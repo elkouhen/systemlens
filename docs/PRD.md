@@ -1,5 +1,17 @@
 # Product requirements — systemlens
 
+## At a glance
+
+SystemLens gives coding agents and developers a trustworthy, local architecture
+inventory before a Java/Spring change. Its defining rule is simple: preserve
+evidence and uncertainty; do not guess dependencies.
+
+| Audience | Primary outcome |
+|---|---|
+| Coding agent | Bounded, evidenced context before an edit |
+| Developer | A navigable inventory of services and integrations |
+| Architect | A reviewable topology with visible uncertainty |
+
 ## Purpose
 
 `systemlens` gives coding agents trustworthy, local architecture context before
@@ -32,9 +44,9 @@ the edit. Developers can follow the same workflow through `microservices`,
 `topics`, `apis`, `modules`, `analyze`, and HTML export. Indexing is
 incremental; `--full` refreshes every eligible source file.
 
-## Scope
+## Scope and non-goals
 
-Delivered:
+### Delivered
 
 - Tree-sitter Java AST extraction for Spring MVC/WebFlux, Feign,
   RestTemplate/WebClient, Spring Cloud Gateway and Spring Data REST endpoints.
@@ -47,7 +59,7 @@ Delivered:
 - Optional Kubernetes Deployment and StatefulSet resource dimensions from the
   active local `kubectl` context, matched conservatively to indexed modules.
 
-Planned:
+### Planned
 
 - Conservative presentation of observed HTTP, Kafka, MongoDB, and S3 activity
   beside the static architecture, without inventing a source mapping.
@@ -56,7 +68,7 @@ Planned:
   then accept a unique token-bounded service-name inclusion in a Deployment or
   StatefulSet name; ambiguous matches remain unresolved.
 
-Not delivered:
+### Not delivered
 
 - Security or quality scans, severity filtering or automated remediation.
 - Guaranteed resolution of dynamic values; unresolved values remain explicitly

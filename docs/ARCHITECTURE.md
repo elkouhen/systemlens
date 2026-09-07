@@ -4,6 +4,16 @@ This guide is the starting point for maintainers. It complements the detailed
 contracts in `SPEC-TECH.md`: read this document to find the right ownership
 boundary, then read the relevant specification before changing behaviour.
 
+## How to use this guide
+
+1. Find the relevant responsibility in [Ownership map](#ownership-map).
+2. Follow the matching call hierarchy to identify the owner.
+3. Read the linked functional or technical specification before changing a
+   public contract or persisted fact.
+
+The package boundaries are intentional: adapters deliver data, discovery
+produces facts, and `Store` owns SQLite.
+
 ## Runtime layers
 
 ```
@@ -29,9 +39,8 @@ utilities.
 
 ## Call hierarchies
 
-The following are the authoritative execution paths. Read from top to bottom:
-each level calls the next one. `Store` is the only component that owns the
-SQLite database.
+These are the authoritative execution paths. Read each graph from top to
+bottom; `Store` is the only component that owns the SQLite database.
 
 ### Indexing
 

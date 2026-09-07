@@ -1,4 +1,11 @@
-# Prompt — boucle d'amélioration de l'inventaire microservices
+# Historical improvement-loop prompt
+
+> **Historical working prompt.** This French-language checklist is retained as
+> an execution record. Before using it, reconcile its references with the
+> current [functional specification](docs/SPEC-FONC.md),
+> [technical specification](docs/SPEC-TECH.md), and active
+> [GitHub backlog](BACKLOG.md). In particular, historical Semgrep references
+> are not part of the current SystemLens contract.
 
 ## Objectif
 

@@ -5,6 +5,15 @@ complex for deterministic extractors. The same manifest can be rendered as a
 temporary graph or imported as replaceable enrichment facts; it never replaces
 the SQLite source inventory.
 
+## Before you write a manifest
+
+| Requirement | Why it matters |
+|---|---|
+| Use stable node and edge IDs | Imports reconcile revisions by ID. |
+| Keep evidence paths relative | The graph stays portable and avoids local-path disclosure. |
+| Mark uncertainty explicitly | Ambiguous and unresolved claims are reviewed, not drawn as dependencies. |
+| Use `complete` only for a full namespace snapshot | It removes stale facts in that namespace. |
+
 ## Contract
 
 ```json
@@ -59,6 +68,9 @@ available in the generic graph and enrichment layer.
 
 ## Invocation
 
+Use this path for a one-off, read-only visualisation. It does not write the
+project index.
+
 ```bash
 systemlens export microservices --graph architecture.ai-graph.json --html architecture.html
 ```
@@ -67,6 +79,8 @@ The command is read-only with respect to the project index. Use
 `--root-path` only when evidence links should resolve to a local checkout.
 
 ## Persistent import
+
+Use this path when the enrichment should survive reindexing.
 
 ```bash
 systemlens import-facts architecture.ai-graph.pass-002.json \

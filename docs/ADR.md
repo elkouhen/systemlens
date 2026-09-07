@@ -1,5 +1,17 @@
 # Architecture Decision Records — systemlens (`systemlens`)
 
+## Reading guide
+
+ADRs explain *why* durable constraints exist. They do not replace the current
+functional or technical contract.
+
+| Topic | ADRs |
+|---|---|
+| Local, conservative extraction | [ADR-1](#adr-1--local-ast-extraction-is-the-sole-static-architecture-analysis-source), [ADR-3](#adr-3--conservative-static-resolution) |
+| Snapshot storage and compatibility | [ADR-2](#adr-2--sqlite-is-the-local-fact-store), [ADR-7](#adr-7--publish-each-index-as-an-atomic-sqlite-snapshot), [ADR-11](#adr-11--separate-module-identity-from-its-display-alias) |
+| Delivery and graph projection | [ADR-8](#adr-8--persisted-relations-are-the-canonical-architecture-projection), [ADR-9](#adr-9--exports-never-enrich-a-snapshot-from-live-source-files), [ADR-23](#adr-23--mcp-control-in-two-phases-with-a-graph-enrichment-layer) |
+| Optional or repository-specific behaviour | [ADR-5](#adr-5--strategy1-conventions-are-opt-in), [ADR-12](#adr-12--kubernetes-discovery-is-explicit-and-snapshot-based) |
+
 ## ADR-1 — Local AST extraction is the sole static architecture analysis source
 
 **Status:** Accepted.
@@ -204,11 +216,16 @@ cluster after indexing.
 
 ## ADR-23 — MCP control in two phases with a graph enrichment layer
 
-The MCP exposes `index_repository`, followed by dedicated operations to add,
-inspect and remove graph facts. Added facts are persisted in `graph_facts`,
-separately from relations derived from source code.
+**Status:** Accepted.
 
-This separation lets an AI complete conventions that cannot be extracted
-deterministically, while ensuring reindexing preserves enrichment and MCP
-deletion never destroys source evidence. `architecture_graph` merges both
-layers for reading. Added evidence paths remain relative to the repository.
+**Context:** An AI can identify repository conventions that deterministic
+extractors cannot prove, but those claims must not overwrite source evidence.
+
+**Decision:** The MCP exposes `index_repository`, followed by dedicated
+operations to add, inspect, and remove graph facts. Added facts are persisted
+in `graph_facts`, separately from relations derived from source code.
+
+**Consequences:** This separation lets an AI complete conventions that cannot
+be extracted deterministically, while ensuring reindexing preserves enrichment
+and MCP deletion never destroys source evidence. `architecture_graph` merges
+both layers for reading. Added evidence paths remain relative to the repository.

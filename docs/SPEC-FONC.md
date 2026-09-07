@@ -3,7 +3,19 @@
 `systemlens` builds a local architecture inventory from Java/Spring source ASTs.
 The inventory commands operate on the current repository unless an explicit
 workspace root is accepted. There is no external code-analysis process in this
-workflow. 
+workflow.
+
+## Reading guide
+
+| If you are… | Start with |
+|---|---|
+| Setting up or operating SystemLens | [Configuration](#configuration) and [CLI](#cli) |
+| Changing extraction behaviour | [Extraction contract](#extraction-contract) and [Boundaries](#boundaries) |
+| Changing the HTML export | [HTML export behaviour](#html-export-behaviour), then its rendering rules |
+| Integrating an agent | [MCP](#mcp) |
+
+The keywords **MUST** and **MUST NOT** identify compatibility requirements.
+
 ## Configuration
 
 `systemlens init` creates `.systemlens/config.yml`:
@@ -71,6 +83,8 @@ the index and reused by incremental MCP reindexing and all derived views.
 
 ## Extraction contract
 
+### Core extraction rules
+
 An endpoint has a role (`serve`/`call` for REST, `produce`/`consume` for Kafka),
 a system, a topic (`METHOD /path` for REST), source location, framework and
 optional module, qualified name and Java message type. A value that cannot be
@@ -88,6 +102,8 @@ method and route only refines a resource within that already identified
 service; it never identifies a service by itself. Calls without a unique target
 remain indexed as unresolved evidence and are reported by coverage and indexing
 issues rather than being linked to a coincidentally similar route.
+
+### HTML export behaviour
 
 The HTML microservice export provides an inspector for each statically typed
 Kafka message. It shows the indexed payload-type identity, message topic, and
@@ -147,6 +163,8 @@ only constrain an explicit zoom-out operation.
 In the namespace view, zooming out remains available. When the fixed-size
 cards would make sibling cluster envelopes overlap, the camera is clamped to
 the last valid zoom level; panning and zooming in remain available.
+### Placement and interaction model
+
 For the graph export, a namespace is the parent directory containing one or
 more projects/modules; Kubernetes namespaces are retained as metadata only.
 Projects located directly at the indexed repository root are assigned to the
@@ -170,7 +188,7 @@ views, which keep their domain inventories separate. Changing a relation-type fi
 the graph from only the selected dependency types; excluded relations do not
 influence the resulting graph layout.
 
-### Rules for the layered microservice rendering
+### Layered-view rendering rules
 
 The HTML architecture view MUST preserve these visual invariants:
 
@@ -236,7 +254,7 @@ If several microservices modify the same resource in writing, the renderer
 MUST associate the resource with the microservice belonging to the lowest
 software layer in the canonical visual order.
 
-### Rules for the namespace-cluster rendering
+### Namespace-cluster rendering rules
 
 The cluster view MUST preserve these visual invariants:
 

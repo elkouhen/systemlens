@@ -1,4 +1,10 @@
-# Implémentation : Détection @RestController et Clients OpenAPI Générés
+# Historical implementation summary: REST controllers and generated OpenAPI clients
+
+> **Historical record — do not use as a current contract.** This document
+> records an earlier schema-15 implementation and retains its original French
+> notes for traceability. Current behaviour and schema compatibility are
+> specified in [docs/SPEC-FONC.md](docs/SPEC-FONC.md) and
+> [docs/SPEC-TECH.md](docs/SPEC-TECH.md).
 
 ## ✅ Fonctionnalités Implémentées
 

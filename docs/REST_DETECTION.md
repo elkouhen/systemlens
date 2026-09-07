@@ -4,6 +4,9 @@
 the supported static patterns and their limits; the public endpoint contract is
 in [SPEC-FONC.md](./SPEC-FONC.md).
 
+**Key principle:** a value that cannot be resolved statically remains dynamic;
+SystemLens does not turn it into a guessed route.
+
 ## Endpoint inventory
 
 The extractor recognises:
@@ -37,7 +40,7 @@ systemlens modules show order-service
 systemlens modules --json
 ```
 
-## Limits
+## Known limits
 
 This is static source analysis. Custom framework annotations, reflection,
 runtime-generated routes, arbitrary string assembly and non-standard generated

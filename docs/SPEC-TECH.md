@@ -1,6 +1,20 @@
 # Technical specification — systemlens (`systemlens`)
 
+## Reading guide
+
+| When changing… | Read |
+|---|---|
+| An extractor or a derived relation | [Data model](#data-model), [Indexing](#indexing), and [Extractors](#extractors) |
+| A CLI, MCP, or web delivery adapter | [Architecture](#architecture) and [Export snapshot contract](#export-snapshot-contract) |
+| HTML graph placement | [Graph layout algorithms](#graph-layout-algorithms) |
+| SQLite schema or index compatibility | [Persistence and compatibility](#persistence-and-compatibility) |
+
+This document records implementation constraints. The observable CLI and MCP
+contract lives in [SPEC-FONC.md](SPEC-FONC.md).
+
 ## Architecture
+
+### Pipeline at a glance
 
 The pipeline is deliberately local:
 
@@ -16,6 +30,8 @@ declared requests and limits of regular containers (init containers are
 excluded) and attaches a workload only when its Kubernetes name exactly matches
 the indexed module name. This optional step can contact the current Kubernetes
 API context; it is never enabled by default.
+
+### Ownership boundaries
 
 `scanner/` (a package; see `docs/ARCHITECTURE.md`) owns Java/Spring extraction.
 `java_parser.py` provides cached
@@ -41,6 +57,8 @@ directory as its only document root, has no application or write routes, and
 binds to loopback by default. It is intentionally separate from `systemlens
 web`, whose only route is the in-memory architecture projection.
 
+### Future adapters
+
 S3 support requires a separate conservative Java extractor for explicit AWS SDK
 v1/v2 operations and configured bucket names, with dynamic bucket expressions
 preserved as unresolved evidence. Kafka, MongoDB, S3, and Kubernetes runtime
@@ -54,6 +72,8 @@ leaves zero or multiple candidates unresolved. It must never use an arbitrary
 substring search or change persisted source topology.
 
 ## Data model
+
+### Core persisted facts
 
 `MessageEndpoint` is the primary extracted fact. It records role, system,
 topic, dynamic status, source (`code` or `manifest`), framework, location,
@@ -88,6 +108,8 @@ inventory, currently the `default` or `strategy1` topic convention. CLI, MCP,
 export, graph, and audit adapters consume this profile. A workspace federation
 retains source profiles and rejects a mixture of incompatible topic strategies.
 
+### Materialised contracts
+
 MongoDB persistence-class metadata is extracted at index time from Java
 `@Document` declarations, entity generic types of Mongo repositories, and
 unambiguous `Type.class` arguments of `MongoTemplate` operations. Repository
@@ -107,6 +129,8 @@ For each MongoDB root class, indexing persists the recursive closure of uniquely
 resolved project field types. Nested definitions retain source locations and
 declared fields but are marked as non-root so collection inventories list only
 actual persistence roots while inspectors can navigate the complete closure.
+
+### Diagnostics and portability
 
 `ExtractionDiagnostic` is a safe, persisted extraction outcome with its file
 path, extractor, category, severity and a non-source-code detail. The initial
