@@ -76,11 +76,6 @@ class ModuleSummary(TypedDict):
 Pytest: 48 passed (test_rest_detection.py + test_modules.py + test_store.py)
 ```
 
-## 📚 Documentation
-
-### Document créé
-- `docs/REST_DETECTION.md` - Documentation complète des nouvelles fonctionnalités
-
 ### Exemples d'utilisation
 ```bash
 # Lister les modules avec leurs contrôleurs REST
@@ -198,9 +193,8 @@ public class OrderController { }
   - `tests/test_modules.py`
   - `tests/test_store.py`
 
-- **Fichiers créés** : 2
+- **Fichiers créés** : 1
   - `tests/test_rest_detection.py` (10 tests)
-  - `docs/REST_DETECTION.md`
 
 - **Lignes de code ajoutées** : ~200
 - **Tests ajoutés** : 10

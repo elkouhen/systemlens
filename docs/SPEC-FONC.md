@@ -110,26 +110,31 @@ Kafka message. It shows the indexed payload-type identity, message topic, and
 producer and consumer services. When the matching Java type is indexed, its
 inspector also shows its source, declared fields, enum values, and conservative
 recursive project-type navigation.
+
 The architecture vocabulary is extensible: a `data_schema` node represents a
 persisted data resource or contract (MongoDB collection, SQL table, Redis
 keyspace or object-store dataset), while a `message_channel` node represents
 a messaging channel (Kafka, RabbitMQ, SQS or a webhook stream). The concrete
 technology is carried as metadata.
+
 The export uses a responsive workspace layout with eight navigation tabs:
 Explorer, Paths, OpenAPI, Kafka, Mongo, Request/reply, Build, and
 Quality. It includes compact architecture counters, task-oriented starting
 actions, a floating context panel, and a full-size resource inspector. On
 narrow viewports the controls and context panel use separate bounded regions so
 the graph remains visible while either panel scrolls independently.
+
 The export opens with an Archify-inspired dark blue presentation (or follows
 the browser's light preference), and provides a theme toggle in the graph
 toolbar. The selected theme is stored only in browser local storage and does
 not affect persisted inventory facts or exported architecture data.
+
 Its initial view foregrounds task-oriented entry points (Kafka topic, service
 dependencies, service-to-service path and Kafka messages). Relation/resource
-filters and placement strategies are available as advanced controls. The graph
-offers three primary views—graph, layers, and namespaces—while grouped and
-non-overlapping placement strategies remain secondary options. The layers view
+filters and placement strategies are available as advanced controls.
+
+The graph offers three primary views—graph, layers, and namespaces—while
+grouped and non-overlapping placement strategies remain secondary options. The layers view
 uses ELK.js compound nodes to arrange resources in a deterministic hierarchy:
 software layers are stacked vertically, namespaces are nested inside their
 layer, and services/resources are placed inside each namespace without
@@ -137,56 +142,74 @@ overlap. The internal canonical order is `api`, `application`, `orchestration`,
 `infrastructure`, `domain`, then `persistence`;
 `persistence` is always the lowest layer. In Strategy1, the `CYCLE-DE-VIE`
 project namespace is rendered in the Orchestration layer.
+
 External microservices are rendered in a dedicated `External services` layer
 at the bottom, after the internal layer order.
+
 Shared libraries and other non-deployable modules are not rendered as layers.
+
 The three primary views are presented as a single view selector; placement
 strategies are secondary controls. The graph viewport reserves the space used
 by the navigation panel and uses a readable initial camera framing after a
 view or window-size change; the complete graph does not have to fit at once.
-Users can pan and zoom to explore the remaining graph. In the layers and namespaces views, relations are
-visually subdued. In every view, microservice, Kafka topic, message channel,
+
+Users can pan and zoom to explore the remaining graph. In the layers and
+namespaces views, relations are visually subdued. In every view, microservice,
+Kafka topic, message channel,
 MongoDB collection, data schema, and equivalent resource cards share the same
 rendered width, height, and scale. Their semantic differences are conveyed by
 icon, border, and color.
+
 During pan and zoom, the graph and its cluster overlays remain synchronized so
 cards and their containing rectangles move together without transient partial
 redraws.
+
 Panning MUST also work when the drag starts on a node card; a simple click on
 the same card MUST continue to select the node.
+
 Double-clicking MUST NOT change the camera zoom accidentally after a pan;
 zoom remains available through the wheel and the explicit zoom controls.
+
 Releasing a pan MUST stop the camera immediately; no inertial continuation is
 allowed.
+
 Automatic collision protection MUST NOT zoom the camera during a pan; it may
 only constrain an explicit zoom-out operation.
+
 In the namespace view, zooming out remains available. When the fixed-size
 cards would make sibling cluster envelopes overlap, the camera is clamped to
 the last valid zoom level; panning and zooming in remain available.
+
 ### Placement and interaction model
 
 For the graph export, a namespace is the parent directory containing one or
 more projects/modules; Kubernetes namespaces are retained as metadata only.
 Projects located directly at the indexed repository root are assigned to the
 synthetic `root` namespace.
+
 The namespace-cluster layout is independent of the layer order and uses a
 deterministic two-level packing without ELK: fCoSE first computes the local
 compound layout of resources inside each namespace, then a deterministic
 packing step places namespace rectangles one per row with a fixed separating
 margin in graph coordinates; the rectangles are projected only after packing,
 so camera zoom does not change their relative separation. The final grid is
-the authoritative collision guard. Node identifiers
-and namespace names are sorted only to make the result reproducible; there is
-no semantic order between clusters. Neither resources nor namespace
-rectangles may overlap. If fCoSE is unavailable, the same deterministic grid
-is used without the local fCoSE ordering.
+the authoritative collision guard.
+
+Node identifiers and namespace names are sorted only to make the result
+reproducible; there is no semantic order between clusters. Neither resources
+nor namespace rectangles may overlap. If fCoSE is unavailable, the same
+deterministic grid is used without the local fCoSE ordering.
+
 ELK is used only for the architectural layer layout, while Sigma.js provides
 the interactive rendering for both views. Architecture relations remain
 visible even when they are not used as placement edges.
+
 It also provides dedicated OpenAPI, Kafka, Mongo, Request/reply, and Build
-views, which keep their domain inventories separate. Changing a relation-type filter rebuilds and relayouts
-the graph from only the selected dependency types; excluded relations do not
-influence the resulting graph layout.
+views, which keep their domain inventories separate.
+
+Changing a relation-type filter rebuilds and relayouts the graph from only the
+selected dependency types; excluded relations do not influence the resulting
+graph layout.
 
 ### Layered-view rendering rules
 
@@ -293,34 +316,46 @@ The cluster view MUST preserve these visual invariants:
 Microservices with no indexed inter-service relation remain visible in a
 separate isolated area of the graph, so their absence of dependencies is not
 confused with an absent service.
+
 Microservices, Kafka topics, and MongoDB collections are marked by their
 relative connectivity. In the HTML graph, the shape identifies the resource
 type. Microservices, Kafka topics, and MongoDB collections use a coloured
 outline around a neutral interior; the fill never carries connectivity or risk
-meaning. The relation count includes their indexed HTTP, Kafka,
-and MongoDB dependencies, while low/medium/high relative tiers are calculated separately
-for each resource type. For a microservice, the count is its distinct direct
+meaning.
+
+The relation count includes their indexed HTTP, Kafka, and MongoDB dependencies,
+while low/medium/high relative tiers are calculated separately for each
+resource type.
+
+For a microservice, the count is its distinct direct
 HTTP clients and targets, Kafka producer/consumer topic relations, and MongoDB
 collection relations; multiple HTTP routes between the same client and target
-are counted once. The HTML complexity badge exposes the HTTP, Kafka, and
+are counted once.
+
+The HTML complexity badge exposes the HTTP, Kafka, and
 MongoDB breakdown as a tooltip, along with the resource rank and its soft
 tercile bounds. The lowest third is blue, the middle third orange, and the
 highest third red; the terciles are recalculated separately for each resource
 type in every export. The graph label of each coloured resource also displays
 its relative connectivity through its coloured outline; the exact details are
 available after selecting the node.
+
 The Explore search suggests indexed resource names and accepts either one
 exact, unambiguous graph-node name or a Kafka itinerary written with `->`.
+
 An itinerary starts and ends with a microservice and follows only directed Kafka
 relations through Kafka topics; it never traverses HTTP or MongoDB dependencies.
+
 When a microservice and another resource have the same display name, a direct
 resource search remains ambiguous, while an itinerary endpoint resolves the
 unique microservice candidate required by the itinerary grammar.
+
 Invalid, ambiguous, repeated, or unreachable stops leave the current graph
 unchanged and produce an actionable message. The itinerary detail is an
 ordered, clickable list of node names and types. A Kafka topic lists its
 associated DTO names in parentheses. Selecting any path stop reveals its
 ordinary detail view, including the indexed Kafka source links where present.
+
 Every graph resource detail starts with indexed and visible relation counts,
 then a `Relations` section. For a microservice, that section separates
 consumed and published API and Kafka resources, plus MongoDB collections. Each
@@ -329,16 +364,20 @@ visible action that opens the module root directory in VS Code. Kafka topics
 list their applicable DTOs. A collapsed `Sources` section lists the indexed
 OpenAPI and Kafka files that provide the evidence, avoiding repetition in every
 topic.
+
 At constrained viewport sizes, an empty floating context panel remains visible
 as guidance but does not intercept pointer interaction with the active tab;
 once it contains selected-node or path details, its normal controls remain
 interactive.
+
 Indexing persists source evidence only as paths relative to the project root.
 HTML export joins those paths to `--root-path` (the current directory by
 default) when building VS Code links. No WSL distribution or absolute local
 source path is stored in the index.
+
 When several modules reference one OpenAPI/Swagger file, it is listed once for
 the module that directly contains the source file.
+
 MongoDB collection details list the services using the collection once, followed
 by indexed Java persistence classes resolved from
 `@Document`, Mongo repository entity generics, or unambiguous `Type.class`
@@ -348,14 +387,17 @@ with filtering by class, package, collection, or service and opens a dedicated
 inspector. Fields whose type resolves uniquely to another indexed project class
 are navigable recursively; the inspector provides a return action to the
 containing class. External and ambiguous field types remain plain text.
+
 Persistence classes declared in a dependent build module are attached to the
 owning service collection through the indexed module-dependency graph. When
 dependency metadata is unavailable, a workspace-wide class is used only if it
 is the unique candidate for that collection name; ambiguous candidates remain
 unassociated rather than being guessed.
+
 The topic detail lists resolved Kafka DTOs once. It lists message types only
 when no matching DTO has been resolved, avoiding duplicate published and
 consumed type lists when they describe the same contract.
+
 Indexing issues that have a source endpoint expose a VS Code link to the
 associated file and line. The HTML export provides dedicated OpenAPI, Kafka,
 Mongo, Request/reply, and Build views. OpenAPI and Kafka both support
@@ -369,6 +411,7 @@ opens their review view.
 (including `envoyerMessageKafkaRequest` and `envoyerMessageKafkaReply`),
 `${kafka.topics.*.name}` expressions and configured REST client constants. It
 also enables the `getXxxServiceUrl()` REST target-name convention.
+
 For a `src/main/resources/openapi/xxx.rest` publication declaration, it
 searches the entire indexed repository for same-named `xxx.yaml`,
 `xxx.yml`, or `xxx.json` OpenAPI contracts, including contracts in a sibling
@@ -383,6 +426,7 @@ Independently of Strategy1, each build module inventories every valid YAML or
 JSON OpenAPI document under its own `src/main/resources/openapi/` directory;
 contract file names do not need to follow an `openapi.*` or `swagger.*`
 pattern.
+
 With Strategy1, it may also derive a high-confidence request/reply pair when
 both sides follow the `retour_<request-topic>` convention.
 
@@ -416,9 +460,12 @@ index-then-enrich workflow. It no longer mirrors every read-only CLI command:
 
 Only `index_repository` creates or refreshes source-derived facts. Enrichment
 facts are stored separately in `graph_facts`, survive reindexing, and are never
-treated as source evidence. Nodes require `fact_type=node`, `kind` and `name`;
+treated as source evidence.
+
+Nodes require `fact_type=node`, `kind` and `name`;
 edges require source/target kinds and names plus `relation`. Evidence paths are
 relative to the indexed repository and may not escape it.
+
 `add_graph_fact` remains an additive single-fact API and rejects duplicates.
 For iterative analysis, use `import_graph_facts`: it reconciles by the
 manifest namespace and stable node/edge id, replacing the complete stored
@@ -427,6 +474,7 @@ manifest with `mode=complete` (or an explicit `complete=true`) removes stale
 facts only from that namespace. Source-derived facts are stored separately and
 are never overwritten. The import is transactional and returns inserted,
 updated and removed counts.
+
 For generic middleware, use `kind=data_schema` or `kind=message_channel`, set
 `technology` to the concrete implementation, and put provider-specific facts
 such as database/schema/table, exchange/queue or partition in `metadata`.

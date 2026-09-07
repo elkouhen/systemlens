@@ -117,14 +117,17 @@ entities without `@Document` use Spring Data's lower-camel simple-name default;
 ambiguous simple names are not resolved. The immutable snapshot records the
 collection, qualified class name, source location, and declared fields so HTML
 exports never reopen Java sources to build this view.
+
 The HTML snapshot resolves these classes from the collection-owning module and
 its transitive build dependencies. A unique collection-wide fallback covers
 snapshots without dependency metadata while preserving ambiguity when several
 modules declare the same collection name.
+
 Persistence-class extraction was introduced in schema version 21 and remains
 part of every later schema version. Any snapshot from an older schema version
 is rejected on read and must be regenerated, preventing a valid-looking HTML
 export from silently presenting the empty pre-extractor inventory.
+
 For each MongoDB root class, indexing persists the recursive closure of uniquely
 resolved project field types. Nested definitions retain source locations and
 declared fields but are marked as non-root so collection inventories list only
@@ -136,6 +139,7 @@ actual persistence roots while inspectors can navigate the complete closure.
 path, extractor, category, severity and a non-source-code detail. The initial
 implementation records Tree-sitter Java parse failures; `analyze
 indexing-issues` exposes them alongside unresolved architecture facts.
+
 MongoDB extraction keeps structurally valid declarations and invocations from
 a partially parsed Java file while ignoring subtrees that contain an error or
 missing token. The file-level diagnostic remains visible so partial coverage is
@@ -160,9 +164,11 @@ component), so it stays correct for modules nested two or more levels below
 the repository root and for a publishing module (a Strategy1 declaration)
 whose contract physically lives in a different, shared module: the export
 looks up the parsed spec and materializes the contract exactly once, keyed by
-the module that truly encloses the file. A DTO definition retains
-its qualified name, owning module, module-relative Java source path, declared
-fields, enum values, and conservative nested-type references. The HTML export
+the module that truly encloses the file.
+
+A DTO definition retains its qualified name, owning module, module-relative
+Java source path, declared fields, enum values, and conservative nested-type
+references. The HTML export
 uses those stored facts and only derives its VS Code URI at render time; it
 does not reopen a Java or OpenAPI source file.
 
@@ -306,6 +312,8 @@ its evidence is intended for a human or an AI to assess a conservative rule.
 
 ## Graph layout algorithms
 
+### Coordinate system and rendering
+
 The HTML renderer keeps graph coordinates as the source of truth for layout.
 Sigma's canvas and the HTML card/cluster overlays share the same workspace
 rectangle (including the space reserved for the navigation and details
@@ -313,6 +321,7 @@ panels). Overlay positions are obtained from Sigma's public
 `graphToViewport` conversion using the raw graph coordinates; renderer
 internal matrices and full-window canvas coordinates are not mixed with the
 workspace-local overlay coordinates.
+
 The browser controller is maintained as ordered source modules under
 `src/systemlens/render/assets/graph/`: core setup, graph rebuilding and camera
 events, controls, layouts, details, path exploration, and bootstrap wiring.
@@ -321,30 +330,41 @@ Mutable selection, view, layout, and camera state is held in one
 `graphState` object. Overlay refreshes go through one animation-frame
 scheduler (`requestGraphRender`) so canvas and HTML overlays observe one
 coalesced render cycle.
+
+### Camera interactions
+
 The shared card size remains stable during navigation. The initial fit uses
 the projected node centers, with a small margin, so every visible node is
 framed without shrinking cards. Card overlap is an accepted dense-overview
 state; zooming and panning never move nodes to repair it or clamp the camera.
+
 Relations remain rendered by Sigma independently of the HTML card overlays.
 Camera updates during pan and zoom are coalesced to the next animation frame.
 The Sigma canvas and the HTML card/cluster overlays are therefore recomputed
 from one camera state per frame, preventing partially rebuilt containers from
 appearing while the user drags the namespace view.
+
 Wheel zoom is handled once for both the Sigma canvas and the HTML overlays;
 the native Sigma wheel handler is disabled so hovering a card cannot change
 the zoom behavior. Each wheel event applies a bounded exponential camera-ratio
 step without collision-based clamping.
+
+### Layout engines and namespace placement
+
 The ELK layer layout loads independently from the ForceAtlas2 and Noverlap
 modules used by the graph layouts, so unrelated dynamic imports cannot keep
 the layer view in a pending state.
+
 Force-based placement uses Sigma's node radius to preserve the graph structure;
 it does not mutate positions after the camera fit to repair HTML-card overlap.
+
 The namespace-cluster packer places microservices in a first sub-layer and
 resources in a second sub-layer on separated grids, then
 packs namespace rectangles with positive margins that include the complete
 projected card/title envelope, not only the node-grid dimensions. Its graph-space
 gaps are expressed in the same graph-coordinate scale as the rest of the
 layout, while remaining large enough for the shared 110×70 card envelope.
+
 Each layout starts with a shared camera-fit operation based on the projected
 node centers and a small margin. The same operation is reapplied by the Ajuster
 action and after a viewport resize, so switching between graph, layer, and
@@ -352,41 +372,55 @@ namespace views does not retain a stale camera scale or leave node centers
 outside the available viewport. Overlapping cards and cluster rectangles are
 allowed in dense views; their fixed screen-space dimensions are preserved
 during navigation.
+
 Container geometry is kept in graph coordinates until it is projected to the
-viewport. The cluster view
-uses this deterministic packing as its source of truth; it does
+viewport.
+
+The cluster view uses this deterministic packing as its source of truth; it does
 not wait for a compound force layout that could block the browser. When project
-or other parent groups are enabled,
-their bounds are the union of the already
+or other parent groups are enabled, their bounds are the union of the already
 projected child namespace bounds plus title/padding margins; node-grid gaps are
 calibrated with the shared 110×70 card envelope and a dedicated vertical
 separation between the two sub-layers. This explicit hierarchy prevents a
 parent from being smaller than a nested cluster after zooming. Project groups
-carry their owning project
-namespace and full namespace path. Structural project groups contain only
+carry their owning project namespace and full namespace path.
+
+Structural project groups contain only
 their owning projects; resource nodes resolve their cluster
 from incoming producer edges before consulting resource metadata; this keeps
-topics and collections with their producing microservice. When several services write the same resource, ownership is selected by the
+topics and collections with their producing microservice.
+
+When several services write the same resource, ownership is selected by the
 lowest service layer in the canonical order; ties are resolved by service name
 for deterministic exports.
-The layered view reuses this packer with an additional grouping key: namespaces are first grouped by the
-canonical internal software-layer order (`api`, `application`, `orchestration`,
-`infrastructure`, `domain`, `persistence`), producing
-top-to-bottom layer bands. External microservices use the dedicated `external`
-layer at the bottom and are not part of the internal dependency order. The
-same canonical resolver is used for layer placement, namespace boxes, and band
-bounds, so a namespace cannot be placed in a band different from its nodes. Each
-namespace uses the same two-part grid as the cluster view: microservices first,
-then resources. ELK may
-provide the initial compound layout, but the deterministic layer-aware pack is
-the final collision guard and remains valid when ELK fails. The layered packer
+
+### Layer placement
+
+The layered view reuses this packer with an additional grouping key: namespaces
+are first grouped by the canonical internal software-layer order (`api`,
+`application`, `orchestration`, `infrastructure`, `domain`, `persistence`),
+producing top-to-bottom layer bands. External microservices use the dedicated
+`external` layer at the bottom and are not part of the internal dependency
+order.
+
+The same canonical resolver is used for layer placement, namespace boxes, and
+band bounds, so a namespace cannot be placed in a band different from its
+nodes. Each namespace uses the same two-part grid as the cluster view:
+microservices first, then resources.
+
+ELK may provide the initial compound layout, but the deterministic layer-aware
+pack is the final collision guard and remains valid when ELK fails. The layered packer
 checks each cluster envelope after placement. Clusters that exceed the vertical
 safety envelope are widened by adding columns, then the row width and all
 positions are recomputed. This trades height for diagram width to preserve
 layer separation.
+
 Layer bands reserve a left graph-space gutter for their titles, so the title
 overlay cannot cover the first namespace or project cluster.
-This calculation is implemented in the embedded `layer_geometry.js` module
+
+### Browser verification
+
+The layer-band calculation is implemented in the embedded `layer_geometry.js` module
 and is covered by renderer geometry unit tests for ordering, containment, and
 shared bounds. Browser integration tests additionally capture a PNG and JSON
 geometry snapshot after each significant browser action (load, view change,

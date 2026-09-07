@@ -162,6 +162,5 @@ RabbitMQ, SQS, or other middleware facts.
 | CLI, MCP, and HTML-export behaviour | [Functional specification](docs/SPEC-FONC.md) |
 | Extraction, storage, and layout design | [Technical specification](docs/SPEC-TECH.md) |
 | A maintainer's code-navigation guide | [Architecture map](docs/ARCHITECTURE.md) |
-| REST/OpenAPI coverage and limits | [REST detection](docs/REST_DETECTION.md) |
 | The rationale for durable design choices | [ADRs](docs/ADR.md) |
 | AI graph manifest format | [AI graph manifest](docs/AI-GRAPH.md) |
