@@ -378,24 +378,6 @@
           const title = document.createElement("span"); title.className = "graph-namespace-title";
           title.textContent = group.namespace === "root" ? "ROOT" : group.namespace;
           box.append(title);
-          if (graphState.clusteredView || graphState.layeredClusterView) {
-            const graphPoints = group.ids.map(id => ({
-              point: nodePoints.get(id),
-              kind: nodeDataById.get(id)?.kind,
-            })).filter(item => item.point);
-            const servicePoints = graphPoints.filter(item => item.kind === "microservice");
-            const resourcePoints = graphPoints.filter(item => item.kind !== "microservice");
-            const addSubLayerTitle = (label, points) => {
-              if (!points.length) return;
-              const subTitle = document.createElement("span");
-              subTitle.className = "graph-cluster-sublayer-title";
-              subTitle.textContent = label;
-              subTitle.style.top = `${Math.max(28, Math.min(...points.map(item => item.point.y)) - minY - 38)}px`;
-              box.append(subTitle);
-            };
-            addSubLayerTitle("Microservices", servicePoints);
-            addSubLayerTitle("Ressources", resourcePoints);
-          }
           graphLayersOverlay.append(box);
         });
         if (!showProjectGroups.checked) return;

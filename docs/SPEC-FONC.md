@@ -164,7 +164,9 @@ namespaces views, relations are visually subdued. In every view, microservice,
 Kafka topic, message channel,
 MongoDB collection, data schema, and equivalent resource cards share the same
 rendered width, height, and scale. Their semantic differences are conveyed by
-icon, border, and color.
+compact icons aligned with the name, plus border and color. The secondary kind
+label uses the full inner card width instead of reserving a permanent icon
+column.
 
 During pan and zoom, the graph and its cluster overlays remain synchronized so
 cards and their containing rectangles move together without transient partial
@@ -275,8 +277,10 @@ that makes the layout unnecessarily small. `Readable distance` MAY leave
 peripheral nodes outside the viewport; users can pan to reach them.
 
 The details panel MUST display the resolved software layer and the cluster
-path for microservices and resources (topics, collections, and enriched
-resources). The cluster path MUST be the slash-separated path of cluster
+path once, in its `Architecture` section, for microservices and resources
+(topics, collections, and enriched resources). Architecture fields already
+shown there MUST NOT be repeated as header badges or raw metadata. The cluster
+path MUST be the slash-separated path of cluster
 directories, such as `cluster1/cluster2`, without a structural-group prefix.
 For a resource modified in writing, the path MUST be inherited from its
 producing or owning microservice.
@@ -299,7 +303,9 @@ The cluster view MUST preserve these visual invariants:
   horizontal and vertical gap greater than the projected card size.
 - Within each namespace cluster, microservices MUST occupy the first
   sub-layer and Kafka, MongoDB, and other resources MUST occupy a second
-  sub-layer below them. Empty sub-layers are omitted.
+  sub-layer below them. Empty sub-layers are omitted. This ordering is conveyed
+  by placement only; the renderer MUST NOT add visible `Microservices` or
+  `Resources` sub-layer labels inside the cluster.
 - Namespace rectangles MUST be packed with a positive gap based on their full
   rendered envelope, including card, title, and padding margins, and MUST NOT
   overlap each other.
@@ -363,8 +369,10 @@ ordered, clickable list of node names and types. A Kafka topic lists its
 associated DTO names in parentheses. Selecting any path stop reveals its
 ordinary detail view, including the indexed Kafka source links where present.
 
-Every graph resource detail starts with indexed and visible relation counts,
-then a `Relations` section. For a microservice, that section separates
+Every graph resource detail starts with one relation count when every indexed
+relation is visible. When filters hide relations, it instead distinguishes the
+indexed and visible counts. A `Relations` section follows. For a microservice,
+that section separates
 consumed and published API and Kafka resources, plus MongoDB collections. Each
 microservice resolved to an indexed Maven or Gradle module also provides a
 visible action that opens the module root directory in VS Code. Kafka topics
@@ -389,7 +397,8 @@ MongoDB collection details list the services using the collection once, followed
 by indexed Java persistence classes resolved from
 `@Document`, Mongo repository entity generics, or unambiguous `Type.class`
 arguments passed to `MongoTemplate`. They include their qualified name, source
-location, and declared fields. The Persistence view provides the same inventory
+location, collection, owning microservice, module, and declared fields without
+repeating the collection in the inspector summary. The Persistence view provides the same inventory
 with filtering by class, package, collection, or service and opens a dedicated
 inspector. Fields whose type resolves uniquely to another indexed project class
 are navigable recursively; the inspector provides a return action to the

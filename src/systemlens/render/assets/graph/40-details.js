@@ -552,7 +552,7 @@
       }
       const summary = document.createElement("p");
       summary.className = "dto-summary";
-      summary.textContent = `${item.qualified_name} · collection ${item.collection} · ${item.source}:${item.line}`;
+      summary.textContent = `${item.qualified_name} · ${item.source}:${item.line}`;
       inspectorBody.append(summary);
       if (item.vscode_uri) {
         const sourceLink = document.createElement("a");
@@ -669,4 +669,3 @@
       appendDtoInspectorSection("Producteurs", dto.producers || []);
       appendDtoInspectorSection("Consommateurs", dto.consumers || []);
     }
-

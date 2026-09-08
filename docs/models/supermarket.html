@@ -107,21 +107,20 @@
     .graph-layer-band { position: absolute; border-top: 2px solid color-mix(in srgb, var(--layer-accent, #64748b) 58%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--layer-accent, #64748b) 30%, transparent); background: color-mix(in srgb, var(--layer-accent, #64748b) 5%, transparent); }
     .graph-layer-title { position: absolute; top: 8px; left: 14px; min-width: 154px; padding: 3px 8px; box-sizing: border-box; color: var(--layer-accent, #64748b); background: color-mix(in srgb, #f8fafc 94%, var(--layer-accent, #64748b)); border-radius: 5px; font-size: 11px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
     .graph-namespace-group { position: absolute; border: 1px dashed color-mix(in srgb, var(--namespace-accent, #64748b) 72%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--namespace-accent, #64748b) 8%, transparent); }
-    .graph-cluster-sublayer-title { position: absolute; left: 10px; padding: 2px 6px; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 94%, var(--namespace-accent, #64748b)); border-radius: 4px; font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
     .graph-namespace-title { position: absolute; top: 7px; left: 50%; max-width: calc(100% - 20px); padding: 2px 7px; box-sizing: border-box; overflow: hidden; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 92%, var(--namespace-accent, #64748b)); border-radius: 5px; font-size: 10px; font-weight: 750; text-align: center; text-overflow: ellipsis; transform: translateX(-50%); white-space: nowrap; }
     .graph-project-group { position: absolute; padding: 25px 13px 13px; border: 1px dashed var(--group-accent, #64748b); border-radius: 12px; background: color-mix(in srgb, var(--group-accent, #64748b) 4%, transparent); color: var(--group-accent, #64748b); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
     .graph-project-group-title { position: absolute; top: 8px; left: 50%; max-width: calc(100% - 26px); padding: 2px 7px; box-sizing: border-box; overflow: hidden; background: color-mix(in srgb, #f8fafc 94%, var(--group-accent, #64748b)); border-radius: 5px; text-align: center; text-overflow: ellipsis; transform: translateX(-50%); white-space: nowrap; }
     :root[data-theme="dark"] .graph-project-group { background: color-mix(in srgb, var(--group-accent, #64748b) 8%, transparent); }
-    .graph-node-card-label { position: absolute; width: 110px; height: 70px; min-height: 70px; display: grid; grid-template-columns: 22px minmax(0, 1fr); grid-template-rows: auto auto; align-content: center; column-gap: 7px; padding: 8px 9px; box-sizing: border-box; transform: translate(-50%, -50%) scale(var(--graph-card-scale, 1)); transform-origin: center; pointer-events: auto; cursor: pointer; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #ffffff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; overflow: hidden; }
-    .graph-node-card-icon { position: static; grid-row: 1 / 3; display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 0; color: var(--card-accent, #64748b); line-height: 1; }
-    .graph-node-card-icon::before { display: block; width: 16px; height: 16px; box-sizing: border-box; }
-    .graph-node-card-icon.is-service::before { content: "⚙"; width: 16px; height: 16px; font-size: 21px; line-height: 16px; text-align: center; }
+    .graph-node-card-label { position: absolute; width: 110px; height: 70px; min-height: 70px; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; box-sizing: border-box; transform: translate(-50%, -50%) scale(var(--graph-card-scale, 1)); transform-origin: center; pointer-events: auto; cursor: pointer; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #ffffff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; overflow: hidden; }
+    .graph-node-card-icon { position: static; grid-column: 2; grid-row: 1; align-self: center; display: grid; place-items: center; width: 14px; height: 14px; border: 0; border-radius: 0; color: var(--card-accent, #64748b); line-height: 1; }
+    .graph-node-card-icon::before { display: block; width: 12px; height: 12px; box-sizing: border-box; }
+    .graph-node-card-icon.is-service::before { content: "⚙"; width: 14px; height: 14px; font-size: 17px; line-height: 14px; text-align: center; }
     .graph-node-card-icon.is-database { border: 0; border-radius: 0; }
-    .graph-node-card-icon.is-database::before { content: ""; width: 14px; height: 16px; border: 1.5px solid currentColor; border-radius: 50% / 18%; background: linear-gradient(to bottom, transparent 0 17%, currentColor 18% 23%, transparent 24% 76%, currentColor 77% 82%, transparent 83%); }
+    .graph-node-card-icon.is-database::before { content: ""; width: 11px; height: 13px; border: 1.25px solid currentColor; border-radius: 50% / 18%; background: linear-gradient(to bottom, transparent 0 17%, currentColor 18% 23%, transparent 24% 76%, currentColor 77% 82%, transparent 83%); }
     .graph-node-card-icon.is-topic { border: 0; border-radius: 0; }
-    .graph-node-card-icon.is-topic::before { content: ""; width: 16px; height: 16px; border: 0; border-radius: 1px; background: linear-gradient(to right, currentColor 0 2px, transparent 2px 7px, currentColor 7px 9px, transparent 9px 14px, currentColor 14px 16px); }
-    .graph-node-card-name { min-width: 0; align-self: end; font-weight: 750; }
-    .graph-node-card-kind { min-width: 0; margin-top: 3px; color: #64748b; font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .graph-node-card-icon.is-topic::before { content: ""; width: 12px; height: 13px; border: 0; border-radius: 1px; background: linear-gradient(to right, currentColor 0 1.5px, transparent 1.5px 5.25px, currentColor 5.25px 6.75px, transparent 6.75px 10.5px, currentColor 10.5px 12px); }
+    .graph-node-card-name { min-width: 0; grid-column: 1; grid-row: 1; align-self: end; font-weight: 750; }
+    .graph-node-card-kind { min-width: 0; grid-column: 1 / 3; grid-row: 2; margin-top: 3px; color: #64748b; font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .graph-node-card-label.is-selected { border-width: 1.5px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 0 22px color-mix(in srgb, var(--card-accent, #64748b) 52%, transparent), 0 8px 20px rgba(15, 23, 42, .18); }
     .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 9%, transparent), 0 0 13px color-mix(in srgb, var(--card-accent, #64748b) 27%, transparent), 0 6px 17px rgba(15, 23, 42, .14); }
     .graph-node-card-label.is-dimmed { opacity: 1; }
@@ -1632,24 +1631,6 @@
           const title = document.createElement("span"); title.className = "graph-namespace-title";
           title.textContent = group.namespace === "root" ? "ROOT" : group.namespace;
           box.append(title);
-          if (graphState.clusteredView || graphState.layeredClusterView) {
-            const graphPoints = group.ids.map(id => ({
-              point: nodePoints.get(id),
-              kind: nodeDataById.get(id)?.kind,
-            })).filter(item => item.point);
-            const servicePoints = graphPoints.filter(item => item.kind === "microservice");
-            const resourcePoints = graphPoints.filter(item => item.kind !== "microservice");
-            const addSubLayerTitle = (label, points) => {
-              if (!points.length) return;
-              const subTitle = document.createElement("span");
-              subTitle.className = "graph-cluster-sublayer-title";
-              subTitle.textContent = label;
-              subTitle.style.top = `${Math.max(28, Math.min(...points.map(item => item.point.y)) - minY - 38)}px`;
-              box.append(subTitle);
-            };
-            addSubLayerTitle("Microservices", servicePoints);
-            addSubLayerTitle("Ressources", resourcePoints);
-          }
           graphLayersOverlay.append(box);
         });
         if (!showProjectGroups.checked) return;
@@ -3316,7 +3297,7 @@
       }
       const summary = document.createElement("p");
       summary.className = "dto-summary";
-      summary.textContent = `${item.qualified_name} · collection ${item.collection} · ${item.source}:${item.line}`;
+      summary.textContent = `${item.qualified_name} · ${item.source}:${item.line}`;
       inspectorBody.append(summary);
       if (item.vscode_uri) {
         const sourceLink = document.createElement("a");
@@ -3433,7 +3414,6 @@
       appendDtoInspectorSection("Producteurs", dto.producers || []);
       appendDtoInspectorSection("Consommateurs", dto.consumers || []);
     }
-
 
 // Ordered source module: 50-paths.js
     function selectDependencyModule(id) {
@@ -3878,48 +3858,22 @@
       meta.className = "details-meta";
       const relationBadge = document.createElement("span");
       relationBadge.className = "detail-badge";
-      relationBadge.textContent = `Relations indexees : ${indexedEdges.length}`;
-      const visibleBadge = document.createElement("span");
-      visibleBadge.className = "detail-badge";
-      visibleBadge.textContent = `Affichees : ${edges.length}`;
-      meta.append(relationBadge, visibleBadge);
+      relationBadge.textContent = edges.length === indexedEdges.length
+        ? `Relations : ${indexedEdges.length}`
+        : `Relations indexees : ${indexedEdges.length}`;
+      meta.append(relationBadge);
+      if (edges.length !== indexedEdges.length) {
+        const visibleBadge = document.createElement("span");
+        visibleBadge.className = "detail-badge";
+        visibleBadge.textContent = `Affichees : ${edges.length}`;
+        meta.append(visibleBadge);
+      }
       if (isMicroservice) {
-        const layerBadge = document.createElement("span");
-        layerBadge.className = "detail-badge";
-        layerBadge.textContent = `Layer : ${node.layer_label || "Unknown"}`;
-        meta.append(layerBadge);
-        const clusterPathBadge = document.createElement("span");
-        clusterPathBadge.className = "detail-badge";
-        clusterPathBadge.textContent = `Chemin des clusters : ${clusterPathForNode(id)}`;
-        meta.append(clusterPathBadge);
-        (node.runtime_namespaces || []).forEach(namespace => {
-          const namespaceBadge = document.createElement("span");
-          namespaceBadge.className = "detail-badge";
-          namespaceBadge.textContent = `Namespace : ${namespace}`;
-          meta.append(namespaceBadge);
-        });
-        (node.fact_namespaces || []).forEach(namespace => {
-          const factNamespaceBadge = document.createElement("span");
-          factNamespaceBadge.className = "detail-badge";
-          factNamespaceBadge.textContent = `Facts : ${namespace}`;
-          meta.append(factNamespaceBadge);
-        });
         [
           `${publishedApiCount} API${publishedApiCount > 1 ? "s" : ""} exposee${publishedApiCount > 1 ? "s" : ""}`,
           `${publishedTopicCount} topic${publishedTopicCount > 1 ? "s" : ""} publie${publishedTopicCount > 1 ? "s" : ""}`,
           `${collectionCount} collection${collectionCount > 1 ? "s" : ""} utilisee${collectionCount > 1 ? "s" : ""}`,
         ].forEach(label => { const badge = document.createElement("span"); badge.className = "detail-badge"; badge.textContent = label; meta.append(badge); });
-      } else {
-        const architectureLayer = architectureLayerForNode(id);
-        const clusterPath = clusterPathForNode(id);
-        const layerBadge = document.createElement("span");
-        layerBadge.className = "detail-badge";
-        layerBadge.textContent = `Layer : ${architectureLayer}`;
-        meta.append(layerBadge);
-        const clusterPathBadge = document.createElement("span");
-        clusterPathBadge.className = "detail-badge";
-        clusterPathBadge.textContent = `Chemin des clusters : ${clusterPath}`;
-        meta.append(clusterPathBadge);
       }
       const confidenceLabels = { proved: "prouvee", inferred: "inferee", conventional: "conventionnelle" };
       ["proved", "inferred", "conventional"].forEach(confidence => {
@@ -3944,12 +3898,10 @@
       details.append(header);
       if (!isMicroservice) {
         const clusterPath = clusterPathForNode(id);
-        if (clusterPath) {
-          const architectureGroup = createDetailsGroup("Architecture");
-          appendList("Layer", [architectureLayerForNode(id)], architectureGroup);
-          appendList("Chemin des clusters", [clusterPath], architectureGroup);
-          discardEmptyDetailsGroup(architectureGroup);
-        }
+        const architectureGroup = createDetailsGroup("Architecture");
+        appendList("Layer", [architectureLayerForNode(id)], architectureGroup);
+        appendList("Chemin des clusters", clusterPath ? [clusterPath] : [], architectureGroup);
+        discardEmptyDetailsGroup(architectureGroup);
       }
       if (node.kind === "microservice") {
         if (node.vscode_uri) {
@@ -3968,14 +3920,13 @@
         const openApiContracts = node.openapi_contracts || [];
         const kubernetesWorkloads = node.kubernetes_workloads || [];
         appendFindings(node.findings || []);
-        if (node.project_namespace || node.runtime_namespaces?.length || node.fact_namespaces?.length) {
-          const architectureGroup = createDetailsGroup("Architecture");
-          appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
-          appendList("Chemin des clusters", [clusterPathForNode(id)], architectureGroup);
-          appendList("Namespaces Kubernetes", node.runtime_namespaces || [], architectureGroup);
-          appendList("Namespaces de faits", node.fact_namespaces || [], architectureGroup);
-          discardEmptyDetailsGroup(architectureGroup);
-        }
+        const clusterPath = clusterPathForNode(id);
+        const architectureGroup = createDetailsGroup("Architecture");
+        appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
+        appendList("Chemin des clusters", clusterPath ? [clusterPath] : [], architectureGroup);
+        appendList("Namespaces Kubernetes", node.runtime_namespaces || [], architectureGroup);
+        appendList("Namespaces de faits", node.fact_namespaces || [], architectureGroup);
+        discardEmptyDetailsGroup(architectureGroup);
         if (kubernetesWorkloads.length) {
           const kubernetesGroup = createDetailsGroup("Kubernetes");
           appendList("Workloads", kubernetesWorkloads.map(workload => {
@@ -4031,7 +3982,7 @@
         appendRelationList("Services producteurs", edges.filter(link => link.kind === "kafka" && link.target === id), id,
           link => nodeDataById.get(link.source).name, relationsGroup);
         appendRelationList("Services consommateurs", edges.filter(link => link.kind === "kafka" && link.source === id), id,
-          link => nodeDataById.get(link.source).name, relationsGroup);
+          link => nodeDataById.get(link.target).name, relationsGroup);
         appendRelationList("Pattern request/reply", edges.filter(link => link.kind === "request_reply" && (link.source === id || link.target === id)), id,
           link => nodeDataById.get(link.source === id ? link.target : link.source).name, relationsGroup);
         const dtos = (graphData.kafka_dtos || [])
@@ -4079,9 +4030,13 @@
       if (["data_schema", "message_channel"].includes(node.kind)) {
         const factsGroup = createDetailsGroup("Ressource enrichie");
         if (node.technology) appendList("Technologie", [node.technology], factsGroup);
-        const metadata = Object.entries(node.metadata || {}).map(([key, value]) => (
-          `${key} : ${Array.isArray(value) ? value.join(", ") : String(value)}`
-        ));
+        const architectureMetadataKeys = new Set([
+          "architecture_layer", "cluster", "cluster_path", "fact_namespaces", "layer",
+          "namespace", "namespaces", "project_namespace", "project_namespace_path", "runtime_namespaces",
+        ]);
+        const metadata = Object.entries(node.metadata || {})
+          .filter(([key]) => !architectureMetadataKeys.has(key) && !(key === "technology" && node.technology))
+          .map(([key, value]) => `${key} : ${Array.isArray(value) ? value.join(", ") : String(value)}`);
         appendList("Métadonnées", metadata.length ? metadata : ["Aucune métadonnée"], factsGroup);
         appendRelationList("Relations", edges.filter(link => link.source === id || link.target === id), id,
           link => `${link.label} · ${nodeDataById.get(link.source === id ? link.target : link.source)?.name || "ressource"}`,
@@ -4126,7 +4081,6 @@
       renderer.refresh();
       renderDetails(id);
       const position = renderer.getNodeDisplayData(id);
-
 
 // Ordered source module: 60-bootstrap.js
       if (position) renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });

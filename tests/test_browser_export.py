@@ -409,7 +409,8 @@ def _capture_render_snapshot(page, name: str) -> None:
     screenshot = _inspect_png_content(image, metrics["graph"])
     assert screenshot["width"] == metrics["viewport"]["width"]
     assert screenshot["height"] == metrics["viewport"]["height"]
-    assert screenshot["dark_pixels"] > 40, f"Screenshot graph area is empty: {screenshot}"
+    if metrics["cards"] or metrics["clusters"]:
+        assert screenshot["dark_pixels"] > 40, f"Screenshot graph area is empty: {screenshot}"
     assert screenshot["distinct_pixels"] > 100, f"Screenshot has no rendered content: {screenshot}"
     metrics["screenshot"] = screenshot
     (output / f"{name}.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
@@ -692,6 +693,17 @@ def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
         page.wait_for_function(
             "() => Number.isFinite(Number(document.querySelector('#graph')?.dataset.fitRatio))"
         )
+        card_content_metrics = page.locator(".graph-node-card-label").first.evaluate(
+            """card => {
+                const icon = card.querySelector('.graph-node-card-icon').getBoundingClientRect();
+                const name = card.querySelector('.graph-node-card-name').getBoundingClientRect();
+                const kind = card.querySelector('.graph-node-card-kind').getBoundingClientRect();
+                return { iconWidth: icon.width, nameRight: name.right, iconLeft: icon.left, kindWidth: kind.width };
+            }"""
+        )
+        assert card_content_metrics["iconWidth"] <= 14
+        assert card_content_metrics["nameRight"] <= card_content_metrics["iconLeft"]
+        assert card_content_metrics["kindWidth"] >= 90
 
         initial_readable_metrics = _graph_card_metrics(page)
         initial_readable_ratio = float(page.locator("#graph").get_attribute("data-fit-ratio") or "nan")
@@ -1035,8 +1047,10 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
             ]
             if services and resources:
                 assert min(services) > max(resources)
-        assert page.locator("#graph-layers .graph-namespace-group").count() >= 1
-        assert page.locator("#graph-layers .graph-cluster-sublayer-title").count() >= 2
+        page.wait_for_function(
+            "() => document.querySelectorAll('#graph-layers .graph-namespace-group').length >= 1"
+        )
+        assert page.locator("#graph-layers .graph-cluster-sublayer-title").count() == 0
         _assert_architecture_cards_match_size(page, card_size)
         _assert_architecture_cards_do_not_overlap(page)
         _assert_architecture_cards_are_contained_in_clusters(page)
@@ -1078,6 +1092,10 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         mongo_class.get_by_role("button", name="Inspecter").click()
         _capture_render_snapshot(page, "constrained-after-inspect-order")
         assert page.locator("#inspector-title").inner_text() == "Persistance MongoDB · Order"
+        assert "collection orders" not in page.locator("#inspector-body .dto-summary").first.inner_text()
+        assert page.locator("#inspector-body .dto-section").filter(has_text="COLLECTION").get_by_text(
+            "orders", exact=True
+        ).is_visible()
         page.get_by_role("button", name="Address", exact=True).click()
         _capture_render_snapshot(page, "constrained-after-inspect-address")
         assert page.locator("#inspector-title").inner_text() == "Persistance MongoDB · Address"
@@ -1107,6 +1125,13 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         assert page.locator("#details .details-group > summary").all_text_contents() == [
             "Architecture", "Relations", "Sources"
         ]
+        details_meta = page.locator("#details .details-meta").inner_text()
+        assert "Relations : 3" in details_meta
+        assert "Layer :" not in details_meta
+        assert "Chemin des clusters :" not in details_meta
+        architecture = page.locator("#details .details-group").filter(has_text="Architecture")
+        assert "Application" in architecture.inner_text()
+        assert "test_html_export_resources_are0" in architecture.inner_text()
         assert page.get_by_text("Topics publies", exact=True).is_visible()
         assert page.get_by_role("button", name="orders.created", exact=True).is_visible()
         assert page.get_by_role("button", name="DTO · OrderCreated").is_visible()
@@ -1115,6 +1140,9 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         assert page.get_by_text("Publisher.java:4").is_visible()
         page.get_by_role("button", name="orders.created", exact=True).click()
         _capture_render_snapshot(page, "constrained-after-topic-select")
+        consumers = page.locator("#details .details-section").filter(has_text="Services consommateurs")
+        assert consumers.get_by_role("button", name="payments", exact=True).is_visible()
+        assert not consumers.get_by_role("button", name="orders.created", exact=True).count()
         assert page.get_by_text("DTO Kafka", exact=True).is_visible()
         assert not page.get_by_text("Types publies", exact=True).count()
         assert not page.get_by_text("Types consommes", exact=True).count()

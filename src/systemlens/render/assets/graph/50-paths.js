@@ -441,48 +441,22 @@
       meta.className = "details-meta";
       const relationBadge = document.createElement("span");
       relationBadge.className = "detail-badge";
-      relationBadge.textContent = `Relations indexees : ${indexedEdges.length}`;
-      const visibleBadge = document.createElement("span");
-      visibleBadge.className = "detail-badge";
-      visibleBadge.textContent = `Affichees : ${edges.length}`;
-      meta.append(relationBadge, visibleBadge);
+      relationBadge.textContent = edges.length === indexedEdges.length
+        ? `Relations : ${indexedEdges.length}`
+        : `Relations indexees : ${indexedEdges.length}`;
+      meta.append(relationBadge);
+      if (edges.length !== indexedEdges.length) {
+        const visibleBadge = document.createElement("span");
+        visibleBadge.className = "detail-badge";
+        visibleBadge.textContent = `Affichees : ${edges.length}`;
+        meta.append(visibleBadge);
+      }
       if (isMicroservice) {
-        const layerBadge = document.createElement("span");
-        layerBadge.className = "detail-badge";
-        layerBadge.textContent = `Layer : ${node.layer_label || "Unknown"}`;
-        meta.append(layerBadge);
-        const clusterPathBadge = document.createElement("span");
-        clusterPathBadge.className = "detail-badge";
-        clusterPathBadge.textContent = `Chemin des clusters : ${clusterPathForNode(id)}`;
-        meta.append(clusterPathBadge);
-        (node.runtime_namespaces || []).forEach(namespace => {
-          const namespaceBadge = document.createElement("span");
-          namespaceBadge.className = "detail-badge";
-          namespaceBadge.textContent = `Namespace : ${namespace}`;
-          meta.append(namespaceBadge);
-        });
-        (node.fact_namespaces || []).forEach(namespace => {
-          const factNamespaceBadge = document.createElement("span");
-          factNamespaceBadge.className = "detail-badge";
-          factNamespaceBadge.textContent = `Facts : ${namespace}`;
-          meta.append(factNamespaceBadge);
-        });
         [
           `${publishedApiCount} API${publishedApiCount > 1 ? "s" : ""} exposee${publishedApiCount > 1 ? "s" : ""}`,
           `${publishedTopicCount} topic${publishedTopicCount > 1 ? "s" : ""} publie${publishedTopicCount > 1 ? "s" : ""}`,
           `${collectionCount} collection${collectionCount > 1 ? "s" : ""} utilisee${collectionCount > 1 ? "s" : ""}`,
         ].forEach(label => { const badge = document.createElement("span"); badge.className = "detail-badge"; badge.textContent = label; meta.append(badge); });
-      } else {
-        const architectureLayer = architectureLayerForNode(id);
-        const clusterPath = clusterPathForNode(id);
-        const layerBadge = document.createElement("span");
-        layerBadge.className = "detail-badge";
-        layerBadge.textContent = `Layer : ${architectureLayer}`;
-        meta.append(layerBadge);
-        const clusterPathBadge = document.createElement("span");
-        clusterPathBadge.className = "detail-badge";
-        clusterPathBadge.textContent = `Chemin des clusters : ${clusterPath}`;
-        meta.append(clusterPathBadge);
       }
       const confidenceLabels = { proved: "prouvee", inferred: "inferee", conventional: "conventionnelle" };
       ["proved", "inferred", "conventional"].forEach(confidence => {
@@ -507,12 +481,10 @@
       details.append(header);
       if (!isMicroservice) {
         const clusterPath = clusterPathForNode(id);
-        if (clusterPath) {
-          const architectureGroup = createDetailsGroup("Architecture");
-          appendList("Layer", [architectureLayerForNode(id)], architectureGroup);
-          appendList("Chemin des clusters", [clusterPath], architectureGroup);
-          discardEmptyDetailsGroup(architectureGroup);
-        }
+        const architectureGroup = createDetailsGroup("Architecture");
+        appendList("Layer", [architectureLayerForNode(id)], architectureGroup);
+        appendList("Chemin des clusters", clusterPath ? [clusterPath] : [], architectureGroup);
+        discardEmptyDetailsGroup(architectureGroup);
       }
       if (node.kind === "microservice") {
         if (node.vscode_uri) {
@@ -531,14 +503,13 @@
         const openApiContracts = node.openapi_contracts || [];
         const kubernetesWorkloads = node.kubernetes_workloads || [];
         appendFindings(node.findings || []);
-        if (node.project_namespace || node.runtime_namespaces?.length || node.fact_namespaces?.length) {
-          const architectureGroup = createDetailsGroup("Architecture");
-          appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
-          appendList("Chemin des clusters", [clusterPathForNode(id)], architectureGroup);
-          appendList("Namespaces Kubernetes", node.runtime_namespaces || [], architectureGroup);
-          appendList("Namespaces de faits", node.fact_namespaces || [], architectureGroup);
-          discardEmptyDetailsGroup(architectureGroup);
-        }
+        const clusterPath = clusterPathForNode(id);
+        const architectureGroup = createDetailsGroup("Architecture");
+        appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
+        appendList("Chemin des clusters", clusterPath ? [clusterPath] : [], architectureGroup);
+        appendList("Namespaces Kubernetes", node.runtime_namespaces || [], architectureGroup);
+        appendList("Namespaces de faits", node.fact_namespaces || [], architectureGroup);
+        discardEmptyDetailsGroup(architectureGroup);
         if (kubernetesWorkloads.length) {
           const kubernetesGroup = createDetailsGroup("Kubernetes");
           appendList("Workloads", kubernetesWorkloads.map(workload => {
@@ -594,7 +565,7 @@
         appendRelationList("Services producteurs", edges.filter(link => link.kind === "kafka" && link.target === id), id,
           link => nodeDataById.get(link.source).name, relationsGroup);
         appendRelationList("Services consommateurs", edges.filter(link => link.kind === "kafka" && link.source === id), id,
-          link => nodeDataById.get(link.source).name, relationsGroup);
+          link => nodeDataById.get(link.target).name, relationsGroup);
         appendRelationList("Pattern request/reply", edges.filter(link => link.kind === "request_reply" && (link.source === id || link.target === id)), id,
           link => nodeDataById.get(link.source === id ? link.target : link.source).name, relationsGroup);
         const dtos = (graphData.kafka_dtos || [])
@@ -642,9 +613,13 @@
       if (["data_schema", "message_channel"].includes(node.kind)) {
         const factsGroup = createDetailsGroup("Ressource enrichie");
         if (node.technology) appendList("Technologie", [node.technology], factsGroup);
-        const metadata = Object.entries(node.metadata || {}).map(([key, value]) => (
-          `${key} : ${Array.isArray(value) ? value.join(", ") : String(value)}`
-        ));
+        const architectureMetadataKeys = new Set([
+          "architecture_layer", "cluster", "cluster_path", "fact_namespaces", "layer",
+          "namespace", "namespaces", "project_namespace", "project_namespace_path", "runtime_namespaces",
+        ]);
+        const metadata = Object.entries(node.metadata || {})
+          .filter(([key]) => !architectureMetadataKeys.has(key) && !(key === "technology" && node.technology))
+          .map(([key, value]) => `${key} : ${Array.isArray(value) ? value.join(", ") : String(value)}`);
         appendList("Métadonnées", metadata.length ? metadata : ["Aucune métadonnée"], factsGroup);
         appendRelationList("Relations", edges.filter(link => link.source === id || link.target === id), id,
           link => `${link.label} · ${nodeDataById.get(link.source === id ? link.target : link.source)?.name || "ressource"}`,
@@ -689,4 +664,3 @@
       renderer.refresh();
       renderDetails(id);
       const position = renderer.getNodeDisplayData(id);
-

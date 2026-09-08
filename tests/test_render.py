@@ -201,6 +201,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="graph-legend"' in document
     assert "layerTitleGutter = 182" in document
     assert "min-width: 154px" in document
+    assert "grid-template-columns: minmax(0, 1fr) 14px" in document
+    assert "grid-column: 1 / 3" in document
+    assert "graph-cluster-sublayer-title" not in document
     assert 'graphLegend.hidden = !showingGraph' in document
     assert 'issue.vscode_uri ? "a" : "code"' in document
     assert "max-height: calc(100vh - 32px)" in document
@@ -303,8 +306,13 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "Namespace architectural" not in document
     assert "function clusterPathForNode(node)" in document
     assert "function architectureLayerForNode(node)" in document
-    assert "Chemin des clusters : ${clusterPath}" in document
-    assert "Chemin des clusters : ${clusterPathForNode(id)}" in document
+    assert 'appendList("Chemin des clusters", clusterPath ? [clusterPath] : [], architectureGroup)' in document
+    assert "Chemin des clusters : ${clusterPath}" not in document
+    assert "Chemin des clusters : ${clusterPathForNode(id)}" not in document
+    assert "edges.length === indexedEdges.length" in document
+    assert "link => nodeDataById.get(link.target).name, relationsGroup" in document
+    assert "architectureMetadataKeys" in document
+    assert "collection ${item.collection} · ${item.source}" not in document
     assert "project_namespace_path" in document
     assert "architecture_namespace_path" in document
     assert 'labelAlignment: "center"' in document

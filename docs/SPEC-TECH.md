@@ -375,7 +375,9 @@ resources in a second sub-layer on separated grids, then
 packs namespace rectangles with positive margins that include the complete
 projected card/title envelope, not only the node-grid dimensions. Its graph-space
 gaps are expressed in the same graph-coordinate scale as the rest of the
-layout, while remaining large enough for the shared 110×70 card envelope.
+layout, while remaining large enough for the shared 110×70 card envelope. The
+sub-layer assignment remains available as layout state and export diagnostics,
+but the overlay does not render sub-layer titles.
 
 Each layout starts with the shared camera-fit operation in the selected mode.
 The `All nodes` and `Readable distance` actions select and immediately apply
