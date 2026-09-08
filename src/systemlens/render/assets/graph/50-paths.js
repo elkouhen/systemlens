@@ -627,10 +627,61 @@
         discardEmptyDetailsGroup(factsGroup);
       }
     }
+    function renderClusterDetails(cluster) {
+      const members = [...new Set(cluster.ids)]
+        .map(id => nodeDataById.get(id))
+        .filter(Boolean)
+        .sort((left, right) => left.name.localeCompare(right.name));
+      details.classList.remove("is-empty");
+      details.replaceChildren();
+      const header = document.createElement("header");
+      header.className = "details-header";
+      const kicker = document.createElement("p");
+      kicker.className = "details-kicker";
+      kicker.textContent = cluster.kind === "project" ? "Cluster de projets" : "Cluster namespace";
+      const title = document.createElement("h1");
+      title.className = "details-title";
+      title.textContent = cluster.name;
+      const meta = document.createElement("div");
+      meta.className = "details-meta";
+      const count = document.createElement("span");
+      count.className = "detail-badge";
+      count.textContent = `${members.length} élément${members.length > 1 ? "s" : ""}`;
+      meta.append(count);
+      if (cluster.layer && cluster.layer !== "namespaces") {
+        const layer = document.createElement("span");
+        layer.className = "detail-badge";
+        layer.textContent = `Layer : ${cluster.layer.replaceAll("_", " ")}`;
+        meta.append(layer);
+      }
+      header.append(kicker, title, meta);
+      details.append(header);
+      appendActionList("Éléments", members.map(member => ({
+        label: `${member.name} · ${nodeKindLabel(member)}`,
+        title: `Afficher les détails de ${member.name}`,
+        action: () => selectNode(member.id),
+      })));
+      if (!members.length) appendList("Éléments", ["Aucun élément visible"]);
+    }
+    function selectCluster(cluster) {
+      if (!pathLock.checked) clearPathControls();
+      updateGraphState({
+        selectedId: null,
+        selectedClusterKey: cluster.key,
+        relatedNodes: null,
+        relatedEdges: null,
+        pathMicroserviceOrder: new Map(),
+      });
+      renderer.refresh();
+      requestGraphRender();
+      renderClusterDetails(cluster);
+      persistState();
+    }
     function focusNodeRelations(id, matches) {
       if (!pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
+      graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       network.forEachEdge((edge, attributes, source, target) => {
@@ -653,6 +704,7 @@
       if (!preservePath && !pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
+      graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       network.forEachEdge((edge, attributes, source, target) => {

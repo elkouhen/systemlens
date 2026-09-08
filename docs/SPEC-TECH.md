@@ -331,6 +331,12 @@ Mutable selection, view, layout, and camera state is held in one
 scheduler (`requestGraphRender`) so canvas and HTML overlays observe one
 coalesced render cycle.
 
+Namespace and project-cluster titles are interactive overlay controls. Cluster
+selection is tracked independently from node selection in `graphState`; it
+reuses the visible membership calculated for the rendered container, so the
+details list cannot include filtered or guessed nodes. Selecting a listed
+element returns to the ordinary node-detail flow.
+
 ### Camera interactions
 
 The shared card size remains stable during navigation. Camera fitting starts

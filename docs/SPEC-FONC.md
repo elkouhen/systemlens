@@ -252,6 +252,10 @@ The HTML architecture view MUST preserve these visual invariants:
 - Selecting a layer or namespace MUST rebuild the visible graph without
   turning remaining cards white, losing isolated services, or leaving stale
   containers on screen.
+- In the layers and namespaces views, selecting a namespace or project-cluster
+  title MUST highlight that cluster and display its name and sorted list of
+  currently visible elements in the details panel. Each listed element MUST
+  open its ordinary node details.
 - Changing node-type or relation filters MUST remain valid when no
   microservice layer is visible or when the filtered graph is empty; the
   renderer MUST clear stale layer and cluster containers without producing

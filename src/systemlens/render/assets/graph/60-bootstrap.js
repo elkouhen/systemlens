@@ -5,6 +5,7 @@
     function reset() {
       updateGraphState({
         selectedId: null,
+        selectedClusterKey: null,
         relatedNodes: null,
         relatedEdges: null,
         pathMicroserviceOrder: new Map(),
@@ -13,7 +14,7 @@
         setActiveRelationPreset("all");
       }
       renderer.refresh();
-      setDetailsEmpty("Selectionnez un noeud pour isoler ses relations et afficher ses APIs.");
+      setDetailsEmpty("Selectionnez un noeud ou un cluster pour afficher ses informations.");
       search.value = "";
       clearPathControls();
       persistState();

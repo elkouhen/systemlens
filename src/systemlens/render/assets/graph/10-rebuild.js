@@ -366,17 +366,33 @@
           }
           const renderedWidth = Math.max(150, maxX - minX);
           const renderedHeight = Math.max(92, maxY - minY);
-          namespaceBounds.set(`${group.layer}:${group.namespace}`, {
+          const groupKey = `${group.layer}:${group.namespace}`;
+          namespaceBounds.set(groupKey, {
             minX, maxX: minX + renderedWidth, minY, maxY: minY + renderedHeight,
           });
-          const box = document.createElement("div"); box.className = "graph-namespace-group";
+          const box = document.createElement("div");
+          box.className = `graph-namespace-group${graphState.selectedClusterKey === groupKey ? " is-selected" : ""}`;
           box.dataset.namespace = group.namespace;
+          box.dataset.clusterKey = groupKey;
           box.style.left = `${minX}px`; box.style.top = `${minY}px`;
           box.style.width = `${renderedWidth}px`;
           box.style.height = `${renderedHeight}px`;
           box.style.setProperty("--namespace-accent", layerColors[group.layer] || "#64748b");
-          const title = document.createElement("span"); title.className = "graph-namespace-title";
+          const title = document.createElement("button");
+          title.type = "button";
+          title.className = "graph-namespace-title";
           title.textContent = group.namespace === "root" ? "ROOT" : group.namespace;
+          title.title = `Afficher les éléments du cluster ${title.textContent}`;
+          title.addEventListener("click", event => {
+            event.stopPropagation();
+            selectCluster({
+              key: groupKey,
+              kind: "namespace",
+              name: title.textContent,
+              layer: group.layer,
+              ids: group.ids,
+            });
+          });
           box.append(title);
           graphLayersOverlay.append(box);
         });
@@ -413,16 +429,30 @@
             maxY = Math.max(...points.map(point => point.y)) + 52;
           }
           const container = document.createElement("div");
-          container.className = "graph-project-group";
+          const groupKey = `project:${group.namespace || group.name || "root"}:${group.name}`;
+          container.className = `graph-project-group${graphState.selectedClusterKey === groupKey ? " is-selected" : ""}`;
           container.dataset.namespaceGroup = group.namespace || group.name || "root";
+          container.dataset.clusterKey = groupKey;
           container.style.left = `${minX}px`;
           container.style.top = `${minY}px`;
           container.style.width = `${Math.max(150, maxX - minX)}px`;
           container.style.height = `${Math.max(120, maxY - minY)}px`;
           container.style.setProperty("--group-accent", "#64748b");
-          const title = document.createElement("span");
+          const title = document.createElement("button");
+          title.type = "button";
           title.className = "graph-project-group-title";
           title.textContent = group.name;
+          title.title = `Afficher les éléments du cluster ${group.name}`;
+          title.addEventListener("click", event => {
+            event.stopPropagation();
+            selectCluster({
+              key: groupKey,
+              kind: "project",
+              name: group.name,
+              layer: null,
+              ids: children.filter(id => nodePoints.has(id)),
+            });
+          });
           container.append(title);
           graphGroupsOverlay.append(container);
         });

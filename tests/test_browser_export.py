@@ -631,6 +631,33 @@ def _assert_nested_namespace_cluster_contains_three_children(page) -> None:
     assert result["valid"], result
 
 
+def _assert_cluster_can_be_selected_and_inspected(page) -> None:
+    titles = page.locator(".graph-namespace-title")
+    assert titles.count() > 0
+    cluster_name = (titles.first.text_content() or "").strip()
+    titles.first.dispatch_event("click")
+    page.wait_for_function(
+        "() => document.querySelectorAll('.graph-namespace-group.is-selected').length === 1"
+    )
+    assert (page.locator("#details .details-title").text_content() or "").strip() == cluster_name
+    assert "élément" in (page.locator("#details .detail-badge").first.text_content() or "")
+    members = page.locator("#details .relation-link")
+    assert members.count() > 0
+    member_name = (members.first.text_content() or "").split(" · ", 1)[0]
+    members.first.click()
+    assert (page.locator("#details .details-title").text_content() or "").strip() == member_name
+    assert page.locator(".graph-node-card-label.is-selected").count() == 1
+    page.wait_for_timeout(300)
+    titles.first.dispatch_event("click")
+    page.wait_for_function(
+        "() => document.querySelectorAll('.graph-namespace-group.is-selected').length === 1"
+    )
+    page.locator("#reset").dispatch_event("click")
+    page.wait_for_function(
+        "() => document.querySelectorAll('.graph-namespace-group.is-selected').length === 0"
+    )
+
+
 def _assert_layer_bands_are_disjoint_and_contain_clusters(page) -> None:
     result = page.evaluate(
         """() => {
@@ -825,6 +852,8 @@ def test_complex_dataset_geometry_contract_across_all_views() -> None:
             if layout_id == "layout-cluster":
                 _assert_nested_namespace_cluster_contains_three_children(page)
                 _capture_render_snapshot(page, "complex-cluster-final")
+            if layout_id in {"layout-cluster", "layout-elk"}:
+                _assert_cluster_can_be_selected_and_inspected(page)
             _assert_pan_does_not_zoom_or_desynchronise_overlays(page)
             _assert_architecture_cards_keep_size_after_camera_change(page, card_size)
             _assert_geometry_contract(page, layered=layered)

@@ -462,13 +462,14 @@
       if (switchingView) {
         updateGraphState({
           selectedId: null,
+          selectedClusterKey: null,
           hoveredId: null,
           relatedNodes: null,
           relatedEdges: null,
           pathMicroserviceOrder: new Map(),
         });
         clearPathControls();
-        setDetailsEmpty("Selectionnez un noeud pour isoler ses relations et afficher ses APIs.");
+        setDetailsEmpty("Selectionnez un noeud ou un cluster pour afficher ses informations.");
       }
       const zoomOutButton = document.getElementById("zoom-out");
       zoomOutButton.disabled = false;

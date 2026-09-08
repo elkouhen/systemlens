@@ -177,6 +177,7 @@
     let initialNodePositions = new Map();
     const graphState = {
       selectedId: null,
+      selectedClusterKey: null,
       hoveredId: null,
       relatedNodes: null,
       relatedEdges: null,
