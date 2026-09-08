@@ -177,7 +177,13 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert '>Mongo</button>' in document
     assert 'id="request-reply-tab"' in document
     assert 'id="build-tab"' in document
-    assert '>Ajuster</button>' in document
+    assert '>Tout voir</button>' in document
+    assert '>Distance lisible</button>' in document
+    assert 'fitMode: "readable"' in document
+    assert "fitRequest !== graphState.fitRequest" in document
+    assert 'Math.max(1.6, requiredCardZoomIn(targetRenderer))' in document
+    assert "if (renderFrameScheduled) return renderFramePromise" in document
+    assert "await requestGraphRender()" in document
     assert '>Effacer</button>' in document
     assert 'id="dto-reference-filter"' in document
     assert 'id="openapi-reference-filter"' in document

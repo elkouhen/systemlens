@@ -191,6 +191,8 @@
       graphWheelCleanup: null,
       activeLayout: "forceatlas2-noverlap",
       layoutRequest: 0,
+      fitMode: "readable",
+      fitRequest: 0,
     };
     function updateGraphState(patch) {
       Object.assign(graphState, patch);
@@ -228,13 +230,21 @@
       return required;
     }
     let renderFrameScheduled = false;
+    let renderFramePromise = Promise.resolve();
     function requestGraphRender() {
-      if (renderFrameScheduled) return;
+      if (renderFrameScheduled) return renderFramePromise;
       renderFrameScheduled = true;
-      requestAnimationFrame(() => {
-        renderFrameScheduled = false;
-        renderOverlays?.();
+      renderFramePromise = new Promise(resolve => {
+        requestAnimationFrame(() => {
+          renderFrameScheduled = false;
+          try {
+            renderOverlays?.();
+          } finally {
+            resolve();
+          }
+        });
       });
+      return renderFramePromise;
     }
     const layoutLibraries = Promise.all([
       import("https://esm.sh/graphology-layout-forceatlas2@0.10.1"),

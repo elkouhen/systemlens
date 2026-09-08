@@ -333,10 +333,13 @@ coalesced render cycle.
 
 ### Camera interactions
 
-The shared card size remains stable during navigation. The initial fit uses
-the projected node centers, with a small margin, so every visible node is
-framed without shrinking cards. Card overlap is an accepted dense-overview
-state; zooming and panning never move nodes to repair it or clamp the camera.
+The shared card size remains stable during navigation. Camera fitting starts
+from Sigma's native complete overview. In `All nodes` mode that state is used
+unchanged. In the default `Readable distance` mode, the renderer measures the
+projected center spacing of visible fixed-size cards and zooms in by at least
+1.6x, capped by the existing 4x spacing guard. Peripheral nodes may therefore
+leave the viewport. Zooming and panning never move nodes to repair spacing or
+clamp the camera.
 
 Relations remain rendered by Sigma independently of the HTML card overlays.
 Camera updates during pan and zoom are coalesced to the next animation frame.
@@ -365,13 +368,13 @@ projected card/title envelope, not only the node-grid dimensions. Its graph-spac
 gaps are expressed in the same graph-coordinate scale as the rest of the
 layout, while remaining large enough for the shared 110×70 card envelope.
 
-Each layout starts with a shared camera-fit operation based on the projected
-node centers and a small margin. The same operation is reapplied by the Ajuster
-action and after a viewport resize, so switching between graph, layer, and
-namespace views does not retain a stale camera scale or leave node centers
-outside the available viewport. Overlapping cards and cluster rectangles are
-allowed in dense views; their fixed screen-space dimensions are preserved
-during navigation.
+Each layout starts with the shared camera-fit operation in the selected mode.
+The `All nodes` and `Readable distance` actions select and immediately apply
+their mode; the selection is reapplied after a viewport resize. This prevents
+view switches from retaining a stale camera scale while allowing the readable
+mode to favor card separation over a complete overview. Overlapping cards and
+cluster rectangles remain possible in dense views; their fixed screen-space
+dimensions are preserved during navigation.
 
 Container geometry is kept in graph coordinates until it is projected to the
 viewport.

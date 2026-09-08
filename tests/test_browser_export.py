@@ -276,6 +276,37 @@ def _assert_all_node_centers_are_visible(page) -> None:
     assert result["outside"] == [], result
 
 
+def _graph_card_metrics(page) -> dict[str, float | int]:
+    return page.evaluate(
+        """() => {
+            const cards = [...document.querySelectorAll('.graph-node-card-label')]
+                .map(card => {
+                    const rect = card.getBoundingClientRect();
+                    return {
+                        left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+                        x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2,
+                    };
+                });
+            let overlaps = 0;
+            for (let index = 0; index < cards.length; index += 1) {
+                for (let otherIndex = index + 1; otherIndex < cards.length; otherIndex += 1) {
+                    const left = cards[index], right = cards[otherIndex];
+                    if (left.left < right.right && left.right > right.left
+                        && left.top < right.bottom && left.bottom > right.top) overlaps += 1;
+                }
+            }
+            return {
+                count: cards.length,
+                overlaps,
+                span: Math.max(
+                    Math.max(...cards.map(point => point.x)) - Math.min(...cards.map(point => point.x)),
+                    Math.max(...cards.map(point => point.y)) - Math.min(...cards.map(point => point.y)),
+                ),
+            };
+        }"""
+    )
+
+
 def _inspect_png_content(image: bytes, region: dict[str, float]) -> dict[str, int]:
     """Inspect screenshot pixels without depending on a GUI or image library."""
     assert image.startswith(b"\x89PNG\r\n\x1a\n")
@@ -628,6 +659,38 @@ def _assert_geometry_contract(page, *, layered: bool) -> None:
 
 
 @pytest.mark.slow
+def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
+    """The checked-in complex export keeps both camera presets operational."""
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1440, "height": 900})
+        page = context.new_page()
+        page.set_default_timeout(10_000)
+        page.set_content(_COMPLEX_DATASET_EXPORT.read_text(encoding="utf-8"), wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 200"
+        )
+        page.locator("#layout-status").filter(has_text="vue graphe actif.").wait_for(state="visible")
+
+        page.locator("#fit-view").click()
+        page.wait_for_function("() => document.querySelector('#graph')?.dataset.fitMode === 'overview'")
+        overview_metrics = _graph_card_metrics(page)
+        _assert_all_node_centers_are_visible(page)
+
+        page.locator("#fit-readable").click()
+        page.wait_for_function("() => document.querySelector('#graph')?.dataset.fitMode === 'readable'")
+        readable_metrics = _graph_card_metrics(page)
+        assert readable_metrics["span"] > overview_metrics["span"] * 1.5
+        assert readable_metrics["overlaps"] < overview_metrics["overlaps"] * .1
+
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
 def test_complex_dataset_geometry_contract_across_all_views() -> None:
     """Stress the geometry invariants with the 50-service stress dataset."""
     with sync_playwright() as playwright:
@@ -651,7 +714,28 @@ def test_complex_dataset_geometry_contract_across_all_views() -> None:
         assert graph.get_attribute("data-visible-node-count") == "180"
         assert graph.get_attribute("data-relation-count") == "300"
         assert not errors, errors
+        page.locator("#layout-status").filter(has_text="vue graphe actif.").wait_for(state="visible")
+        page.wait_for_function("() => document.querySelector('#graph')?.dataset.fitMode === 'readable'")
+        page.locator("#fit-view").click()
+        page.wait_for_function("() => document.querySelector('#graph')?.dataset.fitMode === 'overview'")
+        overview_metrics = _graph_card_metrics(page)
+        assert page.locator("#fit-view").get_attribute("aria-pressed") == "true"
         _assert_all_node_centers_are_visible(page)
+        page.locator("#fit-readable").click()
+        page.wait_for_function("() => document.querySelector('#graph')?.dataset.fitMode === 'readable'")
+        selected_readable_metrics = _graph_card_metrics(page)
+        assert selected_readable_metrics["span"] > overview_metrics["span"] * 1.5, {
+            "overview": overview_metrics,
+            "readable": selected_readable_metrics,
+            "fit_ratio": graph.get_attribute("data-fit-ratio"),
+        }
+        assert selected_readable_metrics["overlaps"] < overview_metrics["overlaps"] * .1, {
+            "overview": overview_metrics,
+            "readable": selected_readable_metrics,
+        }
+        assert page.locator("#fit-readable").get_attribute("aria-pressed") == "true"
+        page.locator("#fit-view").click()
+        page.wait_for_function("() => document.querySelector('#graph')?.dataset.fitMode === 'overview'")
         _capture_render_snapshot(page, "complex-initial")
 
         # The same contract is checked after layout, resize, zoom and pan. A

@@ -40,21 +40,59 @@
     function activeRenderer() {
       return dependencyCanvas.hidden ? renderer : ensureDependencyRenderer();
     }
-    function fitCameraToVisibleGraph(targetRenderer = renderer) {
+    const fitOverviewButton = document.getElementById("fit-view");
+    const fitReadableButton = document.getElementById("fit-readable");
+    function updateFitModeControls(mode) {
+      [
+        [fitOverviewButton, "overview"],
+        [fitReadableButton, "readable"],
+      ].forEach(([button, buttonMode]) => {
+        const active = mode === buttonMode;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+    }
+    async function fitCameraToVisibleGraph(targetRenderer = renderer, mode = graphState.fitMode) {
       if (!targetRenderer) return;
+      const fitRequest = ++graphState.fitRequest;
+      const nextMode = mode === "overview" ? "overview" : "readable";
+      updateGraphState({ fitMode: nextMode });
+      updateFitModeControls(nextMode);
       targetRenderer.refresh();
       // Sigma owns the normalized camera coordinate system. Mixing projected
       // CSS pixels into CameraState.x/y sends overlays millions of pixels off
       // screen after a view switch. Its native reset computes the fit from
       // the current graph bounds and keeps canvas and HTML overlays aligned.
       targetRenderer.getCamera().animatedReset({ duration: 0 });
+      // Sigma 2.4 schedules animatedReset even with a zero duration and does
+      // not expose a completion promise. Wait until that scheduled camera
+      // update and the following paint have both run before applying the
+      // readable zoom, otherwise the reset silently overwrites it.
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (fitRequest !== graphState.fitRequest) return;
+      if (nextMode === "readable") {
+        const camera = targetRenderer.getCamera();
+        const state = camera.getState();
+        // Start from the complete overview, then move closer. Architecture
+        // cards use the measured projected spacing; the build graph has no
+        // HTML cards and uses the same minimum reading distance.
+        const zoomIn = targetRenderer === renderer
+          ? Math.max(1.6, requiredCardZoomIn(targetRenderer))
+          : 1.6;
+        camera.setState({ ...state, ratio: Math.max(.01, state.ratio / zoomIn) });
+      }
+      targetRenderer.refresh();
       if (targetRenderer === renderer) {
         const layoutRequest = graphState.layoutRequest;
-        requestAnimationFrame(() => {
-          if (layoutRequest !== graphState.layoutRequest) return;
-          requestGraphRender();
-        });
+        // Wait for the exact coalesced overlay frame. Waiting for an unrelated
+        // animation frame can mark the fit complete while fixed-size cards
+        // still use the previous camera state.
+        await requestGraphRender();
+        if (fitRequest !== graphState.fitRequest || layoutRequest !== graphState.layoutRequest) return;
       }
+      const targetCanvas = targetRenderer === renderer ? graphCanvas : dependencyCanvas;
+      targetCanvas.dataset.fitMode = nextMode;
+      targetCanvas.dataset.fitRatio = String(targetRenderer.getCamera().getState().ratio);
     }
     document.getElementById("zoom-in").addEventListener("click", () => {
       const renderer = activeRenderer();
@@ -70,7 +108,8 @@
       camera.setState({ ...state, ratio: Math.min(100, state.ratio * 1.25) });
       requestGraphRender();
     });
-    document.getElementById("fit-view").addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer()));
+    fitOverviewButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "overview"));
+    fitReadableButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "readable"));
     document.getElementById("reset").addEventListener("click", reset);
     document.getElementById("inspector-close").addEventListener("click", closeInspector);
     inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });

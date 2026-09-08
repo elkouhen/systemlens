@@ -150,8 +150,11 @@ Shared libraries and other non-deployable modules are not rendered as layers.
 
 The three primary views are presented as a single view selector; placement
 strategies are secondary controls. The graph viewport reserves the space used
-by the navigation panel and uses a readable initial camera framing after a
-view or window-size change; the complete graph does not have to fit at once.
+by the navigation panel. Its fit control exposes two explicit modes: `All
+nodes`, which frames every visible node, and `Readable distance`, which keeps
+the same center but zooms in until cards have useful reading separation. The
+selected mode is reapplied after a view or window-size change, and `Readable
+distance` is the initial mode.
 
 Users can pan and zoom to explore the remaining graph. In the layers and
 namespaces views, relations are visually subdued. In every view, microservice,
@@ -263,9 +266,10 @@ The HTML architecture view MUST preserve these visual invariants:
   layer, the renderer MUST add columns to that cluster and recompute the
   layout. The additional horizontal space MUST expand the diagram rather than
   overlap another layer or cluster.
-Every layout switch MUST refit the camera to the resulting graph; it MUST NOT
-apply an additional automatic zoom-out that makes the layout unnecessarily
-small.
+Every layout switch MUST refit the camera to the resulting graph using the
+selected fit mode. `All nodes` MUST NOT apply an additional automatic zoom-out
+that makes the layout unnecessarily small. `Readable distance` MAY leave
+peripheral nodes outside the viewport; users can pan to reach them.
 
 The details panel MUST display the resolved software layer and the cluster
 path for microservices and resources (topics, collections, and enriched

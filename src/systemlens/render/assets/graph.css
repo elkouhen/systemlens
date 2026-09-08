@@ -67,6 +67,8 @@
     .toolbar button { width: 34px; height: 34px; border: 1px solid #b9c5d6; border-radius: 6px; color: #315f9b; background: #fff; font-size: 19px; line-height: 1; cursor: pointer; }
     .toolbar button:hover { background: #eaf2ff; }
     .graph-actions .graph-action-label { width: auto; padding: 0 8px; font-size: 11px; font-weight: 700; }
+    .graph-actions .fit-mode.is-active { border-color: #3156d3; color: #fff; background: #3156d3; }
+    .graph-actions .fit-mode.is-active:hover { background: #2647b5; }
     .exploration-start { display: grid; gap: 7px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px; background: #f8fbff; }
     .exploration-start h2 { margin: 0; color: #1d4f91; font-size: 12px; }
     .exploration-start p { margin: 0; color: #52616b; font-size: 11px; line-height: 1.4; }
