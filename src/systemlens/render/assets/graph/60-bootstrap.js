@@ -59,19 +59,14 @@
       updateGraphState({ fitMode: nextMode });
       updateFitModeControls(nextMode);
       targetRenderer.refresh();
-      // Sigma owns the normalized camera coordinate system. Mixing projected
-      // CSS pixels into CameraState.x/y sends overlays millions of pixels off
-      // screen after a view switch. Its native reset computes the fit from
-      // the current graph bounds and keeps canvas and HTML overlays aligned.
-      targetRenderer.getCamera().animatedReset({ duration: 0 });
-      // Sigma 2.4 schedules animatedReset even with a zero duration and does
-      // not expose a completion promise. Wait until that scheduled camera
-      // update and the following paint have both run before applying the
-      // readable zoom, otherwise the reset silently overwrites it.
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      // Sigma's normalized overview is the default camera state. Apply it
+      // synchronously so repeated or rapid fit actions cannot interleave two
+      // zero-duration animations and compound the readable zoom.
+      const camera = targetRenderer.getCamera();
+      camera.setState({ x: .5, y: .5, ratio: 1, angle: 0 });
+      targetRenderer.refresh();
       if (fitRequest !== graphState.fitRequest) return;
       if (nextMode === "readable") {
-        const camera = targetRenderer.getCamera();
         const state = camera.getState();
         // Start from the complete overview, then move closer. Architecture
         // cards use the measured projected spacing; the build graph has no

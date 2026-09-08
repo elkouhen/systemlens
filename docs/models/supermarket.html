@@ -977,7 +977,7 @@
       const cardWidth = GRAPH_CARD_WIDTH + 4;
       const cardHeight = GRAPH_CARD_HEIGHT + 4;
       const buckets = new Map();
-      let required = 1;
+      const requiredZooms = [];
       network.forEachNode((id, attributes) => {
         if (!isVisibleNodeId(id) || attributes.hidden) return;
         const point = targetRenderer.graphToViewport({ x: attributes.x, y: attributes.y });
@@ -989,7 +989,10 @@
               const distanceX = Math.abs(point.x - other.x);
               const distanceY = Math.abs(point.y - other.y);
               if (distanceX >= cardWidth || distanceY >= cardHeight) continue;
-              required = Math.max(required, Math.min(4, Math.max(
+              // Uniform zoom separates the cards as soon as either axis has
+              // enough room. Taking the larger axis factor would over-zoom
+              // every pair that is nearly aligned horizontally or vertically.
+              requiredZooms.push(Math.min(4, Math.min(
                 cardWidth / Math.max(distanceX, 1),
                 cardHeight / Math.max(distanceY, 1),
               )));
@@ -1001,7 +1004,12 @@
         bucket.push(point);
         buckets.set(key, bucket);
       });
-      return required;
+      if (!requiredZooms.length) return 1;
+      requiredZooms.sort((left, right) => left - right);
+      // A single near-coincident pair must not dictate the camera distance for
+      // the entire graph. Separating 90% of the initially overlapping pairs
+      // gives a stable readable view while leaving local outliers explorable.
+      return requiredZooms[Math.floor((requiredZooms.length - 1) * .9)];
     }
     let renderFrameScheduled = false;
     let renderFramePromise = Promise.resolve();
@@ -4163,19 +4171,14 @@
       updateGraphState({ fitMode: nextMode });
       updateFitModeControls(nextMode);
       targetRenderer.refresh();
-      // Sigma owns the normalized camera coordinate system. Mixing projected
-      // CSS pixels into CameraState.x/y sends overlays millions of pixels off
-      // screen after a view switch. Its native reset computes the fit from
-      // the current graph bounds and keeps canvas and HTML overlays aligned.
-      targetRenderer.getCamera().animatedReset({ duration: 0 });
-      // Sigma 2.4 schedules animatedReset even with a zero duration and does
-      // not expose a completion promise. Wait until that scheduled camera
-      // update and the following paint have both run before applying the
-      // readable zoom, otherwise the reset silently overwrites it.
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      // Sigma's normalized overview is the default camera state. Apply it
+      // synchronously so repeated or rapid fit actions cannot interleave two
+      // zero-duration animations and compound the readable zoom.
+      const camera = targetRenderer.getCamera();
+      camera.setState({ x: .5, y: .5, ratio: 1, angle: 0 });
+      targetRenderer.refresh();
       if (fitRequest !== graphState.fitRequest) return;
       if (nextMode === "readable") {
-        const camera = targetRenderer.getCamera();
         const state = camera.getState();
         // Start from the complete overview, then move closer. Architecture
         // cards use the measured projected spacing; the build graph has no

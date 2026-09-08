@@ -182,6 +182,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'fitMode: "readable"' in document
     assert "fitRequest !== graphState.fitRequest" in document
     assert 'Math.max(1.6, requiredCardZoomIn(targetRenderer))' in document
+    assert "requiredZooms.push(Math.min(4, Math.min(" in document
+    assert "(requiredZooms.length - 1) * .9" in document
+    assert "camera.setState({ x: .5, y: .5, ratio: 1, angle: 0 })" in document
+    assert "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))" not in document
     assert "if (renderFrameScheduled) return renderFramePromise" in document
     assert "await requestGraphRender()" in document
     assert '>Effacer</button>' in document

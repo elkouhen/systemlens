@@ -203,7 +203,7 @@
       const cardWidth = GRAPH_CARD_WIDTH + 4;
       const cardHeight = GRAPH_CARD_HEIGHT + 4;
       const buckets = new Map();
-      let required = 1;
+      const requiredZooms = [];
       network.forEachNode((id, attributes) => {
         if (!isVisibleNodeId(id) || attributes.hidden) return;
         const point = targetRenderer.graphToViewport({ x: attributes.x, y: attributes.y });
@@ -215,7 +215,10 @@
               const distanceX = Math.abs(point.x - other.x);
               const distanceY = Math.abs(point.y - other.y);
               if (distanceX >= cardWidth || distanceY >= cardHeight) continue;
-              required = Math.max(required, Math.min(4, Math.max(
+              // Uniform zoom separates the cards as soon as either axis has
+              // enough room. Taking the larger axis factor would over-zoom
+              // every pair that is nearly aligned horizontally or vertically.
+              requiredZooms.push(Math.min(4, Math.min(
                 cardWidth / Math.max(distanceX, 1),
                 cardHeight / Math.max(distanceY, 1),
               )));
@@ -227,7 +230,12 @@
         bucket.push(point);
         buckets.set(key, bucket);
       });
-      return required;
+      if (!requiredZooms.length) return 1;
+      requiredZooms.sort((left, right) => left - right);
+      // A single near-coincident pair must not dictate the camera distance for
+      // the entire graph. Separating 90% of the initially overlapping pairs
+      // gives a stable readable view while leaving local outliers explorable.
+      return requiredZooms[Math.floor((requiredZooms.length - 1) * .9)];
     }
     let renderFrameScheduled = false;
     let renderFramePromise = Promise.resolve();

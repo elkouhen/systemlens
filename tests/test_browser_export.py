@@ -288,16 +288,31 @@ def _graph_card_metrics(page) -> dict[str, float | int]:
                     };
                 });
             let overlaps = 0;
+            const requiredZooms = [];
             for (let index = 0; index < cards.length; index += 1) {
                 for (let otherIndex = index + 1; otherIndex < cards.length; otherIndex += 1) {
                     const left = cards[index], right = cards[otherIndex];
                     if (left.left < right.right && left.right > right.left
-                        && left.top < right.bottom && left.bottom > right.top) overlaps += 1;
+                        && left.top < right.bottom && left.bottom > right.top) {
+                        overlaps += 1;
+                        requiredZooms.push(Math.min(
+                            (left.right - left.left + 4) / Math.max(Math.abs(left.x - right.x), 1),
+                            (left.bottom - left.top + 4) / Math.max(Math.abs(left.y - right.y), 1),
+                        ));
+                    }
                 }
             }
+            requiredZooms.sort((left, right) => left - right);
+            const percentile = value => requiredZooms.length
+                ? requiredZooms[Math.floor((requiredZooms.length - 1) * value)]
+                : 1;
             return {
                 count: cards.length,
                 overlaps,
+                zoomP50: percentile(.5),
+                zoomP75: percentile(.75),
+                zoomP90: percentile(.9),
+                zoomP95: percentile(.95),
                 span: Math.max(
                     Math.max(...cards.map(point => point.x)) - Math.min(...cards.map(point => point.x)),
                     Math.max(...cards.map(point => point.y)) - Math.min(...cards.map(point => point.y)),
@@ -674,17 +689,43 @@ def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 200"
         )
         page.locator("#layout-status").filter(has_text="vue graphe actif.").wait_for(state="visible")
+        page.wait_for_function(
+            "() => Number.isFinite(Number(document.querySelector('#graph')?.dataset.fitRatio))"
+        )
+
+        initial_readable_metrics = _graph_card_metrics(page)
+        initial_readable_ratio = float(page.locator("#graph").get_attribute("data-fit-ratio") or "nan")
+        page.locator("#fit-readable").click()
+        page.wait_for_timeout(100)
+        repeated_initial_metrics = _graph_card_metrics(page)
+        repeated_initial_ratio = float(page.locator("#graph").get_attribute("data-fit-ratio") or "nan")
+        assert repeated_initial_ratio == pytest.approx(initial_readable_ratio)
+        assert repeated_initial_metrics["span"] == pytest.approx(initial_readable_metrics["span"], abs=1)
 
         page.locator("#fit-view").click()
         page.wait_for_function("() => document.querySelector('#graph')?.dataset.fitMode === 'overview'")
         overview_metrics = _graph_card_metrics(page)
+        overview_ratio = float(page.locator("#graph").get_attribute("data-fit-ratio") or "nan")
         _assert_all_node_centers_are_visible(page)
 
         page.locator("#fit-readable").click()
         page.wait_for_function("() => document.querySelector('#graph')?.dataset.fitMode === 'readable'")
         readable_metrics = _graph_card_metrics(page)
+        readable_ratio = float(page.locator("#graph").get_attribute("data-fit-ratio") or "nan")
+        readable_zoom = overview_ratio / readable_ratio
+        assert 1.6 <= readable_zoom < 4, json.dumps(
+            {"zoom": readable_zoom, "overview": overview_metrics}, sort_keys=True
+        )
         assert readable_metrics["span"] > overview_metrics["span"] * 1.5
         assert readable_metrics["overlaps"] < overview_metrics["overlaps"] * .1
+
+        page.locator("#fit-readable").dblclick(delay=10)
+        page.wait_for_timeout(100)
+        repeated_metrics = _graph_card_metrics(page)
+        repeated_ratio = float(page.locator("#graph").get_attribute("data-fit-ratio") or "nan")
+        assert repeated_ratio == pytest.approx(readable_ratio)
+        assert repeated_metrics["span"] == pytest.approx(readable_metrics["span"], abs=1)
+        assert repeated_metrics["overlaps"] == readable_metrics["overlaps"]
 
         context.close()
         browser.close()

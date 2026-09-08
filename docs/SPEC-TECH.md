@@ -337,12 +337,21 @@ The shared card size remains stable during navigation. Camera fitting starts
 from Sigma's native complete overview. In `All nodes` mode that state is used
 unchanged. In the default `Readable distance` mode, the renderer measures the
 projected center spacing of visible fixed-size cards and zooms in by at least
-1.6x, capped by the existing 4x spacing guard. Peripheral nodes may therefore
-leave the viewport. Zooming and panning never move nodes to repair spacing or
-clamp the camera.
+1.6x, capped by the existing 4x spacing guard. For each overlapping pair, the
+required factor is the smaller of its horizontal and vertical separation
+factors: reaching the card clearance on either axis is sufficient. The 90th
+percentile of those pair factors determines the fit, preventing a single
+near-coincident outlier from forcing the 4x cap while separating most initially
+overlapping cards. The factors are collected through the existing spatial grid
+and sorted, adding O(p log p) work for p nearby overlapping pairs. Peripheral
+nodes may therefore leave the viewport. Zooming and panning never move nodes to
+repair spacing or clamp the camera.
 
 Relations remain rendered by Sigma independently of the HTML card overlays.
 Camera updates during pan and zoom are coalesced to the next animation frame.
+Fit operations reset Sigma's normalized camera state synchronously before
+calculating the selected mode. This makes overlapping fit requests idempotent
+and prevents zero-duration camera animations from racing on repeated clicks.
 The Sigma canvas and the HTML card/cluster overlays are therefore recomputed
 from one camera state per frame, preventing partially rebuilt containers from
 appearing while the user drags the namespace view.

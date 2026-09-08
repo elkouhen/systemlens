@@ -154,7 +154,9 @@ by the navigation panel. Its fit control exposes two explicit modes: `All
 nodes`, which frames every visible node, and `Readable distance`, which keeps
 the same center but zooms in until cards have useful reading separation. The
 selected mode is reapplied after a view or window-size change, and `Readable
-distance` is the initial mode.
+distance` is the initial mode. Reapplying either selected mode MUST be
+idempotent: repeated or rapid clicks MUST produce the same camera framing and
+MUST NOT compound the previous zoom.
 
 Users can pan and zoom to explore the remaining graph. In the layers and
 namespaces views, relations are visually subdued. In every view, microservice,
