@@ -150,9 +150,10 @@ Shared libraries and other non-deployable modules are not rendered as layers.
 
 The three primary views are presented as a single view selector; placement
 strategies are secondary controls. The graph viewport reserves the space used
-by the navigation panel. Its fit control exposes two explicit modes: `All
-nodes`, which frames every visible node, and `Readable distance`, which keeps
-the same center but zooms in until cards have useful reading separation. The
+by the navigation panel. Zoom actions are grouped as a compact `−` / `+`
+control, and the adjacent segmented fit control exposes two explicit modes:
+`All`, which frames every visible node, and `Readable`, which keeps the same
+center but zooms in until cards have useful reading separation. The
 selected mode is reapplied after a view or window-size change, and `Readable
 distance` is the initial mode. Reapplying either selected mode MUST be
 idempotent: repeated or rapid clicks MUST produce the same camera framing and

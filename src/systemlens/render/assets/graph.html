@@ -20,15 +20,20 @@
   <div class="toolbar">
     <div class="toolbar-header">
       <div class="brand"><span class="brand-mark">SL</span><strong>SystemLens</strong><span class="brand-subtitle">Architecture workspace</span></div>
-      <div class="graph-actions" aria-label="Navigation du graphe">
-        <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
+      <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
+    </div>
+    <div class="graph-actions" aria-label="Navigation du graphe">
+      <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
         <button id="zoom-out" type="button" aria-label="Dézoomer" title="Dézoomer">−</button>
         <button id="zoom-in" type="button" aria-label="Zoomer" title="Zoomer">+</button>
-        <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tous les nœuds" title="Afficher tous les nœuds" aria-pressed="false">Tout voir</button>
-        <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher le graphe à une distance lisible" title="Afficher le graphe à une distance lisible" aria-pressed="true">Distance lisible</button>
-        <button id="layer-view-toggle" class="graph-action-label" type="button" aria-label="Changer de vue" title="Changer de vue">Vue suivante</button>
-        <button id="reset" class="graph-action-label" type="button" aria-label="Effacer la sélection" title="Effacer la sélection">Effacer</button>
       </div>
+      <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
+        <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tous les nœuds" title="Afficher tous les nœuds" aria-pressed="false">Tout</button>
+        <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher le graphe à une distance lisible" title="Afficher le graphe à une distance lisible" aria-pressed="true">Lisible</button>
+      </div>
+      <span class="graph-actions-spacer" aria-hidden="true"></span>
+      <button id="layer-view-toggle" class="graph-action-label graph-secondary-action" type="button" aria-label="Changer de vue" title="Changer de vue">Vue suivante</button>
+      <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Effacer la sélection" title="Effacer la sélection">Effacer</button>
     </div>
     <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
     <button id="inventory-status" class="inventory-status" type="button" hidden></button>

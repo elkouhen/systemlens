@@ -177,8 +177,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert '>Mongo</button>' in document
     assert 'id="request-reply-tab"' in document
     assert 'id="build-tab"' in document
-    assert '>Tout voir</button>' in document
-    assert '>Distance lisible</button>' in document
+    assert 'class="graph-control-group zoom-controls"' in document
+    assert 'class="graph-control-group fit-controls"' in document
+    assert '>Tout</button>' in document
+    assert '>Lisible</button>' in document
     assert 'fitMode: "readable"' in document
     assert "fitRequest !== graphState.fitRequest" in document
     assert 'Math.max(1.6, requiredCardZoomIn(targetRenderer))' in document

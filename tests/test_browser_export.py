@@ -932,6 +932,16 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         graph = page.locator("#graph")
         assert page.evaluate(
             """() => {
+                const actions = document.querySelector('.graph-actions');
+                const zoom = document.querySelector('.zoom-controls').getBoundingClientRect();
+                const fit = document.querySelector('.fit-controls').getBoundingClientRect();
+                return actions.scrollWidth <= actions.clientWidth
+                    && zoom.right < fit.left
+                    && Math.abs(zoom.height - fit.height) < 1;
+            }"""
+        )
+        assert page.evaluate(
+            """() => {
                 const graphRect = document.querySelector('#graph').getBoundingClientRect();
                 const toolbarRect = document.querySelector('.toolbar').getBoundingClientRect();
                 return graphRect.left >= toolbarRect.right;

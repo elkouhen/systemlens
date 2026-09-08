@@ -141,12 +141,19 @@
     .toolbar-panel { display: grid; gap: 10px; }
     .toolbar-panel[hidden] { display: none; }
     #search, #path-query { width: 100%; }
-    .graph-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; max-width: 230px; }
+    .graph-actions { display: flex; align-items: center; gap: 7px; }
     .toolbar button { width: 34px; height: 34px; border: 1px solid #b9c5d6; border-radius: 6px; color: #315f9b; background: #fff; font-size: 19px; line-height: 1; cursor: pointer; }
     .toolbar button:hover { background: #eaf2ff; }
     .graph-actions .graph-action-label { width: auto; padding: 0 8px; font-size: 11px; font-weight: 700; }
-    .graph-actions .fit-mode.is-active { border-color: #3156d3; color: #fff; background: #3156d3; }
-    .graph-actions .fit-mode.is-active:hover { background: #2647b5; }
+    .graph-control-group { display: inline-flex; flex: 0 0 auto; gap: 2px; padding: 3px; border: 1px solid #d8e0eb; border-radius: 9px; background: #edf2f7; }
+    .graph-control-group button { height: 28px; border: 0; border-radius: 6px; background: transparent; box-shadow: none; }
+    .graph-control-group button:hover { background: rgba(255, 255, 255, .8); box-shadow: 0 1px 3px rgba(15, 23, 42, .1); transform: none; }
+    .zoom-controls button { width: 30px; font-size: 18px; }
+    .fit-controls .graph-action-label { height: 28px; padding: 0 9px; color: #52616b; }
+    .fit-controls .fit-mode.is-active { color: #fff; background: #3156d3; box-shadow: 0 2px 6px rgba(49, 86, 211, .25); }
+    .fit-controls .fit-mode.is-active:hover { background: #2647b5; }
+    .graph-actions-spacer { flex: 1 1 auto; min-width: 2px; }
+    .graph-actions .graph-secondary-action { height: 32px; color: #52616b; background: transparent; }
     .exploration-start { display: grid; gap: 7px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px; background: #f8fbff; }
     .exploration-start h2 { margin: 0; color: #1d4f91; font-size: 12px; }
     .exploration-start p { margin: 0; color: #52616b; font-size: 11px; line-height: 1.4; }
@@ -387,10 +394,10 @@
     }
     .brand strong { align-self: end; color: var(--ink); font-size: 14px; letter-spacing: -.01em; }
     .brand-subtitle { align-self: start; color: var(--muted); font-size: 10px; font-weight: 600; }
-    .graph-actions { gap: 5px; }
+    .graph-actions { gap: 7px; }
     .toolbar button { transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease; }
     .toolbar button:hover { transform: translateY(-1px); }
-    .toolbar-header .graph-actions button {
+    .toolbar-header > button, .graph-actions > button {
       border-color: var(--line);
       border-radius: var(--radius-sm);
       color: #475569;
@@ -544,6 +551,10 @@
     :root[data-theme="dark"] .toolbar input:not([type="checkbox"])::placeholder { color: #7186a3; }
     :root[data-theme="dark"] .toolbar button:hover, :root[data-theme="dark"] .filter-preset:hover,
     :root[data-theme="dark"] .layout-option:hover { background: #203453 !important; }
+    :root[data-theme="dark"] .graph-control-group { border-color: rgba(148, 163, 184, .22); background: #101d31; }
+    :root[data-theme="dark"] .graph-control-group button { color: #c8d5e8; background: transparent; }
+    :root[data-theme="dark"] .graph-control-group button:hover { background: #203453 !important; }
+    :root[data-theme="dark"] .fit-controls .fit-mode.is-active { color: #fff; background: #4663db; }
     :root[data-theme="dark"] .toolbar-tabs { border-color: rgba(148, 163, 184, .18); background: #101d31; }
     :root[data-theme="dark"] .toolbar-tab { color: #91a4bd !important; }
     :root[data-theme="dark"] .toolbar-tab.is-active { color: #b8c7ff !important; background: #1c2d4b !important; }
@@ -576,7 +587,9 @@
       .toolbar { top: 10px; left: 10px; width: calc(100vw - 20px); max-height: calc(62vh - 14px); padding: 12px; border-radius: 16px; }
       .toolbar-header { align-items: start; }
       .brand-subtitle { display: none; }
-      .graph-actions .graph-action-label { padding: 0 6px; font-size: 10px; }
+      .graph-actions { flex-wrap: wrap; gap: 6px; }
+      .graph-actions .graph-action-label { padding: 0 7px; font-size: 10px; }
+      .graph-actions-spacer { display: none; }
       #details { right: 10px; bottom: 10px; width: calc(100vw - 20px); max-height: 34vh; border-radius: 16px; }
       .legend { right: 10px; bottom: 10px; left: auto; }
       .question-actions { grid-template-columns: 1fr; }
@@ -589,15 +602,20 @@
   <div class="toolbar">
     <div class="toolbar-header">
       <div class="brand"><span class="brand-mark">SL</span><strong>SystemLens</strong><span class="brand-subtitle">Architecture workspace</span></div>
-      <div class="graph-actions" aria-label="Navigation du graphe">
-        <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
+      <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
+    </div>
+    <div class="graph-actions" aria-label="Navigation du graphe">
+      <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
         <button id="zoom-out" type="button" aria-label="Dézoomer" title="Dézoomer">−</button>
         <button id="zoom-in" type="button" aria-label="Zoomer" title="Zoomer">+</button>
-        <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tous les nœuds" title="Afficher tous les nœuds" aria-pressed="false">Tout voir</button>
-        <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher le graphe à une distance lisible" title="Afficher le graphe à une distance lisible" aria-pressed="true">Distance lisible</button>
-        <button id="layer-view-toggle" class="graph-action-label" type="button" aria-label="Changer de vue" title="Changer de vue">Vue suivante</button>
-        <button id="reset" class="graph-action-label" type="button" aria-label="Effacer la sélection" title="Effacer la sélection">Effacer</button>
       </div>
+      <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
+        <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tous les nœuds" title="Afficher tous les nœuds" aria-pressed="false">Tout</button>
+        <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher le graphe à une distance lisible" title="Afficher le graphe à une distance lisible" aria-pressed="true">Lisible</button>
+      </div>
+      <span class="graph-actions-spacer" aria-hidden="true"></span>
+      <button id="layer-view-toggle" class="graph-action-label graph-secondary-action" type="button" aria-label="Changer de vue" title="Changer de vue">Vue suivante</button>
+      <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Effacer la sélection" title="Effacer la sélection">Effacer</button>
     </div>
     <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
     <button id="inventory-status" class="inventory-status" type="button" hidden></button>
