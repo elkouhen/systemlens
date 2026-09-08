@@ -732,6 +732,80 @@ def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
         assert card_content_metrics["nameRight"] <= card_content_metrics["iconLeft"]
         assert card_content_metrics["kindWidth"] >= 90
 
+        page.locator("#render-symbols").click()
+        page.wait_for_function(
+            "() => document.querySelector('#graph')?.dataset.renderMode === 'symbols'"
+            " && document.querySelector('#graph-node-labels')?.classList.contains('is-symbol-mode')"
+        )
+        symbol_metrics = page.evaluate(
+            """() => {
+                const metrics = kinds => {
+                    const selector = kinds.map(kind => `.graph-node-card-label[data-node-kind="${kind}"]`).join(',');
+                    const card = document.querySelector(selector);
+                    const icon = card.querySelector('.graph-node-card-icon');
+                    const name = card.querySelector('.graph-node-card-name');
+                    const kindLabel = card.querySelector('.graph-node-card-kind');
+                    const cardRect = card.getBoundingClientRect();
+                    const nameRect = name.getBoundingClientRect();
+                    const style = getComputedStyle(icon);
+                    return {
+                        cardWidth: cardRect.width,
+                        iconWidth: icon.getBoundingClientRect().width,
+                        nameOverflows: nameRect.right > cardRect.right,
+                        borderRadius: style.borderRadius,
+                        clipPath: style.clipPath,
+                        kindDisplay: getComputedStyle(kindLabel).display,
+                        nameVisibility: getComputedStyle(name).visibility,
+                    };
+                };
+                return {
+                    service: metrics(['microservice']),
+                    topic: metrics(['kafka_topic', 'message_channel']),
+                    database: metrics(['mongodb_collection', 'data_schema']),
+                };
+            }"""
+        )
+        assert symbol_metrics["service"]["cardWidth"] == pytest.approx(30)
+        assert symbol_metrics["service"]["clipPath"] != "none"
+        assert symbol_metrics["topic"]["borderRadius"] == "50%"
+        assert symbol_metrics["database"]["iconWidth"] == pytest.approx(20)
+        assert all(item["nameOverflows"] for item in symbol_metrics.values())
+        assert all(item["kindDisplay"] == "none" for item in symbol_metrics.values())
+        assert all(item["nameVisibility"] == "hidden" for item in symbol_metrics.values())
+        overlapping_symbols = page.locator(".graph-node-card-label").evaluate_all(
+            """cards => cards.flatMap((card, index) => {
+                const left = card.getBoundingClientRect();
+                return cards.slice(index + 1).filter(other => {
+                    const right = other.getBoundingClientRect();
+                    return left.left < right.right && left.right > right.left
+                        && left.top < right.bottom && left.bottom > right.top;
+                }).map(other => [card.dataset.nodeId, other.dataset.nodeId]);
+            })"""
+        )
+        assert overlapping_symbols == []
+        assert page.locator("#render-symbols").get_attribute("aria-pressed") == "true"
+        _capture_render_snapshot(page, "complex-symbols")
+        service_symbol = page.locator(
+            '.graph-node-card-label[data-node-kind="microservice"]'
+        ).first
+        service_symbol.hover()
+        assert service_symbol.locator(".graph-node-card-name").evaluate(
+            "name => getComputedStyle(name).visibility"
+        ) == "visible"
+        assert page.locator(
+            '.graph-node-card-label[data-node-kind="message_channel"] .graph-node-card-name'
+        ).first.evaluate("name => getComputedStyle(name).visibility") == "hidden"
+        _capture_render_snapshot(page, "complex-symbols-hover")
+
+        page.locator("#render-cards").click()
+        page.wait_for_function(
+            "() => document.querySelector('#graph')?.dataset.renderMode === 'cards'"
+            " && !document.querySelector('#graph-node-labels')?.classList.contains('is-symbol-mode')"
+        )
+        assert page.locator(".graph-node-card-label").first.evaluate(
+            "card => card.getBoundingClientRect().width"
+        ) == pytest.approx(110)
+
         initial_readable_metrics = _graph_card_metrics(page)
         initial_readable_ratio = float(page.locator("#graph").get_attribute("data-fit-ratio") or "nan")
         page.locator("#fit-readable").click()
@@ -752,11 +826,11 @@ def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
         readable_metrics = _graph_card_metrics(page)
         readable_ratio = float(page.locator("#graph").get_attribute("data-fit-ratio") or "nan")
         readable_zoom = overview_ratio / readable_ratio
-        assert 1.6 <= readable_zoom < 4, json.dumps(
+        assert 1.6 <= readable_zoom <= 4, json.dumps(
             {"zoom": readable_zoom, "overview": overview_metrics}, sort_keys=True
         )
         assert readable_metrics["span"] > overview_metrics["span"] * 1.5
-        assert readable_metrics["overlaps"] < overview_metrics["overlaps"] * .1
+        assert readable_metrics["overlaps"] == 0
 
         page.locator("#fit-readable").dblclick(delay=10)
         page.wait_for_timeout(100)

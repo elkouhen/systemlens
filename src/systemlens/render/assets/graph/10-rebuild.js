@@ -204,11 +204,12 @@
         labelAlignment: "center",
         nodeReducer: (node, data) => {
           if (!isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
+          const renderedData = graphState.renderMode === "symbols" ? { ...data, size: .5 } : data;
           if (!graphState.selectedId || graphState.relatedNodes.has(node)) {
             const order = graphState.pathMicroserviceOrder.get(node);
-            return order ? { ...data, label: `${order}. ${data.label}` } : data;
+            return order ? { ...renderedData, label: `${order}. ${data.label}` } : renderedData;
           }
-          return { ...data, color: "#d8e0ea", label: "" };
+          return { ...renderedData, color: "#d8e0ea", label: "" };
         },
         edgeReducer: (edge, data) => {
           if (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge))) return { ...data, hidden: true };
@@ -219,6 +220,7 @@
         },
       });
       renderOverlays = () => {
+        nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         const nodePoints = new Map();
         const graphPointToViewport = graphPoint => {
           return renderer.graphToViewport(graphPoint);

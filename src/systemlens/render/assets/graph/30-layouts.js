@@ -370,16 +370,12 @@
       });
     }
     function resolveGraphCardOverlaps() {
-      // Cards are intentionally fixed-size HTML overlays. The overview
-      // contract allows overlap, so moving Sigma nodes after the camera fit
-      // would make the fitted bounds stale and could push nodes off-screen.
-      // Keep this hook for compatibility with older layout callers.
-      return;
       const cardScale = GRAPH_CARD_SCALE;
-      const cardWidth = 110 * cardScale;
-      const cardHeight = 70 * cardScale;
+      const symbolMode = graphState.renderMode === "symbols";
+      const cardWidth = (symbolMode ? 30 : 110) * cardScale;
+      const cardHeight = (symbolMode ? 30 : 70) * cardScale;
       const gap = 4;
-      const ids = [...network.nodes()];
+      const ids = network.nodes().filter(id => isVisibleNodeId(id));
       const points = new Map(ids.map(id => {
           const attributes = network.getNodeAttributes(id);
           const point = renderer.graphToViewport({ x: attributes.x, y: attributes.y });
@@ -554,7 +550,7 @@
       }
       if (request !== graphState.layoutRequest) return;
       renderer.refresh();
-      fitCameraToVisibleGraph(renderer);
+      await fitCameraToVisibleGraph(renderer);
       await new Promise(resolve => setTimeout(resolve, 300));
       if (request !== graphState.layoutRequest) return;
       // Commit the view mode only after its layout and camera are ready. This
@@ -566,12 +562,13 @@
         clusteredView: layout === "cluster",
         layeredClusterView: layout === "elk",
       });
-      if (["forceatlas2", "noverlap", "cluster", "elk"].includes(layout)) {
-        // Force layouts optimize Sigma's node radii, not the larger HTML cards.
-        // Resolve the final projected envelope once after fitting the graph
-        // view; compound views use deterministic packing instead.
+      if (layout === "forceatlas2-noverlap" && graphState.fitMode === "readable") {
+        // Force layouts optimize Sigma's node radii, not the larger HTML
+        // overlays. Resolve their final projected envelope only in the plain
+        // graph's readable view; compound views keep deterministic packing.
         resolveGraphCardOverlaps();
         renderer.refresh();
+        await fitCameraToVisibleGraph(renderer);
       }
       // Sigma's noverlap solver works with Sigma node radii, while the
       // readable labels are larger HTML rectangles. Resolve any residual

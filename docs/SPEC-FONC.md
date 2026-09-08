@@ -168,6 +168,17 @@ compact icons aligned with the name, plus border and color. The secondary kind
 label uses the full inner card width instead of reserving a permanent icon
 column.
 
+Users can switch node rendering between `Cards` and `Symbols` without changing
+the active graph, filters, layout, or selection. `Cards` remains the default.
+In `Symbols`, microservices use compact hexagons, Kafka topics and message
+channels use circles, and MongoDB collections and data schemas use small
+squares. Resource names are hidden by default, appear beside the symbol while
+it is hovered, and MAY extend beyond the symbol envelope. `Readable` fitting
+uses the compact symbol envelope in this mode rather than the card dimensions.
+In the plain graph's `Readable` fit, a final screen-space collision pass keeps
+the active card or symbol envelopes from overlapping. This pass does not run in
+the layers or namespaces views, whose deterministic placement remains unchanged.
+
 During pan and zoom, the graph and its cluster overlays remain synchronized so
 cards and their containing rectangles move together without transient partial
 redraws.

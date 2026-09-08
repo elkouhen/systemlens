@@ -194,6 +194,7 @@
       layoutRequest: 0,
       fitMode: "readable",
       fitRequest: 0,
+      renderMode: "cards",
     };
     function updateGraphState(patch) {
       Object.assign(graphState, patch);
@@ -201,8 +202,9 @@
     }
     function requiredCardZoomIn(targetRenderer) {
       if (!targetRenderer || !network) return 1;
-      const cardWidth = GRAPH_CARD_WIDTH + 4;
-      const cardHeight = GRAPH_CARD_HEIGHT + 4;
+      const symbolMode = graphState.renderMode === "symbols";
+      const cardWidth = symbolMode ? 34 : GRAPH_CARD_WIDTH + 4;
+      const cardHeight = symbolMode ? 34 : GRAPH_CARD_HEIGHT + 4;
       const buckets = new Map();
       const requiredZooms = [];
       network.forEachNode((id, attributes) => {
@@ -233,6 +235,9 @@
       });
       if (!requiredZooms.length) return 1;
       requiredZooms.sort((left, right) => left - right);
+      if (graphState.activeLayout === "forceatlas2-noverlap") {
+        return requiredZooms[requiredZooms.length - 1];
+      }
       // A single near-coincident pair must not dictate the camera distance for
       // the entire graph. Separating 90% of the initially overlapping pairs
       // gives a stable readable view while leaving local outliers explorable.

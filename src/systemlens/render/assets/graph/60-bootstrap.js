@@ -43,6 +43,9 @@
     }
     const fitOverviewButton = document.getElementById("fit-view");
     const fitReadableButton = document.getElementById("fit-readable");
+    const renderCardsButton = document.getElementById("render-cards");
+    const renderSymbolsButton = document.getElementById("render-symbols");
+    graphCanvas.dataset.renderMode = graphState.renderMode;
     function updateFitModeControls(mode) {
       [
         [fitOverviewButton, "overview"],
@@ -52,6 +55,31 @@
         button.classList.toggle("is-active", active);
         button.setAttribute("aria-pressed", String(active));
       });
+    }
+    async function setNodeRenderMode(mode) {
+      const nextMode = mode === "symbols" ? "symbols" : "cards";
+      updateGraphState({ renderMode: nextMode });
+      [
+        [renderCardsButton, "cards"],
+        [renderSymbolsButton, "symbols"],
+      ].forEach(([button, buttonMode]) => {
+        const active = nextMode === buttonMode;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+      graphCanvas.dataset.renderModePending = nextMode;
+      await requestGraphRender();
+      if (graphState.renderMode !== nextMode) return;
+      await fitCameraToVisibleGraph(renderer);
+      if (graphState.renderMode !== nextMode) return;
+      if (graphState.activeLayout === "forceatlas2-noverlap" && graphState.fitMode === "readable") {
+        resolveGraphCardOverlaps();
+        renderer.refresh();
+        await fitCameraToVisibleGraph(renderer);
+        await requestGraphRender();
+      }
+      graphCanvas.dataset.renderMode = nextMode;
+      delete graphCanvas.dataset.renderModePending;
     }
     async function fitCameraToVisibleGraph(targetRenderer = renderer, mode = graphState.fitMode) {
       if (!targetRenderer) return;
@@ -106,6 +134,8 @@
     });
     fitOverviewButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "overview"));
     fitReadableButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "readable"));
+    renderCardsButton.addEventListener("click", () => setNodeRenderMode("cards"));
+    renderSymbolsButton.addEventListener("click", () => setNodeRenderMode("symbols"));
     document.getElementById("reset").addEventListener("click", reset);
     document.getElementById("inspector-close").addEventListener("click", closeInspector);
     inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });

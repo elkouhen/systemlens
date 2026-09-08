@@ -346,14 +346,29 @@ projected center spacing of visible fixed-size cards and zooms in by at least
 1.6x, capped by the existing 4x spacing guard. For each overlapping pair, the
 required factor is the smaller of its horizontal and vertical separation
 factors: reaching the card clearance on either axis is sufficient. The 90th
-percentile of those pair factors determines the fit, preventing a single
-near-coincident outlier from forcing the 4x cap while separating most initially
-overlapping cards. The factors are collected through the existing spatial grid
-and sorted, adding O(p log p) work for p nearby overlapping pairs. Peripheral
-nodes may therefore leave the viewport. Zooming and panning never move nodes to
-repair spacing or clamp the camera.
+percentile of those pair factors determines the fit in compound views,
+preventing a single near-coincident outlier from forcing the 4x cap. The plain
+graph instead uses the maximum factor after its collision pass so its final
+readable fit preserves every resolved envelope. The factors are collected
+through the existing spatial grid and sorted, adding O(p log p) work for p
+nearby overlapping pairs. Peripheral nodes may therefore leave the viewport.
+Zooming and panning never move nodes to repair spacing or clamp the camera.
+
+The renderer keeps one graph and HTML overlay implementation for both node
+rendering modes. Card mode uses the fixed 110×70 envelope. Symbol mode applies
+a 30×30 overlay marker and reveals its overflowing adjacent name only on hover;
+its fit calculation uses a 34×34 marker envelope, so label length does not force
+the camera away from the graph. Switching modes redraws overlays and reapplies
+the selected fit without rebuilding or re-parsing the persisted graph snapshot.
 
 Relations remain rendered by Sigma independently of the HTML card overlays.
+In symbol mode, Sigma's underlying node marker is reduced beneath the HTML
+shape so that the card-oriented canvas glyph does not remain visible.
+After the combined ForceAtlas2/Noverlap layout and readable camera fit, the
+plain graph alone resolves residual collisions in projected screen space. The
+solver uses 110×70 card envelopes or 30×30 symbol envelopes, converts the
+adjusted centers back to graph coordinates, and leaves compound layouts
+untouched.
 Camera updates during pan and zoom are coalesced to the next animation frame.
 Fit operations reset Sigma's normalized camera state synchronously before
 calculating the selected mode. This makes overlapping fit requests idempotent

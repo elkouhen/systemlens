@@ -179,8 +179,18 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="build-tab"' in document
     assert 'class="graph-control-group zoom-controls"' in document
     assert 'class="graph-control-group fit-controls"' in document
+    assert 'class="graph-control-group render-controls"' in document
     assert '>Tout</button>' in document
     assert '>Lisible</button>' in document
+    assert '>Cartes</button>' in document
+    assert '>Symboles</button>' in document
+    assert 'renderMode: "cards"' in document
+    assert 'cardWidth = symbolMode ? 34 : GRAPH_CARD_WIDTH + 4' in document
+    assert 'nodeLabelOverlay.classList.toggle("is-symbol-mode"' in document
+    assert 'graphState.renderMode === "symbols" ? { ...data, size: .5 }' in document
+    assert '.graph-node-card-label:hover .graph-node-card-name' in document
+    assert 'layout === "forceatlas2-noverlap" && graphState.fitMode === "readable"' in document
+    assert 'return requiredZooms[requiredZooms.length - 1]' in document
     assert 'fitMode: "readable"' in document
     assert "fitRequest !== graphState.fitRequest" in document
     assert 'Math.max(1.6, requiredCardZoomIn(targetRenderer))' in document
@@ -204,6 +214,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "grid-template-columns: minmax(0, 1fr) 14px" in document
     assert "grid-column: 1 / 3" in document
     assert "graph-cluster-sublayer-title" not in document
+    assert 'selectedClusterKey: null' in document
+    assert 'function selectCluster(cluster)' in document
+    assert 'function renderClusterDetails(cluster)' in document
+    assert 'appendActionList("Éléments"' in document
+    assert 'box.dataset.clusterKey = groupKey' in document
     assert 'graphLegend.hidden = !showingGraph' in document
     assert 'issue.vscode_uri ? "a" : "code"' in document
     assert "max-height: calc(100vh - 32px)" in document
@@ -289,7 +304,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "const GRAPH_CARD_HEIGHT = 70 * GRAPH_CARD_SCALE" in document
     assert "lastSafeCameraState: null" in document
     assert "const cardHalfWidth = 110 * cardScale / 2" in document
-    assert "const cardWidth = 110 * cardScale" in document
+    assert "const cardWidth = (symbolMode ? 30 : 110) * cardScale" in document
+    assert "const cardHeight = (symbolMode ? 30 : 70) * cardScale" in document
     assert 'label.style.transform = `translate(-50%, -50%) scale(${cardScale})`' in document
     assert 'transform: translate(-50%, -50%) scale(var(--graph-card-scale, 1))' in document
     assert 'color = typeof color === "string" && color ? color : "#94a3b8"' in document
