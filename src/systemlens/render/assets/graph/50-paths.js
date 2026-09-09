@@ -707,10 +707,6 @@
       });
       renderer.refresh();
       renderDetails(id);
-      const position = renderer.getNodeDisplayData(id);
-      if (position && !graphState.layeredView && !graphState.clusteredView) {
-        renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
-      }
       persistState();
     }
     function focusPublishedRestResource(id, resource) {
@@ -734,4 +730,3 @@
       });
       renderer.refresh();
       renderDetails(id);
-      const position = renderer.getNodeDisplayData(id);

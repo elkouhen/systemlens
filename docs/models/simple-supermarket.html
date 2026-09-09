@@ -4211,10 +4211,6 @@
       });
       renderer.refresh();
       renderDetails(id);
-      const position = renderer.getNodeDisplayData(id);
-      if (position && !graphState.layeredView && !graphState.clusteredView) {
-        renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
-      }
       persistState();
     }
     function focusPublishedRestResource(id, resource) {
@@ -4238,12 +4234,8 @@
       });
       renderer.refresh();
       renderDetails(id);
-      const position = renderer.getNodeDisplayData(id);
 
 // Ordered source module: 60-bootstrap.js
-      if (position && !graphState.layeredView && !graphState.clusteredView) {
-        renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
-      }
       persistState();
     }
     function reset() {
@@ -4312,16 +4304,9 @@
         button.setAttribute("aria-pressed", String(active));
       });
       graphCanvas.dataset.renderModePending = nextMode;
+      renderer.refresh();
       await requestGraphRender();
       if (graphState.renderMode !== nextMode) return;
-      await fitCameraToVisibleGraph(renderer);
-      if (graphState.renderMode !== nextMode) return;
-      if (graphState.activeLayout === "forceatlas2-noverlap" && graphState.fitMode === "readable") {
-        resolveGraphCardOverlaps();
-        renderer.refresh();
-        await fitCameraToVisibleGraph(renderer);
-        await requestGraphRender();
-      }
       graphCanvas.dataset.renderMode = nextMode;
       delete graphCanvas.dataset.renderModePending;
     }

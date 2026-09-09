@@ -171,7 +171,9 @@ label uses the full inner card width instead of reserving a permanent icon
 column.
 
 Users can switch node rendering between `Cards` and `Symbols` without changing
-the active graph, filters, layout, or selection. `Cards` remains the default.
+the active graph, filters, layout, selection, node positions, or current camera
+framing. The switch redraws node representations in place and MUST NOT reapply
+either fit mode or rerun collision placement. `Cards` remains the default.
 In `Symbols`, microservices use compact hexagons, Kafka topics and message
 channels use circles, and MongoDB collections and data schemas use small
 squares. Resource names are hidden by default, appear beside the symbol while
@@ -191,8 +193,9 @@ The details panel is a floating overlay and MUST NOT resize or crop the graph
 workspace when a node is selected. Layer and cluster backgrounds therefore
 retain their full horizontal and vertical extent behind the opaque panel,
 without a visible clipping seam along any panel edge. Node selection MUST NOT
-start a competing focus animation in the Layers or Clusters views; the plain
-Graph view retains its focused-node animation.
+move, zoom, refit, or otherwise alter the camera in any primary view. Selection
+may update emphasis and details, but every node and cluster retains its current
+screen position.
 
 In the layers and clusters views, each cluster exposes a full-width clickable
 header. Selecting that header highlights the cluster and opens its member list;

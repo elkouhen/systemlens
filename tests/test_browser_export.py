@@ -494,6 +494,23 @@ def _surface_rects(page) -> list[list[float]]:
     )
 
 
+def _node_centers(page) -> dict[str, list[float]]:
+    return page.evaluate(
+        """() => Object.fromEntries([...document.querySelectorAll(
+            '.graph-node-card-label'
+        )].map(card => {
+            const rect = card.getBoundingClientRect();
+            return [card.dataset.nodeId, [rect.left + rect.width / 2, rect.top + rect.height / 2]];
+        }))"""
+    )
+
+
+def _assert_node_centers_unchanged(before, after) -> None:
+    assert after.keys() == before.keys()
+    for node_id, center in before.items():
+        assert after[node_id] == pytest.approx(center, abs=0.5)
+
+
 def _assert_pan_does_not_zoom_or_desynchronise_overlays(page) -> None:
     """A drag must translate the surface without changing its scale."""
     before = _surface_rects(page)
@@ -842,7 +859,7 @@ def test_cluster_and_resource_details_support_bidirectional_navigation() -> None
 
 
 @pytest.mark.slow
-def test_node_selection_refits_layer_and_cluster_overlays_above_details() -> None:
+def test_selection_and_render_mode_preserve_graph_framing() -> None:
     with sync_playwright() as playwright:
         try:
             browser = _launch_visual_browser(playwright)
@@ -855,6 +872,26 @@ def test_node_selection_refits_layer_and_cluster_overlays_above_details() -> Non
         page.wait_for_function(
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
         )
+        page.locator("#layout-status").filter(has_text="vue graphe actif.").wait_for(
+            state="visible"
+        )
+        page.locator("#zoom-in").click()
+        page.wait_for_timeout(150)
+        graph_centers = _node_centers(page)
+        page.locator("#render-symbols").click()
+        page.wait_for_function("() => document.querySelector('#graph')?.dataset.renderMode === 'symbols'")
+        _assert_node_centers_unchanged(graph_centers, _node_centers(page))
+
+        selected = page.locator(".graph-node-card-label").first
+        selected.dispatch_event("click")
+        page.locator("#details:not(.is-empty)").wait_for(state="visible")
+        page.wait_for_timeout(100)
+        _assert_node_centers_unchanged(graph_centers, _node_centers(page))
+
+        page.locator("#render-cards").click()
+        page.wait_for_function("() => document.querySelector('#graph')?.dataset.renderMode === 'cards'")
+        _assert_node_centers_unchanged(graph_centers, _node_centers(page))
+        page.locator("#reset").click()
         page.locator("#render-symbols").click()
         page.wait_for_function("() => document.querySelector('#graph')?.dataset.renderMode === 'symbols'")
 

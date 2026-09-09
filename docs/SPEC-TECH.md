@@ -369,8 +369,10 @@ The renderer keeps one graph and HTML overlay implementation for both node
 rendering modes. Card mode uses the fixed 110×70 envelope. Symbol mode applies
 a 30×30 overlay marker and reveals its overflowing adjacent name only on hover;
 its fit calculation uses a 34×34 marker envelope, so label length does not force
-the camera away from the graph. Switching modes redraws overlays and reapplies
-the selected fit without rebuilding or re-parsing the persisted graph snapshot.
+the camera away from the graph. Switching modes redraws overlays and the Sigma
+node reducer without rebuilding or re-parsing the persisted graph snapshot. It
+does not invoke camera fitting or collision placement, so the camera state and
+graph coordinates remain unchanged.
 
 Relations remain rendered by Sigma independently of the HTML card overlays.
 In symbol mode, Sigma's underlying node marker is reduced beneath the HTML
