@@ -2,7 +2,7 @@
 
 Local, source-evidenced Java/Spring architecture context for coding agents.
 
-SystemLens indexes REST and Kafka integrations, Maven/Gradle modules, OpenAPI
+SystemLens indexes REST and Kafka integrations, Maven/Gradle projects, OpenAPI
 contracts, MongoDB collections, and derived architecture relations in a local
 SQLite database. It gives agents dependencies, impact paths, and unresolved
 facts before they change a system. Source code is neither sent to a service nor
@@ -33,12 +33,12 @@ For a human-readable topology, generate an interactive export:
 systemlens export microservices --html architecture.html
 ```
 
-To inspect the structural hierarchy of clusters, child clusters, and indexed
-projects, use the dedicated cluster view. Kubernetes namespaces do not define
+To inspect the structural hierarchy of modules, child modules, and indexed
+projects, use the dedicated module view. Kubernetes namespaces do not define
 this hierarchy:
 
 ```bash
-systemlens export clusters --html clusters.html
+systemlens export modules --html modules.html
 ```
 
 For iterative AI enrichment, validate and replace facts in the separate local
@@ -50,7 +50,8 @@ systemlens import-facts architecture.ai-graph.pass-001.json \
 ```
 
 For terminal-oriented exploration, use `systemlens microservices`,
-`systemlens topics`, `systemlens apis`, and `systemlens analyze audit`.
+`systemlens topics`, `systemlens apis`, `systemlens projects`, and
+`systemlens analyze audit`.
 
 ### Choose an interface
 
@@ -114,7 +115,7 @@ local installation state and must not be committed.
 - Feign, RestTemplate, WebClient and gateway HTTP calls.
 - Spring Kafka and Spring Cloud Stream producers/consumers, including explicit
   payload types when available.
-- Maven/Gradle modules and dependencies, OpenAPI contracts, MongoDB usage and
+- Maven/Gradle projects and dependencies, OpenAPI contracts, MongoDB usage and
   Spring properties.
 - Optional Kafka facts from Markdown and JSON manifests.
 - Optional Deployment and StatefulSet CPU/RAM dimensions from the active local

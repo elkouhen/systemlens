@@ -69,7 +69,7 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     assert 'aria-label="Vue principale"' in document
     assert '>Graphe</button>' in document
     assert '>Couches</button>' in document
-    assert '>Clusters</button>' in document
+    assert '>Modules</button>' in document
     assert 'id="layer-view-toggle"' not in document
     assert "#graph, #dependency-graph {\n      position: fixed;" in document
     assert "#graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }" in document
@@ -77,6 +77,15 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     assert "#graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }" in document
     assert ".graph-project-group-title { position: absolute; z-index: 5;" in document
     assert "left: var(--workspace-left, 0px);" in document
+    assert '<div id="details" class="is-empty">' in document
+    assert "#details.is-empty { display: none; }" in document
+    assert '.toolbar.has-details .toolbar-panel { display: none; }' in document
+    assert '.toolbar.has-details #graph-panel > :not(#layout-status) { display: none; }' in document
+    assert 'toolbar?.classList.add("has-details");' in document
+    assert 'document.querySelector(".toolbar")?.classList.remove("has-details");' in document
+    assert '.toolbar #details .relation-link,' in document
+    assert document.index('id="request-reply-panel"') < document.index('id="details"')
+    assert document.index('id="details"') < document.index('id="graph-legend"')
     assert "const point = graphPointToViewport({ x: attributes.x, y: attributes.y });" in document
     assert "const display = renderer.getNodeDisplayData(id);" not in document
     assert "const matrix = renderer.matrix;" not in document
@@ -249,7 +258,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'selectedClusterKey: null' in document
     assert 'async function selectCluster(cluster)' in document
     assert 'function renderClusterDetails(cluster)' in document
-    assert 'appendActionList("Sous-clusters"' in document
+    assert 'appendActionList("Sous-modules"' in document
     assert 'appendActionList("Ressources contenues"' in document
     assert 'box.dataset.clusterKey = cluster.key' in document
     assert 'graphLegend.hidden = !showingGraph' in document
@@ -364,7 +373,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "function clusterDescriptorForPath(path)" in document
     assert "function clusterPathForNode(node)" in document
     assert "function architectureLayerForNode(node)" in document
-    assert document.count('appendActionList("Cluster", clusterPath ? [{') == 2
+    assert document.count('appendActionList("Module", clusterPath ? [{') == 2
     assert 'if (!graphState.layeredView && !graphState.clusteredView) await applyLayout("cluster")' in document
     assert "Chemin des clusters : ${clusterPath}" not in document
     assert "Chemin des clusters : ${clusterPathForNode(id)}" not in document
@@ -671,7 +680,7 @@ def test_graph_html_colours_topics_and_mongodb_collections_by_connectivity() -> 
     collection = nodes["mongodb_collection:orders:orders"]
     assert service["build_system"] == "maven"
     assert service["vscode_uri"] == "vscode://file//workspace/orders"
-    assert "Ouvrir le module ${buildSystem} dans VS Code" in graph_document
+    assert "Ouvrir le projet ${buildSystem} dans VS Code" in graph_document
     assert topic["complexity"] == {
         "score": 2,
         "level": "low",

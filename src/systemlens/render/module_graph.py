@@ -1,7 +1,7 @@
-"""Endpoint/module/workspace/flow rendering, plus the module-dependency HTML export.
+"""Endpoint/project/workspace/flow rendering, plus the project-dependency HTML export.
 
 The dependency-graph HTML payload lives in ``assets/module_graph.html``; this
-module builds the JSON data model injected into that static template.
+This module builds the JSON data model injected into that static template.
 """
 
 import json
@@ -19,7 +19,7 @@ _MODULE_GRAPH_HTML_TEMPLATE = (
 
 
 class EndpointHit(TypedDict):
-    """Shape returned by the `list_endpoints` MCP tool and module inventory views."""
+    """Shape returned by the `list_endpoints` MCP tool and project inventory views."""
 
     id: str
     role: str
@@ -188,7 +188,7 @@ def _workspace_kafka_message_types(
 
 def render_workspace_text(result: WorkspaceResult) -> str:
     if not result["services"]:
-        return "Aucun service workspace découvert (ni module Maven runtime, ni microservice Gradle Spring Boot)."
+        return "Aucun service workspace découvert (ni projet Maven runtime, ni microservice Gradle Spring Boot)."
     lines = []
     for info in result["services"]:
         status = "indexé" if info["indexed"] else "non indexé"
@@ -240,7 +240,7 @@ def render_modules_list_json(modules: list[DiscoveredModule]) -> list[ModuleSumm
 
 def render_modules_list_text(modules: list[ModuleSummary]) -> str:
     if not modules:
-        return "Aucun module Maven ou Gradle découvert."
+        return "Aucun projet Maven ou Gradle découvert."
     lines: list[str] = []
     for module in modules:
         version = module["version"] or "inconnue"
@@ -280,8 +280,8 @@ def render_module_graph_json(
 
 def render_module_graph_text(result: ModuleGraphResult) -> str:
     if not result["modules"]:
-        return "Aucun module indexé."
-    lines = [f"Modules ({len(result['modules'])}) : {', '.join(result['modules'])}"]
+        return "Aucun projet indexé."
+    lines = [f"Projets ({len(result['modules'])}) : {', '.join(result['modules'])}"]
     if not result["dependencies"]:
         lines.append("Aucune dépendance interne déclarée.")
     else:

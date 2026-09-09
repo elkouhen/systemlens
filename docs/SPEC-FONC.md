@@ -45,11 +45,11 @@ but does not alter AST endpoint extraction.
 | `systemlens version` | Prints the installed `systemlens` package version. |
 | `systemlens index [MANIFEST]... [--full] [--topic-strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. `--kubernetes` queries the active `kubectl` context for Deployments and StatefulSets; `--kubernetes-namespace` restricts it to one runtime namespace. `--disable` can independently disable the `properties`, `module-architecture`, or `module-tree-sitter` extractor and may be repeated. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts an AI fact manifest into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
-| `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `modules` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
+| `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
 | `systemlens microservices topics\|apis\|mongodb\|properties\|openapi NAME [--root DIR] [--json]` | Follow one linked object kind from a single named microservice. |
 | `systemlens microservices implementation KIND ID [--root DIR] [--json]` | Jump to the source implementation of one identified integration. |
-| `systemlens modules integrations MODULE [--json]` | Lists the integrations owned by one module. |
-| `systemlens modules graph [--json]` | Prints the Maven/Gradle build-dependency graph between modules. |
+| `systemlens projects integrations PROJECT [--json]` | Lists the integrations owned by one Maven/Gradle project. |
+| `systemlens projects graph [--json]` | Prints the Maven/Gradle build-dependency graph between projects. |
 | `systemlens analyze audit [--workspace DIR]` | Reports static architecture risks; `--workspace` analyzes a parent workspace of independently indexed services instead of the current repository. |
 | `systemlens analyze coverage [--root DIR] [--json]` | Reports inventory coverage and unresolved integrations. |
 | `systemlens analyze indexing-issues [--root DIR] [--json]` | Lists unresolved indexing facts. JSON includes source evidence suitable for reviewing proposed heuristics. |
@@ -57,10 +57,10 @@ but does not alter AST endpoint extraction.
 | `systemlens analyze microservices impact NAME [--root DIR] [--json]` | Lists direct and transitive impact paths. |
 | `systemlens analyze microservices path FROM TO [--root DIR] [--json] [--max-depth N] [--limit N]` | Lists bounded paths between services. |
 | `systemlens analyze request-reply [--root DIR] [--json]` | Lists Strategy1 Kafka request/reply candidates. |
-| `systemlens export microservices (--html FILE | --c4 DIRECTORY | --json) [--graph FILE] [--workspace DIRECTORY] [--root-path DIRECTORY]` | Exports the deployable microservice, API, data-schema and message-channel topology. Non-deployable indexed modules (libraries and aggregators without an application entry point) are excluded from this view and remain available to `export modules` and `export layers`. Persisted MCP graph facts are included in the HTML export. `--graph FILE` reads a validated `systemlens-ai-graph-v1` manifest; `--workspace` federates separately indexed services below one parent directory; `--root-path` provides the local source root for HTML source links. |
-| `systemlens export modules --html FILE` | Exports the Maven/Gradle build-dependency view. |
-| `systemlens export layers --html FILE` | Exports a dedicated software-layer view. With the persisted Strategy1 profile, the project groups `PORTAIL` and `CYCLE-DE-VIE` are rendered in API/contracts and Orchestration, `DOMAIN-*` modules in Domain, and the documented layer-name prefixes/suffixes in their matching layers; shared libraries and other non-deployable modules are omitted, and without Strategy1 the repository-specific conventions are disabled. |
-| `systemlens export clusters --html FILE` | Exports the structural hierarchy where a cluster can contain child clusters and indexed projects/modules. Membership comes from project directory paths, never from Kubernetes namespaces. The legacy `export namespaces` spelling remains a hidden compatibility alias. |
+| `systemlens export microservices (--html FILE | --c4 DIRECTORY | --json) [--graph FILE] [--workspace DIRECTORY] [--root-path DIRECTORY]` | Exports the deployable microservice, API, data-schema and message-channel topology. Non-deployable indexed projects (libraries and aggregators without an application entry point) are excluded from this view and remain available to `export projects` and `export layers`. Persisted MCP graph facts are included in the HTML export. `--graph FILE` reads a validated `systemlens-ai-graph-v1` manifest; `--workspace` federates separately indexed services below one parent directory; `--root-path` provides the local source root for HTML source links. |
+| `systemlens export projects --html FILE` | Exports the Maven/Gradle build-dependency view. |
+| `systemlens export layers --html FILE` | Exports a dedicated software-layer view. With the persisted Strategy1 profile, the project groups `PORTAIL` and `CYCLE-DE-VIE` are rendered in API/contracts and Orchestration, `DOMAIN-*` projects in Domain, and the documented layer-name prefixes/suffixes in their matching layers; shared libraries and other non-deployable projects are omitted, and without Strategy1 the repository-specific conventions are disabled. |
+| `systemlens export modules --html FILE` | Exports the structural hierarchy where a module can contain child modules and indexed projects. Membership comes from project directory paths, never from Kubernetes namespaces. The legacy `export clusters` and `export namespaces` spellings remain hidden compatibility aliases. |
 | `systemlens export request-reply --html FILE` | Exports Strategy1 Kafka request/reply candidates. |
 | `systemlens web [--host HOST] [--port PORT]` | Starts the local Python web application at `http://127.0.0.1:8765/` by default. Its home page links to Architecture. Architecture renders the persisted snapshot for each request, excluding test-fixture microservices and every relation attached to them; when no index exists, it offers an explicit local button that creates the default configuration when needed and indexes the repository. The default loopback host prevents network exposure unless the user explicitly changes `--host`. |
 | `simpleweb [DIRECTORY] [--host HOST] [--port PORT]` | Serves static files from `DIRECTORY`, or from the current directory when omitted, for opening generated HTML files that load adjacent JSON. It binds to `http://127.0.0.1:8000/` by default, has no write routes, and does not create or modify files. The directory must exist. |
@@ -119,10 +119,10 @@ technology is carried as metadata.
 
 The export uses a responsive workspace layout with seven navigation tabs:
 Explorer, OpenAPI, Kafka, Mongo, Request/reply, Build, and Quality. It includes
-compact architecture counters, a floating context panel, and a full-size
-resource inspector. On
-narrow viewports the controls and context panel use separate bounded regions so
-the graph remains visible while either panel scrolls independently.
+compact architecture counters, contextual details integrated into the left
+panel, and a full-size resource inspector. On narrow viewports the left panel
+uses one bounded, scrollable region so the graph remains visible while users
+inspect controls or resource details.
 
 The export opens with a dark blue presentation (or follows the browser's light
 preference), and provides a theme toggle in the graph
@@ -138,11 +138,11 @@ vocabularies. Placement strategies remain available as advanced controls.
 The toolbar does not expose a separate path-history section. Paths remain
 available directly from search and the advanced route tools in `Explore`.
 
-The graph offers three primary views—graph, layers, and clusters—while
+The graph offers three primary views—graph, layers, and modules—while
 grouped and non-overlapping placement strategies remain secondary options. The layers view
 uses ELK.js compound nodes to arrange resources in a deterministic hierarchy:
-software layers are stacked vertically, clusters are nested inside their
-layer, and projects/resources are placed inside each cluster without
+software layers are stacked vertically, modules are nested inside their
+layer, and projects/resources are placed inside each module without
 overlap. The internal canonical order is `api`, `application`, `orchestration`,
 `infrastructure`, `domain`, then `persistence`;
 `persistence` is always the lowest layer. In Strategy1, the `CYCLE-DE-VIE`
@@ -151,10 +151,10 @@ project group is rendered in the Orchestration layer.
 External microservices are rendered in a dedicated `External services` layer
 at the bottom, after the internal layer order.
 
-Shared libraries and other non-deployable modules are not rendered as layers.
+Shared libraries and other non-deployable projects are not rendered as layers.
 
 The three primary views are presented as a permanently visible segmented
-selector with direct `Graph`, `Layers`, and `Clusters` choices; changing
+selector with direct `Graph`, `Layers`, and `Modules` choices; changing
 views MUST NOT require cycling through intermediate views. Placement strategies
 remain secondary controls. On desktop, the navigation panel uses a compact
 340 px maximum width, 10 px outer margins, and dense internal spacing. The
@@ -169,7 +169,7 @@ idempotent: repeated or rapid clicks MUST produce the same camera framing and
 MUST NOT compound the previous zoom.
 
 Users can pan and zoom to explore the remaining graph. In the layers and
-clusters views, relations are visually subdued. In every view, microservice,
+modules views, relations are visually subdued. In every view, microservice,
 Kafka topic, message channel,
 MongoDB collection, data schema, and equivalent resource cards share the same
 rendered width, height, and scale. Their semantic differences are conveyed by
@@ -193,38 +193,46 @@ The hovered symbol and its label are rendered above every non-hovered symbol,
 so another geometric marker cannot obscure the visible resource name.
 In the plain graph's `Readable` fit, a final screen-space collision pass keeps
 the active card or symbol envelopes from overlapping. This pass does not run in
-the layers or clusters views, whose deterministic placement remains unchanged.
+the layers or modules views, whose deterministic placement remains unchanged.
 
-During pan and zoom, the graph and its cluster overlays remain synchronized so
+During pan and zoom, the graph and its module overlays remain synchronized so
 cards and their containing rectangles move together without transient partial
 redraws.
 
-The details panel is a floating overlay and MUST NOT resize or crop the graph
-workspace when a node is selected. Layer and cluster backgrounds therefore
-retain their full horizontal and vertical extent behind the opaque panel,
-without a visible clipping seam along any panel edge. Node selection MUST NOT
+The details panel is integrated into the left navigation panel and is hidden
+until a resource, architecture module, build project, or itinerary is selected. Opening it MUST
+NOT resize or crop the graph workspace: the reserved panel width remains
+constant while its contents scroll vertically. The detail view temporarily
+replaces the active tab content while preserving the global toolbar,
+primary view controls, navigation tabs, and `Clear` action. Architecture
+counters are temporarily hidden to give the details usable vertical space;
+the current graph-view status remains visible so direct module navigation has
+an immediate confirmation. Clearing the selection restores the Explorer
+controls and counters. Buttons inside details use the full available width for
+resource and module names rather than inheriting the compact square dimensions
+of toolbar icon buttons. Node selection MUST NOT
 move, zoom, refit, or otherwise alter the camera in any primary view. Selection
-may update emphasis and details, but every node and cluster retains its current
+may update emphasis and details, but every node and module retains its current
 screen position.
 
-In the layers and clusters views, each cluster exposes a full-width clickable
-header. Selecting that header highlights the cluster and opens its member list;
-the cluster body remains available for graph panning.
+In the layers and modules views, each module exposes a full-width clickable
+header. Selecting that header highlights the module and opens its member list;
+the module body remains available for graph panning.
 
-Cluster details MUST support direct hierarchy navigation: the parent cluster,
-direct child clusters, and resources assigned directly to the selected cluster
+Module details MUST support direct hierarchy navigation: the parent module,
+direct child modules, and resources assigned directly to the selected module
 are actionable when present. Selecting a listed resource opens its ordinary
 resource details. Conversely, every resource detail exposes its canonical
-cluster as an action; following it switches directly to the Clusters view and
-selects that cluster. Nested cluster membership is derived from canonical
-slash-separated cluster paths. A parent cluster does not claim resources that
+module as an action; following it switches directly to the Modules view and
+selects that module. Nested module membership is derived from canonical
+slash-separated paths. A parent module does not claim resources that
 are assigned only to one of its descendants.
 
 Resource details MUST NOT present Kubernetes runtime namespaces or enrichment
 manifest namespaces as architectural grouping information. Kubernetes workload
 entries identify the workload by kind and name without displaying a namespace
 prefix. Namespace fields MAY remain in the embedded snapshot for compatibility
-and source evidence, but the report's navigable structure uses clusters only.
+and source evidence, but the report's navigable structure uses modules only.
 
 Panning MUST also work when the drag starts on a node card; a simple click on
 the same card MUST continue to select the node.
@@ -238,31 +246,31 @@ allowed.
 Automatic collision protection MUST NOT zoom the camera during a pan; it may
 only constrain an explicit zoom-out operation.
 
-In the cluster view, zooming out remains available. When the fixed-size
-cards would make sibling cluster envelopes overlap, the camera is clamped to
+In the module view, zooming out remains available. When the fixed-size
+cards would make sibling module envelopes overlap, the camera is clamped to
 the last valid zoom level; panning and zooming in remain available.
 
 ### Placement and interaction model
 
-For the graph export, a cluster is a structural group that can contain child
-clusters and projects/modules. Cluster membership comes from project directory
+For the graph export, a module is a structural group that can contain child
+modules and projects. Module membership comes from project directory
 paths and MUST NOT be inferred from Kubernetes namespaces. Projects located
 directly at the indexed repository root are assigned to the synthetic `root`
-cluster. The legacy internal `project_namespace*` fields remain compatibility
+module. The legacy internal `project_namespace*` fields remain compatibility
 aliases for the canonical `cluster_path`; they do not denote Kubernetes
 namespaces.
 
-The cluster layout is independent of the layer order and uses a
+The module layout is independent of the layer order and uses a
 deterministic two-level packing without ELK: fCoSE first computes the local
-compound layout of resources inside each cluster, then a deterministic
-packing step places cluster rectangles one per row with a fixed separating
+compound layout of resources inside each module, then a deterministic
+packing step places module rectangles one per row with a fixed separating
 margin in graph coordinates; the rectangles are projected only after packing,
 so camera zoom does not change their relative separation. The final grid is
 the authoritative collision guard.
 
-Node identifiers and cluster names are sorted only to make the result
-reproducible; there is no semantic order between clusters. Neither resources
-nor cluster rectangles may overlap. If fCoSE is unavailable, the same
+Node identifiers and module names are sorted only to make the result
+reproducible; there is no semantic order between modules. Neither resources
+nor module rectangles may overlap. If fCoSE is unavailable, the same
 deterministic grid is used without the local fCoSE ordering.
 
 ELK is used only for the architectural layer layout, while Sigma.js provides
@@ -284,54 +292,54 @@ The HTML architecture view MUST preserve these visual invariants:
   calculated from its visible content. Layers MUST NOT be infinite full-width
   backgrounds.
 - All visible layer bands MUST share the same left and right bounds. The first
-  band starts immediately above its highest visible cluster content, and the
-  last band ends immediately below its lowest visible cluster content.
+  band starts immediately above its highest visible module content, and the
+  last band ends immediately below its lowest visible module content.
 - Each layer band MUST reserve a visible left gutter for its title. The title
-  MUST NOT overlap a cluster; widening the band is
-  preferred to moving or shrinking cluster content.
+  MUST NOT overlap a module; widening the band is
+  preferred to moving or shrinking module content.
 - The layer-band geometry MUST be calculated from one shared rectangle model:
   all bands use the same left/right bounds, and the title gutter is included
-  before the first cluster envelope.
+  before the first module envelope.
 - Layers MUST be stacked vertically in the canonical order above, with the
   Persistence layer at the bottom.
-- Each visible structural cluster MUST be represented by a bounded rectangle
+- Each visible structural module MUST be represented by a bounded rectangle
   fully contained inside its owning layer, including its header and padding.
-- A cluster MAY use several rows. The default placement uses at most five
+- A module MAY use several rows. The default placement uses at most five
   boxes per row; additional boxes wrap onto subsequent rows.
 - Microservices, Kafka topics, message channels, MongoDB collections, data
   schemas and other rendered resources MUST NOT overlap. Placement MUST keep a
   positive horizontal and vertical gap greater than the projected card size.
 - Microservice and resource cards MUST use one shared rendered width, height,
   and scale in every view. Type-specific styling MUST NOT change card geometry.
-- Layer and cluster bounds MUST be recomputed after filtering, zooming,
+- Layer and module bounds MUST be recomputed after filtering, zooming,
   camera updates and layout changes so containers continue to contain their
   visible children.
-- Selecting a layer or cluster MUST rebuild the visible graph without
+- Selecting a layer or module MUST rebuild the visible graph without
   turning remaining cards white, losing isolated services, or leaving stale
   containers on screen.
-- In the layers and clusters views, selecting a cluster
-  title MUST highlight that cluster and display its name and sorted list of
+- In the layers and modules views, selecting a module
+  title MUST highlight that module and display its name and sorted list of
   currently visible elements in the details panel. Each listed element MUST
   open its ordinary node details.
 - Changing node-type or relation filters MUST remain valid when no
   microservice layer is visible or when the filtered graph is empty; the
-  renderer MUST clear stale layer and cluster containers without producing
+  renderer MUST clear stale layer and module containers without producing
   invalid coordinates.
 - Changing a node-type filter MUST refresh the main graph renderer and its
   overlays immediately and MUST reapply the active graph layout to the
   filtered network.
-- The layered view extends the cluster packing: each canonical
+- The layered view extends the module packing: each canonical
   software layer is a separate horizontal band ordered from top to bottom,
-  clusters are packed inside that band, and each cluster uses a first
+  modules are packed inside that band, and each module uses a first
   microservice sub-layer followed by a resource sub-layer. ELK compound-node placement is
   used as a seed when available, while the deterministic layer-aware packing
   is the final collision guard. If ELK is unavailable or fails, the fallback
-  MUST retain the same layer order, cluster containment and non-overlap
+  MUST retain the same layer order, module containment and non-overlap
   guarantees.
-- If a cluster becomes too tall and risks crossing a neighbouring
-  layer, the renderer MUST add columns to that cluster and recompute the
+- If a module becomes too tall and risks crossing a neighbouring
+  layer, the renderer MUST add columns to that module and recompute the
   layout. The additional horizontal space MUST expand the diagram rather than
-  overlap another layer or cluster.
+  overlap another layer or module.
 Every layout switch MUST refit the camera to the resulting graph using the
 selected fit mode. `All nodes` MUST NOT apply an additional automatic zoom-out
 that makes the layout unnecessarily small. `Readable distance` MAY leave
@@ -342,55 +350,55 @@ appear empty. It adds only the zoom-out required to keep the full fixed-size
 card envelopes inside the graph viewport; the screen-space collision pass
 handles card separation.
 
-The details panel MUST display the resolved software layer and the cluster
+The details panel MUST display the resolved software layer and the module
 path once, in its `Architecture` section, for microservices and resources
 (topics, collections, and enriched resources). Architecture fields already
-shown there MUST NOT be repeated as header badges or raw metadata. The cluster
-path MUST be the slash-separated path of cluster
-directories, such as `cluster1/cluster2`, without a structural-group prefix.
+shown there MUST NOT be repeated as header badges or raw metadata. The module
+path MUST be the slash-separated path of grouping
+directories, such as `group1/group2`, without a structural-group prefix.
 For a resource modified in writing, the path MUST be inherited from its
 producing or owning microservice.
 If several microservices modify the same resource in writing, the renderer
 MUST associate the resource with the microservice belonging to the lowest
 software layer in the canonical visual order.
 
-### Cluster rendering rules
+### Module rendering rules
 
-The cluster view MUST preserve these visual invariants:
+The module view MUST preserve these visual invariants:
 
-- Cluster membership MUST use the same resolver for placement and for the
-  visible cluster rectangle.
+- Module membership MUST use the same resolver for placement and for the
+  visible module rectangle.
 - A Kafka topic, message channel, collection, or other resource MUST be
-  assigned first to the cluster of its producing microservice, using the
-  incoming source relation. A consumer cluster MUST NOT move the resource
-  into its cluster. Resources without an identifiable producer remain in
+  assigned first to the module of its producing microservice, using the
+  incoming source relation. A consumer module MUST NOT move the resource
+  into its module. Resources without an identifiable producer remain in
   `ROOT`.
-- Resources inside one cluster MUST be placed on a grid with a positive
+- Resources inside one module MUST be placed on a grid with a positive
   horizontal and vertical gap greater than the projected card size.
-- Within each cluster, microservices MUST occupy the first
+- Within each module, microservices MUST occupy the first
   sub-layer and Kafka, MongoDB, and other resources MUST occupy a second
   sub-layer below them. Empty sub-layers are omitted. This ordering is conveyed
   by placement only; the renderer MUST NOT add visible `Microservices` or
-  `Resources` sub-layer labels inside the cluster.
-- Cluster rectangles MUST be packed with a positive gap based on their full
+  `Resources` sub-layer labels inside the module.
+- Module rectangles MUST be packed with a positive gap based on their full
   rendered envelope, including card, title, and padding margins, and MUST NOT
   overlap each other.
-- When a second grouping level is displayed, each parent cluster MUST be the
-  union of its visible child cluster rectangles plus its own title/padding
+- When a second grouping level is displayed, each parent module MUST be the
+  union of its visible child module rectangles plus its own title/padding
   margin. Parent bounds MUST contain the complete child boxes; the
-  non-overlap rule applies between sibling clusters, not between a parent and
+  non-overlap rule applies between sibling modules, not between a parent and
   its descendants.
-- A project-group parent MUST remain attached to the cluster of its owning
+- A project-group parent MUST remain attached to the module of its owning
   projects and MUST contain only those owning projects. Resources MUST remain
-  in the cluster of their producing microservice; relation targets
+  in the module of their producing microservice; relation targets
   MUST NOT be added as children of the structural parent or enlarge it across
-  unrelated clusters.
-- Cluster bounds MUST be calculated from graph-coordinate bounds and projected
+  unrelated modules.
+- Module bounds MUST be calculated from graph-coordinate bounds and projected
   after camera changes. Parent bounds MUST be recomputed from the projected
   child bounds, so zooming cannot make a child escape its parent or make the
   hierarchy drift.
 - The layout MUST NOT depend on the software-layer order. Narrow viewports MAY
-  use additional rows to keep clusters inside the visible graph area.
+  use additional rows to keep modules inside the visible graph area.
 
 Microservices with no indexed inter-service relation remain visible in a
 separate isolated area of the graph, so their absence of dependencies is not
@@ -440,16 +448,16 @@ relation is visible. When filters hide relations, it instead distinguishes the
 indexed and visible counts. A `Relations` section follows. For a microservice,
 that section separates
 consumed and published API and Kafka resources, plus MongoDB collections. Each
-microservice resolved to an indexed Maven or Gradle module also provides a
+microservice resolved to an indexed Maven or Gradle project also provides a
 visible action that opens the module root directory in VS Code. Kafka topics
 list their applicable DTOs. A collapsed `Sources` section lists the indexed
 OpenAPI and Kafka files that provide the evidence, avoiding repetition in every
 topic.
 
-At constrained viewport sizes, an empty floating context panel remains visible
-as guidance but does not intercept pointer interaction with the active tab;
-once it contains selected-node or path details, its normal controls remain
-interactive.
+At constrained viewport sizes, the empty context panel is hidden. Once it
+contains selected-node or path details, it replaces the Explorer controls and
+starts at the top of the panel content. Its normal controls remain interactive
+inside the single left-panel scroll region.
 
 Indexing persists source evidence only as paths relative to the project root.
 HTML export joins those paths to `--root-path` (the current directory by
@@ -470,8 +478,8 @@ inspector. Fields whose type resolves uniquely to another indexed project class
 are navigable recursively; the inspector provides a return action to the
 containing class. External and ambiguous field types remain plain text.
 
-Persistence classes declared in a dependent build module are attached to the
-owning service collection through the indexed module-dependency graph. When
+Persistence classes declared in a dependent build project are attached to the
+owning service collection through the indexed project-dependency graph. When
 dependency metadata is unavailable, a workspace-wide class is used only if it
 is the unique candidate for that collection name; ambiguous candidates remain
 unassociated rather than being guessed.
@@ -497,14 +505,14 @@ also enables the `getXxxServiceUrl()` REST target-name convention.
 For a `src/main/resources/openapi/xxx.rest` publication declaration, it
 searches the entire indexed repository for same-named `xxx.yaml`,
 `xxx.yml`, or `xxx.json` OpenAPI contracts, including contracts in a sibling
-shared module without an `openapi-generator` Maven configuration. It also
+shared project without an `openapi-generator` Maven configuration. It also
 searches every YAML or JSON document below
 `model-xxx/src/main/resources/openapi/`, so that module may contain several
 contracts with distinct names. Only a valid OpenAPI document is attached, and
 its resulting endpoints remain attributed to the module that owns the `.rest`
 declaration.
 
-Independently of Strategy1, each build module inventories every valid YAML or
+Independently of Strategy1, each build project inventories every valid YAML or
 JSON OpenAPI document under its own `src/main/resources/openapi/` directory;
 contract file names do not need to follow an `openapi.*` or `swagger.*`
 pattern.

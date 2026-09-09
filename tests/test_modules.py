@@ -446,7 +446,7 @@ def test_modules_cli_lists_then_returns_module_detail(tmp_path: Path, monkeypatc
         store.replace_modules(discover_modules(tmp_path))
     monkeypatch.chdir(tmp_path)
 
-    result = runner.invoke(app, ["modules", "--json"])
+    result = runner.invoke(app, ["projects", "--json"])
 
     assert result.exit_code == 0
     modules = json.loads(result.output)
@@ -468,7 +468,7 @@ def test_modules_cli_lists_then_returns_module_detail(tmp_path: Path, monkeypatc
         }
     ]
 
-    detail = runner.invoke(app, ["modules", "show", "orders-api", "--json"])
+    detail = runner.invoke(app, ["projects", "show", "orders-api", "--json"])
     assert detail.exit_code == 0
     assert json.loads(detail.output)["configuration_example"] == "server:\n  port: 0\n"
 
@@ -756,7 +756,7 @@ class OrderLock {
 
 def test_modules_cli_requires_an_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["modules", "--json"])
+    result = runner.invoke(app, ["projects", "--json"])
 
     assert result.exit_code == 2
     assert "Index absent" in result.output
@@ -764,11 +764,11 @@ def test_modules_cli_requires_an_index(tmp_path: Path, monkeypatch: pytest.Monke
 
 def test_modules_cli_rejects_removed_root_and_properties_options(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["modules", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["projects", "--root", str(tmp_path)])
 
     assert result.exit_code == 2
     assert "No such option: --root" in result.output
-    properties = runner.invoke(app, ["modules", "--properties"])
+    properties = runner.invoke(app, ["projects", "--properties"])
     assert properties.exit_code == 2
     assert "No such option: --properties" in properties.output
 
@@ -787,13 +787,13 @@ def test_modules_cli_subcommands_render_endpoints_properties_and_openapi(tmp_pat
         store.replace_endpoints_for_files([call.path, serve.path], [call, serve])
     monkeypatch.chdir(tmp_path)
 
-    endpoints = runner.invoke(app, ["modules", "integrations", "orders-api", "--json"])
+    endpoints = runner.invoke(app, ["projects", "integrations", "orders-api", "--json"])
     assert endpoints.exit_code == 0
     assert json.loads(endpoints.output)[0]["topic"] == "GET /payments"
-    properties = runner.invoke(app, ["modules", "properties", "orders-api", "--json"])
+    properties = runner.invoke(app, ["projects", "properties", "orders-api", "--json"])
     assert properties.exit_code == 0
     assert properties.output
-    openapi = runner.invoke(app, ["modules", "openapi", "orders-api", "--json"])
+    openapi = runner.invoke(app, ["projects", "openapi", "orders-api", "--json"])
     assert openapi.exit_code == 0
     assert json.loads(openapi.output)["contracts"][0]["path"] == "src/main/resources/openapi.yml"
 
@@ -826,7 +826,7 @@ def test_modules_openapi_renders_plugin_referenced_contract_for_generated_rest_a
         store.replace_modules(discover_modules(tmp_path))
     monkeypatch.chdir(tmp_path)
 
-    openapi = runner.invoke(app, ["modules", "openapi", "orders-api", "--json"])
+    openapi = runner.invoke(app, ["projects", "openapi", "orders-api", "--json"])
 
     assert openapi.exit_code == 0
     assert json.loads(openapi.output)["contracts"] == [
@@ -867,7 +867,7 @@ def test_modules_graph_reads_indexed_build_dependencies_and_exports_html(
         )
     monkeypatch.chdir(tmp_path)
 
-    result = runner.invoke(app, ["modules", "graph", "--json"])
+    result = runner.invoke(app, ["projects", "graph", "--json"])
 
     assert result.exit_code == 0
     assert json.loads(result.output) == {
@@ -879,10 +879,12 @@ def test_modules_graph_reads_indexed_build_dependencies_and_exports_html(
     }
 
     html = tmp_path / "module-dependencies.html"
-    html_export = runner.invoke(app, ["export", "modules", "--html", str(html)])
+    html_export = runner.invoke(app, ["export", "projects", "--html", str(html)])
     assert html_export.exit_code == 0
     document = html.read_text(encoding="utf-8")
     assert "new Sigma(network" in document
+    assert "<strong>Projets</strong>" in document
+    assert "Rechercher un projet" in document
     assert "G6" not in document
     graph_data = json.loads(
         re.search(r'<script id="module-graph-data" type="application/json">(.*)</script>', document).group(1)
@@ -894,6 +896,16 @@ def test_modules_graph_reads_indexed_build_dependencies_and_exports_html(
     assert orders_node["kafkaTopicsPublished"] == ["orders.created"]
     assert orders_node["kafkaTopicsConsumed"] == ["payments.completed"]
     assert 'appendList("APIs exposees", node.httpApisExposed)' in document
+
+    hierarchy = tmp_path / "architecture-modules.html"
+    module_export = runner.invoke(app, ["export", "modules", "--html", str(hierarchy)])
+    assert module_export.exit_code == 0
+    hierarchy_document = hierarchy.read_text(encoding="utf-8")
+    assert "Module hierarchy" in hierarchy_document
+    assert (
+        "Each module can contain child modules and indexed projects."
+        in hierarchy_document
+    )
 
 def test_modules_are_read_from_the_persisted_index_snapshot(tmp_path: Path) -> None:
     module = tmp_path / "orders"

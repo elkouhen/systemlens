@@ -84,6 +84,7 @@ export_app = typer.Typer(
     help=(
         "Exporter les graphes de dépendances d'architecture.\n\n"
         "Exemples : `systemlens export microservices --html graph.html`, "
+        "`systemlens export projects --html projects.html`, "
         "`systemlens export modules --html modules.html`, "
         "`systemlens export layers --html layers.html`."
     )
@@ -104,7 +105,7 @@ microservices_app = typer.Typer(
     help="Explorer les microservices indexés.\n\nExemples : `systemlens microservices`, `systemlens microservices show orders`."
 )
 modules_app = typer.Typer(
-    help="Explorer les modules Maven ou Gradle indexés.\n\nExemples : `systemlens modules`, `systemlens modules show orders-api`."
+    help="Explorer les projets Maven ou Gradle indexés.\n\nExemples : `systemlens projects`, `systemlens projects show orders-api`."
 )
 analyze_app = typer.Typer(
     help="Analyser les impacts et les chemins d'architecture.\n\nExemples : `systemlens analyze audit`, `systemlens analyze microservices impact orders`."
@@ -118,7 +119,8 @@ app.add_typer(dtos_app, name="dtos")
 app.add_typer(apis_app, name="apis")
 app.add_typer(mongodb_app, name="mongodb")
 app.add_typer(microservices_app, name="microservices")
-app.add_typer(modules_app, name="modules")
+app.add_typer(modules_app, name="projects")
+app.add_typer(modules_app, name="modules", hidden=True)
 app.add_typer(analyze_app, name="analyze")
 analyze_app.add_typer(analyze_microservices_app, name="microservices")
 
@@ -1497,18 +1499,18 @@ def export_microservices_cmd(
         typer.echo(str(graph_data.result["note"]))
 
 
-@export_app.command(name="modules")
+@export_app.command(name="projects")
 def export_modules_cmd(
     html: Optional[Path] = typer.Option(
         None, "--html", help="Fichier HTML Sigma.js à produire."
     ),
 ) -> None:
-    """Exporter les dépendances de build entre modules indexés.
+    """Exporter les dépendances de build entre projets indexés.
 
-    Exemple : `systemlens export modules --html modules.html`.
+    Exemple : `systemlens export projects --html projects.html`.
     """
     if html is None:
-        typer.echo("`systemlens export modules` requiert --html FILE.", err=True)
+        typer.echo("`systemlens export projects` requiert --html FILE.", err=True)
         raise typer.Exit(code=2)
     repo_root = Path.cwd()
     if not db_path(repo_root).is_file():
@@ -1525,8 +1527,8 @@ def export_modules_cmd(
         render_module_graph_html(modules, dependencies, endpoints), encoding="utf-8"
     )
     typer.echo(
-        f"Export modules écrit dans {html} "
-        f"({len(modules)} modules, {len(dependencies)} dépendances)."
+        f"Export projects écrit dans {html} "
+        f"({len(modules)} projets, {len(dependencies)} dépendances)."
     )
 
 
@@ -1536,9 +1538,9 @@ def export_layers_cmd(
         None, "--html", help="Fichier HTML des couches logicielles à produire."
     ),
 ) -> None:
-    """Exporter une vue dédiée des couches logicielles des modules.
+    """Exporter une vue dédiée des couches logicielles des projets.
 
-    Avec Strategy1, le namespace projet ``PORTAIL`` classe les modules
+    Avec Strategy1, le namespace projet ``PORTAIL`` classe les projets
     dans API et le préfixe ``DOMAIN-*`` dans Domain. Sans Strategy1, les
     conventions restent désactivées.
 
@@ -1571,23 +1573,24 @@ def export_layers_cmd(
     domain_count = sum(module.name.casefold().startswith("domain-") for module in modules)
     typer.echo(
         f"Export layers écrit dans {html} "
-        f"({len(modules)} modules, {domain_count} modules Domain, {len(dependencies)} dépendances)."
+        f"({len(modules)} projets, {domain_count} projets Domain, {len(dependencies)} dépendances)."
     )
 
 
-@export_app.command(name="clusters")
+@export_app.command(name="modules")
+@export_app.command(name="clusters", hidden=True)
 @export_app.command(name="namespaces", hidden=True)
 def export_namespaces_cmd(
     html: Optional[Path] = typer.Option(
-        None, "--html", help="Fichier HTML de la hiérarchie des clusters à produire."
+        None, "--html", help="Fichier HTML de la hiérarchie des modules à produire."
     ),
 ) -> None:
-    """Exporter les clusters et les projets qui leur sont associés.
+    """Exporter les modules et les projets qui leur sont associés.
 
-    Exemple : `systemlens export clusters --html clusters.html`.
+    Exemple : `systemlens export modules --html modules.html`.
     """
     if html is None:
-        typer.echo("`systemlens export clusters` requiert --html FILE.", err=True)
+        typer.echo("`systemlens export modules` requiert --html FILE.", err=True)
         raise typer.Exit(code=2)
     repo_root = Path.cwd()
     if not db_path(repo_root).is_file():
@@ -1601,7 +1604,7 @@ def export_namespaces_cmd(
     html.write_text(render_namespaces_html(modules, repo_root), encoding="utf-8")
     cluster_count = len({project_namespace(module, repo_root) for module in modules})
     typer.echo(
-        f"Export clusters écrit dans {html} ({cluster_count} clusters, {len(modules)} modules)."
+        f"Export modules écrit dans {html} ({cluster_count} modules, {len(modules)} projets)."
     )
 
 
@@ -2093,7 +2096,7 @@ def _render_microservice_openapi(service: str, root: Path, json_output: bool) ->
 
 
 def _render_openapi_contracts(name: str, root: Path, json_output: bool) -> None:
-    """Rend les contrats OpenAPI/Swagger d'un module ou microservice."""
+    """Rend les contrats OpenAPI/Swagger d'un projet ou microservice."""
     contracts = []
     module = next((item for item in discover_modules(root) if item.path == root), None)
     contract_paths = module.openapi_files if module is not None else ()
@@ -2123,37 +2126,37 @@ def _render_openapi_contracts(name: str, root: Path, json_output: bool) -> None:
 
 def modules_cmd(
     arguments: list[str] = typer.Argument(
-        None, help="Sous-commande et module, ou nom de module à détailler."
+        None, help="Sous-commande et projet, ou nom de projet à détailler."
     ),
     json_output: bool = typer.Option(False, "--json"),
     html: Optional[Path] = typer.Option(
         None,
         "--html",
-        help="Exporte le graphe de dépendances de modules en HTML Sigma.js.",
+        help="Exporte le graphe de dépendances de projets en HTML Sigma.js.",
         hidden=True,
     ),
 ) -> None:
-    """Liste les modules indexés ou détaille l'un d'eux.
+    """Liste les projets indexés ou détaille l'un d'eux.
 
-    `systemlens modules` liste. `systemlens modules <module>` détaille. Les sous-commandes
-    `integrations`, `properties` et `openapi` prennent un module dans le
+    `systemlens projects` liste. `systemlens projects <projet>` détaille. Les sous-commandes
+    `integrations`, `properties` et `openapi` prennent un projet dans le
     répertoire courant déjà indexé. `graph` affiche les dépendances de build
-    entre modules. Utilisez `systemlens export modules` pour générer le rendu HTML.
+    entre projets. Utilisez `systemlens export projects` pour générer le rendu HTML.
 
-    Exemples : `systemlens modules`, `systemlens modules order-service`,
-    `systemlens modules integrations order-service`, `systemlens modules graph`.
+    Exemples : `systemlens projects`, `systemlens projects order-service`,
+    `systemlens projects integrations order-service`, `systemlens projects graph`.
     """
     arguments = arguments or []
     commands = {"integrations", "properties", "openapi", "graph"}
     if arguments and arguments[0] in commands:
         if arguments[0] == "graph":
             if len(arguments) != 1:
-                typer.echo("`modules graph` ne prend pas de nom de module.", err=True)
+                typer.echo("`projects graph` ne prend pas de nom de projet.", err=True)
                 raise typer.Exit(code=2)
             _render_module_graph(Path.cwd().resolve(), json_output, html)
             return
         if len(arguments) != 2:
-            typer.echo(f"`modules {arguments[0]}` requiert un nom de module.", err=True)
+            typer.echo(f"`projects {arguments[0]}` requiert un nom de projet.", err=True)
             raise typer.Exit(code=2)
         repo_root = Path.cwd().resolve()
         selected = _selected_indexed_module(arguments[1], repo_root)
@@ -2184,7 +2187,7 @@ def modules_cmd(
         return
     if len(arguments) > 1:
         typer.echo(
-            "Usage : `systemlens modules [module]` ou `systemlens modules <integrations|properties|openapi> <module>` ou `systemlens modules graph`.",
+            "Usage : `systemlens projects [projet]` ou `systemlens projects <integrations|properties|openapi> <projet>` ou `systemlens projects graph`.",
             err=True,
         )
         raise typer.Exit(code=2)
@@ -2212,11 +2215,11 @@ def modules_cmd(
         return
     matches = [item for item in modules if item.name == module]
     if not matches:
-        typer.echo(f"Module introuvable : {module}", err=True)
+        typer.echo(f"Projet introuvable : {module}", err=True)
         raise typer.Exit(code=2)
     if len(matches) > 1:
         paths = ", ".join(str(item.path) for item in matches)
-        typer.echo(f"Module ambigu : {module} ({paths})", err=True)
+        typer.echo(f"Projet ambigu : {module} ({paths})", err=True)
         raise typer.Exit(code=2)
     selected = matches[0]
     detail_result = render_module_detail_json(selected)
@@ -2247,7 +2250,7 @@ def _render_module_graph(repo_root: Path, json_output: bool, html: Path | None) 
             render_module_graph_html(modules, dependencies, endpoints), encoding="utf-8"
         )
         typer.echo(
-            f"Graphe écrit dans {html} ({len(modules)} modules, {len(dependencies)} dépendances)."
+            f"Graphe écrit dans {html} ({len(modules)} projets, {len(dependencies)} dépendances)."
         )
         return
     result = render_module_graph_json(modules, dependencies)
@@ -2361,14 +2364,14 @@ def microservices_openapi(
 def modules_root(
     ctx: typer.Context, json_output: bool = typer.Option(False, "--json")
 ) -> None:
-    """Lister les modules sans sous-commande."""
+    """Lister les projets sans sous-commande."""
     if ctx.invoked_subcommand is None:
         modules_cmd([], json_output, None)
 
 
 @modules_app.command("list")
 def modules_list(json_output: bool = typer.Option(False, "--json")) -> None:
-    """Lister les modules."""
+    """Lister les projets."""
     modules_cmd([], json_output, None)
 
 
@@ -2376,7 +2379,7 @@ def modules_list(json_output: bool = typer.Option(False, "--json")) -> None:
 def modules_show(
     module: str, json_output: bool = typer.Option(False, "--json")
 ) -> None:
-    """Résumer un module."""
+    """Résumer un projet."""
     modules_cmd([module], json_output, None)
 
 
@@ -2384,7 +2387,7 @@ def modules_show(
 def modules_integrations(
     module: str, json_output: bool = typer.Option(False, "--json")
 ) -> None:
-    """Lister les intégrations d'un module."""
+    """Lister les intégrations d'un projet."""
     modules_cmd(["integrations", module], json_output, None)
 
 
@@ -2392,7 +2395,7 @@ def modules_integrations(
 def modules_properties(
     module: str, json_output: bool = typer.Option(False, "--json")
 ) -> None:
-    """Afficher explicitement la configuration indexée d'un module."""
+    """Afficher explicitement la configuration indexée d'un projet."""
     modules_cmd(["properties", module], json_output, None)
 
 
@@ -2406,7 +2409,7 @@ def modules_openapi(
 
 @modules_app.command("graph")
 def modules_graph(json_output: bool = typer.Option(False, "--json")) -> None:
-    """Afficher les dépendances de build entre modules."""
+    """Afficher les dépendances de build entre projets."""
     modules_cmd(["graph"], json_output, None)
 
 
@@ -2424,11 +2427,11 @@ def _selected_indexed_module(name: str, repo_root: Path):
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     if not matches:
-        typer.echo(f"Module introuvable : {name}", err=True)
+        typer.echo(f"Projet introuvable : {name}", err=True)
         raise typer.Exit(code=2)
     if len(matches) > 1:
         paths = ", ".join(str(item.path) for item in matches)
-        typer.echo(f"Module ambigu : {name} ({paths})", err=True)
+        typer.echo(f"Projet ambigu : {name} ({paths})", err=True)
         raise typer.Exit(code=2)
     return matches[0]
 

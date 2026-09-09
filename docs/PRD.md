@@ -25,7 +25,7 @@ The product answers questions such as:
 - Which services expose or call an HTTP API?
 - Which Kafka topics are produced and consumed, and with which payload type?
 - What are the dependencies and likely impact paths between services?
-- Which Maven/Gradle modules, OpenAPI contracts, MongoDB collections and
+- Which Maven/Gradle projects, OpenAPI contracts, MongoDB collections and
   Spring properties belong to a service?
 
 ## Users and primary workflows
@@ -33,7 +33,7 @@ The product answers questions such as:
 | User | Need | Surface |
 |---|---|---|
 | Coding agent (primary) | Establish proven dependencies, impact and unresolved facts before an edit | MCP tools |
-| Developer | Inspect the evidence behind a service, API, topic or module | CLI catalog commands and HTML export |
+| Developer | Inspect the evidence behind a service, API, topic, project or architecture module | CLI catalog commands and HTML export |
 | Architect | Review topology, uncertainty and static architecture risks across services | `analyze`, graph export |
 
 The primary workflow is `systemlens init`, `systemlens index`, then an agent
@@ -41,7 +41,7 @@ uses the MCP catalog, graph, coverage and trace tools before making a bounded
 change. Source evidence is available from the catalog and graph; coverage and
 indexing-issue tools expose unresolved facts. The agent then reindexes after
 the edit. Developers can follow the same workflow through `microservices`,
-`topics`, `apis`, `modules`, `analyze`, and HTML export. Indexing is
+`topics`, `apis`, `projects`, `analyze`, and HTML export. Indexing is
 incremental; `--full` refreshes every eligible source file.
 
 ## Scope and non-goals
@@ -52,12 +52,12 @@ incremental; `--full` refreshes every eligible source file.
   RestTemplate/WebClient, Spring Cloud Gateway and Spring Data REST endpoints.
 - Kafka producers and consumers, dynamic-topic evidence and explicit Java
   payload types.
-- Maven/Gradle module discovery, OpenAPI and MongoDB inventory.
+- Maven/Gradle project discovery, OpenAPI and MongoDB inventory.
 - Local SQLite persistence, architecture relations, graph/audit views and
   workspace federation.
 - Markdown/JSON Kafka manifests and the opt-in Strategy1 conventions.
 - Optional Kubernetes Deployment and StatefulSet resource dimensions from the
-  active local `kubectl` context, matched conservatively to indexed modules.
+  active local `kubectl` context, matched conservatively to indexed projects.
 
 ### Planned
 

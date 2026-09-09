@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SystemLens module dependencies</title>
+  <title>SystemLens project dependencies</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/graphology/0.25.4/graphology.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/sigma.js/2.4.0/sigma.min.js"></script>
   <style>
@@ -24,15 +24,15 @@
 </head>
 <body>
   <div class="toolbar">
-    <strong>Modules</strong>
-    <input id="search" type="search" placeholder="Rechercher un module" autocomplete="off" aria-label="Rechercher un module">
+    <strong>Projets</strong>
+    <input id="search" type="search" placeholder="Rechercher un projet" autocomplete="off" aria-label="Rechercher un projet">
     <button id="zoom-out" type="button" aria-label="Dezoomer" title="Dezoomer">-</button>
     <button id="zoom-in" type="button" aria-label="Zoomer" title="Zoomer">+</button>
     <button id="fit-view" type="button" aria-label="Ajuster a l'ecran" title="Ajuster a l'ecran">o</button>
     <button id="reset" type="button" aria-label="Reinitialiser la selection" title="Reinitialiser">x</button>
   </div>
-  <div id="details">Selectionnez un module pour explorer ses dependances directes.</div>
-  <div id="graph" aria-label="Graphe des dependances de modules"></div>
+  <div id="details">Selectionnez un projet pour explorer ses dependances directes.</div>
+  <div id="graph" aria-label="Graphe des dependances de projets"></div>
   <script id="module-graph-data" type="application/json">__MODULE_GRAPH_DATA__</script>
   <script>
     const graphData = JSON.parse(document.getElementById("module-graph-data").textContent);
@@ -90,7 +90,7 @@
     }
     function reset() {
       selectedId = null; relatedNodes = null; relatedEdges = null; renderer.refresh();
-      details.textContent = "Selectionnez un module pour explorer ses dependances directes.";
+      details.textContent = "Selectionnez un projet pour explorer ses dependances directes.";
       search.value = "";
     }
     renderer.on("clickNode", ({ node }) => selectModule(node));

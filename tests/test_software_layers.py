@@ -81,12 +81,12 @@ def test_software_layers_render_contains_layer_metadata_and_dependencies() -> No
     assert "Software layers" in html
 
 
-def test_cluster_export_groups_projects_by_resolved_cluster() -> None:
+def test_module_export_groups_projects_by_resolved_architecture_module() -> None:
     module = _module("orders-service", starts_application=True)
     html = render_namespaces_html([module])
 
-    assert "Cluster hierarchy" in html
-    assert "Each cluster can contain child clusters and indexed projects." in html
+    assert "Module hierarchy" in html
+    assert "Each module can contain child modules and indexed projects." in html
     assert '"name": "workspace"' in html
     assert "orders-service" in html
 

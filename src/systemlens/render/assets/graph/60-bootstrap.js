@@ -10,7 +10,7 @@
         pathMicroserviceOrder: new Map(),
       });
       renderer.refresh();
-      setDetailsEmpty("Selectionnez un noeud ou un cluster pour afficher ses informations.");
+      setDetailsEmpty("Selectionnez un noeud ou un module pour afficher ses informations.");
       search.value = "";
       clearPathControls();
       persistState();

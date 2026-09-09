@@ -33,7 +33,7 @@
 <body>
   <div class="toolbar">
     <strong>Software layers</strong>
-    <input id="search" type="search" placeholder="Search a module" autocomplete="off" aria-label="Search a module">
+    <input id="search" type="search" placeholder="Search a project" autocomplete="off" aria-label="Search a project">
     <button id="zoom-out" type="button" aria-label="Zoom out">-</button>
     <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
     <button id="fit-view" type="button" aria-label="Fit view">o</button>
@@ -41,7 +41,7 @@
   </div>
   <div id="legend"></div>
   <div id="containers" aria-hidden="true"></div>
-  <div id="details">Select a module to explore its layer and direct dependencies.</div>
+  <div id="details">Select a project to explore its layer and direct dependencies.</div>
   <div id="graph" aria-label="Software layers graph"></div>
   <script id="software-layers-data" type="application/json">__SOFTWARE_LAYERS_DATA__</script>
   <script>
@@ -124,7 +124,7 @@
       appendList("HTTP APIs exposed", node.httpApisExposed); appendList("Topics published", node.kafkaTopicsPublished); appendList("Topics consumed", node.kafkaTopicsConsumed); appendList("Depends on", dependencies); appendList("Used by", dependents);
       const position = renderer.getNodeDisplayData(id); if (position) renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
     }
-    function reset() { selectedId = null; relatedNodes = null; relatedEdges = null; renderer.refresh(); details.textContent = "Select a module to explore its layer and direct dependencies."; document.getElementById("search").value = ""; }
+    function reset() { selectedId = null; relatedNodes = null; relatedEdges = null; renderer.refresh(); details.textContent = "Select a project to explore its layer and direct dependencies."; document.getElementById("search").value = ""; }
     renderer.on("clickNode", ({ node }) => selectModule(node)); renderer.on("clickStage", reset);
     renderer.on("afterRender", refreshContainers);
     renderer.getCamera().on("updated", refreshContainers);

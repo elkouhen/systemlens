@@ -786,7 +786,7 @@ def test_primary_view_selector_opens_each_view_directly() -> None:
         view_controls = page.get_by_role("group", name="Vue principale")
         assert view_controls.is_visible()
         assert view_controls.get_by_role("button").all_text_contents() == [
-            "Graphe", "Couches", "Clusters",
+            "Graphe", "Couches", "Modules",
         ]
         assert page.evaluate(
             """() => {
@@ -796,7 +796,7 @@ def test_primary_view_selector_opens_each_view_directly() -> None:
         )
         for button_id, status_text in (
             ("layout-elk", "vue couches actif."),
-            ("layout-cluster", "vue clusters actif."),
+            ("layout-cluster", "vue modules actif."),
             ("layout-forceatlas2-noverlap", "vue graphe actif."),
         ):
             page.locator(f"#{button_id}").click()
@@ -825,7 +825,7 @@ def test_cluster_and_resource_details_support_bidirectional_navigation() -> None
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
         )
         page.locator("#layout-cluster").click()
-        page.locator("#layout-status").filter(has_text="vue clusters actif.").wait_for(
+        page.locator("#layout-status").filter(has_text="vue modules actif.").wait_for(
             state="visible"
         )
 
@@ -833,7 +833,8 @@ def test_cluster_and_resource_details_support_bidirectional_navigation() -> None
             has_text="platform-edge"
         ).dispatch_event("click")
         assert page.locator("#details .details-title").inner_text() == "platform-edge"
-        subclusters = page.get_by_role("heading", name="Sous-clusters").locator("..").get_by_role(
+        assert "Cluster" not in page.locator(".toolbar").inner_text()
+        subclusters = page.get_by_role("heading", name="Sous-modules").locator("..").get_by_role(
             "button"
         )
         assert subclusters.all_text_contents() == [
@@ -853,7 +854,7 @@ def test_cluster_and_resource_details_support_bidirectional_navigation() -> None
             "data-node-id"
         )
         assert selected_id
-        cluster_link = page.get_by_role("heading", name="Cluster", exact=True).locator(
+        cluster_link = page.get_by_role("heading", name="Module", exact=True).locator(
             ".."
         ).get_by_role("button")
         assert cluster_link.inner_text() == "platform-edge/sub-1"
@@ -865,14 +866,14 @@ def test_cluster_and_resource_details_support_bidirectional_navigation() -> None
         page.locator(f'.graph-node-card-label[data-node-id="{selected_id}"]').dispatch_event(
             "click"
         )
-        page.get_by_role("heading", name="Cluster", exact=True).locator("..").get_by_role(
+        page.get_by_role("heading", name="Module", exact=True).locator("..").get_by_role(
             "button"
         ).click()
-        page.locator("#layout-status").filter(has_text="vue clusters actif.").wait_for(
+        page.locator("#layout-status").filter(has_text="vue modules actif.").wait_for(
             state="visible"
         )
         assert page.locator("#details .details-title").inner_text() == "platform-edge/sub-1"
-        page.get_by_role("heading", name="Cluster parent").locator("..").get_by_role(
+        page.get_by_role("heading", name="Module parent").locator("..").get_by_role(
             "button"
         ).click()
         assert page.locator("#details .details-title").inner_text() == "platform-edge"
@@ -923,7 +924,7 @@ def test_selection_and_render_mode_preserve_graph_framing() -> None:
 
         for button_id, status_text in (
             ("layout-elk", "vue couches actif."),
-            ("layout-cluster", "vue clusters actif."),
+            ("layout-cluster", "vue modules actif."),
         ):
             page.locator(f"#{button_id}").click()
             page.locator("#layout-status").filter(has_text=status_text).wait_for(
@@ -1287,7 +1288,7 @@ def test_complex_dataset_geometry_contract_across_all_views() -> None:
                     arg=previous_status,
                 )
                 expected_status = {
-                    "layout-cluster": "vue clusters actif.",
+                    "layout-cluster": "vue modules actif.",
                     "layout-elk": "vue couches actif.",
                     "layout-forceatlas2-noverlap": "vue graphe actif.",
                 }[layout_id]
@@ -1425,7 +1426,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         view_controls = page.get_by_role("group", name="Vue principale")
         assert view_controls.is_visible()
         assert view_controls.get_by_role("button").all_text_contents() == [
-            "Graphe", "Couches", "Clusters",
+            "Graphe", "Couches", "Modules",
         ]
         assert page.locator("#layout-forceatlas2-noverlap").get_attribute("aria-pressed") == "true"
         assert page.evaluate(
@@ -1449,6 +1450,10 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
             }"""
         )
         assert graph.get_attribute("data-relation-count") == "4"
+        assert page.locator("#details").is_hidden()
+        assert page.locator("#details").evaluate(
+            "details => details.parentElement.classList.contains('toolbar')"
+        )
         page.locator("#layout-status").filter(has_text="vue graphe actif.").wait_for(state="visible")
         card_size = _assert_architecture_cards_have_uniform_size(page)
         _assert_architecture_cards_do_not_overlap(page)
@@ -1515,7 +1520,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _capture_render_snapshot(page, "constrained-after-mongodb-on")
 
         page.locator("#layout-cluster").click()
-        page.locator("#layout-status").filter(has_text="vue clusters actif.").wait_for(state="visible")
+        page.locator("#layout-status").filter(has_text="vue modules actif.").wait_for(state="visible")
         _capture_render_snapshot(page, "constrained-after-clusters")
         page.wait_for_function("() => Boolean(document.querySelector('#graph').dataset.clusterLayout)")
         assert page.locator("#graph").get_attribute("data-cluster-sub-layers") == (
@@ -1608,7 +1613,21 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         orders_stop.click()
         _capture_render_snapshot(page, "constrained-after-node-select")
         assert page.locator(".details-title").inner_text() == "orders"
-        module_action = page.get_by_role("link", name="Ouvrir le module Maven dans VS Code")
+        assert "has-details" in (page.locator(".toolbar").get_attribute("class") or "")
+        assert search.is_hidden()
+        assert page.locator("#graph-summary").is_hidden()
+        assert page.evaluate(
+            """() => {
+                const toolbar = document.querySelector('.toolbar').getBoundingClientRect();
+                const details = document.querySelector('#details').getBoundingClientRect();
+                const title = document.querySelector('#details .details-title').getBoundingClientRect();
+                return details.left >= toolbar.left
+                    && details.right <= toolbar.right
+                    && title.top >= toolbar.top
+                    && title.bottom <= toolbar.bottom;
+            }"""
+        )
+        module_action = page.get_by_role("link", name="Ouvrir le projet Maven dans VS Code")
         assert module_action.is_visible()
         assert module_action.get_attribute("href") == f"vscode://file/{module.path}"
         assert page.locator("#details .details-group > summary").all_text_contents() == [
@@ -1621,6 +1640,12 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         architecture = page.locator("#details .details-group").filter(has_text="Architecture")
         assert "Application" in architecture.inner_text()
         assert "test_html_export_resources_are0" in architecture.inner_text()
+        architecture_links = architecture.locator("button.relation-link")
+        assert architecture_links.count() > 0
+        assert all(
+            box is not None and box["width"] > 100
+            for box in [link.bounding_box() for link in architecture_links.all()]
+        )
         assert page.get_by_text("Topics publies", exact=True).is_visible()
         assert page.get_by_role("button", name="orders.created", exact=True).is_visible()
         assert page.get_by_role("button", name="DTO · OrderCreated").is_visible()
@@ -1636,6 +1661,10 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         assert not page.get_by_text("Types publies", exact=True).count()
         assert not page.get_by_text("Types consommes", exact=True).count()
 
+        page.locator("#reset").click()
+        assert page.locator("#details").is_hidden()
+        assert search.is_visible()
+        assert page.locator("#graph-summary").is_visible()
         search.fill("does-not-exist")
         search.press("Enter")
         _capture_render_snapshot(page, "constrained-after-missing-search")
@@ -1650,7 +1679,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         for view_name, status_text in (
             ("Graphe", "vue graphe actif."),
             ("Couches", "vue couches actif."),
-            ("Clusters", "vue clusters actif."),
+            ("Modules", "vue modules actif."),
         ):
             page.get_by_role("button", name=view_name, exact=True).click()
             page.locator("#layout-status").filter(has_text=status_text).wait_for(state="visible")
@@ -1674,7 +1703,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
             _capture_render_snapshot(page, f"constrained-{view_name.lower()}-after-resize")
             _assert_architecture_cards_have_uniform_size(page)
             _assert_architecture_cards_do_not_overlap(page)
-            if view_name == "Clusters":
+            if view_name == "Modules":
                 _assert_background_pan_preserves_overlay_scale(page)
                 _assert_pan_moves_cluster_overlays_as_one_surface(page)
             else:

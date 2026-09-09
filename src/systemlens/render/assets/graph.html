@@ -37,7 +37,7 @@
       <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
         <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Explorer les relations avec des nœuds espacés">Graphe</button>
         <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
-        <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des clusters et des projets">Clusters</button>
+        <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
       </div>
       <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
         <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
@@ -111,7 +111,7 @@
     <div id="dependencies-panel" class="toolbar-panel dependency-view" role="tabpanel" aria-labelledby="build-tab" hidden>
       <p class="dependency-view-kicker">Structure de build</p>
       <h2>Arbre des dépendances</h2>
-      <p>Disposition Sugiyama : les modules sont rangés par niveaux de dépendance. Un lien part du module dépendant, à gauche, vers le module requis, à droite. Les interactions HTTP, Kafka et données restent dans la vue Explorer.</p>
+      <p>Disposition Sugiyama : les projets sont rangés par niveaux de dépendance. Un lien part du projet dépendant, à gauche, vers le projet requis, à droite. Les interactions HTTP, Kafka et données restent dans la vue Explorer.</p>
     </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
       <div class="indexing-issues-header">
@@ -155,6 +155,7 @@
       <ul id="request-reply-patterns" class="references-list" aria-label="Patterns Kafka request reply"></ul>
       <p id="request-reply-empty" class="references-empty">Aucun couple request/reply détecté.</p>
     </div>
+    <div id="details" class="is-empty"><div class="details-empty">Selectionnez un noeud pour isoler ses relations et afficher ses APIs.</div></div>
   </div>
   <details id="graph-legend" class="legend" aria-label="Legende du graphe">
     <summary>Legende</summary>
@@ -176,7 +177,6 @@
       <div class="legend-row"><span class="legend-mark" style="background:#7c3aed"></span>Relation conventionnelle : Strategy1</div>
     </div>
   </details>
-  <div id="details" class="is-empty"><div class="details-empty">Selectionnez un noeud pour isoler ses relations et afficher ses APIs.</div></div>
   <div id="graph" aria-label="Graphe des interactions"></div>
   <div id="graph-layers" aria-hidden="true"></div>
   <div id="graph-groups" aria-hidden="true"></div>

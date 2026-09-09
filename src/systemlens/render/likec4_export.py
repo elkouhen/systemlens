@@ -309,7 +309,7 @@ def render_graph_likec4(
         "    style { shape browser }",
         "  }",
         "  element build_module {",
-        "    notation 'Build module'",
+        "    notation 'Build project'",
         "    style { shape component }",
         "  }",
         "  element indexing_warning {",
@@ -453,7 +453,7 @@ def render_graph_likec4(
     for name in build_module_names:
         module = build_module_details.get(name)
         technology = module.build_system if module else "unknown"
-        description = "Starts an application" if module and module.starts_application else "Shared build module"
+        description = "Starts an application" if module and module.starts_application else "Shared build project"
         lines.extend(
             [
                 f"    {build_module_ids[name]} = build_module '{_likec4_string(name)}' {{",
@@ -502,7 +502,7 @@ def render_graph_likec4(
         lines.extend(
             [
                 "  view build {",
-                "    title 'Maven and Gradle module dependencies'",
+                "    title 'Maven and Gradle project dependencies'",
                 "    include build.**",
                 "  }",
             ]

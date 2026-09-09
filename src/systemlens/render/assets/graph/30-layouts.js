@@ -176,7 +176,7 @@
           });
           return layerCursorY;
         };
-        // Keep exceptionally tall clusters from crossing a neighbouring layer.
+        // Keep exceptionally tall module envelopes from crossing a neighbouring layer.
         // Adding columns trades vertical pressure for horizontal space; the
         // outer width is recomputed on every pass so the diagram grows with it.
         for (let pass = 0; pass < 12; pass += 1) {
@@ -266,7 +266,7 @@
         packClusterGraphPositions();
         return fcoseApplied;
       } catch (error) {
-        console.warn("fCoSE est indisponible pour le rendu par clusters ; la grille déterministe est utilisée.", error);
+        console.warn("fCoSE est indisponible pour le rendu par modules ; la grille déterministe est utilisée.", error);
         network.forEachNode(node => {
           const attributes = network.getNodeAttributes(node);
           graphState.clusterLayoutPositions.set(node, { x: attributes.x, y: attributes.y });
@@ -465,14 +465,14 @@
           pathMicroserviceOrder: new Map(),
         });
         clearPathControls();
-        setDetailsEmpty("Selectionnez un noeud ou un cluster pour afficher ses informations.");
+        setDetailsEmpty("Selectionnez un noeud ou un module pour afficher ses informations.");
       }
       const zoomOutButton = document.getElementById("zoom-out");
       zoomOutButton.disabled = false;
       zoomOutButton.title = "Dézoomer";
       setActiveLayout(layout);
       layoutStatus.textContent = `Calcul de la disposition ${label}…`;
-      // Cluster placement is deterministic and local; it does not need any
+      // Module placement is deterministic and local; it does not need any
       // external layout library. Keep the library loading requirement for
       // ForceAtlas2/Noverlap and the ELK layer view only.
       // The layer view only needs ELK. Do not make it wait for the dynamic
@@ -508,7 +508,7 @@
           // it sizes namespaces from their two sub-layers and reserves sibling
           // gaps before projection. fCoSE can block the browser main thread
           // on large compound graphs, which prevents the fallback and leaves
-          // partially packed cluster envelopes on screen.
+          // partially packed module envelopes on screen.
           packClusterGraphPositions();
         }
         if (layout === "forceatlas2" || layout === "forceatlas2-noverlap") {
@@ -547,7 +547,7 @@
       // Commit the view mode only after its layout and camera are ready. This
       // keeps the old overlays coherent while an async layout is pending and
       // prevents a half-switched view from mixing old positions with new
-      // cluster/layer geometry.
+      // module/layer geometry.
       updateGraphState({
         layeredView: nextLayeredView,
         clusteredView: layout === "cluster",

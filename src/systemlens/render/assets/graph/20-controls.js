@@ -160,7 +160,7 @@
       ["noverlap", "placement sans chevauchement"],
       ["forceatlas2-noverlap", "vue graphe"],
       ["elk", "vue couches"],
-      ["cluster", "vue clusters"],
+      ["cluster", "vue modules"],
     ]);
     const pathStops = [];
     const MAX_SIMPLE_PATH_DEPTH = 8;

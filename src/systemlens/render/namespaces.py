@@ -1,4 +1,4 @@
-"""Rendering of the indexed namespace inventory."""
+"""Rendering of the indexed architecture-module hierarchy."""
 
 import json
 from pathlib import Path
@@ -19,7 +19,7 @@ def project_namespace(module: DiscoveredModule, root_path: Path | None = None) -
 
 
 def project_namespace_path(module: DiscoveredModule, root_path: Path | None = None) -> str:
-    """Return the full cluster path formed by parent directories."""
+    """Return the full architecture-module path formed by parent directories."""
     parent = module.path.resolve().parent
     if root_path is None:
         return parent.name or "root"
@@ -33,10 +33,10 @@ def project_namespace_path(module: DiscoveredModule, root_path: Path | None = No
 def render_namespaces_html(
     modules: list[DiscoveredModule], root_path: Path | None = None
 ) -> str:
-    """Render namespaces as containers containing their indexed modules."""
+    """Render architecture modules as containers of indexed build projects."""
     by_namespace: dict[str, list[DiscoveredModule]] = {}
     for module in modules:
-        # The hierarchy export is the canonical cluster-path view.  Keep
+        # The hierarchy export is the canonical architecture-module view. Keep
         # ``project_namespace`` as the legacy immediate-parent API, but do not
         # discard parent directories when building the hierarchy.
         namespace = project_namespace_path(module, root_path)

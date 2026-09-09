@@ -49,7 +49,7 @@ class GraphResult(TypedDict):
     `services`/`nodes`/`edges` restent vides tant qu'aucune donnée
     inter-module n'est disponible : ni fédération explicite
     (`--workspace`/`workspace_root`, BACKLOG-11 A2), ni endpoints attribués à
-    un module Maven par l'indexation d'un répertoire parent multi-modules
+    un projet Maven par l'indexation d'un répertoire parent multi-projets
     (BACKLOG-13 M1/M2/M3) — voir `note`.
     """
 
@@ -63,7 +63,7 @@ class GraphResult(TypedDict):
 _NO_CROSS_MODULE_DATA_NOTE = (
     "La topologie inter-services nécessite soit un répertoire multi-services "
     "fédéré (--workspace/workspace_root, BACKLOG-11 A2), soit des endpoints "
-    "attribués à un module Maven par une indexation multi-modules (BACKLOG-13) — "
+    "attribués à un projet Maven par une indexation multi-projets (BACKLOG-13) — "
     "seuls les appels REST détectés dans un handler Kafka de ce projet sont "
     "remontés pour l'instant."
 )
@@ -181,7 +181,7 @@ def render_graph_text(result: GraphResult) -> str:
     if services:
         lines.append(f"Services ({len(services)}) : {', '.join(services)}")
     else:
-        lines.append("Aucun service inter-module disponible pour construire le graphe.")
+        lines.append("Aucun service inter-projet disponible pour construire le graphe.")
 
     kafka_topics = [node["name"] for node in nodes if node["kind"] == "kafka_topic"]
     if kafka_topics:
@@ -225,6 +225,4 @@ def render_graph_text(result: GraphResult) -> str:
     if result["note"]:
         lines.append(result["note"])
     return "\n".join(lines)
-
-
 

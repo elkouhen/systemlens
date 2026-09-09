@@ -1,4 +1,10 @@
 // Ordered source module: 50-paths.js
+    function revealDetails() {
+      details.classList.remove("is-empty");
+      const toolbar = document.querySelector(".toolbar");
+      toolbar?.classList.add("has-details");
+      requestAnimationFrame(() => toolbar?.scrollTo({ top: 0 }));
+    }
     function selectDependencyModule(id) {
       const node = (graphData.build_dependencies?.nodes || []).find(item => item.id === id);
       if (!node) return;
@@ -11,13 +17,13 @@
         .filter(link => link.target === id)
         .map(link => (graphData.build_dependencies.nodes.find(item => item.id === link.source) || {}).name)
         .filter(Boolean);
-      details.classList.remove("is-empty");
+      revealDetails();
       details.replaceChildren();
       const header = document.createElement("header");
       header.className = "details-header";
       const kicker = document.createElement("p");
       kicker.className = "details-kicker";
-      kicker.textContent = `Module ${node.build_system === "unknown" ? "Maven / Gradle" : node.build_system}`;
+      kicker.textContent = `Projet ${node.build_system === "unknown" ? "Maven / Gradle" : node.build_system}`;
       const title = document.createElement("h1");
       title.className = "details-title";
       title.textContent = node.name;
@@ -28,6 +34,7 @@
     }
     function setDetailsEmpty(message) {
       details.classList.add("is-empty");
+      document.querySelector(".toolbar")?.classList.remove("has-details");
       details.replaceChildren();
       const empty = document.createElement("div");
       empty.className = "details-empty";
@@ -221,7 +228,7 @@
       });
     }
     function renderPathDetails(path) {
-      details.classList.remove("is-empty");
+      revealDetails();
       details.replaceChildren();
       const pathNodeLabel = (id, index) => {
         const node = nodeDataById.get(id);
@@ -284,7 +291,7 @@
       persistState();
     }
     function renderSimplePathChoices(paths, limited) {
-      details.classList.remove("is-empty");
+      revealDetails();
       details.replaceChildren();
       const section = document.createElement("section");
       section.className = "details-section simple-paths";
@@ -423,7 +430,7 @@
       const collectionCount = isMicroservice ? new Set(
         indexedEdges.filter(link => link.kind === "mongodb" && link.source === id).map(link => link.target)
       ).size : 0;
-      details.classList.remove("is-empty");
+      revealDetails();
       details.replaceChildren();
       const kindLabel = nodeKindLabel(node);
       const complexity = node.complexity;
@@ -482,9 +489,9 @@
         const clusterPath = clusterPathForNode(id);
         const architectureGroup = createDetailsGroup("Architecture");
         appendList("Layer", [architectureLayerForNode(id)], architectureGroup);
-        appendActionList("Cluster", clusterPath ? [{
+        appendActionList("Module", clusterPath ? [{
           label: clusterPath,
-          title: `Naviguer vers le cluster ${clusterPath}`,
+          title: `Naviguer vers le module ${clusterPath}`,
           action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
         }] : [], architectureGroup);
         discardEmptyDetailsGroup(architectureGroup);
@@ -495,8 +502,8 @@
           moduleAction.className = "module-open-action";
           moduleAction.href = node.vscode_uri;
           const buildSystem = node.build_system === "gradle" ? "Gradle" : "Maven";
-          moduleAction.textContent = `Ouvrir le module ${buildSystem} dans VS Code`;
-          moduleAction.title = `Ouvrir le repertoire racine du module ${node.name}`;
+          moduleAction.textContent = `Ouvrir le projet ${buildSystem} dans VS Code`;
+          moduleAction.title = `Ouvrir le repertoire racine du projet ${node.name}`;
           details.append(moduleAction);
         }
         const httpCalls = edges.filter(link => link.kind === "rest" && link.source === id);
@@ -509,9 +516,9 @@
         const clusterPath = clusterPathForNode(id);
         const architectureGroup = createDetailsGroup("Architecture");
         appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
-        appendActionList("Cluster", clusterPath ? [{
+        appendActionList("Module", clusterPath ? [{
           label: clusterPath,
-          title: `Naviguer vers le cluster ${clusterPath}`,
+          title: `Naviguer vers le module ${clusterPath}`,
           action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
         }] : [], architectureGroup);
         discardEmptyDetailsGroup(architectureGroup);
@@ -638,13 +645,13 @@
         .map(id => nodeDataById.get(id))
         .filter(Boolean)
         .sort((left, right) => left.name.localeCompare(right.name));
-      details.classList.remove("is-empty");
+      revealDetails();
       details.replaceChildren();
       const header = document.createElement("header");
       header.className = "details-header";
       const kicker = document.createElement("p");
       kicker.className = "details-kicker";
-      kicker.textContent = "Cluster";
+      kicker.textContent = "Module";
       const title = document.createElement("h1");
       title.className = "details-title";
       title.textContent = resolvedCluster.name;
@@ -656,18 +663,18 @@
       meta.append(count);
       const childCount = document.createElement("span");
       childCount.className = "detail-badge";
-      childCount.textContent = `${resolvedCluster.childPaths.length} sous-cluster${resolvedCluster.childPaths.length > 1 ? "s" : ""}`;
+      childCount.textContent = `${resolvedCluster.childPaths.length} sous-module${resolvedCluster.childPaths.length > 1 ? "s" : ""}`;
       meta.append(childCount);
       header.append(kicker, title, meta);
       details.append(header);
-      appendActionList("Cluster parent", resolvedCluster.parentPath ? [{
+      appendActionList("Module parent", resolvedCluster.parentPath ? [{
         label: resolvedCluster.parentPath === "root" ? "ROOT" : resolvedCluster.parentPath,
-        title: "Naviguer vers le cluster parent",
+        title: "Naviguer vers le module parent",
         action: () => selectCluster(clusterDescriptorForPath(resolvedCluster.parentPath)),
       }] : []);
-      appendActionList("Sous-clusters", resolvedCluster.childPaths.map(childPath => ({
+      appendActionList("Sous-modules", resolvedCluster.childPaths.map(childPath => ({
         label: childPath,
-        title: `Naviguer vers le sous-cluster ${childPath}`,
+        title: `Naviguer vers le sous-module ${childPath}`,
         action: () => selectCluster(clusterDescriptorForPath(childPath)),
       })));
       appendActionList("Ressources contenues", members.map(member => ({

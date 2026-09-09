@@ -204,7 +204,7 @@ normal source index must remain usable offline and without cluster credentials.
 
 **Decision:** `systemlens index --kubernetes` invokes the local `kubectl` CLI
 against its active context and records Deployments and StatefulSets. It attaches
-a workload only when its Kubernetes name exactly matches an indexed module
+a workload only when its Kubernetes name exactly matches an indexed project
 name, and aggregates requests and limits across regular containers. Init
 containers are excluded because their scheduling resources are not steady-state
 service capacity.
@@ -230,7 +230,7 @@ be extracted deterministically, while ensuring reindexing preserves enrichment
 and MCP deletion never destroys source evidence. `architecture_graph` merges
 both layers for reading. Added evidence paths remain relative to the repository.
 
-## ADR-24 — Reserve cluster terminology for structural project grouping
+## ADR-24 — Use module terminology for structural project grouping
 
 **Status:** Accepted.
 
@@ -239,12 +239,17 @@ directory hierarchy a namespace view. That wording confused project grouping
 with Kubernetes namespaces and enrichment-fact namespaces, even though neither
 defines the hierarchy.
 
-**Decision:** The interactive export calls this hierarchy `Clusters`. A cluster
-is a structural group that may contain child clusters and projects. Membership
-comes from project directory paths; Kubernetes namespaces remain runtime
-metadata only. Existing `project_namespace*` export fields remain compatibility
-aliases for the canonical `cluster_path` field.
+**Decision:** The interactive export calls this hierarchy `Modules`. An
+architecture module is a structural group that may contain child modules and
+projects. Maven/Gradle build units are called `Projects` in user-facing text.
+Membership comes from project directory paths; Kubernetes namespaces remain
+runtime metadata only. Existing `project_namespace*` export fields remain
+compatibility aliases for the canonical `cluster_path` field.
 
-**Consequences:** Users select `Graph`, `Layers`, or `Clusters` without implying
-a Kubernetes grouping. Internal compatibility is preserved while new UI and
-documentation use cluster terminology for structural containers.
+**Consequences:** Users select `Graph`, `Layers`, or `Modules` without implying
+a Kubernetes grouping or confusing build projects with structural containers.
+Internal identifiers such as `cluster_path`, persisted `module` fields, and
+Python model names remain unchanged for index and JSON compatibility. The CLI
+uses `projects` for the Maven/Gradle catalog and build export, and `export
+modules` for the structural hierarchy; legacy unambiguous spellings remain
+hidden aliases.

@@ -7,6 +7,9 @@
       nodesByNormalizedName.set(key, [...(nodesByNormalizedName.get(key) || []), node]);
     });
     function setToolbarTab(tab) {
+      if (document.querySelector(".toolbar")?.classList.contains("has-details")) {
+        setDetailsEmpty("Selectionnez un noeud pour afficher ses details.");
+      }
       const showingGraph = tab === "graph";
       const showingDependencies = tab === "dependencies";
       const showingIssues = tab === "issues";
@@ -468,7 +471,7 @@
       }
       appendDtoInspectorSection("Collection", [item.collection]);
       appendDtoInspectorSection("Microservice", [item.service]);
-      appendDtoInspectorSection("Module de persistance", [item.module]);
+      appendDtoInspectorSection("Projet de persistance", [item.module]);
     }
     function openNestedDtoInspector(dtoName, parentDtoName) {
       dtoNavigation.push(parentDtoName);

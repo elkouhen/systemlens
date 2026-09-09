@@ -253,7 +253,7 @@ def _index_repo(
     )
     discovered_modules = []
     if "properties" not in disabled:
-        _report_progress(progress, "→ Indexation : découverte des modules Maven/Gradle...")
+        _report_progress(progress, "→ Indexation : découverte des projets Maven/Gradle...")
         _trace("modules.begin")
         discovered_modules = discover_modules(
             repo_root,
@@ -268,7 +268,7 @@ def _index_repo(
                     f"  • [{module.build_system}/{module.kind}] {module.name}  {module.path}",
                 )
         else:
-            _report_progress(progress, "  • aucun module Maven/Gradle détecté ; scan de la racine.")
+            _report_progress(progress, "  • aucun projet Maven/Gradle détecté ; scan de la racine.")
     # Les signatures d'inventaire d'endpoints pilotent aussi l'analyse locale
     # (REST/Kafka/manifests) : une évolution du code
     # d'inférence ou de stratégie Kafka doit forcer un rescan complet.
@@ -425,14 +425,14 @@ def _index_repo(
     # transactional with the rest of the index and represents the audited
     # repository state, not a partially failed scan.
     if "properties" not in disabled:
-        _report_progress(progress, "→ Indexation : inventaire des modules et propriétés...")
+        _report_progress(progress, "→ Indexation : inventaire des projets et propriétés...")
         _trace("store.modules.begin", count=len(discovered_modules))
         store.replace_modules(discovered_modules)
         module_dependencies = discover_module_dependencies(repo_root, discovered_modules)
         store.replace_module_dependencies(module_dependencies)
         _trace("store.modules.end")
     else:
-        _report_progress(progress, "→ Indexation : propriétés et inventaire des modules désactivés, snapshot conservé.")
+        _report_progress(progress, "→ Indexation : propriétés et inventaire des projets désactivés, snapshot conservé.")
 
     relation_modules = discovered_modules if "properties" not in disabled else store.all_modules()
     relation_dependencies = (

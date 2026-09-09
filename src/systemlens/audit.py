@@ -164,8 +164,8 @@ def _non_runtime_module_activity_risk(
     return ArchitectureRisk(
         "non-runtime-module-activity",
         "WARNING",
-        "Module non microservice avec responsabilités d'exécution",
-        f"{module_identity(module)} est un module non runtime mais " + "; ".join(details) + ".",
+        "Projet non microservice avec responsabilités d'exécution",
+        f"{module_identity(module)} est un projet non runtime mais " + "; ".join(details) + ".",
         (module_identity(module),),
     )
 

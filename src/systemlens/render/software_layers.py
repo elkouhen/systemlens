@@ -1,4 +1,4 @@
-"""Rendering of the software-layer view for indexed build modules."""
+"""Rendering of the software-layer view for indexed build projects."""
 
 import json
 from pathlib import Path
@@ -39,13 +39,13 @@ def software_layer(
     strategy1: bool = False,
     root_path: Path | None = None,
 ) -> str:
-    """Classify a module conservatively for the dedicated layer view.
+    """Classify a build project conservatively for the dedicated layer view.
 
     Strategy1 adds repository-specific conventions: project namespaces
     ``PORTAIL`` and ``CYCLE-DE-VIE`` identify API and Orchestration modules,
     ``DOMAIN-*`` identifies Domain modules, and layer-name prefixes/suffixes
     identify their matching layers. Without Strategy1, these names remain
-    ordinary module names and do not alter the portable default classification.
+    ordinary project names and do not alter the portable default classification.
     """
     name = module.name.casefold()
     if strategy1 and project_namespace(module, root_path).casefold() == "portail":
@@ -80,7 +80,7 @@ def render_software_layers_html(
     strategy1: bool = False,
     root_path: Path | None = None,
 ) -> str:
-    """Render modules in explicit software-layer columns."""
+    """Render build projects in explicit software-layer columns."""
     classified_modules = [
         (module, software_layer(module, strategy1=strategy1, root_path=root_path))
         for module in modules

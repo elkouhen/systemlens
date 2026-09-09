@@ -80,11 +80,10 @@
     * { box-sizing: border-box; }
     body { margin: 0; overflow: hidden; }
     #graph, #dependency-graph { background: #f8fafc; touch-action: none; }
-    /* Keep Sigma's canvas in a dedicated background layer. The floating
-       workspace controls must remain above it, regardless of DOM order. */
+    /* Keep Sigma's canvas in a dedicated background layer. The workspace
+       controls must remain above it, regardless of DOM order. */
     /* Sigma and every HTML overlay must share the same containing rectangle.
-       The workspace variables reserve the space used by the controls and
-       details panel. */
+       The workspace variables reserve the space used by the controls. */
     #graph, #dependency-graph {
       position: fixed;
       left: var(--workspace-left, 0px);
@@ -162,6 +161,10 @@
     .toolbar-tab.is-active { color: #1d4f91 !important; background: #fff !important; box-shadow: 0 1px 3px rgba(15, 23, 42, .12); }
     .toolbar-panel { display: grid; gap: 10px; }
     .toolbar-panel[hidden] { display: none; }
+    .toolbar.has-details .toolbar-panel { display: none; }
+    .toolbar.has-details #graph-panel:not([hidden]) { display: grid; }
+    .toolbar.has-details #graph-panel > :not(#layout-status) { display: none; }
+    .toolbar.has-details .graph-summary, .toolbar.has-details .inventory-status { display: none; }
     #search, #path-query { width: 100%; }
     .graph-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
     .toolbar button { width: 34px; height: 34px; border: 1px solid #b9c5d6; border-radius: 6px; color: #315f9b; background: #fff; font-size: 19px; line-height: 1; cursor: pointer; }
@@ -247,9 +250,9 @@
     .reference-meta { margin-top: 2px; color: #64748b; font-size: 10px; overflow-wrap: anywhere; }
     .reference-action { width: auto !important; height: 29px !important; padding: 0 8px !important; color: #1d4f91 !important; border-color: #bfdbfe !important; background: #eff6ff !important; font-size: 11px !important; font-weight: 700; white-space: nowrap; }
     .reference-action:disabled { color: #94a3b8 !important; border-color: #e2e8f0 !important; background: #f8fafc !important; cursor: not-allowed; }
-    #details { position: fixed; z-index: 10; right: 16px; bottom: 16px; width: min(400px, calc(100vw - 32px)); max-height: min(68vh, 560px); overflow: auto; border: 1px solid #d7dee9; border-radius: 14px; background: rgba(255, 255, 255, .97); color: #475569; font-size: 13px; line-height: 1.45; box-shadow: 0 12px 32px rgba(15, 23, 42, .16); }
-    #details.is-empty { pointer-events: none; }
-    .details-header { padding: 16px; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #f8fafc, #eef5ff); }
+    #details { position: relative; width: 100%; overflow: visible; color: #475569; font-size: 13px; line-height: 1.45; }
+    #details.is-empty { display: none; }
+    .details-header { padding: 12px; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #f8fafc, #eef5ff); }
     .details-header.is-low { border-left: 4px solid #2563eb; }
     .details-header.is-medium { border-left: 4px solid #d97706; }
     .details-header.is-high { border-left: 4px solid #dc2626; }
@@ -261,10 +264,10 @@
     .detail-badge.complexity.low { color: #2563eb; background: #eff6ff; }
     .detail-badge.complexity.medium { color: #b45309; background: #fffbeb; }
     .detail-badge.complexity.high { color: #dc2626; background: #fef2f2; }
-    .module-open-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 16px; padding: 10px 12px; border: 1px solid #bfdbfe; border-radius: 8px; color: #1d4f91; background: #eff6ff; font-weight: 700; text-decoration: none; }
+    .module-open-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 12px; padding: 9px 10px; border: 1px solid #bfdbfe; border-radius: 8px; color: #1d4f91; background: #eff6ff; font-weight: 700; text-decoration: none; }
     .module-open-action::after { content: "↗"; flex: 0 0 auto; font-size: 15px; }
     .module-open-action:hover, .module-open-action:focus-visible { border-color: #60a5fa; background: #dbeafe; outline: none; }
-    .details-section { padding: 12px 16px; border-bottom: 1px solid #edf2f7; }
+    .details-section { padding: 10px 12px; border-bottom: 1px solid #edf2f7; }
     .details-section:last-child { border-bottom: 0; }
     .details-section h2 { margin: 0 0 7px; color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .details-section ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
@@ -272,10 +275,14 @@
     .details-section li.relation-item { padding: 0; background: transparent; }
     .details-group { border-bottom: 1px solid #dfe7f0; }
     .details-group:last-child { border-bottom: 0; }
-    .details-group > summary { display: flex; align-items: center; min-height: 38px; padding: 0 16px; color: #315f9b; font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; cursor: pointer; }
+    .details-group > summary { display: flex; align-items: center; min-height: 38px; padding: 0 12px; color: #315f9b; font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; cursor: pointer; }
     .details-group[open] > summary { border-bottom: 1px solid #edf2f7; background: #f8fafc; }
-    .details-group > .details-section { padding-left: 16px; padding-right: 16px; }
+    .details-group > .details-section { padding-left: 12px; padding-right: 12px; }
     .relation-link { display: block; width: 100%; padding: 7px 8px; border: 1px solid #e2e8f0; border-radius: 6px; color: #1d4f91; background: #f8fafc; font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+    .toolbar #details button { width: auto; height: auto; font-size: inherit; line-height: inherit; }
+    .toolbar #details .relation-link,
+    .toolbar #details .service-kafka-topic,
+    .toolbar #details .path-overview-stop { width: 100%; }
     .relation-link:hover, .relation-link:focus-visible { border-color: #93c5fd; background: #eff6ff; outline: none; }
     .service-kafka-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
     .service-kafka-item { display: grid; gap: 6px; padding: 8px; border: 1px solid #dbeafe; border-radius: 7px; background: #f8fbff; }
@@ -305,7 +312,7 @@
     .dependency-view-kicker { margin: 0; color: #1d4f91; font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
     .dependency-view h2 { margin: 0; color: #172033; font-size: 16px; }
     .dependency-view p:last-child { margin: 0; color: #52616b; font-size: 12px; line-height: 1.45; }
-    .legend { position: fixed; z-index: 10; left: 16px; bottom: 16px; width: 210px; padding: 9px 11px; border: 1px solid #d7dee9; border-radius: 8px; background: rgba(255, 255, 255, .95); color: #475569; font-size: 11px; box-shadow: 0 2px 12px rgba(15, 23, 42, .10); }
+    .legend { position: fixed; z-index: 10; right: 16px; bottom: 16px; width: 210px; padding: 9px 11px; border: 1px solid #d7dee9; border-radius: 8px; background: rgba(255, 255, 255, .95); color: #475569; font-size: 11px; box-shadow: 0 2px 12px rgba(15, 23, 42, .10); }
     .legend[open] summary { margin-bottom: 8px; }
     .legend-content { display: grid; gap: 5px; }
     .legend-row { display: flex; align-items: center; gap: 6px; }
@@ -480,22 +487,16 @@
     .reference-item { padding: 10px; }
     .reference-action { border-radius: 8px !important; }
     #details {
-      right: 18px;
-      bottom: 18px;
-      width: min(420px, calc(100vw - 36px));
-      border-color: rgba(255, 255, 255, .8);
-      border-radius: var(--radius-lg);
-      background: var(--surface);
-      box-shadow: 0 20px 55px rgba(36, 50, 83, .16), 0 2px 8px rgba(36, 50, 83, .06);
-      backdrop-filter: blur(18px) saturate(1.15);
-      scrollbar-width: thin;
+      margin-top: 1px;
+      border-top: 1px solid var(--line);
+      background: transparent;
     }
-    .details-header { padding: 18px; background: linear-gradient(145deg, #fbfcff, #f2f5fb); }
-    .details-title { font-size: 20px; letter-spacing: -.025em; }
+    .details-header { padding: 12px 2px; background: transparent; }
+    .details-title { font-size: 18px; letter-spacing: -.02em; }
     .details-group > summary { min-height: 43px; letter-spacing: .065em; }
     .relation-link { border-color: var(--line); border-radius: var(--radius-sm); background: var(--surface-soft); }
     .legend {
-      left: 18px;
+      right: 18px;
       bottom: 18px;
       border-color: rgba(255, 255, 255, .8);
       border-radius: 12px;
@@ -525,7 +526,7 @@
         radial-gradient(circle at 34% 84%, rgba(18, 126, 151, .17), transparent 31%),
         linear-gradient(145deg, #13213a 0%, #0f1b2e 55%, #0b1423 100%);
     }
-    :root[data-theme="dark"] .toolbar, :root[data-theme="dark"] #details, :root[data-theme="dark"] .legend {
+    :root[data-theme="dark"] .toolbar, :root[data-theme="dark"] .legend {
       border-color: rgba(148, 163, 184, .22); background: rgba(17, 29, 48, .91);
       box-shadow: 0 22px 60px rgba(0, 0, 0, .28), 0 2px 10px rgba(0, 0, 0, .18);
     }
@@ -559,9 +560,10 @@
     :root[data-theme="dark"] .relation-link, :root[data-theme="dark"] .dto-section {
       border-color: rgba(148, 163, 184, .2); color: #cfdbeb; background: #17263d;
     }
-    :root[data-theme="dark"] .details-header, :root[data-theme="dark"] .inspector-header {
+    :root[data-theme="dark"] .inspector-header {
       border-color: rgba(148, 163, 184, .2); background: linear-gradient(145deg, #1a2b46, #14233a);
     }
+    :root[data-theme="dark"] .details-header { border-color: rgba(148, 163, 184, .2); background: transparent; }
     :root[data-theme="dark"] .details-section h2, :root[data-theme="dark"] .details-kicker,
     :root[data-theme="dark"] .reference-meta, :root[data-theme="dark"] .details-empty,
     :root[data-theme="dark"] .path-details-summary, :root[data-theme="dark"] .dependency-view p:last-child { color: #91a4bd; }
@@ -579,8 +581,7 @@
       .graph-actions { flex-wrap: wrap; gap: 6px; }
       .graph-actions .graph-action-label { padding: 0 7px; font-size: 10px; }
       .graph-actions-spacer { display: none; }
-      #details { right: 10px; bottom: 10px; width: calc(100vw - 20px); max-height: 34vh; border-radius: 16px; }
-      .legend { right: 10px; bottom: 10px; left: auto; }
+      .legend { right: 10px; bottom: 10px; }
       .inspector-modal { padding: 10px; }
       .inspector-dialog { border-radius: 16px; }
     }
@@ -607,7 +608,7 @@
       <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
         <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Explorer les relations avec des nœuds espacés">Graphe</button>
         <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
-        <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des clusters et des projets">Clusters</button>
+        <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
       </div>
       <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
         <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
@@ -681,7 +682,7 @@
     <div id="dependencies-panel" class="toolbar-panel dependency-view" role="tabpanel" aria-labelledby="build-tab" hidden>
       <p class="dependency-view-kicker">Structure de build</p>
       <h2>Arbre des dépendances</h2>
-      <p>Disposition Sugiyama : les modules sont rangés par niveaux de dépendance. Un lien part du module dépendant, à gauche, vers le module requis, à droite. Les interactions HTTP, Kafka et données restent dans la vue Explorer.</p>
+      <p>Disposition Sugiyama : les projets sont rangés par niveaux de dépendance. Un lien part du projet dépendant, à gauche, vers le projet requis, à droite. Les interactions HTTP, Kafka et données restent dans la vue Explorer.</p>
     </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
       <div class="indexing-issues-header">
@@ -725,6 +726,7 @@
       <ul id="request-reply-patterns" class="references-list" aria-label="Patterns Kafka request reply"></ul>
       <p id="request-reply-empty" class="references-empty">Aucun couple request/reply détecté.</p>
     </div>
+    <div id="details" class="is-empty"><div class="details-empty">Selectionnez un noeud pour isoler ses relations et afficher ses APIs.</div></div>
   </div>
   <details id="graph-legend" class="legend" aria-label="Legende du graphe">
     <summary>Legende</summary>
@@ -746,7 +748,6 @@
       <div class="legend-row"><span class="legend-mark" style="background:#7c3aed"></span>Relation conventionnelle : Strategy1</div>
     </div>
   </details>
-  <div id="details" class="is-empty"><div class="details-empty">Selectionnez un noeud pour isoler ses relations et afficher ses APIs.</div></div>
   <div id="graph" aria-label="Graphe des interactions"></div>
   <div id="graph-layers" aria-hidden="true"></div>
   <div id="graph-groups" aria-hidden="true"></div>
@@ -1716,7 +1717,7 @@
           title.type = "button";
           title.className = "graph-namespace-title";
           title.textContent = group.namespace === "root" ? "ROOT" : group.namespace;
-          title.title = `Afficher les éléments du cluster ${title.textContent}`;
+          title.title = `Afficher les éléments du module ${title.textContent}`;
           title.addEventListener("click", event => {
             event.stopPropagation();
             selectCluster(cluster);
@@ -1770,7 +1771,7 @@
           title.type = "button";
           title.className = "graph-project-group-title";
           title.textContent = group.name;
-          title.title = `Afficher les éléments du cluster ${group.name}`;
+          title.title = `Afficher les éléments du module ${group.name}`;
           title.addEventListener("click", event => {
             event.stopPropagation();
             selectCluster(cluster);
@@ -2162,7 +2163,7 @@
       ["noverlap", "placement sans chevauchement"],
       ["forceatlas2-noverlap", "vue graphe"],
       ["elk", "vue couches"],
-      ["cluster", "vue clusters"],
+      ["cluster", "vue modules"],
     ]);
     const pathStops = [];
     const MAX_SIMPLE_PATH_DEPTH = 8;
@@ -2566,7 +2567,7 @@
         packClusterGraphPositions();
         return fcoseApplied;
       } catch (error) {
-        console.warn("fCoSE est indisponible pour le rendu par clusters ; la grille déterministe est utilisée.", error);
+        console.warn("fCoSE est indisponible pour le rendu par modules ; la grille déterministe est utilisée.", error);
         network.forEachNode(node => {
           const attributes = network.getNodeAttributes(node);
           graphState.clusterLayoutPositions.set(node, { x: attributes.x, y: attributes.y });
@@ -2765,7 +2766,7 @@
           pathMicroserviceOrder: new Map(),
         });
         clearPathControls();
-        setDetailsEmpty("Selectionnez un noeud ou un cluster pour afficher ses informations.");
+        setDetailsEmpty("Selectionnez un noeud ou un module pour afficher ses informations.");
       }
       const zoomOutButton = document.getElementById("zoom-out");
       zoomOutButton.disabled = false;
@@ -2879,6 +2880,9 @@
       nodesByNormalizedName.set(key, [...(nodesByNormalizedName.get(key) || []), node]);
     });
     function setToolbarTab(tab) {
+      if (document.querySelector(".toolbar")?.classList.contains("has-details")) {
+        setDetailsEmpty("Selectionnez un noeud pour afficher ses details.");
+      }
       const showingGraph = tab === "graph";
       const showingDependencies = tab === "dependencies";
       const showingIssues = tab === "issues";
@@ -3340,7 +3344,7 @@
       }
       appendDtoInspectorSection("Collection", [item.collection]);
       appendDtoInspectorSection("Microservice", [item.service]);
-      appendDtoInspectorSection("Module de persistance", [item.module]);
+      appendDtoInspectorSection("Projet de persistance", [item.module]);
     }
     function openNestedDtoInspector(dtoName, parentDtoName) {
       dtoNavigation.push(parentDtoName);
@@ -3417,6 +3421,12 @@
     }
 
 // Ordered source module: 50-paths.js
+    function revealDetails() {
+      details.classList.remove("is-empty");
+      const toolbar = document.querySelector(".toolbar");
+      toolbar?.classList.add("has-details");
+      requestAnimationFrame(() => toolbar?.scrollTo({ top: 0 }));
+    }
     function selectDependencyModule(id) {
       const node = (graphData.build_dependencies?.nodes || []).find(item => item.id === id);
       if (!node) return;
@@ -3429,13 +3439,13 @@
         .filter(link => link.target === id)
         .map(link => (graphData.build_dependencies.nodes.find(item => item.id === link.source) || {}).name)
         .filter(Boolean);
-      details.classList.remove("is-empty");
+      revealDetails();
       details.replaceChildren();
       const header = document.createElement("header");
       header.className = "details-header";
       const kicker = document.createElement("p");
       kicker.className = "details-kicker";
-      kicker.textContent = `Module ${node.build_system === "unknown" ? "Maven / Gradle" : node.build_system}`;
+      kicker.textContent = `Projet ${node.build_system === "unknown" ? "Maven / Gradle" : node.build_system}`;
       const title = document.createElement("h1");
       title.className = "details-title";
       title.textContent = node.name;
@@ -3446,6 +3456,7 @@
     }
     function setDetailsEmpty(message) {
       details.classList.add("is-empty");
+      document.querySelector(".toolbar")?.classList.remove("has-details");
       details.replaceChildren();
       const empty = document.createElement("div");
       empty.className = "details-empty";
@@ -3639,7 +3650,7 @@
       });
     }
     function renderPathDetails(path) {
-      details.classList.remove("is-empty");
+      revealDetails();
       details.replaceChildren();
       const pathNodeLabel = (id, index) => {
         const node = nodeDataById.get(id);
@@ -3702,7 +3713,7 @@
       persistState();
     }
     function renderSimplePathChoices(paths, limited) {
-      details.classList.remove("is-empty");
+      revealDetails();
       details.replaceChildren();
       const section = document.createElement("section");
       section.className = "details-section simple-paths";
@@ -3841,7 +3852,7 @@
       const collectionCount = isMicroservice ? new Set(
         indexedEdges.filter(link => link.kind === "mongodb" && link.source === id).map(link => link.target)
       ).size : 0;
-      details.classList.remove("is-empty");
+      revealDetails();
       details.replaceChildren();
       const kindLabel = nodeKindLabel(node);
       const complexity = node.complexity;
@@ -3900,9 +3911,9 @@
         const clusterPath = clusterPathForNode(id);
         const architectureGroup = createDetailsGroup("Architecture");
         appendList("Layer", [architectureLayerForNode(id)], architectureGroup);
-        appendActionList("Cluster", clusterPath ? [{
+        appendActionList("Module", clusterPath ? [{
           label: clusterPath,
-          title: `Naviguer vers le cluster ${clusterPath}`,
+          title: `Naviguer vers le module ${clusterPath}`,
           action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
         }] : [], architectureGroup);
         discardEmptyDetailsGroup(architectureGroup);
@@ -3913,8 +3924,8 @@
           moduleAction.className = "module-open-action";
           moduleAction.href = node.vscode_uri;
           const buildSystem = node.build_system === "gradle" ? "Gradle" : "Maven";
-          moduleAction.textContent = `Ouvrir le module ${buildSystem} dans VS Code`;
-          moduleAction.title = `Ouvrir le repertoire racine du module ${node.name}`;
+          moduleAction.textContent = `Ouvrir le projet ${buildSystem} dans VS Code`;
+          moduleAction.title = `Ouvrir le repertoire racine du projet ${node.name}`;
           details.append(moduleAction);
         }
         const httpCalls = edges.filter(link => link.kind === "rest" && link.source === id);
@@ -3927,9 +3938,9 @@
         const clusterPath = clusterPathForNode(id);
         const architectureGroup = createDetailsGroup("Architecture");
         appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
-        appendActionList("Cluster", clusterPath ? [{
+        appendActionList("Module", clusterPath ? [{
           label: clusterPath,
-          title: `Naviguer vers le cluster ${clusterPath}`,
+          title: `Naviguer vers le module ${clusterPath}`,
           action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
         }] : [], architectureGroup);
         discardEmptyDetailsGroup(architectureGroup);
@@ -4056,13 +4067,13 @@
         .map(id => nodeDataById.get(id))
         .filter(Boolean)
         .sort((left, right) => left.name.localeCompare(right.name));
-      details.classList.remove("is-empty");
+      revealDetails();
       details.replaceChildren();
       const header = document.createElement("header");
       header.className = "details-header";
       const kicker = document.createElement("p");
       kicker.className = "details-kicker";
-      kicker.textContent = "Cluster";
+      kicker.textContent = "Module";
       const title = document.createElement("h1");
       title.className = "details-title";
       title.textContent = resolvedCluster.name;
@@ -4074,18 +4085,18 @@
       meta.append(count);
       const childCount = document.createElement("span");
       childCount.className = "detail-badge";
-      childCount.textContent = `${resolvedCluster.childPaths.length} sous-cluster${resolvedCluster.childPaths.length > 1 ? "s" : ""}`;
+      childCount.textContent = `${resolvedCluster.childPaths.length} sous-module${resolvedCluster.childPaths.length > 1 ? "s" : ""}`;
       meta.append(childCount);
       header.append(kicker, title, meta);
       details.append(header);
-      appendActionList("Cluster parent", resolvedCluster.parentPath ? [{
+      appendActionList("Module parent", resolvedCluster.parentPath ? [{
         label: resolvedCluster.parentPath === "root" ? "ROOT" : resolvedCluster.parentPath,
-        title: "Naviguer vers le cluster parent",
+        title: "Naviguer vers le module parent",
         action: () => selectCluster(clusterDescriptorForPath(resolvedCluster.parentPath)),
       }] : []);
-      appendActionList("Sous-clusters", resolvedCluster.childPaths.map(childPath => ({
+      appendActionList("Sous-modules", resolvedCluster.childPaths.map(childPath => ({
         label: childPath,
-        title: `Naviguer vers le sous-cluster ${childPath}`,
+        title: `Naviguer vers le sous-module ${childPath}`,
         action: () => selectCluster(clusterDescriptorForPath(childPath)),
       })));
       appendActionList("Ressources contenues", members.map(member => ({
@@ -4160,7 +4171,7 @@
         pathMicroserviceOrder: new Map(),
       });
       renderer.refresh();
-      setDetailsEmpty("Selectionnez un noeud ou un cluster pour afficher ses informations.");
+      setDetailsEmpty("Selectionnez un noeud ou un module pour afficher ses informations.");
       search.value = "";
       clearPathControls();
       persistState();

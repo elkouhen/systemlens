@@ -344,9 +344,9 @@
           ? [...nodePoints.values()]
           : [...pointsByLayer.values()].flat();
         // Reserve a left gutter inside every layer band for its title.  The
-        // cluster rectangles keep their graph-space positions, while the
+        // module rectangles keep their graph-space positions, while the
         // widened band starts earlier so the overlay title never sits on top
-        // of the first cluster.
+        // of the first module.
         const layerTitleGutter = 182;
         const contentMinX = allLayerPoints.length
           ? Math.max(0, Math.min(...allLayerPoints.map(point => point.x)) - 92)
@@ -420,7 +420,7 @@
           if (graphState.clusteredView || graphState.layeredClusterView) {
             // The cards are HTML rectangles in viewport coordinates. Build
             // the namespace envelope from those projected centers so graph
-            // zoom cannot make a cluster smaller than its visible children.
+            // zoom cannot make a module smaller than its visible children.
             // Keep this in sync with .graph-node-card-label's CSS scale.
             // The envelope must contain the rendered HTML card, not Sigma's
             // logical node dimensions.
@@ -451,7 +451,7 @@
           title.type = "button";
           title.className = "graph-namespace-title";
           title.textContent = group.namespace === "root" ? "ROOT" : group.namespace;
-          title.title = `Afficher les éléments du cluster ${title.textContent}`;
+          title.title = `Afficher les éléments du module ${title.textContent}`;
           title.addEventListener("click", event => {
             event.stopPropagation();
             selectCluster(cluster);
@@ -505,7 +505,7 @@
           title.type = "button";
           title.className = "graph-project-group-title";
           title.textContent = group.name;
-          title.title = `Afficher les éléments du cluster ${group.name}`;
+          title.title = `Afficher les éléments du module ${group.name}`;
           title.addEventListener("click", event => {
             event.stopPropagation();
             selectCluster(cluster);
@@ -619,7 +619,7 @@
       // Camera updates can fire several times during one drag. Coalesce them
       // into the next animation frame so the canvas and its HTML overlays are
       // repainted from the same camera state. Rebuilding synchronously for
-      // every intermediate pan state can briefly expose partial cluster boxes.
+      // every intermediate pan state can briefly expose partial module boxes.
       let labelRefreshScheduled = false;
       const scheduleNodeLabelRefresh = () => {
         if (labelRefreshScheduled) return;

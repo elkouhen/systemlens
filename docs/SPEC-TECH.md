@@ -12,6 +12,12 @@
 This document records implementation constraints. The observable CLI and MCP
 contract lives in [SPEC-FONC.md](SPEC-FONC.md).
 
+User-facing vocabulary distinguishes architecture `modules` (hierarchical
+containers) from Maven/Gradle `projects` (build units). Compatibility-facing
+Python names, SQLite tables, JSON fields such as `module`, and the canonical
+architecture path field `cluster_path` retain their historical spelling; the
+delivery layer translates those technical names before presenting them.
+
 ## Architecture
 
 ### Pipeline at a glance
@@ -28,7 +34,7 @@ When explicitly enabled with `--kubernetes`, indexing also invokes the local
 `kubectl` CLI once to list Deployments and StatefulSets. It aggregates the
 declared requests and limits of regular containers (init containers are
 excluded) and attaches a workload only when its Kubernetes name exactly matches
-the indexed module name. This optional step can contact the current Kubernetes
+the indexed project name. This optional step can contact the current Kubernetes
 API context; it is never enabled by default.
 
 ### Ownership boundaries
@@ -212,10 +218,13 @@ OpenAPI evidence paths; richer DTO/OpenAPI content requires an explicit future
 indexed contract rather than a live source read. This keeps an export
 reproducible when repository files change after `systemlens index`.
 
-The HTML renderer keeps its floating graph-detail panel in an explicit empty
-state until a resource or itinerary is selected. The empty state is visual-only
-and ignores pointer events, preventing it from obscuring a control in a narrow
-viewport; any populated detail panel restores pointer interaction. Path parsing
+The HTML renderer keeps its graph-detail section inside the left toolbar and
+hides it while empty. Selecting a resource or itinerary applies a panel state
+that hides the active tab panel, reveals the detail section, and resets the outer
+toolbar scroll position. The same state hides summary and inventory counters,
+while graph actions, tabs, and the active graph-layout status remain present.
+Clearing the selection reverses that state; selecting a navigation tab clears
+details before displaying its ordinary panel. Path parsing
 filters same-name candidates by the grammar before accepting an itinerary
 endpoint: only a microservice can be first or last, while intermediate stops
 can be microservices or Kafka topics. Direct resource search continues to
@@ -337,7 +346,7 @@ its evidence is intended for a human or an AI to assess a conservative rule.
 ### Coordinate system and rendering
 
 The HTML renderer keeps graph coordinates as the source of truth for layout.
-Sigma's canvas and the HTML card/cluster overlays share the same workspace
+Sigma's canvas and the HTML card/module overlays share the same workspace
 rectangle (including the space reserved for the navigation and details
 panels). Overlay positions are obtained from Sigma's public
 `graphToViewport` conversion using the raw graph coordinates; renderer
@@ -353,22 +362,22 @@ Mutable selection, view, layout, and camera state is held in one
 scheduler (`requestGraphRender`) so canvas and HTML overlays observe one
 coalesced render cycle.
 
-Cluster titles are interactive overlay controls. Cluster
-selection is tracked independently from node selection in `graphState`; it
+Architecture-module titles are interactive overlay controls. Module selection
+is tracked independently from node selection in `graphState`; it
 uses the visible canonical `cluster_path` values to derive a hierarchy of path
-prefixes. A cluster descriptor contains its canonical key, parent path, direct
-child paths, and the visible node identifiers whose cluster path is an exact
+prefixes. A module descriptor contains its canonical key, parent path, direct
+child paths, and the visible node identifiers whose module path is an exact
 match. This exact-match rule keeps direct membership distinct from descendant
 membership and prevents filtered or guessed nodes from entering the details
 list. Selecting a listed resource returns to the ordinary node-detail flow;
-following a resource's cluster action applies the deterministic cluster layout
+following a resource's module action applies the deterministic module layout
 before selecting the corresponding descriptor.
 
 Persisted `runtime_namespaces` and `fact_namespaces` remain available in the
 embedded snapshot for backward compatibility and evidence processing. The
 details renderer does not expose them as architectural metadata and does not
-prefix Kubernetes workload names with their runtime namespace; cluster
-navigation is sourced exclusively from the canonical cluster path.
+prefix Kubernetes workload names with their runtime namespace; module
+navigation is sourced exclusively from the canonical `cluster_path` value.
 
 ### Camera interactions
 
@@ -413,23 +422,23 @@ Camera updates during pan and zoom are coalesced to the next animation frame.
 Fit operations reset Sigma's normalized camera state synchronously before
 calculating the selected mode. This makes overlapping fit requests idempotent
 and prevents zero-duration camera animations from racing on repeated clicks.
-The fixed details panel floats above the graph and does not participate in the
-Sigma workspace rectangle. The HTML layer, cluster, and node overlays retain
-the same full-height coordinate surface as the canvas; the panel's higher
-stacking order masks content beneath it. Opening or resizing details therefore
-cannot introduce a horizontal or vertical clipping seam or reset the camera.
+The details section participates in the navigation panel's vertical flow but
+does not participate in the Sigma workspace rectangle. The HTML layer, module,
+and node overlays retain the same full-height coordinate surface as the canvas.
+Opening or resizing details only changes the navigation panel's internal scroll
+extent and therefore cannot introduce a clipping seam or reset the camera.
 The desktop workspace starts 10 px after the measured right edge of the compact
 navigation panel; it does not reserve an additional decorative gutter.
-The Sigma canvas and the HTML card/cluster overlays are therefore recomputed
+The Sigma canvas and the HTML card/module overlays are therefore recomputed
 from one camera state per frame, preventing partially rebuilt containers from
-appearing while the user drags the cluster view.
+appearing while the user drags the module view.
 
 Wheel zoom is handled once for both the Sigma canvas and the HTML overlays;
 the native Sigma wheel handler is disabled so hovering a card cannot change
 the zoom behavior. Each wheel event applies a bounded exponential camera-ratio
 step without collision-based clamping.
 
-### Layout engines and cluster placement
+### Layout engines and architecture-module placement
 
 The ELK layer layout loads independently from the ForceAtlas2 and Noverlap
 modules used by the graph layouts, so unrelated dynamic imports cannot keep
@@ -438,9 +447,9 @@ the layer view in a pending state.
 Force-based placement uses Sigma's node radius to preserve the graph structure;
 it does not mutate positions after the camera fit to repair HTML-card overlap.
 
-The cluster packer places microservices in a first sub-layer and
+The module packer places microservices in a first sub-layer and
 resources in a second sub-layer on separated grids, then
-packs cluster rectangles with positive margins that include the complete
+packs module rectangles with positive margins that include the complete
 projected card/title envelope, not only the node-grid dimensions. Its graph-space
 gaps are expressed in the same graph-coordinate scale as the rest of the
 layout, while remaining large enough for the shared 110×70 card envelope. The
@@ -452,25 +461,25 @@ The `All nodes` and `Readable distance` actions select and immediately apply
 their mode; the selection is reapplied after a viewport resize. This prevents
 view switches from retaining a stale camera scale while allowing the readable
 mode to favor card separation over a complete overview. Overlapping cards and
-cluster rectangles remain possible in dense views; their fixed screen-space
+module rectangles remain possible in dense views; their fixed screen-space
 dimensions are preserved during navigation.
 
 Container geometry is kept in graph coordinates until it is projected to the
 viewport.
 
-The cluster view uses this deterministic packing as its source of truth; it does
+The module view uses this deterministic packing as its source of truth; it does
 not wait for a compound force layout that could block the browser. When project
 or other parent groups are enabled, their bounds are the union of the already
-projected child-cluster bounds plus title/padding margins; node-grid gaps are
+projected child-module bounds plus title/padding margins; node-grid gaps are
 calibrated with the shared 110×70 card envelope and a dedicated vertical
 separation between the two sub-layers. This explicit hierarchy prevents a
-parent from being smaller than a nested cluster after zooming. Project groups
-carry their owning cluster and full cluster path. The historical
+parent from being smaller than a nested module after zooming. Project groups
+carry their owning module and full module path. The historical
 `project_namespace` and `project_namespace_path` fields remain read-compatible
 aliases for `cluster_path`; they do not represent Kubernetes namespaces.
 
 Structural project groups contain only
-their owning projects; resource nodes resolve their cluster
+their owning projects; resource nodes resolve their module
 from incoming producer edges before consulting resource metadata; this keeps
 topics and collections with their producing microservice.
 
@@ -480,27 +489,27 @@ for deterministic exports.
 
 ### Layer placement
 
-The layered view reuses this packer with an additional grouping key: clusters
+The layered view reuses this packer with an additional grouping key: modules
 are first grouped by the canonical internal software-layer order (`api`,
 `application`, `orchestration`, `infrastructure`, `domain`, `persistence`),
 producing top-to-bottom layer bands. External microservices use the dedicated
 `external` layer at the bottom and are not part of the internal dependency
 order.
 
-The same canonical resolver is used for layer placement, cluster boxes, and
-band bounds, so a cluster cannot be placed in a band different from its
-nodes. Each cluster uses the same two-part grid as the cluster view:
+The same canonical resolver is used for layer placement, module boxes, and
+band bounds, so a module cannot be placed in a band different from its
+nodes. Each module uses the same two-part grid as the module view:
 microservices first, then resources.
 
 ELK may provide the initial compound layout, but the deterministic layer-aware
 pack is the final collision guard and remains valid when ELK fails. The layered packer
-checks each cluster envelope after placement. Clusters that exceed the vertical
+checks each module envelope after placement. Modules that exceed the vertical
 safety envelope are widened by adding columns, then the row width and all
 positions are recomputed. This trades height for diagram width to preserve
 layer separation.
 
 Layer bands reserve a left graph-space gutter for their titles, so the title
-overlay cannot cover the first namespace or project cluster.
+overlay cannot cover the first architecture module.
 
 ### Browser verification
 

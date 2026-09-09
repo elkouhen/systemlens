@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SystemLens clusters</title>
+  <title>SystemLens architecture modules</title>
   <style>
     :root { color: #172033; background: #f5f7fb; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
     * { box-sizing: border-box; }
@@ -22,7 +22,7 @@
   </style>
 </head>
 <body>
-  <header><h1>Cluster hierarchy</h1><p>Each cluster can contain child clusters and indexed projects.</p></header>
+  <header><h1>Module hierarchy</h1><p>Each module can contain child modules and indexed projects.</p></header>
   <main id="namespace-grid"></main>
   <script>
     const data = __NAMESPACE_DATA__;
@@ -30,13 +30,13 @@
     data.namespaces.forEach(namespace => {
       const box = document.createElement("section"); box.className = "namespace";
       const title = document.createElement("h2"); title.textContent = namespace.name; box.append(title);
-      if (namespace.parent) { const parent = document.createElement("div"); parent.className = "parent"; parent.textContent = `Parent cluster: ${namespace.parent}`; box.append(parent); }
+      if (namespace.parent) { const parent = document.createElement("div"); parent.className = "parent"; parent.textContent = `Parent module: ${namespace.parent}`; box.append(parent); }
       const list = document.createElement("ul");
-      namespace.modules.forEach(module => { const item = document.createElement("li"); item.textContent = module.name; const meta = document.createElement("small"); meta.textContent = `${module.kind} · ${module.deployable ? "deployable" : "module"}`; item.append(meta); list.append(item); });
+      namespace.modules.forEach(module => { const item = document.createElement("li"); item.textContent = module.name; const meta = document.createElement("small"); meta.textContent = `${module.kind} · ${module.deployable ? "deployable" : "project"}`; item.append(meta); list.append(item); });
       if (!namespace.modules.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "No indexed project"; box.append(empty); } else box.append(list);
       grid.append(box);
     });
-    if (!data.namespaces.length) grid.innerHTML = '<p class="empty">No cluster found.</p>';
+    if (!data.namespaces.length) grid.innerHTML = '<p class="empty">No module found.</p>';
   </script>
 </body>
 </html>
