@@ -336,6 +336,11 @@ Every layout switch MUST refit the camera to the resulting graph using the
 selected fit mode. `All nodes` MUST NOT apply an additional automatic zoom-out
 that makes the layout unnecessarily small. `Readable distance` MAY leave
 peripheral nodes outside the viewport; users can pan to reach them.
+For graphs of at most 12 nodes, the readable mode MUST retain the complete
+overview instead of applying its normal zoom and making the small diagram
+appear empty. It adds only the zoom-out required to keep the full fixed-size
+card envelopes inside the graph viewport; the screen-space collision pass
+handles card separation.
 
 The details panel MUST display the resolved software layer and the cluster
 path once, in its `Architecture` section, for microservices and resources

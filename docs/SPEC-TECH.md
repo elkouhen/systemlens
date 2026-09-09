@@ -376,9 +376,14 @@ The shared card size remains stable during navigation. Camera fitting starts
 from Sigma's native complete overview. In `All nodes` mode that state is used
 unchanged. In the default `Readable distance` mode, the renderer measures the
 projected center spacing of visible fixed-size cards and zooms in by at least
-1.6x, capped by the existing 4x spacing guard. For each overlapping pair, the
-required factor is the smaller of its horizontal and vertical separation
-factors: reaching the card clearance on either axis is sufficient. The 90th
+1.6x, capped by the existing 4x spacing guard. Graphs with at most 12 nodes
+instead derive an overview ratio from their projected center span and the
+available viewport after subtracting the fixed card width and height. This
+keeps the complete card envelopes visible and relies on the following
+collision pass for separation.
+For each overlapping pair, the required factor is the smaller of its
+horizontal and vertical separation factors: reaching the card clearance on
+either axis is sufficient. The 90th
 percentile of those pair factors determines the fit in compound views,
 preventing a single near-coincident outlier from forcing the 4x cap. The plain
 graph instead uses the maximum factor after its collision pass so its final

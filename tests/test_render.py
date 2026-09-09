@@ -223,7 +223,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "ResizeObserver" not in document
     assert "renderer.getCamera().animate({ x: position.x" not in document
     assert "await fitCameraToVisibleGraph(renderer);\n      if (graphState.renderMode" not in document
-    assert 'Math.max(1.6, requiredCardZoomIn(targetRenderer))' in document
+    assert "function requiredSmallGraphOverviewRatio(targetRenderer)" in document
+    assert "network.order <= 12" in document
+    assert "ratio: requiredSmallGraphOverviewRatio(targetRenderer)" in document
     assert "requiredZooms.push(Math.min(4, Math.min(" in document
     assert "(requiredZooms.length - 1) * .9" in document
     assert "camera.setState({ x: .5, y: .5, ratio: 1, angle: 0 })" in document

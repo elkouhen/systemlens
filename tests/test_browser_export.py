@@ -23,6 +23,9 @@ pytestmark = pytest.mark.integration
 _COMPLEX_DATASET_EXPORT = (
     Path(__file__).parents[1] / "examples" / "supermarket" / "supermarket.html"
 )
+_SIMPLE_DATASET_EXPORT = (
+    Path(__file__).parents[1] / "docs" / "models" / "simple-supermarket.html"
+)
 _GRAPH_TEMPLATE = (
     Path(__file__).parents[1] / "src" / "systemlens" / "render" / "assets" / "graph.html"
 )
@@ -969,6 +972,43 @@ def test_selection_and_render_mode_preserve_graph_framing() -> None:
             page.locator("#reset").click()
             page.wait_for_timeout(200)
 
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_generated_simple_supermarket_starts_with_every_node_in_view() -> None:
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 800, "height": 450})
+        page = context.new_page()
+        page.set_default_timeout(10_000)
+        errors: list[str] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.set_content(_SIMPLE_DATASET_EXPORT.read_text(encoding="utf-8"), wait_until="load")
+        page.wait_for_function(
+            "() => document.querySelector('#graph')?.dataset.visibleNodeCount === '7'"
+        )
+        page.locator("#layout-status").filter(has_text="vue graphe actif.").wait_for(
+            state="visible"
+        )
+        assert not errors
+        assert page.locator("#graph").get_attribute("data-relation-count") == "7"
+        _assert_all_node_centers_are_visible(page)
+        assert page.evaluate(
+            """() => {
+                const graph = document.querySelector('#graph').getBoundingClientRect();
+                return [...document.querySelectorAll('.graph-node-card-label')].every(card => {
+                    const box = card.getBoundingClientRect();
+                    return box.left >= graph.left && box.right <= graph.right
+                        && box.top >= graph.top && box.bottom <= graph.bottom;
+                });
+            }"""
+        )
+        assert 1 < float(page.locator("#graph").get_attribute("data-fit-ratio") or "nan") <= 2
         context.close()
         browser.close()
 

@@ -243,6 +243,24 @@
       // gives a stable readable view while leaving local outliers explorable.
       return requiredZooms[Math.floor((requiredZooms.length - 1) * .9)];
     }
+    function requiredSmallGraphOverviewRatio(targetRenderer) {
+      if (!targetRenderer || !network?.order) return 1;
+      const points = network.nodes()
+        .filter(id => isVisibleNodeId(id) && !network.getNodeAttribute(id, "hidden"))
+        .map(id => {
+          const attributes = network.getNodeAttributes(id);
+          return targetRenderer.graphToViewport({ x: attributes.x, y: attributes.y });
+        });
+      if (points.length < 2) return 1;
+      const viewport = graphCanvas.getBoundingClientRect();
+      const cardWidth = graphState.renderMode === "symbols" ? 34 : GRAPH_CARD_WIDTH + 8;
+      const cardHeight = graphState.renderMode === "symbols" ? 34 : GRAPH_CARD_HEIGHT + 8;
+      const spanX = Math.max(...points.map(point => point.x)) - Math.min(...points.map(point => point.x));
+      const spanY = Math.max(...points.map(point => point.y)) - Math.min(...points.map(point => point.y));
+      const availableWidth = Math.max(1, viewport.width - cardWidth);
+      const availableHeight = Math.max(1, viewport.height - cardHeight);
+      return Math.min(2, Math.max(1, spanX / availableWidth, spanY / availableHeight));
+    }
     let renderFrameScheduled = false;
     let renderFramePromise = Promise.resolve();
     function requestGraphRender() {

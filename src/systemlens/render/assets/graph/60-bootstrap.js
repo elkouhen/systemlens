@@ -89,10 +89,14 @@
         // Start from the complete overview, then move closer. Architecture
         // cards use the measured projected spacing; the build graph has no
         // HTML cards and uses the same minimum reading distance.
-        const zoomIn = targetRenderer === renderer
-          ? Math.max(1.6, requiredCardZoomIn(targetRenderer))
-          : 1.6;
-        camera.setState({ ...state, ratio: Math.max(.01, state.ratio / zoomIn) });
+        if (targetRenderer === renderer && network.order <= 12) {
+          camera.setState({ ...state, ratio: requiredSmallGraphOverviewRatio(targetRenderer) });
+        } else {
+          const zoomIn = targetRenderer === renderer
+            ? Math.max(1.6, requiredCardZoomIn(targetRenderer))
+            : 1.6;
+          camera.setState({ ...state, ratio: Math.max(.01, state.ratio / zoomIn) });
+        }
       }
       targetRenderer.refresh();
       if (targetRenderer === renderer) {
