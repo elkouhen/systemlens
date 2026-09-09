@@ -333,9 +333,20 @@ coalesced render cycle.
 
 Cluster titles are interactive overlay controls. Cluster
 selection is tracked independently from node selection in `graphState`; it
-reuses the visible membership calculated for the rendered container, so the
-details list cannot include filtered or guessed nodes. Selecting a listed
-element returns to the ordinary node-detail flow.
+uses the visible canonical `cluster_path` values to derive a hierarchy of path
+prefixes. A cluster descriptor contains its canonical key, parent path, direct
+child paths, and the visible node identifiers whose cluster path is an exact
+match. This exact-match rule keeps direct membership distinct from descendant
+membership and prevents filtered or guessed nodes from entering the details
+list. Selecting a listed resource returns to the ordinary node-detail flow;
+following a resource's cluster action applies the deterministic cluster layout
+before selecting the corresponding descriptor.
+
+Persisted `runtime_namespaces` and `fact_namespaces` remain available in the
+embedded snapshot for backward compatibility and evidence processing. The
+details renderer does not expose them as architectural metadata and does not
+prefix Kubernetes workload names with their runtime namespace; cluster
+navigation is sourced exclusively from the canonical cluster path.
 
 ### Camera interactions
 
@@ -373,10 +384,11 @@ Camera updates during pan and zoom are coalesced to the next animation frame.
 Fit operations reset Sigma's normalized camera state synchronously before
 calculating the selected mode. This makes overlapping fit requests idempotent
 and prevents zero-duration camera animations from racing on repeated clicks.
-The details panel is observed with `ResizeObserver`; when its reserved height
-changes, the renderer refreshes every overlay and reapplies the selected fit
-mode. A geometry comparison prevents content-only mutations from causing
-redundant camera resets.
+The fixed details panel floats above the graph and does not participate in the
+Sigma workspace rectangle. The HTML layer, cluster, and node overlays retain
+the same full-height coordinate surface as the canvas; the panel's higher
+stacking order masks content beneath it. Opening or resizing details therefore
+cannot introduce a horizontal or vertical clipping seam or reset the camera.
 The Sigma canvas and the HTML card/cluster overlays are therefore recomputed
 from one camera state per frame, preventing partially rebuilt containers from
 appearing while the user drags the cluster view.

@@ -95,9 +95,9 @@
       height: auto;
       z-index: 0;
     }
-    #graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
-    #graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
-    #graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: hidden; }
+    #graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
+    #graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
+    #graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
     #graph-layers, #graph-groups, #graph-node-labels {
       left: var(--workspace-left, 0px);
       right: var(--workspace-right, 0px);
@@ -107,21 +107,40 @@
     .graph-layer-band { position: absolute; border-top: 2px solid color-mix(in srgb, var(--layer-accent, #64748b) 58%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--layer-accent, #64748b) 30%, transparent); background: color-mix(in srgb, var(--layer-accent, #64748b) 5%, transparent); }
     .graph-layer-title { position: absolute; top: 8px; left: 14px; min-width: 154px; padding: 3px 8px; box-sizing: border-box; color: var(--layer-accent, #64748b); background: color-mix(in srgb, #f8fafc 94%, var(--layer-accent, #64748b)); border-radius: 5px; font-size: 11px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
     .graph-namespace-group { position: absolute; border: 1px dashed color-mix(in srgb, var(--namespace-accent, #64748b) 72%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--namespace-accent, #64748b) 8%, transparent); }
-    .graph-cluster-sublayer-title { position: absolute; left: 10px; padding: 2px 6px; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 94%, var(--namespace-accent, #64748b)); border-radius: 4px; font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-    .graph-namespace-title { position: absolute; top: 7px; left: 50%; max-width: calc(100% - 20px); padding: 2px 7px; box-sizing: border-box; overflow: hidden; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 92%, var(--namespace-accent, #64748b)); border-radius: 5px; font-size: 10px; font-weight: 750; text-align: center; text-overflow: ellipsis; transform: translateX(-50%); white-space: nowrap; }
+    .graph-namespace-group.is-selected { border-style: solid; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--namespace-accent, #64748b) 28%, transparent), 0 0 18px color-mix(in srgb, var(--namespace-accent, #64748b) 28%, transparent); }
+    .graph-namespace-title { position: absolute; z-index: 4; top: 7px; left: 8px; right: 8px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 92%, var(--namespace-accent, #64748b)); border-radius: 5px; font: inherit; font-size: 10px; font-weight: 750; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+    .graph-namespace-title:hover, .graph-namespace-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--namespace-accent, #64748b) 58%, transparent); outline-offset: 1px; }
     .graph-project-group { position: absolute; padding: 25px 13px 13px; border: 1px dashed var(--group-accent, #64748b); border-radius: 12px; background: color-mix(in srgb, var(--group-accent, #64748b) 4%, transparent); color: var(--group-accent, #64748b); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-    .graph-project-group-title { position: absolute; top: 8px; left: 50%; max-width: calc(100% - 26px); padding: 2px 7px; box-sizing: border-box; overflow: hidden; background: color-mix(in srgb, #f8fafc 94%, var(--group-accent, #64748b)); border-radius: 5px; text-align: center; text-overflow: ellipsis; transform: translateX(-50%); white-space: nowrap; }
+    .graph-project-group.is-selected { border-style: solid; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--group-accent, #64748b) 28%, transparent), 0 0 18px color-mix(in srgb, var(--group-accent, #64748b) 28%, transparent); }
+    .graph-project-group-title { position: absolute; z-index: 5; top: 8px; left: 10px; right: 10px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: inherit; background: color-mix(in srgb, #f8fafc 94%, var(--group-accent, #64748b)); border-radius: 5px; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: center; text-overflow: ellipsis; text-transform: inherit; white-space: nowrap; }
+    .graph-namespace-title:hover, .graph-project-group-title:hover { filter: brightness(.97); box-shadow: 0 1px 5px color-mix(in srgb, currentColor 18%, transparent); }
+    .graph-project-group-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--group-accent, #64748b) 58%, transparent); outline-offset: 1px; }
     :root[data-theme="dark"] .graph-project-group { background: color-mix(in srgb, var(--group-accent, #64748b) 8%, transparent); }
-    .graph-node-card-label { position: absolute; width: 110px; height: 70px; min-height: 70px; display: grid; grid-template-columns: 22px minmax(0, 1fr); grid-template-rows: auto auto; align-content: center; column-gap: 7px; padding: 8px 9px; box-sizing: border-box; transform: translate(-50%, -50%) scale(var(--graph-card-scale, 1)); transform-origin: center; pointer-events: auto; cursor: pointer; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #ffffff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; overflow: hidden; }
-    .graph-node-card-icon { position: static; grid-row: 1 / 3; display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 0; color: var(--card-accent, #64748b); line-height: 1; }
-    .graph-node-card-icon::before { display: block; width: 16px; height: 16px; box-sizing: border-box; }
-    .graph-node-card-icon.is-service::before { content: "⚙"; width: 16px; height: 16px; font-size: 21px; line-height: 16px; text-align: center; }
+    .graph-node-card-label { position: absolute; width: 110px; height: 70px; min-height: 70px; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; box-sizing: border-box; transform: translate(-50%, -50%) scale(var(--graph-card-scale, 1)); transform-origin: center; pointer-events: auto; cursor: pointer; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #ffffff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; overflow: hidden; }
+    .graph-node-card-icon { position: static; grid-column: 2; grid-row: 1; align-self: center; display: grid; place-items: center; width: 14px; height: 14px; border: 0; border-radius: 0; color: var(--card-accent, #64748b); line-height: 1; }
+    .graph-node-card-icon::before { display: block; width: 12px; height: 12px; box-sizing: border-box; }
+    .graph-node-card-icon.is-service::before { content: "⚙"; width: 14px; height: 14px; font-size: 17px; line-height: 14px; text-align: center; }
     .graph-node-card-icon.is-database { border: 0; border-radius: 0; }
-    .graph-node-card-icon.is-database::before { content: ""; width: 14px; height: 16px; border: 1.5px solid currentColor; border-radius: 50% / 18%; background: linear-gradient(to bottom, transparent 0 17%, currentColor 18% 23%, transparent 24% 76%, currentColor 77% 82%, transparent 83%); }
+    .graph-node-card-icon.is-database::before { content: ""; width: 11px; height: 13px; border: 1.25px solid currentColor; border-radius: 50% / 18%; background: linear-gradient(to bottom, transparent 0 17%, currentColor 18% 23%, transparent 24% 76%, currentColor 77% 82%, transparent 83%); }
     .graph-node-card-icon.is-topic { border: 0; border-radius: 0; }
-    .graph-node-card-icon.is-topic::before { content: ""; width: 16px; height: 16px; border: 0; border-radius: 1px; background: linear-gradient(to right, currentColor 0 2px, transparent 2px 7px, currentColor 7px 9px, transparent 9px 14px, currentColor 14px 16px); }
-    .graph-node-card-name { min-width: 0; align-self: end; font-weight: 750; }
-    .graph-node-card-kind { min-width: 0; margin-top: 3px; color: #64748b; font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .graph-node-card-icon.is-topic::before { content: ""; width: 12px; height: 13px; border: 0; border-radius: 1px; background: linear-gradient(to right, currentColor 0 1.5px, transparent 1.5px 5.25px, currentColor 5.25px 6.75px, transparent 6.75px 10.5px, currentColor 10.5px 12px); }
+    .graph-node-card-name { min-width: 0; grid-column: 1; grid-row: 1; align-self: end; font-weight: 750; }
+    .graph-node-card-kind { min-width: 0; grid-column: 1 / 3; grid-row: 2; margin-top: 3px; color: #64748b; font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #graph-node-labels.is-symbol-mode { overflow: visible; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label { width: 30px; height: 30px; min-height: 0; display: block; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon { position: absolute; z-index: 1; inset: 2px; display: block; width: 26px; height: 26px; color: #fff; background: var(--card-accent, #64748b); border: 2px solid color-mix(in srgb, var(--card-accent, #64748b) 72%, #172033); box-sizing: border-box; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon::before { display: none; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service { border-radius: 0; clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%); }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-topic { border-radius: 50%; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-database { inset: 5px; width: 20px; height: 20px; border-radius: 3px; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-name { position: absolute; z-index: 2; top: 50%; left: 34px; display: block; width: max-content; max-width: none; padding: 2px 4px; visibility: hidden; opacity: 0; pointer-events: none; color: #172033; background: rgba(255, 255, 255, .9); border-radius: 4px; box-shadow: 0 2px 8px rgba(15, 23, 42, .12); font-size: 10px; line-height: 1.2; white-space: nowrap; overflow: visible; overflow-wrap: normal; transform: translateY(-50%); transition: opacity .1s ease; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label:hover,
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered { z-index: 20; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label:hover .graph-node-card-name,
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered .graph-node-card-name { visibility: visible; opacity: 1; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-kind { display: none; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-icon { box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 24%, transparent), 0 0 18px var(--card-accent, #64748b); }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered:not(.is-selected) .graph-node-card-icon { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 0 12px color-mix(in srgb, var(--card-accent, #64748b) 55%, transparent); }
     .graph-node-card-label.is-selected { border-width: 1.5px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 0 22px color-mix(in srgb, var(--card-accent, #64748b) 52%, transparent), 0 8px 20px rgba(15, 23, 42, .18); }
     .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 9%, transparent), 0 0 13px color-mix(in srgb, var(--card-accent, #64748b) 27%, transparent), 0 6px 17px rgba(15, 23, 42, .14); }
     .graph-node-card-label.is-dimmed { opacity: 1; }
@@ -141,10 +160,23 @@
     .toolbar-panel { display: grid; gap: 10px; }
     .toolbar-panel[hidden] { display: none; }
     #search, #path-query { width: 100%; }
-    .graph-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; max-width: 230px; }
+    .graph-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
     .toolbar button { width: 34px; height: 34px; border: 1px solid #b9c5d6; border-radius: 6px; color: #315f9b; background: #fff; font-size: 19px; line-height: 1; cursor: pointer; }
     .toolbar button:hover { background: #eaf2ff; }
     .graph-actions .graph-action-label { width: auto; padding: 0 8px; font-size: 11px; font-weight: 700; }
+    .graph-control-group { display: inline-flex; flex: 0 0 auto; gap: 2px; padding: 3px; border: 1px solid #d8e0eb; border-radius: 9px; background: #edf2f7; }
+    .graph-control-group button { height: 28px; border: 0; border-radius: 6px; background: transparent; box-shadow: none; }
+    .graph-control-group button:hover { background: rgba(255, 255, 255, .8); box-shadow: 0 1px 3px rgba(15, 23, 42, .1); transform: none; }
+    .zoom-controls button { width: 30px; font-size: 18px; }
+    .fit-controls .graph-action-label { height: 28px; padding: 0 9px; color: #52616b; }
+    .view-controls { flex: 1 1 205px; }
+    .view-controls .graph-action-label { flex: 1 1 auto; height: 28px; padding: 0 7px; color: #52616b; }
+    .render-controls .graph-action-label { height: 28px; padding: 0 8px; color: #52616b; }
+    .fit-controls .fit-mode.is-active, .view-controls .view-mode.is-active, .render-controls .render-mode.is-active { color: #fff; background: #3156d3; box-shadow: 0 2px 6px rgba(49, 86, 211, .25); }
+    .fit-controls .fit-mode.is-active:hover, .view-controls .view-mode.is-active:hover, .render-controls .render-mode.is-active:hover { background: #2647b5; }
+    .graph-actions-spacer { flex: 1 1 auto; min-width: 2px; }
+    .graph-actions-break { flex-basis: 100%; height: 0; }
+    .graph-actions .graph-secondary-action { height: 32px; color: #52616b; background: transparent; }
     .exploration-start { display: grid; gap: 7px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px; background: #f8fbff; }
     .exploration-start h2 { margin: 0; color: #1d4f91; font-size: 12px; }
     .exploration-start p { margin: 0; color: #52616b; font-size: 11px; line-height: 1.4; }
@@ -385,10 +417,10 @@
     }
     .brand strong { align-self: end; color: var(--ink); font-size: 14px; letter-spacing: -.01em; }
     .brand-subtitle { align-self: start; color: var(--muted); font-size: 10px; font-weight: 600; }
-    .graph-actions { gap: 5px; }
+    .graph-actions { gap: 7px; }
     .toolbar button { transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease; }
     .toolbar button:hover { transform: translateY(-1px); }
-    .toolbar-header .graph-actions button {
+    .toolbar-header > button, .graph-actions > button {
       border-color: var(--line);
       border-radius: var(--radius-sm);
       color: #475569;
@@ -542,6 +574,11 @@
     :root[data-theme="dark"] .toolbar input:not([type="checkbox"])::placeholder { color: #7186a3; }
     :root[data-theme="dark"] .toolbar button:hover, :root[data-theme="dark"] .filter-preset:hover,
     :root[data-theme="dark"] .layout-option:hover { background: #203453 !important; }
+    :root[data-theme="dark"] .graph-control-group { border-color: rgba(148, 163, 184, .22); background: #101d31; }
+    :root[data-theme="dark"] .graph-control-group button { color: #c8d5e8; background: transparent; }
+    :root[data-theme="dark"] .graph-control-group button:hover { background: #203453 !important; }
+    :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .view-controls .view-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: #fff; background: #4663db; }
+    :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: rgba(15, 27, 46, .84); }
     :root[data-theme="dark"] .toolbar-tabs { border-color: rgba(148, 163, 184, .18); background: #101d31; }
     :root[data-theme="dark"] .toolbar-tab { color: #91a4bd !important; }
     :root[data-theme="dark"] .toolbar-tab.is-active { color: #b8c7ff !important; background: #1c2d4b !important; }
@@ -574,7 +611,9 @@
       .toolbar { top: 10px; left: 10px; width: calc(100vw - 20px); max-height: calc(62vh - 14px); padding: 12px; border-radius: 16px; }
       .toolbar-header { align-items: start; }
       .brand-subtitle { display: none; }
-      .graph-actions .graph-action-label { padding: 0 6px; font-size: 10px; }
+      .graph-actions { flex-wrap: wrap; gap: 6px; }
+      .graph-actions .graph-action-label { padding: 0 7px; font-size: 10px; }
+      .graph-actions-spacer { display: none; }
       #details { right: 10px; bottom: 10px; width: calc(100vw - 20px); max-height: 34vh; border-radius: 16px; }
       .legend { right: 10px; bottom: 10px; left: auto; }
       .question-actions { grid-template-columns: 1fr; }
@@ -587,13 +626,28 @@
   <div class="toolbar">
     <div class="toolbar-header">
       <div class="brand"><span class="brand-mark">SL</span><strong>SystemLens</strong><span class="brand-subtitle">Architecture workspace</span></div>
-      <div class="graph-actions" aria-label="Navigation du graphe">
-        <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
+      <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
+    </div>
+    <div class="graph-actions" aria-label="Navigation du graphe">
+      <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
         <button id="zoom-out" type="button" aria-label="Dézoomer" title="Dézoomer">−</button>
         <button id="zoom-in" type="button" aria-label="Zoomer" title="Zoomer">+</button>
-        <button id="fit-view" class="graph-action-label" type="button" aria-label="Ajuster le graphe à l'écran" title="Ajuster le graphe à l'écran">Ajuster</button>
-        <button id="layer-view-toggle" class="graph-action-label" type="button" aria-label="Changer de vue" title="Changer de vue">Vue suivante</button>
-        <button id="reset" class="graph-action-label" type="button" aria-label="Effacer la sélection" title="Effacer la sélection">Effacer</button>
+      </div>
+      <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
+        <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tous les nœuds" title="Afficher tous les nœuds" aria-pressed="false">Tout</button>
+        <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher le graphe à une distance lisible" title="Afficher le graphe à une distance lisible" aria-pressed="true">Lisible</button>
+      </div>
+      <span class="graph-actions-spacer" aria-hidden="true"></span>
+      <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Effacer la sélection" title="Effacer la sélection">Effacer</button>
+      <span class="graph-actions-break" aria-hidden="true"></span>
+      <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
+        <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Explorer les relations avec des nœuds espacés">Graphe</button>
+        <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
+        <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des clusters et des projets">Clusters</button>
+      </div>
+      <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
+        <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
+        <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
       </div>
     </div>
     <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
@@ -645,14 +699,6 @@
         <label class="relation-filter" title="Afficher les microservices externes"><input id="node-external-microservice" type="checkbox" checked aria-label="Afficher les microservices externes">Externes</label>
         <label class="relation-filter" title="Afficher les topics Kafka"><input id="node-kafka-topic" type="checkbox" checked aria-label="Afficher les topics Kafka">Topics Kafka</label>
         <label class="relation-filter" title="Afficher les collections MongoDB"><input id="node-mongodb-collection" type="checkbox" checked aria-label="Afficher les collections MongoDB">MongoDB</label>
-      </fieldset>
-      <fieldset class="layout-controls">
-        <legend>Vue principale</legend>
-        <div class="layout-options" role="group" aria-label="Choix de la vue principale">
-          <button id="layout-forceatlas2-noverlap" class="layout-option is-active" type="button" aria-pressed="true" title="Explorer les relations avec des nœuds espacés">Graphe</button>
-          <button id="layout-elk" class="layout-option" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
-          <button id="layout-cluster" class="layout-option" type="button" aria-pressed="false" title="Afficher l’organisation par namespace">Namespaces</button>
-        </div>
       </fieldset>
       <fieldset class="layout-controls">
         <legend>Placement des nœuds</legend>
@@ -768,7 +814,7 @@
       <div id="inspector-body" class="inspector-body"></div>
     </div>
   </div>
-  <script id="graph-data" type="application/json">{"nodes": [{"id": "microservice:inventory-service", "kind": "microservice", "name": "inventory-service", "layer": "application", "layer_label": "Application", "color": "#dc2626", "runtime_namespaces": [], "fact_namespaces": [], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "kafka_endpoints": [{"role": "consume", "topic": "supermarket.order.placed", "message_type": "OrderPlaced", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18"}, {"role": "consume", "topic": "supermarket.stock.restock-requested", "message_type": "StockRestockRequested", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaStockRestockConsumer.java:18"}, {"role": "produce", "topic": "supermarket.stock.depleted", "message_type": "String", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java:13"}], "build_system": "maven", "resources": ["GET /api/health", "POST /api/reservations"], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "label": "inventory-service", "width": 190, "height": 42, "complexity": {"score": 4, "level": "high", "relations": 4, "breakdown": {"http": 0, "kafka": 3, "mongodb": 1}, "rank": 3, "population": 3, "tier_start": 3, "tier_end": 3}, "size": 50}, {"id": "microservice:order-service", "kind": "microservice", "name": "order-service", "layer": "application", "layer_label": "Application", "color": "#2563eb", "runtime_namespaces": [], "fact_namespaces": [], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "kafka_endpoints": [{"role": "produce", "topic": "supermarket.order.placed", "message_type": "OrderPlaced", "location": "order-service/src/main/java/io/systemlens/supermarket/order/ScheduledOrderPublisher.java:39"}], "build_system": "maven", "resources": ["GET /api/error", "GET /api/health", "POST /api/orders"], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "label": "order-service", "width": 190, "height": 42, "complexity": {"score": 1, "level": "low", "relations": 1, "breakdown": {"http": 0, "kafka": 1, "mongodb": 0}, "rank": 1, "population": 3, "tier_start": 1, "tier_end": 1}, "size": 50}, {"id": "microservice:restock-service", "kind": "microservice", "name": "restock-service", "layer": "application", "layer_label": "Application", "color": "#d97706", "runtime_namespaces": [], "fact_namespaces": [], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "kafka_endpoints": [{"role": "consume", "topic": "supermarket.stock.depleted", "message_type": "StockDepleted", "location": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37"}, {"role": "produce", "topic": "supermarket.stock.restock-requested", "message_type": "StockRestockRequested", "location": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:44"}], "build_system": "maven", "resources": [], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "label": "restock-service", "width": 190, "height": 42, "complexity": {"score": 2, "level": "medium", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 2, "population": 3, "tier_start": 2, "tier_end": 2}, "size": 50}, {"id": "kafka_topic:supermarket.order.placed", "kind": "kafka_topic", "name": "supermarket.order.placed", "label": "supermarket.order.placed", "published_message_types": ["OrderPlaced"], "consumed_message_types": ["OrderPlaced"], "width": 190, "height": 42, "owner_service": "order-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "low", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 1, "population": 3, "tier_start": 1, "tier_end": 1}, "color": "#2563eb", "size": 50}, {"id": "kafka_topic:supermarket.stock.depleted", "kind": "kafka_topic", "name": "supermarket.stock.depleted", "label": "supermarket.stock.depleted", "published_message_types": ["String"], "consumed_message_types": ["StockDepleted"], "width": 190, "height": 42, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "medium", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 2, "population": 3, "tier_start": 2, "tier_end": 2}, "color": "#d97706", "size": 50}, {"id": "kafka_topic:supermarket.stock.restock-requested", "kind": "kafka_topic", "name": "supermarket.stock.restock-requested", "label": "supermarket.stock.restock-requested", "published_message_types": ["StockRestockRequested"], "consumed_message_types": ["StockRestockRequested"], "width": 190, "height": 42, "owner_service": "restock-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "high", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 3, "population": 3, "tier_start": 3, "tier_end": 3}, "color": "#dc2626", "size": 50}, {"id": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb_collection", "name": "order_fulfillments", "owner": "inventory-service", "label": "order_fulfillments", "persistence_classes": [{"id": "inventory-service:inventory-service:io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "service": "inventory-service", "module": "inventory-service", "collection": "order_fulfillments", "name": "OrderFulfillmentDocument", "qualified_name": "io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "source": "src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "line": 7, "root": true, "fields": [{"name": "orderId", "type": "String", "references": []}, {"name": "productId", "type": "String", "references": []}, {"name": "productName", "type": "String", "references": []}, {"name": "quantity", "type": "int", "references": []}, {"name": "remainingStock", "type": "int", "references": []}, {"name": "channel", "type": "String", "references": []}, {"name": "requestedAt", "type": "Instant", "references": []}, {"name": "createdAt", "type": "Instant", "references": []}]}], "width": 190, "height": 42, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 1, "level": "low", "relations": 1, "breakdown": {"http": 0, "kafka": 0, "mongodb": 1}, "rank": 1, "population": 1, "tier_start": 1, "tier_end": 1}, "color": "#2563eb", "size": 50}], "links": [{"source": "microservice:order-service", "target": "kafka_topic:supermarket.order.placed", "kind": "kafka", "direction": "outgoing", "label": "supermarket.order.placed", "confidence": "proved", "provenance": "code", "published_message_types": ["OrderPlaced"]}, {"source": "kafka_topic:supermarket.order.placed", "target": "microservice:inventory-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.order.placed", "confidence": "proved", "provenance": "code", "consumed_message_types": ["OrderPlaced"]}, {"source": "microservice:restock-service", "target": "kafka_topic:supermarket.stock.restock-requested", "kind": "kafka", "direction": "outgoing", "label": "supermarket.stock.restock-requested", "confidence": "proved", "provenance": "code", "published_message_types": ["StockRestockRequested"]}, {"source": "kafka_topic:supermarket.stock.restock-requested", "target": "microservice:inventory-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.stock.restock-requested", "confidence": "proved", "provenance": "code", "consumed_message_types": ["StockRestockRequested"]}, {"source": "microservice:inventory-service", "target": "kafka_topic:supermarket.stock.depleted", "kind": "kafka", "direction": "outgoing", "label": "supermarket.stock.depleted", "confidence": "proved", "provenance": "code", "published_message_types": ["String"]}, {"source": "kafka_topic:supermarket.stock.depleted", "target": "microservice:restock-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.stock.depleted", "confidence": "proved", "provenance": "code", "consumed_message_types": ["StockDepleted"]}, {"source": "microservice:inventory-service", "target": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb", "direction": "data_access", "label": "stocke", "confidence": "inferred", "provenance": "module inventory"}], "software_layers": ["application"], "runtime_namespaces": [], "fact_namespaces": [], "groups": [{"name": "supermarket-demo", "namespace": ".", "children": ["microservice:inventory-service", "microservice:order-service", "microservice:restock-service"]}], "build_dependencies": {"nodes": [{"id": "module:inventory-service", "name": "inventory-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:order-service", "name": "order-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:restock-service", "name": "restock-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:supermarket-contracts", "name": "supermarket-contracts", "kind": "build_module", "build_system": "maven", "color": "#64748b", "size": 14}, {"id": "module:supermarket-demo-parent", "name": "supermarket-demo-parent", "kind": "build_module", "build_system": "maven", "color": "#64748b", "size": 14}], "links": [{"source": "module:inventory-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}, {"source": "module:order-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}, {"source": "module:restock-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}]}, "kafka_dtos": [{"id": "io.systemlens.supermarket.contract.OrderPlaced", "name": "OrderPlaced", "qualified_name": "io.systemlens.supermarket.contract.OrderPlaced", "fields": [{"type": "String", "name": "orderId"}, {"type": "String", "name": "productId"}, {"type": "int", "name": "quantity"}, {"type": "Instant", "name": "requestedAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/OrderPlaced.java", "module": "supermarket-contracts", "producers": ["order-service"], "consumers": ["inventory-service"], "topics": ["supermarket.order.placed"], "root": true}, {"id": "io.systemlens.supermarket.contract.StockDepleted", "name": "StockDepleted", "qualified_name": "io.systemlens.supermarket.contract.StockDepleted", "fields": [{"type": "String", "name": "productId"}, {"type": "Instant", "name": "occurredAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/StockDepleted.java", "module": "supermarket-contracts", "producers": [], "consumers": ["restock-service"], "topics": ["supermarket.stock.depleted"], "root": true}, {"id": "io.systemlens.supermarket.contract.StockRestockRequested", "name": "StockRestockRequested", "qualified_name": "io.systemlens.supermarket.contract.StockRestockRequested", "fields": [{"type": "String", "name": "productId"}, {"type": "int", "name": "quantity"}, {"type": "Instant", "name": "requestedAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/StockRestockRequested.java", "module": "supermarket-contracts", "producers": ["restock-service"], "consumers": ["inventory-service"], "topics": ["supermarket.stock.restock-requested"], "root": true}, {"id": "unresolved:String", "name": "String", "qualified_name": null, "fields": [], "source": null, "module": null, "producers": ["inventory-service"], "consumers": [], "topics": ["supermarket.stock.depleted"], "root": true}], "project_dto_definitions": [], "mongo_persistence_classes": [{"id": "inventory-service:inventory-service:io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "service": "inventory-service", "module": "inventory-service", "collection": "order_fulfillments", "name": "OrderFulfillmentDocument", "qualified_name": "io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "source": "src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "line": 7, "root": true, "fields": [{"name": "orderId", "type": "String", "references": []}, {"name": "productId", "type": "String", "references": []}, {"name": "productName", "type": "String", "references": []}, {"name": "quantity", "type": "int", "references": []}, {"name": "remainingStock", "type": "int", "references": []}, {"name": "channel", "type": "String", "references": []}, {"name": "requestedAt", "type": "Instant", "references": []}, {"name": "createdAt", "type": "Instant", "references": []}]}], "indexing_issues": [{"severity": "info", "category": "Appel HTTP non rapproche", "message": "order-service : aucun microservice fournisseur n'a ete identifie pour 'POST /api/reservations'.", "location": "order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:47"}, {"severity": "info", "category": "Appel HTTP non rapproche", "message": "order-service : aucun microservice fournisseur n'a ete identifie pour 'POST /api/reservations'.", "location": "order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:61"}]}</script>
+  <script id="graph-data" type="application/json">{"nodes": [{"id": "microservice:inventory-service", "kind": "microservice", "name": "inventory-service", "layer": "application", "layer_label": "Application", "color": "#dc2626", "runtime_namespaces": [], "fact_namespaces": [], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "kafka_endpoints": [{"role": "consume", "topic": "supermarket.order.placed", "message_type": "OrderPlaced", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18"}, {"role": "consume", "topic": "supermarket.stock.restock-requested", "message_type": "StockRestockRequested", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaStockRestockConsumer.java:18", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaStockRestockConsumer.java:18"}, {"role": "produce", "topic": "supermarket.stock.depleted", "message_type": "String", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java:13", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java:13"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service", "resources": ["GET /api/health", "POST /api/reservations"], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "label": "inventory-service", "width": 190, "height": 42, "complexity": {"score": 4, "level": "high", "relations": 4, "breakdown": {"http": 0, "kafka": 3, "mongodb": 1}, "rank": 3, "population": 3, "tier_start": 3, "tier_end": 3}, "size": 50}, {"id": "microservice:order-service", "kind": "microservice", "name": "order-service", "layer": "application", "layer_label": "Application", "color": "#2563eb", "runtime_namespaces": [], "fact_namespaces": [], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "kafka_endpoints": [{"role": "produce", "topic": "supermarket.order.placed", "message_type": "OrderPlaced", "location": "order-service/src/main/java/io/systemlens/supermarket/order/ScheduledOrderPublisher.java:39", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/java/io/systemlens/supermarket/order/ScheduledOrderPublisher.java:39"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service", "resources": ["GET /api/error", "GET /api/health", "POST /api/orders"], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "label": "order-service", "width": 190, "height": 42, "complexity": {"score": 1, "level": "low", "relations": 1, "breakdown": {"http": 0, "kafka": 1, "mongodb": 0}, "rank": 1, "population": 3, "tier_start": 1, "tier_end": 1}, "size": 50}, {"id": "microservice:restock-service", "kind": "microservice", "name": "restock-service", "layer": "application", "layer_label": "Application", "color": "#d97706", "runtime_namespaces": [], "fact_namespaces": [], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "kafka_endpoints": [{"role": "consume", "topic": "supermarket.stock.depleted", "message_type": "StockDepleted", "location": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37"}, {"role": "produce", "topic": "supermarket.stock.restock-requested", "message_type": "StockRestockRequested", "location": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:44", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:44"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service", "resources": [], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "label": "restock-service", "width": 190, "height": 42, "complexity": {"score": 2, "level": "medium", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 2, "population": 3, "tier_start": 2, "tier_end": 2}, "size": 50}, {"id": "kafka_topic:supermarket.order.placed", "kind": "kafka_topic", "name": "supermarket.order.placed", "label": "supermarket.order.placed", "published_message_types": ["OrderPlaced"], "consumed_message_types": ["OrderPlaced"], "width": 190, "height": 42, "owner_service": "order-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "low", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 1, "population": 3, "tier_start": 1, "tier_end": 1}, "color": "#2563eb", "size": 50}, {"id": "kafka_topic:supermarket.stock.depleted", "kind": "kafka_topic", "name": "supermarket.stock.depleted", "label": "supermarket.stock.depleted", "published_message_types": ["String"], "consumed_message_types": ["StockDepleted"], "width": 190, "height": 42, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "medium", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 2, "population": 3, "tier_start": 2, "tier_end": 2}, "color": "#d97706", "size": 50}, {"id": "kafka_topic:supermarket.stock.restock-requested", "kind": "kafka_topic", "name": "supermarket.stock.restock-requested", "label": "supermarket.stock.restock-requested", "published_message_types": ["StockRestockRequested"], "consumed_message_types": ["StockRestockRequested"], "width": 190, "height": 42, "owner_service": "restock-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "high", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 3, "population": 3, "tier_start": 3, "tier_end": 3}, "color": "#dc2626", "size": 50}, {"id": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb_collection", "name": "order_fulfillments", "owner": "inventory-service", "label": "order_fulfillments", "persistence_classes": [{"id": "inventory-service:inventory-service:io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "service": "inventory-service", "module": "inventory-service", "collection": "order_fulfillments", "name": "OrderFulfillmentDocument", "qualified_name": "io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "source": "src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "line": 7, "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "fields": [{"name": "orderId", "type": "String", "references": []}, {"name": "productId", "type": "String", "references": []}, {"name": "productName", "type": "String", "references": []}, {"name": "quantity", "type": "int", "references": []}, {"name": "remainingStock", "type": "int", "references": []}, {"name": "channel", "type": "String", "references": []}, {"name": "requestedAt", "type": "Instant", "references": []}, {"name": "createdAt", "type": "Instant", "references": []}]}], "width": 190, "height": 42, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 1, "level": "low", "relations": 1, "breakdown": {"http": 0, "kafka": 0, "mongodb": 1}, "rank": 1, "population": 1, "tier_start": 1, "tier_end": 1}, "color": "#2563eb", "size": 50}], "links": [{"source": "microservice:order-service", "target": "kafka_topic:supermarket.order.placed", "kind": "kafka", "direction": "outgoing", "label": "supermarket.order.placed", "confidence": "proved", "provenance": "code", "published_message_types": ["OrderPlaced"]}, {"source": "kafka_topic:supermarket.order.placed", "target": "microservice:inventory-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.order.placed", "confidence": "proved", "provenance": "code", "consumed_message_types": ["OrderPlaced"]}, {"source": "microservice:restock-service", "target": "kafka_topic:supermarket.stock.restock-requested", "kind": "kafka", "direction": "outgoing", "label": "supermarket.stock.restock-requested", "confidence": "proved", "provenance": "code", "published_message_types": ["StockRestockRequested"]}, {"source": "kafka_topic:supermarket.stock.restock-requested", "target": "microservice:inventory-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.stock.restock-requested", "confidence": "proved", "provenance": "code", "consumed_message_types": ["StockRestockRequested"]}, {"source": "microservice:inventory-service", "target": "kafka_topic:supermarket.stock.depleted", "kind": "kafka", "direction": "outgoing", "label": "supermarket.stock.depleted", "confidence": "proved", "provenance": "code", "published_message_types": ["String"]}, {"source": "kafka_topic:supermarket.stock.depleted", "target": "microservice:restock-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.stock.depleted", "confidence": "proved", "provenance": "code", "consumed_message_types": ["StockDepleted"]}, {"source": "microservice:inventory-service", "target": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb", "direction": "data_access", "label": "stocke", "confidence": "inferred", "provenance": "module inventory"}], "software_layers": ["application"], "runtime_namespaces": [], "fact_namespaces": [], "groups": [{"name": "supermarket-demo", "namespace": ".", "children": ["microservice:inventory-service", "microservice:order-service", "microservice:restock-service"]}], "build_dependencies": {"nodes": [{"id": "module:inventory-service", "name": "inventory-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:order-service", "name": "order-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:restock-service", "name": "restock-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:supermarket-contracts", "name": "supermarket-contracts", "kind": "build_module", "build_system": "maven", "color": "#64748b", "size": 14}, {"id": "module:supermarket-demo-parent", "name": "supermarket-demo-parent", "kind": "build_module", "build_system": "maven", "color": "#64748b", "size": 14}], "links": [{"source": "module:inventory-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}, {"source": "module:order-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}, {"source": "module:restock-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}]}, "kafka_dtos": [{"id": "io.systemlens.supermarket.contract.OrderPlaced", "name": "OrderPlaced", "qualified_name": "io.systemlens.supermarket.contract.OrderPlaced", "fields": [{"type": "String", "name": "orderId"}, {"type": "String", "name": "productId"}, {"type": "int", "name": "quantity"}, {"type": "Instant", "name": "requestedAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/OrderPlaced.java", "module": "supermarket-contracts", "producers": ["order-service"], "consumers": ["inventory-service"], "topics": ["supermarket.order.placed"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/OrderPlaced.java"}, {"id": "io.systemlens.supermarket.contract.StockDepleted", "name": "StockDepleted", "qualified_name": "io.systemlens.supermarket.contract.StockDepleted", "fields": [{"type": "String", "name": "productId"}, {"type": "Instant", "name": "occurredAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/StockDepleted.java", "module": "supermarket-contracts", "producers": [], "consumers": ["restock-service"], "topics": ["supermarket.stock.depleted"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/StockDepleted.java"}, {"id": "io.systemlens.supermarket.contract.StockRestockRequested", "name": "StockRestockRequested", "qualified_name": "io.systemlens.supermarket.contract.StockRestockRequested", "fields": [{"type": "String", "name": "productId"}, {"type": "int", "name": "quantity"}, {"type": "Instant", "name": "requestedAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/StockRestockRequested.java", "module": "supermarket-contracts", "producers": ["restock-service"], "consumers": ["inventory-service"], "topics": ["supermarket.stock.restock-requested"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/StockRestockRequested.java"}, {"id": "unresolved:String", "name": "String", "qualified_name": null, "fields": [], "source": null, "module": null, "producers": ["inventory-service"], "consumers": [], "topics": ["supermarket.stock.depleted"], "root": true}], "project_dto_definitions": [], "mongo_persistence_classes": [{"id": "inventory-service:inventory-service:io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "service": "inventory-service", "module": "inventory-service", "collection": "order_fulfillments", "name": "OrderFulfillmentDocument", "qualified_name": "io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "source": "src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "line": 7, "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "fields": [{"name": "orderId", "type": "String", "references": []}, {"name": "productId", "type": "String", "references": []}, {"name": "productName", "type": "String", "references": []}, {"name": "quantity", "type": "int", "references": []}, {"name": "remainingStock", "type": "int", "references": []}, {"name": "channel", "type": "String", "references": []}, {"name": "requestedAt", "type": "Instant", "references": []}, {"name": "createdAt", "type": "Instant", "references": []}]}], "indexing_issues": [{"severity": "info", "category": "Appel HTTP non rapproche", "message": "order-service : aucun microservice fournisseur n'a ete identifie pour 'POST /api/reservations'.", "location": "order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:47", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:47"}, {"severity": "info", "category": "Appel HTTP non rapproche", "message": "order-service : aucun microservice fournisseur n'a ete identifie pour 'POST /api/reservations'.", "location": "order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:61", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:61"}]}</script>
   <script type="module">// Ordered source module: 00-core.js
     const graphData = JSON.parse(document.getElementById("graph-data").textContent);
     // HTML cards are rendered in screen space. Layouts and collision envelopes
@@ -948,6 +994,7 @@
     let initialNodePositions = new Map();
     const graphState = {
       selectedId: null,
+      selectedClusterKey: null,
       hoveredId: null,
       relatedNodes: null,
       relatedEdges: null,
@@ -962,6 +1009,9 @@
       graphWheelCleanup: null,
       activeLayout: "forceatlas2-noverlap",
       layoutRequest: 0,
+      fitMode: "readable",
+      fitRequest: 0,
+      renderMode: "cards",
     };
     function updateGraphState(patch) {
       Object.assign(graphState, patch);
@@ -969,10 +1019,11 @@
     }
     function requiredCardZoomIn(targetRenderer) {
       if (!targetRenderer || !network) return 1;
-      const cardWidth = GRAPH_CARD_WIDTH + 4;
-      const cardHeight = GRAPH_CARD_HEIGHT + 4;
+      const symbolMode = graphState.renderMode === "symbols";
+      const cardWidth = symbolMode ? 34 : GRAPH_CARD_WIDTH + 4;
+      const cardHeight = symbolMode ? 34 : GRAPH_CARD_HEIGHT + 4;
       const buckets = new Map();
-      let required = 1;
+      const requiredZooms = [];
       network.forEachNode((id, attributes) => {
         if (!isVisibleNodeId(id) || attributes.hidden) return;
         const point = targetRenderer.graphToViewport({ x: attributes.x, y: attributes.y });
@@ -984,7 +1035,10 @@
               const distanceX = Math.abs(point.x - other.x);
               const distanceY = Math.abs(point.y - other.y);
               if (distanceX >= cardWidth || distanceY >= cardHeight) continue;
-              required = Math.max(required, Math.min(4, Math.max(
+              // Uniform zoom separates the cards as soon as either axis has
+              // enough room. Taking the larger axis factor would over-zoom
+              // every pair that is nearly aligned horizontally or vertically.
+              requiredZooms.push(Math.min(4, Math.min(
                 cardWidth / Math.max(distanceX, 1),
                 cardHeight / Math.max(distanceY, 1),
               )));
@@ -996,16 +1050,32 @@
         bucket.push(point);
         buckets.set(key, bucket);
       });
-      return required;
+      if (!requiredZooms.length) return 1;
+      requiredZooms.sort((left, right) => left - right);
+      if (graphState.activeLayout === "forceatlas2-noverlap") {
+        return requiredZooms[requiredZooms.length - 1];
+      }
+      // A single near-coincident pair must not dictate the camera distance for
+      // the entire graph. Separating 90% of the initially overlapping pairs
+      // gives a stable readable view while leaving local outliers explorable.
+      return requiredZooms[Math.floor((requiredZooms.length - 1) * .9)];
     }
     let renderFrameScheduled = false;
+    let renderFramePromise = Promise.resolve();
     function requestGraphRender() {
-      if (renderFrameScheduled) return;
+      if (renderFrameScheduled) return renderFramePromise;
       renderFrameScheduled = true;
-      requestAnimationFrame(() => {
-        renderFrameScheduled = false;
-        renderOverlays?.();
+      renderFramePromise = new Promise(resolve => {
+        requestAnimationFrame(() => {
+          renderFrameScheduled = false;
+          try {
+            renderOverlays?.();
+          } finally {
+            resolve();
+          }
+        });
       });
+      return renderFramePromise;
     }
     const layoutLibraries = Promise.all([
       import("https://esm.sh/graphology-layout-forceatlas2@0.10.1"),
@@ -1419,11 +1489,12 @@
         labelAlignment: "center",
         nodeReducer: (node, data) => {
           if (!isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
+          const renderedData = graphState.renderMode === "symbols" ? { ...data, size: .5 } : data;
           if (!graphState.selectedId || graphState.relatedNodes.has(node)) {
             const order = graphState.pathMicroserviceOrder.get(node);
-            return order ? { ...data, label: `${order}. ${data.label}` } : data;
+            return order ? { ...renderedData, label: `${order}. ${data.label}` } : renderedData;
           }
-          return { ...data, color: "#d8e0ea", label: "" };
+          return { ...renderedData, color: "#d8e0ea", label: "" };
         },
         edgeReducer: (edge, data) => {
           if (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge))) return { ...data, hidden: true };
@@ -1434,6 +1505,7 @@
         },
       });
       renderOverlays = () => {
+        nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         const nodePoints = new Map();
         const graphPointToViewport = graphPoint => {
           return renderer.graphToViewport(graphPoint);
@@ -1581,36 +1653,29 @@
           }
           const renderedWidth = Math.max(150, maxX - minX);
           const renderedHeight = Math.max(92, maxY - minY);
-          namespaceBounds.set(`${group.layer}:${group.namespace}`, {
+          const boundsKey = `${group.layer}:${group.namespace}`;
+          const cluster = clusterDescriptorForPath(group.namespace);
+          namespaceBounds.set(boundsKey, {
             minX, maxX: minX + renderedWidth, minY, maxY: minY + renderedHeight,
           });
-          const box = document.createElement("div"); box.className = "graph-namespace-group";
+          const box = document.createElement("div");
+          box.className = `graph-namespace-group${graphState.selectedClusterKey === cluster.key ? " is-selected" : ""}`;
           box.dataset.namespace = group.namespace;
+          box.dataset.clusterKey = cluster.key;
           box.style.left = `${minX}px`; box.style.top = `${minY}px`;
           box.style.width = `${renderedWidth}px`;
           box.style.height = `${renderedHeight}px`;
           box.style.setProperty("--namespace-accent", layerColors[group.layer] || "#64748b");
-          const title = document.createElement("span"); title.className = "graph-namespace-title";
+          const title = document.createElement("button");
+          title.type = "button";
+          title.className = "graph-namespace-title";
           title.textContent = group.namespace === "root" ? "ROOT" : group.namespace;
+          title.title = `Afficher les éléments du cluster ${title.textContent}`;
+          title.addEventListener("click", event => {
+            event.stopPropagation();
+            selectCluster(cluster);
+          });
           box.append(title);
-          if (graphState.clusteredView || graphState.layeredClusterView) {
-            const graphPoints = group.ids.map(id => ({
-              point: nodePoints.get(id),
-              kind: nodeDataById.get(id)?.kind,
-            })).filter(item => item.point);
-            const servicePoints = graphPoints.filter(item => item.kind === "microservice");
-            const resourcePoints = graphPoints.filter(item => item.kind !== "microservice");
-            const addSubLayerTitle = (label, points) => {
-              if (!points.length) return;
-              const subTitle = document.createElement("span");
-              subTitle.className = "graph-cluster-sublayer-title";
-              subTitle.textContent = label;
-              subTitle.style.top = `${Math.max(28, Math.min(...points.map(item => item.point.y)) - minY - 38)}px`;
-              box.append(subTitle);
-            };
-            addSubLayerTitle("Microservices", servicePoints);
-            addSubLayerTitle("Ressources", resourcePoints);
-          }
           graphLayersOverlay.append(box);
         });
         if (!showProjectGroups.checked) return;
@@ -1646,16 +1711,24 @@
             maxY = Math.max(...points.map(point => point.y)) + 52;
           }
           const container = document.createElement("div");
-          container.className = "graph-project-group";
+          const cluster = clusterDescriptorForPath(group.namespace || group.name || "root");
+          container.className = `graph-project-group${graphState.selectedClusterKey === cluster.key ? " is-selected" : ""}`;
           container.dataset.namespaceGroup = group.namespace || group.name || "root";
+          container.dataset.clusterKey = cluster.key;
           container.style.left = `${minX}px`;
           container.style.top = `${minY}px`;
           container.style.width = `${Math.max(150, maxX - minX)}px`;
           container.style.height = `${Math.max(120, maxY - minY)}px`;
           container.style.setProperty("--group-accent", "#64748b");
-          const title = document.createElement("span");
+          const title = document.createElement("button");
+          title.type = "button";
           title.className = "graph-project-group-title";
           title.textContent = group.name;
+          title.title = `Afficher les éléments du cluster ${group.name}`;
+          title.addEventListener("click", event => {
+            event.stopPropagation();
+            selectCluster(cluster);
+          });
           container.append(title);
           graphGroupsOverlay.append(container);
         });
@@ -1716,8 +1789,6 @@
             if (!forwardedPointer.moved) return;
             const camera = renderer.getCamera();
             const state = forwardedPointer.cameraState;
-            // Sigma's internal drawing buffer can use a device-pixel ratio;
-            // camera panning, however, is driven by CSS viewport pixels.
             const viewport = document.getElementById("graph").getBoundingClientRect();
             const width = Math.max(viewport.width, 1);
             const height = Math.max(viewport.height, 1);
@@ -2038,7 +2109,6 @@
     const analyzedPathsEmpty = document.getElementById("analyzed-paths-empty");
     const pathHistoryTitle = document.getElementById("path-history-title");
     const layoutStatus = document.getElementById("layout-status");
-    const layerViewToggle = document.getElementById("layer-view-toggle");
     const layoutButtons = new Map([
       ["forceatlas2", document.getElementById("layout-forceatlas2")],
       ["noverlap", document.getElementById("layout-noverlap")],
@@ -2051,7 +2121,7 @@
       ["noverlap", "placement sans chevauchement"],
       ["forceatlas2-noverlap", "vue graphe"],
       ["elk", "vue couches"],
-      ["cluster", "vue namespaces"],
+      ["cluster", "vue clusters"],
     ]);
     const pathStops = [];
     const analyzedPaths = [];
@@ -2128,6 +2198,54 @@
         .map(neighbour => nodeDataById.get(neighbour)?.layer)
         .find(layer => layerOrder.includes(layer));
       return neighbourLayer || "application";
+    }
+    function normalizeClusterPath(path) {
+      const normalized = String(path || "root").replace(/^\/+|\/+$/g, "");
+      return !normalized || normalized === "ROOT" ? "root" : normalized;
+    }
+    function visibleClusterPaths() {
+      const paths = new Set(["root"]);
+      network.nodes().filter(node => isVisibleNodeId(node)).forEach(node => {
+        const path = normalizeClusterPath(namespaceForNode(node));
+        if (path === "root") return;
+        const segments = path.split("/").filter(Boolean);
+        segments.forEach((_segment, index) => paths.add(segments.slice(0, index + 1).join("/")));
+      });
+      return paths;
+    }
+    function clusterDescriptorForPath(path) {
+      const clusterPath = normalizeClusterPath(path);
+      const exactPaths = new Map(network.nodes()
+        .filter(node => isVisibleNodeId(node))
+        .map(node => [node, normalizeClusterPath(namespaceForNode(node))]));
+      const ids = [...exactPaths.entries()]
+        .filter(([, nodePath]) => nodePath === clusterPath)
+        .map(([id]) => id);
+      const childPaths = new Set();
+      visibleClusterPaths().forEach(candidate => {
+        if (candidate === "root" || candidate === clusterPath) return;
+        if (clusterPath === "root") {
+          childPaths.add(candidate.split("/")[0]);
+          return;
+        }
+        if (!candidate.startsWith(`${clusterPath}/`)) return;
+        const nextSegment = candidate.slice(clusterPath.length + 1).split("/")[0];
+        childPaths.add(`${clusterPath}/${nextSegment}`);
+      });
+      const parentPath = clusterPath === "root"
+        ? null
+        : clusterPath.includes("/")
+          ? clusterPath.slice(0, clusterPath.lastIndexOf("/"))
+          : "root";
+      return {
+        key: `cluster:${clusterPath}`,
+        kind: "cluster",
+        name: clusterPath === "root" ? "ROOT" : clusterPath,
+        path: clusterPath,
+        parentPath,
+        childPaths: [...childPaths].sort((left, right) => left.localeCompare(right)),
+        ids,
+      };
     }
     function clusterPathForNode(node) {
       const data = nodeDataById.get(node);
@@ -2512,16 +2630,12 @@
       });
     }
     function resolveGraphCardOverlaps() {
-      // Cards are intentionally fixed-size HTML overlays. The overview
-      // contract allows overlap, so moving Sigma nodes after the camera fit
-      // would make the fitted bounds stale and could push nodes off-screen.
-      // Keep this hook for compatibility with older layout callers.
-      return;
       const cardScale = GRAPH_CARD_SCALE;
-      const cardWidth = 110 * cardScale;
-      const cardHeight = 70 * cardScale;
+      const symbolMode = graphState.renderMode === "symbols";
+      const cardWidth = (symbolMode ? 30 : 110) * cardScale;
+      const cardHeight = (symbolMode ? 30 : 70) * cardScale;
       const gap = 4;
-      const ids = [...network.nodes()];
+      const ids = network.nodes().filter(id => isVisibleNodeId(id));
       const points = new Map(ids.map(id => {
           const attributes = network.getNodeAttributes(id);
           const point = renderer.graphToViewport({ x: attributes.x, y: attributes.y });
@@ -2604,26 +2718,18 @@
       if (switchingView) {
         updateGraphState({
           selectedId: null,
+          selectedClusterKey: null,
           hoveredId: null,
           relatedNodes: null,
           relatedEdges: null,
           pathMicroserviceOrder: new Map(),
         });
         clearPathControls();
-        setDetailsEmpty("Selectionnez un noeud pour isoler ses relations et afficher ses APIs.");
+        setDetailsEmpty("Selectionnez un noeud ou un cluster pour afficher ses informations.");
       }
       const zoomOutButton = document.getElementById("zoom-out");
       zoomOutButton.disabled = false;
       zoomOutButton.title = "Dézoomer";
-      const nextView = !nextLayeredView ? "couches" : layout === "elk" ? "clusters" : "graphe";
-      const nextViewLabel = {
-        couches: "Afficher le rendu en couches",
-        clusters: "Afficher le rendu par clusters",
-        graphe: "Afficher le rendu graphe",
-      }[nextView];
-      layerViewToggle.textContent = nextViewLabel.replace("Afficher ", "");
-      layerViewToggle.setAttribute("aria-label", nextViewLabel);
-      layerViewToggle.title = nextViewLabel;
       setActiveLayout(layout);
       layoutStatus.textContent = `Calcul de la disposition ${label}…`;
       // Cluster placement is deterministic and local; it does not need any
@@ -2695,7 +2801,7 @@
       }
       if (request !== graphState.layoutRequest) return;
       renderer.refresh();
-      fitCameraToVisibleGraph(renderer);
+      await fitCameraToVisibleGraph(renderer);
       await new Promise(resolve => setTimeout(resolve, 300));
       if (request !== graphState.layoutRequest) return;
       // Commit the view mode only after its layout and camera are ready. This
@@ -2707,12 +2813,13 @@
         clusteredView: layout === "cluster",
         layeredClusterView: layout === "elk",
       });
-      if (["forceatlas2", "noverlap", "cluster", "elk"].includes(layout)) {
-        // Force layouts optimize Sigma's node radii, not the larger HTML cards.
-        // Resolve the final projected envelope once after fitting the graph
-        // view; compound views use deterministic packing instead.
+      if (layout === "forceatlas2-noverlap" && graphState.fitMode === "readable") {
+        // Force layouts optimize Sigma's node radii, not the larger HTML
+        // overlays. Resolve their final projected envelope only in the plain
+        // graph's readable view; compound views keep deterministic packing.
         resolveGraphCardOverlaps();
         renderer.refresh();
+        await fitCameraToVisibleGraph(renderer);
       }
       // Sigma's noverlap solver works with Sigma node radii, while the
       // readable labels are larger HTML rectangles. Resolve any residual
@@ -3277,7 +3384,7 @@
       }
       const summary = document.createElement("p");
       summary.className = "dto-summary";
-      summary.textContent = `${item.qualified_name} · collection ${item.collection} · ${item.source}:${item.line}`;
+      summary.textContent = `${item.qualified_name} · ${item.source}:${item.line}`;
       inspectorBody.append(summary);
       if (item.vscode_uri) {
         const sourceLink = document.createElement("a");
@@ -3394,7 +3501,6 @@
       appendDtoInspectorSection("Producteurs", dto.producers || []);
       appendDtoInspectorSection("Consommateurs", dto.consumers || []);
     }
-
 
 // Ordered source module: 50-paths.js
     function selectDependencyModule(id) {
@@ -3839,48 +3945,22 @@
       meta.className = "details-meta";
       const relationBadge = document.createElement("span");
       relationBadge.className = "detail-badge";
-      relationBadge.textContent = `Relations indexees : ${indexedEdges.length}`;
-      const visibleBadge = document.createElement("span");
-      visibleBadge.className = "detail-badge";
-      visibleBadge.textContent = `Affichees : ${edges.length}`;
-      meta.append(relationBadge, visibleBadge);
+      relationBadge.textContent = edges.length === indexedEdges.length
+        ? `Relations : ${indexedEdges.length}`
+        : `Relations indexees : ${indexedEdges.length}`;
+      meta.append(relationBadge);
+      if (edges.length !== indexedEdges.length) {
+        const visibleBadge = document.createElement("span");
+        visibleBadge.className = "detail-badge";
+        visibleBadge.textContent = `Affichees : ${edges.length}`;
+        meta.append(visibleBadge);
+      }
       if (isMicroservice) {
-        const layerBadge = document.createElement("span");
-        layerBadge.className = "detail-badge";
-        layerBadge.textContent = `Layer : ${node.layer_label || "Unknown"}`;
-        meta.append(layerBadge);
-        const clusterPathBadge = document.createElement("span");
-        clusterPathBadge.className = "detail-badge";
-        clusterPathBadge.textContent = `Chemin des clusters : ${clusterPathForNode(id)}`;
-        meta.append(clusterPathBadge);
-        (node.runtime_namespaces || []).forEach(namespace => {
-          const namespaceBadge = document.createElement("span");
-          namespaceBadge.className = "detail-badge";
-          namespaceBadge.textContent = `Namespace : ${namespace}`;
-          meta.append(namespaceBadge);
-        });
-        (node.fact_namespaces || []).forEach(namespace => {
-          const factNamespaceBadge = document.createElement("span");
-          factNamespaceBadge.className = "detail-badge";
-          factNamespaceBadge.textContent = `Facts : ${namespace}`;
-          meta.append(factNamespaceBadge);
-        });
         [
           `${publishedApiCount} API${publishedApiCount > 1 ? "s" : ""} exposee${publishedApiCount > 1 ? "s" : ""}`,
           `${publishedTopicCount} topic${publishedTopicCount > 1 ? "s" : ""} publie${publishedTopicCount > 1 ? "s" : ""}`,
           `${collectionCount} collection${collectionCount > 1 ? "s" : ""} utilisee${collectionCount > 1 ? "s" : ""}`,
         ].forEach(label => { const badge = document.createElement("span"); badge.className = "detail-badge"; badge.textContent = label; meta.append(badge); });
-      } else {
-        const architectureLayer = architectureLayerForNode(id);
-        const clusterPath = clusterPathForNode(id);
-        const layerBadge = document.createElement("span");
-        layerBadge.className = "detail-badge";
-        layerBadge.textContent = `Layer : ${architectureLayer}`;
-        meta.append(layerBadge);
-        const clusterPathBadge = document.createElement("span");
-        clusterPathBadge.className = "detail-badge";
-        clusterPathBadge.textContent = `Chemin des clusters : ${clusterPath}`;
-        meta.append(clusterPathBadge);
       }
       const confidenceLabels = { proved: "prouvee", inferred: "inferee", conventional: "conventionnelle" };
       ["proved", "inferred", "conventional"].forEach(confidence => {
@@ -3905,12 +3985,14 @@
       details.append(header);
       if (!isMicroservice) {
         const clusterPath = clusterPathForNode(id);
-        if (clusterPath) {
-          const architectureGroup = createDetailsGroup("Architecture");
-          appendList("Layer", [architectureLayerForNode(id)], architectureGroup);
-          appendList("Chemin des clusters", [clusterPath], architectureGroup);
-          discardEmptyDetailsGroup(architectureGroup);
-        }
+        const architectureGroup = createDetailsGroup("Architecture");
+        appendList("Layer", [architectureLayerForNode(id)], architectureGroup);
+        appendActionList("Cluster", clusterPath ? [{
+          label: clusterPath,
+          title: `Naviguer vers le cluster ${clusterPath}`,
+          action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
+        }] : [], architectureGroup);
+        discardEmptyDetailsGroup(architectureGroup);
       }
       if (node.kind === "microservice") {
         if (node.vscode_uri) {
@@ -3929,20 +4011,21 @@
         const openApiContracts = node.openapi_contracts || [];
         const kubernetesWorkloads = node.kubernetes_workloads || [];
         appendFindings(node.findings || []);
-        if (node.project_namespace || node.runtime_namespaces?.length || node.fact_namespaces?.length) {
-          const architectureGroup = createDetailsGroup("Architecture");
-          appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
-          appendList("Chemin des clusters", [clusterPathForNode(id)], architectureGroup);
-          appendList("Namespaces Kubernetes", node.runtime_namespaces || [], architectureGroup);
-          appendList("Namespaces de faits", node.fact_namespaces || [], architectureGroup);
-          discardEmptyDetailsGroup(architectureGroup);
-        }
+        const clusterPath = clusterPathForNode(id);
+        const architectureGroup = createDetailsGroup("Architecture");
+        appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
+        appendActionList("Cluster", clusterPath ? [{
+          label: clusterPath,
+          title: `Naviguer vers le cluster ${clusterPath}`,
+          action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
+        }] : [], architectureGroup);
+        discardEmptyDetailsGroup(architectureGroup);
         if (kubernetesWorkloads.length) {
           const kubernetesGroup = createDetailsGroup("Kubernetes");
           appendList("Workloads", kubernetesWorkloads.map(workload => {
             const request = `requests CPU ${workload.cpu_request_millicores ?? "-"}m · RAM ${workload.memory_request_bytes ?? "-"}B`;
             const limit = `limits CPU ${workload.cpu_limit_millicores ?? "-"}m · RAM ${workload.memory_limit_bytes ?? "-"}B`;
-            return `${workload.kind} ${workload.namespace}/${workload.name} · replicas ${workload.replicas ?? "-"} · ${request} · ${limit}`;
+            return `${workload.kind} ${workload.name} · replicas ${workload.replicas ?? "-"} · ${request} · ${limit}`;
           }), kubernetesGroup);
           discardEmptyDetailsGroup(kubernetesGroup);
         }
@@ -3992,7 +4075,7 @@
         appendRelationList("Services producteurs", edges.filter(link => link.kind === "kafka" && link.target === id), id,
           link => nodeDataById.get(link.source).name, relationsGroup);
         appendRelationList("Services consommateurs", edges.filter(link => link.kind === "kafka" && link.source === id), id,
-          link => nodeDataById.get(link.source).name, relationsGroup);
+          link => nodeDataById.get(link.target).name, relationsGroup);
         appendRelationList("Pattern request/reply", edges.filter(link => link.kind === "request_reply" && (link.source === id || link.target === id)), id,
           link => nodeDataById.get(link.source === id ? link.target : link.source).name, relationsGroup);
         const dtos = (graphData.kafka_dtos || [])
@@ -4040,9 +4123,13 @@
       if (["data_schema", "message_channel"].includes(node.kind)) {
         const factsGroup = createDetailsGroup("Ressource enrichie");
         if (node.technology) appendList("Technologie", [node.technology], factsGroup);
-        const metadata = Object.entries(node.metadata || {}).map(([key, value]) => (
-          `${key} : ${Array.isArray(value) ? value.join(", ") : String(value)}`
-        ));
+        const architectureMetadataKeys = new Set([
+          "architecture_layer", "cluster", "cluster_path", "fact_namespaces", "layer",
+          "namespace", "namespaces", "project_namespace", "project_namespace_path", "runtime_namespaces",
+        ]);
+        const metadata = Object.entries(node.metadata || {})
+          .filter(([key]) => !architectureMetadataKeys.has(key) && !(key === "technology" && node.technology))
+          .map(([key, value]) => `${key} : ${Array.isArray(value) ? value.join(", ") : String(value)}`);
         appendList("Métadonnées", metadata.length ? metadata : ["Aucune métadonnée"], factsGroup);
         appendRelationList("Relations", edges.filter(link => link.source === id || link.target === id), id,
           link => `${link.label} · ${nodeDataById.get(link.source === id ? link.target : link.source)?.name || "ressource"}`,
@@ -4050,10 +4137,72 @@
         discardEmptyDetailsGroup(factsGroup);
       }
     }
+    function renderClusterDetails(cluster) {
+      const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);
+      const members = [...new Set(resolvedCluster.ids)]
+        .map(id => nodeDataById.get(id))
+        .filter(Boolean)
+        .sort((left, right) => left.name.localeCompare(right.name));
+      details.classList.remove("is-empty");
+      details.replaceChildren();
+      const header = document.createElement("header");
+      header.className = "details-header";
+      const kicker = document.createElement("p");
+      kicker.className = "details-kicker";
+      kicker.textContent = "Cluster";
+      const title = document.createElement("h1");
+      title.className = "details-title";
+      title.textContent = resolvedCluster.name;
+      const meta = document.createElement("div");
+      meta.className = "details-meta";
+      const count = document.createElement("span");
+      count.className = "detail-badge";
+      count.textContent = `${members.length} ressource${members.length > 1 ? "s" : ""} directe${members.length > 1 ? "s" : ""}`;
+      meta.append(count);
+      const childCount = document.createElement("span");
+      childCount.className = "detail-badge";
+      childCount.textContent = `${resolvedCluster.childPaths.length} sous-cluster${resolvedCluster.childPaths.length > 1 ? "s" : ""}`;
+      meta.append(childCount);
+      header.append(kicker, title, meta);
+      details.append(header);
+      appendActionList("Cluster parent", resolvedCluster.parentPath ? [{
+        label: resolvedCluster.parentPath === "root" ? "ROOT" : resolvedCluster.parentPath,
+        title: "Naviguer vers le cluster parent",
+        action: () => selectCluster(clusterDescriptorForPath(resolvedCluster.parentPath)),
+      }] : []);
+      appendActionList("Sous-clusters", resolvedCluster.childPaths.map(childPath => ({
+        label: childPath,
+        title: `Naviguer vers le sous-cluster ${childPath}`,
+        action: () => selectCluster(clusterDescriptorForPath(childPath)),
+      })));
+      appendActionList("Ressources contenues", members.map(member => ({
+        label: `${member.name} · ${nodeKindLabel(member)}`,
+        title: `Afficher les détails de ${member.name}`,
+        action: () => selectNode(member.id),
+      })));
+      if (!members.length) appendList("Ressources contenues", ["Aucune ressource directe"]);
+    }
+    async function selectCluster(cluster) {
+      if (!pathLock.checked) clearPathControls();
+      if (!graphState.layeredView && !graphState.clusteredView) await applyLayout("cluster");
+      const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);
+      updateGraphState({
+        selectedId: null,
+        selectedClusterKey: resolvedCluster.key,
+        relatedNodes: null,
+        relatedEdges: null,
+        pathMicroserviceOrder: new Map(),
+      });
+      renderer.refresh();
+      requestGraphRender();
+      renderClusterDetails(resolvedCluster);
+      persistState();
+    }
     function focusNodeRelations(id, matches) {
       if (!pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
+      graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       network.forEachEdge((edge, attributes, source, target) => {
@@ -4063,7 +4212,9 @@
       renderer.refresh();
       renderDetails(id);
       const position = renderer.getNodeDisplayData(id);
-      if (position) renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
+      if (position && !graphState.layeredView && !graphState.clusteredView) {
+        renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
+      }
       persistState();
     }
     function focusPublishedRestResource(id, resource) {
@@ -4076,6 +4227,7 @@
       if (!preservePath && !pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
+      graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       network.forEachEdge((edge, attributes, source, target) => {
@@ -4088,14 +4240,16 @@
       renderDetails(id);
       const position = renderer.getNodeDisplayData(id);
 
-
 // Ordered source module: 60-bootstrap.js
-      if (position) renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
+      if (position && !graphState.layeredView && !graphState.clusteredView) {
+        renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
+      }
       persistState();
     }
     function reset() {
       updateGraphState({
         selectedId: null,
+        selectedClusterKey: null,
         relatedNodes: null,
         relatedEdges: null,
         pathMicroserviceOrder: new Map(),
@@ -4104,7 +4258,7 @@
         setActiveRelationPreset("all");
       }
       renderer.refresh();
-      setDetailsEmpty("Selectionnez un noeud pour isoler ses relations et afficher ses APIs.");
+      setDetailsEmpty("Selectionnez un noeud ou un cluster pour afficher ses informations.");
       search.value = "";
       clearPathControls();
       persistState();
@@ -4131,21 +4285,82 @@
     function activeRenderer() {
       return dependencyCanvas.hidden ? renderer : ensureDependencyRenderer();
     }
-    function fitCameraToVisibleGraph(targetRenderer = renderer) {
+    const fitOverviewButton = document.getElementById("fit-view");
+    const fitReadableButton = document.getElementById("fit-readable");
+    const renderCardsButton = document.getElementById("render-cards");
+    const renderSymbolsButton = document.getElementById("render-symbols");
+    graphCanvas.dataset.renderMode = graphState.renderMode;
+    function updateFitModeControls(mode) {
+      [
+        [fitOverviewButton, "overview"],
+        [fitReadableButton, "readable"],
+      ].forEach(([button, buttonMode]) => {
+        const active = mode === buttonMode;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+    }
+    async function setNodeRenderMode(mode) {
+      const nextMode = mode === "symbols" ? "symbols" : "cards";
+      updateGraphState({ renderMode: nextMode });
+      [
+        [renderCardsButton, "cards"],
+        [renderSymbolsButton, "symbols"],
+      ].forEach(([button, buttonMode]) => {
+        const active = nextMode === buttonMode;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+      graphCanvas.dataset.renderModePending = nextMode;
+      await requestGraphRender();
+      if (graphState.renderMode !== nextMode) return;
+      await fitCameraToVisibleGraph(renderer);
+      if (graphState.renderMode !== nextMode) return;
+      if (graphState.activeLayout === "forceatlas2-noverlap" && graphState.fitMode === "readable") {
+        resolveGraphCardOverlaps();
+        renderer.refresh();
+        await fitCameraToVisibleGraph(renderer);
+        await requestGraphRender();
+      }
+      graphCanvas.dataset.renderMode = nextMode;
+      delete graphCanvas.dataset.renderModePending;
+    }
+    async function fitCameraToVisibleGraph(targetRenderer = renderer, mode = graphState.fitMode) {
       if (!targetRenderer) return;
+      const fitRequest = ++graphState.fitRequest;
+      const nextMode = mode === "overview" ? "overview" : "readable";
+      updateGraphState({ fitMode: nextMode });
+      updateFitModeControls(nextMode);
       targetRenderer.refresh();
-      // Sigma owns the normalized camera coordinate system. Mixing projected
-      // CSS pixels into CameraState.x/y sends overlays millions of pixels off
-      // screen after a view switch. Its native reset computes the fit from
-      // the current graph bounds and keeps canvas and HTML overlays aligned.
-      targetRenderer.getCamera().animatedReset({ duration: 0 });
+      // Sigma's normalized overview is the default camera state. Apply it
+      // synchronously so repeated or rapid fit actions cannot interleave two
+      // zero-duration animations and compound the readable zoom.
+      const camera = targetRenderer.getCamera();
+      camera.setState({ x: .5, y: .5, ratio: 1, angle: 0 });
+      targetRenderer.refresh();
+      if (fitRequest !== graphState.fitRequest) return;
+      if (nextMode === "readable") {
+        const state = camera.getState();
+        // Start from the complete overview, then move closer. Architecture
+        // cards use the measured projected spacing; the build graph has no
+        // HTML cards and uses the same minimum reading distance.
+        const zoomIn = targetRenderer === renderer
+          ? Math.max(1.6, requiredCardZoomIn(targetRenderer))
+          : 1.6;
+        camera.setState({ ...state, ratio: Math.max(.01, state.ratio / zoomIn) });
+      }
+      targetRenderer.refresh();
       if (targetRenderer === renderer) {
         const layoutRequest = graphState.layoutRequest;
-        requestAnimationFrame(() => {
-          if (layoutRequest !== graphState.layoutRequest) return;
-          requestGraphRender();
-        });
+        // Wait for the exact coalesced overlay frame. Waiting for an unrelated
+        // animation frame can mark the fit complete while fixed-size cards
+        // still use the previous camera state.
+        await requestGraphRender();
+        if (fitRequest !== graphState.fitRequest || layoutRequest !== graphState.layoutRequest) return;
       }
+      const targetCanvas = targetRenderer === renderer ? graphCanvas : dependencyCanvas;
+      targetCanvas.dataset.fitMode = nextMode;
+      targetCanvas.dataset.fitRatio = String(targetRenderer.getCamera().getState().ratio);
     }
     document.getElementById("zoom-in").addEventListener("click", () => {
       const renderer = activeRenderer();
@@ -4161,7 +4376,10 @@
       camera.setState({ ...state, ratio: Math.min(100, state.ratio * 1.25) });
       requestGraphRender();
     });
-    document.getElementById("fit-view").addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer()));
+    fitOverviewButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "overview"));
+    fitReadableButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "readable"));
+    renderCardsButton.addEventListener("click", () => setNodeRenderMode("cards"));
+    renderSymbolsButton.addEventListener("click", () => setNodeRenderMode("symbols"));
     document.getElementById("reset").addEventListener("click", reset);
     document.getElementById("inspector-close").addEventListener("click", closeInspector);
     inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });
@@ -4189,14 +4407,6 @@
       dtoReferencesFilter.focus();
     });
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
-    layerViewToggle.addEventListener("click", () => {
-      const nextLayout = !graphState.layeredView
-        ? "elk"
-        : !graphState.clusteredView
-          ? "cluster"
-          : "forceatlas2-noverlap";
-      applyLayout(nextLayout);
-    });
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
     openApiTab.addEventListener("click", () => setToolbarTab("openapi"));
     kafkaTab.addEventListener("click", () => setToolbarTab("kafka"));
@@ -4251,24 +4461,19 @@
     restoreState();
     function updateWorkspaceViewport(refit = false) {
       const toolbar = document.querySelector(".toolbar");
-      const detailsPanel = document.getElementById("details");
       const desktop = window.innerWidth > 700;
       const toolbarRight = toolbar?.getBoundingClientRect().right || 0;
       const left = desktop ? Math.min(window.innerWidth - 220, toolbarRight + 24) : 0;
-      const detailsHeight = detailsPanel
-        ? Math.min(window.innerHeight * .42, detailsPanel.getBoundingClientRect().height + 24)
-        : 0;
       const root = document.documentElement;
       root.style.setProperty("--workspace-left", `${Math.max(0, left)}px`);
       root.style.setProperty("--workspace-right", "0px");
       root.style.setProperty("--workspace-top", "0px");
-      root.style.setProperty("--workspace-bottom", `${Math.max(0, detailsHeight)}px`);
+      root.style.setProperty("--workspace-bottom", "0px");
       renderer?.refresh();
       dependencyRenderer?.refresh();
+      requestGraphRender();
       if (refit) fitCameraToVisibleGraph(activeRenderer());
     }
-    const workspaceObserver = new MutationObserver(() => updateWorkspaceViewport(false));
-    workspaceObserver.observe(details, { attributes: true, attributeFilter: ["class"] });
     updateWorkspaceViewport(false);
     applyLayout("forceatlas2-noverlap");
     function runExploreSearch() {

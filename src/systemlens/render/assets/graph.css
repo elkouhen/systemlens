@@ -17,9 +17,9 @@
       height: auto;
       z-index: 0;
     }
-    #graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
-    #graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
-    #graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: hidden; }
+    #graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
+    #graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
+    #graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
     #graph-layers, #graph-groups, #graph-node-labels {
       left: var(--workspace-left, 0px);
       right: var(--workspace-right, 0px);
@@ -30,11 +30,11 @@
     .graph-layer-title { position: absolute; top: 8px; left: 14px; min-width: 154px; padding: 3px 8px; box-sizing: border-box; color: var(--layer-accent, #64748b); background: color-mix(in srgb, #f8fafc 94%, var(--layer-accent, #64748b)); border-radius: 5px; font-size: 11px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
     .graph-namespace-group { position: absolute; border: 1px dashed color-mix(in srgb, var(--namespace-accent, #64748b) 72%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--namespace-accent, #64748b) 8%, transparent); }
     .graph-namespace-group.is-selected { border-style: solid; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--namespace-accent, #64748b) 28%, transparent), 0 0 18px color-mix(in srgb, var(--namespace-accent, #64748b) 28%, transparent); }
-    .graph-namespace-title { position: absolute; top: 7px; left: 8px; right: 8px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 92%, var(--namespace-accent, #64748b)); border-radius: 5px; font: inherit; font-size: 10px; font-weight: 750; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+    .graph-namespace-title { position: absolute; z-index: 4; top: 7px; left: 8px; right: 8px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 92%, var(--namespace-accent, #64748b)); border-radius: 5px; font: inherit; font-size: 10px; font-weight: 750; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
     .graph-namespace-title:hover, .graph-namespace-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--namespace-accent, #64748b) 58%, transparent); outline-offset: 1px; }
     .graph-project-group { position: absolute; padding: 25px 13px 13px; border: 1px dashed var(--group-accent, #64748b); border-radius: 12px; background: color-mix(in srgb, var(--group-accent, #64748b) 4%, transparent); color: var(--group-accent, #64748b); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
     .graph-project-group.is-selected { border-style: solid; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--group-accent, #64748b) 28%, transparent), 0 0 18px color-mix(in srgb, var(--group-accent, #64748b) 28%, transparent); }
-    .graph-project-group-title { position: absolute; top: 8px; left: 10px; right: 10px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: inherit; background: color-mix(in srgb, #f8fafc 94%, var(--group-accent, #64748b)); border-radius: 5px; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: center; text-overflow: ellipsis; text-transform: inherit; white-space: nowrap; }
+    .graph-project-group-title { position: absolute; z-index: 5; top: 8px; left: 10px; right: 10px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: inherit; background: color-mix(in srgb, #f8fafc 94%, var(--group-accent, #64748b)); border-radius: 5px; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: center; text-overflow: ellipsis; text-transform: inherit; white-space: nowrap; }
     .graph-namespace-title:hover, .graph-project-group-title:hover { filter: brightness(.97); box-shadow: 0 1px 5px color-mix(in srgb, currentColor 18%, transparent); }
     .graph-project-group-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--group-accent, #64748b) 58%, transparent); outline-offset: 1px; }
     :root[data-theme="dark"] .graph-project-group { background: color-mix(in srgb, var(--group-accent, #64748b) 8%, transparent); }

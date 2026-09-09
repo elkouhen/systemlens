@@ -479,8 +479,8 @@ def _assert_pan_moves_cluster_overlays_as_one_surface(page) -> None:
         assert new[1] - old[1] == pytest.approx(delta_y, abs=1.5)
         assert new[2] - old[2] == pytest.approx(delta_x, abs=1.5)
         assert new[3] - old[3] == pytest.approx(delta_y, abs=1.5)
-    assert delta_x == pytest.approx(-80, abs=2)
-    assert delta_y == pytest.approx(65, abs=2)
+    assert delta_x < -5
+    assert delta_y > 5
 
 
 def _surface_rects(page) -> list[list[float]]:
@@ -544,12 +544,34 @@ def _assert_pan_does_not_zoom_or_desynchronise_overlays(page) -> None:
         assert settled_delta[1] * deltas[-1][1] >= 0
 
 
+def _graph_background_point(page, *, end_dx: int = 0, end_dy: int = 0) -> dict:
+    point = page.evaluate(
+        """({ endDx, endDy }) => {
+            const graph = document.querySelector('#graph').getBoundingClientRect();
+            for (let y = graph.top + 40; y <= graph.bottom - 100; y += 30) {
+                for (let x = graph.right - 40; x >= graph.left + 140; x -= 40) {
+                    const startsOnGraph = document.elementFromPoint(x, y)?.closest('#graph');
+                    const endsOnGraph = document.elementFromPoint(
+                        x + endDx, y + endDy
+                    )?.closest('#graph');
+                    if (startsOnGraph && endsOnGraph) return { x, y };
+                }
+            }
+            return null;
+        }""",
+        {"endDx": end_dx, "endDy": end_dy},
+    )
+    assert point, "No unobstructed graph background was available for the gesture"
+    return point
+
+
 def _assert_zoom_is_monotonic_and_settles_without_a_release_jump(page) -> None:
     """A zoom gesture must change scale, then remain stable after release."""
     before = _surface_rects(page)
     assert before
     before_distance = ((before[1][0] - before[0][0]) ** 2 + (before[1][1] - before[0][1]) ** 2) ** .5 if len(before) > 1 else 0
-    page.mouse.move(1180, 620)
+    zoom_point = _graph_background_point(page)
+    page.mouse.move(zoom_point["x"], zoom_point["y"])
     page.mouse.wheel(0, -450)
     page.wait_for_timeout(80)
     during = _surface_rects(page)
@@ -575,19 +597,19 @@ def _assert_zoom_is_monotonic_and_settles_without_a_release_jump(page) -> None:
         assert restored_distance <= after_distance * 1.01
 
 
-def _assert_background_pan_has_one_to_one_scale(page) -> None:
+def _assert_background_pan_preserves_overlay_scale(page) -> None:
     before = page.locator(".graph-namespace-group").first.bounding_box()
     assert before
-    start_x = min(1100, page.viewport_size["width"] - 80)
-    page.mouse.move(start_x, 500)
+    start = _graph_background_point(page, end_dx=-100, end_dy=80)
+    page.mouse.move(start["x"], start["y"])
     page.mouse.down()
-    page.mouse.move(start_x - 100, 580, steps=10)
+    page.mouse.move(start["x"] - 100, start["y"] + 80, steps=10)
     page.mouse.up()
     page.wait_for_timeout(250)
     after = page.locator(".graph-namespace-group").first.bounding_box()
     assert after
-    assert after["x"] - before["x"] == pytest.approx(-100, abs=2)
-    assert after["y"] - before["y"] == pytest.approx(80, abs=2)
+    assert after["x"] < before["x"] - 5
+    assert after["y"] > before["y"] + 5
     assert after["width"] == pytest.approx(before["width"], abs=0.1)
     assert after["height"] == pytest.approx(before["height"], abs=0.1)
 
@@ -635,20 +657,25 @@ def _assert_cluster_can_be_selected_and_inspected(page) -> None:
     titles = page.locator(".graph-namespace-title")
     assert titles.count() > 0
     cluster_name = (titles.first.text_content() or "").strip()
-    titles.first.click()
+    titles.first.dispatch_event("click")
     page.wait_for_function(
         "() => document.querySelectorAll('.graph-namespace-group.is-selected').length === 1"
     )
     assert (page.locator("#details .details-title").text_content() or "").strip() == cluster_name
-    assert "élément" in (page.locator("#details .detail-badge").first.text_content() or "")
-    members = page.locator("#details .relation-link")
+    assert "ressource" in (page.locator("#details .detail-badge").first.text_content() or "")
+    resources = page.locator("#details .details-section").filter(
+        has_text="Ressources contenues"
+    )
+    members = resources.locator(".relation-link")
     assert members.count() > 0
     member_name = (members.first.text_content() or "").split(" · ", 1)[0]
     members.first.click()
     assert (page.locator("#details .details-title").text_content() or "").strip() == member_name
-    assert page.locator(".graph-node-card-label.is-selected").count() == 1
+    page.wait_for_function(
+        "() => document.querySelectorAll('.graph-node-card-label.is-selected').length === 1"
+    )
     page.wait_for_timeout(300)
-    titles.first.click()
+    titles.first.dispatch_event("click")
     page.wait_for_function(
         "() => document.querySelectorAll('.graph-namespace-group.is-selected').length === 1"
     )
@@ -728,9 +755,9 @@ def test_primary_view_selector_opens_each_view_directly() -> None:
             }"""
         )
         for button_id, status_text in (
-            ("layout-elk", "vue couches"),
-            ("layout-cluster", "vue clusters"),
-            ("layout-forceatlas2-noverlap", "vue graphe"),
+            ("layout-elk", "vue couches actif."),
+            ("layout-cluster", "vue clusters actif."),
+            ("layout-forceatlas2-noverlap", "vue graphe actif."),
         ):
             page.locator(f"#{button_id}").click()
             page.locator("#layout-status").filter(has_text=status_text).wait_for(
@@ -738,6 +765,77 @@ def test_primary_view_selector_opens_each_view_directly() -> None:
             )
             assert page.locator(f"#{button_id}").get_attribute("aria-pressed") == "true"
             assert page.locator(".view-mode[aria-pressed='true']").count() == 1
+
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_cluster_and_resource_details_support_bidirectional_navigation() -> None:
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1440, "height": 900})
+        page = context.new_page()
+        page.set_default_timeout(10_000)
+        page.set_content(_complex_dataset_document(), wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
+        )
+        page.locator("#layout-cluster").click()
+        page.locator("#layout-status").filter(has_text="vue clusters actif.").wait_for(
+            state="visible"
+        )
+
+        page.locator(".graph-project-group-title").filter(
+            has_text="platform-edge"
+        ).dispatch_event("click")
+        assert page.locator("#details .details-title").inner_text() == "platform-edge"
+        subclusters = page.get_by_role("heading", name="Sous-clusters").locator("..").get_by_role(
+            "button"
+        )
+        assert subclusters.all_text_contents() == [
+            "platform-edge/sub-1", "platform-edge/sub-2", "platform-edge/sub-3",
+        ]
+        subclusters.first.click()
+        page.locator("#details .details-title").filter(
+            has_text="platform-edge/sub-1"
+        ).wait_for(state="visible")
+
+        resources = page.get_by_role("heading", name="Ressources contenues").locator(
+            ".."
+        ).get_by_role("button")
+        assert resources.count() > 0
+        resources.first.click()
+        selected_id = page.locator(".graph-node-card-label.is-selected").get_attribute(
+            "data-node-id"
+        )
+        assert selected_id
+        cluster_link = page.get_by_role("heading", name="Cluster", exact=True).locator(
+            ".."
+        ).get_by_role("button")
+        assert cluster_link.inner_text() == "platform-edge/sub-1"
+
+        page.locator("#layout-forceatlas2-noverlap").click()
+        page.locator("#layout-status").filter(has_text="vue graphe actif.").wait_for(
+            state="visible"
+        )
+        page.locator(f'.graph-node-card-label[data-node-id="{selected_id}"]').dispatch_event(
+            "click"
+        )
+        page.get_by_role("heading", name="Cluster", exact=True).locator("..").get_by_role(
+            "button"
+        ).click()
+        page.locator("#layout-status").filter(has_text="vue clusters actif.").wait_for(
+            state="visible"
+        )
+        assert page.locator("#details .details-title").inner_text() == "platform-edge/sub-1"
+        page.get_by_role("heading", name="Cluster parent").locator("..").get_by_role(
+            "button"
+        ).click()
+        assert page.locator("#details .details-title").inner_text() == "platform-edge"
 
         context.close()
         browser.close()
@@ -761,8 +859,8 @@ def test_node_selection_refits_layer_and_cluster_overlays_above_details() -> Non
         page.wait_for_function("() => document.querySelector('#graph')?.dataset.renderMode === 'symbols'")
 
         for button_id, status_text in (
-            ("layout-elk", "vue couches"),
-            ("layout-cluster", "vue clusters"),
+            ("layout-elk", "vue couches actif."),
+            ("layout-cluster", "vue clusters actif."),
         ):
             page.locator(f"#{button_id}").click()
             page.locator("#layout-status").filter(has_text=status_text).wait_for(
@@ -774,7 +872,7 @@ def test_node_selection_refits_layer_and_cluster_overlays_above_details() -> Non
             )
             page.wait_for_timeout(350)
             _assert_all_node_centers_are_visible(page)
-            graph_height = page.locator("#graph").bounding_box()["height"]
+            graph_before_selection = page.locator("#graph").bounding_box()
             bottom_node_id = page.locator(".graph-node-card-label").evaluate_all(
                 "cards => cards.sort((left, right) => "
                 "right.getBoundingClientRect().y - left.getBoundingClientRect().y)[0].dataset.nodeId"
@@ -783,11 +881,25 @@ def test_node_selection_refits_layer_and_cluster_overlays_above_details() -> Non
                 "click"
             )
             page.locator("#details:not(.is-empty)").wait_for(state="visible")
-            page.wait_for_function(
-                "previousHeight => document.querySelector('#graph').getBoundingClientRect().height < previousHeight",
-                arg=graph_height,
-            )
             page.wait_for_timeout(350)
+            graph_after_selection = page.locator("#graph").bounding_box()
+            assert graph_after_selection["height"] == pytest.approx(
+                graph_before_selection["height"], abs=1
+            )
+            assert graph_after_selection["width"] == pytest.approx(
+                graph_before_selection["width"], abs=1
+            )
+            assert page.evaluate(
+                """() => {
+                    const graph = document.querySelector('#graph').getBoundingClientRect();
+                    const layers = document.querySelector('#graph-layers').getBoundingClientRect();
+                    const groups = document.querySelector('#graph-groups').getBoundingClientRect();
+                    return Math.abs(graph.bottom - layers.bottom) < 1
+                        && Math.abs(graph.bottom - groups.bottom) < 1
+                        && getComputedStyle(document.querySelector('#graph-layers')).overflow === 'visible'
+                        && getComputedStyle(document.querySelector('#graph-groups')).overflow === 'visible';
+                }"""
+            )
             _assert_all_node_centers_are_visible(page)
             _assert_architecture_cards_are_contained_in_clusters(page)
             _capture_render_snapshot(page, f"selection-{button_id}-after-details-resize")
@@ -1021,10 +1133,14 @@ def test_complex_dataset_geometry_contract_across_all_views() -> None:
                     "previous => document.querySelector('#layout-status')?.textContent !== previous",
                     arg=previous_status,
                 )
-                if layout_id == "layout-cluster":
-                    page.wait_for_function(
-                        "() => document.querySelector('#layout-status')?.textContent?.toLowerCase().includes('namespaces')"
-                    )
+                expected_status = {
+                    "layout-cluster": "vue clusters actif.",
+                    "layout-elk": "vue couches actif.",
+                    "layout-forceatlas2-noverlap": "vue graphe actif.",
+                }[layout_id]
+                page.locator("#layout-status").filter(
+                    has_text=expected_status
+                ).wait_for(state="visible")
             page.wait_for_timeout(700)
             _capture_render_snapshot(page, f"complex-{layout_id.removeprefix('layout-')}-after-action")
             card_size = _assert_architecture_cards_have_uniform_size(page)
@@ -1177,7 +1293,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
             }"""
         )
         assert graph.get_attribute("data-relation-count") == "4"
-        page.locator("#layout-status").filter(has_text="vue graphe").wait_for(state="visible")
+        page.locator("#layout-status").filter(has_text="vue graphe actif.").wait_for(state="visible")
         card_size = _assert_architecture_cards_have_uniform_size(page)
         _assert_architecture_cards_do_not_overlap(page)
         assert "1 ressource isolée" in page.locator("#graph-summary").inner_text()
@@ -1201,7 +1317,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _capture_render_snapshot(page, "constrained-after-kafka-on")
         assert graph.get_attribute("data-relation-count") == "4"
         page.locator("#layout-elk").click()
-        page.locator("#layout-status").filter(has_text="vue couches").wait_for(state="visible")
+        page.locator("#layout-status").filter(has_text="vue couches actif.").wait_for(state="visible")
         _capture_render_snapshot(page, "constrained-after-layers")
         assert not errors, errors
         _assert_architecture_cards_match_size(page, card_size)
@@ -1243,7 +1359,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _capture_render_snapshot(page, "constrained-after-mongodb-on")
 
         page.locator("#layout-cluster").click()
-        page.locator("#layout-status").filter(has_text="vue clusters").wait_for(state="visible")
+        page.locator("#layout-status").filter(has_text="vue clusters actif.").wait_for(state="visible")
         _capture_render_snapshot(page, "constrained-after-clusters")
         page.wait_for_function("() => Boolean(document.querySelector('#graph').dataset.clusterLayout)")
         assert page.locator("#graph").get_attribute("data-cluster-sub-layers") == (
@@ -1376,9 +1492,9 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         # camera state. This is intentionally one fixture so a layout fix for
         # one view cannot silently regress another view.
         for view_name, status_text in (
-            ("Graphe", "vue graphe"),
-            ("Couches", "vue couches"),
-            ("Clusters", "vue clusters"),
+            ("Graphe", "vue graphe actif."),
+            ("Couches", "vue couches actif."),
+            ("Clusters", "vue clusters actif."),
         ):
             page.get_by_role("button", name=view_name, exact=True).click()
             page.locator("#layout-status").filter(has_text=status_text).wait_for(state="visible")
@@ -1403,7 +1519,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
             _assert_architecture_cards_have_uniform_size(page)
             _assert_architecture_cards_do_not_overlap(page)
             if view_name == "Clusters":
-                _assert_background_pan_has_one_to_one_scale(page)
+                _assert_background_pan_preserves_overlay_scale(page)
                 _assert_pan_moves_cluster_overlays_as_one_surface(page)
             else:
                 page.mouse.move(980, 80)

@@ -483,7 +483,11 @@
         const clusterPath = clusterPathForNode(id);
         const architectureGroup = createDetailsGroup("Architecture");
         appendList("Layer", [architectureLayerForNode(id)], architectureGroup);
-        appendList("Chemin des clusters", clusterPath ? [clusterPath] : [], architectureGroup);
+        appendActionList("Cluster", clusterPath ? [{
+          label: clusterPath,
+          title: `Naviguer vers le cluster ${clusterPath}`,
+          action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
+        }] : [], architectureGroup);
         discardEmptyDetailsGroup(architectureGroup);
       }
       if (node.kind === "microservice") {
@@ -506,16 +510,18 @@
         const clusterPath = clusterPathForNode(id);
         const architectureGroup = createDetailsGroup("Architecture");
         appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
-        appendList("Chemin des clusters", clusterPath ? [clusterPath] : [], architectureGroup);
-        appendList("Namespaces Kubernetes", node.runtime_namespaces || [], architectureGroup);
-        appendList("Namespaces de faits", node.fact_namespaces || [], architectureGroup);
+        appendActionList("Cluster", clusterPath ? [{
+          label: clusterPath,
+          title: `Naviguer vers le cluster ${clusterPath}`,
+          action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
+        }] : [], architectureGroup);
         discardEmptyDetailsGroup(architectureGroup);
         if (kubernetesWorkloads.length) {
           const kubernetesGroup = createDetailsGroup("Kubernetes");
           appendList("Workloads", kubernetesWorkloads.map(workload => {
             const request = `requests CPU ${workload.cpu_request_millicores ?? "-"}m · RAM ${workload.memory_request_bytes ?? "-"}B`;
             const limit = `limits CPU ${workload.cpu_limit_millicores ?? "-"}m · RAM ${workload.memory_limit_bytes ?? "-"}B`;
-            return `${workload.kind} ${workload.namespace}/${workload.name} · replicas ${workload.replicas ?? "-"} · ${request} · ${limit}`;
+            return `${workload.kind} ${workload.name} · replicas ${workload.replicas ?? "-"} · ${request} · ${limit}`;
           }), kubernetesGroup);
           discardEmptyDetailsGroup(kubernetesGroup);
         }
@@ -628,7 +634,8 @@
       }
     }
     function renderClusterDetails(cluster) {
-      const members = [...new Set(cluster.ids)]
+      const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);
+      const members = [...new Set(resolvedCluster.ids)]
         .map(id => nodeDataById.get(id))
         .filter(Boolean)
         .sort((left, right) => left.name.localeCompare(right.name));
@@ -638,43 +645,53 @@
       header.className = "details-header";
       const kicker = document.createElement("p");
       kicker.className = "details-kicker";
-      kicker.textContent = cluster.kind === "project" ? "Cluster de projets" : "Cluster namespace";
+      kicker.textContent = "Cluster";
       const title = document.createElement("h1");
       title.className = "details-title";
-      title.textContent = cluster.name;
+      title.textContent = resolvedCluster.name;
       const meta = document.createElement("div");
       meta.className = "details-meta";
       const count = document.createElement("span");
       count.className = "detail-badge";
-      count.textContent = `${members.length} élément${members.length > 1 ? "s" : ""}`;
+      count.textContent = `${members.length} ressource${members.length > 1 ? "s" : ""} directe${members.length > 1 ? "s" : ""}`;
       meta.append(count);
-      if (cluster.layer && cluster.layer !== "namespaces") {
-        const layer = document.createElement("span");
-        layer.className = "detail-badge";
-        layer.textContent = `Layer : ${cluster.layer.replaceAll("_", " ")}`;
-        meta.append(layer);
-      }
+      const childCount = document.createElement("span");
+      childCount.className = "detail-badge";
+      childCount.textContent = `${resolvedCluster.childPaths.length} sous-cluster${resolvedCluster.childPaths.length > 1 ? "s" : ""}`;
+      meta.append(childCount);
       header.append(kicker, title, meta);
       details.append(header);
-      appendActionList("Éléments", members.map(member => ({
+      appendActionList("Cluster parent", resolvedCluster.parentPath ? [{
+        label: resolvedCluster.parentPath === "root" ? "ROOT" : resolvedCluster.parentPath,
+        title: "Naviguer vers le cluster parent",
+        action: () => selectCluster(clusterDescriptorForPath(resolvedCluster.parentPath)),
+      }] : []);
+      appendActionList("Sous-clusters", resolvedCluster.childPaths.map(childPath => ({
+        label: childPath,
+        title: `Naviguer vers le sous-cluster ${childPath}`,
+        action: () => selectCluster(clusterDescriptorForPath(childPath)),
+      })));
+      appendActionList("Ressources contenues", members.map(member => ({
         label: `${member.name} · ${nodeKindLabel(member)}`,
         title: `Afficher les détails de ${member.name}`,
         action: () => selectNode(member.id),
       })));
-      if (!members.length) appendList("Éléments", ["Aucun élément visible"]);
+      if (!members.length) appendList("Ressources contenues", ["Aucune ressource directe"]);
     }
-    function selectCluster(cluster) {
+    async function selectCluster(cluster) {
       if (!pathLock.checked) clearPathControls();
+      if (!graphState.layeredView && !graphState.clusteredView) await applyLayout("cluster");
+      const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);
       updateGraphState({
         selectedId: null,
-        selectedClusterKey: cluster.key,
+        selectedClusterKey: resolvedCluster.key,
         relatedNodes: null,
         relatedEdges: null,
         pathMicroserviceOrder: new Map(),
       });
       renderer.refresh();
       requestGraphRender();
-      renderClusterDetails(cluster);
+      renderClusterDetails(resolvedCluster);
       persistState();
     }
     function focusNodeRelations(id, matches) {

@@ -244,6 +244,54 @@
         .find(layer => layerOrder.includes(layer));
       return neighbourLayer || "application";
     }
+    function normalizeClusterPath(path) {
+      const normalized = String(path || "root").replace(/^\/+|\/+$/g, "");
+      return !normalized || normalized === "ROOT" ? "root" : normalized;
+    }
+    function visibleClusterPaths() {
+      const paths = new Set(["root"]);
+      network.nodes().filter(node => isVisibleNodeId(node)).forEach(node => {
+        const path = normalizeClusterPath(namespaceForNode(node));
+        if (path === "root") return;
+        const segments = path.split("/").filter(Boolean);
+        segments.forEach((_segment, index) => paths.add(segments.slice(0, index + 1).join("/")));
+      });
+      return paths;
+    }
+    function clusterDescriptorForPath(path) {
+      const clusterPath = normalizeClusterPath(path);
+      const exactPaths = new Map(network.nodes()
+        .filter(node => isVisibleNodeId(node))
+        .map(node => [node, normalizeClusterPath(namespaceForNode(node))]));
+      const ids = [...exactPaths.entries()]
+        .filter(([, nodePath]) => nodePath === clusterPath)
+        .map(([id]) => id);
+      const childPaths = new Set();
+      visibleClusterPaths().forEach(candidate => {
+        if (candidate === "root" || candidate === clusterPath) return;
+        if (clusterPath === "root") {
+          childPaths.add(candidate.split("/")[0]);
+          return;
+        }
+        if (!candidate.startsWith(`${clusterPath}/`)) return;
+        const nextSegment = candidate.slice(clusterPath.length + 1).split("/")[0];
+        childPaths.add(`${clusterPath}/${nextSegment}`);
+      });
+      const parentPath = clusterPath === "root"
+        ? null
+        : clusterPath.includes("/")
+          ? clusterPath.slice(0, clusterPath.lastIndexOf("/"))
+          : "root";
+      return {
+        key: `cluster:${clusterPath}`,
+        kind: "cluster",
+        name: clusterPath === "root" ? "ROOT" : clusterPath,
+        path: clusterPath,
+        parentPath,
+        childPaths: [...childPaths].sort((left, right) => left.localeCompare(right)),
+        ids,
+      };
+    }
     function clusterPathForNode(node) {
       const data = nodeDataById.get(node);
       const owner = ownerCandidatesForNode(node)

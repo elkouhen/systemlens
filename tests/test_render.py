@@ -72,6 +72,10 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     assert '>Clusters</button>' in document
     assert 'id="layer-view-toggle"' not in document
     assert "#graph, #dependency-graph {\n      position: fixed;" in document
+    assert "#graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }" in document
+    assert ".graph-namespace-title { position: absolute; z-index: 4;" in document
+    assert "#graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }" in document
+    assert ".graph-project-group-title { position: absolute; z-index: 5;" in document
     assert "left: var(--workspace-left, 0px);" in document
     assert "const point = graphPointToViewport({ x: attributes.x, y: attributes.y });" in document
     assert "const display = renderer.getNodeDisplayData(id);" not in document
@@ -115,11 +119,12 @@ def test_microservice_graph_exposes_software_layers_and_namespaces() -> None:
         namespace="ai-boundaries",
     )
 
-    graph_data = _html_graph_data(render_graph_html(
+    document = render_graph_html(
         {"domain-orders": []}, [], modules_by_service={"domain-orders": module},
         graph_facts=[fact],
         strategy1=True,
-    ))
+    )
+    graph_data = _html_graph_data(document)
     node = next(item for item in graph_data["nodes"] if item["name"] == "domain-orders")
     assert node["layer"] == "domain"
     assert node["runtime_namespaces"] == ["orders-prod"]
@@ -128,6 +133,9 @@ def test_microservice_graph_exposes_software_layers_and_namespaces() -> None:
     assert "domain" in graph_data["software_layers"]
     assert graph_data["runtime_namespaces"] == ["orders-prod"]
     assert graph_data["fact_namespaces"] == ["ai-boundaries"]
+    assert "Namespaces Kubernetes" not in document
+    assert "Namespaces de faits" not in document
+    assert "${workload.namespace}/${workload.name}" not in document
 
 
 def test_graph_html_uses_only_indexed_kafka_dto_facts(tmp_path: Path) -> None:
@@ -200,8 +208,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'return requiredZooms[requiredZooms.length - 1]' in document
     assert 'fitMode: "readable"' in document
     assert "fitRequest !== graphState.fitRequest" in document
-    assert 'new ResizeObserver(() => updateWorkspaceViewport(true))' in document
-    assert "if (refit && geometryChanged) fitCameraToVisibleGraph(activeRenderer())" in document
+    assert 'root.style.setProperty("--workspace-right", "0px")' in document
+    assert 'root.style.setProperty("--workspace-bottom", "0px")' in document
+    assert "ResizeObserver" not in document
     assert document.count(
         "if (position && !graphState.layeredView && !graphState.clusteredView)"
     ) == 2
@@ -227,10 +236,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "grid-column: 1 / 3" in document
     assert "graph-cluster-sublayer-title" not in document
     assert 'selectedClusterKey: null' in document
-    assert 'function selectCluster(cluster)' in document
+    assert 'async function selectCluster(cluster)' in document
     assert 'function renderClusterDetails(cluster)' in document
-    assert 'appendActionList("Éléments"' in document
-    assert 'box.dataset.clusterKey = groupKey' in document
+    assert 'appendActionList("Sous-clusters"' in document
+    assert 'appendActionList("Ressources contenues"' in document
+    assert 'box.dataset.clusterKey = cluster.key' in document
     assert 'graphLegend.hidden = !showingGraph' in document
     assert 'issue.vscode_uri ? "a" : "code"' in document
     assert "max-height: calc(100vh - 32px)" in document
@@ -332,9 +342,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "Connectivité relative :" in document
     assert "const visualNodeKind = node" in document
     assert "Namespace architectural" not in document
+    assert "function clusterDescriptorForPath(path)" in document
     assert "function clusterPathForNode(node)" in document
     assert "function architectureLayerForNode(node)" in document
-    assert 'appendList("Chemin des clusters", clusterPath ? [clusterPath] : [], architectureGroup)' in document
+    assert document.count('appendActionList("Cluster", clusterPath ? [{') == 2
+    assert 'if (!graphState.layeredView && !graphState.clusteredView) await applyLayout("cluster")' in document
     assert "Chemin des clusters : ${clusterPath}" not in document
     assert "Chemin des clusters : ${clusterPathForNode(id)}" not in document
     assert "edges.length === indexedEdges.length" in document

@@ -95,9 +95,9 @@
       height: auto;
       z-index: 0;
     }
-    #graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
-    #graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
-    #graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: hidden; }
+    #graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
+    #graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
+    #graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
     #graph-layers, #graph-groups, #graph-node-labels {
       left: var(--workspace-left, 0px);
       right: var(--workspace-right, 0px);
@@ -108,11 +108,11 @@
     .graph-layer-title { position: absolute; top: 8px; left: 14px; min-width: 154px; padding: 3px 8px; box-sizing: border-box; color: var(--layer-accent, #64748b); background: color-mix(in srgb, #f8fafc 94%, var(--layer-accent, #64748b)); border-radius: 5px; font-size: 11px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
     .graph-namespace-group { position: absolute; border: 1px dashed color-mix(in srgb, var(--namespace-accent, #64748b) 72%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--namespace-accent, #64748b) 8%, transparent); }
     .graph-namespace-group.is-selected { border-style: solid; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--namespace-accent, #64748b) 28%, transparent), 0 0 18px color-mix(in srgb, var(--namespace-accent, #64748b) 28%, transparent); }
-    .graph-namespace-title { position: absolute; top: 7px; left: 8px; right: 8px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 92%, var(--namespace-accent, #64748b)); border-radius: 5px; font: inherit; font-size: 10px; font-weight: 750; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+    .graph-namespace-title { position: absolute; z-index: 4; top: 7px; left: 8px; right: 8px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 92%, var(--namespace-accent, #64748b)); border-radius: 5px; font: inherit; font-size: 10px; font-weight: 750; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
     .graph-namespace-title:hover, .graph-namespace-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--namespace-accent, #64748b) 58%, transparent); outline-offset: 1px; }
     .graph-project-group { position: absolute; padding: 25px 13px 13px; border: 1px dashed var(--group-accent, #64748b); border-radius: 12px; background: color-mix(in srgb, var(--group-accent, #64748b) 4%, transparent); color: var(--group-accent, #64748b); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
     .graph-project-group.is-selected { border-style: solid; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--group-accent, #64748b) 28%, transparent), 0 0 18px color-mix(in srgb, var(--group-accent, #64748b) 28%, transparent); }
-    .graph-project-group-title { position: absolute; top: 8px; left: 10px; right: 10px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: inherit; background: color-mix(in srgb, #f8fafc 94%, var(--group-accent, #64748b)); border-radius: 5px; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: center; text-overflow: ellipsis; text-transform: inherit; white-space: nowrap; }
+    .graph-project-group-title { position: absolute; z-index: 5; top: 8px; left: 10px; right: 10px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: inherit; background: color-mix(in srgb, #f8fafc 94%, var(--group-accent, #64748b)); border-radius: 5px; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: center; text-overflow: ellipsis; text-transform: inherit; white-space: nowrap; }
     .graph-namespace-title:hover, .graph-project-group-title:hover { filter: brightness(.97); box-shadow: 0 1px 5px color-mix(in srgb, currentColor 18%, transparent); }
     .graph-project-group-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--group-accent, #64748b) 58%, transparent); outline-offset: 1px; }
     :root[data-theme="dark"] .graph-project-group { background: color-mix(in srgb, var(--group-accent, #64748b) 8%, transparent); }
@@ -1653,14 +1653,15 @@
           }
           const renderedWidth = Math.max(150, maxX - minX);
           const renderedHeight = Math.max(92, maxY - minY);
-          const groupKey = `${group.layer}:${group.namespace}`;
-          namespaceBounds.set(groupKey, {
+          const boundsKey = `${group.layer}:${group.namespace}`;
+          const cluster = clusterDescriptorForPath(group.namespace);
+          namespaceBounds.set(boundsKey, {
             minX, maxX: minX + renderedWidth, minY, maxY: minY + renderedHeight,
           });
           const box = document.createElement("div");
-          box.className = `graph-namespace-group${graphState.selectedClusterKey === groupKey ? " is-selected" : ""}`;
+          box.className = `graph-namespace-group${graphState.selectedClusterKey === cluster.key ? " is-selected" : ""}`;
           box.dataset.namespace = group.namespace;
-          box.dataset.clusterKey = groupKey;
+          box.dataset.clusterKey = cluster.key;
           box.style.left = `${minX}px`; box.style.top = `${minY}px`;
           box.style.width = `${renderedWidth}px`;
           box.style.height = `${renderedHeight}px`;
@@ -1672,13 +1673,7 @@
           title.title = `Afficher les éléments du cluster ${title.textContent}`;
           title.addEventListener("click", event => {
             event.stopPropagation();
-            selectCluster({
-              key: groupKey,
-              kind: "namespace",
-              name: title.textContent,
-              layer: group.layer,
-              ids: group.ids,
-            });
+            selectCluster(cluster);
           });
           box.append(title);
           graphLayersOverlay.append(box);
@@ -1716,10 +1711,10 @@
             maxY = Math.max(...points.map(point => point.y)) + 52;
           }
           const container = document.createElement("div");
-          const groupKey = `project:${group.namespace || group.name || "root"}:${group.name}`;
-          container.className = `graph-project-group${graphState.selectedClusterKey === groupKey ? " is-selected" : ""}`;
+          const cluster = clusterDescriptorForPath(group.namespace || group.name || "root");
+          container.className = `graph-project-group${graphState.selectedClusterKey === cluster.key ? " is-selected" : ""}`;
           container.dataset.namespaceGroup = group.namespace || group.name || "root";
-          container.dataset.clusterKey = groupKey;
+          container.dataset.clusterKey = cluster.key;
           container.style.left = `${minX}px`;
           container.style.top = `${minY}px`;
           container.style.width = `${Math.max(150, maxX - minX)}px`;
@@ -1732,13 +1727,7 @@
           title.title = `Afficher les éléments du cluster ${group.name}`;
           title.addEventListener("click", event => {
             event.stopPropagation();
-            selectCluster({
-              key: groupKey,
-              kind: "project",
-              name: group.name,
-              layer: null,
-              ids: children.filter(id => nodePoints.has(id)),
-            });
+            selectCluster(cluster);
           });
           container.append(title);
           graphGroupsOverlay.append(container);
@@ -1800,8 +1789,6 @@
             if (!forwardedPointer.moved) return;
             const camera = renderer.getCamera();
             const state = forwardedPointer.cameraState;
-            // Sigma's internal drawing buffer can use a device-pixel ratio;
-            // camera panning, however, is driven by CSS viewport pixels.
             const viewport = document.getElementById("graph").getBoundingClientRect();
             const width = Math.max(viewport.width, 1);
             const height = Math.max(viewport.height, 1);
@@ -2211,6 +2198,54 @@
         .map(neighbour => nodeDataById.get(neighbour)?.layer)
         .find(layer => layerOrder.includes(layer));
       return neighbourLayer || "application";
+    }
+    function normalizeClusterPath(path) {
+      const normalized = String(path || "root").replace(/^\/+|\/+$/g, "");
+      return !normalized || normalized === "ROOT" ? "root" : normalized;
+    }
+    function visibleClusterPaths() {
+      const paths = new Set(["root"]);
+      network.nodes().filter(node => isVisibleNodeId(node)).forEach(node => {
+        const path = normalizeClusterPath(namespaceForNode(node));
+        if (path === "root") return;
+        const segments = path.split("/").filter(Boolean);
+        segments.forEach((_segment, index) => paths.add(segments.slice(0, index + 1).join("/")));
+      });
+      return paths;
+    }
+    function clusterDescriptorForPath(path) {
+      const clusterPath = normalizeClusterPath(path);
+      const exactPaths = new Map(network.nodes()
+        .filter(node => isVisibleNodeId(node))
+        .map(node => [node, normalizeClusterPath(namespaceForNode(node))]));
+      const ids = [...exactPaths.entries()]
+        .filter(([, nodePath]) => nodePath === clusterPath)
+        .map(([id]) => id);
+      const childPaths = new Set();
+      visibleClusterPaths().forEach(candidate => {
+        if (candidate === "root" || candidate === clusterPath) return;
+        if (clusterPath === "root") {
+          childPaths.add(candidate.split("/")[0]);
+          return;
+        }
+        if (!candidate.startsWith(`${clusterPath}/`)) return;
+        const nextSegment = candidate.slice(clusterPath.length + 1).split("/")[0];
+        childPaths.add(`${clusterPath}/${nextSegment}`);
+      });
+      const parentPath = clusterPath === "root"
+        ? null
+        : clusterPath.includes("/")
+          ? clusterPath.slice(0, clusterPath.lastIndexOf("/"))
+          : "root";
+      return {
+        key: `cluster:${clusterPath}`,
+        kind: "cluster",
+        name: clusterPath === "root" ? "ROOT" : clusterPath,
+        path: clusterPath,
+        parentPath,
+        childPaths: [...childPaths].sort((left, right) => left.localeCompare(right)),
+        ids,
+      };
     }
     function clusterPathForNode(node) {
       const data = nodeDataById.get(node);
@@ -3952,7 +3987,11 @@
         const clusterPath = clusterPathForNode(id);
         const architectureGroup = createDetailsGroup("Architecture");
         appendList("Layer", [architectureLayerForNode(id)], architectureGroup);
-        appendList("Chemin des clusters", clusterPath ? [clusterPath] : [], architectureGroup);
+        appendActionList("Cluster", clusterPath ? [{
+          label: clusterPath,
+          title: `Naviguer vers le cluster ${clusterPath}`,
+          action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
+        }] : [], architectureGroup);
         discardEmptyDetailsGroup(architectureGroup);
       }
       if (node.kind === "microservice") {
@@ -3975,16 +4014,18 @@
         const clusterPath = clusterPathForNode(id);
         const architectureGroup = createDetailsGroup("Architecture");
         appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
-        appendList("Chemin des clusters", clusterPath ? [clusterPath] : [], architectureGroup);
-        appendList("Namespaces Kubernetes", node.runtime_namespaces || [], architectureGroup);
-        appendList("Namespaces de faits", node.fact_namespaces || [], architectureGroup);
+        appendActionList("Cluster", clusterPath ? [{
+          label: clusterPath,
+          title: `Naviguer vers le cluster ${clusterPath}`,
+          action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
+        }] : [], architectureGroup);
         discardEmptyDetailsGroup(architectureGroup);
         if (kubernetesWorkloads.length) {
           const kubernetesGroup = createDetailsGroup("Kubernetes");
           appendList("Workloads", kubernetesWorkloads.map(workload => {
             const request = `requests CPU ${workload.cpu_request_millicores ?? "-"}m · RAM ${workload.memory_request_bytes ?? "-"}B`;
             const limit = `limits CPU ${workload.cpu_limit_millicores ?? "-"}m · RAM ${workload.memory_limit_bytes ?? "-"}B`;
-            return `${workload.kind} ${workload.namespace}/${workload.name} · replicas ${workload.replicas ?? "-"} · ${request} · ${limit}`;
+            return `${workload.kind} ${workload.name} · replicas ${workload.replicas ?? "-"} · ${request} · ${limit}`;
           }), kubernetesGroup);
           discardEmptyDetailsGroup(kubernetesGroup);
         }
@@ -4097,7 +4138,8 @@
       }
     }
     function renderClusterDetails(cluster) {
-      const members = [...new Set(cluster.ids)]
+      const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);
+      const members = [...new Set(resolvedCluster.ids)]
         .map(id => nodeDataById.get(id))
         .filter(Boolean)
         .sort((left, right) => left.name.localeCompare(right.name));
@@ -4107,43 +4149,53 @@
       header.className = "details-header";
       const kicker = document.createElement("p");
       kicker.className = "details-kicker";
-      kicker.textContent = cluster.kind === "project" ? "Cluster de projets" : "Cluster namespace";
+      kicker.textContent = "Cluster";
       const title = document.createElement("h1");
       title.className = "details-title";
-      title.textContent = cluster.name;
+      title.textContent = resolvedCluster.name;
       const meta = document.createElement("div");
       meta.className = "details-meta";
       const count = document.createElement("span");
       count.className = "detail-badge";
-      count.textContent = `${members.length} élément${members.length > 1 ? "s" : ""}`;
+      count.textContent = `${members.length} ressource${members.length > 1 ? "s" : ""} directe${members.length > 1 ? "s" : ""}`;
       meta.append(count);
-      if (cluster.layer && cluster.layer !== "namespaces") {
-        const layer = document.createElement("span");
-        layer.className = "detail-badge";
-        layer.textContent = `Layer : ${cluster.layer.replaceAll("_", " ")}`;
-        meta.append(layer);
-      }
+      const childCount = document.createElement("span");
+      childCount.className = "detail-badge";
+      childCount.textContent = `${resolvedCluster.childPaths.length} sous-cluster${resolvedCluster.childPaths.length > 1 ? "s" : ""}`;
+      meta.append(childCount);
       header.append(kicker, title, meta);
       details.append(header);
-      appendActionList("Éléments", members.map(member => ({
+      appendActionList("Cluster parent", resolvedCluster.parentPath ? [{
+        label: resolvedCluster.parentPath === "root" ? "ROOT" : resolvedCluster.parentPath,
+        title: "Naviguer vers le cluster parent",
+        action: () => selectCluster(clusterDescriptorForPath(resolvedCluster.parentPath)),
+      }] : []);
+      appendActionList("Sous-clusters", resolvedCluster.childPaths.map(childPath => ({
+        label: childPath,
+        title: `Naviguer vers le sous-cluster ${childPath}`,
+        action: () => selectCluster(clusterDescriptorForPath(childPath)),
+      })));
+      appendActionList("Ressources contenues", members.map(member => ({
         label: `${member.name} · ${nodeKindLabel(member)}`,
         title: `Afficher les détails de ${member.name}`,
         action: () => selectNode(member.id),
       })));
-      if (!members.length) appendList("Éléments", ["Aucun élément visible"]);
+      if (!members.length) appendList("Ressources contenues", ["Aucune ressource directe"]);
     }
-    function selectCluster(cluster) {
+    async function selectCluster(cluster) {
       if (!pathLock.checked) clearPathControls();
+      if (!graphState.layeredView && !graphState.clusteredView) await applyLayout("cluster");
+      const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);
       updateGraphState({
         selectedId: null,
-        selectedClusterKey: cluster.key,
+        selectedClusterKey: resolvedCluster.key,
         relatedNodes: null,
         relatedEdges: null,
         pathMicroserviceOrder: new Map(),
       });
       renderer.refresh();
       requestGraphRender();
-      renderClusterDetails(cluster);
+      renderClusterDetails(resolvedCluster);
       persistState();
     }
     function focusNodeRelations(id, matches) {
@@ -4407,41 +4459,20 @@
     renderReferences();
     renderRequestReplyPatterns();
     restoreState();
-    let workspaceGeometry = null;
     function updateWorkspaceViewport(refit = false) {
       const toolbar = document.querySelector(".toolbar");
-      const detailsPanel = document.getElementById("details");
       const desktop = window.innerWidth > 700;
       const toolbarRight = toolbar?.getBoundingClientRect().right || 0;
       const left = desktop ? Math.min(window.innerWidth - 220, toolbarRight + 24) : 0;
-      const detailsHeight = detailsPanel
-        ? Math.min(window.innerHeight * .42, detailsPanel.getBoundingClientRect().height + 24)
-        : 0;
-      const nextGeometry = {
-        left: Math.max(0, left),
-        bottom: Math.max(0, detailsHeight),
-      };
-      const geometryChanged = !workspaceGeometry
-        || Math.abs(workspaceGeometry.left - nextGeometry.left) > .5
-        || Math.abs(workspaceGeometry.bottom - nextGeometry.bottom) > .5;
-      workspaceGeometry = nextGeometry;
       const root = document.documentElement;
-      root.style.setProperty("--workspace-left", `${nextGeometry.left}px`);
+      root.style.setProperty("--workspace-left", `${Math.max(0, left)}px`);
       root.style.setProperty("--workspace-right", "0px");
       root.style.setProperty("--workspace-top", "0px");
-      root.style.setProperty("--workspace-bottom", `${nextGeometry.bottom}px`);
+      root.style.setProperty("--workspace-bottom", "0px");
       renderer?.refresh();
       dependencyRenderer?.refresh();
       requestGraphRender();
-      if (refit && geometryChanged) fitCameraToVisibleGraph(activeRenderer());
-    }
-    const workspaceObserver = typeof ResizeObserver === "function"
-      ? new ResizeObserver(() => updateWorkspaceViewport(true))
-      : new MutationObserver(() => updateWorkspaceViewport(true));
-    if (workspaceObserver instanceof MutationObserver) {
-      workspaceObserver.observe(details, { attributes: true, childList: true, subtree: true });
-    } else {
-      workspaceObserver.observe(details);
+      if (refit) fitCameraToVisibleGraph(activeRenderer());
     }
     updateWorkspaceViewport(false);
     applyLayout("forceatlas2-noverlap");

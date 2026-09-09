@@ -187,17 +187,31 @@ During pan and zoom, the graph and its cluster overlays remain synchronized so
 cards and their containing rectangles move together without transient partial
 redraws.
 
-When selecting a node changes the height reserved for the details panel, the
-active fit mode MUST be reapplied after the workspace resize. Layer and cluster
-overlays MUST remain visible around every node center kept in the resulting
-viewport, including when node rendering uses symbols that can visually
-overflow their overlay surface. Node selection MUST NOT start a competing
-focus animation in the Layers or Clusters views; the plain Graph view retains
-its focused-node animation.
+The details panel is a floating overlay and MUST NOT resize or crop the graph
+workspace when a node is selected. Layer and cluster backgrounds therefore
+retain their full horizontal and vertical extent behind the opaque panel,
+without a visible clipping seam along any panel edge. Node selection MUST NOT
+start a competing focus animation in the Layers or Clusters views; the plain
+Graph view retains its focused-node animation.
 
 In the layers and clusters views, each cluster exposes a full-width clickable
 header. Selecting that header highlights the cluster and opens its member list;
 the cluster body remains available for graph panning.
+
+Cluster details MUST support direct hierarchy navigation: the parent cluster,
+direct child clusters, and resources assigned directly to the selected cluster
+are actionable when present. Selecting a listed resource opens its ordinary
+resource details. Conversely, every resource detail exposes its canonical
+cluster as an action; following it switches directly to the Clusters view and
+selects that cluster. Nested cluster membership is derived from canonical
+slash-separated cluster paths. A parent cluster does not claim resources that
+are assigned only to one of its descendants.
+
+Resource details MUST NOT present Kubernetes runtime namespaces or enrichment
+manifest namespaces as architectural grouping information. Kubernetes workload
+entries identify the workload by kind and name without displaying a namespace
+prefix. Namespace fields MAY remain in the embedded snapshot for compatibility
+and source evidence, but the report's navigable structure uses clusters only.
 
 Panning MUST also work when the drag starts on a node card; a simple click on
 the same card MUST continue to select the node.

@@ -217,41 +217,20 @@
     renderReferences();
     renderRequestReplyPatterns();
     restoreState();
-    let workspaceGeometry = null;
     function updateWorkspaceViewport(refit = false) {
       const toolbar = document.querySelector(".toolbar");
-      const detailsPanel = document.getElementById("details");
       const desktop = window.innerWidth > 700;
       const toolbarRight = toolbar?.getBoundingClientRect().right || 0;
       const left = desktop ? Math.min(window.innerWidth - 220, toolbarRight + 24) : 0;
-      const detailsHeight = detailsPanel
-        ? Math.min(window.innerHeight * .42, detailsPanel.getBoundingClientRect().height + 24)
-        : 0;
-      const nextGeometry = {
-        left: Math.max(0, left),
-        bottom: Math.max(0, detailsHeight),
-      };
-      const geometryChanged = !workspaceGeometry
-        || Math.abs(workspaceGeometry.left - nextGeometry.left) > .5
-        || Math.abs(workspaceGeometry.bottom - nextGeometry.bottom) > .5;
-      workspaceGeometry = nextGeometry;
       const root = document.documentElement;
-      root.style.setProperty("--workspace-left", `${nextGeometry.left}px`);
+      root.style.setProperty("--workspace-left", `${Math.max(0, left)}px`);
       root.style.setProperty("--workspace-right", "0px");
       root.style.setProperty("--workspace-top", "0px");
-      root.style.setProperty("--workspace-bottom", `${nextGeometry.bottom}px`);
+      root.style.setProperty("--workspace-bottom", "0px");
       renderer?.refresh();
       dependencyRenderer?.refresh();
       requestGraphRender();
-      if (refit && geometryChanged) fitCameraToVisibleGraph(activeRenderer());
-    }
-    const workspaceObserver = typeof ResizeObserver === "function"
-      ? new ResizeObserver(() => updateWorkspaceViewport(true))
-      : new MutationObserver(() => updateWorkspaceViewport(true));
-    if (workspaceObserver instanceof MutationObserver) {
-      workspaceObserver.observe(details, { attributes: true, childList: true, subtree: true });
-    } else {
-      workspaceObserver.observe(details);
+      if (refit) fitCameraToVisibleGraph(activeRenderer());
     }
     updateWorkspaceViewport(false);
     applyLayout("forceatlas2-noverlap");

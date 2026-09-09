@@ -368,14 +368,15 @@
           }
           const renderedWidth = Math.max(150, maxX - minX);
           const renderedHeight = Math.max(92, maxY - minY);
-          const groupKey = `${group.layer}:${group.namespace}`;
-          namespaceBounds.set(groupKey, {
+          const boundsKey = `${group.layer}:${group.namespace}`;
+          const cluster = clusterDescriptorForPath(group.namespace);
+          namespaceBounds.set(boundsKey, {
             minX, maxX: minX + renderedWidth, minY, maxY: minY + renderedHeight,
           });
           const box = document.createElement("div");
-          box.className = `graph-namespace-group${graphState.selectedClusterKey === groupKey ? " is-selected" : ""}`;
+          box.className = `graph-namespace-group${graphState.selectedClusterKey === cluster.key ? " is-selected" : ""}`;
           box.dataset.namespace = group.namespace;
-          box.dataset.clusterKey = groupKey;
+          box.dataset.clusterKey = cluster.key;
           box.style.left = `${minX}px`; box.style.top = `${minY}px`;
           box.style.width = `${renderedWidth}px`;
           box.style.height = `${renderedHeight}px`;
@@ -387,13 +388,7 @@
           title.title = `Afficher les éléments du cluster ${title.textContent}`;
           title.addEventListener("click", event => {
             event.stopPropagation();
-            selectCluster({
-              key: groupKey,
-              kind: "namespace",
-              name: title.textContent,
-              layer: group.layer,
-              ids: group.ids,
-            });
+            selectCluster(cluster);
           });
           box.append(title);
           graphLayersOverlay.append(box);
@@ -431,10 +426,10 @@
             maxY = Math.max(...points.map(point => point.y)) + 52;
           }
           const container = document.createElement("div");
-          const groupKey = `project:${group.namespace || group.name || "root"}:${group.name}`;
-          container.className = `graph-project-group${graphState.selectedClusterKey === groupKey ? " is-selected" : ""}`;
+          const cluster = clusterDescriptorForPath(group.namespace || group.name || "root");
+          container.className = `graph-project-group${graphState.selectedClusterKey === cluster.key ? " is-selected" : ""}`;
           container.dataset.namespaceGroup = group.namespace || group.name || "root";
-          container.dataset.clusterKey = groupKey;
+          container.dataset.clusterKey = cluster.key;
           container.style.left = `${minX}px`;
           container.style.top = `${minY}px`;
           container.style.width = `${Math.max(150, maxX - minX)}px`;
@@ -447,13 +442,7 @@
           title.title = `Afficher les éléments du cluster ${group.name}`;
           title.addEventListener("click", event => {
             event.stopPropagation();
-            selectCluster({
-              key: groupKey,
-              kind: "project",
-              name: group.name,
-              layer: null,
-              ids: children.filter(id => nodePoints.has(id)),
-            });
+            selectCluster(cluster);
           });
           container.append(title);
           graphGroupsOverlay.append(container);
@@ -515,8 +504,6 @@
             if (!forwardedPointer.moved) return;
             const camera = renderer.getCamera();
             const state = forwardedPointer.cameraState;
-            // Sigma's internal drawing buffer can use a device-pixel ratio;
-            // camera panning, however, is driven by CSS viewport pixels.
             const viewport = document.getElementById("graph").getBoundingClientRect();
             const width = Math.max(viewport.width, 1);
             const height = Math.max(viewport.height, 1);
