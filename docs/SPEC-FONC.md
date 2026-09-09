@@ -43,7 +43,7 @@ but does not alter AST endpoint extraction.
 | `systemlens init` | Creates `.systemlens/config.yml`; it never overwrites an existing file. |
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
-| `systemlens index [MANIFEST]... [--full] [--topic-strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME]` | Incrementally extracts and persists architecture facts. `--kubernetes` queries the active `kubectl` context for Deployments and StatefulSets; `--kubernetes-namespace` restricts it to one namespace. |
+| `systemlens index [MANIFEST]... [--full] [--topic-strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. `--kubernetes` queries the active `kubectl` context for Deployments and StatefulSets; `--kubernetes-namespace` restricts it to one runtime namespace. `--disable` can independently disable the `properties`, `module-architecture`, or `module-tree-sitter` extractor and may be repeated. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts an AI fact manifest into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `modules` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
 | `systemlens microservices topics\|apis\|mongodb\|properties\|openapi NAME [--root DIR] [--json]` | Follow one linked object kind from a single named microservice. |
@@ -57,9 +57,9 @@ but does not alter AST endpoint extraction.
 | `systemlens analyze microservices impact NAME [--root DIR] [--json]` | Lists direct and transitive impact paths. |
 | `systemlens analyze microservices path FROM TO [--root DIR] [--json] [--max-depth N] [--limit N]` | Lists bounded paths between services. |
 | `systemlens analyze request-reply [--root DIR] [--json]` | Lists Strategy1 Kafka request/reply candidates. |
-| `systemlens export microservices (--html FILE | --c4 DIRECTORY | --json) [--graph FILE] [--root-path DIRECTORY]` | Exports the deployable microservice, API, data-schema and message-channel topology. Non-deployable indexed modules (libraries and aggregators without an application entry point) are excluded from this view and remain available to `export modules` and `export layers`. Persisted MCP graph facts are included in the HTML export. `--graph FILE` reads a validated `systemlens-ai-graph-v1` manifest; `--root-path` provides the local source root for HTML source links. |
+| `systemlens export microservices (--html FILE | --c4 DIRECTORY | --json) [--graph FILE] [--workspace DIRECTORY] [--root-path DIRECTORY]` | Exports the deployable microservice, API, data-schema and message-channel topology. Non-deployable indexed modules (libraries and aggregators without an application entry point) are excluded from this view and remain available to `export modules` and `export layers`. Persisted MCP graph facts are included in the HTML export. `--graph FILE` reads a validated `systemlens-ai-graph-v1` manifest; `--workspace` federates separately indexed services below one parent directory; `--root-path` provides the local source root for HTML source links. |
 | `systemlens export modules --html FILE` | Exports the Maven/Gradle build-dependency view. |
-| `systemlens export layers --html FILE` | Exports a dedicated software-layer view. With the persisted Strategy1 profile, project namespaces `PORTAIL` and `CYCLE-DE-VIE` are rendered in API/contracts and Orchestration, `DOMAIN-*` modules in Domain, and the documented layer-name prefixes/suffixes in their matching layers; shared libraries and other non-deployable modules are omitted, and without Strategy1 the repository-specific conventions are disabled. |
+| `systemlens export layers --html FILE` | Exports a dedicated software-layer view. With the persisted Strategy1 profile, the project groups `PORTAIL` and `CYCLE-DE-VIE` are rendered in API/contracts and Orchestration, `DOMAIN-*` modules in Domain, and the documented layer-name prefixes/suffixes in their matching layers; shared libraries and other non-deployable modules are omitted, and without Strategy1 the repository-specific conventions are disabled. |
 | `systemlens export clusters --html FILE` | Exports the structural hierarchy where a cluster can contain child clusters and indexed projects/modules. Membership comes from project directory paths, never from Kubernetes namespaces. The legacy `export namespaces` spelling remains a hidden compatibility alias. |
 | `systemlens export request-reply --html FILE` | Exports Strategy1 Kafka request/reply candidates. |
 | `systemlens web [--host HOST] [--port PORT]` | Starts the local Python web application at `http://127.0.0.1:8765/` by default. Its home page links to Architecture. Architecture renders the persisted snapshot for each request, excluding test-fixture microservices and every relation attached to them; when no index exists, it offers an explicit local button that creates the default configuration when needed and indexes the repository. The default loopback host prevents network exposure unless the user explicitly changes `--host`. |
@@ -117,21 +117,26 @@ keyspace or object-store dataset), while a `message_channel` node represents
 a messaging channel (Kafka, RabbitMQ, SQS or a webhook stream). The concrete
 technology is carried as metadata.
 
-The export uses a responsive workspace layout with eight navigation tabs:
-Explorer, Paths, OpenAPI, Kafka, Mongo, Request/reply, Build, and
-Quality. It includes compact architecture counters, task-oriented starting
-actions, a floating context panel, and a full-size resource inspector. On
+The export uses a responsive workspace layout with seven navigation tabs:
+Explorer, OpenAPI, Kafka, Mongo, Request/reply, Build, and Quality. It includes
+compact architecture counters, a floating context panel, and a full-size
+resource inspector. On
 narrow viewports the controls and context panel use separate bounded regions so
 the graph remains visible while either panel scrolls independently.
 
-The export opens with an Archify-inspired dark blue presentation (or follows
-the browser's light preference), and provides a theme toggle in the graph
+The export opens with a dark blue presentation (or follows the browser's light
+preference), and provides a theme toggle in the graph
 toolbar. The selected theme is stored only in browser local storage and does
 not affect persisted inventory facts or exported architecture data.
 
-Its initial view foregrounds task-oriented entry points (Kafka topic, service
-dependencies, service-to-service path and Kafka messages). Relation/resource
-filters and placement strategies are available as advanced controls.
+Its initial view starts directly with resource and itinerary search. A dedicated,
+compact `Displayed nodes and edges` control lets users independently select
+HTTP, Kafka, data-access and other edge categories, and internal services,
+external services, messaging resources, data resources and other node
+categories. This filtering applies equally to native and MCP-enriched graph
+vocabularies. Placement strategies remain available as advanced controls.
+The toolbar does not expose a separate path-history section. Paths remain
+available directly from search and the advanced route tools in `Explore`.
 
 The graph offers three primary views—graph, layers, and clusters—while
 grouped and non-overlapping placement strategies remain secondary options. The layers view
@@ -141,7 +146,7 @@ layer, and projects/resources are placed inside each cluster without
 overlap. The internal canonical order is `api`, `application`, `orchestration`,
 `infrastructure`, `domain`, then `persistence`;
 `persistence` is always the lowest layer. In Strategy1, the `CYCLE-DE-VIE`
-project namespace is rendered in the Orchestration layer.
+project group is rendered in the Orchestration layer.
 
 External microservices are rendered in a dedicated `External services` layer
 at the bottom, after the internal layer order.
@@ -151,8 +156,10 @@ Shared libraries and other non-deployable modules are not rendered as layers.
 The three primary views are presented as a permanently visible segmented
 selector with direct `Graph`, `Layers`, and `Clusters` choices; changing
 views MUST NOT require cycling through intermediate views. Placement strategies
-remain secondary controls. The graph viewport reserves the space used by the
-navigation panel. Zoom actions are grouped as a compact `−` / `+`
+remain secondary controls. On desktop, the navigation panel uses a compact
+340 px maximum width, 10 px outer margins, and dense internal spacing. The
+graph viewport reserves that measured width plus a 10 px separation. Zoom
+actions are grouped as a compact `−` / `+`
 control, and the adjacent segmented fit control exposes two explicit modes:
 `All`, which frames every visible node, and `Readable`, which keeps the same
 center but zooms in until cards have useful reading separation. The
@@ -176,8 +183,11 @@ framing. The switch redraws node representations in place and MUST NOT reapply
 either fit mode or rerun collision placement. `Cards` remains the default.
 In `Symbols`, microservices use compact hexagons, Kafka topics and message
 channels use circles, and MongoDB collections and data schemas use small
-squares. Resource names are hidden by default, appear beside the symbol while
-it is hovered, and MAY extend beyond the symbol envelope. `Readable` fitting
+squares. Node names use adaptive, collision-aware labeling: the viewport
+shows a bounded sample prioritizing connected and semantically important
+nodes, and progressively admits more labels as the user zooms in. A selected
+or hovered node's name is always visible and MAY extend beyond the symbol
+envelope. `Readable` fitting
 uses the compact symbol envelope in this mode rather than the card dimensions.
 The hovered symbol and its label are rendered above every non-hovered symbol,
 so another geometric marker cannot obscure the visible resource name.

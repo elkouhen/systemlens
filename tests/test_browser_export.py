@@ -63,7 +63,7 @@ def _complex_dataset_document() -> str:
         owner = services[index % len(services)]
         resources.append({
             "id": f"kafka_topic:stress-topic-{index:03d}",
-            "kind": "kafka_topic",
+            "kind": "message_channel",
             "name": f"stress-topic-{index:03d}",
             "label": f"stress-topic-{index:03d}",
             "owner_service": owner["name"],
@@ -75,7 +75,7 @@ def _complex_dataset_document() -> str:
         owner = services[(index * 3) % len(services)]
         resources.append({
             "id": f"mongodb_collection:stress-collection-{index:03d}",
-            "kind": "mongodb_collection",
+            "kind": "data_schema",
             "name": f"stress-collection-{index:03d}",
             "label": f"stress-collection-{index:03d}",
             "owner_service": owner["name"],
@@ -90,23 +90,23 @@ def _complex_dataset_document() -> str:
         producer = services[index % len(services)]
         consumer = services[(index + 1) % len(services)]
         links.extend([
-            {"source": producer["id"], "target": topic["id"], "kind": "kafka", "label": topic["name"]},
-            {"source": topic["id"], "target": consumer["id"], "kind": "kafka", "label": topic["name"]},
+            {"source": producer["id"], "target": topic["id"], "kind": "mcp_publishes", "label": "publishes"},
+            {"source": topic["id"], "target": consumer["id"], "kind": "mcp_consumes", "label": "consumes"},
         ])
     for index in range(30):
         collection = resources[100 + index]
         first = services[(index * 3) % len(services)]
         second = services[(index * 3 + 1) % len(services)]
         links.extend([
-            {"source": first["id"], "target": collection["id"], "kind": "mongodb", "label": collection["name"]},
-            {"source": second["id"], "target": collection["id"], "kind": "mongodb", "label": collection["name"]},
+            {"source": first["id"], "target": collection["id"], "kind": "mcp_writes", "label": "writes"},
+            {"source": second["id"], "target": collection["id"], "kind": "mcp_reads", "label": "reads"},
         ])
     for index in range(40):
         topic = resources[(index * 7) % 100]
         producer = services[(index * 5 + 2) % len(services)]
         links.append({
             "source": producer["id"], "target": topic["id"],
-            "kind": "kafka", "label": topic["name"],
+            "kind": "mcp_publishes", "label": "publishes",
         })
     assert len(resources) == 130
     assert len(links) == 300
@@ -760,6 +760,26 @@ def test_primary_view_selector_opens_each_view_directly() -> None:
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
         )
 
+        # Enriched aliases must obey the same selectors as native graph kinds.
+        page.locator("#display-controls > summary").click()
+        page.locator("#node-kafka-topic").uncheck()
+        page.wait_for_function(
+            "() => document.querySelector('#graph')?.dataset.visibleNodeCount === '80'"
+        )
+        assert page.locator("#graph").get_attribute("data-relation-count") == "60"
+        page.locator("#node-kafka-topic").check()
+        page.wait_for_function(
+            "() => document.querySelector('#graph')?.dataset.visibleNodeCount === '180'"
+        )
+        page.locator("#relation-kafka").uncheck()
+        page.wait_for_function(
+            "() => document.querySelector('#graph')?.dataset.relationCount === '60'"
+        )
+        page.locator("#relation-kafka").check()
+        page.wait_for_function(
+            "() => document.querySelector('#graph')?.dataset.relationCount === '300'"
+        )
+
         view_controls = page.get_by_role("group", name="Vue principale")
         assert view_controls.is_visible()
         assert view_controls.get_by_role("button").all_text_contents() == [
@@ -886,6 +906,9 @@ def test_selection_and_render_mode_preserve_graph_framing() -> None:
         selected.dispatch_event("click")
         page.locator("#details:not(.is-empty)").wait_for(state="visible")
         page.wait_for_timeout(100)
+        assert selected.locator(".graph-node-card-name").evaluate(
+            "name => getComputedStyle(name).visibility"
+        ) == "visible"
         _assert_node_centers_unchanged(graph_centers, _node_centers(page))
 
         page.locator("#render-cards").click()
@@ -1004,7 +1027,6 @@ def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
                         borderRadius: style.borderRadius,
                         clipPath: style.clipPath,
                         kindDisplay: getComputedStyle(kindLabel).display,
-                        nameVisibility: getComputedStyle(name).visibility,
                     };
                 };
                 return {
@@ -1020,7 +1042,61 @@ def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
         assert symbol_metrics["database"]["iconWidth"] == pytest.approx(20)
         assert all(item["nameOverflows"] for item in symbol_metrics.values())
         assert all(item["kindDisplay"] == "none" for item in symbol_metrics.values())
-        assert all(item["nameVisibility"] == "hidden" for item in symbol_metrics.values())
+        adaptive_labels = page.locator(".graph-node-card-label.has-adaptive-label")
+        adaptive_count = adaptive_labels.count()
+        assert adaptive_count == int(
+            page.locator("#graph").get_attribute("data-adaptive-label-count") or "0"
+        )
+        assert 0 < adaptive_count < page.locator(".graph-node-card-label").count()
+        initial_visible_symbol_count = page.locator(".graph-node-card-label").evaluate_all(
+            """cards => {
+                const graph = document.querySelector('#graph').getBoundingClientRect();
+                return cards.filter(card => {
+                    const box = card.getBoundingClientRect();
+                    const x = box.left + box.width / 2;
+                    const y = box.top + box.height / 2;
+                    return x >= graph.left && x <= graph.right && y >= graph.top && y <= graph.bottom;
+                }).length;
+            }"""
+        )
+        assert adaptive_labels.evaluate_all(
+            """cards => cards.every(card => (
+                getComputedStyle(card.querySelector('.graph-node-card-name')).visibility === 'visible'
+            ))"""
+        )
+        assert adaptive_labels.evaluate_all(
+            """cards => cards.every((card, index) => {
+                const left = card.querySelector('.graph-node-card-name').getBoundingClientRect();
+                return cards.slice(index + 1).every(other => {
+                    const right = other.querySelector('.graph-node-card-name').getBoundingClientRect();
+                    return left.right <= right.left || right.right <= left.left
+                        || left.bottom <= right.top || right.bottom <= left.top;
+                });
+            })"""
+            )
+        page.locator("#zoom-in").click()
+        page.locator("#zoom-in").click()
+        page.wait_for_timeout(250)
+        zoomed_label_count = int(
+            page.locator("#graph").get_attribute("data-adaptive-label-count") or "0"
+        )
+        zoomed_visible_symbol_count = page.locator(".graph-node-card-label").evaluate_all(
+            """cards => {
+                const graph = document.querySelector('#graph').getBoundingClientRect();
+                return cards.filter(card => {
+                    const box = card.getBoundingClientRect();
+                    const x = box.left + box.width / 2;
+                    const y = box.top + box.height / 2;
+                    return x >= graph.left && x <= graph.right && y >= graph.top && y <= graph.bottom;
+                }).length;
+            }"""
+        )
+        assert zoomed_label_count / zoomed_visible_symbol_count >= (
+            adaptive_count / initial_visible_symbol_count
+        )
+        page.locator("#zoom-out").click()
+        page.locator("#zoom-out").click()
+        page.wait_for_timeout(250)
         overlapping_symbols = page.locator(".graph-node-card-label").evaluate_all(
             """cards => cards.flatMap((card, index) => {
                 const left = card.getBoundingClientRect();
@@ -1053,7 +1129,7 @@ def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
             arg=service_symbol.element_handle(),
         )
         assert page.locator(
-            '.graph-node-card-label[data-node-kind="message_channel"] .graph-node-card-name'
+            '.graph-node-card-label[data-node-kind="message_channel"]:not(.has-adaptive-label) .graph-node-card-name'
         ).first.evaluate("name => getComputedStyle(name).visibility") == "hidden"
         _capture_render_snapshot(page, "complex-symbols-hover")
 
@@ -1326,7 +1402,10 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
             """() => {
                 const graphRect = document.querySelector('#graph').getBoundingClientRect();
                 const toolbarRect = document.querySelector('.toolbar').getBoundingClientRect();
-                return graphRect.left >= toolbarRect.right;
+                return toolbarRect.width <= 340
+                    && toolbarRect.left <= 10
+                    && graphRect.left >= toolbarRect.right
+                    && graphRect.left - toolbarRect.right <= 11;
             }"""
         )
         assert graph.get_attribute("data-relation-count") == "4"
@@ -1336,9 +1415,9 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         assert "1 ressource isolée" in page.locator("#graph-summary").inner_text()
         assert page.locator("#inventory-status").inner_text() == "Inventaire : aucun fait non résolu"
         assert page.locator("#node-suggestions option").count() == 5
-        advanced_controls = page.locator("#advanced-controls")
+        display_controls = page.locator("#display-controls")
         assert not page.locator("#relation-http").is_visible()
-        advanced_controls.locator(":scope > summary").click()
+        display_controls.locator(":scope > summary").click()
         _capture_render_snapshot(page, "constrained-after-open-controls")
         assert page.locator("#relation-http").is_visible()
         page.locator("#relation-http").uncheck()

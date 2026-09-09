@@ -6,45 +6,10 @@
       const key = normalizeNodeName(node.name);
       nodesByNormalizedName.set(key, [...(nodesByNormalizedName.get(key) || []), node]);
     });
-    const pathHistoryStorageKey = (() => {
-      const signature = [
-        ...graphData.nodes.map(node => node.id),
-        ...graphData.links.map(link => `${link.source}->${link.target}:${link.kind}`),
-      ].sort().join("|");
-      let hash = 2166136261;
-      for (let index = 0; index < signature.length; index += 1) {
-        hash = Math.imul(hash ^ signature.charCodeAt(index), 16777619);
-      }
-      return `systemlens:analyzed-paths:${hash >>> 0}`;
-    })();
-
-    function isValidPathStops(stops) {
-      if (!Array.isArray(stops) || stops.length < 2 || new Set(stops).size !== stops.length) return false;
-      return stops.every(id => nodeDataById.has(id) && ["microservice", "kafka_topic"].includes(nodeDataById.get(id).kind))
-        && nodeDataById.get(stops[0]).kind === "microservice"
-        && nodeDataById.get(stops.at(-1)).kind === "microservice";
-    }
-    function loadAnalyzedPaths() {
-      try {
-        const stored = JSON.parse(localStorage.getItem(pathHistoryStorageKey) || "[]");
-        if (!Array.isArray(stored)) return;
-        stored.filter(isValidPathStops).forEach(stops => analyzedPaths.push(stops));
-      } catch (_error) {
-        // The export remains usable when browser storage is unavailable or stale.
-      }
-    }
-    function persistAnalyzedPaths() {
-      try {
-        localStorage.setItem(pathHistoryStorageKey, JSON.stringify(analyzedPaths));
-      } catch (_error) {
-        // Saving the optional history must never prevent graph exploration.
-      }
-    }
     function setToolbarTab(tab) {
       const showingGraph = tab === "graph";
       const showingDependencies = tab === "dependencies";
       const showingIssues = tab === "issues";
-      const showingPaths = tab === "paths";
       const showingOpenApi = tab === "openapi";
       const showingKafka = tab === "kafka";
       const showingPersistence = tab === "persistence";
@@ -63,12 +28,9 @@
       buildTab.setAttribute("aria-selected", String(showingDependencies));
       issuesTab.classList.toggle("is-active", showingIssues);
       issuesTab.setAttribute("aria-selected", String(showingIssues));
-      pathsTab.classList.toggle("is-active", showingPaths);
-      pathsTab.setAttribute("aria-selected", String(showingPaths));
       graphPanel.hidden = !showingGraph;
       dependenciesPanel.hidden = !showingDependencies;
       issuesPanel.hidden = !showingIssues;
-      pathsPanel.hidden = !showingPaths;
       openApiPanel.hidden = !showingOpenApi;
       kafkaPanel.hidden = !showingKafka;
       persistencePanel.hidden = !showingPersistence;
@@ -83,49 +45,6 @@
           activeDependencyRenderer.getCamera().animatedReset({ duration: 220 });
         });
       }
-    }
-    const filterPresetButtons = [...document.querySelectorAll(".filter-preset")];
-    function setActiveRelationPreset(preset) {
-      filterPresetButtons.forEach(button => button.classList.toggle("is-active", button.dataset.preset === preset));
-    }
-    function setRelationFilters(http, kafka, mongodb) {
-      relationHttp.checked = http;
-      relationKafka.checked = kafka;
-      relationMongodb.checked = mongodb;
-    }
-    function applyRelationPreset(preset) {
-      if (preset === "selection") {
-        setRelationFilters(true, true, true);
-        rebuildGraph();
-        if (!graphState.selectedId) {
-          layoutStatus.textContent = "Selectionnez d'abord un noeud pour isoler ses relations.";
-          setActiveRelationPreset("all");
-          reset();
-          return;
-        }
-        graphState.relatedNodes = new Set([graphState.selectedId]);
-        graphState.relatedEdges = new Set();
-        network.forEachEdge((edge, _attributes, source, target) => {
-          if (source === graphState.selectedId || target === graphState.selectedId) {
-            graphState.relatedEdges.add(edge); graphState.relatedNodes.add(source); graphState.relatedNodes.add(target);
-          }
-        });
-        setActiveRelationPreset(preset);
-        renderer.refresh();
-        return;
-      }
-      const filters = {
-        all: [true, true, true],
-        http: [true, false, false],
-        kafka: [false, true, false],
-        mongodb: [false, false, true],
-      };
-      const selected = filters[preset];
-      if (!selected) return;
-      setRelationFilters(...selected);
-      setActiveRelationPreset(preset);
-      rebuildGraph();
-      reset();
     }
     function renderIndexingIssues() {
       inventoryStatus.hidden = false;
@@ -306,51 +225,6 @@
       });
       requestReplyTitle.textContent = `Patterns request/reply Kafka (${patterns.length})`;
     }
-    function renderAnalyzedPaths() {
-      pathHistoryTitle.textContent = `Chemins analyses (${analyzedPaths.length})`;
-      analyzedPathsList.replaceChildren();
-      analyzedPathsEmpty.hidden = analyzedPaths.length > 0;
-      analyzedPaths.forEach((stops, index) => {
-        const item = document.createElement("li");
-        item.className = "path-history-item";
-        const replay = document.createElement("button");
-        replay.className = "path-history-replay";
-        replay.type = "button";
-        replay.textContent = stops.map(id => nodeDataById.get(id).name).join(" -> ");
-        replay.title = "Reanalyser ce chemin";
-        replay.addEventListener("click", () => replayAnalyzedPath(stops));
-        const remove = document.createElement("button");
-        remove.className = "path-history-delete";
-        remove.type = "button";
-        remove.textContent = "×";
-        remove.title = "Supprimer ce chemin analyse";
-        remove.setAttribute("aria-label", `Supprimer le chemin ${replay.textContent}`);
-        remove.addEventListener("click", () => {
-          analyzedPaths.splice(index, 1);
-          persistAnalyzedPaths();
-          renderAnalyzedPaths();
-        });
-        item.append(replay, remove);
-        analyzedPathsList.append(item);
-      });
-    }
-    function rememberAnalyzedPath(stops) {
-      const path = [...stops];
-      const key = path.join("|");
-      const existingIndex = analyzedPaths.findIndex(item => item.join("|") === key);
-      if (existingIndex >= 0) analyzedPaths.splice(existingIndex, 1);
-      analyzedPaths.unshift(path);
-      persistAnalyzedPaths();
-      renderAnalyzedPaths();
-    }
-    function replayAnalyzedPath(stops) {
-      pathStops.splice(0, pathStops.length, ...stops);
-      renderPathQuery();
-      setToolbarTab("graph");
-      showShortestPath();
-    }
-    loadAnalyzedPaths();
-
     function createDetailsGroup(title, open = true) {
       const group = document.createElement("details");
       group.className = "details-group";

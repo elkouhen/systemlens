@@ -278,7 +278,6 @@
       graphState.relatedNodes = new Set(path.nodes);
       graphState.relatedEdges = new Set(path.edges.map(step => step.edge));
       setPathMicroserviceOrder(path);
-      rememberAnalyzedPath(pathStops);
       renderer.refresh();
       renderPathDetails(path);
       renderer.getCamera().animatedReset({ duration: 220 });
@@ -414,7 +413,7 @@
       const node = nodeDataById.get(id);
       const indexedEdges = graphData.links.filter(link => link.source === id || link.target === id);
       const edges = indexedEdges.filter(
-        link => isVisibleRelation(link.kind) && (link.source === id || link.target === id)
+        link => isVisibleRelation(link) && (link.source === id || link.target === id)
       );
       const isMicroservice = node.kind === "microservice";
       const publishedApiCount = isMicroservice ? (node.resources || []).length : 0;
@@ -702,7 +701,7 @@
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       network.forEachEdge((edge, attributes, source, target) => {
-        if (!isVisibleRelation(attributes.kind) || !matches(attributes, source, target)) return;
+        if (!isVisibleRelation(attributes, source, target) || !matches(attributes, source, target)) return;
         graphState.relatedEdges.add(edge); graphState.relatedNodes.add(source); graphState.relatedNodes.add(target);
       });
       renderer.refresh();
@@ -723,7 +722,7 @@
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       network.forEachEdge((edge, attributes, source, target) => {
-        if (!isVisibleRelation(attributes.kind)) return;
+        if (!isVisibleRelation(attributes, source, target)) return;
         if (source === id || target === id) {
           graphState.relatedEdges.add(edge); graphState.relatedNodes.add(source); graphState.relatedNodes.add(target);
         }

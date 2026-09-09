@@ -48,7 +48,6 @@
     <button id="inventory-status" class="inventory-status" type="button" hidden></button>
     <div class="toolbar-tabs" role="tablist" aria-label="Vues de l'architecture">
       <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel">Explorer</button>
-      <button id="paths-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="paths-panel">Parcours</button>
       <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
       <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Kafka</button>
       <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Mongo</button>
@@ -57,43 +56,33 @@
       <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problemes d'indexation">Qualité</button>
     </div>
     <div id="graph-panel" class="toolbar-panel" role="tabpanel" aria-labelledby="graph-tab">
-      <section class="exploration-start" aria-labelledby="exploration-start-title">
-        <h2 id="exploration-start-title">Que voulez-vous comprendre ?</h2>
-        <p>Choisissez un point de départ, puis sélectionnez un nœud du graphe pour voir son contexte.</p>
-        <div class="question-actions">
-          <button id="question-topic" class="question-action" type="button">Qui produit ou consomme un topic Kafka ?</button>
-          <button id="question-service" class="question-action" type="button">Quelles dépendances a ce service ?</button>
-          <button id="question-path" class="question-action" type="button">Quel chemin relie deux services ?</button>
-          <button id="question-messages" class="question-action" type="button">Quel DTO circule via Kafka ?</button>
-        </div>
-      </section>
       <label class="explore-search-label" for="search">Rechercher une ressource ou un itinéraire</label>
       <input id="search" type="search" list="node-suggestions" placeholder="orders ou orders -> payments" autocomplete="off" aria-describedby="search-help search-status" aria-label="Rechercher une ressource ou un itinéraire">
       <datalist id="node-suggestions"></datalist>
       <p id="search-help" class="explore-search-help">Choisissez une suggestion ou saisissez le nom exact d'un noeud. Utilisez <code>-></code>, puis Entrée, pour afficher l'itinéraire le plus court.</p>
       <p id="search-status" class="explore-search-status" role="status"></p>
-      <div class="filter-presets" role="group" aria-label="Vues de relations">
-        <button class="filter-preset is-active" type="button" data-preset="all">Toutes</button>
-        <button class="filter-preset" type="button" data-preset="http">REST</button>
-        <button class="filter-preset" type="button" data-preset="kafka">Kafka</button>
-        <button class="filter-preset" type="button" data-preset="mongodb">MongoDB</button>
-        <button class="filter-preset" type="button" data-preset="selection" title="Isoler les relations du noeud selectionne">Sélection</button>
-      </div>
+      <details id="display-controls" class="display-controls">
+        <summary>Nœuds et arêtes affichés</summary>
+        <div class="display-filter-groups">
+          <fieldset class="relation-filters">
+            <legend>Types d’arêtes</legend>
+            <label class="relation-filter" title="Afficher les appels HTTP"><input id="relation-http" type="checkbox" checked aria-label="Afficher les arêtes HTTP">HTTP</label>
+            <label class="relation-filter" title="Afficher les publications, consommations et échanges request/reply"><input id="relation-kafka" type="checkbox" checked aria-label="Afficher les arêtes Kafka">Kafka</label>
+            <label class="relation-filter" title="Afficher les lectures et écritures de données"><input id="relation-mongodb" type="checkbox" checked aria-label="Afficher les arêtes d’accès aux données">Données</label>
+            <label class="relation-filter" title="Afficher les autres types de relations"><input id="relation-other" type="checkbox" checked aria-label="Afficher les autres types d’arêtes">Autres</label>
+          </fieldset>
+          <fieldset class="relation-filters">
+            <legend>Types de nœuds</legend>
+            <label class="relation-filter" title="Afficher les microservices indexés"><input id="node-microservice" type="checkbox" checked aria-label="Afficher les microservices">Microservices</label>
+            <label class="relation-filter" title="Afficher les microservices externes"><input id="node-external-microservice" type="checkbox" checked aria-label="Afficher les microservices externes">Externes</label>
+            <label class="relation-filter" title="Afficher les topics et canaux de messages"><input id="node-kafka-topic" type="checkbox" checked aria-label="Afficher les topics et canaux de messages">Topics / canaux</label>
+            <label class="relation-filter" title="Afficher les collections et schémas de données"><input id="node-mongodb-collection" type="checkbox" checked aria-label="Afficher les collections et schémas de données">Collections / schémas</label>
+            <label class="relation-filter" title="Afficher les autres types de ressources"><input id="node-other" type="checkbox" checked aria-label="Afficher les autres types de nœuds">Autres</label>
+          </fieldset>
+        </div>
+      </details>
       <details id="advanced-controls" class="advanced-controls">
         <summary>Filtres et disposition avancés</summary>
-      <fieldset class="relation-filters">
-        <legend>Relations affichees</legend>
-        <label class="relation-filter" title="Afficher les appels HTTP"><input id="relation-http" type="checkbox" checked aria-label="Afficher les relations HTTP">HTTP</label>
-        <label class="relation-filter" title="Afficher les publications et consommations Kafka"><input id="relation-kafka" type="checkbox" checked aria-label="Afficher les relations Kafka">Kafka</label>
-        <label class="relation-filter" title="Afficher les acces aux collections MongoDB"><input id="relation-mongodb" type="checkbox" checked aria-label="Afficher les relations MongoDB">MongoDB</label>
-      </fieldset>
-      <fieldset class="relation-filters">
-        <legend>Ressources affichees</legend>
-        <label class="relation-filter" title="Afficher les microservices indexes"><input id="node-microservice" type="checkbox" checked aria-label="Afficher les microservices">Microservices</label>
-        <label class="relation-filter" title="Afficher les microservices externes"><input id="node-external-microservice" type="checkbox" checked aria-label="Afficher les microservices externes">Externes</label>
-        <label class="relation-filter" title="Afficher les topics Kafka"><input id="node-kafka-topic" type="checkbox" checked aria-label="Afficher les topics Kafka">Topics Kafka</label>
-        <label class="relation-filter" title="Afficher les collections MongoDB"><input id="node-mongodb-collection" type="checkbox" checked aria-label="Afficher les collections MongoDB">MongoDB</label>
-      </fieldset>
       <fieldset class="layout-controls">
         <legend>Placement des nœuds</legend>
         <div class="layout-options layout-strategy-options" role="group" aria-label="Choix du placement des nœuds">
@@ -122,7 +111,7 @@
     <div id="dependencies-panel" class="toolbar-panel dependency-view" role="tabpanel" aria-labelledby="build-tab" hidden>
       <p class="dependency-view-kicker">Structure de build</p>
       <h2>Arbre des dépendances</h2>
-      <p>Disposition Sugiyama : les modules sont rangés par niveaux de dépendance. Un lien part du module dépendant, à gauche, vers le module requis, à droite. Les interactions HTTP, Kafka et MongoDB restent dans la vue Interactions.</p>
+      <p>Disposition Sugiyama : les modules sont rangés par niveaux de dépendance. Un lien part du module dépendant, à gauche, vers le module requis, à droite. Les interactions HTTP, Kafka et données restent dans la vue Explorer.</p>
     </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
       <div class="indexing-issues-header">
@@ -132,15 +121,6 @@
       </div>
       <ul id="indexing-issues" class="indexing-issues-list" aria-label="Problemes d'indexation"></ul>
       <p id="indexing-issues-empty" class="indexing-issues-empty">Aucun probleme d'indexation detecte.</p>
-    </div>
-    <div id="paths-panel" class="toolbar-panel path-history" role="tabpanel" aria-labelledby="paths-tab" hidden>
-      <div class="path-history-header">
-        <p class="path-history-kicker">Navigation architecture</p>
-        <h2 id="path-history-title" class="path-history-title">Chemins analyses</h2>
-        <p class="path-history-description">Rejouez un parcours ou retirez-le de cette liste locale.</p>
-      </div>
-      <ul id="analyzed-paths" class="path-history-list" aria-label="Chemins analyses"></ul>
-      <p id="analyzed-paths-empty" class="path-history-empty">Aucun chemin analyse pour le moment.</p>
     </div>
     <div id="openapi-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="openapi-tab" hidden>
       <div class="references-header">

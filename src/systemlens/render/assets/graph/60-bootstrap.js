@@ -9,9 +9,6 @@
         relatedEdges: null,
         pathMicroserviceOrder: new Map(),
       });
-      if (document.querySelector('.filter-preset[data-preset="selection"]')?.classList.contains("is-active")) {
-        setActiveRelationPreset("all");
-      }
       renderer.refresh();
       setDetailsEmpty("Selectionnez un noeud ou un cluster pour afficher ses informations.");
       search.value = "";
@@ -134,26 +131,6 @@
     window.addEventListener("keydown", event => { if (event.key === "Escape" && !inspectorModal.hidden) closeInspector(); });
     document.getElementById("show-path").addEventListener("click", showShortestPath);
     document.getElementById("show-simple-paths").addEventListener("click", showSimplePaths);
-    document.getElementById("question-topic").addEventListener("click", () => {
-      setToolbarTab("graph");
-      applyRelationPreset("kafka");
-      search.placeholder = "orders.created ou orders -> orders.created";
-      search.focus();
-    });
-    document.getElementById("question-service").addEventListener("click", () => {
-      setToolbarTab("graph");
-      applyRelationPreset("all");
-      search.placeholder = "orders ou orders -> payments";
-      search.focus();
-    });
-    document.getElementById("question-path").addEventListener("click", () => {
-      setToolbarTab("graph");
-      search.focus();
-    });
-    document.getElementById("question-messages").addEventListener("click", () => {
-      setToolbarTab("kafka");
-      dtoReferencesFilter.focus();
-    });
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
     openApiTab.addEventListener("click", () => setToolbarTab("openapi"));
@@ -162,30 +139,29 @@
     requestReplyTab.addEventListener("click", () => setToolbarTab("request-reply"));
     buildTab.addEventListener("click", () => setToolbarTab("dependencies"));
     issuesTab.addEventListener("click", () => setToolbarTab("issues"));
-    pathsTab.addEventListener("click", () => setToolbarTab("paths"));
     inventoryStatus.addEventListener("click", () => setToolbarTab("issues"));
-    filterPresetButtons.forEach(button => button.addEventListener("click", () => applyRelationPreset(button.dataset.preset)));
     [
       relationHttp,
       relationKafka,
       relationMongodb,
+      relationOther,
       nodeMicroservice,
       nodeExternalMicroservice,
       nodeKafkaTopic,
       nodeMongodbCollection,
+      nodeOther,
       showProjectGroups,
     ].forEach(control => control.addEventListener("click", () => {
-      setActiveRelationPreset(null);
       // Reflect the checkbox state synchronously. Rebuilding Sigma and
       // applying the active layout are intentionally asynchronous, while the
       // data contract is also consumed by compact-viewport integrations.
       const visibleRelationCount = graphData.links.filter(link => (
-        isVisibleRelation(link.kind)
+        isVisibleRelation(link)
         && isVisibleNode(nodeDataById.get(link.source))
         && isVisibleNode(nodeDataById.get(link.target))
       )).length;
       document.getElementById("graph").dataset.relationCount = String(visibleRelationCount);
-      if ([relationHttp, relationKafka, relationMongodb].includes(control)) {
+      if ([relationHttp, relationKafka, relationMongodb, relationOther].includes(control)) {
         reset();
         rebuildGraph();
         applyLayout(graphState.activeLayout);
@@ -203,7 +179,6 @@
       if (event.key === "Enter") showShortestPath();
     });
     renderIndexingIssues();
-    renderAnalyzedPaths();
     renderReferences();
     renderRequestReplyPatterns();
     restoreState();
@@ -211,7 +186,7 @@
       const toolbar = document.querySelector(".toolbar");
       const desktop = window.innerWidth > 700;
       const toolbarRight = toolbar?.getBoundingClientRect().right || 0;
-      const left = desktop ? Math.min(window.innerWidth - 220, toolbarRight + 24) : 0;
+      const left = desktop ? Math.min(window.innerWidth - 220, toolbarRight + 10) : 0;
       const root = document.documentElement;
       root.style.setProperty("--workspace-left", `${Math.max(0, left)}px`);
       root.style.setProperty("--workspace-right", "0px");

@@ -134,10 +134,13 @@
     #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-topic { border-radius: 50%; }
     #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-database { inset: 5px; width: 20px; height: 20px; border-radius: 3px; }
     #graph-node-labels.is-symbol-mode .graph-node-card-name { position: absolute; z-index: 2; top: 50%; left: 34px; display: block; width: max-content; max-width: none; padding: 2px 4px; visibility: hidden; opacity: 0; pointer-events: none; color: #172033; background: rgba(255, 255, 255, .9); border-radius: 4px; box-shadow: 0 2px 8px rgba(15, 23, 42, .12); font-size: 10px; line-height: 1.2; white-space: nowrap; overflow: visible; overflow-wrap: normal; transform: translateY(-50%); transition: opacity .1s ease; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-label-left .graph-node-card-name { right: 34px; left: auto; }
     #graph-node-labels.is-symbol-mode .graph-node-card-label:hover,
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered { z-index: 20; }
     #graph-node-labels.is-symbol-mode .graph-node-card-label:hover .graph-node-card-name,
-    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered .graph-node-card-name { visibility: visible; opacity: 1; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered .graph-node-card-name,
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-name,
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.has-adaptive-label .graph-node-card-name { visibility: visible; opacity: 1; }
     #graph-node-labels.is-symbol-mode .graph-node-card-kind { display: none; }
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-icon { box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 24%, transparent), 0 0 18px var(--card-accent, #64748b); }
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered:not(.is-selected) .graph-node-card-icon { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 0 12px color-mix(in srgb, var(--card-accent, #64748b) 55%, transparent); }
@@ -177,22 +180,15 @@
     .graph-actions-spacer { flex: 1 1 auto; min-width: 2px; }
     .graph-actions-break { flex-basis: 100%; height: 0; }
     .graph-actions .graph-secondary-action { height: 32px; color: #52616b; background: transparent; }
-    .exploration-start { display: grid; gap: 7px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px; background: #f8fbff; }
-    .exploration-start h2 { margin: 0; color: #1d4f91; font-size: 12px; }
-    .exploration-start p { margin: 0; color: #52616b; font-size: 11px; line-height: 1.4; }
-    .question-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-    .question-action { width: auto !important; height: auto !important; min-height: 38px; padding: 7px !important; color: #1d4f91 !important; border-color: #bfdbfe !important; background: #fff !important; font-size: 11px !important; font-weight: 700; line-height: 1.2; text-align: left; }
-    .advanced-controls, .advanced-tools { border: 0; border-top: 1px solid #e2e8f0; padding-top: 8px; }
-    .advanced-controls > summary, .advanced-tools > summary { color: #315f9b; font-size: 12px; font-weight: 700; cursor: pointer; }
-    .advanced-controls[open] > summary, .advanced-tools[open] > summary { margin-bottom: 8px; }
+    .display-controls, .advanced-controls, .advanced-tools { border: 0; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+    .display-controls > summary, .advanced-controls > summary, .advanced-tools > summary { color: #315f9b; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .display-controls[open] > summary, .advanced-controls[open] > summary, .advanced-tools[open] > summary { margin-bottom: 8px; }
+    .display-filter-groups { display: grid; gap: 8px; }
     .advanced-tools .toolbar-tabs { margin-top: 8px; }
     .relation-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; border: 0; }
     .relation-filters legend { width: 100%; margin-bottom: 2px; color: #59708d; font-size: 11px; font-weight: 700; text-transform: uppercase; }
     .relation-filter { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 8px; border: 1px solid #cdd7e5; border-radius: 999px; color: #315f9b; background: #fff; font-size: 12px; white-space: nowrap; cursor: pointer; }
     .relation-filter input, .path-lock input { width: 14px; height: 14px; margin: 0; padding: 0; border: 0; accent-color: #315f9b; }
-    .filter-presets { display: flex; flex-wrap: wrap; gap: 5px; padding-top: 7px; border-top: 1px solid #e2e8f0; }
-    .filter-preset { width: auto !important; height: 27px !important; padding: 0 8px !important; color: #52616b !important; border-color: #d7dee9 !important; background: #fff !important; font-size: 11px !important; font-weight: 700; }
-    .filter-preset:hover, .filter-preset.is-active { color: #1d4f91 !important; border-color: #93c5fd !important; background: #eff6ff !important; }
     .layout-controls { display: grid; gap: 6px; margin: 0; padding: 8px 0 0; border: 0; border-top: 1px solid #e2e8f0; }
     .layout-controls legend { padding: 0; color: #59708d; font-size: 11px; font-weight: 700; text-transform: uppercase; }
     .layout-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
@@ -217,16 +213,6 @@
     .simple-paths-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
     .simple-path-choice { width: 100% !important; height: auto !important; min-height: 38px; padding: 8px 10px !important; color: #1d4f91 !important; border-color: #dbeafe !important; background: #f8fbff !important; font-size: 12px !important; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
     .simple-path-choice:hover, .simple-path-choice:focus-visible { border-color: #93c5fd !important; background: #eff6ff !important; outline: none; }
-    .path-history { gap: 10px; }
-    .path-history-header { padding: 2px 2px 6px; }
-    .path-history-kicker { margin: 0 0 2px; color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
-    .path-history-title { margin: 0; color: #172033; font-size: 15px; line-height: 1.2; }
-    .path-history-description, .path-history-empty { margin: 5px 0 0; color: #64748b; font-size: 12px; line-height: 1.4; }
-    .path-history-list { display: grid; gap: 7px; max-height: 360px; margin: 0; padding: 0; overflow: auto; list-style: none; }
-    .path-history-item { display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 6px; }
-    .path-history-replay { width: auto !important; min-width: 0; height: auto !important; min-height: 42px; padding: 8px 10px; border-color: #dbeafe !important; color: #1e429f !important; background: linear-gradient(135deg, #f8fbff, #eff6ff) !important; font-size: 12px !important; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
-    .path-history-replay:hover { border-color: #93c5fd !important; background: #dbeafe !important; }
-    .path-history-delete { align-self: center; width: 30px !important; height: 30px !important; color: #a53f3f !important; font-size: 16px !important; }
     .indexing-issues { gap: 10px; }
     .indexing-issues-header { padding: 2px 2px 6px; }
     .indexing-issues-kicker { margin: 0 0 2px; color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
@@ -388,11 +374,11 @@
         linear-gradient(145deg, #f8faff 0%, #f1f5fb 52%, #eef2f8 100%);
     }
     .toolbar {
-      top: 18px;
-      left: 18px;
-      gap: 12px;
-      width: min(420px, calc(100vw - 36px));
-      padding: 14px;
+      top: 10px;
+      left: 10px;
+      gap: 8px;
+      width: min(340px, calc(100vw - 20px));
+      padding: 10px;
       border: 1px solid rgba(255, 255, 255, .8);
       border-radius: var(--radius-lg);
       background: var(--surface);
@@ -400,15 +386,15 @@
       backdrop-filter: blur(18px) saturate(1.15);
       scrollbar-width: thin;
     }
-    .toolbar-header { min-height: 40px; }
-    .brand { display: grid; grid-template-columns: 34px 1fr; column-gap: 9px; align-items: center; }
+    .toolbar-header { min-height: 32px; }
+    .brand { display: grid; grid-template-columns: 30px 1fr; column-gap: 8px; align-items: center; }
     .brand-mark {
       grid-row: 1 / 3;
       display: grid;
       place-items: center;
-      width: 34px;
-      height: 34px;
-      border-radius: 11px;
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
       color: #fff;
       background: linear-gradient(145deg, #405de6, #2742b4);
       box-shadow: 0 7px 16px rgba(49, 86, 211, .28);
@@ -417,7 +403,14 @@
     }
     .brand strong { align-self: end; color: var(--ink); font-size: 14px; letter-spacing: -.01em; }
     .brand-subtitle { align-self: start; color: var(--muted); font-size: 10px; font-weight: 600; }
-    .graph-actions { gap: 7px; }
+    .graph-actions { gap: 5px; }
+    .graph-control-group { gap: 1px; padding: 2px; }
+    .graph-control-group button { height: 26px; }
+    .view-controls { flex-basis: 168px; }
+    .graph-actions .graph-action-label { padding: 0 5px; font-size: 10px; }
+    .fit-controls .graph-action-label,
+    .view-controls .graph-action-label,
+    .render-controls .graph-action-label { height: 26px; }
     .toolbar button { transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease; }
     .toolbar button:hover { transform: translateY(-1px); }
     .toolbar-header > button, .graph-actions > button {
@@ -429,12 +422,12 @@
     .toolbar-tabs {
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 3px;
-      padding: 4px;
+      padding: 3px;
       border: 1px solid rgba(226, 232, 240, .75);
       border-radius: 12px;
       background: #f1f4f9;
     }
-    .toolbar-tab { height: 34px !important; border-radius: 9px !important; color: #64748b !important; }
+    .toolbar-tab { height: 30px !important; border-radius: 8px !important; color: #64748b !important; }
     .toolbar-tab.is-active {
       color: var(--accent) !important;
       box-shadow: 0 2px 7px rgba(30, 41, 59, .1), inset 0 0 0 1px rgba(255, 255, 255, .8);
@@ -467,25 +460,8 @@
       background: rgba(248, 250, 252, .9);
       font-size: 10px;
     }
-    .exploration-start {
-      gap: 8px;
-      padding: 13px;
-      border-color: rgba(199, 210, 254, .8);
-      border-radius: var(--radius-md);
-      background: linear-gradient(145deg, rgba(238, 242, 255, .9), rgba(248, 250, 255, .75));
-    }
-    .exploration-start h2 { color: #263fa5; font-size: 13px; letter-spacing: -.01em; }
-    .question-action {
-      min-height: 44px;
-      padding: 9px !important;
-      border-color: rgba(199, 210, 254, .9) !important;
-      border-radius: 10px !important;
-      color: #334bb5 !important;
-      box-shadow: 0 1px 2px rgba(30, 41, 59, .03);
-    }
-    .question-action:hover { border-color: #a5b4fc !important; background: #f4f6ff !important; }
     .toolbar input:not([type="checkbox"]) {
-      height: 38px;
+      height: 34px;
       border-color: #cbd5e1;
       border-radius: 10px;
       box-shadow: inset 0 1px 2px rgba(15, 23, 42, .03);
@@ -494,15 +470,7 @@
       border-color: #818cf8;
       outline: 3px solid rgba(129, 140, 248, .16);
     }
-    .filter-presets { padding-top: 9px; border-color: var(--line); }
-    .filter-preset { height: 29px !important; border-radius: 999px !important; }
-    .filter-preset.is-active {
-      color: #fff !important;
-      border-color: var(--accent) !important;
-      background: var(--accent) !important;
-      box-shadow: 0 5px 12px rgba(49, 86, 211, .2);
-    }
-    .advanced-controls, .advanced-tools, .resource-analyses { border-color: var(--line); }
+    .display-controls, .advanced-controls, .advanced-tools, .resource-analyses { border-color: var(--line); }
     .relation-filter { border-color: var(--line); background: var(--surface-soft); }
     .reference-item, .indexing-issue, .service-kafka-item {
       border-color: var(--line);
@@ -543,7 +511,7 @@
     .inspector-body { padding: 22px; }
     .dto-section { border-color: var(--line); border-radius: 13px; background: var(--surface-soft); }
 
-    /* Archify-inspired presentation layer: a deep blue canvas, quiet chrome,
+    /* SystemLens presentation layer: a deep blue canvas, quiet chrome,
        and bright semantic accents keep the topology in the foreground. */
     :root[data-theme="dark"] {
       --ink: #e6edf7; --muted: #91a4bd; --line: rgba(148, 163, 184, .24);
@@ -564,15 +532,15 @@
     :root[data-theme="dark"] .toolbar strong, :root[data-theme="dark"] .details-title,
     :root[data-theme="dark"] .path-details-title, :root[data-theme="dark"] .dependency-view h2,
     :root[data-theme="dark"] .references-title, :root[data-theme="dark"] .indexing-issues-title,
-    :root[data-theme="dark"] .path-history-title, :root[data-theme="dark"] .inspector-title { color: #f3f7ff; }
+    :root[data-theme="dark"] .inspector-title { color: #f3f7ff; }
     :root[data-theme="dark"] .toolbar input:not([type="checkbox"]), :root[data-theme="dark"] .toolbar button,
     :root[data-theme="dark"] .relation-filter, :root[data-theme="dark"] .layout-option,
-    :root[data-theme="dark"] .path-lock, :root[data-theme="dark"] .filter-preset,
+    :root[data-theme="dark"] .path-lock,
     :root[data-theme="dark"] .detail-badge, :root[data-theme="dark"] .inspector-close {
       border-color: rgba(148, 163, 184, .3); color: #d8e4f4; background: #17263d;
     }
     :root[data-theme="dark"] .toolbar input:not([type="checkbox"])::placeholder { color: #7186a3; }
-    :root[data-theme="dark"] .toolbar button:hover, :root[data-theme="dark"] .filter-preset:hover,
+    :root[data-theme="dark"] .toolbar button:hover,
     :root[data-theme="dark"] .layout-option:hover { background: #203453 !important; }
     :root[data-theme="dark"] .graph-control-group { border-color: rgba(148, 163, 184, .22); background: #101d31; }
     :root[data-theme="dark"] .graph-control-group button { color: #c8d5e8; background: transparent; }
@@ -583,12 +551,9 @@
     :root[data-theme="dark"] .toolbar-tab { color: #91a4bd !important; }
     :root[data-theme="dark"] .toolbar-tab.is-active { color: #b8c7ff !important; background: #1c2d4b !important; }
     :root[data-theme="dark"] .graph-summary-item { border-color: rgba(148, 163, 184, .25); color: #b7c7dc; background: rgba(25, 42, 68, .9); }
-    :root[data-theme="dark"] .exploration-start { border-color: rgba(112, 137, 224, .48); background: linear-gradient(145deg, rgba(31, 48, 91, .9), rgba(21, 38, 62, .8)); }
-    :root[data-theme="dark"] .exploration-start h2, :root[data-theme="dark"] .explore-search-label,
-    :root[data-theme="dark"] .advanced-controls > summary, :root[data-theme="dark"] .advanced-tools > summary,
+    :root[data-theme="dark"] .explore-search-label,
+    :root[data-theme="dark"] .display-controls > summary, :root[data-theme="dark"] .advanced-controls > summary, :root[data-theme="dark"] .advanced-tools > summary,
     :root[data-theme="dark"] .path-controls summary, :root[data-theme="dark"] .legend summary { color: #b8c7ff; }
-    :root[data-theme="dark"] .question-action { border-color: rgba(112, 137, 224, .48) !important; color: #c0cbff !important; background: #182a49 !important; }
-    :root[data-theme="dark"] .question-action:hover { background: #223962 !important; }
     :root[data-theme="dark"] .reference-item, :root[data-theme="dark"] .indexing-issue,
     :root[data-theme="dark"] .service-kafka-item, :root[data-theme="dark"] .details-section li,
     :root[data-theme="dark"] .relation-link, :root[data-theme="dark"] .dto-section {
@@ -608,7 +573,7 @@
     :root[data-theme="dark"] code { color: #b9c8ff; }
     .theme-toggle { width: auto !important; padding: 0 9px !important; font-size: 11px !important; font-weight: 750; }
     @media (max-width: 700px) {
-      .toolbar { top: 10px; left: 10px; width: calc(100vw - 20px); max-height: calc(62vh - 14px); padding: 12px; border-radius: 16px; }
+      .toolbar { top: 8px; left: 8px; width: calc(100vw - 16px); max-height: calc(62vh - 12px); padding: 10px; border-radius: 14px; }
       .toolbar-header { align-items: start; }
       .brand-subtitle { display: none; }
       .graph-actions { flex-wrap: wrap; gap: 6px; }
@@ -616,7 +581,6 @@
       .graph-actions-spacer { display: none; }
       #details { right: 10px; bottom: 10px; width: calc(100vw - 20px); max-height: 34vh; border-radius: 16px; }
       .legend { right: 10px; bottom: 10px; left: auto; }
-      .question-actions { grid-template-columns: 1fr; }
       .inspector-modal { padding: 10px; }
       .inspector-dialog { border-radius: 16px; }
     }
@@ -654,7 +618,6 @@
     <button id="inventory-status" class="inventory-status" type="button" hidden></button>
     <div class="toolbar-tabs" role="tablist" aria-label="Vues de l'architecture">
       <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel">Explorer</button>
-      <button id="paths-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="paths-panel">Parcours</button>
       <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
       <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Kafka</button>
       <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Mongo</button>
@@ -663,43 +626,33 @@
       <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problemes d'indexation">Qualité</button>
     </div>
     <div id="graph-panel" class="toolbar-panel" role="tabpanel" aria-labelledby="graph-tab">
-      <section class="exploration-start" aria-labelledby="exploration-start-title">
-        <h2 id="exploration-start-title">Que voulez-vous comprendre ?</h2>
-        <p>Choisissez un point de départ, puis sélectionnez un nœud du graphe pour voir son contexte.</p>
-        <div class="question-actions">
-          <button id="question-topic" class="question-action" type="button">Qui produit ou consomme un topic Kafka ?</button>
-          <button id="question-service" class="question-action" type="button">Quelles dépendances a ce service ?</button>
-          <button id="question-path" class="question-action" type="button">Quel chemin relie deux services ?</button>
-          <button id="question-messages" class="question-action" type="button">Quel DTO circule via Kafka ?</button>
-        </div>
-      </section>
       <label class="explore-search-label" for="search">Rechercher une ressource ou un itinéraire</label>
       <input id="search" type="search" list="node-suggestions" placeholder="orders ou orders -> payments" autocomplete="off" aria-describedby="search-help search-status" aria-label="Rechercher une ressource ou un itinéraire">
       <datalist id="node-suggestions"></datalist>
       <p id="search-help" class="explore-search-help">Choisissez une suggestion ou saisissez le nom exact d'un noeud. Utilisez <code>-></code>, puis Entrée, pour afficher l'itinéraire le plus court.</p>
       <p id="search-status" class="explore-search-status" role="status"></p>
-      <div class="filter-presets" role="group" aria-label="Vues de relations">
-        <button class="filter-preset is-active" type="button" data-preset="all">Toutes</button>
-        <button class="filter-preset" type="button" data-preset="http">REST</button>
-        <button class="filter-preset" type="button" data-preset="kafka">Kafka</button>
-        <button class="filter-preset" type="button" data-preset="mongodb">MongoDB</button>
-        <button class="filter-preset" type="button" data-preset="selection" title="Isoler les relations du noeud selectionne">Sélection</button>
-      </div>
+      <details id="display-controls" class="display-controls">
+        <summary>Nœuds et arêtes affichés</summary>
+        <div class="display-filter-groups">
+          <fieldset class="relation-filters">
+            <legend>Types d’arêtes</legend>
+            <label class="relation-filter" title="Afficher les appels HTTP"><input id="relation-http" type="checkbox" checked aria-label="Afficher les arêtes HTTP">HTTP</label>
+            <label class="relation-filter" title="Afficher les publications, consommations et échanges request/reply"><input id="relation-kafka" type="checkbox" checked aria-label="Afficher les arêtes Kafka">Kafka</label>
+            <label class="relation-filter" title="Afficher les lectures et écritures de données"><input id="relation-mongodb" type="checkbox" checked aria-label="Afficher les arêtes d’accès aux données">Données</label>
+            <label class="relation-filter" title="Afficher les autres types de relations"><input id="relation-other" type="checkbox" checked aria-label="Afficher les autres types d’arêtes">Autres</label>
+          </fieldset>
+          <fieldset class="relation-filters">
+            <legend>Types de nœuds</legend>
+            <label class="relation-filter" title="Afficher les microservices indexés"><input id="node-microservice" type="checkbox" checked aria-label="Afficher les microservices">Microservices</label>
+            <label class="relation-filter" title="Afficher les microservices externes"><input id="node-external-microservice" type="checkbox" checked aria-label="Afficher les microservices externes">Externes</label>
+            <label class="relation-filter" title="Afficher les topics et canaux de messages"><input id="node-kafka-topic" type="checkbox" checked aria-label="Afficher les topics et canaux de messages">Topics / canaux</label>
+            <label class="relation-filter" title="Afficher les collections et schémas de données"><input id="node-mongodb-collection" type="checkbox" checked aria-label="Afficher les collections et schémas de données">Collections / schémas</label>
+            <label class="relation-filter" title="Afficher les autres types de ressources"><input id="node-other" type="checkbox" checked aria-label="Afficher les autres types de nœuds">Autres</label>
+          </fieldset>
+        </div>
+      </details>
       <details id="advanced-controls" class="advanced-controls">
         <summary>Filtres et disposition avancés</summary>
-      <fieldset class="relation-filters">
-        <legend>Relations affichees</legend>
-        <label class="relation-filter" title="Afficher les appels HTTP"><input id="relation-http" type="checkbox" checked aria-label="Afficher les relations HTTP">HTTP</label>
-        <label class="relation-filter" title="Afficher les publications et consommations Kafka"><input id="relation-kafka" type="checkbox" checked aria-label="Afficher les relations Kafka">Kafka</label>
-        <label class="relation-filter" title="Afficher les acces aux collections MongoDB"><input id="relation-mongodb" type="checkbox" checked aria-label="Afficher les relations MongoDB">MongoDB</label>
-      </fieldset>
-      <fieldset class="relation-filters">
-        <legend>Ressources affichees</legend>
-        <label class="relation-filter" title="Afficher les microservices indexes"><input id="node-microservice" type="checkbox" checked aria-label="Afficher les microservices">Microservices</label>
-        <label class="relation-filter" title="Afficher les microservices externes"><input id="node-external-microservice" type="checkbox" checked aria-label="Afficher les microservices externes">Externes</label>
-        <label class="relation-filter" title="Afficher les topics Kafka"><input id="node-kafka-topic" type="checkbox" checked aria-label="Afficher les topics Kafka">Topics Kafka</label>
-        <label class="relation-filter" title="Afficher les collections MongoDB"><input id="node-mongodb-collection" type="checkbox" checked aria-label="Afficher les collections MongoDB">MongoDB</label>
-      </fieldset>
       <fieldset class="layout-controls">
         <legend>Placement des nœuds</legend>
         <div class="layout-options layout-strategy-options" role="group" aria-label="Choix du placement des nœuds">
@@ -728,7 +681,7 @@
     <div id="dependencies-panel" class="toolbar-panel dependency-view" role="tabpanel" aria-labelledby="build-tab" hidden>
       <p class="dependency-view-kicker">Structure de build</p>
       <h2>Arbre des dépendances</h2>
-      <p>Disposition Sugiyama : les modules sont rangés par niveaux de dépendance. Un lien part du module dépendant, à gauche, vers le module requis, à droite. Les interactions HTTP, Kafka et MongoDB restent dans la vue Interactions.</p>
+      <p>Disposition Sugiyama : les modules sont rangés par niveaux de dépendance. Un lien part du module dépendant, à gauche, vers le module requis, à droite. Les interactions HTTP, Kafka et données restent dans la vue Explorer.</p>
     </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
       <div class="indexing-issues-header">
@@ -738,15 +691,6 @@
       </div>
       <ul id="indexing-issues" class="indexing-issues-list" aria-label="Problemes d'indexation"></ul>
       <p id="indexing-issues-empty" class="indexing-issues-empty">Aucun probleme d'indexation detecte.</p>
-    </div>
-    <div id="paths-panel" class="toolbar-panel path-history" role="tabpanel" aria-labelledby="paths-tab" hidden>
-      <div class="path-history-header">
-        <p class="path-history-kicker">Navigation architecture</p>
-        <h2 id="path-history-title" class="path-history-title">Chemins analyses</h2>
-        <p class="path-history-description">Rejouez un parcours ou retirez-le de cette liste locale.</p>
-      </div>
-      <ul id="analyzed-paths" class="path-history-list" aria-label="Chemins analyses"></ul>
-      <p id="analyzed-paths-empty" class="path-history-empty">Aucun chemin analyse pour le moment.</p>
     </div>
     <div id="openapi-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="openapi-tab" hidden>
       <div class="references-header">
@@ -1094,14 +1038,32 @@
     const relationHttp = document.getElementById("relation-http");
     const relationKafka = document.getElementById("relation-kafka");
     const relationMongodb = document.getElementById("relation-mongodb");
+    const relationOther = document.getElementById("relation-other");
     const nodeMicroservice = document.getElementById("node-microservice");
     const nodeExternalMicroservice = document.getElementById("node-external-microservice");
     const nodeKafkaTopic = document.getElementById("node-kafka-topic");
     const nodeMongodbCollection = document.getElementById("node-mongodb-collection");
-    function isVisibleRelation(kind) {
-      return (kind !== "rest" || relationHttp.checked)
-        && (!["kafka", "request_reply"].includes(kind) || relationKafka.checked)
-        && (kind !== "mongodb" || relationMongodb.checked);
+    const nodeOther = document.getElementById("node-other");
+    function relationCategory(link, source = link.source, target = link.target) {
+      const kind = String(link.kind || "").toLocaleLowerCase();
+      const label = String(link.label || "").toLocaleLowerCase();
+      const endpointKinds = [source, target].map(id => nodeDataById.get(id)?.kind);
+      if (kind === "rest" || ["calls", "call", "invokes", "http"].includes(label)) return "http";
+      if (["kafka", "request_reply"].includes(kind)
+          || endpointKinds.some(value => ["kafka_topic", "message_channel"].includes(value))
+          || ["publishes", "consumes", "produce", "consume"].includes(label)) return "kafka";
+      if (kind === "mongodb" || link.direction === "data_access"
+          || endpointKinds.some(value => ["mongodb_collection", "data_schema"].includes(value))
+          || ["reads", "writes", "uses"].includes(label)) return "mongodb";
+      return "other";
+    }
+    function isVisibleRelation(link, source = link.source, target = link.target) {
+      return {
+        http: relationHttp.checked,
+        kafka: relationKafka.checked,
+        mongodb: relationMongodb.checked,
+        other: relationOther.checked,
+      }[relationCategory(link, source, target)];
     }
     function isVisibleNode(node) {
       if (!node) return false;
@@ -1109,9 +1071,9 @@
         return (node.external ? nodeExternalMicroservice.checked : nodeMicroservice.checked)
           ;
       }
-      if (node.kind === "kafka_topic") return nodeKafkaTopic.checked;
-      if (node.kind === "mongodb_collection") return nodeMongodbCollection.checked;
-      return true;
+      if (["kafka_topic", "message_channel"].includes(node.kind)) return nodeKafkaTopic.checked;
+      if (["mongodb_collection", "data_schema"].includes(node.kind)) return nodeMongodbCollection.checked;
+      return nodeOther.checked;
     }
     function isVisibleNodeId(id) { return isVisibleNode(nodeDataById.get(id)); }
     const NODE_VERTEX_SHADER = `
@@ -1398,7 +1360,7 @@
     }
     function rebuildGraph() {
       const visibleLinks = graphData.links.filter(link => (
-        isVisibleRelation(link.kind)
+        isVisibleRelation(link)
         && isVisibleNode(nodeDataById.get(link.source))
         && isVisibleNode(nodeDataById.get(link.target))
       ));
@@ -1504,6 +1466,70 @@
           return data;
         },
       });
+      function adaptiveSymbolLabelPlacements(nodePoints) {
+        if (graphState.renderMode !== "symbols" || !nodePoints.size) return new Map();
+        const viewport = graphCanvas.getBoundingClientRect();
+        const cameraRatio = Math.max(.01, renderer.getCamera().getState().ratio || 1);
+        const zoomDensity = Math.max(.7, Math.min(3, 1 / cameraRatio));
+        const labelLimit = Math.max(4, Math.floor(
+          viewport.width * viewport.height / 30000 * zoomDensity
+        ));
+        const candidates = [...nodePoints.entries()].map(([id, point]) => {
+          const node = nodeDataById.get(id);
+          const forced = id === graphState.selectedId || id === graphState.hoveredId;
+          const kindPriority = node?.kind === "microservice" ? 3
+            : ["kafka_topic", "message_channel"].includes(node?.kind) ? 2
+              : 1;
+          return {
+            id, point, node, forced,
+            score: network.degree(id) * 100 + kindPriority * 10 + Number(node?.complexity?.score || 0),
+          };
+        }).sort((left, right) => (
+          Number(right.forced) - Number(left.forced)
+          || right.score - left.score
+          || String(left.node?.name || left.id).localeCompare(String(right.node?.name || right.id))
+        ));
+        const occupied = [];
+        const placements = new Map();
+        const measureContext = document.createElement("canvas").getContext("2d");
+        if (measureContext) measureContext.font = "750 10px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+        const cardScale = GRAPH_CARD_SCALE;
+        const labelOffset = 34 * cardScale;
+        const overlaps = (left, right, gap = 3) => (
+          left.left < right.right + gap && left.right + gap > right.left
+          && left.top < right.bottom + gap && left.bottom + gap > right.top
+        );
+        const symbolRects = [...nodePoints.entries()].map(([id, point]) => ({
+          id, left: point.x - 15, right: point.x + 15,
+          top: point.y - 15, bottom: point.y + 15,
+        }));
+        candidates.forEach(candidate => {
+          if (!candidate.forced && placements.size >= labelLimit) return;
+          const labelText = String(candidate.node?.name || candidate.id);
+          const textWidth = Math.max(44, (measureContext?.measureText(labelText).width || labelText.length * 7) + 8) * cardScale;
+          const textHalfHeight = 9 * cardScale;
+          const sides = candidate.point.x + labelOffset + textWidth <= viewport.width - 4
+            ? ["right", "left"] : ["left", "right"];
+          const options = sides.map(side => ({
+            side,
+            left: side === "right" ? candidate.point.x + labelOffset : candidate.point.x - labelOffset - textWidth,
+            right: side === "right" ? candidate.point.x + labelOffset + textWidth : candidate.point.x - labelOffset,
+            top: candidate.point.y - textHalfHeight,
+            bottom: candidate.point.y + textHalfHeight,
+          }));
+          const placement = options.find(box => (
+            box.left >= 4 && box.right <= viewport.width - 4
+            && box.top >= 4 && box.bottom <= viewport.height - 4
+            && !occupied.some(other => overlaps(box, other))
+            && !symbolRects.some(symbol => symbol.id !== candidate.id && overlaps(box, symbol, 2))
+          ));
+          if (!placement && !candidate.forced) return;
+          const selected = placement || options[0];
+          placements.set(candidate.id, selected.side);
+          occupied.push(selected);
+        });
+        return placements;
+      }
       renderOverlays = () => {
         nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         const nodePoints = new Map();
@@ -1521,6 +1547,8 @@
           if (!node || !point) return;
           nodePoints.set(id, point);
         });
+        const adaptiveLabels = adaptiveSymbolLabelPlacements(nodePoints);
+        graphCanvas.dataset.adaptiveLabelCount = String(adaptiveLabels.size);
         // Card dimensions stay constant. Overlap is an accepted overview
         // state; zoom and pan must never change card size or fight the camera.
         graphGroupsOverlay.replaceChildren();
@@ -1741,7 +1769,8 @@
           const isTopic = node.kind === "message_channel" || node.kind === "kafka_topic";
           const isDatabase = node.kind === "data_schema" || node.kind === "mongodb_collection";
           const isResource = isTopic || isDatabase;
-          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}`;
+          const adaptiveLabelSide = adaptiveLabels.get(id);
+          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}`;
           label.dataset.nodeKind = node.kind;
           label.dataset.nodeId = id;
           const cardScale = GRAPH_CARD_SCALE;
@@ -1967,17 +1996,14 @@
     const requestReplyTab = document.getElementById("request-reply-tab");
     const buildTab = document.getElementById("build-tab");
     const issuesTab = document.getElementById("issues-tab");
-    const pathsTab = document.getElementById("paths-tab");
     const graphLegend = document.getElementById("graph-legend");
     const graphPanel = document.getElementById("graph-panel");
     const dependenciesPanel = document.getElementById("dependencies-panel");
     const issuesPanel = document.getElementById("issues-panel");
-    const pathsPanel = document.getElementById("paths-panel");
     const openApiPanel = document.getElementById("openapi-panel");
     const kafkaPanel = document.getElementById("kafka-panel");
     const persistencePanel = document.getElementById("persistence-panel");
     const requestReplyPanel = document.getElementById("request-reply-panel");
-    const advancedControls = document.getElementById("advanced-controls");
     const graphCanvas = document.getElementById("graph");
     const dependencyCanvas = document.getElementById("dependency-graph");
     function ensureDependencyRenderer() {
@@ -2105,9 +2131,6 @@
     const requestReplyPatternsList = document.getElementById("request-reply-patterns");
     const requestReplyEmpty = document.getElementById("request-reply-empty");
     const requestReplyTitle = document.getElementById("request-reply-title");
-    const analyzedPathsList = document.getElementById("analyzed-paths");
-    const analyzedPathsEmpty = document.getElementById("analyzed-paths-empty");
-    const pathHistoryTitle = document.getElementById("path-history-title");
     const layoutStatus = document.getElementById("layout-status");
     const layoutButtons = new Map([
       ["forceatlas2", document.getElementById("layout-forceatlas2")],
@@ -2124,7 +2147,6 @@
       ["cluster", "vue clusters"],
     ]);
     const pathStops = [];
-    const analyzedPaths = [];
     const MAX_SIMPLE_PATH_DEPTH = 8;
     const MAX_SIMPLE_PATHS = 8;
     const MAX_SIMPLE_PATH_EXPLORATIONS = 2000;
@@ -2838,45 +2860,10 @@
       const key = normalizeNodeName(node.name);
       nodesByNormalizedName.set(key, [...(nodesByNormalizedName.get(key) || []), node]);
     });
-    const pathHistoryStorageKey = (() => {
-      const signature = [
-        ...graphData.nodes.map(node => node.id),
-        ...graphData.links.map(link => `${link.source}->${link.target}:${link.kind}`),
-      ].sort().join("|");
-      let hash = 2166136261;
-      for (let index = 0; index < signature.length; index += 1) {
-        hash = Math.imul(hash ^ signature.charCodeAt(index), 16777619);
-      }
-      return `systemlens:analyzed-paths:${hash >>> 0}`;
-    })();
-
-    function isValidPathStops(stops) {
-      if (!Array.isArray(stops) || stops.length < 2 || new Set(stops).size !== stops.length) return false;
-      return stops.every(id => nodeDataById.has(id) && ["microservice", "kafka_topic"].includes(nodeDataById.get(id).kind))
-        && nodeDataById.get(stops[0]).kind === "microservice"
-        && nodeDataById.get(stops.at(-1)).kind === "microservice";
-    }
-    function loadAnalyzedPaths() {
-      try {
-        const stored = JSON.parse(localStorage.getItem(pathHistoryStorageKey) || "[]");
-        if (!Array.isArray(stored)) return;
-        stored.filter(isValidPathStops).forEach(stops => analyzedPaths.push(stops));
-      } catch (_error) {
-        // The export remains usable when browser storage is unavailable or stale.
-      }
-    }
-    function persistAnalyzedPaths() {
-      try {
-        localStorage.setItem(pathHistoryStorageKey, JSON.stringify(analyzedPaths));
-      } catch (_error) {
-        // Saving the optional history must never prevent graph exploration.
-      }
-    }
     function setToolbarTab(tab) {
       const showingGraph = tab === "graph";
       const showingDependencies = tab === "dependencies";
       const showingIssues = tab === "issues";
-      const showingPaths = tab === "paths";
       const showingOpenApi = tab === "openapi";
       const showingKafka = tab === "kafka";
       const showingPersistence = tab === "persistence";
@@ -2895,12 +2882,9 @@
       buildTab.setAttribute("aria-selected", String(showingDependencies));
       issuesTab.classList.toggle("is-active", showingIssues);
       issuesTab.setAttribute("aria-selected", String(showingIssues));
-      pathsTab.classList.toggle("is-active", showingPaths);
-      pathsTab.setAttribute("aria-selected", String(showingPaths));
       graphPanel.hidden = !showingGraph;
       dependenciesPanel.hidden = !showingDependencies;
       issuesPanel.hidden = !showingIssues;
-      pathsPanel.hidden = !showingPaths;
       openApiPanel.hidden = !showingOpenApi;
       kafkaPanel.hidden = !showingKafka;
       persistencePanel.hidden = !showingPersistence;
@@ -2915,49 +2899,6 @@
           activeDependencyRenderer.getCamera().animatedReset({ duration: 220 });
         });
       }
-    }
-    const filterPresetButtons = [...document.querySelectorAll(".filter-preset")];
-    function setActiveRelationPreset(preset) {
-      filterPresetButtons.forEach(button => button.classList.toggle("is-active", button.dataset.preset === preset));
-    }
-    function setRelationFilters(http, kafka, mongodb) {
-      relationHttp.checked = http;
-      relationKafka.checked = kafka;
-      relationMongodb.checked = mongodb;
-    }
-    function applyRelationPreset(preset) {
-      if (preset === "selection") {
-        setRelationFilters(true, true, true);
-        rebuildGraph();
-        if (!graphState.selectedId) {
-          layoutStatus.textContent = "Selectionnez d'abord un noeud pour isoler ses relations.";
-          setActiveRelationPreset("all");
-          reset();
-          return;
-        }
-        graphState.relatedNodes = new Set([graphState.selectedId]);
-        graphState.relatedEdges = new Set();
-        network.forEachEdge((edge, _attributes, source, target) => {
-          if (source === graphState.selectedId || target === graphState.selectedId) {
-            graphState.relatedEdges.add(edge); graphState.relatedNodes.add(source); graphState.relatedNodes.add(target);
-          }
-        });
-        setActiveRelationPreset(preset);
-        renderer.refresh();
-        return;
-      }
-      const filters = {
-        all: [true, true, true],
-        http: [true, false, false],
-        kafka: [false, true, false],
-        mongodb: [false, false, true],
-      };
-      const selected = filters[preset];
-      if (!selected) return;
-      setRelationFilters(...selected);
-      setActiveRelationPreset(preset);
-      rebuildGraph();
-      reset();
     }
     function renderIndexingIssues() {
       inventoryStatus.hidden = false;
@@ -3138,51 +3079,6 @@
       });
       requestReplyTitle.textContent = `Patterns request/reply Kafka (${patterns.length})`;
     }
-    function renderAnalyzedPaths() {
-      pathHistoryTitle.textContent = `Chemins analyses (${analyzedPaths.length})`;
-      analyzedPathsList.replaceChildren();
-      analyzedPathsEmpty.hidden = analyzedPaths.length > 0;
-      analyzedPaths.forEach((stops, index) => {
-        const item = document.createElement("li");
-        item.className = "path-history-item";
-        const replay = document.createElement("button");
-        replay.className = "path-history-replay";
-        replay.type = "button";
-        replay.textContent = stops.map(id => nodeDataById.get(id).name).join(" -> ");
-        replay.title = "Reanalyser ce chemin";
-        replay.addEventListener("click", () => replayAnalyzedPath(stops));
-        const remove = document.createElement("button");
-        remove.className = "path-history-delete";
-        remove.type = "button";
-        remove.textContent = "×";
-        remove.title = "Supprimer ce chemin analyse";
-        remove.setAttribute("aria-label", `Supprimer le chemin ${replay.textContent}`);
-        remove.addEventListener("click", () => {
-          analyzedPaths.splice(index, 1);
-          persistAnalyzedPaths();
-          renderAnalyzedPaths();
-        });
-        item.append(replay, remove);
-        analyzedPathsList.append(item);
-      });
-    }
-    function rememberAnalyzedPath(stops) {
-      const path = [...stops];
-      const key = path.join("|");
-      const existingIndex = analyzedPaths.findIndex(item => item.join("|") === key);
-      if (existingIndex >= 0) analyzedPaths.splice(existingIndex, 1);
-      analyzedPaths.unshift(path);
-      persistAnalyzedPaths();
-      renderAnalyzedPaths();
-    }
-    function replayAnalyzedPath(stops) {
-      pathStops.splice(0, pathStops.length, ...stops);
-      renderPathQuery();
-      setToolbarTab("graph");
-      showShortestPath();
-    }
-    loadAnalyzedPaths();
-
     function createDetailsGroup(title, open = true) {
       const group = document.createElement("details");
       group.className = "details-group";
@@ -3782,7 +3678,6 @@
       graphState.relatedNodes = new Set(path.nodes);
       graphState.relatedEdges = new Set(path.edges.map(step => step.edge));
       setPathMicroserviceOrder(path);
-      rememberAnalyzedPath(pathStops);
       renderer.refresh();
       renderPathDetails(path);
       renderer.getCamera().animatedReset({ duration: 220 });
@@ -3918,7 +3813,7 @@
       const node = nodeDataById.get(id);
       const indexedEdges = graphData.links.filter(link => link.source === id || link.target === id);
       const edges = indexedEdges.filter(
-        link => isVisibleRelation(link.kind) && (link.source === id || link.target === id)
+        link => isVisibleRelation(link) && (link.source === id || link.target === id)
       );
       const isMicroservice = node.kind === "microservice";
       const publishedApiCount = isMicroservice ? (node.resources || []).length : 0;
@@ -4206,7 +4101,7 @@
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       network.forEachEdge((edge, attributes, source, target) => {
-        if (!isVisibleRelation(attributes.kind) || !matches(attributes, source, target)) return;
+        if (!isVisibleRelation(attributes, source, target) || !matches(attributes, source, target)) return;
         graphState.relatedEdges.add(edge); graphState.relatedNodes.add(source); graphState.relatedNodes.add(target);
       });
       renderer.refresh();
@@ -4227,7 +4122,7 @@
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       network.forEachEdge((edge, attributes, source, target) => {
-        if (!isVisibleRelation(attributes.kind)) return;
+        if (!isVisibleRelation(attributes, source, target)) return;
         if (source === id || target === id) {
           graphState.relatedEdges.add(edge); graphState.relatedNodes.add(source); graphState.relatedNodes.add(target);
         }
@@ -4246,9 +4141,6 @@
         relatedEdges: null,
         pathMicroserviceOrder: new Map(),
       });
-      if (document.querySelector('.filter-preset[data-preset="selection"]')?.classList.contains("is-active")) {
-        setActiveRelationPreset("all");
-      }
       renderer.refresh();
       setDetailsEmpty("Selectionnez un noeud ou un cluster pour afficher ses informations.");
       search.value = "";
@@ -4371,26 +4263,6 @@
     window.addEventListener("keydown", event => { if (event.key === "Escape" && !inspectorModal.hidden) closeInspector(); });
     document.getElementById("show-path").addEventListener("click", showShortestPath);
     document.getElementById("show-simple-paths").addEventListener("click", showSimplePaths);
-    document.getElementById("question-topic").addEventListener("click", () => {
-      setToolbarTab("graph");
-      applyRelationPreset("kafka");
-      search.placeholder = "orders.created ou orders -> orders.created";
-      search.focus();
-    });
-    document.getElementById("question-service").addEventListener("click", () => {
-      setToolbarTab("graph");
-      applyRelationPreset("all");
-      search.placeholder = "orders ou orders -> payments";
-      search.focus();
-    });
-    document.getElementById("question-path").addEventListener("click", () => {
-      setToolbarTab("graph");
-      search.focus();
-    });
-    document.getElementById("question-messages").addEventListener("click", () => {
-      setToolbarTab("kafka");
-      dtoReferencesFilter.focus();
-    });
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
     openApiTab.addEventListener("click", () => setToolbarTab("openapi"));
@@ -4399,30 +4271,29 @@
     requestReplyTab.addEventListener("click", () => setToolbarTab("request-reply"));
     buildTab.addEventListener("click", () => setToolbarTab("dependencies"));
     issuesTab.addEventListener("click", () => setToolbarTab("issues"));
-    pathsTab.addEventListener("click", () => setToolbarTab("paths"));
     inventoryStatus.addEventListener("click", () => setToolbarTab("issues"));
-    filterPresetButtons.forEach(button => button.addEventListener("click", () => applyRelationPreset(button.dataset.preset)));
     [
       relationHttp,
       relationKafka,
       relationMongodb,
+      relationOther,
       nodeMicroservice,
       nodeExternalMicroservice,
       nodeKafkaTopic,
       nodeMongodbCollection,
+      nodeOther,
       showProjectGroups,
     ].forEach(control => control.addEventListener("click", () => {
-      setActiveRelationPreset(null);
       // Reflect the checkbox state synchronously. Rebuilding Sigma and
       // applying the active layout are intentionally asynchronous, while the
       // data contract is also consumed by compact-viewport integrations.
       const visibleRelationCount = graphData.links.filter(link => (
-        isVisibleRelation(link.kind)
+        isVisibleRelation(link)
         && isVisibleNode(nodeDataById.get(link.source))
         && isVisibleNode(nodeDataById.get(link.target))
       )).length;
       document.getElementById("graph").dataset.relationCount = String(visibleRelationCount);
-      if ([relationHttp, relationKafka, relationMongodb].includes(control)) {
+      if ([relationHttp, relationKafka, relationMongodb, relationOther].includes(control)) {
         reset();
         rebuildGraph();
         applyLayout(graphState.activeLayout);
@@ -4440,7 +4311,6 @@
       if (event.key === "Enter") showShortestPath();
     });
     renderIndexingIssues();
-    renderAnalyzedPaths();
     renderReferences();
     renderRequestReplyPatterns();
     restoreState();
@@ -4448,7 +4318,7 @@
       const toolbar = document.querySelector(".toolbar");
       const desktop = window.innerWidth > 700;
       const toolbarRight = toolbar?.getBoundingClientRect().right || 0;
-      const left = desktop ? Math.min(window.innerWidth - 220, toolbarRight + 24) : 0;
+      const left = desktop ? Math.min(window.innerWidth - 220, toolbarRight + 10) : 0;
       const root = document.documentElement;
       root.style.setProperty("--workspace-left", `${Math.max(0, left)}px`);
       root.style.setProperty("--workspace-right", "0px");

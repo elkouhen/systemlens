@@ -113,7 +113,7 @@
     }
     function rebuildGraph() {
       const visibleLinks = graphData.links.filter(link => (
-        isVisibleRelation(link.kind)
+        isVisibleRelation(link)
         && isVisibleNode(nodeDataById.get(link.source))
         && isVisibleNode(nodeDataById.get(link.target))
       ));
@@ -219,6 +219,70 @@
           return data;
         },
       });
+      function adaptiveSymbolLabelPlacements(nodePoints) {
+        if (graphState.renderMode !== "symbols" || !nodePoints.size) return new Map();
+        const viewport = graphCanvas.getBoundingClientRect();
+        const cameraRatio = Math.max(.01, renderer.getCamera().getState().ratio || 1);
+        const zoomDensity = Math.max(.7, Math.min(3, 1 / cameraRatio));
+        const labelLimit = Math.max(4, Math.floor(
+          viewport.width * viewport.height / 30000 * zoomDensity
+        ));
+        const candidates = [...nodePoints.entries()].map(([id, point]) => {
+          const node = nodeDataById.get(id);
+          const forced = id === graphState.selectedId || id === graphState.hoveredId;
+          const kindPriority = node?.kind === "microservice" ? 3
+            : ["kafka_topic", "message_channel"].includes(node?.kind) ? 2
+              : 1;
+          return {
+            id, point, node, forced,
+            score: network.degree(id) * 100 + kindPriority * 10 + Number(node?.complexity?.score || 0),
+          };
+        }).sort((left, right) => (
+          Number(right.forced) - Number(left.forced)
+          || right.score - left.score
+          || String(left.node?.name || left.id).localeCompare(String(right.node?.name || right.id))
+        ));
+        const occupied = [];
+        const placements = new Map();
+        const measureContext = document.createElement("canvas").getContext("2d");
+        if (measureContext) measureContext.font = "750 10px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+        const cardScale = GRAPH_CARD_SCALE;
+        const labelOffset = 34 * cardScale;
+        const overlaps = (left, right, gap = 3) => (
+          left.left < right.right + gap && left.right + gap > right.left
+          && left.top < right.bottom + gap && left.bottom + gap > right.top
+        );
+        const symbolRects = [...nodePoints.entries()].map(([id, point]) => ({
+          id, left: point.x - 15, right: point.x + 15,
+          top: point.y - 15, bottom: point.y + 15,
+        }));
+        candidates.forEach(candidate => {
+          if (!candidate.forced && placements.size >= labelLimit) return;
+          const labelText = String(candidate.node?.name || candidate.id);
+          const textWidth = Math.max(44, (measureContext?.measureText(labelText).width || labelText.length * 7) + 8) * cardScale;
+          const textHalfHeight = 9 * cardScale;
+          const sides = candidate.point.x + labelOffset + textWidth <= viewport.width - 4
+            ? ["right", "left"] : ["left", "right"];
+          const options = sides.map(side => ({
+            side,
+            left: side === "right" ? candidate.point.x + labelOffset : candidate.point.x - labelOffset - textWidth,
+            right: side === "right" ? candidate.point.x + labelOffset + textWidth : candidate.point.x - labelOffset,
+            top: candidate.point.y - textHalfHeight,
+            bottom: candidate.point.y + textHalfHeight,
+          }));
+          const placement = options.find(box => (
+            box.left >= 4 && box.right <= viewport.width - 4
+            && box.top >= 4 && box.bottom <= viewport.height - 4
+            && !occupied.some(other => overlaps(box, other))
+            && !symbolRects.some(symbol => symbol.id !== candidate.id && overlaps(box, symbol, 2))
+          ));
+          if (!placement && !candidate.forced) return;
+          const selected = placement || options[0];
+          placements.set(candidate.id, selected.side);
+          occupied.push(selected);
+        });
+        return placements;
+      }
       renderOverlays = () => {
         nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         const nodePoints = new Map();
@@ -236,6 +300,8 @@
           if (!node || !point) return;
           nodePoints.set(id, point);
         });
+        const adaptiveLabels = adaptiveSymbolLabelPlacements(nodePoints);
+        graphCanvas.dataset.adaptiveLabelCount = String(adaptiveLabels.size);
         // Card dimensions stay constant. Overlap is an accepted overview
         // state; zoom and pan must never change card size or fight the camera.
         graphGroupsOverlay.replaceChildren();
@@ -456,7 +522,8 @@
           const isTopic = node.kind === "message_channel" || node.kind === "kafka_topic";
           const isDatabase = node.kind === "data_schema" || node.kind === "mongodb_collection";
           const isResource = isTopic || isDatabase;
-          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}`;
+          const adaptiveLabelSide = adaptiveLabels.get(id);
+          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}`;
           label.dataset.nodeKind = node.kind;
           label.dataset.nodeId = id;
           const cardScale = GRAPH_CARD_SCALE;

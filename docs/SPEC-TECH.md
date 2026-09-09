@@ -180,9 +180,9 @@ attributed to the module containing the declaration while the contract source
 path stays evidence.
 
 With Strategy1, software-layer classification additionally maps project
-namespace `PORTAIL` to API, `CYCLE-DE-VIE` to Orchestration, `DOMAIN-*` to
+group `PORTAIL` to API, `CYCLE-DE-VIE` to Orchestration, `DOMAIN-*` to
 Domain, and the documented layer-name prefixes/suffixes to their matching
-layers. Project namespaces are parent directories containing projects;
+layers. These project groups are parent directories containing projects;
 Kubernetes namespaces are not used for this classification. These mappings
 are disabled for the default profile.
 
@@ -300,6 +300,28 @@ links carry relation-specific published or consumed Java message types; the
 selected-path detail uses only these adjacent links and explicitly reports
 missing type information.
 
+Display filtering first maps persisted node and edge vocabulary to visual
+categories. `kafka_topic` and `message_channel` are messaging nodes;
+`mongodb_collection` and `data_schema` are data nodes. Edge classification
+uses the native kind, its relation label and endpoint kinds so that native
+`rest`/`kafka`/`mongodb` links and enriched `mcp_*` links respond to the same
+HTTP, Kafka and data-access selectors. Unrecognized kinds remain conservative
+and independently selectable as `Other`; they are never silently discarded.
+
+In symbol rendering, label decluttering is recomputed from projected viewport
+coordinates on each coalesced render. Candidates are ordered deterministically
+by selection/hover state, visible degree, semantic node category, complexity,
+then name. A greedy screen-space collision pass accepts labels up to a limit
+derived from viewport area and inverse camera ratio, rejects labels that would
+cover another accepted label or symbol, and chooses the free side of the
+symbol. Zooming in therefore increases the labeled share of currently visible
+nodes without changing graph positions or camera state. Selected and hovered
+labels bypass the density and collision constraints so their names remain
+visible.
+For `n` visible nodes, the current conservative collision pass is `O(n²)` and
+uses `O(n)` temporary rectangles; exported architecture reports are expected
+to remain within interactive inventory sizes.
+
 The manifest extractors add explicitly declared Kafka facts from Markdown and
 JSON. Strategy1 is separate and opt-in because it embeds repository-specific
 naming conventions.
@@ -391,6 +413,8 @@ Sigma workspace rectangle. The HTML layer, cluster, and node overlays retain
 the same full-height coordinate surface as the canvas; the panel's higher
 stacking order masks content beneath it. Opening or resizing details therefore
 cannot introduce a horizontal or vertical clipping seam or reset the camera.
+The desktop workspace starts 10 px after the measured right edge of the compact
+navigation panel; it does not reserve an additional decorative gutter.
 The Sigma canvas and the HTML card/cluster overlays are therefore recomputed
 from one camera state per frame, preventing partially rebuilt containers from
 appearing while the user drags the cluster view.

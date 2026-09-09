@@ -182,8 +182,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert kafka_dtos["OrderCreated"]["fields"] == []
     assert graph_data["project_dto_definitions"] == []
     assert 'appendDtoInspectorSection("Valeurs enum", dto.enum_values || [])' in document
-    assert "Que voulez-vous comprendre ?" in document
-    assert "Qui produit ou consomme un topic Kafka ?" in document
+    assert "Que voulez-vous comprendre ?" not in document
+    assert 'class="exploration-start"' not in document
+    assert "Qui produit ou consomme un topic Kafka ?" not in document
     assert 'id="advanced-controls"' in document
     assert 'id="openapi-tab"' in document
     assert 'id="kafka-tab"' in document
@@ -202,12 +203,21 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'cardWidth = symbolMode ? 34 : GRAPH_CARD_WIDTH + 4' in document
     assert 'nodeLabelOverlay.classList.toggle("is-symbol-mode"' in document
     assert 'graphState.renderMode === "symbols" ? { ...data, size: .5 }' in document
+    assert "function adaptiveSymbolLabelPlacements(nodePoints)" in document
+    assert "graphCanvas.dataset.adaptiveLabelCount" in document
+    assert "has-adaptive-label" in document
+    assert "viewport.width * viewport.height / 30000 * zoomDensity" in document
     assert '.graph-node-card-label:hover .graph-node-card-name' in document
     assert '.graph-node-card-label.is-hovered { z-index: 20; }' in document
     assert 'layout === "forceatlas2-noverlap" && graphState.fitMode === "readable"' in document
     assert 'return requiredZooms[requiredZooms.length - 1]' in document
     assert 'fitMode: "readable"' in document
     assert "fitRequest !== graphState.fitRequest" in document
+    assert 'toolbarRight + 10' in document
+    assert 'width: min(340px, calc(100vw - 20px));' in document
+    assert 'id="paths-tab"' not in document
+    assert 'id="paths-panel"' not in document
+    assert "systemlens:analyzed-paths" not in document
     assert 'root.style.setProperty("--workspace-right", "0px")' in document
     assert 'root.style.setProperty("--workspace-bottom", "0px")' in document
     assert "ResizeObserver" not in document
@@ -257,6 +267,14 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'appendRelationList("Services utilisant cette collection"' in document
     assert 'appendList("Stockee par", [node.owner], relationsGroup)' not in document
     assert "function rebuildGraph()" in document
+    assert 'id="display-controls"' in document
+    assert 'id="relation-other"' in document
+    assert 'id="node-other"' in document
+    assert 'class="filter-presets"' not in document
+    assert "applyRelationPreset" not in document
+    assert '["kafka_topic", "message_channel"].includes(node.kind)' in document
+    assert '["mongodb_collection", "data_schema"].includes(node.kind)' in document
+    assert "function relationCategory(link" in document
     assert "Commit the view mode only after its layout and camera are ready" in document
     assert "const previousLayout = graphState.activeLayout" in document
     assert "const visibleLinks = graphData.links.filter(link => (" in document

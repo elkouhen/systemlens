@@ -277,14 +277,32 @@
     const relationHttp = document.getElementById("relation-http");
     const relationKafka = document.getElementById("relation-kafka");
     const relationMongodb = document.getElementById("relation-mongodb");
+    const relationOther = document.getElementById("relation-other");
     const nodeMicroservice = document.getElementById("node-microservice");
     const nodeExternalMicroservice = document.getElementById("node-external-microservice");
     const nodeKafkaTopic = document.getElementById("node-kafka-topic");
     const nodeMongodbCollection = document.getElementById("node-mongodb-collection");
-    function isVisibleRelation(kind) {
-      return (kind !== "rest" || relationHttp.checked)
-        && (!["kafka", "request_reply"].includes(kind) || relationKafka.checked)
-        && (kind !== "mongodb" || relationMongodb.checked);
+    const nodeOther = document.getElementById("node-other");
+    function relationCategory(link, source = link.source, target = link.target) {
+      const kind = String(link.kind || "").toLocaleLowerCase();
+      const label = String(link.label || "").toLocaleLowerCase();
+      const endpointKinds = [source, target].map(id => nodeDataById.get(id)?.kind);
+      if (kind === "rest" || ["calls", "call", "invokes", "http"].includes(label)) return "http";
+      if (["kafka", "request_reply"].includes(kind)
+          || endpointKinds.some(value => ["kafka_topic", "message_channel"].includes(value))
+          || ["publishes", "consumes", "produce", "consume"].includes(label)) return "kafka";
+      if (kind === "mongodb" || link.direction === "data_access"
+          || endpointKinds.some(value => ["mongodb_collection", "data_schema"].includes(value))
+          || ["reads", "writes", "uses"].includes(label)) return "mongodb";
+      return "other";
+    }
+    function isVisibleRelation(link, source = link.source, target = link.target) {
+      return {
+        http: relationHttp.checked,
+        kafka: relationKafka.checked,
+        mongodb: relationMongodb.checked,
+        other: relationOther.checked,
+      }[relationCategory(link, source, target)];
     }
     function isVisibleNode(node) {
       if (!node) return false;
@@ -292,9 +310,9 @@
         return (node.external ? nodeExternalMicroservice.checked : nodeMicroservice.checked)
           ;
       }
-      if (node.kind === "kafka_topic") return nodeKafkaTopic.checked;
-      if (node.kind === "mongodb_collection") return nodeMongodbCollection.checked;
-      return true;
+      if (["kafka_topic", "message_channel"].includes(node.kind)) return nodeKafkaTopic.checked;
+      if (["mongodb_collection", "data_schema"].includes(node.kind)) return nodeMongodbCollection.checked;
+      return nodeOther.checked;
     }
     function isVisibleNodeId(id) { return isVisibleNode(nodeDataById.get(id)); }
     const NODE_VERTEX_SHADER = `

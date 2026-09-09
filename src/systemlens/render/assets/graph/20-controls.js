@@ -12,17 +12,14 @@
     const requestReplyTab = document.getElementById("request-reply-tab");
     const buildTab = document.getElementById("build-tab");
     const issuesTab = document.getElementById("issues-tab");
-    const pathsTab = document.getElementById("paths-tab");
     const graphLegend = document.getElementById("graph-legend");
     const graphPanel = document.getElementById("graph-panel");
     const dependenciesPanel = document.getElementById("dependencies-panel");
     const issuesPanel = document.getElementById("issues-panel");
-    const pathsPanel = document.getElementById("paths-panel");
     const openApiPanel = document.getElementById("openapi-panel");
     const kafkaPanel = document.getElementById("kafka-panel");
     const persistencePanel = document.getElementById("persistence-panel");
     const requestReplyPanel = document.getElementById("request-reply-panel");
-    const advancedControls = document.getElementById("advanced-controls");
     const graphCanvas = document.getElementById("graph");
     const dependencyCanvas = document.getElementById("dependency-graph");
     function ensureDependencyRenderer() {
@@ -150,9 +147,6 @@
     const requestReplyPatternsList = document.getElementById("request-reply-patterns");
     const requestReplyEmpty = document.getElementById("request-reply-empty");
     const requestReplyTitle = document.getElementById("request-reply-title");
-    const analyzedPathsList = document.getElementById("analyzed-paths");
-    const analyzedPathsEmpty = document.getElementById("analyzed-paths-empty");
-    const pathHistoryTitle = document.getElementById("path-history-title");
     const layoutStatus = document.getElementById("layout-status");
     const layoutButtons = new Map([
       ["forceatlas2", document.getElementById("layout-forceatlas2")],
@@ -169,7 +163,6 @@
       ["cluster", "vue clusters"],
     ]);
     const pathStops = [];
-    const analyzedPaths = [];
     const MAX_SIMPLE_PATH_DEPTH = 8;
     const MAX_SIMPLE_PATHS = 8;
     const MAX_SIMPLE_PATH_EXPLORATIONS = 2000;
