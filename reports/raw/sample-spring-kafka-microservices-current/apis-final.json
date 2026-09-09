@@ -1,1 +1,0 @@
-[{"kind": "api", "name": "GET /orders", "providers": ["order-service"], "consumers": []}, {"kind": "api", "name": "POST /orders", "providers": ["order-service"], "consumers": []}, {"kind": "api", "name": "POST /orders/generate", "providers": ["order-service"], "consumers": []}]

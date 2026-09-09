@@ -1,3 +1,0 @@
-[WARNING] Contrat de message Kafka potentiellement incompatible
-`order` publie Order mais consomme Invoice.
-confiance : medium

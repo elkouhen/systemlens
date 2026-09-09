@@ -635,7 +635,7 @@ def _assert_cluster_can_be_selected_and_inspected(page) -> None:
     titles = page.locator(".graph-namespace-title")
     assert titles.count() > 0
     cluster_name = (titles.first.text_content() or "").strip()
-    titles.first.dispatch_event("click")
+    titles.first.click()
     page.wait_for_function(
         "() => document.querySelectorAll('.graph-namespace-group.is-selected').length === 1"
     )
@@ -648,7 +648,7 @@ def _assert_cluster_can_be_selected_and_inspected(page) -> None:
     assert (page.locator("#details .details-title").text_content() or "").strip() == member_name
     assert page.locator(".graph-node-card-label.is-selected").count() == 1
     page.wait_for_timeout(300)
-    titles.first.dispatch_event("click")
+    titles.first.click()
     page.wait_for_function(
         "() => document.querySelectorAll('.graph-namespace-group.is-selected').length === 1"
     )
@@ -699,6 +699,106 @@ def _assert_geometry_contract(page, *, layered: bool) -> None:
         _assert_clusters_only_overlap_when_nested(page)
     if layered:
         _assert_layer_bands_are_disjoint_and_contain_clusters(page)
+
+
+@pytest.mark.slow
+def test_primary_view_selector_opens_each_view_directly() -> None:
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 800, "height": 450})
+        page = context.new_page()
+        page.set_default_timeout(10_000)
+        page.set_content(_complex_dataset_document(), wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
+        )
+
+        view_controls = page.get_by_role("group", name="Vue principale")
+        assert view_controls.is_visible()
+        assert view_controls.get_by_role("button").all_text_contents() == [
+            "Graphe", "Couches", "Clusters",
+        ]
+        assert page.evaluate(
+            """() => {
+                const actions = document.querySelector('.graph-actions');
+                return actions.scrollWidth <= actions.clientWidth;
+            }"""
+        )
+        for button_id, status_text in (
+            ("layout-elk", "vue couches"),
+            ("layout-cluster", "vue clusters"),
+            ("layout-forceatlas2-noverlap", "vue graphe"),
+        ):
+            page.locator(f"#{button_id}").click()
+            page.locator("#layout-status").filter(has_text=status_text).wait_for(
+                state="visible"
+            )
+            assert page.locator(f"#{button_id}").get_attribute("aria-pressed") == "true"
+            assert page.locator(".view-mode[aria-pressed='true']").count() == 1
+
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_node_selection_refits_layer_and_cluster_overlays_above_details() -> None:
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1440, "height": 900})
+        page = context.new_page()
+        page.set_default_timeout(10_000)
+        page.set_content(_complex_dataset_document(), wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
+        )
+        page.locator("#render-symbols").click()
+        page.wait_for_function("() => document.querySelector('#graph')?.dataset.renderMode === 'symbols'")
+
+        for button_id, status_text in (
+            ("layout-elk", "vue couches"),
+            ("layout-cluster", "vue clusters"),
+        ):
+            page.locator(f"#{button_id}").click()
+            page.locator("#layout-status").filter(has_text=status_text).wait_for(
+                state="visible"
+            )
+            page.locator("#fit-view").click()
+            page.wait_for_function(
+                "() => document.querySelector('#graph')?.dataset.fitMode === 'overview'"
+            )
+            page.wait_for_timeout(350)
+            _assert_all_node_centers_are_visible(page)
+            graph_height = page.locator("#graph").bounding_box()["height"]
+            bottom_node_id = page.locator(".graph-node-card-label").evaluate_all(
+                "cards => cards.sort((left, right) => "
+                "right.getBoundingClientRect().y - left.getBoundingClientRect().y)[0].dataset.nodeId"
+            )
+            page.locator(f'.graph-node-card-label[data-node-id="{bottom_node_id}"]').dispatch_event(
+                "click"
+            )
+            page.locator("#details:not(.is-empty)").wait_for(state="visible")
+            page.wait_for_function(
+                "previousHeight => document.querySelector('#graph').getBoundingClientRect().height < previousHeight",
+                arg=graph_height,
+            )
+            page.wait_for_timeout(350)
+            _assert_all_node_centers_are_visible(page)
+            _assert_architecture_cards_are_contained_in_clusters(page)
+            _capture_render_snapshot(page, f"selection-{button_id}-after-details-resize")
+            assert page.locator(".graph-namespace-group").count() > 0
+            if button_id == "layout-elk":
+                assert page.locator(".graph-layer-band").count() > 0
+            page.locator("#reset").click()
+            page.wait_for_timeout(200)
+
+        context.close()
+        browser.close()
 
 
 @pytest.mark.slow
@@ -792,6 +892,17 @@ def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
         assert service_symbol.locator(".graph-node-card-name").evaluate(
             "name => getComputedStyle(name).visibility"
         ) == "visible"
+        assert service_symbol.evaluate("card => getComputedStyle(card).zIndex") == "20"
+        assert service_symbol.locator(".graph-node-card-name").evaluate(
+            "name => getComputedStyle(name).zIndex"
+        ) == "2"
+        assert service_symbol.locator(".graph-node-card-icon").evaluate(
+            "icon => getComputedStyle(icon).zIndex"
+        ) == "1"
+        page.wait_for_function(
+            "card => getComputedStyle(card.querySelector('.graph-node-card-name')).opacity === '1'",
+            arg=service_symbol.element_handle(),
+        )
         assert page.locator(
             '.graph-node-card-label[data-node-kind="message_channel"] .graph-node-card-name'
         ).first.evaluate("name => getComputedStyle(name).visibility") == "hidden"
@@ -900,13 +1011,10 @@ def test_complex_dataset_geometry_contract_across_all_views() -> None:
             ("layout-elk", True),
             ("layout-forceatlas2-noverlap", False),
         ):
-            # The layout controls live in the graph toolbar and may be hidden
-            # behind the compact toolbar at this viewport. Trigger the same
-            # user handler even when the option is visually collapsed.
+            # Exercise each permanently visible primary-view control against
+            # the same geometry contract.
             previous_status = page.locator("#layout-status").text_content() or ""
             already_active = page.locator(f"#{layout_id}").get_attribute("aria-pressed") == "true"
-            # The advanced layout menu can be collapsed; dispatch the control
-            # event directly so the test still exercises the real handler.
             page.locator(f"#{layout_id}").dispatch_event("click")
             if not already_active:
                 page.wait_for_function(
@@ -1045,6 +1153,12 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _capture_render_snapshot(page, "constrained-initial")
 
         graph = page.locator("#graph")
+        view_controls = page.get_by_role("group", name="Vue principale")
+        assert view_controls.is_visible()
+        assert view_controls.get_by_role("button").all_text_contents() == [
+            "Graphe", "Couches", "Clusters",
+        ]
+        assert page.locator("#layout-forceatlas2-noverlap").get_attribute("aria-pressed") == "true"
         assert page.evaluate(
             """() => {
                 const actions = document.querySelector('.graph-actions');
@@ -1129,7 +1243,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _capture_render_snapshot(page, "constrained-after-mongodb-on")
 
         page.locator("#layout-cluster").click()
-        page.locator("#layout-status").filter(has_text="vue namespaces").wait_for(state="visible")
+        page.locator("#layout-status").filter(has_text="vue clusters").wait_for(state="visible")
         _capture_render_snapshot(page, "constrained-after-clusters")
         page.wait_for_function("() => Boolean(document.querySelector('#graph').dataset.clusterLayout)")
         assert page.locator("#graph").get_attribute("data-cluster-sub-layers") == (
@@ -1264,7 +1378,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         for view_name, status_text in (
             ("Graphe", "vue graphe"),
             ("Couches", "vue couches"),
-            ("Namespaces", "vue namespaces"),
+            ("Clusters", "vue clusters"),
         ):
             page.get_by_role("button", name=view_name, exact=True).click()
             page.locator("#layout-status").filter(has_text=status_text).wait_for(state="visible")
@@ -1288,7 +1402,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
             _capture_render_snapshot(page, f"constrained-{view_name.lower()}-after-resize")
             _assert_architecture_cards_have_uniform_size(page)
             _assert_architecture_cards_do_not_overlap(page)
-            if view_name == "Namespaces":
+            if view_name == "Clusters":
                 _assert_background_pan_has_one_to_one_scale(page)
                 _assert_pan_moves_cluster_overlays_as_one_surface(page)
             else:

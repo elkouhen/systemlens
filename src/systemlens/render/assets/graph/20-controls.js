@@ -154,7 +154,6 @@
     const analyzedPathsEmpty = document.getElementById("analyzed-paths-empty");
     const pathHistoryTitle = document.getElementById("path-history-title");
     const layoutStatus = document.getElementById("layout-status");
-    const layerViewToggle = document.getElementById("layer-view-toggle");
     const layoutButtons = new Map([
       ["forceatlas2", document.getElementById("layout-forceatlas2")],
       ["noverlap", document.getElementById("layout-noverlap")],
@@ -167,7 +166,7 @@
       ["noverlap", "placement sans chevauchement"],
       ["forceatlas2-noverlap", "vue graphe"],
       ["elk", "vue couches"],
-      ["cluster", "vue namespaces"],
+      ["cluster", "vue clusters"],
     ]);
     const pathStops = [];
     const analyzedPaths = [];

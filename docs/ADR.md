@@ -229,3 +229,22 @@ in `graph_facts`, separately from relations derived from source code.
 be extracted deterministically, while ensuring reindexing preserves enrichment
 and MCP deletion never destroys source evidence. `architecture_graph` merges
 both layers for reading. Added evidence paths remain relative to the repository.
+
+## ADR-24 — Reserve cluster terminology for structural project grouping
+
+**Status:** Accepted.
+
+**Context:** The interactive architecture export called its structural
+directory hierarchy a namespace view. That wording confused project grouping
+with Kubernetes namespaces and enrichment-fact namespaces, even though neither
+defines the hierarchy.
+
+**Decision:** The interactive export calls this hierarchy `Clusters`. A cluster
+is a structural group that may contain child clusters and projects. Membership
+comes from project directory paths; Kubernetes namespaces remain runtime
+metadata only. Existing `project_namespace*` export fields remain compatibility
+aliases for the canonical `cluster_path` field.
+
+**Consequences:** Users select `Graph`, `Layers`, or `Clusters` without implying
+a Kubernetes grouping. Internal compatibility is preserved while new UI and
+documentation use cluster terminology for structural containers.

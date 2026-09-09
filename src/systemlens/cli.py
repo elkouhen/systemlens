@@ -1575,18 +1575,19 @@ def export_layers_cmd(
     )
 
 
-@export_app.command(name="namespaces")
+@export_app.command(name="clusters")
+@export_app.command(name="namespaces", hidden=True)
 def export_namespaces_cmd(
     html: Optional[Path] = typer.Option(
-        None, "--html", help="Fichier HTML des namespaces à produire."
+        None, "--html", help="Fichier HTML de la hiérarchie des clusters à produire."
     ),
 ) -> None:
-    """Exporter les namespaces et les modules qui leur sont associés.
+    """Exporter les clusters et les projets qui leur sont associés.
 
-    Exemple : `systemlens export namespaces --html namespaces.html`.
+    Exemple : `systemlens export clusters --html clusters.html`.
     """
     if html is None:
-        typer.echo("`systemlens export namespaces` requiert --html FILE.", err=True)
+        typer.echo("`systemlens export clusters` requiert --html FILE.", err=True)
         raise typer.Exit(code=2)
     repo_root = Path.cwd()
     if not db_path(repo_root).is_file():
@@ -1598,9 +1599,9 @@ def export_namespaces_cmd(
     with Store(repo_root, readonly=True) as store:
         modules = store.all_modules()
     html.write_text(render_namespaces_html(modules, repo_root), encoding="utf-8")
-    namespace_count = len({project_namespace(module, repo_root) for module in modules})
+    cluster_count = len({project_namespace(module, repo_root) for module in modules})
     typer.echo(
-        f"Export namespaces écrit dans {html} ({namespace_count} namespaces, {len(modules)} modules)."
+        f"Export clusters écrit dans {html} ({cluster_count} clusters, {len(modules)} modules)."
     )
 
 

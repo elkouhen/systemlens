@@ -1,1 +1,0 @@
-[{"kind": "topic", "name": "order", "producers": ["microservice-order"], "consumers": ["microservice-invoicing"], "message_types_published": ["Order"], "message_types_consumed": ["Invoice"]}]

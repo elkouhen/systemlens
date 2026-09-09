@@ -33,11 +33,12 @@ For a human-readable topology, generate an interactive export:
 systemlens export microservices --html architecture.html
 ```
 
-To inspect resolved Kubernetes namespaces and attached modules, use the
-dedicated namespace view:
+To inspect the structural hierarchy of clusters, child clusters, and indexed
+projects, use the dedicated cluster view. Kubernetes namespaces do not define
+this hierarchy:
 
 ```bash
-systemlens export namespaces --html namespaces.html
+systemlens export clusters --html clusters.html
 ```
 
 For iterative AI enrichment, validate and replace facts in the separate local

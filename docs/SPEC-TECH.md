@@ -331,7 +331,7 @@ Mutable selection, view, layout, and camera state is held in one
 scheduler (`requestGraphRender`) so canvas and HTML overlays observe one
 coalesced render cycle.
 
-Namespace and project-cluster titles are interactive overlay controls. Cluster
+Cluster titles are interactive overlay controls. Cluster
 selection is tracked independently from node selection in `graphState`; it
 reuses the visible membership calculated for the rendered container, so the
 details list cannot include filtered or guessed nodes. Selecting a listed
@@ -373,16 +373,20 @@ Camera updates during pan and zoom are coalesced to the next animation frame.
 Fit operations reset Sigma's normalized camera state synchronously before
 calculating the selected mode. This makes overlapping fit requests idempotent
 and prevents zero-duration camera animations from racing on repeated clicks.
+The details panel is observed with `ResizeObserver`; when its reserved height
+changes, the renderer refreshes every overlay and reapplies the selected fit
+mode. A geometry comparison prevents content-only mutations from causing
+redundant camera resets.
 The Sigma canvas and the HTML card/cluster overlays are therefore recomputed
 from one camera state per frame, preventing partially rebuilt containers from
-appearing while the user drags the namespace view.
+appearing while the user drags the cluster view.
 
 Wheel zoom is handled once for both the Sigma canvas and the HTML overlays;
 the native Sigma wheel handler is disabled so hovering a card cannot change
 the zoom behavior. Each wheel event applies a bounded exponential camera-ratio
 step without collision-based clamping.
 
-### Layout engines and namespace placement
+### Layout engines and cluster placement
 
 The ELK layer layout loads independently from the ForceAtlas2 and Noverlap
 modules used by the graph layouts, so unrelated dynamic imports cannot keep
@@ -391,9 +395,9 @@ the layer view in a pending state.
 Force-based placement uses Sigma's node radius to preserve the graph structure;
 it does not mutate positions after the camera fit to repair HTML-card overlap.
 
-The namespace-cluster packer places microservices in a first sub-layer and
+The cluster packer places microservices in a first sub-layer and
 resources in a second sub-layer on separated grids, then
-packs namespace rectangles with positive margins that include the complete
+packs cluster rectangles with positive margins that include the complete
 projected card/title envelope, not only the node-grid dimensions. Its graph-space
 gaps are expressed in the same graph-coordinate scale as the rest of the
 layout, while remaining large enough for the shared 110×70 card envelope. The
@@ -414,11 +418,13 @@ viewport.
 The cluster view uses this deterministic packing as its source of truth; it does
 not wait for a compound force layout that could block the browser. When project
 or other parent groups are enabled, their bounds are the union of the already
-projected child namespace bounds plus title/padding margins; node-grid gaps are
+projected child-cluster bounds plus title/padding margins; node-grid gaps are
 calibrated with the shared 110×70 card envelope and a dedicated vertical
 separation between the two sub-layers. This explicit hierarchy prevents a
 parent from being smaller than a nested cluster after zooming. Project groups
-carry their owning project namespace and full namespace path.
+carry their owning cluster and full cluster path. The historical
+`project_namespace` and `project_namespace_path` fields remain read-compatible
+aliases for `cluster_path`; they do not represent Kubernetes namespaces.
 
 Structural project groups contain only
 their owning projects; resource nodes resolve their cluster
@@ -431,16 +437,16 @@ for deterministic exports.
 
 ### Layer placement
 
-The layered view reuses this packer with an additional grouping key: namespaces
+The layered view reuses this packer with an additional grouping key: clusters
 are first grouped by the canonical internal software-layer order (`api`,
 `application`, `orchestration`, `infrastructure`, `domain`, `persistence`),
 producing top-to-bottom layer bands. External microservices use the dedicated
 `external` layer at the bottom and are not part of the internal dependency
 order.
 
-The same canonical resolver is used for layer placement, namespace boxes, and
-band bounds, so a namespace cannot be placed in a band different from its
-nodes. Each namespace uses the same two-part grid as the cluster view:
+The same canonical resolver is used for layer placement, cluster boxes, and
+band bounds, so a cluster cannot be placed in a band different from its
+nodes. Each cluster uses the same two-part grid as the cluster view:
 microservices first, then resources.
 
 ELK may provide the initial compound layout, but the deterministic layer-aware

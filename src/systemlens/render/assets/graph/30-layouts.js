@@ -470,15 +470,6 @@
       const zoomOutButton = document.getElementById("zoom-out");
       zoomOutButton.disabled = false;
       zoomOutButton.title = "Dézoomer";
-      const nextView = !nextLayeredView ? "couches" : layout === "elk" ? "clusters" : "graphe";
-      const nextViewLabel = {
-        couches: "Afficher le rendu en couches",
-        clusters: "Afficher le rendu par clusters",
-        graphe: "Afficher le rendu graphe",
-      }[nextView];
-      layerViewToggle.textContent = nextViewLabel.replace("Afficher ", "");
-      layerViewToggle.setAttribute("aria-label", nextViewLabel);
-      layerViewToggle.title = nextViewLabel;
       setActiveLayout(layout);
       layoutStatus.textContent = `Calcul de la disposition ${label}…`;
       // Cluster placement is deterministic and local; it does not need any

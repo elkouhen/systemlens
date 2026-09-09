@@ -107,9 +107,14 @@
     .graph-layer-band { position: absolute; border-top: 2px solid color-mix(in srgb, var(--layer-accent, #64748b) 58%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--layer-accent, #64748b) 30%, transparent); background: color-mix(in srgb, var(--layer-accent, #64748b) 5%, transparent); }
     .graph-layer-title { position: absolute; top: 8px; left: 14px; min-width: 154px; padding: 3px 8px; box-sizing: border-box; color: var(--layer-accent, #64748b); background: color-mix(in srgb, #f8fafc 94%, var(--layer-accent, #64748b)); border-radius: 5px; font-size: 11px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
     .graph-namespace-group { position: absolute; border: 1px dashed color-mix(in srgb, var(--namespace-accent, #64748b) 72%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--namespace-accent, #64748b) 8%, transparent); }
-    .graph-namespace-title { position: absolute; top: 7px; left: 50%; max-width: calc(100% - 20px); padding: 2px 7px; box-sizing: border-box; overflow: hidden; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 92%, var(--namespace-accent, #64748b)); border-radius: 5px; font-size: 10px; font-weight: 750; text-align: center; text-overflow: ellipsis; transform: translateX(-50%); white-space: nowrap; }
+    .graph-namespace-group.is-selected { border-style: solid; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--namespace-accent, #64748b) 28%, transparent), 0 0 18px color-mix(in srgb, var(--namespace-accent, #64748b) 28%, transparent); }
+    .graph-namespace-title { position: absolute; top: 7px; left: 8px; right: 8px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 92%, var(--namespace-accent, #64748b)); border-radius: 5px; font: inherit; font-size: 10px; font-weight: 750; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+    .graph-namespace-title:hover, .graph-namespace-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--namespace-accent, #64748b) 58%, transparent); outline-offset: 1px; }
     .graph-project-group { position: absolute; padding: 25px 13px 13px; border: 1px dashed var(--group-accent, #64748b); border-radius: 12px; background: color-mix(in srgb, var(--group-accent, #64748b) 4%, transparent); color: var(--group-accent, #64748b); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-    .graph-project-group-title { position: absolute; top: 8px; left: 50%; max-width: calc(100% - 26px); padding: 2px 7px; box-sizing: border-box; overflow: hidden; background: color-mix(in srgb, #f8fafc 94%, var(--group-accent, #64748b)); border-radius: 5px; text-align: center; text-overflow: ellipsis; transform: translateX(-50%); white-space: nowrap; }
+    .graph-project-group.is-selected { border-style: solid; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--group-accent, #64748b) 28%, transparent), 0 0 18px color-mix(in srgb, var(--group-accent, #64748b) 28%, transparent); }
+    .graph-project-group-title { position: absolute; top: 8px; left: 10px; right: 10px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: inherit; background: color-mix(in srgb, #f8fafc 94%, var(--group-accent, #64748b)); border-radius: 5px; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: center; text-overflow: ellipsis; text-transform: inherit; white-space: nowrap; }
+    .graph-namespace-title:hover, .graph-project-group-title:hover { filter: brightness(.97); box-shadow: 0 1px 5px color-mix(in srgb, currentColor 18%, transparent); }
+    .graph-project-group-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--group-accent, #64748b) 58%, transparent); outline-offset: 1px; }
     :root[data-theme="dark"] .graph-project-group { background: color-mix(in srgb, var(--group-accent, #64748b) 8%, transparent); }
     .graph-node-card-label { position: absolute; width: 110px; height: 70px; min-height: 70px; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; box-sizing: border-box; transform: translate(-50%, -50%) scale(var(--graph-card-scale, 1)); transform-origin: center; pointer-events: auto; cursor: pointer; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #ffffff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; overflow: hidden; }
     .graph-node-card-icon { position: static; grid-column: 2; grid-row: 1; align-self: center; display: grid; place-items: center; width: 14px; height: 14px; border: 0; border-radius: 0; color: var(--card-accent, #64748b); line-height: 1; }
@@ -121,6 +126,21 @@
     .graph-node-card-icon.is-topic::before { content: ""; width: 12px; height: 13px; border: 0; border-radius: 1px; background: linear-gradient(to right, currentColor 0 1.5px, transparent 1.5px 5.25px, currentColor 5.25px 6.75px, transparent 6.75px 10.5px, currentColor 10.5px 12px); }
     .graph-node-card-name { min-width: 0; grid-column: 1; grid-row: 1; align-self: end; font-weight: 750; }
     .graph-node-card-kind { min-width: 0; grid-column: 1 / 3; grid-row: 2; margin-top: 3px; color: #64748b; font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #graph-node-labels.is-symbol-mode { overflow: visible; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label { width: 30px; height: 30px; min-height: 0; display: block; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon { position: absolute; z-index: 1; inset: 2px; display: block; width: 26px; height: 26px; color: #fff; background: var(--card-accent, #64748b); border: 2px solid color-mix(in srgb, var(--card-accent, #64748b) 72%, #172033); box-sizing: border-box; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon::before { display: none; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service { border-radius: 0; clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%); }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-topic { border-radius: 50%; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-database { inset: 5px; width: 20px; height: 20px; border-radius: 3px; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-name { position: absolute; z-index: 2; top: 50%; left: 34px; display: block; width: max-content; max-width: none; padding: 2px 4px; visibility: hidden; opacity: 0; pointer-events: none; color: #172033; background: rgba(255, 255, 255, .9); border-radius: 4px; box-shadow: 0 2px 8px rgba(15, 23, 42, .12); font-size: 10px; line-height: 1.2; white-space: nowrap; overflow: visible; overflow-wrap: normal; transform: translateY(-50%); transition: opacity .1s ease; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label:hover,
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered { z-index: 20; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label:hover .graph-node-card-name,
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered .graph-node-card-name { visibility: visible; opacity: 1; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-kind { display: none; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-icon { box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 24%, transparent), 0 0 18px var(--card-accent, #64748b); }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered:not(.is-selected) .graph-node-card-icon { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 0 12px color-mix(in srgb, var(--card-accent, #64748b) 55%, transparent); }
     .graph-node-card-label.is-selected { border-width: 1.5px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 0 22px color-mix(in srgb, var(--card-accent, #64748b) 52%, transparent), 0 8px 20px rgba(15, 23, 42, .18); }
     .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 9%, transparent), 0 0 13px color-mix(in srgb, var(--card-accent, #64748b) 27%, transparent), 0 6px 17px rgba(15, 23, 42, .14); }
     .graph-node-card-label.is-dimmed { opacity: 1; }
@@ -140,7 +160,7 @@
     .toolbar-panel { display: grid; gap: 10px; }
     .toolbar-panel[hidden] { display: none; }
     #search, #path-query { width: 100%; }
-    .graph-actions { display: flex; align-items: center; gap: 7px; }
+    .graph-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
     .toolbar button { width: 34px; height: 34px; border: 1px solid #b9c5d6; border-radius: 6px; color: #315f9b; background: #fff; font-size: 19px; line-height: 1; cursor: pointer; }
     .toolbar button:hover { background: #eaf2ff; }
     .graph-actions .graph-action-label { width: auto; padding: 0 8px; font-size: 11px; font-weight: 700; }
@@ -149,9 +169,13 @@
     .graph-control-group button:hover { background: rgba(255, 255, 255, .8); box-shadow: 0 1px 3px rgba(15, 23, 42, .1); transform: none; }
     .zoom-controls button { width: 30px; font-size: 18px; }
     .fit-controls .graph-action-label { height: 28px; padding: 0 9px; color: #52616b; }
-    .fit-controls .fit-mode.is-active { color: #fff; background: #3156d3; box-shadow: 0 2px 6px rgba(49, 86, 211, .25); }
-    .fit-controls .fit-mode.is-active:hover { background: #2647b5; }
+    .view-controls { flex: 1 1 205px; }
+    .view-controls .graph-action-label { flex: 1 1 auto; height: 28px; padding: 0 7px; color: #52616b; }
+    .render-controls .graph-action-label { height: 28px; padding: 0 8px; color: #52616b; }
+    .fit-controls .fit-mode.is-active, .view-controls .view-mode.is-active, .render-controls .render-mode.is-active { color: #fff; background: #3156d3; box-shadow: 0 2px 6px rgba(49, 86, 211, .25); }
+    .fit-controls .fit-mode.is-active:hover, .view-controls .view-mode.is-active:hover, .render-controls .render-mode.is-active:hover { background: #2647b5; }
     .graph-actions-spacer { flex: 1 1 auto; min-width: 2px; }
+    .graph-actions-break { flex-basis: 100%; height: 0; }
     .graph-actions .graph-secondary-action { height: 32px; color: #52616b; background: transparent; }
     .exploration-start { display: grid; gap: 7px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px; background: #f8fbff; }
     .exploration-start h2 { margin: 0; color: #1d4f91; font-size: 12px; }
@@ -553,7 +577,8 @@
     :root[data-theme="dark"] .graph-control-group { border-color: rgba(148, 163, 184, .22); background: #101d31; }
     :root[data-theme="dark"] .graph-control-group button { color: #c8d5e8; background: transparent; }
     :root[data-theme="dark"] .graph-control-group button:hover { background: #203453 !important; }
-    :root[data-theme="dark"] .fit-controls .fit-mode.is-active { color: #fff; background: #4663db; }
+    :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .view-controls .view-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: #fff; background: #4663db; }
+    :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: rgba(15, 27, 46, .84); }
     :root[data-theme="dark"] .toolbar-tabs { border-color: rgba(148, 163, 184, .18); background: #101d31; }
     :root[data-theme="dark"] .toolbar-tab { color: #91a4bd !important; }
     :root[data-theme="dark"] .toolbar-tab.is-active { color: #b8c7ff !important; background: #1c2d4b !important; }
@@ -613,8 +638,17 @@
         <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher le graphe à une distance lisible" title="Afficher le graphe à une distance lisible" aria-pressed="true">Lisible</button>
       </div>
       <span class="graph-actions-spacer" aria-hidden="true"></span>
-      <button id="layer-view-toggle" class="graph-action-label graph-secondary-action" type="button" aria-label="Changer de vue" title="Changer de vue">Vue suivante</button>
       <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Effacer la sélection" title="Effacer la sélection">Effacer</button>
+      <span class="graph-actions-break" aria-hidden="true"></span>
+      <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
+        <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Explorer les relations avec des nœuds espacés">Graphe</button>
+        <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
+        <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des clusters et des projets">Clusters</button>
+      </div>
+      <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
+        <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
+        <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
+      </div>
     </div>
     <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
     <button id="inventory-status" class="inventory-status" type="button" hidden></button>
@@ -665,14 +699,6 @@
         <label class="relation-filter" title="Afficher les microservices externes"><input id="node-external-microservice" type="checkbox" checked aria-label="Afficher les microservices externes">Externes</label>
         <label class="relation-filter" title="Afficher les topics Kafka"><input id="node-kafka-topic" type="checkbox" checked aria-label="Afficher les topics Kafka">Topics Kafka</label>
         <label class="relation-filter" title="Afficher les collections MongoDB"><input id="node-mongodb-collection" type="checkbox" checked aria-label="Afficher les collections MongoDB">MongoDB</label>
-      </fieldset>
-      <fieldset class="layout-controls">
-        <legend>Vue principale</legend>
-        <div class="layout-options" role="group" aria-label="Choix de la vue principale">
-          <button id="layout-forceatlas2-noverlap" class="layout-option is-active" type="button" aria-pressed="true" title="Explorer les relations avec des nœuds espacés">Graphe</button>
-          <button id="layout-elk" class="layout-option" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
-          <button id="layout-cluster" class="layout-option" type="button" aria-pressed="false" title="Afficher l’organisation par namespace">Namespaces</button>
-        </div>
       </fieldset>
       <fieldset class="layout-controls">
         <legend>Placement des nœuds</legend>
@@ -968,6 +994,7 @@
     let initialNodePositions = new Map();
     const graphState = {
       selectedId: null,
+      selectedClusterKey: null,
       hoveredId: null,
       relatedNodes: null,
       relatedEdges: null,
@@ -984,6 +1011,7 @@
       layoutRequest: 0,
       fitMode: "readable",
       fitRequest: 0,
+      renderMode: "cards",
     };
     function updateGraphState(patch) {
       Object.assign(graphState, patch);
@@ -991,8 +1019,9 @@
     }
     function requiredCardZoomIn(targetRenderer) {
       if (!targetRenderer || !network) return 1;
-      const cardWidth = GRAPH_CARD_WIDTH + 4;
-      const cardHeight = GRAPH_CARD_HEIGHT + 4;
+      const symbolMode = graphState.renderMode === "symbols";
+      const cardWidth = symbolMode ? 34 : GRAPH_CARD_WIDTH + 4;
+      const cardHeight = symbolMode ? 34 : GRAPH_CARD_HEIGHT + 4;
       const buckets = new Map();
       const requiredZooms = [];
       network.forEachNode((id, attributes) => {
@@ -1023,6 +1052,9 @@
       });
       if (!requiredZooms.length) return 1;
       requiredZooms.sort((left, right) => left - right);
+      if (graphState.activeLayout === "forceatlas2-noverlap") {
+        return requiredZooms[requiredZooms.length - 1];
+      }
       // A single near-coincident pair must not dictate the camera distance for
       // the entire graph. Separating 90% of the initially overlapping pairs
       // gives a stable readable view while leaving local outliers explorable.
@@ -1457,11 +1489,12 @@
         labelAlignment: "center",
         nodeReducer: (node, data) => {
           if (!isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
+          const renderedData = graphState.renderMode === "symbols" ? { ...data, size: .5 } : data;
           if (!graphState.selectedId || graphState.relatedNodes.has(node)) {
             const order = graphState.pathMicroserviceOrder.get(node);
-            return order ? { ...data, label: `${order}. ${data.label}` } : data;
+            return order ? { ...renderedData, label: `${order}. ${data.label}` } : renderedData;
           }
-          return { ...data, color: "#d8e0ea", label: "" };
+          return { ...renderedData, color: "#d8e0ea", label: "" };
         },
         edgeReducer: (edge, data) => {
           if (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge))) return { ...data, hidden: true };
@@ -1472,6 +1505,7 @@
         },
       });
       renderOverlays = () => {
+        nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         const nodePoints = new Map();
         const graphPointToViewport = graphPoint => {
           return renderer.graphToViewport(graphPoint);
@@ -1619,17 +1653,33 @@
           }
           const renderedWidth = Math.max(150, maxX - minX);
           const renderedHeight = Math.max(92, maxY - minY);
-          namespaceBounds.set(`${group.layer}:${group.namespace}`, {
+          const groupKey = `${group.layer}:${group.namespace}`;
+          namespaceBounds.set(groupKey, {
             minX, maxX: minX + renderedWidth, minY, maxY: minY + renderedHeight,
           });
-          const box = document.createElement("div"); box.className = "graph-namespace-group";
+          const box = document.createElement("div");
+          box.className = `graph-namespace-group${graphState.selectedClusterKey === groupKey ? " is-selected" : ""}`;
           box.dataset.namespace = group.namespace;
+          box.dataset.clusterKey = groupKey;
           box.style.left = `${minX}px`; box.style.top = `${minY}px`;
           box.style.width = `${renderedWidth}px`;
           box.style.height = `${renderedHeight}px`;
           box.style.setProperty("--namespace-accent", layerColors[group.layer] || "#64748b");
-          const title = document.createElement("span"); title.className = "graph-namespace-title";
+          const title = document.createElement("button");
+          title.type = "button";
+          title.className = "graph-namespace-title";
           title.textContent = group.namespace === "root" ? "ROOT" : group.namespace;
+          title.title = `Afficher les éléments du cluster ${title.textContent}`;
+          title.addEventListener("click", event => {
+            event.stopPropagation();
+            selectCluster({
+              key: groupKey,
+              kind: "namespace",
+              name: title.textContent,
+              layer: group.layer,
+              ids: group.ids,
+            });
+          });
           box.append(title);
           graphLayersOverlay.append(box);
         });
@@ -1666,16 +1716,30 @@
             maxY = Math.max(...points.map(point => point.y)) + 52;
           }
           const container = document.createElement("div");
-          container.className = "graph-project-group";
+          const groupKey = `project:${group.namespace || group.name || "root"}:${group.name}`;
+          container.className = `graph-project-group${graphState.selectedClusterKey === groupKey ? " is-selected" : ""}`;
           container.dataset.namespaceGroup = group.namespace || group.name || "root";
+          container.dataset.clusterKey = groupKey;
           container.style.left = `${minX}px`;
           container.style.top = `${minY}px`;
           container.style.width = `${Math.max(150, maxX - minX)}px`;
           container.style.height = `${Math.max(120, maxY - minY)}px`;
           container.style.setProperty("--group-accent", "#64748b");
-          const title = document.createElement("span");
+          const title = document.createElement("button");
+          title.type = "button";
           title.className = "graph-project-group-title";
           title.textContent = group.name;
+          title.title = `Afficher les éléments du cluster ${group.name}`;
+          title.addEventListener("click", event => {
+            event.stopPropagation();
+            selectCluster({
+              key: groupKey,
+              kind: "project",
+              name: group.name,
+              layer: null,
+              ids: children.filter(id => nodePoints.has(id)),
+            });
+          });
           container.append(title);
           graphGroupsOverlay.append(container);
         });
@@ -2058,7 +2122,6 @@
     const analyzedPathsEmpty = document.getElementById("analyzed-paths-empty");
     const pathHistoryTitle = document.getElementById("path-history-title");
     const layoutStatus = document.getElementById("layout-status");
-    const layerViewToggle = document.getElementById("layer-view-toggle");
     const layoutButtons = new Map([
       ["forceatlas2", document.getElementById("layout-forceatlas2")],
       ["noverlap", document.getElementById("layout-noverlap")],
@@ -2071,7 +2134,7 @@
       ["noverlap", "placement sans chevauchement"],
       ["forceatlas2-noverlap", "vue graphe"],
       ["elk", "vue couches"],
-      ["cluster", "vue namespaces"],
+      ["cluster", "vue clusters"],
     ]);
     const pathStops = [];
     const analyzedPaths = [];
@@ -2532,16 +2595,12 @@
       });
     }
     function resolveGraphCardOverlaps() {
-      // Cards are intentionally fixed-size HTML overlays. The overview
-      // contract allows overlap, so moving Sigma nodes after the camera fit
-      // would make the fitted bounds stale and could push nodes off-screen.
-      // Keep this hook for compatibility with older layout callers.
-      return;
       const cardScale = GRAPH_CARD_SCALE;
-      const cardWidth = 110 * cardScale;
-      const cardHeight = 70 * cardScale;
+      const symbolMode = graphState.renderMode === "symbols";
+      const cardWidth = (symbolMode ? 30 : 110) * cardScale;
+      const cardHeight = (symbolMode ? 30 : 70) * cardScale;
       const gap = 4;
-      const ids = [...network.nodes()];
+      const ids = network.nodes().filter(id => isVisibleNodeId(id));
       const points = new Map(ids.map(id => {
           const attributes = network.getNodeAttributes(id);
           const point = renderer.graphToViewport({ x: attributes.x, y: attributes.y });
@@ -2624,26 +2683,18 @@
       if (switchingView) {
         updateGraphState({
           selectedId: null,
+          selectedClusterKey: null,
           hoveredId: null,
           relatedNodes: null,
           relatedEdges: null,
           pathMicroserviceOrder: new Map(),
         });
         clearPathControls();
-        setDetailsEmpty("Selectionnez un noeud pour isoler ses relations et afficher ses APIs.");
+        setDetailsEmpty("Selectionnez un noeud ou un cluster pour afficher ses informations.");
       }
       const zoomOutButton = document.getElementById("zoom-out");
       zoomOutButton.disabled = false;
       zoomOutButton.title = "Dézoomer";
-      const nextView = !nextLayeredView ? "couches" : layout === "elk" ? "clusters" : "graphe";
-      const nextViewLabel = {
-        couches: "Afficher le rendu en couches",
-        clusters: "Afficher le rendu par clusters",
-        graphe: "Afficher le rendu graphe",
-      }[nextView];
-      layerViewToggle.textContent = nextViewLabel.replace("Afficher ", "");
-      layerViewToggle.setAttribute("aria-label", nextViewLabel);
-      layerViewToggle.title = nextViewLabel;
       setActiveLayout(layout);
       layoutStatus.textContent = `Calcul de la disposition ${label}…`;
       // Cluster placement is deterministic and local; it does not need any
@@ -2715,7 +2766,7 @@
       }
       if (request !== graphState.layoutRequest) return;
       renderer.refresh();
-      fitCameraToVisibleGraph(renderer);
+      await fitCameraToVisibleGraph(renderer);
       await new Promise(resolve => setTimeout(resolve, 300));
       if (request !== graphState.layoutRequest) return;
       // Commit the view mode only after its layout and camera are ready. This
@@ -2727,12 +2778,13 @@
         clusteredView: layout === "cluster",
         layeredClusterView: layout === "elk",
       });
-      if (["forceatlas2", "noverlap", "cluster", "elk"].includes(layout)) {
-        // Force layouts optimize Sigma's node radii, not the larger HTML cards.
-        // Resolve the final projected envelope once after fitting the graph
-        // view; compound views use deterministic packing instead.
+      if (layout === "forceatlas2-noverlap" && graphState.fitMode === "readable") {
+        // Force layouts optimize Sigma's node radii, not the larger HTML
+        // overlays. Resolve their final projected envelope only in the plain
+        // graph's readable view; compound views keep deterministic packing.
         resolveGraphCardOverlaps();
         renderer.refresh();
+        await fitCameraToVisibleGraph(renderer);
       }
       // Sigma's noverlap solver works with Sigma node radii, while the
       // readable labels are larger HTML rectangles. Resolve any residual
@@ -4044,10 +4096,61 @@
         discardEmptyDetailsGroup(factsGroup);
       }
     }
+    function renderClusterDetails(cluster) {
+      const members = [...new Set(cluster.ids)]
+        .map(id => nodeDataById.get(id))
+        .filter(Boolean)
+        .sort((left, right) => left.name.localeCompare(right.name));
+      details.classList.remove("is-empty");
+      details.replaceChildren();
+      const header = document.createElement("header");
+      header.className = "details-header";
+      const kicker = document.createElement("p");
+      kicker.className = "details-kicker";
+      kicker.textContent = cluster.kind === "project" ? "Cluster de projets" : "Cluster namespace";
+      const title = document.createElement("h1");
+      title.className = "details-title";
+      title.textContent = cluster.name;
+      const meta = document.createElement("div");
+      meta.className = "details-meta";
+      const count = document.createElement("span");
+      count.className = "detail-badge";
+      count.textContent = `${members.length} élément${members.length > 1 ? "s" : ""}`;
+      meta.append(count);
+      if (cluster.layer && cluster.layer !== "namespaces") {
+        const layer = document.createElement("span");
+        layer.className = "detail-badge";
+        layer.textContent = `Layer : ${cluster.layer.replaceAll("_", " ")}`;
+        meta.append(layer);
+      }
+      header.append(kicker, title, meta);
+      details.append(header);
+      appendActionList("Éléments", members.map(member => ({
+        label: `${member.name} · ${nodeKindLabel(member)}`,
+        title: `Afficher les détails de ${member.name}`,
+        action: () => selectNode(member.id),
+      })));
+      if (!members.length) appendList("Éléments", ["Aucun élément visible"]);
+    }
+    function selectCluster(cluster) {
+      if (!pathLock.checked) clearPathControls();
+      updateGraphState({
+        selectedId: null,
+        selectedClusterKey: cluster.key,
+        relatedNodes: null,
+        relatedEdges: null,
+        pathMicroserviceOrder: new Map(),
+      });
+      renderer.refresh();
+      requestGraphRender();
+      renderClusterDetails(cluster);
+      persistState();
+    }
     function focusNodeRelations(id, matches) {
       if (!pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
+      graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       network.forEachEdge((edge, attributes, source, target) => {
@@ -4057,7 +4160,9 @@
       renderer.refresh();
       renderDetails(id);
       const position = renderer.getNodeDisplayData(id);
-      if (position) renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
+      if (position && !graphState.layeredView && !graphState.clusteredView) {
+        renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
+      }
       persistState();
     }
     function focusPublishedRestResource(id, resource) {
@@ -4070,6 +4175,7 @@
       if (!preservePath && !pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
+      graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       network.forEachEdge((edge, attributes, source, target) => {
@@ -4083,12 +4189,15 @@
       const position = renderer.getNodeDisplayData(id);
 
 // Ordered source module: 60-bootstrap.js
-      if (position) renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
+      if (position && !graphState.layeredView && !graphState.clusteredView) {
+        renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
+      }
       persistState();
     }
     function reset() {
       updateGraphState({
         selectedId: null,
+        selectedClusterKey: null,
         relatedNodes: null,
         relatedEdges: null,
         pathMicroserviceOrder: new Map(),
@@ -4097,7 +4206,7 @@
         setActiveRelationPreset("all");
       }
       renderer.refresh();
-      setDetailsEmpty("Selectionnez un noeud pour isoler ses relations et afficher ses APIs.");
+      setDetailsEmpty("Selectionnez un noeud ou un cluster pour afficher ses informations.");
       search.value = "";
       clearPathControls();
       persistState();
@@ -4126,6 +4235,9 @@
     }
     const fitOverviewButton = document.getElementById("fit-view");
     const fitReadableButton = document.getElementById("fit-readable");
+    const renderCardsButton = document.getElementById("render-cards");
+    const renderSymbolsButton = document.getElementById("render-symbols");
+    graphCanvas.dataset.renderMode = graphState.renderMode;
     function updateFitModeControls(mode) {
       [
         [fitOverviewButton, "overview"],
@@ -4135,6 +4247,31 @@
         button.classList.toggle("is-active", active);
         button.setAttribute("aria-pressed", String(active));
       });
+    }
+    async function setNodeRenderMode(mode) {
+      const nextMode = mode === "symbols" ? "symbols" : "cards";
+      updateGraphState({ renderMode: nextMode });
+      [
+        [renderCardsButton, "cards"],
+        [renderSymbolsButton, "symbols"],
+      ].forEach(([button, buttonMode]) => {
+        const active = nextMode === buttonMode;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+      graphCanvas.dataset.renderModePending = nextMode;
+      await requestGraphRender();
+      if (graphState.renderMode !== nextMode) return;
+      await fitCameraToVisibleGraph(renderer);
+      if (graphState.renderMode !== nextMode) return;
+      if (graphState.activeLayout === "forceatlas2-noverlap" && graphState.fitMode === "readable") {
+        resolveGraphCardOverlaps();
+        renderer.refresh();
+        await fitCameraToVisibleGraph(renderer);
+        await requestGraphRender();
+      }
+      graphCanvas.dataset.renderMode = nextMode;
+      delete graphCanvas.dataset.renderModePending;
     }
     async function fitCameraToVisibleGraph(targetRenderer = renderer, mode = graphState.fitMode) {
       if (!targetRenderer) return;
@@ -4189,6 +4326,8 @@
     });
     fitOverviewButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "overview"));
     fitReadableButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "readable"));
+    renderCardsButton.addEventListener("click", () => setNodeRenderMode("cards"));
+    renderSymbolsButton.addEventListener("click", () => setNodeRenderMode("symbols"));
     document.getElementById("reset").addEventListener("click", reset);
     document.getElementById("inspector-close").addEventListener("click", closeInspector);
     inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });
@@ -4216,14 +4355,6 @@
       dtoReferencesFilter.focus();
     });
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
-    layerViewToggle.addEventListener("click", () => {
-      const nextLayout = !graphState.layeredView
-        ? "elk"
-        : !graphState.clusteredView
-          ? "cluster"
-          : "forceatlas2-noverlap";
-      applyLayout(nextLayout);
-    });
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
     openApiTab.addEventListener("click", () => setToolbarTab("openapi"));
     kafkaTab.addEventListener("click", () => setToolbarTab("kafka"));
@@ -4276,6 +4407,7 @@
     renderReferences();
     renderRequestReplyPatterns();
     restoreState();
+    let workspaceGeometry = null;
     function updateWorkspaceViewport(refit = false) {
       const toolbar = document.querySelector(".toolbar");
       const detailsPanel = document.getElementById("details");
@@ -4285,17 +4417,32 @@
       const detailsHeight = detailsPanel
         ? Math.min(window.innerHeight * .42, detailsPanel.getBoundingClientRect().height + 24)
         : 0;
+      const nextGeometry = {
+        left: Math.max(0, left),
+        bottom: Math.max(0, detailsHeight),
+      };
+      const geometryChanged = !workspaceGeometry
+        || Math.abs(workspaceGeometry.left - nextGeometry.left) > .5
+        || Math.abs(workspaceGeometry.bottom - nextGeometry.bottom) > .5;
+      workspaceGeometry = nextGeometry;
       const root = document.documentElement;
-      root.style.setProperty("--workspace-left", `${Math.max(0, left)}px`);
+      root.style.setProperty("--workspace-left", `${nextGeometry.left}px`);
       root.style.setProperty("--workspace-right", "0px");
       root.style.setProperty("--workspace-top", "0px");
-      root.style.setProperty("--workspace-bottom", `${Math.max(0, detailsHeight)}px`);
+      root.style.setProperty("--workspace-bottom", `${nextGeometry.bottom}px`);
       renderer?.refresh();
       dependencyRenderer?.refresh();
-      if (refit) fitCameraToVisibleGraph(activeRenderer());
+      requestGraphRender();
+      if (refit && geometryChanged) fitCameraToVisibleGraph(activeRenderer());
     }
-    const workspaceObserver = new MutationObserver(() => updateWorkspaceViewport(false));
-    workspaceObserver.observe(details, { attributes: true, attributeFilter: ["class"] });
+    const workspaceObserver = typeof ResizeObserver === "function"
+      ? new ResizeObserver(() => updateWorkspaceViewport(true))
+      : new MutationObserver(() => updateWorkspaceViewport(true));
+    if (workspaceObserver instanceof MutationObserver) {
+      workspaceObserver.observe(details, { attributes: true, childList: true, subtree: true });
+    } else {
+      workspaceObserver.observe(details);
+    }
     updateWorkspaceViewport(false);
     applyLayout("forceatlas2-noverlap");
     function runExploreSearch() {

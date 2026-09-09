@@ -1,5 +1,7 @@
 // Ordered source module: 60-bootstrap.js
-      if (position) renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
+      if (position && !graphState.layeredView && !graphState.clusteredView) {
+        renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
+      }
       persistState();
     }
     function reset() {
@@ -163,14 +165,6 @@
       dtoReferencesFilter.focus();
     });
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
-    layerViewToggle.addEventListener("click", () => {
-      const nextLayout = !graphState.layeredView
-        ? "elk"
-        : !graphState.clusteredView
-          ? "cluster"
-          : "forceatlas2-noverlap";
-      applyLayout(nextLayout);
-    });
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
     openApiTab.addEventListener("click", () => setToolbarTab("openapi"));
     kafkaTab.addEventListener("click", () => setToolbarTab("kafka"));
@@ -223,6 +217,7 @@
     renderReferences();
     renderRequestReplyPatterns();
     restoreState();
+    let workspaceGeometry = null;
     function updateWorkspaceViewport(refit = false) {
       const toolbar = document.querySelector(".toolbar");
       const detailsPanel = document.getElementById("details");
@@ -232,17 +227,32 @@
       const detailsHeight = detailsPanel
         ? Math.min(window.innerHeight * .42, detailsPanel.getBoundingClientRect().height + 24)
         : 0;
+      const nextGeometry = {
+        left: Math.max(0, left),
+        bottom: Math.max(0, detailsHeight),
+      };
+      const geometryChanged = !workspaceGeometry
+        || Math.abs(workspaceGeometry.left - nextGeometry.left) > .5
+        || Math.abs(workspaceGeometry.bottom - nextGeometry.bottom) > .5;
+      workspaceGeometry = nextGeometry;
       const root = document.documentElement;
-      root.style.setProperty("--workspace-left", `${Math.max(0, left)}px`);
+      root.style.setProperty("--workspace-left", `${nextGeometry.left}px`);
       root.style.setProperty("--workspace-right", "0px");
       root.style.setProperty("--workspace-top", "0px");
-      root.style.setProperty("--workspace-bottom", `${Math.max(0, detailsHeight)}px`);
+      root.style.setProperty("--workspace-bottom", `${nextGeometry.bottom}px`);
       renderer?.refresh();
       dependencyRenderer?.refresh();
-      if (refit) fitCameraToVisibleGraph(activeRenderer());
+      requestGraphRender();
+      if (refit && geometryChanged) fitCameraToVisibleGraph(activeRenderer());
     }
-    const workspaceObserver = new MutationObserver(() => updateWorkspaceViewport(false));
-    workspaceObserver.observe(details, { attributes: true, attributeFilter: ["class"] });
+    const workspaceObserver = typeof ResizeObserver === "function"
+      ? new ResizeObserver(() => updateWorkspaceViewport(true))
+      : new MutationObserver(() => updateWorkspaceViewport(true));
+    if (workspaceObserver instanceof MutationObserver) {
+      workspaceObserver.observe(details, { attributes: true, childList: true, subtree: true });
+    } else {
+      workspaceObserver.observe(details);
+    }
     updateWorkspaceViewport(false);
     applyLayout("forceatlas2-noverlap");
     function runExploreSearch() {

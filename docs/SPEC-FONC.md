@@ -60,7 +60,7 @@ but does not alter AST endpoint extraction.
 | `systemlens export microservices (--html FILE | --c4 DIRECTORY | --json) [--graph FILE] [--root-path DIRECTORY]` | Exports the deployable microservice, API, data-schema and message-channel topology. Non-deployable indexed modules (libraries and aggregators without an application entry point) are excluded from this view and remain available to `export modules` and `export layers`. Persisted MCP graph facts are included in the HTML export. `--graph FILE` reads a validated `systemlens-ai-graph-v1` manifest; `--root-path` provides the local source root for HTML source links. |
 | `systemlens export modules --html FILE` | Exports the Maven/Gradle build-dependency view. |
 | `systemlens export layers --html FILE` | Exports a dedicated software-layer view. With the persisted Strategy1 profile, project namespaces `PORTAIL` and `CYCLE-DE-VIE` are rendered in API/contracts and Orchestration, `DOMAIN-*` modules in Domain, and the documented layer-name prefixes/suffixes in their matching layers; shared libraries and other non-deployable modules are omitted, and without Strategy1 the repository-specific conventions are disabled. |
-| `systemlens export namespaces --html FILE` | Exports a namespace view where each parent directory containing projects is shown as a container containing its indexed modules. Kubernetes namespaces remain secondary module metadata and do not define these containers. |
+| `systemlens export clusters --html FILE` | Exports the structural hierarchy where a cluster can contain child clusters and indexed projects/modules. Membership comes from project directory paths, never from Kubernetes namespaces. The legacy `export namespaces` spelling remains a hidden compatibility alias. |
 | `systemlens export request-reply --html FILE` | Exports Strategy1 Kafka request/reply candidates. |
 | `systemlens web [--host HOST] [--port PORT]` | Starts the local Python web application at `http://127.0.0.1:8765/` by default. Its home page links to Architecture. Architecture renders the persisted snapshot for each request, excluding test-fixture microservices and every relation attached to them; when no index exists, it offers an explicit local button that creates the default configuration when needed and indexes the repository. The default loopback host prevents network exposure unless the user explicitly changes `--host`. |
 | `simpleweb [DIRECTORY] [--host HOST] [--port PORT]` | Serves static files from `DIRECTORY`, or from the current directory when omitted, for opening generated HTML files that load adjacent JSON. It binds to `http://127.0.0.1:8000/` by default, has no write routes, and does not create or modify files. The directory must exist. |
@@ -133,11 +133,11 @@ Its initial view foregrounds task-oriented entry points (Kafka topic, service
 dependencies, service-to-service path and Kafka messages). Relation/resource
 filters and placement strategies are available as advanced controls.
 
-The graph offers three primary views—graph, layers, and namespaces—while
+The graph offers three primary views—graph, layers, and clusters—while
 grouped and non-overlapping placement strategies remain secondary options. The layers view
 uses ELK.js compound nodes to arrange resources in a deterministic hierarchy:
-software layers are stacked vertically, namespaces are nested inside their
-layer, and services/resources are placed inside each namespace without
+software layers are stacked vertically, clusters are nested inside their
+layer, and projects/resources are placed inside each cluster without
 overlap. The internal canonical order is `api`, `application`, `orchestration`,
 `infrastructure`, `domain`, then `persistence`;
 `persistence` is always the lowest layer. In Strategy1, the `CYCLE-DE-VIE`
@@ -148,9 +148,11 @@ at the bottom, after the internal layer order.
 
 Shared libraries and other non-deployable modules are not rendered as layers.
 
-The three primary views are presented as a single view selector; placement
-strategies are secondary controls. The graph viewport reserves the space used
-by the navigation panel. Zoom actions are grouped as a compact `−` / `+`
+The three primary views are presented as a permanently visible segmented
+selector with direct `Graph`, `Layers`, and `Clusters` choices; changing
+views MUST NOT require cycling through intermediate views. Placement strategies
+remain secondary controls. The graph viewport reserves the space used by the
+navigation panel. Zoom actions are grouped as a compact `−` / `+`
 control, and the adjacent segmented fit control exposes two explicit modes:
 `All`, which frames every visible node, and `Readable`, which keeps the same
 center but zooms in until cards have useful reading separation. The
@@ -160,7 +162,7 @@ idempotent: repeated or rapid clicks MUST produce the same camera framing and
 MUST NOT compound the previous zoom.
 
 Users can pan and zoom to explore the remaining graph. In the layers and
-namespaces views, relations are visually subdued. In every view, microservice,
+clusters views, relations are visually subdued. In every view, microservice,
 Kafka topic, message channel,
 MongoDB collection, data schema, and equivalent resource cards share the same
 rendered width, height, and scale. Their semantic differences are conveyed by
@@ -175,13 +177,27 @@ channels use circles, and MongoDB collections and data schemas use small
 squares. Resource names are hidden by default, appear beside the symbol while
 it is hovered, and MAY extend beyond the symbol envelope. `Readable` fitting
 uses the compact symbol envelope in this mode rather than the card dimensions.
+The hovered symbol and its label are rendered above every non-hovered symbol,
+so another geometric marker cannot obscure the visible resource name.
 In the plain graph's `Readable` fit, a final screen-space collision pass keeps
 the active card or symbol envelopes from overlapping. This pass does not run in
-the layers or namespaces views, whose deterministic placement remains unchanged.
+the layers or clusters views, whose deterministic placement remains unchanged.
 
 During pan and zoom, the graph and its cluster overlays remain synchronized so
 cards and their containing rectangles move together without transient partial
 redraws.
+
+When selecting a node changes the height reserved for the details panel, the
+active fit mode MUST be reapplied after the workspace resize. Layer and cluster
+overlays MUST remain visible around every node center kept in the resulting
+viewport, including when node rendering uses symbols that can visually
+overflow their overlay surface. Node selection MUST NOT start a competing
+focus animation in the Layers or Clusters views; the plain Graph view retains
+its focused-node animation.
+
+In the layers and clusters views, each cluster exposes a full-width clickable
+header. Selecting that header highlights the cluster and opens its member list;
+the cluster body remains available for graph panning.
 
 Panning MUST also work when the drag starts on a node card; a simple click on
 the same card MUST continue to select the node.
@@ -195,28 +211,31 @@ allowed.
 Automatic collision protection MUST NOT zoom the camera during a pan; it may
 only constrain an explicit zoom-out operation.
 
-In the namespace view, zooming out remains available. When the fixed-size
+In the cluster view, zooming out remains available. When the fixed-size
 cards would make sibling cluster envelopes overlap, the camera is clamped to
 the last valid zoom level; panning and zooming in remain available.
 
 ### Placement and interaction model
 
-For the graph export, a namespace is the parent directory containing one or
-more projects/modules; Kubernetes namespaces are retained as metadata only.
-Projects located directly at the indexed repository root are assigned to the
-synthetic `root` namespace.
+For the graph export, a cluster is a structural group that can contain child
+clusters and projects/modules. Cluster membership comes from project directory
+paths and MUST NOT be inferred from Kubernetes namespaces. Projects located
+directly at the indexed repository root are assigned to the synthetic `root`
+cluster. The legacy internal `project_namespace*` fields remain compatibility
+aliases for the canonical `cluster_path`; they do not denote Kubernetes
+namespaces.
 
-The namespace-cluster layout is independent of the layer order and uses a
+The cluster layout is independent of the layer order and uses a
 deterministic two-level packing without ELK: fCoSE first computes the local
-compound layout of resources inside each namespace, then a deterministic
-packing step places namespace rectangles one per row with a fixed separating
+compound layout of resources inside each cluster, then a deterministic
+packing step places cluster rectangles one per row with a fixed separating
 margin in graph coordinates; the rectangles are projected only after packing,
 so camera zoom does not change their relative separation. The final grid is
 the authoritative collision guard.
 
-Node identifiers and namespace names are sorted only to make the result
+Node identifiers and cluster names are sorted only to make the result
 reproducible; there is no semantic order between clusters. Neither resources
-nor namespace rectangles may overlap. If fCoSE is unavailable, the same
+nor cluster rectangles may overlap. If fCoSE is unavailable, the same
 deterministic grid is used without the local fCoSE ordering.
 
 ELK is used only for the architectural layer layout, while Sigma.js provides
@@ -238,32 +257,32 @@ The HTML architecture view MUST preserve these visual invariants:
   calculated from its visible content. Layers MUST NOT be infinite full-width
   backgrounds.
 - All visible layer bands MUST share the same left and right bounds. The first
-  band starts immediately above its highest visible namespace content, and the
-  last band ends immediately below its lowest visible namespace content.
+  band starts immediately above its highest visible cluster content, and the
+  last band ends immediately below its lowest visible cluster content.
 - Each layer band MUST reserve a visible left gutter for its title. The title
-  MUST NOT overlap a namespace or project cluster; widening the band is
+  MUST NOT overlap a cluster; widening the band is
   preferred to moving or shrinking cluster content.
 - The layer-band geometry MUST be calculated from one shared rectangle model:
   all bands use the same left/right bounds, and the title gutter is included
   before the first cluster envelope.
 - Layers MUST be stacked vertically in the canonical order above, with the
   Persistence layer at the bottom.
-- Each visible project or fact namespace MUST be represented by a bounded rectangle
+- Each visible structural cluster MUST be represented by a bounded rectangle
   fully contained inside its owning layer, including its header and padding.
-- A namespace MAY use several rows. The default placement uses at most five
+- A cluster MAY use several rows. The default placement uses at most five
   boxes per row; additional boxes wrap onto subsequent rows.
 - Microservices, Kafka topics, message channels, MongoDB collections, data
   schemas and other rendered resources MUST NOT overlap. Placement MUST keep a
   positive horizontal and vertical gap greater than the projected card size.
 - Microservice and resource cards MUST use one shared rendered width, height,
   and scale in every view. Type-specific styling MUST NOT change card geometry.
-- Layer and namespace bounds MUST be recomputed after filtering, zooming,
+- Layer and cluster bounds MUST be recomputed after filtering, zooming,
   camera updates and layout changes so containers continue to contain their
   visible children.
-- Selecting a layer or namespace MUST rebuild the visible graph without
+- Selecting a layer or cluster MUST rebuild the visible graph without
   turning remaining cards white, losing isolated services, or leaving stale
   containers on screen.
-- In the layers and namespaces views, selecting a namespace or project-cluster
+- In the layers and clusters views, selecting a cluster
   title MUST highlight that cluster and display its name and sorted list of
   currently visible elements in the details panel. Each listed element MUST
   open its ordinary node details.
@@ -274,15 +293,15 @@ The HTML architecture view MUST preserve these visual invariants:
 - Changing a node-type filter MUST refresh the main graph renderer and its
   overlays immediately and MUST reapply the active graph layout to the
   filtered network.
-- The layered view extends the namespace-cluster packing: each canonical
+- The layered view extends the cluster packing: each canonical
   software layer is a separate horizontal band ordered from top to bottom,
-  namespaces are packed inside that band, and each namespace uses a first
+  clusters are packed inside that band, and each cluster uses a first
   microservice sub-layer followed by a resource sub-layer. ELK compound-node placement is
   used as a seed when available, while the deterministic layer-aware packing
   is the final collision guard. If ELK is unavailable or fails, the fallback
-  MUST retain the same layer order, namespace containment and non-overlap
+  MUST retain the same layer order, cluster containment and non-overlap
   guarantees.
-- If a namespace cluster becomes too tall and risks crossing a neighbouring
+- If a cluster becomes too tall and risks crossing a neighbouring
   layer, the renderer MUST add columns to that cluster and recompute the
   layout. The additional horizontal space MUST expand the diagram rather than
   overlap another layer or cluster.
@@ -303,25 +322,25 @@ If several microservices modify the same resource in writing, the renderer
 MUST associate the resource with the microservice belonging to the lowest
 software layer in the canonical visual order.
 
-### Namespace-cluster rendering rules
+### Cluster rendering rules
 
 The cluster view MUST preserve these visual invariants:
 
-- Namespace membership MUST use the same resolver for placement and for the
-  visible namespace rectangle.
+- Cluster membership MUST use the same resolver for placement and for the
+  visible cluster rectangle.
 - A Kafka topic, message channel, collection, or other resource MUST be
-  assigned first to the namespace of its producing microservice, using the
-  incoming source relation. A consumer namespace MUST NOT move the resource
+  assigned first to the cluster of its producing microservice, using the
+  incoming source relation. A consumer cluster MUST NOT move the resource
   into its cluster. Resources without an identifiable producer remain in
   `ROOT`.
-- Resources inside one namespace MUST be placed on a grid with a positive
+- Resources inside one cluster MUST be placed on a grid with a positive
   horizontal and vertical gap greater than the projected card size.
-- Within each namespace cluster, microservices MUST occupy the first
+- Within each cluster, microservices MUST occupy the first
   sub-layer and Kafka, MongoDB, and other resources MUST occupy a second
   sub-layer below them. Empty sub-layers are omitted. This ordering is conveyed
   by placement only; the renderer MUST NOT add visible `Microservices` or
   `Resources` sub-layer labels inside the cluster.
-- Namespace rectangles MUST be packed with a positive gap based on their full
+- Cluster rectangles MUST be packed with a positive gap based on their full
   rendered envelope, including card, title, and padding margins, and MUST NOT
   overlap each other.
 - When a second grouping level is displayed, each parent cluster MUST be the
@@ -329,11 +348,11 @@ The cluster view MUST preserve these visual invariants:
   margin. Parent bounds MUST contain the complete child boxes; the
   non-overlap rule applies between sibling clusters, not between a parent and
   its descendants.
-- A project-group parent MUST remain attached to the namespace of its owning
+- A project-group parent MUST remain attached to the cluster of its owning
   projects and MUST contain only those owning projects. Resources MUST remain
-  in the namespace cluster of their producing microservice; relation targets
+  in the cluster of their producing microservice; relation targets
   MUST NOT be added as children of the structural parent or enlarge it across
-  unrelated namespace clusters.
+  unrelated clusters.
 - Cluster bounds MUST be calculated from graph-coordinate bounds and projected
   after camera changes. Parent bounds MUST be recomputed from the projected
   child bounds, so zooming cannot make a child escape its parent or make the

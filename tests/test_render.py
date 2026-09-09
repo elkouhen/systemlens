@@ -65,6 +65,12 @@ def _html_graph_data(document: str) -> dict[str, object]:
 def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> None:
     document = render_graph_html({}, [])
 
+    assert 'class="graph-control-group view-controls"' in document
+    assert 'aria-label="Vue principale"' in document
+    assert '>Graphe</button>' in document
+    assert '>Couches</button>' in document
+    assert '>Clusters</button>' in document
+    assert 'id="layer-view-toggle"' not in document
     assert "#graph, #dependency-graph {\n      position: fixed;" in document
     assert "left: var(--workspace-left, 0px);" in document
     assert "const point = graphPointToViewport({ x: attributes.x, y: attributes.y });" in document
@@ -189,10 +195,16 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'nodeLabelOverlay.classList.toggle("is-symbol-mode"' in document
     assert 'graphState.renderMode === "symbols" ? { ...data, size: .5 }' in document
     assert '.graph-node-card-label:hover .graph-node-card-name' in document
+    assert '.graph-node-card-label.is-hovered { z-index: 20; }' in document
     assert 'layout === "forceatlas2-noverlap" && graphState.fitMode === "readable"' in document
     assert 'return requiredZooms[requiredZooms.length - 1]' in document
     assert 'fitMode: "readable"' in document
     assert "fitRequest !== graphState.fitRequest" in document
+    assert 'new ResizeObserver(() => updateWorkspaceViewport(true))' in document
+    assert "if (refit && geometryChanged) fitCameraToVisibleGraph(activeRenderer())" in document
+    assert document.count(
+        "if (position && !graphState.layeredView && !graphState.clusteredView)"
+    ) == 2
     assert 'Math.max(1.6, requiredCardZoomIn(targetRenderer))' in document
     assert "requiredZooms.push(Math.min(4, Math.min(" in document
     assert "(requiredZooms.length - 1) * .9" in document
@@ -279,14 +291,14 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "parent group is defined by its rendered children" in document
     assert "namespaceGroup.namespace === group.namespace" in document
     assert 'group.namespace === "root" ? "ROOT" : group.namespace' in document
-    assert "left: 50%; max-width: calc(100% - 20px)" in document
-    assert "left: 50%; max-width: calc(100% - 26px)" in document
+    assert "left: 8px; right: 8px; width: auto; max-width: none" in document
+    assert "left: 10px; right: 10px; width: auto; max-width: none" in document
     assert 'const libraries = layout === "cluster"' in document
     assert '? { elk: typeof window.ELK === "function" ? new window.ELK() : null }' in document
     assert ': await layoutLibraries;' in document
     assert "async function applyFcoseClusterLayout()" in document
-    assert 'const nextLayout = !graphState.layeredView' in document
-    assert '? "cluster"' in document
+    assert 'layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)))' in document
+    assert "layerViewToggle" not in document
     assert "labelGridCellSize: 160" in document
     assert "labelRenderedSizeThreshold: 10" in document
     assert "doubleClickZoomingRatio: 1" in document
