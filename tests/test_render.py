@@ -209,7 +209,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert '>Cartes</button>' in document
     assert '>Symboles</button>' in document
     assert 'renderMode: "cards"' in document
-    assert 'cardWidth = symbolMode ? 34 : GRAPH_CARD_WIDTH + 4' in document
+    assert "cardWidth = compoundView || !symbolMode ? GRAPH_CARD_WIDTH + 4 : 34" in document
     assert 'nodeLabelOverlay.classList.toggle("is-symbol-mode"' in document
     assert 'graphState.renderMode === "symbols" ? { ...data, size: .5 }' in document
     assert "function adaptiveSymbolLabelPlacements(nodePoints)" in document
@@ -235,7 +235,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "function requiredSmallGraphOverviewRatio(targetRenderer)" in document
     assert "network.order <= 12" in document
     assert "ratio: requiredSmallGraphOverviewRatio(targetRenderer)" in document
-    assert "requiredZooms.push(Math.min(4, Math.min(" in document
+    assert 'const compoundView = ["cluster", "elk"].includes(graphState.activeLayout)' in document
+    assert "requiredZooms.push(compoundView ? requiredZoom : Math.min(4, requiredZoom))" in document
+    assert "maximumCollisionFreeRatio" in document
     assert "(requiredZooms.length - 1) * .9" in document
     assert "camera.setState({ x: .5, y: .5, ratio: 1, angle: 0 })" in document
     assert "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))" not in document
@@ -353,7 +355,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "const GRAPH_CARD_WIDTH = 110 * GRAPH_CARD_SCALE" in document
     assert "const GRAPH_CARD_HEIGHT = 70 * GRAPH_CARD_SCALE" in document
     assert "lastSafeCameraState: null" in document
-    assert "const cardHalfWidth = 110 * cardScale / 2" in document
+    assert "const cardHalfWidth = GRAPH_CARD_WIDTH / 2" in document
+    assert "const cardHalfHeight = GRAPH_CARD_HEIGHT / 2" in document
+    assert "MODULE_PADDING_TOP" in document
     assert "const cardWidth = (symbolMode ? 30 : 110) * cardScale" in document
     assert "const cardHeight = (symbolMode ? 30 : 70) * cardScale" in document
     assert 'label.style.transform = `translate(-50%, -50%) scale(${cardScale})`' in document

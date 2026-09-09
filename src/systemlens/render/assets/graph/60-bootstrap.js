@@ -84,12 +84,22 @@
       camera.setState({ x: .5, y: .5, ratio: 1, angle: 0 });
       targetRenderer.refresh();
       if (fitRequest !== graphState.fitRequest) return;
+      const compoundView = targetRenderer === renderer
+        && ["cluster", "elk"].includes(graphState.activeLayout);
+      const collisionZoom = compoundView ? Math.max(1, requiredCardZoomIn(targetRenderer)) : 1;
+      if (compoundView) {
+        graphState.maximumCollisionFreeRatio = 1 / collisionZoom;
+      } else if (targetRenderer === renderer) {
+        graphState.maximumCollisionFreeRatio = 100;
+      }
       if (nextMode === "readable") {
         const state = camera.getState();
         // Start from the complete overview, then move closer. Architecture
         // cards use the measured projected spacing; the build graph has no
         // HTML cards and uses the same minimum reading distance.
-        if (targetRenderer === renderer && network.order <= 12) {
+        if (compoundView) {
+          camera.setState({ ...state, ratio: Math.max(.01, state.ratio / Math.max(1.6, collisionZoom)) });
+        } else if (targetRenderer === renderer && network.order <= 12) {
           camera.setState({ ...state, ratio: requiredSmallGraphOverviewRatio(targetRenderer) });
         } else {
           const zoomIn = targetRenderer === renderer
@@ -97,6 +107,9 @@
             : 1.6;
           camera.setState({ ...state, ratio: Math.max(.01, state.ratio / zoomIn) });
         }
+      } else if (compoundView) {
+        const state = camera.getState();
+        camera.setState({ ...state, ratio: Math.max(.01, state.ratio / collisionZoom) });
       }
       targetRenderer.refresh();
       if (targetRenderer === renderer) {
@@ -122,7 +135,10 @@
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
-      camera.setState({ ...state, ratio: Math.min(100, state.ratio * 1.25) });
+      const maximumRatio = renderer === dependencyRenderer
+        ? 100
+        : graphState.maximumCollisionFreeRatio;
+      camera.setState({ ...state, ratio: Math.min(maximumRatio, state.ratio * 1.25) });
       requestGraphRender();
     });
     fitOverviewButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "overview"));

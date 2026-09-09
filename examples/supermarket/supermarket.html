@@ -21,12 +21,15 @@
     const {
       contentMinX,
       contentMaxX,
-      viewportWidth,
+      viewportWidth: _viewportWidth,
       titleGutter = 182,
       minimumWidth = 260,
     } = options;
-    const left = Math.max(0, contentMinX - titleGutter);
-    const right = Math.min(viewportWidth, contentMaxX);
+    // Layer bands belong to the same unbounded overlay surface as modules.
+    // Clamping them to the viewport cuts off panned/off-screen modules and can
+    // make a module appear to intersect the neighbouring layer boundary.
+    const left = contentMinX - titleGutter;
+    const right = contentMaxX;
     const width = Math.max(minimumWidth, right - left);
     return layerBounds.map((bounds, index) => {
       const previous = layerBounds[index - 1];
@@ -37,7 +40,7 @@
       const bottom = next
         ? (bounds.contentBottom + next.contentTop) / 2
         : bounds.contentBottom;
-      return { left, top: Math.max(0, top), width, height: Math.max(0, bottom - Math.max(0, top)) };
+      return { left, top, width, height: Math.max(0, bottom - top) };
     });
   }
 
@@ -768,6 +771,10 @@
     const GRAPH_CARD_SCALE = 1;
     const GRAPH_CARD_WIDTH = 110 * GRAPH_CARD_SCALE;
     const GRAPH_CARD_HEIGHT = 70 * GRAPH_CARD_SCALE;
+    const MODULE_PADDING_X = 24;
+    const MODULE_PADDING_TOP = 42;
+    const MODULE_PADDING_BOTTOM = 24;
+    const MODULE_GAP = 8;
     const themeToggle = document.getElementById("theme-toggle");
     const themeStorageKey = "systemlens:graph-theme";
     const storedTheme = (() => {
@@ -956,6 +963,7 @@
       layoutRequest: 0,
       fitMode: "readable",
       fitRequest: 0,
+      maximumCollisionFreeRatio: 100,
       renderMode: "cards",
     };
     function updateGraphState(patch) {
@@ -964,9 +972,13 @@
     }
     function requiredCardZoomIn(targetRenderer) {
       if (!targetRenderer || !network) return 1;
+      const compoundView = ["cluster", "elk"].includes(graphState.activeLayout);
       const symbolMode = graphState.renderMode === "symbols";
-      const cardWidth = symbolMode ? 34 : GRAPH_CARD_WIDTH + 4;
-      const cardHeight = symbolMode ? 34 : GRAPH_CARD_HEIGHT + 4;
+      // Compound views must remain collision-free when the user switches
+      // between Symbols and Cards without moving the camera. Reserve the
+      // largest envelope even when symbols are currently rendered.
+      const cardWidth = compoundView || !symbolMode ? GRAPH_CARD_WIDTH + 4 : 34;
+      const cardHeight = compoundView || !symbolMode ? GRAPH_CARD_HEIGHT + 4 : 34;
       const buckets = new Map();
       const requiredZooms = [];
       network.forEachNode((id, attributes) => {
@@ -983,10 +995,11 @@
               // Uniform zoom separates the cards as soon as either axis has
               // enough room. Taking the larger axis factor would over-zoom
               // every pair that is nearly aligned horizontally or vertically.
-              requiredZooms.push(Math.min(4, Math.min(
+              const requiredZoom = Math.min(
                 cardWidth / Math.max(distanceX, 1),
                 cardHeight / Math.max(distanceY, 1),
-              )));
+              );
+              requiredZooms.push(compoundView ? requiredZoom : Math.min(4, requiredZoom));
             }
           }
         }
@@ -995,9 +1008,43 @@
         bucket.push(point);
         buckets.set(key, bucket);
       });
+      if (compoundView) {
+        const groupedPoints = new Map();
+        network.forEachNode((id, attributes) => {
+          if (!isVisibleNodeId(id) || attributes.hidden) return;
+          const modulePath = namespaceForNode(id);
+          const layer = graphState.activeLayout === "elk" ? layeredLayerForNode(id) : "modules";
+          const key = `${layer}:${modulePath}`;
+          const point = targetRenderer.graphToViewport({ x: attributes.x, y: attributes.y });
+          const points = groupedPoints.get(key) || [];
+          points.push(point);
+          groupedPoints.set(key, points);
+        });
+        const bounds = [...groupedPoints.values()].map(points => ({
+          minX: Math.min(...points.map(point => point.x)),
+          maxX: Math.max(...points.map(point => point.x)),
+          minY: Math.min(...points.map(point => point.y)),
+          maxY: Math.max(...points.map(point => point.y)),
+        }));
+        const requiredGapX = GRAPH_CARD_WIDTH + 2 * MODULE_PADDING_X + MODULE_GAP;
+        const requiredGapY = GRAPH_CARD_HEIGHT + MODULE_PADDING_TOP
+          + MODULE_PADDING_BOTTOM + MODULE_GAP;
+        for (let leftIndex = 0; leftIndex < bounds.length; leftIndex += 1) {
+          for (let rightIndex = leftIndex + 1; rightIndex < bounds.length; rightIndex += 1) {
+            const left = bounds[leftIndex];
+            const right = bounds[rightIndex];
+            const gapX = Math.max(left.minX - right.maxX, right.minX - left.maxX, 0);
+            const gapY = Math.max(left.minY - right.maxY, right.minY - left.maxY, 0);
+            const zoomX = gapX > 0 ? requiredGapX / gapX : Number.POSITIVE_INFINITY;
+            const zoomY = gapY > 0 ? requiredGapY / gapY : Number.POSITIVE_INFINITY;
+            const required = Math.min(zoomX, zoomY);
+            if (Number.isFinite(required)) requiredZooms.push(required);
+          }
+        }
+      }
       if (!requiredZooms.length) return 1;
       requiredZooms.sort((left, right) => left - right);
-      if (graphState.activeLayout === "forceatlas2-noverlap") {
+      if (["forceatlas2-noverlap", "cluster", "elk"].includes(graphState.activeLayout)) {
         return requiredZooms[requiredZooms.length - 1];
       }
       // A single near-coincident pair must not dictate the camera distance for
@@ -1582,8 +1629,13 @@
         const visibleServices = [...nodePoints.entries()]
           .map(([id, point]) => ({ id, point, node: nodeDataById.get(id) }))
           .filter(item => item.node?.kind === "microservice" && layeredLayerForNode(item.id));
+        const visibleLayerItems = graphState.layeredClusterView
+          ? [...nodePoints.entries()]
+            .map(([id, point]) => ({ id, point, node: nodeDataById.get(id) }))
+            .filter(item => layeredLayerForNode(item.id))
+          : visibleServices;
         const layers = layerOrder
-          .map(id => ({ id, items: visibleServices.filter(item => layeredLayerForNode(item.id) === id) }))
+          .map(id => ({ id, items: visibleLayerItems.filter(item => layeredLayerForNode(item.id) === id) }))
           .filter(layer => layer.items.length);
         const layerCenters = layers.map(layer => ({
           ...layer,
@@ -1595,30 +1647,32 @@
           graphGroupsOverlay.replaceChildren();
           return;
         }
-        [...nodePoints.entries()]
-          .filter(([id]) => nodeDataById.get(id)?.kind !== "microservice")
-          .forEach(([id, point]) => {
-            if (!layerCenters.length) return;
-            const nearest = layerCenters.reduce((best, layer) => (
-              Math.abs(layer.center - point.y) < Math.abs(best.center - point.y) ? layer : best
-            ), layerCenters[0]);
-            if (nearest) {
-              pointsByLayer.get(nearest.id).push(point);
-            }
-          });
+        if (!graphState.layeredClusterView) {
+          [...nodePoints.entries()]
+            .filter(([id]) => nodeDataById.get(id)?.kind !== "microservice")
+            .forEach(([id, point]) => {
+              if (!layerCenters.length) return;
+              const nearest = layerCenters.reduce((best, layer) => (
+                Math.abs(layer.center - point.y) < Math.abs(best.center - point.y) ? layer : best
+              ), layerCenters[0]);
+              if (nearest) {
+                pointsByLayer.get(nearest.id).push(point);
+              }
+            });
+        }
         const allLayerPoints = graphState.layeredClusterView
           ? [...nodePoints.values()]
           : [...pointsByLayer.values()].flat();
         // Reserve a left gutter inside every layer band for its title.  The
-        // cluster rectangles keep their graph-space positions, while the
+        // module rectangles keep their graph-space positions, while the
         // widened band starts earlier so the overlay title never sits on top
-        // of the first cluster.
+        // of the first module.
         const layerTitleGutter = 182;
         const contentMinX = allLayerPoints.length
-          ? Math.max(0, Math.min(...allLayerPoints.map(point => point.x)) - 92)
+          ? Math.min(...allLayerPoints.map(point => point.x)) - 92
           : 0;
         const contentMaxX = allLayerPoints.length
-          ? Math.min(window.innerWidth, Math.max(...allLayerPoints.map(point => point.x)) + 92)
+          ? Math.max(...allLayerPoints.map(point => point.x)) + 92
           : window.innerWidth;
         // ELK can retain an empty layer shell when filters remove all of its
         // nodes. Never feed empty point sets to Math.min/Math.max: Infinity
@@ -1631,8 +1685,10 @@
           const points = pointsByLayer.get(layer.id) || [];
           return {
             ...layer,
-            contentTop: Math.min(...points.map(point => point.y)) - 44,
-            contentBottom: Math.max(...points.map(point => point.y)) + 44,
+            contentTop: Math.min(...points.map(point => point.y))
+              - GRAPH_CARD_HEIGHT / 2 - MODULE_PADDING_TOP - MODULE_GAP,
+            contentBottom: Math.max(...points.map(point => point.y))
+              + GRAPH_CARD_HEIGHT / 2 + MODULE_PADDING_BOTTOM + MODULE_GAP,
           };
         });
         if (!layerCenters.length) {
@@ -1646,10 +1702,11 @@
         });
         if (!graphState.clusteredView || graphState.layeredClusterView) renderedLayerCenters.forEach((layer, index) => {
           const bandBounds = layerBands[index];
-          const bandHeight = Math.min(window.innerHeight, bandBounds.top + bandBounds.height) - bandBounds.top;
+          const bandHeight = bandBounds.height;
           if (bandHeight < 4) return;
           const band = document.createElement("div");
           band.className = "graph-layer-band";
+          band.dataset.layer = layer.id;
           band.style.left = `${bandBounds.left}px`; band.style.top = `${bandBounds.top}px`;
           band.style.width = `${bandBounds.width}px`;
           band.style.height = `${bandHeight}px`;
@@ -1686,17 +1743,16 @@
           if (graphState.clusteredView || graphState.layeredClusterView) {
             // The cards are HTML rectangles in viewport coordinates. Build
             // the namespace envelope from those projected centers so graph
-            // zoom cannot make a cluster smaller than its visible children.
+            // zoom cannot make a module smaller than its visible children.
             // Keep this in sync with .graph-node-card-label's CSS scale.
             // The envelope must contain the rendered HTML card, not Sigma's
             // logical node dimensions.
-            const cardScale = GRAPH_CARD_SCALE;
-            const cardHalfWidth = 110 * cardScale / 2;
-            const cardHalfHeight = 70 * cardScale / 2;
-            minX = Math.min(...group.points.map(point => point.x)) - cardHalfWidth - 24;
-            maxX = Math.max(...group.points.map(point => point.x)) + cardHalfWidth + 24;
-            minY = Math.min(...group.points.map(point => point.y)) - cardHalfHeight - 24;
-            maxY = Math.max(...group.points.map(point => point.y)) + cardHalfHeight + 10;
+            const cardHalfWidth = GRAPH_CARD_WIDTH / 2;
+            const cardHalfHeight = GRAPH_CARD_HEIGHT / 2;
+            minX = Math.min(...group.points.map(point => point.x)) - cardHalfWidth - MODULE_PADDING_X;
+            maxX = Math.max(...group.points.map(point => point.x)) + cardHalfWidth + MODULE_PADDING_X;
+            minY = Math.min(...group.points.map(point => point.y)) - cardHalfHeight - MODULE_PADDING_TOP;
+            maxY = Math.max(...group.points.map(point => point.y)) + cardHalfHeight + MODULE_PADDING_BOTTOM;
           }
           const renderedWidth = Math.max(150, maxX - minX);
           const renderedHeight = Math.max(92, maxY - minY);
@@ -1708,6 +1764,7 @@
           const box = document.createElement("div");
           box.className = `graph-namespace-group${graphState.selectedClusterKey === cluster.key ? " is-selected" : ""}`;
           box.dataset.namespace = group.namespace;
+          box.dataset.layer = group.layer;
           box.dataset.clusterKey = cluster.key;
           box.style.left = `${minX}px`; box.style.top = `${minY}px`;
           box.style.width = `${renderedWidth}px`;
@@ -1885,7 +1942,7 @@
       // Camera updates can fire several times during one drag. Coalesce them
       // into the next animation frame so the canvas and its HTML overlays are
       // repainted from the same camera state. Rebuilding synchronously for
-      // every intermediate pan state can briefly expose partial cluster boxes.
+      // every intermediate pan state can briefly expose partial module boxes.
       let labelRefreshScheduled = false;
       const scheduleNodeLabelRefresh = () => {
         if (labelRefreshScheduled) return;
@@ -1918,7 +1975,10 @@
         const graphPoint = renderer.viewportToGraph(cursor);
         const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
         const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * .0012);
-        const ratio = Math.max(.01, Math.min(100, state.ratio * factor));
+        const maximumRatio = ["cluster", "elk"].includes(graphState.activeLayout)
+          ? graphState.maximumCollisionFreeRatio
+          : 100;
+        const ratio = Math.max(.01, Math.min(maximumRatio, state.ratio * factor));
         camera.setState({
           ...state,
           // A larger Sigma ratio is a zoom-out. Bound manual wheel changes
@@ -2348,7 +2408,9 @@
           envelopeHeight: Math.abs(subLayers.height) + 200,
         };
       });
-      const outerColumns = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(packedGroups.length))));
+      // Four columns use the wide graph viewport more efficiently and reduce
+      // the collision-free zoom required by large module inventories.
+      const outerColumns = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(packedGroups.length))));
       const outerRows = Math.ceil(packedGroups.length / outerColumns);
       const outerWidth = Math.max(...packedGroups.map(group => group.envelopeWidth + clusterPaddingX * 2));
       const rowHeights = Array.from({ length: outerRows }, (_, row) => Math.max(
@@ -2477,7 +2539,7 @@
           });
           return layerCursorY;
         };
-        // Keep exceptionally tall clusters from crossing a neighbouring layer.
+        // Keep exceptionally tall module envelopes from crossing a neighbouring layer.
         // Adding columns trades vertical pressure for horizontal space; the
         // outer width is recomputed on every pass so the diagram grows with it.
         for (let pass = 0; pass < 12; pass += 1) {
@@ -2773,7 +2835,7 @@
       zoomOutButton.title = "Dézoomer";
       setActiveLayout(layout);
       layoutStatus.textContent = `Calcul de la disposition ${label}…`;
-      // Cluster placement is deterministic and local; it does not need any
+      // Module placement is deterministic and local; it does not need any
       // external layout library. Keep the library loading requirement for
       // ForceAtlas2/Noverlap and the ELK layer view only.
       // The layer view only needs ELK. Do not make it wait for the dynamic
@@ -2809,7 +2871,7 @@
           // it sizes namespaces from their two sub-layers and reserves sibling
           // gaps before projection. fCoSE can block the browser main thread
           // on large compound graphs, which prevents the fallback and leaves
-          // partially packed cluster envelopes on screen.
+          // partially packed module envelopes on screen.
           packClusterGraphPositions();
         }
         if (layout === "forceatlas2" || layout === "forceatlas2-noverlap") {
@@ -2848,7 +2910,7 @@
       // Commit the view mode only after its layout and camera are ready. This
       // keeps the old overlays coherent while an async layout is pending and
       // prevents a half-switched view from mixing old positions with new
-      // cluster/layer geometry.
+      // module/layer geometry.
       updateGraphState({
         layeredView: nextLayeredView,
         clusteredView: layout === "cluster",
@@ -4245,12 +4307,22 @@
       camera.setState({ x: .5, y: .5, ratio: 1, angle: 0 });
       targetRenderer.refresh();
       if (fitRequest !== graphState.fitRequest) return;
+      const compoundView = targetRenderer === renderer
+        && ["cluster", "elk"].includes(graphState.activeLayout);
+      const collisionZoom = compoundView ? Math.max(1, requiredCardZoomIn(targetRenderer)) : 1;
+      if (compoundView) {
+        graphState.maximumCollisionFreeRatio = 1 / collisionZoom;
+      } else if (targetRenderer === renderer) {
+        graphState.maximumCollisionFreeRatio = 100;
+      }
       if (nextMode === "readable") {
         const state = camera.getState();
         // Start from the complete overview, then move closer. Architecture
         // cards use the measured projected spacing; the build graph has no
         // HTML cards and uses the same minimum reading distance.
-        if (targetRenderer === renderer && network.order <= 12) {
+        if (compoundView) {
+          camera.setState({ ...state, ratio: Math.max(.01, state.ratio / Math.max(1.6, collisionZoom)) });
+        } else if (targetRenderer === renderer && network.order <= 12) {
           camera.setState({ ...state, ratio: requiredSmallGraphOverviewRatio(targetRenderer) });
         } else {
           const zoomIn = targetRenderer === renderer
@@ -4258,6 +4330,9 @@
             : 1.6;
           camera.setState({ ...state, ratio: Math.max(.01, state.ratio / zoomIn) });
         }
+      } else if (compoundView) {
+        const state = camera.getState();
+        camera.setState({ ...state, ratio: Math.max(.01, state.ratio / collisionZoom) });
       }
       targetRenderer.refresh();
       if (targetRenderer === renderer) {
@@ -4283,7 +4358,10 @@
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
-      camera.setState({ ...state, ratio: Math.min(100, state.ratio * 1.25) });
+      const maximumRatio = renderer === dependencyRenderer
+        ? 100
+        : graphState.maximumCollisionFreeRatio;
+      camera.setState({ ...state, ratio: Math.min(maximumRatio, state.ratio * 1.25) });
       requestGraphRender();
     });
     fitOverviewButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "overview"));

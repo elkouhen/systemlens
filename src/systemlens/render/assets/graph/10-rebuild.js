@@ -316,8 +316,13 @@
         const visibleServices = [...nodePoints.entries()]
           .map(([id, point]) => ({ id, point, node: nodeDataById.get(id) }))
           .filter(item => item.node?.kind === "microservice" && layeredLayerForNode(item.id));
+        const visibleLayerItems = graphState.layeredClusterView
+          ? [...nodePoints.entries()]
+            .map(([id, point]) => ({ id, point, node: nodeDataById.get(id) }))
+            .filter(item => layeredLayerForNode(item.id))
+          : visibleServices;
         const layers = layerOrder
-          .map(id => ({ id, items: visibleServices.filter(item => layeredLayerForNode(item.id) === id) }))
+          .map(id => ({ id, items: visibleLayerItems.filter(item => layeredLayerForNode(item.id) === id) }))
           .filter(layer => layer.items.length);
         const layerCenters = layers.map(layer => ({
           ...layer,
@@ -329,17 +334,19 @@
           graphGroupsOverlay.replaceChildren();
           return;
         }
-        [...nodePoints.entries()]
-          .filter(([id]) => nodeDataById.get(id)?.kind !== "microservice")
-          .forEach(([id, point]) => {
-            if (!layerCenters.length) return;
-            const nearest = layerCenters.reduce((best, layer) => (
-              Math.abs(layer.center - point.y) < Math.abs(best.center - point.y) ? layer : best
-            ), layerCenters[0]);
-            if (nearest) {
-              pointsByLayer.get(nearest.id).push(point);
-            }
-          });
+        if (!graphState.layeredClusterView) {
+          [...nodePoints.entries()]
+            .filter(([id]) => nodeDataById.get(id)?.kind !== "microservice")
+            .forEach(([id, point]) => {
+              if (!layerCenters.length) return;
+              const nearest = layerCenters.reduce((best, layer) => (
+                Math.abs(layer.center - point.y) < Math.abs(best.center - point.y) ? layer : best
+              ), layerCenters[0]);
+              if (nearest) {
+                pointsByLayer.get(nearest.id).push(point);
+              }
+            });
+        }
         const allLayerPoints = graphState.layeredClusterView
           ? [...nodePoints.values()]
           : [...pointsByLayer.values()].flat();
@@ -349,10 +356,10 @@
         // of the first module.
         const layerTitleGutter = 182;
         const contentMinX = allLayerPoints.length
-          ? Math.max(0, Math.min(...allLayerPoints.map(point => point.x)) - 92)
+          ? Math.min(...allLayerPoints.map(point => point.x)) - 92
           : 0;
         const contentMaxX = allLayerPoints.length
-          ? Math.min(window.innerWidth, Math.max(...allLayerPoints.map(point => point.x)) + 92)
+          ? Math.max(...allLayerPoints.map(point => point.x)) + 92
           : window.innerWidth;
         // ELK can retain an empty layer shell when filters remove all of its
         // nodes. Never feed empty point sets to Math.min/Math.max: Infinity
@@ -365,8 +372,10 @@
           const points = pointsByLayer.get(layer.id) || [];
           return {
             ...layer,
-            contentTop: Math.min(...points.map(point => point.y)) - 44,
-            contentBottom: Math.max(...points.map(point => point.y)) + 44,
+            contentTop: Math.min(...points.map(point => point.y))
+              - GRAPH_CARD_HEIGHT / 2 - MODULE_PADDING_TOP - MODULE_GAP,
+            contentBottom: Math.max(...points.map(point => point.y))
+              + GRAPH_CARD_HEIGHT / 2 + MODULE_PADDING_BOTTOM + MODULE_GAP,
           };
         });
         if (!layerCenters.length) {
@@ -380,10 +389,11 @@
         });
         if (!graphState.clusteredView || graphState.layeredClusterView) renderedLayerCenters.forEach((layer, index) => {
           const bandBounds = layerBands[index];
-          const bandHeight = Math.min(window.innerHeight, bandBounds.top + bandBounds.height) - bandBounds.top;
+          const bandHeight = bandBounds.height;
           if (bandHeight < 4) return;
           const band = document.createElement("div");
           band.className = "graph-layer-band";
+          band.dataset.layer = layer.id;
           band.style.left = `${bandBounds.left}px`; band.style.top = `${bandBounds.top}px`;
           band.style.width = `${bandBounds.width}px`;
           band.style.height = `${bandHeight}px`;
@@ -424,13 +434,12 @@
             // Keep this in sync with .graph-node-card-label's CSS scale.
             // The envelope must contain the rendered HTML card, not Sigma's
             // logical node dimensions.
-            const cardScale = GRAPH_CARD_SCALE;
-            const cardHalfWidth = 110 * cardScale / 2;
-            const cardHalfHeight = 70 * cardScale / 2;
-            minX = Math.min(...group.points.map(point => point.x)) - cardHalfWidth - 24;
-            maxX = Math.max(...group.points.map(point => point.x)) + cardHalfWidth + 24;
-            minY = Math.min(...group.points.map(point => point.y)) - cardHalfHeight - 24;
-            maxY = Math.max(...group.points.map(point => point.y)) + cardHalfHeight + 10;
+            const cardHalfWidth = GRAPH_CARD_WIDTH / 2;
+            const cardHalfHeight = GRAPH_CARD_HEIGHT / 2;
+            minX = Math.min(...group.points.map(point => point.x)) - cardHalfWidth - MODULE_PADDING_X;
+            maxX = Math.max(...group.points.map(point => point.x)) + cardHalfWidth + MODULE_PADDING_X;
+            minY = Math.min(...group.points.map(point => point.y)) - cardHalfHeight - MODULE_PADDING_TOP;
+            maxY = Math.max(...group.points.map(point => point.y)) + cardHalfHeight + MODULE_PADDING_BOTTOM;
           }
           const renderedWidth = Math.max(150, maxX - minX);
           const renderedHeight = Math.max(92, maxY - minY);
@@ -442,6 +451,7 @@
           const box = document.createElement("div");
           box.className = `graph-namespace-group${graphState.selectedClusterKey === cluster.key ? " is-selected" : ""}`;
           box.dataset.namespace = group.namespace;
+          box.dataset.layer = group.layer;
           box.dataset.clusterKey = cluster.key;
           box.style.left = `${minX}px`; box.style.top = `${minY}px`;
           box.style.width = `${renderedWidth}px`;
@@ -652,7 +662,10 @@
         const graphPoint = renderer.viewportToGraph(cursor);
         const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
         const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * .0012);
-        const ratio = Math.max(.01, Math.min(100, state.ratio * factor));
+        const maximumRatio = ["cluster", "elk"].includes(graphState.activeLayout)
+          ? graphState.maximumCollisionFreeRatio
+          : 100;
+        const ratio = Math.max(.01, Math.min(maximumRatio, state.ratio * factor));
         camera.setState({
           ...state,
           // A larger Sigma ratio is a zoom-out. Bound manual wheel changes

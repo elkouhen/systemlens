@@ -6,12 +6,15 @@
     const {
       contentMinX,
       contentMaxX,
-      viewportWidth,
+      viewportWidth: _viewportWidth,
       titleGutter = 182,
       minimumWidth = 260,
     } = options;
-    const left = Math.max(0, contentMinX - titleGutter);
-    const right = Math.min(viewportWidth, contentMaxX);
+    // Layer bands belong to the same unbounded overlay surface as modules.
+    // Clamping them to the viewport cuts off panned/off-screen modules and can
+    // make a module appear to intersect the neighbouring layer boundary.
+    const left = contentMinX - titleGutter;
+    const right = contentMaxX;
     const width = Math.max(minimumWidth, right - left);
     return layerBounds.map((bounds, index) => {
       const previous = layerBounds[index - 1];
@@ -22,7 +25,7 @@
       const bottom = next
         ? (bounds.contentBottom + next.contentTop) / 2
         : bounds.contentBottom;
-      return { left, top: Math.max(0, top), width, height: Math.max(0, bottom - Math.max(0, top)) };
+      return { left, top, width, height: Math.max(0, bottom - top) };
     });
   }
 

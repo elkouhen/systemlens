@@ -6,6 +6,10 @@
     const GRAPH_CARD_SCALE = 1;
     const GRAPH_CARD_WIDTH = 110 * GRAPH_CARD_SCALE;
     const GRAPH_CARD_HEIGHT = 70 * GRAPH_CARD_SCALE;
+    const MODULE_PADDING_X = 24;
+    const MODULE_PADDING_TOP = 42;
+    const MODULE_PADDING_BOTTOM = 24;
+    const MODULE_GAP = 8;
     const themeToggle = document.getElementById("theme-toggle");
     const themeStorageKey = "systemlens:graph-theme";
     const storedTheme = (() => {
@@ -194,6 +198,7 @@
       layoutRequest: 0,
       fitMode: "readable",
       fitRequest: 0,
+      maximumCollisionFreeRatio: 100,
       renderMode: "cards",
     };
     function updateGraphState(patch) {
@@ -202,9 +207,13 @@
     }
     function requiredCardZoomIn(targetRenderer) {
       if (!targetRenderer || !network) return 1;
+      const compoundView = ["cluster", "elk"].includes(graphState.activeLayout);
       const symbolMode = graphState.renderMode === "symbols";
-      const cardWidth = symbolMode ? 34 : GRAPH_CARD_WIDTH + 4;
-      const cardHeight = symbolMode ? 34 : GRAPH_CARD_HEIGHT + 4;
+      // Compound views must remain collision-free when the user switches
+      // between Symbols and Cards without moving the camera. Reserve the
+      // largest envelope even when symbols are currently rendered.
+      const cardWidth = compoundView || !symbolMode ? GRAPH_CARD_WIDTH + 4 : 34;
+      const cardHeight = compoundView || !symbolMode ? GRAPH_CARD_HEIGHT + 4 : 34;
       const buckets = new Map();
       const requiredZooms = [];
       network.forEachNode((id, attributes) => {
@@ -221,10 +230,11 @@
               // Uniform zoom separates the cards as soon as either axis has
               // enough room. Taking the larger axis factor would over-zoom
               // every pair that is nearly aligned horizontally or vertically.
-              requiredZooms.push(Math.min(4, Math.min(
+              const requiredZoom = Math.min(
                 cardWidth / Math.max(distanceX, 1),
                 cardHeight / Math.max(distanceY, 1),
-              )));
+              );
+              requiredZooms.push(compoundView ? requiredZoom : Math.min(4, requiredZoom));
             }
           }
         }
@@ -233,9 +243,43 @@
         bucket.push(point);
         buckets.set(key, bucket);
       });
+      if (compoundView) {
+        const groupedPoints = new Map();
+        network.forEachNode((id, attributes) => {
+          if (!isVisibleNodeId(id) || attributes.hidden) return;
+          const modulePath = namespaceForNode(id);
+          const layer = graphState.activeLayout === "elk" ? layeredLayerForNode(id) : "modules";
+          const key = `${layer}:${modulePath}`;
+          const point = targetRenderer.graphToViewport({ x: attributes.x, y: attributes.y });
+          const points = groupedPoints.get(key) || [];
+          points.push(point);
+          groupedPoints.set(key, points);
+        });
+        const bounds = [...groupedPoints.values()].map(points => ({
+          minX: Math.min(...points.map(point => point.x)),
+          maxX: Math.max(...points.map(point => point.x)),
+          minY: Math.min(...points.map(point => point.y)),
+          maxY: Math.max(...points.map(point => point.y)),
+        }));
+        const requiredGapX = GRAPH_CARD_WIDTH + 2 * MODULE_PADDING_X + MODULE_GAP;
+        const requiredGapY = GRAPH_CARD_HEIGHT + MODULE_PADDING_TOP
+          + MODULE_PADDING_BOTTOM + MODULE_GAP;
+        for (let leftIndex = 0; leftIndex < bounds.length; leftIndex += 1) {
+          for (let rightIndex = leftIndex + 1; rightIndex < bounds.length; rightIndex += 1) {
+            const left = bounds[leftIndex];
+            const right = bounds[rightIndex];
+            const gapX = Math.max(left.minX - right.maxX, right.minX - left.maxX, 0);
+            const gapY = Math.max(left.minY - right.maxY, right.minY - left.maxY, 0);
+            const zoomX = gapX > 0 ? requiredGapX / gapX : Number.POSITIVE_INFINITY;
+            const zoomY = gapY > 0 ? requiredGapY / gapY : Number.POSITIVE_INFINITY;
+            const required = Math.min(zoomX, zoomY);
+            if (Number.isFinite(required)) requiredZooms.push(required);
+          }
+        }
+      }
       if (!requiredZooms.length) return 1;
       requiredZooms.sort((left, right) => left - right);
-      if (graphState.activeLayout === "forceatlas2-noverlap") {
+      if (["forceatlas2-noverlap", "cluster", "elk"].includes(graphState.activeLayout)) {
         return requiredZooms[requiredZooms.length - 1];
       }
       // A single near-coincident pair must not dictate the camera distance for

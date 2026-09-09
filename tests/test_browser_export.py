@@ -243,22 +243,39 @@ def _assert_architecture_cards_keep_size_after_camera_change(
 
 
 def _assert_architecture_cards_do_not_overlap(page) -> None:
-    """Validate card geometry without imposing an artificial no-overlap rule.
-
-    Dense architecture overviews are allowed to overlap; readability comes
-    from fixed screen-space card dimensions and camera controls.
-    """
+    """Reject intersections between the rendered card bounding boxes."""
     geometry = page.evaluate(
         """() => {
-            const cards = [...document.querySelectorAll('.graph-node-card-label')];
-            return cards.every(card => {
+            const cards = [...document.querySelectorAll('.graph-node-card-label')].map(card => {
                 const rect = card.getBoundingClientRect();
-                return [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
-                    && rect.width > 0 && rect.height > 0;
+                return { id: card.dataset.nodeId, left: rect.left, right: rect.right,
+                    top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height };
             });
+            const overlap = (left, right) => left.left < right.right - .5
+                && left.right > right.left + .5
+                && left.top < right.bottom - .5
+                && left.bottom > right.top + .5;
+            const invalid = cards.filter(card => ![card.left, card.top, card.width, card.height].every(Number.isFinite)
+                || card.width <= 0 || card.height <= 0);
+            const intersections = [];
+            cards.forEach((left, index) => cards.slice(index + 1).forEach(right => {
+                if (overlap(left, right)) intersections.push([left.id, right.id]);
+            }));
+            return { valid: !invalid.length && !intersections.length, invalid, intersections };
         }"""
     )
-    assert geometry
+    assert geometry["valid"], geometry
+
+
+def _assert_architecture_cards_are_valid(page) -> None:
+    """Require finite, positive card rectangles when an overview may be dense."""
+    assert page.evaluate(
+        """() => [...document.querySelectorAll('.graph-node-card-label')].every(card => {
+            const rect = card.getBoundingClientRect();
+            return [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
+                && rect.width > 0 && rect.height > 0;
+        })"""
+    )
 
 
 def _assert_all_node_centers_are_visible(page) -> None:
@@ -437,15 +454,26 @@ def _assert_architecture_cards_are_contained_in_clusters(page) -> None:
 
 
 def _assert_architecture_clusters_do_not_overlap(page) -> None:
-    """Check finite cluster geometry; sibling overlap is an accepted state."""
-    assert page.evaluate(
+    """Reject intersections between architecture-module sibling rectangles."""
+    result = page.evaluate(
         """() => {
-            const rects = [...document.querySelectorAll('.graph-namespace-group')]
-                .map(group => group.getBoundingClientRect());
-            return rects.every(rect => [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
-                && rect.width > 0 && rect.height > 0);
+            const rects = [...document.querySelectorAll('.graph-namespace-group')].map(group => {
+                const rect = group.getBoundingClientRect();
+                return { name: group.dataset.namespace, left: rect.left, right: rect.right,
+                    top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height };
+            });
+            const overlap = (left, right) => left.left < right.right - .5
+                && left.right > right.left + .5
+                && left.top < right.bottom - .5
+                && left.bottom > right.top + .5;
+            const intersections = [];
+            rects.forEach((left, index) => rects.slice(index + 1).forEach(right => {
+                if (overlap(left, right)) intersections.push([left.name, right.name]);
+            }));
+            return { valid: !intersections.length, intersections, rects };
         }"""
     )
+    assert result["valid"], result
 
 
 def _assert_pan_moves_cluster_overlays_as_one_surface(page) -> None:
@@ -635,16 +663,34 @@ def _assert_background_pan_preserves_overlay_scale(page) -> None:
 
 
 def _assert_clusters_only_overlap_when_nested(page) -> None:
-    """Validate cluster rectangles without rejecting intentional overlaps."""
-    assert page.evaluate(
+    """Allow an overlap only when one module rectangle contains the other."""
+    result = page.evaluate(
         """() => {
             const rects = [...document.querySelectorAll(
                 '.graph-namespace-group, .graph-project-group'
-            )].map(element => element.getBoundingClientRect());
-            return rects.every(rect => [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
-                && rect.width > 0 && rect.height > 0);
+            )].map(element => {
+                const rect = element.getBoundingClientRect();
+                return { name: element.dataset.namespace || element.dataset.namespaceGroup,
+                    left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+                    width: rect.width, height: rect.height };
+            });
+            const overlap = (left, right) => left.left < right.right - .5
+                && left.right > right.left + .5
+                && left.top < right.bottom - .5
+                && left.bottom > right.top + .5;
+            const contains = (outer, inner) => inner.left >= outer.left - .5
+                && inner.right <= outer.right + .5 && inner.top >= outer.top - .5
+                && inner.bottom <= outer.bottom + .5;
+            const invalid = [];
+            rects.forEach((left, index) => rects.slice(index + 1).forEach(right => {
+                if (overlap(left, right) && !contains(left, right) && !contains(right, left)) {
+                    invalid.push([left.name, right.name]);
+                }
+            }));
+            return { valid: !invalid.length, invalid, rects };
         }"""
     )
+    assert result["valid"], result
 
 
 def _assert_nested_namespace_cluster_contains_three_children(page) -> None:
@@ -709,28 +755,40 @@ def _assert_layer_bands_are_disjoint_and_contain_clusters(page) -> None:
     result = page.evaluate(
         """() => {
                 const bands = [...document.querySelectorAll('.graph-layer-band')]
-                    .map(element => element.getBoundingClientRect())
-                    .filter(band => band.left >= 0 && band.right <= innerWidth
-                        && band.top >= 0 && band.bottom <= innerHeight);
+                    .map(element => ({ layer: element.dataset.layer,
+                        rect: element.getBoundingClientRect() }));
                 const clusters = [...document.querySelectorAll('.graph-namespace-group')]
-                    .map(element => element.getBoundingClientRect())
-                    // A clipped cluster cannot be validated for containment;
-                    // its visible fragment is intentionally allowed to leave
-                    // the current viewport after pan/zoom.
-                    .filter(cluster => cluster.left >= 0 && cluster.right <= innerWidth
-                        && cluster.top >= 0 && cluster.bottom <= innerHeight);
+                    .map(element => ({ layer: element.dataset.layer,
+                        namespace: element.dataset.namespace,
+                        rect: element.getBoundingClientRect() }));
+            const clip = rect => ({
+                left: Math.max(0, rect.left), right: Math.min(innerWidth, rect.right),
+                top: Math.max(0, rect.top), bottom: Math.min(innerHeight, rect.bottom),
+            });
+            const visible = rect => rect.right > 0 && rect.left < innerWidth
+                && rect.bottom > 0 && rect.top < innerHeight;
             const overlap = (left, right) => (
-                left.left < right.right && left.right > right.left
-                && left.top < right.bottom && left.bottom > right.top
+                left.left < right.right - .5 && left.right > right.left + .5
+                && left.top < right.bottom - .5 && left.bottom > right.top + .5
             );
             const contains = (outer, inner) => (
                 inner.left >= outer.left && inner.right <= outer.right
                 && inner.top >= outer.top && inner.bottom <= outer.bottom
             );
-            const valid = !bands.length || (bands.every((band, index) => bands.every((other, otherIndex) => (
-                index === otherIndex || !overlap(band, other)
-            ))) && clusters.every(cluster => bands.some(band => overlap(band, cluster))));
-            return { valid, bands, clusters };
+            const visibleBands = bands.filter(item => visible(item.rect));
+            const visibleClusters = clusters.filter(item => visible(item.rect));
+            const intersections = [];
+            visibleBands.forEach((band, index) => visibleBands.slice(index + 1).forEach(other => {
+                if (overlap(clip(band.rect), clip(other.rect))) {
+                    intersections.push([band.layer, other.layer]);
+                }
+            }));
+            const outside = visibleClusters.filter(cluster => {
+                const owner = visibleBands.find(band => band.layer === cluster.layer);
+                return !owner || !contains(clip(owner.rect), clip(cluster.rect));
+            }).map(cluster => ({ layer: cluster.layer, namespace: cluster.namespace }));
+            return { valid: !intersections.length && !outside.length,
+                intersections, outside, bands, clusters };
         }"""
     )
     assert result["valid"], result
@@ -740,7 +798,10 @@ def _assert_geometry_contract(page, *, layered: bool) -> None:
     graph = page.locator("#graph")
     assert graph.get_attribute("data-invalid-coordinates") == "false"
     _assert_architecture_cards_have_uniform_size(page)
-    _assert_architecture_cards_do_not_overlap(page)
+    if page.locator(".graph-namespace-group").count():
+        _assert_architecture_cards_do_not_overlap(page)
+    else:
+        _assert_architecture_cards_are_valid(page)
     _assert_architecture_cards_are_contained_in_clusters(page)
     if not layered:
         _assert_clusters_only_overlap_when_nested(page)
@@ -935,7 +996,21 @@ def test_selection_and_render_mode_preserve_graph_framing() -> None:
                 "() => document.querySelector('#graph')?.dataset.fitMode === 'overview'"
             )
             page.wait_for_timeout(350)
-            _assert_all_node_centers_are_visible(page)
+            _assert_architecture_cards_do_not_overlap(page)
+            _assert_architecture_clusters_do_not_overlap(page)
+            compound_centers = _node_centers(page)
+            page.locator("#render-cards").click()
+            page.wait_for_function(
+                "() => document.querySelector('#graph')?.dataset.renderMode === 'cards'"
+            )
+            _assert_node_centers_unchanged(compound_centers, _node_centers(page))
+            _assert_architecture_cards_do_not_overlap(page)
+            _assert_architecture_clusters_do_not_overlap(page)
+            page.locator("#render-symbols").click()
+            page.wait_for_function(
+                "() => document.querySelector('#graph')?.dataset.renderMode === 'symbols'"
+            )
+            _assert_node_centers_unchanged(compound_centers, _node_centers(page))
             graph_before_selection = page.locator("#graph").bounding_box()
             bottom_node_id = page.locator(".graph-node-card-label").evaluate_all(
                 "cards => cards.sort((left, right) => "
@@ -964,7 +1039,8 @@ def test_selection_and_render_mode_preserve_graph_framing() -> None:
                         && getComputedStyle(document.querySelector('#graph-groups')).overflow === 'visible';
                 }"""
             )
-            _assert_all_node_centers_are_visible(page)
+            _assert_architecture_cards_do_not_overlap(page)
+            _assert_architecture_clusters_do_not_overlap(page)
             _assert_architecture_cards_are_contained_in_clusters(page)
             _capture_render_snapshot(page, f"selection-{button_id}-after-details-resize")
             assert page.locator(".graph-namespace-group").count() > 0
@@ -1298,7 +1374,8 @@ def test_complex_dataset_geometry_contract_across_all_views() -> None:
             page.wait_for_timeout(700)
             _capture_render_snapshot(page, f"complex-{layout_id.removeprefix('layout-')}-after-action")
             card_size = _assert_architecture_cards_have_uniform_size(page)
-            _assert_all_node_centers_are_visible(page)
+            if layout_id == "layout-forceatlas2-noverlap":
+                _assert_all_node_centers_are_visible(page)
             _capture_render_snapshot(page, f"complex-{layout_id.removeprefix('layout-')}-fit")
             _assert_geometry_contract(page, layered=layered)
             if layout_id == "layout-cluster":

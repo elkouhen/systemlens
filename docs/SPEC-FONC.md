@@ -161,8 +161,9 @@ remain secondary controls. On desktop, the navigation panel uses a compact
 graph viewport reserves that measured width plus a 10 px separation. Zoom
 actions are grouped as a compact `−` / `+`
 control, and the adjacent segmented fit control exposes two explicit modes:
-`All`, which frames every visible node, and `Readable`, which keeps the same
-center but zooms in until cards have useful reading separation. The
+`All`, which frames every visible node in the plain graph and uses the widest
+collision-free scale in the module and layer views, and `Readable`, which keeps
+the same center but zooms in until cards have useful reading separation. The
 selected mode is reapplied after a view or window-size change, and `Readable
 distance` is the initial mode. Reapplying either selected mode MUST be
 idempotent: repeated or rapid clicks MUST produce the same camera framing and
@@ -187,8 +188,9 @@ squares. Node names use adaptive, collision-aware labeling: the viewport
 shows a bounded sample prioritizing connected and semantically important
 nodes, and progressively admits more labels as the user zooms in. A selected
 or hovered node's name is always visible and MAY extend beyond the symbol
-envelope. `Readable` fitting
-uses the compact symbol envelope in this mode rather than the card dimensions.
+envelope. `Readable` fitting uses the compact symbol envelope in the plain
+graph. Module and layer views retain full module-envelope clearance so
+switching rendering mode never changes their camera framing.
 The hovered symbol and its label are rendered above every non-hovered symbol,
 so another geometric marker cannot obscure the visible resource name.
 In the plain graph's `Readable` fit, a final screen-space collision pass keeps
@@ -246,9 +248,10 @@ allowed.
 Automatic collision protection MUST NOT zoom the camera during a pan; it may
 only constrain an explicit zoom-out operation.
 
-In the module view, zooming out remains available. When the fixed-size
-cards would make sibling module envelopes overlap, the camera is clamped to
-the last valid zoom level; panning and zooming in remain available.
+In the module and layer views, zooming out remains available until fixed-size
+cards would make sibling module envelopes overlap. The camera is then clamped
+to the collision-free ratio calculated for the current viewport; panning and
+zooming in remain available.
 
 ### Placement and interaction model
 
@@ -260,13 +263,13 @@ module. The legacy internal `project_namespace*` fields remain compatibility
 aliases for the canonical `cluster_path`; they do not denote Kubernetes
 namespaces.
 
-The module layout is independent of the layer order and uses a
-deterministic two-level packing without ELK: fCoSE first computes the local
-compound layout of resources inside each module, then a deterministic
-packing step places module rectangles one per row with a fixed separating
-margin in graph coordinates; the rectangles are projected only after packing,
-so camera zoom does not change their relative separation. The final grid is
-the authoritative collision guard.
+The module layout is independent of the layer order and uses deterministic
+two-level grid packing without ELK or fCoSE. Resources are placed locally
+inside each module, then modules are placed in an outer grid with fixed graph
+coordinate margins. After projection, the camera fit measures card and module
+envelopes in screen coordinates and zooms to the smallest scale at which every
+sibling rectangle is disjoint. The projected-envelope check is the
+authoritative collision guard.
 
 Node identifiers and module names are sorted only to make the result
 reproducible; there is no semantic order between modules. Neither resources
@@ -341,9 +344,9 @@ The HTML architecture view MUST preserve these visual invariants:
   layout. The additional horizontal space MUST expand the diagram rather than
   overlap another layer or module.
 Every layout switch MUST refit the camera to the resulting graph using the
-selected fit mode. `All nodes` MUST NOT apply an additional automatic zoom-out
-that makes the layout unnecessarily small. `Readable distance` MAY leave
-peripheral nodes outside the viewport; users can pan to reach them.
+selected fit mode. In a compound view, both modes MUST honor the collision-free
+camera limit; this may leave peripheral nodes outside the viewport, and users
+can pan to reach them. `Readable distance` MAY zoom in further.
 For graphs of at most 12 nodes, the readable mode MUST retain the complete
 overview instead of applying its normal zoom and making the small diagram
 appear empty. It adds only the zoom-out required to keep the full fixed-size

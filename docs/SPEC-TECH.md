@@ -382,24 +382,28 @@ navigation is sourced exclusively from the canonical `cluster_path` value.
 ### Camera interactions
 
 The shared card size remains stable during navigation. Camera fitting starts
-from Sigma's native complete overview. In `All nodes` mode that state is used
-unchanged. In the default `Readable distance` mode, the renderer measures the
-projected center spacing of visible fixed-size cards and zooms in by at least
-1.6x, capped by the existing 4x spacing guard. Graphs with at most 12 nodes
-instead derive an overview ratio from their projected center span and the
+from Sigma's native complete overview. In the plain graph, `All nodes` uses
+that state unchanged. In compound module and layer views, it measures the
+projected card and sibling-module envelopes and applies the minimum
+collision-free zoom. The default `Readable distance` mode also zooms in by at
+least 1.6x. The historical 4x spacing guard remains limited to the plain graph;
+compound views are not capped because a narrow viewport may require greater
+separation. Graphs with at most 12 nodes in the plain graph instead derive an
+overview ratio from their projected center span and the
 available viewport after subtracting the fixed card width and height. This
 keeps the complete card envelopes visible and relies on the following
 collision pass for separation.
 For each overlapping pair, the required factor is the smaller of its
 horizontal and vertical separation factors: reaching the card clearance on
-either axis is sufficient. The 90th
-percentile of those pair factors determines the fit in compound views,
-preventing a single near-coincident outlier from forcing the 4x cap. The plain
-graph instead uses the maximum factor after its collision pass so its final
-readable fit preserves every resolved envelope. The factors are collected
-through the existing spatial grid and sorted, adding O(p log p) work for p
-nearby overlapping pairs. Peripheral nodes may therefore leave the viewport.
-Zooming and panning never move nodes to repair spacing or clamp the camera.
+either axis is sufficient. Compound views use the maximum factor across card
+pairs and module-envelope pairs. For module envelopes, the required factor is
+derived from the gap between projected min/max center intervals on both axes,
+including fixed card size, module header/padding and a positive sibling gap.
+The factors are collected through the existing spatial grid and sorted, adding
+O(p log p) work for p nearby card pairs plus O(m²) comparisons for m rendered
+modules. Peripheral nodes may therefore leave the viewport. Panning and
+zooming in never move nodes; zooming out is clamped to the collision-free ratio
+in compound views.
 
 The renderer keeps one graph and HTML overlay implementation for both node
 rendering modes. Card mode uses the fixed 110×70 envelope. Symbol mode applies
@@ -408,7 +412,9 @@ its fit calculation uses a 34×34 marker envelope, so label length does not forc
 the camera away from the graph. Switching modes redraws overlays and the Sigma
 node reducer without rebuilding or re-parsing the persisted graph snapshot. It
 does not invoke camera fitting or collision placement, so the camera state and
-graph coordinates remain unchanged.
+graph coordinates remain unchanged. Compound module and layer fits therefore
+reserve the larger 110×70 card envelope even when Symbols is active; switching
+back to Cards cannot introduce an overlap.
 
 Relations remain rendered by Sigma independently of the HTML card overlays.
 In symbol mode, Sigma's underlying node marker is reduced beneath the HTML
@@ -436,7 +442,7 @@ appearing while the user drags the module view.
 Wheel zoom is handled once for both the Sigma canvas and the HTML overlays;
 the native Sigma wheel handler is disabled so hovering a card cannot change
 the zoom behavior. Each wheel event applies a bounded exponential camera-ratio
-step without collision-based clamping.
+step and respects the collision-free maximum ratio in compound views.
 
 ### Layout engines and architecture-module placement
 
@@ -460,12 +466,13 @@ Each layout starts with the shared camera-fit operation in the selected mode.
 The `All nodes` and `Readable distance` actions select and immediately apply
 their mode; the selection is reapplied after a viewport resize. This prevents
 view switches from retaining a stale camera scale while allowing the readable
-mode to favor card separation over a complete overview. Overlapping cards and
-module rectangles remain possible in dense views; their fixed screen-space
+mode to favor card separation over a complete overview. In module and layer
+views, cards and sibling module rectangles remain disjoint; parent rectangles
+may overlap only by containing their children. Their fixed screen-space
 dimensions are preserved during navigation.
 
-Container geometry is kept in graph coordinates until it is projected to the
-viewport.
+Node positions remain in graph coordinates. Container geometry is rebuilt in
+viewport coordinates from projected node centers after every camera update.
 
 The module view uses this deterministic packing as its source of truth; it does
 not wait for a compound force layout that could block the browser. When project
@@ -500,6 +507,11 @@ The same canonical resolver is used for layer placement, module boxes, and
 band bounds, so a module cannot be placed in a band different from its
 nodes. Each module uses the same two-part grid as the module view:
 microservices first, then resources.
+
+Layer-band bounds group every rendered resource with
+`layeredLayerForNode`; they do not reassign non-microservice resources to the
+visually nearest service layer. The module envelope and its owning band thus
+consume exactly the same layer identity.
 
 ELK may provide the initial compound layout, but the deterministic layer-aware
 pack is the final collision guard and remains valid when ELK fails. The layered packer

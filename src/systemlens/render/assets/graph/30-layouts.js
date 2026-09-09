@@ -47,7 +47,9 @@
           envelopeHeight: Math.abs(subLayers.height) + 200,
         };
       });
-      const outerColumns = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(packedGroups.length))));
+      // Four columns use the wide graph viewport more efficiently and reduce
+      // the collision-free zoom required by large module inventories.
+      const outerColumns = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(packedGroups.length))));
       const outerRows = Math.ceil(packedGroups.length / outerColumns);
       const outerWidth = Math.max(...packedGroups.map(group => group.envelopeWidth + clusterPaddingX * 2));
       const rowHeights = Array.from({ length: outerRows }, (_, row) => Math.max(

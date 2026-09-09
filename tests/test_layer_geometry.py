@@ -50,6 +50,22 @@ def test_layer_bands_share_bounds_and_reserve_title_gutter() -> None:
     assert all(band["left"] + 182 <= 300 for band in bands)
 
 
+def test_layer_bands_are_not_clipped_to_the_viewport() -> None:
+    script = f"""
+const geometry = require({json.dumps(str(_MODULE))});
+const bands = geometry.computeLayerBands([
+  {{contentTop: -120, contentBottom: 40}},
+  {{contentTop: 180, contentBottom: 360}}
+], {{contentMinX: -80, contentMaxX: 1480, viewportWidth: 1200}});
+console.log(JSON.stringify(bands));
+"""
+    bands = _run_node(script)
+    assert bands[0]["left"] == -262
+    assert bands[0]["top"] == -120
+    assert bands[0]["width"] == 1742
+    assert bands[1]["top"] == 110
+
+
 def test_layer_bands_scale_to_a_large_architecture_without_overlaps() -> None:
     """Exercise the layer band algorithm with a realistic large layer count."""
     script = f"""
