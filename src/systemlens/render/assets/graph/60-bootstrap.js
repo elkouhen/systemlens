@@ -145,7 +145,7 @@
     fitReadableButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "readable"));
     renderCardsButton.addEventListener("click", () => setNodeRenderMode("cards"));
     renderSymbolsButton.addEventListener("click", () => setNodeRenderMode("symbols"));
-    document.getElementById("reset").addEventListener("click", reset);
+    resetButton.addEventListener("click", reset);
     document.getElementById("inspector-close").addEventListener("click", closeInspector);
     inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });
     window.addEventListener("keydown", event => { if (event.key === "Escape" && !inspectorModal.hidden) closeInspector(); });
@@ -156,7 +156,6 @@
     openApiTab.addEventListener("click", () => setToolbarTab("openapi"));
     kafkaTab.addEventListener("click", () => setToolbarTab("kafka"));
     persistenceTab.addEventListener("click", () => setToolbarTab("persistence"));
-    requestReplyTab.addEventListener("click", () => setToolbarTab("request-reply"));
     buildTab.addEventListener("click", () => setToolbarTab("dependencies"));
     issuesTab.addEventListener("click", () => setToolbarTab("issues"));
     inventoryStatus.addEventListener("click", () => setToolbarTab("issues"));
@@ -200,15 +199,10 @@
     });
     renderIndexingIssues();
     renderReferences();
-    renderRequestReplyPatterns();
     restoreState();
     function updateWorkspaceViewport(refit = false) {
-      const toolbar = document.querySelector(".toolbar");
-      const desktop = window.innerWidth > 700;
-      const toolbarRight = toolbar?.getBoundingClientRect().right || 0;
-      const left = desktop ? Math.min(window.innerWidth - 220, toolbarRight + 10) : 0;
       const root = document.documentElement;
-      root.style.setProperty("--workspace-left", `${Math.max(0, left)}px`);
+      root.style.setProperty("--workspace-left", "0px");
       root.style.setProperty("--workspace-right", "0px");
       root.style.setProperty("--workspace-top", "0px");
       root.style.setProperty("--workspace-bottom", "0px");

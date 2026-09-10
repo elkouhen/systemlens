@@ -117,19 +117,40 @@ keyspace or object-store dataset), while a `message_channel` node represents
 a messaging channel (Kafka, RabbitMQ, SQS or a webhook stream). The concrete
 technology is carried as metadata.
 
-The export uses a responsive workspace layout with seven navigation tabs:
-Explorer, OpenAPI, Kafka, Mongo, Request/reply, Build, and Quality. It includes
+The export uses a responsive workspace layout with six navigation tabs:
+Explorer, OpenAPI, Kafka, Mongo, Build, and Quality. It includes
 compact architecture counters, contextual details integrated into the left
 panel, and a full-size resource inspector. On narrow viewports the left panel
 uses one bounded, scrollable region so the graph remains visible while users
-inspect controls or resource details.
+inspect controls or resource details. At intermediate widths up to 1024 px it
+is limited to 320 px and 82% of the viewport height. Its branded header remains
+visible while the panel content scrolls, and its navigation tabs use one
+balanced three-column, two-row grid immediately after search, so all six
+destinations remain visible without horizontal scrolling. The extended search
+hint is hidden at those widths while its label and example placeholder remain
+visible.
+
+The panel typography uses a stable functional scale: 10 px uppercase kickers,
+11 px compact controls, 12 px body copy, 13 px section prompts, 16 px view
+titles, and 19 px selected-resource or itinerary titles. A component's size is
+derived from its role in that hierarchy rather than from its individual tab.
+Interactive widgets use one visual grammar across the panel: segmented tabs
+and graph selectors share the same control height, inner radius, border,
+surface, and blue selected state; collapsible Explorer sections use the same
+bordered surface and outer radius. Pills remain reserved for filters, counters,
+and status metadata so their shape continues to communicate a distinct role.
 
 The export opens with a dark blue presentation (or follows the browser's light
 preference), and provides a theme toggle in the graph
 toolbar. The selected theme is stored only in browser local storage and does
 not affect persisted inventory facts or exported architecture data.
 
-Its initial view starts directly with resource and itinerary search. A dedicated,
+Its initial view places resource and itinerary search immediately below the
+brand, before camera and rendering controls. Graph-specific context is grouped
+below the navigation: its first row contains zoom, fit and reset actions; its
+second row contains the graph-view and node-rendering selectors; architecture
+counters and inventory status follow. This whole context appears only in
+Explorer, so domain tabs start directly with their own content. A dedicated,
 compact `Displayed nodes and edges` control lets users independently select
 HTTP, Kafka, data-access and other edge categories, and internal services,
 external services, messaging resources, data resources and other node
@@ -158,7 +179,8 @@ selector with direct `Graph`, `Layers`, and `Modules` choices; changing
 views MUST NOT require cycling through intermediate views. Placement strategies
 remain secondary controls. On desktop, the navigation panel uses a compact
 340 px maximum width, 10 px outer margins, and dense internal spacing. The
-graph viewport reserves that measured width plus a 10 px separation. Zoom
+graph viewport spans the full window behind the floating navigation panel, so
+the area below the panel continues to render both nodes and edges. Zoom
 actions are grouped as a compact `−` / `+`
 control, and the adjacent segmented fit control exposes two explicit modes:
 `All`, which frames every visible node in the plain graph and uses the widest
@@ -184,7 +206,10 @@ framing. The switch redraws node representations in place and MUST NOT reapply
 either fit mode or rerun collision placement. `Cards` remains the default.
 In `Symbols`, microservices use compact hexagons, Kafka topics and message
 channels use circles, and MongoDB collections and data schemas use small
-squares. Node names use adaptive, collision-aware labeling: the viewport
+squares. Symbols use the same visual rule as cards: a light surface tinted by
+the resource accent, a defined accent border and a restrained depth shadow;
+the dark theme uses an accent-tinted slate surface rather than a saturated
+solid fill. Node names use adaptive, collision-aware labeling: the viewport
 shows a bounded sample prioritizing connected and semantically important
 nodes, and progressively admits more labels as the user zooms in. A selected
 or hovered node's name is always visible and MAY extend beyond the symbol
@@ -203,10 +228,12 @@ redraws.
 
 The details panel is integrated into the left navigation panel and is hidden
 until a resource, architecture module, build project, or itinerary is selected. Opening it MUST
-NOT resize or crop the graph workspace: the reserved panel width remains
-constant while its contents scroll vertically. The detail view temporarily
+NOT resize or crop the full-window graph workspace; only the floating panel's
+contents scroll vertically. The detail view temporarily
 replaces the active tab content while preserving the global toolbar,
-primary view controls, navigation tabs, and `Clear` action. Architecture
+primary view controls and navigation tabs. The selection action is hidden when
+nothing is selected and becomes an explicit `Fermer` action while details are
+shown. Architecture
 counters are temporarily hidden to give the details usable vertical space;
 the current graph-view status remains visible so direct module navigation has
 an immediate confirmation. Clearing the selection restores the Explorer
@@ -280,7 +307,7 @@ ELK is used only for the architectural layer layout, while Sigma.js provides
 the interactive rendering for both views. Architecture relations remain
 visible even when they are not used as placement edges.
 
-It also provides dedicated OpenAPI, Kafka, Mongo, Request/reply, and Build
+It also provides dedicated OpenAPI, Kafka, Mongo, and Build
 views, which keep their domain inventories separate.
 
 Changing a relation-type filter rebuilds and relayouts the graph from only the
@@ -493,7 +520,7 @@ consumed type lists when they describe the same contract.
 
 Indexing issues that have a source endpoint expose a VS Code link to the
 associated file and line. The HTML export provides dedicated OpenAPI, Kafka,
-Mongo, Request/reply, and Build views. OpenAPI and Kafka both support
+Mongo, and Build views. OpenAPI and Kafka both support
 filtering their complete list (OpenAPI by path or service, DTOs by simple name
 or package); Persistence filters by class, package, collection, or service. A
 persistent inventory status reports whether unresolved indexing facts exist and

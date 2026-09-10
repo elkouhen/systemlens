@@ -855,6 +855,30 @@ def test_primary_view_selector_opens_each_view_directly() -> None:
                 return actions.scrollWidth <= actions.clientWidth;
             }"""
         )
+        widget_metrics = page.evaluate(
+            """() => {
+                const styles = selector => [...document.querySelectorAll(selector)]
+                    .filter(element => element.getBoundingClientRect().height > 0)
+                    .map(element => getComputedStyle(element));
+                const buttons = styles('.toolbar-tab, .graph-control-group button');
+                const containers = styles('.toolbar-tabs, .graph-control-group');
+                const selected = styles('.toolbar-tab.is-active, .graph-control-group .is-active');
+                const disclosures = styles('#display-controls, #advanced-controls');
+                return {
+                    buttonHeights: [...new Set(buttons.map(style => style.height))],
+                    buttonRadii: [...new Set(buttons.map(style => style.borderRadius))],
+                    containerRadii: [...new Set(containers.map(style => style.borderRadius))],
+                    selectedBackgrounds: [...new Set(selected.map(style => style.backgroundColor))],
+                    disclosureRadii: [...new Set(disclosures.map(style => style.borderRadius))],
+                };
+            }"""
+        )
+        assert widget_metrics["buttonHeights"] == ["30px"]
+        assert widget_metrics["buttonRadii"] == ["8px"]
+        assert widget_metrics["containerRadii"] == ["12px"]
+        assert len(widget_metrics["selectedBackgrounds"]) == 1
+        assert widget_metrics["selectedBackgrounds"][0] != "rgba(0, 0, 0, 0)"
+        assert widget_metrics["disclosureRadii"] == ["12px"]
         for button_id, status_text in (
             ("layout-elk", "vue couches actif."),
             ("layout-cluster", "vue modules actif."),
@@ -1105,6 +1129,10 @@ def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
         page.wait_for_function(
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 200"
         )
+        summary = page.locator("#graph-summary").inner_text()
+        assert "50 services" in summary
+        assert "100 canaux" in summary
+        assert "50 ressources de données" in summary
         page.locator("#layout-status").filter(has_text="vue graphe actif.").wait_for(state="visible")
         page.wait_for_function(
             "() => Number.isFinite(Number(document.querySelector('#graph')?.dataset.fitRatio))"
@@ -1143,6 +1171,13 @@ def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
                         nameOverflows: nameRect.right > cardRect.right,
                         borderRadius: style.borderRadius,
                         clipPath: style.clipPath,
+                        backgroundImage: style.backgroundImage,
+                        borderWidth: style.borderWidth,
+                        boxShadow: style.boxShadow,
+                        beforeClipPath: getComputedStyle(icon, '::before').clipPath,
+                        beforeBackground: getComputedStyle(icon, '::before').backgroundColor,
+                        afterClipPath: getComputedStyle(icon, '::after').clipPath,
+                        afterBackgroundImage: getComputedStyle(icon, '::after').backgroundImage,
                         kindDisplay: getComputedStyle(kindLabel).display,
                     };
                 };
@@ -1154,9 +1189,25 @@ def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
             }"""
         )
         assert symbol_metrics["service"]["cardWidth"] == pytest.approx(30)
-        assert symbol_metrics["service"]["clipPath"] != "none"
+        assert symbol_metrics["service"]["clipPath"] == "none"
+        assert symbol_metrics["service"]["beforeClipPath"] != "none"
+        assert symbol_metrics["service"]["afterClipPath"] != "none"
+        assert symbol_metrics["service"]["beforeBackground"] != "rgba(0, 0, 0, 0)"
+        assert "linear-gradient" in symbol_metrics["service"]["afterBackgroundImage"]
         assert symbol_metrics["topic"]["borderRadius"] == "50%"
         assert symbol_metrics["database"]["iconWidth"] == pytest.approx(20)
+        assert all(
+            "linear-gradient" in symbol_metrics[kind]["backgroundImage"]
+            for kind in ("topic", "database")
+        )
+        assert all(
+            symbol_metrics[kind]["borderWidth"] == "2px"
+            for kind in ("topic", "database")
+        )
+        assert all(
+            symbol_metrics[kind]["boxShadow"] != "none"
+            for kind in ("topic", "database")
+        )
         assert all(item["nameOverflows"] for item in symbol_metrics.values())
         assert all(item["kindDisplay"] == "none" for item in symbol_metrics.values())
         adaptive_labels = page.locator(".graph-node-card-label.has-adaptive-label")
@@ -1249,6 +1300,16 @@ def test_generated_supermarket_fit_modes_change_rendered_card_spacing() -> None:
             '.graph-node-card-label[data-node-kind="message_channel"]:not(.has-adaptive-label) .graph-node-card-name'
         ).first.evaluate("name => getComputedStyle(name).visibility") == "hidden"
         _capture_render_snapshot(page, "complex-symbols-hover")
+
+        page.locator("#theme-toggle").click()
+        page.wait_for_function("() => document.documentElement.dataset.theme === 'dark'")
+        dark_symbol_style = service_symbol.locator(".graph-node-card-icon").evaluate(
+            "icon => ({ surface: getComputedStyle(icon, '::after').backgroundImage, "
+            "border: getComputedStyle(icon, '::before').backgroundColor })"
+        )
+        assert "linear-gradient" in dark_symbol_style["surface"]
+        assert dark_symbol_style["border"] != "rgba(0, 0, 0, 0)"
+        _capture_render_snapshot(page, "complex-symbols-dark")
 
         page.locator("#render-cards").click()
         page.wait_for_function(
@@ -1522,8 +1583,9 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
                 const toolbarRect = document.querySelector('.toolbar').getBoundingClientRect();
                 return toolbarRect.width <= 340
                     && toolbarRect.left <= 10
-                    && graphRect.left >= toolbarRect.right
-                    && graphRect.left - toolbarRect.right <= 11;
+                    && graphRect.left === 0
+                    && graphRect.right === window.innerWidth
+                    && toolbarRect.left > graphRect.left;
             }"""
         )
         assert graph.get_attribute("data-relation-count") == "4"
@@ -1535,7 +1597,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         card_size = _assert_architecture_cards_have_uniform_size(page)
         _assert_architecture_cards_do_not_overlap(page)
         assert "1 ressource isolée" in page.locator("#graph-summary").inner_text()
-        assert page.locator("#inventory-status").inner_text() == "Inventaire : aucun fait non résolu"
+        assert page.locator("#inventory-status").inner_text() == "Inventaire complet"
         assert page.locator("#node-suggestions option").count() == 5
         display_controls = page.locator("#display-controls")
         assert not page.locator("#relation-http").is_visible()
@@ -1632,6 +1694,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
 
         page.get_by_role("tab", name="Kafka").click()
         page.locator("#kafka-panel").wait_for(state="visible")
+        assert page.locator("#graph-context").is_hidden()
         _capture_render_snapshot(page, "constrained-after-kafka-tab")
         dto_filter = page.locator("#dto-reference-filter")
         dto_filter.fill("OrderCreated")
@@ -1654,6 +1717,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
 
         page.get_by_role("tab", name="Mongo").click()
         page.locator("#persistence-panel").wait_for(state="visible")
+        assert page.locator("#graph-context").is_hidden()
         _capture_render_snapshot(page, "constrained-after-mongo-tab")
         mongo_filter = page.locator("#mongo-class-reference-filter")
         mongo_filter.fill("Order")
@@ -1677,6 +1741,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _capture_render_snapshot(page, "constrained-after-inspector-close")
 
         page.get_by_role("tab", name="Explorer").click()
+        assert page.locator("#graph-context").is_visible()
         _capture_render_snapshot(page, "constrained-after-explorer-tab")
         search = page.locator("#search")
         search.fill("orders -> orders.created -> payments")
@@ -1691,6 +1756,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _capture_render_snapshot(page, "constrained-after-node-select")
         assert page.locator(".details-title").inner_text() == "orders"
         assert "has-details" in (page.locator(".toolbar").get_attribute("class") or "")
+        assert page.locator("#reset").inner_text() == "Fermer"
         assert search.is_hidden()
         assert page.locator("#graph-summary").is_hidden()
         assert page.evaluate(
@@ -1740,6 +1806,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
 
         page.locator("#reset").click()
         assert page.locator("#details").is_hidden()
+        assert page.locator("#reset").is_disabled()
         assert search.is_visible()
         assert page.locator("#graph-summary").is_visible()
         search.fill("does-not-exist")

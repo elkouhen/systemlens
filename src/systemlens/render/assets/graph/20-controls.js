@@ -1,7 +1,10 @@
 // Ordered source module: 20-controls.js
     let dependencyRenderer = null;
     const details = document.getElementById("details");
+    const quickSearch = document.getElementById("quick-search");
+    const graphContext = document.getElementById("graph-context");
     const search = document.getElementById("search");
+    const resetButton = document.getElementById("reset");
     const searchStatus = document.getElementById("search-status");
     const pathQuery = document.getElementById("path-query");
     const pathLock = document.getElementById("path-lock");
@@ -9,7 +12,6 @@
     const openApiTab = document.getElementById("openapi-tab");
     const kafkaTab = document.getElementById("kafka-tab");
     const persistenceTab = document.getElementById("persistence-tab");
-    const requestReplyTab = document.getElementById("request-reply-tab");
     const buildTab = document.getElementById("build-tab");
     const issuesTab = document.getElementById("issues-tab");
     const graphLegend = document.getElementById("graph-legend");
@@ -19,7 +21,6 @@
     const openApiPanel = document.getElementById("openapi-panel");
     const kafkaPanel = document.getElementById("kafka-panel");
     const persistencePanel = document.getElementById("persistence-panel");
-    const requestReplyPanel = document.getElementById("request-reply-panel");
     const graphCanvas = document.getElementById("graph");
     const dependencyCanvas = document.getElementById("dependency-graph");
     function ensureDependencyRenderer() {
@@ -144,9 +145,6 @@
     const mongoClassReferencesEmpty = document.getElementById("mongo-class-references-empty");
     const mongoClassReferencesFilter = document.getElementById("mongo-class-reference-filter");
     const mongoClassReferencesTitle = document.getElementById("mongo-class-references-title");
-    const requestReplyPatternsList = document.getElementById("request-reply-patterns");
-    const requestReplyEmpty = document.getElementById("request-reply-empty");
-    const requestReplyTitle = document.getElementById("request-reply-title");
     const layoutStatus = document.getElementById("layout-status");
     const layoutButtons = new Map([
       ["forceatlas2", document.getElementById("layout-forceatlas2")],

@@ -73,6 +73,7 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     assert 'id="layer-view-toggle"' not in document
     assert "#graph, #dependency-graph {\n      position: fixed;" in document
     assert "#graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }" in document
+    assert "#graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }" in document
     assert ".graph-namespace-title { position: absolute; z-index: 4;" in document
     assert "#graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }" in document
     assert ".graph-project-group-title { position: absolute; z-index: 5;" in document
@@ -84,13 +85,17 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     assert 'toolbar?.classList.add("has-details");' in document
     assert 'document.querySelector(".toolbar")?.classList.remove("has-details");' in document
     assert '.toolbar #details .relation-link,' in document
-    assert document.index('id="request-reply-panel"') < document.index('id="details"')
     assert document.index('id="details"') < document.index('id="graph-legend"')
     assert "const point = graphPointToViewport({ x: attributes.x, y: attributes.y });" in document
     assert "const display = renderer.getNodeDisplayData(id);" not in document
     assert "const matrix = renderer.matrix;" not in document
     assert "__GRAPH_CSS__" not in document
     assert "__GRAPH_JS__" not in document
+    assert "--control-height: 30px;" in document
+    assert "--control-radius: 8px;" in document
+    assert "--widget-radius: 12px;" in document
+    assert ".toolbar-tabs, .graph-control-group {" in document
+    assert ".display-controls, .advanced-controls, .advanced-tools {" in document
 
 
 def test_microservice_graph_exposes_software_layers_and_namespaces() -> None:
@@ -199,7 +204,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="kafka-tab"' in document
     assert 'id="persistence-tab"' in document
     assert '>Mongo</button>' in document
-    assert 'id="request-reply-tab"' in document
+    assert 'id="request-reply-tab"' not in document
     assert 'id="build-tab"' in document
     assert 'class="graph-control-group zoom-controls"' in document
     assert 'class="graph-control-group fit-controls"' in document
@@ -218,11 +223,16 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "viewport.width * viewport.height / 30000 * zoomDensity" in document
     assert '.graph-node-card-label:hover .graph-node-card-name' in document
     assert '.graph-node-card-label.is-hovered { z-index: 20; }' in document
+    assert "linear-gradient(145deg" in document
+    assert "clip-path: polygon(7px 1px, 19px 1px, 25px 13px" in document
+    assert ".graph-node-card-icon.is-service::after" in document
+    assert ':root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon' in document
     assert 'layout === "forceatlas2-noverlap" && graphState.fitMode === "readable"' in document
     assert 'return requiredZooms[requiredZooms.length - 1]' in document
     assert 'fitMode: "readable"' in document
     assert "fitRequest !== graphState.fitRequest" in document
-    assert 'toolbarRight + 10' in document
+    assert 'root.style.setProperty("--workspace-left", "0px")' in document
+    assert "toolbarRight" not in document
     assert 'width: min(340px, calc(100vw - 20px));' in document
     assert 'id="paths-tab"' not in document
     assert 'id="paths-panel"' not in document
@@ -249,7 +259,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="openapi-panel"' in document
     assert 'id="kafka-panel"' in document
     assert 'id="persistence-panel"' in document
-    assert 'id="request-reply-panel"' in document
+    assert 'id="request-reply-panel"' not in document
     assert 'id="dependencies-panel"' in document
     assert 'id="graph-legend"' in document
     assert "layerTitleGutter = 182" in document
@@ -390,7 +400,17 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'labelAlignment: "center"' in document
     assert "legend-resource-mark collection" in document
     assert 'class="brand-mark">SL</span>' in document
-    assert "grid-template-columns: repeat(4, minmax(0, 1fr))" in document
+    assert "Espace d’architecture" in document
+    assert "--type-kicker: 10px" in document
+    assert "--type-view-title: 16px" in document
+    assert "--type-entity-title: 19px" in document
+    assert ".details-title { margin: 0; overflow-wrap: anywhere; color: #172033; font-size: var(--type-entity-title);" in document
+    assert ".toolbar-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));" in document
+    assert 'id="graph-context"' in document
+    assert "graphContext.hidden = !showingGraph" in document
+    assert 'id="quick-search"' in document
+    assert document.index('id="quick-search"') < document.index('class="graph-actions"')
+    assert "@media (max-width: 1024px)" in document
     assert "--accent: #3156d3" in document
     assert "backdrop-filter: blur(18px)" in document
     assert "@media (max-width: 700px)" in document

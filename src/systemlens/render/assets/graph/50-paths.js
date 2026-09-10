@@ -3,6 +3,10 @@
       details.classList.remove("is-empty");
       const toolbar = document.querySelector(".toolbar");
       toolbar?.classList.add("has-details");
+      resetButton.disabled = false;
+      resetButton.textContent = "Fermer";
+      resetButton.title = "Fermer le détail";
+      resetButton.setAttribute("aria-label", resetButton.title);
       requestAnimationFrame(() => toolbar?.scrollTo({ top: 0 }));
     }
     function selectDependencyModule(id) {
@@ -35,6 +39,10 @@
     function setDetailsEmpty(message) {
       details.classList.add("is-empty");
       document.querySelector(".toolbar")?.classList.remove("has-details");
+      resetButton.disabled = true;
+      resetButton.textContent = "Effacer";
+      resetButton.title = "Effacer la sélection";
+      resetButton.setAttribute("aria-label", resetButton.title);
       details.replaceChildren();
       const empty = document.createElement("div");
       empty.className = "details-empty";
@@ -425,10 +433,10 @@
       const isMicroservice = node.kind === "microservice";
       const publishedApiCount = isMicroservice ? (node.resources || []).length : 0;
       const publishedTopicCount = isMicroservice ? new Set(
-        indexedEdges.filter(link => link.kind === "kafka" && link.source === id).map(link => link.target)
+        indexedEdges.filter(link => relationCategory(link) === "kafka" && link.source === id).map(link => link.target)
       ).size : 0;
       const collectionCount = isMicroservice ? new Set(
-        indexedEdges.filter(link => link.kind === "mongodb" && link.source === id).map(link => link.target)
+        indexedEdges.filter(link => relationCategory(link) === "mongodb" && link.source === id).map(link => link.target)
       ).size : 0;
       revealDetails();
       details.replaceChildren();

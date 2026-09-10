@@ -16,7 +16,6 @@
       const showingOpenApi = tab === "openapi";
       const showingKafka = tab === "kafka";
       const showingPersistence = tab === "persistence";
-      const showingRequestReply = tab === "request-reply";
       graphTab.classList.toggle("is-active", showingGraph);
       graphTab.setAttribute("aria-selected", String(showingGraph));
       openApiTab.classList.toggle("is-active", showingOpenApi);
@@ -25,19 +24,18 @@
       kafkaTab.setAttribute("aria-selected", String(showingKafka));
       persistenceTab.classList.toggle("is-active", showingPersistence);
       persistenceTab.setAttribute("aria-selected", String(showingPersistence));
-      requestReplyTab.classList.toggle("is-active", showingRequestReply);
-      requestReplyTab.setAttribute("aria-selected", String(showingRequestReply));
       buildTab.classList.toggle("is-active", showingDependencies);
       buildTab.setAttribute("aria-selected", String(showingDependencies));
       issuesTab.classList.toggle("is-active", showingIssues);
       issuesTab.setAttribute("aria-selected", String(showingIssues));
       graphPanel.hidden = !showingGraph;
+      quickSearch.hidden = !showingGraph;
+      graphContext.hidden = !showingGraph;
       dependenciesPanel.hidden = !showingDependencies;
       issuesPanel.hidden = !showingIssues;
       openApiPanel.hidden = !showingOpenApi;
       kafkaPanel.hidden = !showingKafka;
       persistencePanel.hidden = !showingPersistence;
-      requestReplyPanel.hidden = !showingRequestReply;
       graphLegend.hidden = !showingGraph;
       graphCanvas.hidden = showingDependencies;
       dependencyCanvas.hidden = !showingDependencies;
@@ -53,8 +51,8 @@
       inventoryStatus.hidden = false;
       inventoryStatus.classList.toggle("is-warning", indexingIssues.length > 0);
       inventoryStatus.textContent = indexingIssues.length
-        ? `Inventaire : ${indexingIssues.length} fait${indexingIssues.length > 1 ? "s" : ""} à vérifier`
-        : "Inventaire : aucun fait non résolu";
+        ? `${indexingIssues.length} fait${indexingIssues.length > 1 ? "s" : ""} à vérifier`
+        : "Inventaire complet";
       inventoryStatus.title = indexingIssues.length
         ? "Ouvrir les problèmes d'indexation"
         : "Aucun fait non résolu dans cet inventaire";
@@ -176,57 +174,6 @@
         () => openMongoPersistenceInspector(item.id),
       )));
       mongoClassReferencesTitle.textContent = `Classes de persistance (${visiblePersistenceClasses.length}/${persistenceClasses.length})`;
-    }
-    function renderRequestReplyPatterns() {
-      const patterns = graphData.links.filter(link => link.kind === "request_reply");
-      requestReplyPatternsList.replaceChildren();
-      requestReplyEmpty.hidden = patterns.length > 0;
-      patterns.forEach(pattern => {
-        const request = nodeDataById.get(pattern.source);
-        const reply = nodeDataById.get(pattern.target);
-        const requestProducers = graphData.links
-          .filter(link => link.target === pattern.source && link.kind === "kafka")
-          .map(link => link.source);
-        const requestConsumers = graphData.links
-          .filter(link => link.source === pattern.source && link.kind === "kafka")
-          .map(link => link.target);
-        const replyProducers = graphData.links
-          .filter(link => link.target === pattern.target && link.kind === "kafka")
-          .map(link => link.source);
-        const replyConsumers = graphData.links
-          .filter(link => link.source === pattern.target && link.kind === "kafka")
-          .map(link => link.target);
-        const sources = requestProducers.filter(service => replyConsumers.includes(service));
-        const destinations = requestConsumers.filter(service => replyProducers.includes(service));
-        const servicePairs = [...new Set(sources)].flatMap(source =>
-          [...new Set(destinations)].filter(target => target !== source).map(target => ({ source, target }))
-        );
-        if (!servicePairs.length) {
-          requestReplyPatternsList.append(referenceItem(
-            `${request?.name || pattern.source} → ${reply?.name || pattern.target}`,
-            "Couple de topics détecté ; les services qui réalisent l’aller-retour ne sont pas tous indexés.",
-            "Voir dans le graphe",
-            () => { setToolbarTab("graph"); selectNode(pattern.source); },
-          ));
-          return;
-        }
-        servicePairs.forEach(({ source, target }) => {
-          const sourceName = nodeDataById.get(source)?.name || source;
-          const targetName = nodeDataById.get(target)?.name || target;
-          requestReplyPatternsList.append(referenceItem(
-            `${sourceName} ⇄ ${targetName}`,
-            `${request?.name || pattern.source} → ${reply?.name || pattern.target} · chemin le plus court entre services`,
-            "Voir le chemin",
-            () => {
-              setToolbarTab("graph");
-              const path = shortestPath(source, target);
-              if (path) showPath(path, [source, target]);
-              else setDetailsEmpty(`Aucun chemin orienté entre ${sourceName} et ${targetName}.`);
-            },
-          ));
-        });
-      });
-      requestReplyTitle.textContent = `Patterns request/reply Kafka (${patterns.length})`;
     }
     function createDetailsGroup(title, open = true) {
       const group = document.createElement("details");

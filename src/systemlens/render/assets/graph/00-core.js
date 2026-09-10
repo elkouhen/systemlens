@@ -20,7 +20,7 @@
     document.documentElement.dataset.theme = preferredTheme;
     function updateThemeToggle() {
       const isDark = document.documentElement.dataset.theme === "dark";
-      themeToggle.textContent = isDark ? "☼" : "☾";
+      themeToggle.textContent = isDark ? "☼ Clair" : "☾ Sombre";
       themeToggle.title = isDark ? "Passer au thème clair" : "Passer au thème sombre";
       themeToggle.setAttribute("aria-label", themeToggle.title);
     }
@@ -71,14 +71,13 @@
     const graphSummary = document.getElementById("graph-summary");
     const summaryCounts = {
       microservices: graphData.nodes.filter(node => node.kind === "microservice").length,
-      topics: graphData.nodes.filter(node => node.kind === "kafka_topic").length,
-      collections: graphData.nodes.filter(node => node.kind === "mongodb_collection").length,
-      requestReplies: graphData.links.filter(link => link.kind === "request_reply").length,
+      channels: graphData.nodes.filter(node => ["kafka_topic", "message_channel"].includes(node.kind)).length,
+      dataResources: graphData.nodes.filter(node => ["mongodb_collection", "data_schema"].includes(node.kind)).length,
     };
     const summaryItems = [
-      `${summaryCounts.microservices} microservice${summaryCounts.microservices > 1 ? "s" : ""}`,
-      `${summaryCounts.topics} topic${summaryCounts.topics > 1 ? "s" : ""} Kafka`,
-      `${summaryCounts.collections} collection${summaryCounts.collections > 1 ? "s" : ""} MongoDB`,
+      `${summaryCounts.microservices} service${summaryCounts.microservices > 1 ? "s" : ""}`,
+      `${summaryCounts.channels} ${summaryCounts.channels > 1 ? "canaux" : "canal"}`,
+      `${summaryCounts.dataResources} ressource${summaryCounts.dataResources > 1 ? "s" : ""} de données`,
       `${graphData.links.length} relation${graphData.links.length > 1 ? "s" : ""}`,
       ...(isolatedNodeIds.size
         ? [`${isolatedNodeIds.size} ressource${isolatedNodeIds.size > 1 ? "s" : ""} isolée${isolatedNodeIds.size > 1 ? "s" : ""}`]
@@ -90,12 +89,6 @@
       item.textContent = text;
       graphSummary.append(item);
     });
-    if (summaryCounts.requestReplies) {
-      const item = document.createElement("span");
-      item.className = "graph-summary-item is-warning";
-      item.textContent = `${summaryCounts.requestReplies} pattern${summaryCounts.requestReplies > 1 ? "s" : ""} request/reply`;
-      graphSummary.append(item);
-    }
     const RELATION_COLORS = Object.freeze({
       http: "#D55E00",
       kafkaPublish: "#009E73",

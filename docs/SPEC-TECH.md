@@ -223,6 +223,15 @@ hides it while empty. Selecting a resource or itinerary applies a panel state
 that hides the active tab panel, reveals the detail section, and resets the outer
 toolbar scroll position. The same state hides summary and inventory counters,
 while graph actions, tabs, and the active graph-layout status remain present.
+The quick search is a separate Explorer-only toolbar section. A second
+Explorer-only context section groups camera actions on one row, display actions
+on another, then summary and inventory counters. Switching to a domain tab
+hides that complete context. The reset action is disabled while there is no selection.
+Shared CSS tokens define the height and inner radius of segmented controls and
+the border, surface, and outer radius of widget containers. Navigation tabs and
+graph mode selectors consume those tokens and use the same selected-state rule;
+Explorer disclosure sections consume the container tokens. Semantic pills do
+not consume the rectangular control radius.
 Clearing the selection reverses that state; selecting a navigation tab clears
 details before displaying its ordinary panel. Path parsing
 filters same-name candidates by the grammar before accepting an itinerary
@@ -331,6 +340,14 @@ For `n` visible nodes, the current conservative collision pass is `O(n²)` and
 uses `O(n)` temporary rectangles; exported architecture reports are expected
 to remain within interactive inventory sizes.
 
+Symbol styling reuses each node's `--card-accent`: a light accent-tinted
+gradient and a high-contrast accent border mirror the card surface/border
+rules, while the dark theme mixes the same accent into the slate surface.
+Selection and hover add scale and glow without changing the 30×30 collision
+envelope. The microservice hexagon uses nested, pixel-aligned polygons for its
+border and surface; this avoids clipping a rectangular CSS border and keeps the
+six edges visually even at the compact symbol size.
+
 The manifest extractors add explicitly declared Kafka facts from Markdown and
 JSON. Strategy1 is separate and opt-in because it embeds repository-specific
 naming conventions.
@@ -346,9 +363,8 @@ its evidence is intended for a human or an AI to assess a conservative rule.
 ### Coordinate system and rendering
 
 The HTML renderer keeps graph coordinates as the source of truth for layout.
-Sigma's canvas and the HTML card/module overlays share the same workspace
-rectangle (including the space reserved for the navigation and details
-panels). Overlay positions are obtained from Sigma's public
+Sigma's canvas and the HTML card/module overlays share the same full-window
+workspace rectangle behind the floating navigation and details panel. Overlay positions are obtained from Sigma's public
 `graphToViewport` conversion using the raw graph coordinates; renderer
 internal matrices and full-window canvas coordinates are not mixed with the
 workspace-local overlay coordinates.
@@ -433,8 +449,9 @@ does not participate in the Sigma workspace rectangle. The HTML layer, module,
 and node overlays retain the same full-height coordinate surface as the canvas.
 Opening or resizing details only changes the navigation panel's internal scroll
 extent and therefore cannot introduce a clipping seam or reset the camera.
-The desktop workspace starts 10 px after the measured right edge of the compact
-navigation panel; it does not reserve an additional decorative gutter.
+The desktop workspace starts at the window's left edge. The toolbar overlays
+its upper-left portion, while nodes and relations remain rendered in the usable
+space below the toolbar.
 The Sigma canvas and the HTML card/module overlays are therefore recomputed
 from one camera state per frame, preventing partially rebuilt containers from
 appearing while the user drags the module view.
