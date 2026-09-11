@@ -1,4 +1,4 @@
-"""Compatibility facade for the SQLite store implementation."""
+"""Persistence adapters for local SystemLens snapshots."""
 
 from systemlens.storage.sqlite import CodeChunk, Store, StoreError
 

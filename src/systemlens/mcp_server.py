@@ -17,7 +17,7 @@ from systemlens.dependency_analysis import (
 from systemlens.indexer import IndexReport, index_repo
 from systemlens.models import GraphFact
 from systemlens.paths import db_path
-from systemlens.store import Store
+from systemlens.storage.sqlite import Store
 
 mcp = FastMCP("systemlens")
 _FACT_TYPES = {"node", "edge"}

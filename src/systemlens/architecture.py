@@ -16,7 +16,7 @@ from systemlens.graph import (
     resolve_rest_target_service,
 )
 from systemlens.models import ArchitectureRelation, ExtractionDiagnostic, MessageEndpoint
-from systemlens.module_types import DiscoveredModule, module_identity
+from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 
 
 _KINDS = {

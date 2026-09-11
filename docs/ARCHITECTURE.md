@@ -26,14 +26,15 @@ application queries and indexing (`architecture.py`, `architecture_inventory.py`
 facts and discovery (`scanner/`, `modules.py`, `maven.py`, `gradle.py`,
 `java_parser.py`, `relations.py`)
                 |
-models and persistence (`models.py`, `module_types.py`, `store.py`)
+domain and persistence (`models.py`, `domain/`, `storage/`)
 ```
 
 The `render/` package (formerly the single `render.py` file, still imported as
 `from systemlens.render import ...`) is an output adapter. It may consume
 query results and models, but must not perform indexing or persist data.
-`indexing/` contains the repository-file inventory and snapshot materializers
-used by the `indexer.py` application service. `config.py`, `paths.py`, and
+`application/` contains projections shared by delivery adapters. `indexing/`
+contains the repository-file inventory and snapshot materializers used by the
+`indexer.py` application service. `config.py`, `paths.py`, and
 `inventory_freshness.py` are small cross-cutting
 utilities.
 
@@ -116,10 +117,10 @@ they are not cross-module entry points.
 | Shared CLI/web graph selection | `architecture_projection.py` |
 | Java AST endpoint extraction | `scanner/` package (`__init__.py` re-exports the public surface) |
 | Maven/Gradle module facts or Java source inventory | `modules.py`, `maven.py`, `gradle.py` |
-| Shared module inventory types | `module_types.py` |
+| Shared module inventory types | `domain/module_inventory.py` |
 | File eligibility or incremental refresh policy | `indexing/file_inventory.py` |
 | Persisted contract materialization | `indexing/materializers.py` |
-| SQLite schema or queries | `store.py` |
+| SQLite schema or queries | `storage/sqlite.py` (`store.py` is a compatibility facade) |
 | JSON, terminal, HTML, or LikeC4 presentation | `render/` package (`__init__.py` re-exports the public surface) |
 
 ## The `scanner/` package
@@ -200,9 +201,9 @@ source extraction.
    adapter wiring; they are not the first home for an extraction rule.
 5. Keep new output formats in the `render/` package (a focused new submodule
    if needed), not in query or discovery code.
-6. Import module inventory dataclasses from `module_types.py` outside the
-   discovery implementation. `modules.py` re-exports them only for historical
-   compatibility.
+6. Import module inventory dataclasses from `domain/module_inventory.py`
+   outside the discovery implementation. `module_types.py` and `modules.py`
+   re-export them only for historical compatibility.
 
 Browser integration tests live in `tests/test_browser_export.py`. They are
 marked both `integration` and `slow`, so they do not run in the default

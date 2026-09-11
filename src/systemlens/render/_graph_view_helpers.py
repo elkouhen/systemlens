@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 from systemlens.graph import GraphEdge, graph_edge_rest_resource
 from systemlens.models import Finding, MessageEndpoint
-from systemlens.module_types import DiscoveredModule
+from systemlens.domain.module_inventory import DiscoveredModule
 
 
 def _rest_resources_served(endpoints: list[MessageEndpoint]) -> list[str]:
@@ -222,4 +222,3 @@ def _visual_link_evidence(
     if any(endpoint.source == "manifest" for endpoint in endpoints):
         return "proved", "manifest"
     return "proved", "code"
-

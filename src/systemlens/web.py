@@ -19,12 +19,12 @@ from systemlens.architecture_inventory import (
     ArchitectureInventoryError,
     load_architecture_inventory,
 )
-from systemlens.architecture_projection import project_architecture_graph
+from systemlens.application.architecture_projection import project_architecture_graph
 from systemlens.config import ConfigError, init_config, load_config
 from systemlens.indexer import index_repo
 from systemlens.paths import db_path
 from systemlens.render import render_graph_html
-from systemlens.store import Store, StoreError
+from systemlens.storage.sqlite import Store, StoreError
 
 Document: TypeAlias = tuple[HTTPStatus, str]
 

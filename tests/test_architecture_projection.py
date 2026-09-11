@@ -1,9 +1,9 @@
 from pathlib import Path
 
 from systemlens.architecture_inventory import AnalysisProfile, ArchitectureInventory
-from systemlens.architecture_projection import project_architecture_graph
+from systemlens.application.architecture_projection import project_architecture_graph
 from systemlens.models import MessageEndpoint
-from systemlens.module_types import DiscoveredModule
+from systemlens.domain.module_inventory import DiscoveredModule
 
 
 def _module(name: str, *, starts_application: bool, collections: tuple[str, ...] = ()) -> DiscoveredModule:

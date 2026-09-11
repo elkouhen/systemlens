@@ -26,7 +26,7 @@ from systemlens.architecture import (
     trace_topic_flows,
 )
 from systemlens.architecture_inventory import load_architecture_inventory
-from systemlens.architecture_projection import project_architecture_graph
+from systemlens.application.architecture_projection import project_architecture_graph
 from systemlens.audit import assess_architecture, render_audit_json, render_audit_text
 from systemlens.config import ConfigError, init_config, load_config
 from systemlens.flow import resolve_topic
@@ -35,7 +35,7 @@ from systemlens.indexer import index_repo
 from systemlens.inventory_freshness import endpoint_inventory_warning
 from systemlens.models import GraphFact, MessageEndpoint
 from systemlens.models import ExtractionDiagnostic
-from systemlens.module_types import DiscoveredModule, ModuleDependency, module_identity
+from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.modules import (
     discover_modules,
 )
@@ -59,7 +59,7 @@ from systemlens.render import (
     render_modules_list_text,
 )
 from systemlens.paths import config_path, db_path
-from systemlens.store import Store, StoreError
+from systemlens.storage.sqlite import Store, StoreError
 from systemlens.mcp_server import import_graph_facts as import_graph_facts_mcp
 from systemlens.workspace import (
     discover_maven_services,

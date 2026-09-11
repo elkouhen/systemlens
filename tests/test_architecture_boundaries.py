@@ -19,7 +19,7 @@ def _imported_modules(path: Path) -> set[str]:
 
 
 def test_module_types_do_not_depend_on_discovery_or_parsing() -> None:
-    imported = _imported_modules(SOURCE_ROOT / "module_types.py")
+    imported = _imported_modules(SOURCE_ROOT / "domain" / "module_inventory.py")
 
     assert not imported & {
         "systemlens.gradle",
@@ -31,7 +31,7 @@ def test_module_types_do_not_depend_on_discovery_or_parsing() -> None:
 
 
 def test_store_depends_on_module_facts_not_module_discovery() -> None:
-    imported = _imported_modules(SOURCE_ROOT / "store.py")
+    imported = _imported_modules(SOURCE_ROOT / "storage" / "sqlite.py")
 
-    assert "systemlens.module_types" in imported
+    assert "systemlens.domain.module_inventory" in imported
     assert "systemlens.modules" not in imported

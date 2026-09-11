@@ -14,7 +14,7 @@ from systemlens import java_parser
 from systemlens.gradle import discover_gradle_modules, gradle_module_identity
 from systemlens.maven import module_name_for_path, parse_pom, pom_version
 from systemlens.configuration import service_configuration_example
-from systemlens.module_types import (
+from systemlens.domain.module_inventory import (
     BlockingPoint,
     DiscoveredModule,
     JavaArchitectureExtension,

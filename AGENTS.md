@@ -126,6 +126,9 @@ To keep long agent sessions reliable and reviewable:
 6. When a session is becoming long or crosses several work phases, remind the
    user of the useful options: compact the conversation, record a checkpoint,
    split unrelated work into a new thread, and preserve the validation status.
+7. Use Archify only to analyze or visualize Python projects. Do not use it to
+   replace SystemLens' native exports or infer architecture facts that
+   SystemLens has not indexed.
 
 ## Cross-functional review
 

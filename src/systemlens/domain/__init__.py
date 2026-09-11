@@ -1,4 +1,4 @@
-"""Compatibility facade for module facts now owned by :mod:`systemlens.domain`."""
+"""Stable domain facts shared across SystemLens layers."""
 
 from systemlens.domain.module_inventory import (
     BlockingPoint,

@@ -4,7 +4,7 @@ import json
 
 import yaml
 
-from systemlens.module_types import DiscoveredModule
+from systemlens.domain.module_inventory import DiscoveredModule
 from systemlens.modules import deduplicate_openapi_contract_owners
 
 

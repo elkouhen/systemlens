@@ -15,7 +15,7 @@ from systemlens.graph import (
     qualified_rest_resource,
 )
 from systemlens.models import ArchitectureRelation, MessageEndpoint
-from systemlens.module_types import DiscoveredModule
+from systemlens.domain.module_inventory import DiscoveredModule
 
 
 _MONGO_WRITE_OPERATIONS = frozenset({

@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from systemlens.module_types import DiscoveredModule, module_identity
+from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 
 _NAMESPACE_HTML_TEMPLATE = (
     Path(__file__).parent / "assets" / "namespaces.html"

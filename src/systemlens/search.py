@@ -4,7 +4,7 @@ import re
 
 from systemlens.config import VALID_SEVERITIES
 from systemlens.models import Finding
-from systemlens.store import Store
+from systemlens.storage.sqlite import Store
 
 _WORD_RE = re.compile(r"\w+")
 

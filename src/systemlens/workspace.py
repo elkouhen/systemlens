@@ -13,10 +13,10 @@ from typing import TypeVar
 
 from systemlens.inventory_freshness import endpoint_inventory_warning
 from systemlens.models import ArchitectureRelation, Finding, MessageEndpoint
-from systemlens.module_types import DiscoveredModule, ModuleDependency, module_identity
+from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.modules import discover_modules
 from systemlens.paths import db_path
-from systemlens.store import Store, StoreError
+from systemlens.storage.sqlite import Store, StoreError
 
 _ItemT = TypeVar("_ItemT", ArchitectureRelation, Finding, MessageEndpoint)
 

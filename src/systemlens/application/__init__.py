@@ -1,4 +1,4 @@
-"""Compatibility facade for the shared architecture application projection."""
+"""Application services that coordinate domain facts for delivery adapters."""
 
 from systemlens.application.architecture_projection import (
     ArchitectureGraphProjection,

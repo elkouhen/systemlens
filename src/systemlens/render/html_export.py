@@ -13,7 +13,7 @@ from systemlens.models import (
     GraphFact,
     MessageEndpoint,
 )
-from systemlens.module_types import DiscoveredModule, ModuleDependency
+from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency
 from systemlens.render.graph_view_model import build_graph_view_model
 
 

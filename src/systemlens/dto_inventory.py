@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from systemlens import java_parser
 from systemlens.models import MessageEndpoint
-from systemlens.module_types import DiscoveredModule, module_identity
+from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 
 
 def _java_type_references(source_bytes: bytes, type_node) -> list[str]:

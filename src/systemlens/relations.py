@@ -5,7 +5,7 @@ from typing import TypedDict
 
 from systemlens.models import ArchitectureRelation, MessageEndpoint, compute_architecture_relation_id
 from systemlens.graph import build_graph, group_endpoints_by_module
-from systemlens.module_types import DiscoveredModule, ModuleDependency, module_identity
+from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.scanner import _local_spring_application_names
 
 

@@ -9,7 +9,7 @@ from systemlens.config import ConfigError, load_config
 from systemlens import java_parser
 from systemlens.inventory_freshness import endpoint_inventory_warning
 from systemlens.paths import db_path
-from systemlens.store import Store, StoreError
+from systemlens.storage.sqlite import Store, StoreError
 
 
 @dataclass(frozen=True)

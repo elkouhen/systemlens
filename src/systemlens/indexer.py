@@ -34,7 +34,7 @@ from systemlens.scanner import (
     infer_markdown_topic_manifest_endpoints,
     apply_kafka_topic_strategy1,
 )
-from systemlens.store import Store
+from systemlens.storage.sqlite import Store
 from systemlens.kubernetes import KubernetesDiscoveryError, KubernetesWorkload, discover_workloads
 
 
