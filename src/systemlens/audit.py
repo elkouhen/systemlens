@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 
 from systemlens.graph import GraphEdge
 from systemlens.models import MessageEndpoint
-from systemlens.modules import DiscoveredModule, module_identity
+from systemlens.module_types import DiscoveredModule, module_identity
 
 
 _MONGO_WRITE_OPERATIONS = frozenset({

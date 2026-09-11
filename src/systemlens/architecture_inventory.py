@@ -13,7 +13,7 @@ from typing import Literal, cast
 from systemlens.graph import group_endpoints_by_module
 from systemlens.inventory_freshness import endpoint_inventory_warning
 from systemlens.models import ArchitectureRelation, ExtractionDiagnostic, Finding, MessageEndpoint
-from systemlens.modules import DiscoveredModule, ModuleDependency, module_identity
+from systemlens.module_types import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.paths import db_path
 from systemlens.store import Store
 from systemlens.workspace import (

@@ -1,6 +1,3 @@
-import fnmatch
-import hashlib
-import json
 import os
 import sys
 import time
@@ -8,15 +5,21 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
-import yaml
-
 from systemlens.config import Config
 from systemlens.dto_inventory import materialize_kafka_dto_definitions
 from systemlens.inventory_freshness import current_endpoint_inventory_signature
+from systemlens.indexing.file_inventory import (
+    analysis_inputs_signature as _analysis_inputs_signature,
+    changes_require_dependent_rescan as _changes_require_dependent_rescan,
+    is_in_excluded_module as _is_in_excluded_module,
+    list_repo_files as _list_repo_files,
+    sha256_file as _sha256_file,
+    strategy1_requires_full_reindex as _strategy1_requires_full_reindex,
+)
+from systemlens.indexing.materializers import materialize_openapi_contracts
 from systemlens import java_parser
 from systemlens.models import ExtractionDiagnostic, MessageEndpoint
 from systemlens.modules import (
-    _deduplicate_openapi_contract_owners,
     discover_module_dependencies,
     discover_modules,
     discover_excluded_module_paths,
@@ -47,174 +50,6 @@ class IndexReport:
     deleted_files: int
     endpoints_added: int = 0
     endpoints_removed: int = 0
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _matches_any(rel_path: str, patterns: list[str]) -> bool:
-    return any(pattern == "**/*" or fnmatch.fnmatch(rel_path, pattern) for pattern in patterns)
-
-
-def _is_maven_or_gradle_test_source_set(source_set: str) -> bool:
-    """`main` est le seul nom de source set universel en Maven/Gradle ;
-    ses variants de test suivent tous la convention `test` ou
-    `<prefixe>Test` (`componentTest`, `contractTest`, `endToEndTest`, ...).
-    BACKLOG-16 P1 : restreint `_is_test_source` à cette convention, plutôt
-    qu'à « tout ce qui suit `src/` et n'est pas `main` » — cette dernière
-    règle confondait n'importe quel layout `src/<package>` (Python, JS,
-    Rust, y compris ce projet lui-même) avec un jeu de sources de test."""
-    return source_set == "test" or source_set.endswith("Test")
-
-
-def _is_test_source(rel_path: str) -> bool:
-    """BACKLOG-15 H2 (ADR-34) : tout fichier sous un dossier `src/<jeu-de-
-    sources>` où `<jeu-de-sources>` suit la convention Maven/Gradle de
-    nommage des source sets de test (voir
-    `_is_maven_or_gradle_test_source_set`) est exclu du scan, findings et
-    endpoints confondus. Décision explicite qui revient sur BACKLOG-2 R2/
-    ADR-14 (« ne jamais exclure silencieusement les tests ») — voir ADR-34.
-    Basé sur les segments du chemin, pas un pattern glob : un `fnmatch`
-    avec `*` ne respecte pas les frontières de répertoire et confondrait un
-    paquet nommé `testutils` sous `src/main/...` avec un vrai jeu de
-    sources de test."""
-    segments = rel_path.split("/")
-    return any(
-        segment == "src"
-        and i + 1 < len(segments)
-        and _is_maven_or_gradle_test_source_set(segments[i + 1])
-        for i, segment in enumerate(segments)
-    )
-
-
-def _is_strategy1_openapi_declaration(rel_path: str) -> bool:
-    path = Path(rel_path)
-    parts = path.parts
-    return path.suffix.casefold() == ".rest" and any(
-        parts[index:index + 4] == ("src", "main", "resources", "openapi")
-        for index in range(max(0, len(parts) - 3))
-    )
-
-
-def _strategy1_requires_full_reindex(
-    changed_or_deleted: set[str], repo_root: Path, modules: list
-) -> bool:
-    """Whether a change can alter service ↔ model OpenAPI attribution."""
-    model_roots = {
-        module.path.resolve().relative_to(repo_root.resolve()).as_posix()
-        for module in modules
-        if module.name.casefold().startswith("model-")
-        and module.path.resolve() != repo_root.resolve()
-    }
-    for rel_path in changed_or_deleted:
-        if rel_path.endswith("pom.xml") or _is_strategy1_openapi_declaration(rel_path):
-            return True
-        if any(rel_path == root or rel_path.startswith(f"{root}/") for root in model_roots):
-            return True
-    return False
-
-
-def _is_git_metadata(rel_path: str) -> bool:
-    """Git metadata is never source input, even when config omits `.git/**`.
-
-    This is intentionally a segment check rather than a glob so a source file
-    merely containing the characters ``.git`` in its name remains indexable.
-    """
-    return ".git" in rel_path.split("/")
-
-
-def _nested_build_roots(repo_root: Path) -> tuple[Path, ...]:
-    """Return the outermost Maven/Gradle modules below a container root.
-
-    A directory used only as a workspace (for example ``~/examples``) must
-    not be mistaken for one source module.  When it has no build descriptor of
-    its own, scanning is restricted to its child Maven/Gradle projects; nested
-    modules remain included and are later attributed to their nearest build
-    descriptor.  A normal repository root keeps the historical whole-tree
-    behaviour.
-    """
-    descriptors = ("pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts")
-    if any((repo_root / descriptor).is_file() for descriptor in descriptors):
-        return ()
-    candidates = {
-        path.parent
-        for descriptor in descriptors
-        for path in repo_root.rglob(descriptor)
-        if not _is_git_metadata(path.relative_to(repo_root).as_posix())
-        if len(path.parent.relative_to(repo_root).parts) <= 5
-    }
-    return tuple(
-        candidate
-        for candidate in sorted(candidates)
-        if not any(parent != candidate and parent in candidates for parent in candidate.parents)
-    )
-
-
-def _is_in_excluded_module(path: Path, excluded_module_paths: tuple[Path, ...]) -> bool:
-    return any(module_path == path.parent or module_path in path.parents for module_path in excluded_module_paths)
-
-
-def _list_repo_files(
-    repo_root: Path,
-    config: Config,
-    *,
-    excluded_module_paths: tuple[Path, ...] = (),
-) -> dict[str, str]:
-    repo_root = repo_root.resolve()
-    hashes: dict[str, str] = {}
-    nested_roots = _nested_build_roots(repo_root)
-    for path in sorted(repo_root.rglob("*")):
-        if not path.is_file():
-            continue
-        if _is_in_excluded_module(path, excluded_module_paths):
-            continue
-        if nested_roots and not any(root == path.parent or root in path.parents for root in nested_roots):
-            continue
-        rel_path = path.relative_to(repo_root).as_posix()
-        if _is_git_metadata(rel_path):
-            continue
-        if _is_test_source(rel_path):
-            continue
-        if config.exclude and _matches_any(rel_path, config.exclude):
-            continue
-        if config.include and not _matches_any(rel_path, config.include):
-            continue
-        hashes[rel_path] = _sha256_file(path)
-    return hashes
-
-
-def _analysis_inputs_signature(repo_root: Path, config: Config) -> str:
-    """Fingerprint local configuration that changes AST analysis facts."""
-    digest = hashlib.sha256()
-    config_file = repo_root / ".systemlens" / "config.yml"
-    if config_file.is_file():
-        digest.update(_sha256_file(config_file).encode())
-    return digest.hexdigest()
-
-
-def _changes_require_dependent_rescan(paths: set[str]) -> bool:
-    """Return whether changed inputs can alter facts in unchanged source files.
-
-    Endpoint extraction resolves Spring placeholders from configuration files and
-    attributes every source fact to its nearest Maven/Gradle build module.  The
-    source file using either input need not itself change.  A conservative full
-    refresh is therefore required whenever one of these dependency inputs is
-    added, changed, or deleted; publishing a fast but mixed snapshot would be
-    worse than scanning a few additional files.
-    """
-    build_files = {
-        "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts",
-    }
-    return any(
-        Path(path).name in build_files
-        or Path(path).suffix.casefold() in {".properties", ".yml", ".yaml"}
-        for path in paths
-    )
 
 
 def _report_progress(progress: ProgressCallback | None, message: str) -> None:
@@ -278,7 +113,7 @@ def _index_repo(
         full = True
     if store.get_meta("topic_strategy") != topic_strategy:
         full = True
-    analysis_inputs_signature = _analysis_inputs_signature(repo_root, config)
+    analysis_inputs_signature = _analysis_inputs_signature(repo_root)
     if store.get_meta("analysis_inputs_signature") != analysis_inputs_signature:
         full = True
 
@@ -445,27 +280,9 @@ def _index_repo(
     store.replace_kafka_dto_definitions(
         materialize_kafka_dto_definitions(endpoints_by_service, relation_modules)
     )
-    openapi_contracts: list[dict[str, object]] = []
-    indexed_openapi_paths: set[Path] = set()
     # Also normalize a persisted module snapshot when module inventory refresh
     # is disabled for this run.
-    for module in _deduplicate_openapi_contract_owners(relation_modules):
-        for path in module.openapi_files:
-            contract_path = (module.path / path).resolve()
-            if contract_path in indexed_openapi_paths:
-                continue
-            try:
-                spec = yaml.safe_load(contract_path.read_text(encoding="utf-8"))
-            except (OSError, yaml.YAMLError):
-                continue
-            if isinstance(spec, dict) and ("openapi" in spec or "swagger" in spec):
-                openapi_contracts.append({
-                    "module": module.identity or module.name,
-                    "path": path,
-                    "spec": json.loads(json.dumps(spec, default=str)),
-                })
-                indexed_openapi_paths.add(contract_path)
-    store.replace_openapi_contracts(openapi_contracts)
+    store.replace_openapi_contracts(materialize_openapi_contracts(relation_modules))
     relations = build_architecture_relations(
         relation_modules,
         store.all_endpoints(),

@@ -41,10 +41,14 @@ API context; it is never enabled by default.
 
 `scanner/` (a package; see `docs/ARCHITECTURE.md`) owns Java/Spring extraction.
 `java_parser.py` provides cached
-Tree-sitter parsing and syntax helpers. `modules.py`, `maven.py` and `gradle.py`
-discover build units; `relations.py` derives typed architecture relations from
-modules, endpoints and build dependencies. `indexer.py` orchestrates the
-incremental transaction. `dto_inventory.py` materializes the conservative Java
+Tree-sitter parsing and syntax helpers. `module_types.py` owns the build-inventory
+facts shared with persistence and projections, without depending on discovery.
+`modules.py`, `maven.py` and `gradle.py` discover build units; `relations.py`
+derives typed architecture relations from modules, endpoints and build
+dependencies. `indexer.py` orchestrates the incremental transaction, while
+`indexing/file_inventory.py` owns file eligibility and conservative full-rescan
+promotion and `indexing/materializers.py` owns persisted contract projections.
+`dto_inventory.py` materializes the conservative Java
 DTO closure referenced by Kafka endpoints before that closure is persisted.
 `store.py` owns SQLite persistence.
 
@@ -55,8 +59,11 @@ browser assets. Rendering code must not be imported by indexing or discovery
 code.
 
 `cli.py`, `mcp_server.py`, and the standard-library local HTTP server in
-`web.py` are thin delivery layers over the domain modules. `systemlens web`
-serves only an in-memory landing page and the existing `/architecture` HTML
+`web.py` are thin delivery layers over the domain modules. The CLI export and
+`systemlens web` both use `architecture_projection.py` to select the same
+deployable, exportable service topology before choosing their output format.
+The web command serves only an in-memory landing page and the existing
+`/architecture` HTML
 projection: it loads the persisted architecture snapshot and renders it for
 that request. If no local index exists, its explicit POST action creates the
 default configuration when needed and indexes the repository before rendering

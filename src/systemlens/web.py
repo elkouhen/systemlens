@@ -17,11 +17,10 @@ from urllib.parse import urlsplit
 
 from systemlens.architecture_inventory import (
     ArchitectureInventoryError,
-    is_deployable_service,
     load_architecture_inventory,
 )
+from systemlens.architecture_projection import project_architecture_graph
 from systemlens.config import ConfigError, init_config, load_config
-from systemlens.graph import graph_edges_from_relations
 from systemlens.indexer import index_repo
 from systemlens.paths import db_path
 from systemlens.render import render_graph_html
@@ -59,28 +58,14 @@ class SystemLensWebApplication:
             )
         except ArchitectureInventoryError as exc:
             return HTTPStatus.SERVICE_UNAVAILABLE, _error_document("Architecture unavailable", str(exc))
-        services = {
-            name: endpoints
-            for name, endpoints in inventory.endpoints_by_service.items()
-            if _is_exportable_microservice(name)
-            and is_deployable_service(name, inventory.modules_by_service)
-        }
-        edges = [
-            edge
-            for edge in graph_edges_from_relations(inventory.relations, services)
-            if _is_exportable_microservice(edge.from_service)
-            and _is_exportable_microservice(edge.to_service)
-        ]
-        collections = {
-            service: list(module.mongo_collections)
-            for service, module in inventory.modules_by_service.items()
-            if module.mongo_collections
-        }
+        projection = project_architecture_graph(
+            inventory, include_module_details=True
+        )
         document = render_graph_html(
-            services,
-            edges,
-            collections,
-            inventory.modules_by_service,
+            projection.services_by_name,
+            projection.edges,
+            projection.collections_by_service,
+            projection.modules_by_service,
             inventory.warnings,
             inventory.modules,
             inventory.module_dependencies,
@@ -170,11 +155,3 @@ def _missing_index_document() -> str:
     return """<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Create architecture index</title>
 <style>body{font-family:system-ui,sans-serif;max-width:44rem;margin:4rem auto;padding:0 1rem;color:#172033}button{background:#2563eb;border:0;border-radius:.5rem;color:white;cursor:pointer;font:inherit;font-weight:650;padding:.7rem 1rem}button:disabled{cursor:wait;opacity:.7}a{color:#2563eb}</style></head>
 <body><h1>Architecture index not found</h1><p>Create a local index of this repository to explore its static architecture.</p><form method="post" action="/architecture/index" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Creating index…'"><button type="submit">Create architecture index</button></form><p><a href="/">Back to SystemLens</a></p></body></html>"""
-
-
-def _is_exportable_microservice(name: str) -> bool:
-    """Keep the web architecture view aligned with the HTML export scope."""
-    normalized = name.casefold()
-    return "test" not in normalized and not (
-        name.startswith("${") and name.endswith("}")
-    )

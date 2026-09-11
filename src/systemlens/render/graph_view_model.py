@@ -15,7 +15,7 @@ from systemlens.models import (
     GraphFact,
     MessageEndpoint,
 )
-from systemlens.modules import (
+from systemlens.module_types import (
     DiscoveredModule,
     ModuleDependency,
     MongoPersistenceClass,

@@ -10,7 +10,7 @@ from typing import TypedDict
 
 from systemlens.flow import FlowResult
 from systemlens.models import MessageEndpoint
-from systemlens.modules import DiscoveredModule, ModuleDependency
+from systemlens.module_types import DiscoveredModule, ModuleDependency
 from systemlens.workspace import DiscoveredService, FederationResult
 
 _MODULE_GRAPH_HTML_TEMPLATE = (

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from systemlens.models import MessageEndpoint
-from systemlens.modules import DiscoveredModule, ModuleDependency, module_identity
+from systemlens.module_types import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.render.namespaces import project_namespace, project_namespace_path
 
 _SOFTWARE_LAYERS_HTML_TEMPLATE = (

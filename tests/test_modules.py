@@ -15,7 +15,7 @@ from systemlens.models import MessageEndpoint
 from systemlens.modules import (
     DiscoveredModule,
     ModuleDependency,
-    _deduplicate_openapi_contract_owners,
+    deduplicate_openapi_contract_owners,
     discover_module_dependencies,
     discover_modules,
     module_identity,
@@ -384,7 +384,7 @@ def test_direct_enclosing_module_owns_a_shared_openapi_contract(tmp_path: Path) 
         openapi_files=("../swagger.yaml",),
     )
 
-    modules = _deduplicate_openapi_contract_owners([root_module, nested_module])
+    modules = deduplicate_openapi_contract_owners([root_module, nested_module])
 
     by_name = {module.name: module for module in modules}
     assert by_name["workspace"].openapi_files == ("swagger.yaml",)

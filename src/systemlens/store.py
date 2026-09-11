@@ -8,7 +8,7 @@ from types import TracebackType
 from typing import Any
 
 from systemlens.models import ArchitectureRelation, ExtractionDiagnostic, Finding, GraphFact, MessageEndpoint
-from systemlens.modules import (
+from systemlens.module_types import (
     BlockingPoint,
     DiscoveredModule,
     KafkaMethod,

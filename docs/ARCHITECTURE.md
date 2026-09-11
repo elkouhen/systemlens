@@ -20,18 +20,21 @@ produces facts, and `Store` owns SQLite.
 CLI / MCP adapters (`cli.py`, `mcp_server.py`)
                 |
 application queries and indexing (`architecture.py`, `architecture_inventory.py`,
+`architecture_projection.py`,
 `flow.py`, `dependency_analysis.py`, `indexer.py`, `workspace.py`)
                 |
 facts and discovery (`scanner/`, `modules.py`, `maven.py`, `gradle.py`,
 `java_parser.py`, `relations.py`)
                 |
-models and persistence (`models.py`, `store.py`)
+models and persistence (`models.py`, `module_types.py`, `store.py`)
 ```
 
 The `render/` package (formerly the single `render.py` file, still imported as
 `from systemlens.render import ...`) is an output adapter. It may consume
 query results and models, but must not perform indexing or persist data.
-`config.py`, `paths.py`, and `inventory_freshness.py` are small cross-cutting
+`indexing/` contains the repository-file inventory and snapshot materializers
+used by the `indexer.py` application service. `config.py`, `paths.py`, and
+`inventory_freshness.py` are small cross-cutting
 utilities.
 
 `scanner.py` was split into the `scanner/` package (see below) the same way:
@@ -51,7 +54,7 @@ flowchart TD
     Config --> Store["Store"]
     Store --> Indexer["indexer.index_repo"]
     Indexer --> ModuleDiscovery["modules.discover_modules"]
-    Indexer --> FileInventory["file hashes / incremental delta"]
+    Indexer --> FileInventory["indexing/file_inventory.py: hashes / incremental policy"]
     FileInventory --> Scanner["scanner: Tree-sitter AST extraction"]
     Scanner --> Facts["MessageEndpoint"]
     ModuleDiscovery --> ModuleFacts["DiscoveredModule + dependencies"]
@@ -59,7 +62,8 @@ flowchart TD
     ModuleFacts --> Persist
     Facts --> DTOInventory["dto_inventory.materialize_kafka_dto_definitions"]
     ModuleFacts --> DTOInventory
-    DTOInventory --> Persist
+    DTOInventory --> Materializers["indexing/materializers.py"]
+    Materializers --> Persist
     Persist --> Relations["relations.build_architecture_relations"]
     Relations --> Store
 ```
@@ -109,8 +113,12 @@ they are not cross-module entry points.
 | CLI parsing, option validation, exit code | `cli.py` |
 | MCP tool signature or transport concern | `mcp_server.py` |
 | A user query over the architecture inventory | `architecture.py`, `flow.py`, or `dependency_analysis.py` |
+| Shared CLI/web graph selection | `architecture_projection.py` |
 | Java AST endpoint extraction | `scanner/` package (`__init__.py` re-exports the public surface) |
 | Maven/Gradle module facts or Java source inventory | `modules.py`, `maven.py`, `gradle.py` |
+| Shared module inventory types | `module_types.py` |
+| File eligibility or incremental refresh policy | `indexing/file_inventory.py` |
+| Persisted contract materialization | `indexing/materializers.py` |
 | SQLite schema or queries | `store.py` |
 | JSON, terminal, HTML, or LikeC4 presentation | `render/` package (`__init__.py` re-exports the public surface) |
 
@@ -192,6 +200,9 @@ source extraction.
    adapter wiring; they are not the first home for an extraction rule.
 5. Keep new output formats in the `render/` package (a focused new submodule
    if needed), not in query or discovery code.
+6. Import module inventory dataclasses from `module_types.py` outside the
+   discovery implementation. `modules.py` re-exports them only for historical
+   compatibility.
 
 Browser integration tests live in `tests/test_browser_export.py`. They are
 marked both `integration` and `slow`, so they do not run in the default

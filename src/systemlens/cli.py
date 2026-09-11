@@ -25,24 +25,19 @@ from systemlens.architecture import (
     show_object as show_architecture_object,
     trace_topic_flows,
 )
-from systemlens.architecture_inventory import is_deployable_service, load_architecture_inventory
+from systemlens.architecture_inventory import load_architecture_inventory
+from systemlens.architecture_projection import project_architecture_graph
 from systemlens.audit import assess_architecture, render_audit_json, render_audit_text
 from systemlens.config import ConfigError, init_config, load_config
 from systemlens.flow import resolve_topic
-from systemlens.graph import (
-    GraphEdge,
-    find_outbound_calls_in_consumers,
-    graph_edges_from_relations,
-)
+from systemlens.graph import GraphEdge, find_outbound_calls_in_consumers
 from systemlens.indexer import index_repo
 from systemlens.inventory_freshness import endpoint_inventory_warning
 from systemlens.models import GraphFact, MessageEndpoint
 from systemlens.models import ExtractionDiagnostic
+from systemlens.module_types import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.modules import (
-    DiscoveredModule,
-    ModuleDependency,
     discover_modules,
-    module_identity,
 )
 from systemlens.render import (
     GraphResult,
@@ -1216,14 +1211,6 @@ class _MicroserviceGraphData:
     graph_facts: list[GraphFact] | None = None
 
 
-def _is_exportable_microservice(name: str) -> bool:
-    """Exclude test fixtures and unresolved Maven placeholder service names."""
-    normalized = name.casefold()
-    return "test" not in normalized and not (
-        name.startswith("${") and name.endswith("}")
-    )
-
-
 def _load_microservice_graph(
     repo_root: Path, workspace: Path | None, include_mongodb: bool
 ) -> _MicroserviceGraphData:
@@ -1232,47 +1219,24 @@ def _load_microservice_graph(
         workspace,
         include_runtime_services_without_endpoints=True,
     )
-    services_by_name = {
-        name: endpoints
-        for name, endpoints in inventory.endpoints_by_service.items()
-        if _is_exportable_microservice(name)
-        and is_deployable_service(name, inventory.modules_by_service)
-    }
-    edges = [
-        edge
-        for edge in graph_edges_from_relations(inventory.relations, services_by_name)
-        if _is_exportable_microservice(edge.from_service)
-        and _is_exportable_microservice(edge.to_service)
-    ]
-    modules_by_service = (
-        {
-            name: module
-            for name, module in inventory.modules_by_service.items()
-            if name in services_by_name
-        }
-        if include_mongodb
-        else {}
+    projection = project_architecture_graph(
+        inventory, include_module_details=include_mongodb
     )
-    collections_by_service = {
-        service: list(module.mongo_collections)
-        for service, module in modules_by_service.items()
-        if module.mongo_collections
-    }
 
     result = render_graph_json(
-        list(services_by_name),
-        edges,
+        list(projection.services_by_name),
+        projection.edges,
         find_outbound_calls_in_consumers(inventory.endpoints),
         warnings=inventory.warnings,
-        cross_module_data_available=bool(services_by_name),
+        cross_module_data_available=bool(projection.services_by_name),
     )
     with Store(repo_root, readonly=True) as store:
         graph_facts = store.all_graph_facts()
     return _MicroserviceGraphData(
-        services_by_name,
-        edges,
-        collections_by_service,
-        modules_by_service,
+        projection.services_by_name,
+        projection.edges,
+        projection.collections_by_service,
+        projection.modules_by_service,
         inventory.modules,
         inventory.module_dependencies,
         inventory.source_roots,
