@@ -139,6 +139,12 @@ and graph selectors share the same control height, inner radius, border,
 surface, and blue selected state; collapsible Explorer sections use the same
 bordered surface and outer radius. Pills remain reserved for filters, counters,
 and status metadata so their shape continues to communicate a distinct role.
+All widget families also consume one semantic palette for headings, body text,
+muted metadata, accent text, panel surfaces, nested surfaces, controls, borders,
+focus, and selected states. Large headings use the shared heading colour in
+every tab and inspector; in the dark theme that colour is a restrained lavender
+rather than white. Technology, relation, severity, and confidence colours are
+excluded because they encode architecture data or status rather than chrome.
 
 The export opens with a dark blue presentation (or follows the browser's light
 preference), and provides a theme toggle in the graph

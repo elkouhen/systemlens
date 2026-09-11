@@ -94,6 +94,9 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     assert "--control-height: 30px;" in document
     assert "--control-radius: 8px;" in document
     assert "--widget-radius: 12px;" in document
+    assert "--ui-title: #24355f;" in document
+    assert "--ui-title: #bac7ff;" in document
+    assert "/* One visual charter for every widget." in document
     assert ".toolbar-tabs, .graph-control-group {" in document
     assert ".display-controls, .advanced-controls, .advanced-tools {" in document
 

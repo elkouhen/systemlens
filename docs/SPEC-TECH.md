@@ -232,6 +232,12 @@ the border, surface, and outer radius of widget containers. Navigation tabs and
 graph mode selectors consume those tokens and use the same selected-state rule;
 Explorer disclosure sections consume the container tokens. Semantic pills do
 not consume the rectangular control radius.
+The `--ui-*` palette is the only source for widget chrome: title, body, muted
+and accent text; panel, nested-widget and control surfaces; borders, focus and
+selection. Light and dark themes override those tokens rather than individual
+components. Selectors may retain local colours only when they visualize graph
+data or a semantic status such as warning, confidence, relation type, or
+resource type.
 Clearing the selection reverses that state; selecting a navigation tab clears
 details before displaying its ordinary panel. Path parsing
 filters same-name candidates by the grammar before accepting an itinerary

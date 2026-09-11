@@ -879,6 +879,47 @@ def test_primary_view_selector_opens_each_view_directly() -> None:
         assert len(widget_metrics["selectedBackgrounds"]) == 1
         assert widget_metrics["selectedBackgrounds"][0] != "rgba(0, 0, 0, 0)"
         assert widget_metrics["disclosureRadii"] == ["12px"]
+        widget_palettes = page.evaluate(
+            """() => {
+                const originalTheme = document.documentElement.dataset.theme;
+                const inspect = theme => {
+                    document.documentElement.dataset.theme = theme;
+                    const root = getComputedStyle(document.documentElement);
+                    const colors = selector => [...document.querySelectorAll(selector)]
+                        .map(element => getComputedStyle(element).color);
+                    const backgrounds = selector => [...document.querySelectorAll(selector)]
+                        .map(element => getComputedStyle(element).backgroundColor);
+                    return {
+                        titleToken: root.getPropertyValue('--ui-title').trim(),
+                        titleColors: [...new Set(colors(
+                            '.brand strong, .references-title, .indexing-issues-title, '
+                            + '.dependency-view h2, .inspector-title'
+                        ))],
+                        widgetToken: root.getPropertyValue('--ui-widget').trim(),
+                        widgetBackgrounds: [...new Set(backgrounds(
+                            '.toolbar-tabs, .graph-control-group, #display-controls, #advanced-controls'
+                        ))],
+                    };
+                };
+                const palettes = { light: inspect('light'), dark: inspect('dark') };
+                document.documentElement.dataset.theme = originalTheme;
+                return palettes;
+            }"""
+        )
+        assert widget_palettes == {
+            "light": {
+                "titleToken": "#24355f",
+                "titleColors": ["rgb(36, 53, 95)"],
+                "widgetToken": "#f4f7fb",
+                "widgetBackgrounds": ["rgb(244, 247, 251)"],
+            },
+            "dark": {
+                "titleToken": "#bac7ff",
+                "titleColors": ["rgb(186, 199, 255)"],
+                "widgetToken": "#142238",
+                "widgetBackgrounds": ["rgb(20, 34, 56)"],
+            },
+        }
         for button_id, status_text in (
             ("layout-elk", "vue couches actif."),
             ("layout-cluster", "vue modules actif."),

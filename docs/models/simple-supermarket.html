@@ -396,6 +396,22 @@
       --widget-border: rgba(148, 163, 184, .28);
       --widget-surface: rgba(248, 250, 252, .9);
       --widget-surface-strong: #fff;
+      --ui-title: #24355f;
+      --ui-text: #40506a;
+      --ui-muted: #6b7a90;
+      --ui-accent-text: #3156d3;
+      --ui-on-accent: #f8faff;
+      --ui-panel: rgba(255, 255, 255, .94);
+      --ui-widget: #f4f7fb;
+      --ui-control: #fff;
+      --ui-selected: #405ad5;
+      --ui-selected-hover: #3348b8;
+      --ui-accent-soft: #ebefff;
+      --ui-accent-soft-hover: #dfe5ff;
+      --ui-accent-border: #bcc8ff;
+      --ui-border: #d7dfeb;
+      --ui-divider: #e4e9f1;
+      --ui-focus: rgba(64, 90, 213, .18);
       color: var(--ink);
       background: #eef2f8;
       font-family: Inter, "SF Pro Text", ui-sans-serif, system-ui, sans-serif;
@@ -577,6 +593,22 @@
       --surface: rgba(19, 31, 51, .94); --surface-solid: #131f33; --surface-soft: #17263d;
       --accent: #8ea7ff; --accent-soft: #202f5c; --accent-line: #4e66bf;
       --widget-border: rgba(148, 163, 184, .24); --widget-surface: #17263d; --widget-surface-strong: #1c2d4b;
+      --ui-title: #bac7ff;
+      --ui-text: #c5d0e0;
+      --ui-muted: #8fa1b9;
+      --ui-accent-text: #9fb0ff;
+      --ui-on-accent: #f8faff;
+      --ui-panel: rgba(17, 29, 48, .94);
+      --ui-widget: #142238;
+      --ui-control: #192a43;
+      --ui-selected: #526bd7;
+      --ui-selected-hover: #647be0;
+      --ui-accent-soft: #202d58;
+      --ui-accent-soft-hover: #29396d;
+      --ui-accent-border: #43578f;
+      --ui-border: #31415b;
+      --ui-divider: #293951;
+      --ui-focus: rgba(142, 167, 255, .24);
       color-scheme: dark; color: var(--ink); background: #0c1525;
     }
     :root[data-theme="dark"] body { background: #0c1525; }
@@ -586,40 +618,40 @@
         linear-gradient(145deg, #13213a 0%, #0f1b2e 55%, #0b1423 100%);
     }
     :root[data-theme="dark"] .toolbar, :root[data-theme="dark"] .legend {
-      border-color: rgba(148, 163, 184, .22); background: rgba(17, 29, 48, .91);
+      border-color: var(--ui-border); background: var(--ui-panel);
       box-shadow: 0 22px 60px rgba(0, 0, 0, .28), 0 2px 10px rgba(0, 0, 0, .18);
     }
-    :root[data-theme="dark"] .toolbar-header { background: rgba(17, 29, 48, .98); }
+    :root[data-theme="dark"] .toolbar-header { background: var(--ui-panel); }
     :root[data-theme="dark"] .toolbar strong, :root[data-theme="dark"] .details-title,
     :root[data-theme="dark"] .path-details-title, :root[data-theme="dark"] .dependency-view h2,
     :root[data-theme="dark"] .references-title, :root[data-theme="dark"] .indexing-issues-title,
-    :root[data-theme="dark"] .inspector-title { color: #f3f7ff; }
+    :root[data-theme="dark"] .inspector-title { color: var(--ui-title); }
     :root[data-theme="dark"] .toolbar input:not([type="checkbox"]), :root[data-theme="dark"] .toolbar button,
     :root[data-theme="dark"] .relation-filter, :root[data-theme="dark"] .layout-option,
     :root[data-theme="dark"] .path-lock,
     :root[data-theme="dark"] .detail-badge, :root[data-theme="dark"] .inspector-close {
-      border-color: rgba(148, 163, 184, .3); color: #d8e4f4; background: #17263d;
+      border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control);
     }
-    :root[data-theme="dark"] .toolbar input:not([type="checkbox"])::placeholder { color: #7186a3; }
+    :root[data-theme="dark"] .toolbar input:not([type="checkbox"])::placeholder { color: var(--ui-muted); }
     :root[data-theme="dark"] .toolbar button:hover,
-    :root[data-theme="dark"] .layout-option:hover { background: #203453 !important; }
-    :root[data-theme="dark"] .toolbar-tabs, :root[data-theme="dark"] .graph-control-group { border-color: var(--widget-border); background: #101d31; }
-    :root[data-theme="dark"] .graph-control-group button { color: #c8d5e8; background: transparent; }
-    :root[data-theme="dark"] .graph-control-group button:hover { background: #203453 !important; }
-    :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .view-controls .view-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: #fff; background: #4663db; }
+    :root[data-theme="dark"] .layout-option:hover { background: var(--ui-control) !important; }
+    :root[data-theme="dark"] .toolbar-tabs, :root[data-theme="dark"] .graph-control-group { border-color: var(--ui-border); background: var(--ui-widget); }
+    :root[data-theme="dark"] .graph-control-group button { color: var(--ui-text); background: transparent; }
+    :root[data-theme="dark"] .graph-control-group button:hover { background: var(--ui-control) !important; }
+    :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .view-controls .view-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: var(--ui-on-accent); background: var(--ui-selected); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: rgba(15, 27, 46, .84); }
-    :root[data-theme="dark"] .toolbar-tab { color: #91a4bd !important; }
-    :root[data-theme="dark"] .toolbar-tab.is-active { color: #fff !important; background: #4663db !important; }
+    :root[data-theme="dark"] .toolbar-tab { color: var(--ui-text) !important; }
+    :root[data-theme="dark"] .toolbar-tab.is-active { color: var(--ui-on-accent) !important; background: var(--ui-selected) !important; }
     :root[data-theme="dark"] .display-controls, :root[data-theme="dark"] .advanced-controls,
-    :root[data-theme="dark"] .advanced-tools { border-color: var(--widget-border); background: rgba(16, 29, 49, .72); }
-    :root[data-theme="dark"] .graph-summary-item { border-color: rgba(148, 163, 184, .25); color: #b7c7dc; background: rgba(25, 42, 68, .9); }
+    :root[data-theme="dark"] .advanced-tools { border-color: var(--ui-border); background: var(--ui-widget); }
+    :root[data-theme="dark"] .graph-summary-item { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
     :root[data-theme="dark"] .explore-search-label,
     :root[data-theme="dark"] .display-controls > summary, :root[data-theme="dark"] .advanced-controls > summary, :root[data-theme="dark"] .advanced-tools > summary,
-    :root[data-theme="dark"] .path-controls summary, :root[data-theme="dark"] .legend summary { color: #b8c7ff; }
+    :root[data-theme="dark"] .path-controls summary, :root[data-theme="dark"] .legend summary { color: var(--ui-accent-text); }
     :root[data-theme="dark"] .reference-item, :root[data-theme="dark"] .indexing-issue,
     :root[data-theme="dark"] .service-kafka-item, :root[data-theme="dark"] .details-section li,
     :root[data-theme="dark"] .relation-link, :root[data-theme="dark"] .dto-section {
-      border-color: rgba(148, 163, 184, .2); color: #cfdbeb; background: #17263d;
+      border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-widget);
     }
     :root[data-theme="dark"] .inspector-header {
       border-color: rgba(148, 163, 184, .2); background: linear-gradient(145deg, #1a2b46, #14233a);
@@ -627,13 +659,140 @@
     :root[data-theme="dark"] .details-header { border-color: rgba(148, 163, 184, .2); background: transparent; }
     :root[data-theme="dark"] .details-section h2, :root[data-theme="dark"] .details-kicker,
     :root[data-theme="dark"] .reference-meta, :root[data-theme="dark"] .details-empty,
-    :root[data-theme="dark"] .path-details-summary, :root[data-theme="dark"] .dependency-view p:last-child { color: #91a4bd; }
+    :root[data-theme="dark"] .path-details-summary, :root[data-theme="dark"] .dependency-view p:last-child { color: var(--ui-muted); }
     :root[data-theme="dark"] .detail-badge.complexity.low { background: #172f66; }
     :root[data-theme="dark"] .detail-badge.complexity.medium { background: #4a3517; }
     :root[data-theme="dark"] .detail-badge.complexity.high { color: #c4b5fd; background: #35245f; }
     :root[data-theme="dark"] .path-overview-item { border-color: rgba(148, 163, 184, .2); color: #cfdbeb; background: #17263d !important; }
     :root[data-theme="dark"] .inspector-dialog { background: #101d31; }
     :root[data-theme="dark"] code { color: #b9c8ff; }
+
+    /* One visual charter for every widget. Graph colors remain semantic data. */
+    .toolbar, .legend, .inspector-dialog { color: var(--ui-text); background: var(--ui-panel); }
+    .toolbar, .legend { border-color: var(--ui-border); }
+    .toolbar-header { background: var(--ui-panel); }
+    .brand strong,
+    .details-title,
+    .path-details-title,
+    .dependency-view h2,
+    .references-title,
+    .indexing-issues-title,
+    .inspector-title { color: var(--ui-title); }
+    .explore-search-label,
+    .details-kicker,
+    .path-details-kicker,
+    .dependency-view-kicker,
+    .references-kicker,
+    .indexing-issues-kicker,
+    .details-section h2,
+    .references-section h3,
+    .details-group > summary,
+    .display-controls > summary,
+    .advanced-controls > summary,
+    .advanced-tools > summary,
+    .path-controls summary,
+    .resource-analyses summary,
+    .legend summary { color: var(--ui-accent-text); }
+    .brand-subtitle,
+    .explore-search-help,
+    .layout-status,
+    .references-description,
+    .references-empty,
+    .indexing-issues-description,
+    .indexing-issues-empty,
+    .reference-meta,
+    .details-empty,
+    .path-details-summary,
+    .dependency-view p:last-child,
+    .dto-summary { color: var(--ui-muted); }
+    .toolbar-tabs,
+    .graph-control-group,
+    .display-controls,
+    .advanced-controls,
+    .advanced-tools,
+    .reference-item,
+    .indexing-issue,
+    .service-kafka-item,
+    .details-section li,
+    .relation-link,
+    .dto-section { border-color: var(--ui-border); background: var(--ui-widget); }
+    .toolbar input:not([type="checkbox"]),
+    .toolbar button,
+    .relation-filter,
+    .layout-option,
+    .path-lock,
+    .detail-badge,
+    .inspector-close,
+    .dto-field { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
+    .toolbar input:not([type="checkbox"])::placeholder { color: var(--ui-muted); }
+    .toolbar input:not([type="checkbox"]):focus {
+      border-color: var(--ui-selected);
+      outline-color: var(--ui-focus);
+    }
+    .toolbar-tab,
+    .graph-control-group button { color: var(--ui-text) !important; background: transparent !important; }
+    .toolbar-tab:hover,
+    .graph-control-group button:hover,
+    .toolbar button:hover,
+    .layout-option:hover { color: var(--ui-title) !important; background: var(--ui-control) !important; }
+    .toolbar-tab.is-active,
+    .fit-controls .fit-mode.is-active,
+    .view-controls .view-mode.is-active,
+    .render-controls .render-mode.is-active,
+    .layout-option.is-active {
+      border-color: var(--ui-selected) !important;
+      color: var(--ui-on-accent) !important;
+      background: var(--ui-selected) !important;
+      box-shadow: 0 2px 6px color-mix(in srgb, var(--ui-selected) 30%, transparent);
+    }
+    .toolbar-tab.is-active:hover,
+    .fit-controls .fit-mode.is-active:hover,
+    .view-controls .view-mode.is-active:hover,
+    .render-controls .render-mode.is-active:hover,
+    .layout-option.is-active:hover { color: var(--ui-on-accent) !important; background: var(--ui-selected-hover) !important; }
+    .details-group,
+    .details-section,
+    .details-group[open] > summary,
+    .inspector-header { border-color: var(--ui-divider); }
+    .details-group[open] > summary,
+    .inspector-header { background: var(--ui-widget); }
+    .path-details-header {
+      border-color: var(--ui-divider);
+      background: var(--ui-widget);
+    }
+    .path-overview-item { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control) !important; }
+    .reference-title,
+    .indexing-issue-category,
+    .details-section li,
+    .dto-field-name { color: var(--ui-text); }
+    .relation-link,
+    .service-kafka-topic,
+    .dto-field-type,
+    button.dto-field-type { color: var(--ui-accent-text) !important; }
+    .reference-action,
+    .simple-path-choice,
+    #show-simple-paths,
+    .service-kafka-meta button,
+    .module-open-action,
+    .dto-back {
+      border-color: var(--ui-accent-border) !important;
+      color: var(--ui-accent-text) !important;
+      background: var(--ui-accent-soft) !important;
+    }
+    .reference-action:hover,
+    .simple-path-choice:hover,
+    #show-simple-paths:hover,
+    .service-kafka-meta button:hover,
+    .module-open-action:hover,
+    .dto-back:hover { background: var(--ui-accent-soft-hover) !important; }
+    .reference-action:disabled {
+      border-color: var(--ui-border) !important;
+      color: var(--ui-muted) !important;
+      background: var(--ui-widget) !important;
+    }
+    .service-kafka-meta a,
+    .service-kafka-meta span { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
+    .dto-tag { color: var(--ui-accent-text); background: var(--ui-accent-soft); }
     .theme-toggle { width: auto !important; padding: 0 9px !important; font-size: 11px !important; font-weight: 750; }
     @media (max-width: 1024px) {
       .toolbar { width: min(320px, calc(100vw - 20px)); max-height: min(82vh, 620px); }
