@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from systemlens.architecture_inventory import AnalysisProfile, ArchitectureInventory
+from systemlens.application.architecture_inventory import AnalysisProfile, ArchitectureInventory
 from systemlens.application.architecture_projection import project_architecture_graph
-from systemlens.models import MessageEndpoint
+from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule
 
 

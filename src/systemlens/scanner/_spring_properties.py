@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-from systemlens import java_parser
+from systemlens.discovery.java import parser as java_parser
 
 _SPRING_BASE_FILENAMES = (
     "application.yml",

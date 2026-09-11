@@ -11,8 +11,8 @@ import pytest
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Playwright, sync_playwright
 
-from systemlens.models import MessageEndpoint, compute_endpoint_id
-from systemlens.graph import GraphEdge
+from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
+from systemlens.domain.graph import GraphEdge
 from systemlens.modules import DiscoveredModule, MongoField, MongoPersistenceClass
 from systemlens.render import render_graph_html
 

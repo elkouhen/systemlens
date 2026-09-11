@@ -15,10 +15,10 @@ from urllib.parse import urlsplit
 
 import yaml
 
-from systemlens import java_parser
-from systemlens import maven as maven_module
-from systemlens.models import MessageEndpoint, compute_endpoint_id
-from systemlens.modules import discover_rest_controllers, maven_module_dependencies
+from systemlens.discovery.java import parser as java_parser
+from systemlens.discovery.build import maven as maven_module
+from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
+from systemlens.discovery.build.modules import discover_rest_controllers, maven_module_dependencies
 from systemlens.scanner._core import (
     _build_endpoint,
     _find_first_literal,

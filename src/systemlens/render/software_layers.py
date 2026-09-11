@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from systemlens.models import MessageEndpoint
+from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.render.namespaces import project_namespace, project_namespace_path
 

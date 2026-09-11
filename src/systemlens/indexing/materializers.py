@@ -5,7 +5,7 @@ import json
 import yaml
 
 from systemlens.domain.module_inventory import DiscoveredModule
-from systemlens.modules import deduplicate_openapi_contract_owners
+from systemlens.discovery.build.modules import deduplicate_openapi_contract_owners
 
 
 def materialize_openapi_contracts(

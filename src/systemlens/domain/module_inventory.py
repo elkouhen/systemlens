@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from systemlens.kubernetes import KubernetesWorkload
+from systemlens.domain.runtime import KubernetesWorkload
 
 
 @dataclass(frozen=True)

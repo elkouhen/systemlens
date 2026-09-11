@@ -3,12 +3,12 @@
 from pathlib import Path
 from typing import Any
 
-from systemlens.graph import (
+from systemlens.domain.graph import (
     GraphEdge,
     external_microservice_names,
     resolve_rest_target_service,
 )
-from systemlens.models import (
+from systemlens.domain.models import (
     ArchitectureRelation,
     ExtractionDiagnostic,
     Finding,
@@ -36,7 +36,7 @@ from systemlens.render._graph_view_helpers import (
     _vscode_uri,
 )
 from systemlens.render.likec4_export import _complexity_ranking
-from systemlens.render_snapshot import kafka_dto_views
+from systemlens.render.snapshot import kafka_dto_views
 
 
 def _fact_runtime_namespaces(fact: GraphFact) -> list[str]:

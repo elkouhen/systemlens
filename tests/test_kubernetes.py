@@ -2,7 +2,7 @@ import subprocess
 
 import pytest
 
-from systemlens.kubernetes import KubernetesDiscoveryError, discover_workloads
+from systemlens.discovery.kubernetes import KubernetesDiscoveryError, discover_workloads
 
 
 def test_discover_workloads_aggregates_regular_container_resources() -> None:

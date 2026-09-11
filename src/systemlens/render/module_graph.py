@@ -8,10 +8,10 @@ import json
 from pathlib import Path
 from typing import TypedDict
 
-from systemlens.flow import FlowResult
-from systemlens.models import MessageEndpoint
+from systemlens.application.flow import FlowResult
+from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency
-from systemlens.workspace import DiscoveredService, FederationResult
+from systemlens.application.workspace import DiscoveredService, FederationResult
 
 _MODULE_GRAPH_HTML_TEMPLATE = (
     Path(__file__).parent / "assets" / "module_graph.html"

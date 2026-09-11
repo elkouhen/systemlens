@@ -2,9 +2,9 @@
 
 from dataclasses import dataclass
 
-from systemlens.architecture_inventory import ArchitectureInventory, is_deployable_service
-from systemlens.graph import GraphEdge, graph_edges_from_relations
-from systemlens.models import MessageEndpoint
+from systemlens.application.architecture_inventory import ArchitectureInventory, is_deployable_service
+from systemlens.domain.graph import GraphEdge, graph_edges_from_relations
+from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule
 
 

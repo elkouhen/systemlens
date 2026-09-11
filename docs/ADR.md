@@ -264,7 +264,7 @@ source extraction, graph-model projection, serialization, and standalone HTML
 assembly. This reversed the intended dependency direction and made indexing
 depend on an output adapter.
 
-**Decision:** `dto_inventory.py` owns the conservative Java DTO closure created
+**Decision:** `indexing/dto_inventory.py` owns the conservative Java DTO closure created
 during indexing and exposes one public materialization function. The persisted
 snapshot remains the only DTO input to exports. Within `render/`,
 `graph_view_model.py` projects snapshot facts into browser data, while
@@ -276,3 +276,30 @@ be tested independently, and HTML assembly stays small. Adding a browser field
 requires changing the view-model projection, while changing Java DTO discovery
 requires changing the inventory module and its focused tests. Asset ordering is
 an explicit build-time convention rather than an implicit monolithic file.
+
+## ADR-26 — Organize implementation modules by architectural ownership
+
+**Status:** Accepted.
+
+**Context:** Most implementation modules historically lived directly under
+`src/systemlens/`. Their imports formed a valid acyclic graph, but the
+filesystem did not communicate the documented delivery, application, domain,
+discovery, indexing, infrastructure, rendering, and persistence boundaries.
+This also allowed persistence to depend accidentally on discovery-owned types.
+
+**Decision:** Keep only `__init__.py` as a file at the `systemlens` package
+root. Place implementations in ownership packages: `application/`, `domain/`,
+`discovery/`, `indexing/`, `infrastructure/`, `delivery/`, `render/`,
+`scanner/`, and `storage/`. Console entry points target `delivery/` directly.
+Small root-level compatibility packages retain established imports such as
+`systemlens.cli`, `systemlens.modules`, and `systemlens.store`, but production
+code imports the owning implementation package. Domain modules may not import
+outer layers; an architecture test enforces both dependency direction and the
+absence of flat root implementations.
+
+**Consequences:** Directory structure now exposes ownership before a file is
+opened, and domain facts no longer depend on Java, build, Kubernetes, or SQLite
+adapters. Moving a module requires updating internal imports and documentation,
+while compatibility packages keep existing Python and console consumers
+working. Large files may still be split further inside their owning package
+without changing the top-level layer model.

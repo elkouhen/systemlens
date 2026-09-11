@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from systemlens.configuration import service_configuration_example
+from systemlens.discovery.configuration import service_configuration_example
 from systemlens.render import render_workspace_json
-from systemlens.workspace import DiscoveredService, FederationResult
+from systemlens.application.workspace import DiscoveredService, FederationResult
 
 
 def test_service_configuration_example_builds_structure_from_production_code(

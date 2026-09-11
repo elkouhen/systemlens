@@ -15,8 +15,8 @@ import time
 from functools import lru_cache
 from pathlib import Path
 
-from systemlens import java_parser
-from systemlens import maven as maven_module
+from systemlens.discovery.java import parser as java_parser
+from systemlens.discovery.build import maven as maven_module
 
 def _trace(stage: str, **fields: object) -> None:
     """Émet des traces opt-in de l'inventaire REST (`SYSTEMLENS_TRACE=1`)."""

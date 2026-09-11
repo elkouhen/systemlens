@@ -12,8 +12,8 @@ import json
 import re
 from pathlib import Path
 
-from systemlens import java_parser
-from systemlens.models import MessageEndpoint, compute_endpoint_id
+from systemlens.discovery.java import parser as java_parser
+from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.scanner._core import _build_endpoint
 from systemlens.scanner.kafka_ast import (
     _kafka_endpoint,

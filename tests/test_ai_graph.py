@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from systemlens.ai_graph import AiGraphError, load_ai_graph
+from systemlens.application.ai_graph import AiGraphError, load_ai_graph
 
 
 def test_load_ai_graph_projects_events_and_keeps_unresolved_claims(tmp_path):

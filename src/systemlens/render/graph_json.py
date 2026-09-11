@@ -2,8 +2,8 @@
 
 from typing import NotRequired, TypedDict
 
-from systemlens.graph import GraphEdge, OutboundCallInConsumer, external_microservice_names, graph_edge_rest_resource
-from systemlens.models import MessageEndpoint
+from systemlens.domain.graph import GraphEdge, OutboundCallInConsumer, external_microservice_names, graph_edge_rest_resource
+from systemlens.domain.models import MessageEndpoint
 
 
 class GraphSite(TypedDict):

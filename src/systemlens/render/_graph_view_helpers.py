@@ -9,8 +9,8 @@ import re
 from pathlib import Path
 from urllib.parse import quote
 
-from systemlens.graph import GraphEdge, graph_edge_rest_resource
-from systemlens.models import Finding, MessageEndpoint
+from systemlens.domain.graph import GraphEdge, graph_edge_rest_resource
+from systemlens.domain.models import Finding, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule
 
 

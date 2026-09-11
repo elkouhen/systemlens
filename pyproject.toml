@@ -13,8 +13,8 @@ dependencies = [
 ]
 
 [project.scripts]
-systemlens = "systemlens.cli:app"
-simpleweb = "systemlens.simpleweb:app"
+systemlens = "systemlens.delivery.cli:app"
+simpleweb = "systemlens.delivery.simpleweb:app"
 
 [dependency-groups]
 dev = [

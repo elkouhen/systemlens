@@ -12,10 +12,10 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from systemlens import java_parser
-from systemlens.gradle import gradle_service_for_path
-from systemlens.maven import module_name_for_path
-from systemlens.models import MessageEndpoint, compute_endpoint_id
+from systemlens.discovery.java import parser as java_parser
+from systemlens.discovery.build.gradle import gradle_service_for_path
+from systemlens.discovery.build.maven import module_name_for_path
+from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 
 def _read_snippet(repo_root: Path, rel_path: str, start_line: int, end_line: int) -> str:
     try:

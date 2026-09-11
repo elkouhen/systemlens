@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import TypedDict
 
-from systemlens.search import SearchHit, Summary, get_context
+from systemlens.application.search import SearchHit, Summary, get_context
 
 
 class FindingHit(TypedDict):

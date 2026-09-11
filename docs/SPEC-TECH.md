@@ -40,20 +40,20 @@ API context; it is never enabled by default.
 ### Ownership boundaries
 
 `scanner/` (a package; see `docs/ARCHITECTURE.md`) owns Java/Spring extraction.
-`java_parser.py` provides cached
-Tree-sitter parsing and syntax helpers. `domain/module_inventory.py` owns the
+`discovery/java/parser.py` provides cached Tree-sitter parsing and syntax
+helpers. `domain/module_inventory.py` owns the
 build-inventory facts shared with persistence and projections, without
-depending on discovery. The former `module_types.py` import remains a
-compatibility facade.
-`modules.py`, `maven.py` and `gradle.py` discover build units; `relations.py`
-derives typed architecture relations from modules, endpoints and build
-dependencies. `indexer.py` orchestrates the incremental transaction, while
+depending on discovery. The `module_types/` compatibility package retains the
+former import path.
+`discovery/build/` discovers build units; `indexing/relations.py` derives typed
+architecture relations from modules, endpoints and build dependencies.
+`indexing/service.py` orchestrates the incremental transaction, while
 `indexing/file_inventory.py` owns file eligibility and conservative full-rescan
 promotion and `indexing/materializers.py` owns persisted contract projections.
-`dto_inventory.py` materializes the conservative Java
+`indexing/dto_inventory.py` materializes the conservative Java
 DTO closure referenced by Kafka endpoints before that closure is persisted.
-`storage/sqlite.py` owns SQLite persistence; `store.py` remains a compatibility
-facade for existing Python consumers.
+`storage/sqlite.py` owns SQLite persistence; the `store/` compatibility package
+retains the former Python import.
 
 Within `render/`, `graph_view_model.py` owns the projection from persisted
 facts to the browser data model. `html_export.py` only serializes that model
@@ -61,8 +61,8 @@ and assembles the standalone document from the HTML template and ordered
 browser assets. Rendering code must not be imported by indexing or discovery
 code.
 
-`cli.py`, `mcp_server.py`, and the standard-library local HTTP server in
-`web.py` are thin delivery layers over the domain modules. The CLI export and
+`delivery/cli.py`, `delivery/mcp.py`, and the standard-library local HTTP server
+in `delivery/web.py` are thin delivery layers over the domain modules. The CLI export and
 `systemlens web` both use `application/architecture_projection.py` to select the same
 deployable, exportable service topology before choosing their output format.
 The web command serves only an in-memory landing page and the existing
@@ -192,7 +192,7 @@ the module that truly encloses the file.
 
 A DTO definition retains its qualified name, owning module, module-relative
 Java source path, declared fields, enum values, and conservative nested-type
-references. `dto_inventory.py` resolves a simple nested type only through an
+references. `indexing/dto_inventory.py` resolves a simple nested type only through an
 explicit import, the containing package, or a globally unique simple name; an
 ambiguous name remains unresolved. The HTML export uses those stored facts and
 only derives its VS Code URI at render time; it does not reopen a Java or

@@ -1,10 +1,10 @@
 from dataclasses import replace
 from pathlib import Path
 
-from systemlens.architecture import build_catalog, indexing_issues, request_reply_patterns
-from systemlens.models import MessageEndpoint, compute_endpoint_id
+from systemlens.application.architecture import build_catalog, indexing_issues, request_reply_patterns
+from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.modules import DiscoveredModule, ModuleDependency, MongoMethod
-from systemlens.relations import build_architecture_relations
+from systemlens.indexing.relations import build_architecture_relations
 
 
 def _endpoint(

@@ -16,27 +16,39 @@ produces facts, and `Store` owns SQLite.
 
 ## Runtime layers
 
+```text
+delivery/ + render/
+        |
+application/ + indexing/
+        |
+discovery/ + scanner/ + storage/
+        |
+domain/ + infrastructure/
 ```
-CLI / MCP adapters (`cli.py`, `mcp_server.py`)
-                |
-application queries and indexing (`architecture.py`, `architecture_inventory.py`,
-`architecture_projection.py`,
-`flow.py`, `dependency_analysis.py`, `indexer.py`, `workspace.py`)
-                |
-facts and discovery (`scanner/`, `modules.py`, `maven.py`, `gradle.py`,
-`java_parser.py`, `relations.py`)
-                |
-domain and persistence (`models.py`, `domain/`, `storage/`)
-```
+
+The package root contains only `__init__.py` and directories. Implementation
+modules must live in the package that owns their responsibility:
+
+| Package | Responsibility |
+|---|---|
+| `domain/` | Stable facts, graph primitives, module inventory types, runtime facts |
+| `application/` | Read-only architecture queries, federation, audits and shared projections |
+| `indexing/` | Atomic index orchestration, incremental policy and snapshot materialization |
+| `discovery/` | Maven, Gradle, Java parser, configuration and Kubernetes adapters |
+| `scanner/` | Java/Spring endpoint extractors and their public facade |
+| `storage/` | SQLite schema, migrations, codecs and fact persistence |
+| `infrastructure/` | Local configuration and state-path resolution |
+| `delivery/` | CLI, MCP and local HTTP adapters |
+| `render/` | Text, JSON, HTML and LikeC4 output projections |
 
 The `render/` package (formerly the single `render.py` file, still imported as
 `from systemlens.render import ...`) is an output adapter. It may consume
 query results and models, but must not perform indexing or persist data.
-`application/` contains projections shared by delivery adapters. `indexing/`
-contains the repository-file inventory and snapshot materializers used by the
-`indexer.py` application service. `config.py`, `paths.py`, and
-`inventory_freshness.py` are small cross-cutting
-utilities.
+`application/` contains queries and projections shared by delivery adapters.
+`indexing/service.py` is the write-side application service;
+`indexing/file_inventory.py` and `indexing/freshness.py` own incremental
+refresh policy. `infrastructure/config.py` and `infrastructure/paths.py` are
+small cross-cutting utilities.
 
 `scanner.py` was split into the `scanner/` package (see below) the same way:
 `from systemlens.scanner import ...` is unchanged.
@@ -53,23 +65,23 @@ flowchart TD
     CLI["CLI: index_cmd"] --> Config["load_config"]
     MCP["MCP: incremental reindex"] --> Config
     Config --> Store["Store"]
-    Store --> Indexer["indexer.index_repo"]
-    Indexer --> ModuleDiscovery["modules.discover_modules"]
+    Store --> Indexer["indexing.service.index_repo"]
+    Indexer --> ModuleDiscovery["discovery.build.modules.discover_modules"]
     Indexer --> FileInventory["indexing/file_inventory.py: hashes / incremental policy"]
     FileInventory --> Scanner["scanner: Tree-sitter AST extraction"]
     Scanner --> Facts["MessageEndpoint"]
     ModuleDiscovery --> ModuleFacts["DiscoveredModule + dependencies"]
     Facts --> Persist["Store replaces facts"]
     ModuleFacts --> Persist
-    Facts --> DTOInventory["dto_inventory.materialize_kafka_dto_definitions"]
+    Facts --> DTOInventory["indexing.dto_inventory.materialize_kafka_dto_definitions"]
     ModuleFacts --> DTOInventory
     DTOInventory --> Materializers["indexing/materializers.py"]
     Materializers --> Persist
-    Persist --> Relations["relations.build_architecture_relations"]
+    Persist --> Relations["indexing.relations.build_architecture_relations"]
     Relations --> Store
 ```
 
-`indexer.index_repo` is the orchestration root once input has crossed an
+`indexing.service.index_repo` is the orchestration root once input has crossed an
 adapter. Scanner and module discovery are siblings: neither should orchestrate
 the other.
 
@@ -79,23 +91,23 @@ the other.
 flowchart TD
     CLI["CLI: microservices / export / analyze"] --> InventoryLoader
     MCP["MCP: graph / dependency_graph"] --> InventoryLoader
-    InventoryLoader["architecture_inventory.load_architecture_inventory"] --> Store["Store (read-only)"]
-    InventoryLoader --> Federation["workspace.discover_workspace_services + load_federation"]
-    Store --> Catalog["architecture.build_catalog"]
+    InventoryLoader["application.architecture_inventory.load_architecture_inventory"] --> Store["Store (read-only)"]
+    InventoryLoader --> Federation["application.workspace: discover + load"]
+    Store --> Catalog["application.architecture.build_catalog"]
     Federation --> Catalog
     Catalog --> Architecture["architecture: list / show / neighbors / path / analyze"]
-    Store --> Graph["graph.build_graph"]
+    Store --> Graph["domain.graph.build_graph"]
     Federation --> Graph
-    Graph --> Dependencies["dependency_analysis"]
-    Store --> Flow["flow.trace_flow"]
+    Graph --> Dependencies["application.dependency_analysis"]
+    Store --> Flow["application.flow.trace_flow"]
     Architecture --> Render["architecture.render_text or render"]
     Dependencies --> Render
     Flow --> Render
 ```
 
 There are two valid sources of facts: the current repository index (`Store`)
-or a read-only federation of separately indexed services (`workspace`).
-`architecture_inventory.load_architecture_inventory` normalizes both sources,
+or a read-only federation of separately indexed services (`application.workspace`).
+`application.architecture_inventory.load_architecture_inventory` normalizes both sources,
 including freshness and incomplete-federation warnings, before graph and audit
 queries use them. The catalog, graph, dependency audit, and flow tracing are
 all derived views: they must not write back to the index.
@@ -104,23 +116,25 @@ all derived views: they must not write back to the index.
 
 Start at its adapter decorator (`@app.command` or `@mcp.tool`), follow the
 first non-private application function, then stop at either a query module or
-`indexer.index_repo`. Private helpers only refine the behaviour of their owner;
+`indexing.service.index_repo`. Private helpers only refine the behaviour of their owner;
 they are not cross-module entry points.
 
 ## Ownership map
 
 | Need to change | Start in |
 |---|---|
-| CLI parsing, option validation, exit code | `cli.py` |
-| MCP tool signature or transport concern | `mcp_server.py` |
-| A user query over the architecture inventory | `architecture.py`, `flow.py`, or `dependency_analysis.py` |
-| Shared CLI/web graph selection | `architecture_projection.py` |
+| CLI parsing, option validation, exit code | `delivery/cli.py` |
+| MCP tool signature or transport concern | `delivery/mcp.py` |
+| A user query over the architecture inventory | `application/architecture.py`, `application/flow.py`, or `application/dependency_analysis.py` |
+| Shared CLI/web graph selection | `application/architecture_projection.py` |
 | Java AST endpoint extraction | `scanner/` package (`__init__.py` re-exports the public surface) |
-| Maven/Gradle module facts or Java source inventory | `modules.py`, `maven.py`, `gradle.py` |
+| Maven/Gradle module facts or Java source inventory | `discovery/build/` |
+| Shared Java parser primitives | `discovery/java/parser.py` |
+| Kubernetes runtime discovery | `discovery/kubernetes.py` |
 | Shared module inventory types | `domain/module_inventory.py` |
 | File eligibility or incremental refresh policy | `indexing/file_inventory.py` |
 | Persisted contract materialization | `indexing/materializers.py` |
-| SQLite schema or queries | `storage/sqlite.py` (`store.py` is a compatibility facade) |
+| SQLite schema or queries | `storage/sqlite.py` |
 | JSON, terminal, HTML, or LikeC4 presentation | `render/` package (`__init__.py` re-exports the public surface) |
 
 ## The `scanner/` package
@@ -141,16 +155,16 @@ import boundary other modules should rely on
 | `rest_mvc.py` | REST/OpenAPI inference (MVC, Feign, Spring Data REST, Swagger/OpenAPI generator, RestTemplate/RestClient, WebClient, WebFlux, Spring Cloud Gateway) and the `infer_framework_endpoints` orchestrator; imports from `_core.py`, `_spring_properties.py`, and `rest_client_config.py` |
 | `kafka_ast.py` | AST-level Kafka endpoint inference (`@KafkaListener`, `KafkaTemplate`, `ProducerRecord`, Kafka Streams); imports from `_core.py` and `_spring_properties.py` |
 | `kafka_conventions.py` | Strategy1 naming-convention Kafka inference plus Markdown/JSON topic-manifest inference; imports from `_core.py` and `kafka_ast.py` |
-| `__init__.py` | Re-exports the public API and implements `clear_analysis_caches()`, which must reach into nearly every submodule to clear their `lru_cache`-decorated functions plus `java_parser`/`maven`/`gradle` caches |
+| `__init__.py` | Re-exports the public API and implements `clear_analysis_caches()`, which must reach into nearly every submodule to clear their `lru_cache`-decorated functions plus `discovery/java/parser.py` and `discovery/build/` caches |
 
 Sharing leading-underscore helpers between these submodules (for example
 `rest_mvc.py` importing `_build_endpoint` from `_core.py`, or
 `kafka_conventions.py` importing `_kafka_endpoint` from `kafka_ast.py`) is the
 same narrow, intentional exception to dependency rule 3 documented for the
 `render/` package below: the package boundary, not the file boundary, is the
-real contract. `relations.py` also imports the private
-`_local_spring_application_names` directly from `systemlens.scanner` (a
-pre-existing cross-module private import preserved by the split).
+real contract. Cross-package consumers use the named public
+`local_spring_application_names` facade rather than reaching into a scanner
+submodule.
 
 ## The `render/` package
 
@@ -181,8 +195,8 @@ because the package boundary (its `__init__.py`), not the file boundary, is
 the actual contract. Reaching into `render/<submodule>.py` from *outside* the
 package remains prohibited.
 
-Kafka DTO materialization is owned by the top-level `dto_inventory.py` index
-projection. `indexer.py` invokes its public function before persistence;
+Kafka DTO materialization is owned by `indexing/dto_inventory.py`.
+`indexing/service.py` invokes its public function before persistence;
 renderers consume the resulting snapshot facts and never participate in Java
 source extraction.
 
@@ -192,8 +206,8 @@ source extraction.
    algorithms.
 2. Discovery modules return models or typed facts and never import CLI, MCP,
    rendering, or persistence adapters.
-3. Use a named public function for a cross-module dependency. Do not import a
-   name beginning with `_` from another top-level module. Within the
+3. Use a named public function for a cross-package dependency. Do not import a
+   name beginning with `_` from another package. Within the
    `render/` and `scanner/` packages, submodules may share leading-underscore
    helpers with each other (see their respective sections above); this does
    not extend to importing them from outside the package.
@@ -201,9 +215,12 @@ source extraction.
    adapter wiring; they are not the first home for an extraction rule.
 5. Keep new output formats in the `render/` package (a focused new submodule
    if needed), not in query or discovery code.
-6. Import module inventory dataclasses from `domain/module_inventory.py`
-   outside the discovery implementation. `module_types.py` and `modules.py`
-   re-export them only for historical compatibility.
+6. Import module inventory dataclasses from `domain/module_inventory.py`.
+   The `module_types/`, `modules/`, `store/`, `cli/`, `web/`, `simpleweb/`,
+   `mcp_server/`, and `architecture_projection/` packages exist only as
+   compatibility import surfaces; production code must use the owning package.
+7. Keep the package root free of flat implementation modules. The architecture
+   boundary test permits only `src/systemlens/__init__.py` at that level.
 
 Browser integration tests live in `tests/test_browser_export.py`. They are
 marked both `integration` and `slow`, so they do not run in the default
@@ -225,16 +242,16 @@ validation. There is currently no GitHub Actions workflow for this gate.
 ## Diagnostics
 
 Set `SYSTEMLENS_TRACE=1` to print stage-timing lines
-(`SYSTEMLENS_TRACE ts=<monotonic> stage=<name> ...`) to stderr from `cli.py`,
-`indexer.py`, `java_parser.py`, `modules.py`, and `graph.py`. This is an
+(`SYSTEMLENS_TRACE ts=<monotonic> stage=<name> ...`) to stderr from the CLI,
+indexing service, Java parser, build discovery, and domain graph. This is an
 internal debugging aid for slow-index investigations; it never changes
 persisted facts, CLI/MCP output, or any documented contract.
 
 ## Maintenance focus
 
-`cli.py` remains the largest module. `render.py` and `scanner.py` were split
-into the `render/` and `scanner/` packages (see above); apply the same
-approach — a narrow package with a single re-exporting `__init__.py` — before
-`cli.py` grows unmanageable. Refactor behind named public contracts and
-focused tests; behavioural CLI and MCP specifications remain the
+`delivery/cli.py`, `discovery/build/modules.py`, `storage/sqlite.py`, and
+`render/graph_view_model.py` remain large implementation modules inside clear
+ownership packages. Further splits should stay within those packages and keep
+their existing public facades stable. Refactor behind named public contracts
+and focused tests; behavioural CLI and MCP specifications remain the
 compatibility gate.

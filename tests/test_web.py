@@ -1,8 +1,8 @@
 from http import HTTPStatus
 from pathlib import Path
 
-from systemlens.architecture_inventory import AnalysisProfile, ArchitectureInventory
-from systemlens.models import ArchitectureRelation, MessageEndpoint
+from systemlens.application.architecture_inventory import AnalysisProfile, ArchitectureInventory
+from systemlens.domain.models import ArchitectureRelation, MessageEndpoint
 from systemlens.web import SystemLensWebApplication
 
 

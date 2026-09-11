@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from systemlens.graph import (
+from systemlens.domain.graph import (
     build_graph,
     find_outbound_calls_in_consumers,
     graph_edge_rest_resource,
@@ -10,7 +10,7 @@ from systemlens.graph import (
 )
 from dataclasses import replace
 
-from systemlens.models import MessageEndpoint, compute_endpoint_id
+from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.store import Store
 
 

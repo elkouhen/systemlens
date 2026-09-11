@@ -8,13 +8,13 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import systemlens.indexer as indexer_module
+import systemlens.indexing.service as indexer_module
 from systemlens.cli import app
-from systemlens.config import Config
-from systemlens.flow import group_endpoints_by_module_for_flow, trace_flow
-from systemlens.graph import build_graph
-from systemlens.indexer import index_repo
-from systemlens.architecture_inventory import load_architecture_inventory
+from systemlens.infrastructure.config import Config
+from systemlens.application.flow import group_endpoints_by_module_for_flow, trace_flow
+from systemlens.domain.graph import build_graph
+from systemlens.indexing.service import index_repo
+from systemlens.application.architecture_inventory import load_architecture_inventory
 from systemlens.mcp_server import reindex_architecture
 from systemlens.scanner import (
     infer_framework_endpoints,

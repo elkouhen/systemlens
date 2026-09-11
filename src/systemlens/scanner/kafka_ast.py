@@ -11,8 +11,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from systemlens import java_parser
-from systemlens.models import MessageEndpoint, compute_endpoint_id
+from systemlens.discovery.java import parser as java_parser
+from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.scanner._core import (
     _find_first_literal,
     _invocation_receiver,
@@ -24,7 +24,7 @@ from systemlens.scanner._spring_properties import (
     _resolve_value_annotated_variable,
     resolve_spring_property,
 )
-from systemlens.topic_expressions import spring_topic_reference
+from systemlens.domain.topic_expressions import spring_topic_reference
 
 _BARE_TOPIC_VAR_RE = re.compile(
     r"(?:topics\s*=\s*|\.send\(\s*|ProducerRecord\(\s*)([A-Za-z_]\w*)\s*[,)]"

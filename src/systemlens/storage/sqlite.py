@@ -9,7 +9,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any
 
-from systemlens.models import ArchitectureRelation, ExtractionDiagnostic, Finding, GraphFact, MessageEndpoint
+from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, Finding, GraphFact, MessageEndpoint
 from systemlens.domain.module_inventory import (
     BlockingPoint,
     DiscoveredModule,
@@ -20,8 +20,8 @@ from systemlens.domain.module_inventory import (
     MongoPersistenceClass,
     SourceEvidence,
 )
-from systemlens.kubernetes import KubernetesWorkload
-from systemlens.paths import db_path
+from systemlens.domain.runtime import KubernetesWorkload
+from systemlens.infrastructure.paths import db_path
 
 SCHEMA_VERSION = "26"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]

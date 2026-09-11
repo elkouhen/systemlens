@@ -8,8 +8,8 @@ import re
 from html import escape
 from typing import Literal, TypedDict
 
-from systemlens.graph import GraphEdge, external_microservice_names
-from systemlens.models import Finding, MessageEndpoint
+from systemlens.domain.graph import GraphEdge, external_microservice_names
+from systemlens.domain.models import Finding, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency
 from systemlens.render._graph_view_helpers import _mongodb_collection_nodes, _rest_resources_served
 

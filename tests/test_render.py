@@ -3,9 +3,9 @@ import re
 from dataclasses import replace
 from pathlib import Path
 
-from systemlens.models import GraphFact, MessageEndpoint, compute_endpoint_id
-from systemlens.graph import GraphEdge
-from systemlens.kubernetes import KubernetesWorkload
+from systemlens.domain.models import GraphFact, MessageEndpoint, compute_endpoint_id
+from systemlens.domain.graph import GraphEdge
+from systemlens.discovery.kubernetes import KubernetesWorkload
 from systemlens.modules import (
     DiscoveredModule,
     ModuleDependency,

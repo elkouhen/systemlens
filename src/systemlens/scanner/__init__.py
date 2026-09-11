@@ -20,15 +20,14 @@ organisé en couches sans cycle d'import :
   manifestes Markdown/JSON — dépend de `_core`.
 
 Ce module `__init__` réexporte l'API publique historique de `scanner.py`
-(y compris `_local_spring_application_names`, importé directement par
-`relations.py`) et fournit `clear_analysis_caches`, qui doit purger les
+et fournit `clear_analysis_caches`, qui doit purger les
 caches `lru_cache` répartis dans plusieurs sous-modules."""
 
 from __future__ import annotations
 
-from systemlens import gradle as gradle_module
-from systemlens import java_parser
-from systemlens import maven as maven_module
+from systemlens.discovery.build import gradle as gradle_module
+from systemlens.discovery.java import parser as java_parser
+from systemlens.discovery.build import maven as maven_module
 from systemlens.scanner._core import _java_qualified_name, _java_source
 from systemlens.scanner._spring_properties import (
     _load_flat_spring_properties,
@@ -54,8 +53,9 @@ from systemlens.scanner.rest_mvc import (
     infer_framework_endpoints,
 )
 
+local_spring_application_names = _local_spring_application_names
+
 __all__ = [
-    "_local_spring_application_names",
     "apply_kafka_topic_strategy1",
     "clear_analysis_caches",
     "infer_framework_endpoints",
@@ -63,6 +63,7 @@ __all__ = [
     "infer_kafka_endpoints",
     "infer_kafka_topic_strategy1_endpoints",
     "infer_markdown_topic_manifest_endpoints",
+    "local_spring_application_names",
 ]
 
 

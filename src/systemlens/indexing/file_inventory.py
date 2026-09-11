@@ -4,7 +4,7 @@ import fnmatch
 import hashlib
 from pathlib import Path
 
-from systemlens.config import Config
+from systemlens.infrastructure.config import Config
 from systemlens.domain.module_inventory import DiscoveredModule
 
 

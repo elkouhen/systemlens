@@ -7,11 +7,11 @@ import pytest
 from typer.testing import CliRunner
 
 from systemlens import cli
-from systemlens.architecture_inventory import is_deployable_service
+from systemlens.application.architecture_inventory import is_deployable_service
 from systemlens.cli import app
-from systemlens.config import Config
-from systemlens.indexer import index_repo
-from systemlens.models import MessageEndpoint
+from systemlens.infrastructure.config import Config
+from systemlens.indexing.service import index_repo
+from systemlens.domain.models import MessageEndpoint
 from systemlens.modules import (
     DiscoveredModule,
     ModuleDependency,
@@ -21,7 +21,7 @@ from systemlens.modules import (
     module_identity,
 )
 from systemlens.store import Store, StoreError
-from systemlens.workspace import discover_workspace_services, load_federation
+from systemlens.application.workspace import discover_workspace_services, load_federation
 
 runner = CliRunner()
 

@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from systemlens.dto_inventory import materialize_kafka_dto_definitions
-from systemlens.models import MessageEndpoint
+from systemlens.indexing.dto_inventory import materialize_kafka_dto_definitions
+from systemlens.domain.models import MessageEndpoint
 from systemlens.modules import DiscoveredModule
 
 

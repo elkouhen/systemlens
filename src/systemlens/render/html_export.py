@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from systemlens.graph import GraphEdge
-from systemlens.models import (
+from systemlens.domain.graph import GraphEdge
+from systemlens.domain.models import (
     ArchitectureRelation,
     ExtractionDiagnostic,
     Finding,

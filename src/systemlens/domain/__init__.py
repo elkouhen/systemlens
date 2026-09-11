@@ -12,6 +12,7 @@ from systemlens.domain.module_inventory import (
     SourceEvidence,
     module_identity,
 )
+from systemlens.domain.runtime import KubernetesWorkload
 
 __all__ = [
     "BlockingPoint",
@@ -24,4 +25,5 @@ __all__ = [
     "MongoPersistenceClass",
     "SourceEvidence",
     "module_identity",
+    "KubernetesWorkload",
 ]

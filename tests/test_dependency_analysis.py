@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from systemlens.dependency_analysis import build_dependency_graph
-from systemlens.models import MessageEndpoint, compute_endpoint_id
+from systemlens.application.dependency_analysis import build_dependency_graph
+from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.modules import DiscoveredModule
 from systemlens.scanner import infer_framework_endpoints
 
