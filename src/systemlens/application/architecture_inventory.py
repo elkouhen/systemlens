@@ -6,11 +6,12 @@ normalisation here prevents graph, audit and MCP tools from each rebuilding a
 slightly different view of modules, endpoints and warnings.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, cast
 
 from systemlens.domain.graph import group_endpoints_by_module
+from systemlens.domain.code_flows import CodeFlow
 from systemlens.indexing.freshness import endpoint_inventory_warning
 from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, Finding, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
@@ -68,6 +69,7 @@ class ArchitectureInventory:
     warnings: list[str]
     source_roots: list[Path]
     profile: AnalysisProfile
+    code_flows: list[CodeFlow] = field(default_factory=list)
     kafka_dto_definitions: list[dict[str, object]] | None = None
     openapi_contracts: list[dict[str, object]] | None = None
 
@@ -138,6 +140,7 @@ def load_architecture_inventory(
             modules_by_service=modules_by_service,
             module_dependencies=federation.module_dependencies,
             relations=federation.relations,
+            code_flows=[],
             diagnostics=[],
             warnings=warnings,
             source_roots=[workspace_root, *(service.path.resolve() for service in services)],
@@ -152,6 +155,7 @@ def load_architecture_inventory(
         modules = store.all_modules()
         dependencies = store.all_module_dependencies()
         relations = store.all_architecture_relations()
+        code_flows = store.all_code_flows()
         diagnostics = store.all_extraction_diagnostics()
         kafka_dto_definitions = store.all_kafka_dto_definitions()
         openapi_contracts = store.all_openapi_contracts()
@@ -192,6 +196,7 @@ def load_architecture_inventory(
         modules_by_service=modules_by_service,
         module_dependencies=dependencies,
         relations=relations,
+        code_flows=code_flows,
         diagnostics=diagnostics,
         warnings=[warning] if warning else [],
         source_roots=[repo_root],

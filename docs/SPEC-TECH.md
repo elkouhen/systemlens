@@ -169,9 +169,28 @@ a partially parsed Java file while ignoring subtrees that contain an error or
 missing token. The file-level diagnostic remains visible so partial coverage is
 never presented as a complete parse.
 
+`CodeFlow` is a persisted, ordered potential path through one Java method. Its
+first `CodeFlowStep` is an indexed HTTP or Kafka entry point; later steps are
+HTTP calls, Kafka publications, or MongoDB reads/writes located within the
+same Tree-sitter `method_declaration`. Steps retain relative evidence paths and
+line ranges. Flow identity uses the module, relative path, qualified method,
+and trigger semantics rather than line numbers, so ordinary line movement does
+not replace the logical flow. The materializer runs during indexing and never during export or
+query. It is linear in the indexed endpoint and Mongo-operation inventory plus
+the traversed AST nodes for Java files that contain eligible endpoints. A
+same-method relation remains `potential` with medium confidence because static
+lexical order does not prove branch execution. Interprocedural calls, dynamic
+dispatch, reflection, and runtime-only routing remain outside this
+deterministic layer.
+
 The SQLite store is standard-library-only: it does not load native vector
 extensions or persist/query vector representations. The retained findings
 search compatibility path uses deterministic lexical matching.
+
+Schema version 27 adds the `code_flows` table and its module/path indexes. The
+migration is additive and occurs when the writable store opens, before the
+index transaction. Stored steps are JSON projections of immutable domain
+facts; source paths remain relative to the indexed root.
 
 The index persists source evidence only as paths relative to the indexed
 project root. HTML export receives a local `--root-path` and joins it to these

@@ -14,10 +14,12 @@
     const persistenceTab = document.getElementById("persistence-tab");
     const buildTab = document.getElementById("build-tab");
     const issuesTab = document.getElementById("issues-tab");
+    const flowsTab = document.getElementById("flows-tab");
     const graphLegend = document.getElementById("graph-legend");
     const graphPanel = document.getElementById("graph-panel");
     const dependenciesPanel = document.getElementById("dependencies-panel");
     const issuesPanel = document.getElementById("issues-panel");
+    const flowsPanel = document.getElementById("flows-panel");
     const openApiPanel = document.getElementById("openapi-panel");
     const kafkaPanel = document.getElementById("kafka-panel");
     const persistencePanel = document.getElementById("persistence-panel");

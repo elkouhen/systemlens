@@ -1611,6 +1611,14 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         assert page.locator("#layout-forceatlas2-noverlap").get_attribute("aria-pressed") == "true"
         assert page.evaluate(
             """() => {
+                const tabs = document.querySelector('.toolbar-tabs').getBoundingClientRect();
+                const search = document.querySelector('#quick-search').getBoundingClientRect();
+                const actions = document.querySelector('.graph-actions').getBoundingClientRect();
+                return tabs.bottom <= search.top && search.bottom <= actions.top;
+            }"""
+        )
+        assert page.evaluate(
+            """() => {
                 const actions = document.querySelector('.graph-actions');
                 const zoom = document.querySelector('.zoom-controls').getBoundingClientRect();
                 const fit = document.querySelector('.fit-controls').getBoundingClientRect();

@@ -81,7 +81,10 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     assert '<div id="details" class="is-empty">' in document
     assert "#details.is-empty { display: none; }" in document
     assert '.toolbar.has-details .toolbar-panel { display: none; }' in document
-    assert '.toolbar.has-details #graph-panel > :not(#layout-status) { display: none; }' in document
+    assert (
+        '.toolbar.has-details #graph-panel > :not(#graph-context):not(#layout-status) '
+        "{ display: none; }"
+    ) in document
     assert 'toolbar?.classList.add("has-details");' in document
     assert 'document.querySelector(".toolbar")?.classList.remove("has-details");' in document
     assert '.toolbar #details .relation-link,' in document
@@ -412,7 +415,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="graph-context"' in document
     assert "graphContext.hidden = !showingGraph" in document
     assert 'id="quick-search"' in document
+    assert document.index('class="toolbar-tabs"') < document.index('id="quick-search"')
     assert document.index('id="quick-search"') < document.index('class="graph-actions"')
+    graph_panel_start = document.index('id="graph-panel"')
+    graph_panel_end = document.index('id="dependencies-panel"')
+    assert graph_panel_start < document.index('id="quick-search"') < graph_panel_end
     assert "@media (max-width: 1024px)" in document
     assert "--accent: #3156d3" in document
     assert "backdrop-filter: blur(18px)" in document

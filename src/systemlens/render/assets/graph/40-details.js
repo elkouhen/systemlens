@@ -16,6 +16,7 @@
       const showingOpenApi = tab === "openapi";
       const showingKafka = tab === "kafka";
       const showingPersistence = tab === "persistence";
+      const showingFlows = tab === "flows";
       graphTab.classList.toggle("is-active", showingGraph);
       graphTab.setAttribute("aria-selected", String(showingGraph));
       openApiTab.classList.toggle("is-active", showingOpenApi);
@@ -28,6 +29,8 @@
       buildTab.setAttribute("aria-selected", String(showingDependencies));
       issuesTab.classList.toggle("is-active", showingIssues);
       issuesTab.setAttribute("aria-selected", String(showingIssues));
+      flowsTab.classList.toggle("is-active", showingFlows);
+      flowsTab.setAttribute("aria-selected", String(showingFlows));
       graphPanel.hidden = !showingGraph;
       quickSearch.hidden = !showingGraph;
       graphContext.hidden = !showingGraph;
@@ -36,6 +39,7 @@
       openApiPanel.hidden = !showingOpenApi;
       kafkaPanel.hidden = !showingKafka;
       persistencePanel.hidden = !showingPersistence;
+      flowsPanel.hidden = !showingFlows;
       graphLegend.hidden = !showingGraph;
       graphCanvas.hidden = showingDependencies;
       dependencyCanvas.hidden = !showingDependencies;

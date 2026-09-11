@@ -17,6 +17,7 @@ from systemlens.indexing.file_inventory import (
     strategy1_requires_full_reindex as _strategy1_requires_full_reindex,
 )
 from systemlens.indexing.materializers import materialize_openapi_contracts
+from systemlens.indexing.code_flows import CODE_FLOW_SIGNATURE, materialize_code_flows
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import ExtractionDiagnostic, MessageEndpoint
 from systemlens.discovery.build.modules import (
@@ -292,6 +293,22 @@ def _index_repo(
     )
     store.replace_architecture_relations(relations)
     _report_progress(progress, f"→ Indexation : {len(relations)} relation(s) d'architecture matérialisée(s).")
+
+    if (
+        full
+        or changed
+        or deleted
+        or store.get_meta("code_flow_signature") != CODE_FLOW_SIGNATURE
+    ):
+        flows = materialize_code_flows(
+            repo_root, store.all_endpoints(), relation_modules
+        )
+        store.replace_code_flows(flows)
+        store.set_meta("code_flow_signature", CODE_FLOW_SIGNATURE)
+        _report_progress(
+            progress,
+            f"→ Indexation : {len(flows)} parcours de code potentiel(s) matérialisé(s).",
+        )
 
     _trace("index_repo.end", scanned=len(changed), skipped=len(unchanged))
     return IndexReport(

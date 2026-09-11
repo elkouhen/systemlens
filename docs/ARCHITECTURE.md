@@ -72,6 +72,8 @@ flowchart TD
     Scanner --> Facts["MessageEndpoint"]
     ModuleDiscovery --> ModuleFacts["DiscoveredModule + dependencies"]
     Facts --> Persist["Store replaces facts"]
+    Facts --> CodeFlows["indexing.code_flows.materialize_code_flows"]
+    CodeFlows --> Persist
     ModuleFacts --> Persist
     Facts --> DTOInventory["indexing.dto_inventory.materialize_kafka_dto_definitions"]
     ModuleFacts --> DTOInventory
@@ -132,6 +134,7 @@ they are not cross-module entry points.
 | Shared Java parser primitives | `discovery/java/parser.py` |
 | Kubernetes runtime discovery | `discovery/kubernetes.py` |
 | Shared module inventory types | `domain/module_inventory.py` |
+| Same-method potential flow materialization | `indexing/code_flows.py` |
 | File eligibility or incremental refresh policy | `indexing/file_inventory.py` |
 | Persisted contract materialization | `indexing/materializers.py` |
 | SQLite schema or queries | `storage/sqlite.py` |

@@ -58,6 +58,8 @@ incremental; `--full` refreshes every eligible source file.
 - Markdown/JSON Kafka manifests and the opt-in Strategy1 conventions.
 - Optional Kubernetes Deployment and StatefulSet resource dimensions from the
   active local `kubectl` context, matched conservatively to indexed projects.
+- Persisted potential code flows from an HTTP/Kafka entry point to external
+  effects located in the same Java method.
 
 ### Planned
 

@@ -46,6 +46,8 @@ but does not alter AST endpoint extraction.
 | `systemlens index [MANIFEST]... [--full] [--topic-strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. `--kubernetes` queries the active `kubectl` context for Deployments and StatefulSets; `--kubernetes-namespace` restricts it to one runtime namespace. `--disable` can independently disable the `properties`, `module-architecture`, or `module-tree-sitter` extractor and may be repeated. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts an AI fact manifest into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
+| `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows whose entry point and external effects occur in the same Java method. |
+| `systemlens flows show ID_OR_QUERY [--root DIR] [--json]` | Shows the ordered steps and source evidence of one unambiguously selected potential code flow. |
 | `systemlens microservices topics\|apis\|mongodb\|properties\|openapi NAME [--root DIR] [--json]` | Follow one linked object kind from a single named microservice. |
 | `systemlens microservices implementation KIND ID [--root DIR] [--json]` | Jump to the source implementation of one identified integration. |
 | `systemlens projects integrations PROJECT [--json]` | Lists the integrations owned by one Maven/Gradle project. |
@@ -95,6 +97,15 @@ WebClient, Spring Cloud Gateway, Spring Data REST, Spring Kafka and Spring
 Cloud Stream. Markdown and JSON Kafka manifests are supported as explicit
 sources and are labelled `source=manifest`.
 
+Indexing also materializes conservative same-method code flows. An HTTP
+`serve` or Kafka `consume` endpoint is a flow entry point; HTTP `call`, Kafka
+`produce`, and concrete MongoDB operations located in the same Java method are
+ordered by source position as external effects. These flows have
+`status=potential` and `confidence=medium`: lexical containment does not prove
+that a conditional branch executes. Effects reached only through another
+method, dynamic dispatch, reflection, or runtime configuration are not added
+to this deterministic flow layer.
+
 A REST call forms an internal architecture relation only when its target
 service is identified by an exact normalized explicit alias, such as an HTTP
 host, an `lb://` service name, or a configured client domain. A matching HTTP
@@ -125,8 +136,8 @@ uses one bounded, scrollable region so the graph remains visible while users
 inspect controls or resource details. At intermediate widths up to 1024 px it
 is limited to 320 px and 82% of the viewport height. Its branded header remains
 visible while the panel content scrolls, and its navigation tabs use one
-balanced three-column, two-row grid immediately after search, so all six
-destinations remain visible without horizontal scrolling. The extended search
+balanced three-column, two-row grid immediately after the branded header, so
+all six destinations remain visible without horizontal scrolling. The extended search
 hint is hidden at those widths while its label and example placeholder remain
 visible.
 
@@ -151,11 +162,11 @@ preference), and provides a theme toggle in the graph
 toolbar. The selected theme is stored only in browser local storage and does
 not affect persisted inventory facts or exported architecture data.
 
-Its initial view places resource and itinerary search immediately below the
-brand, before camera and rendering controls. Graph-specific context is grouped
-below the navigation: its first row contains zoom, fit and reset actions; its
-second row contains the graph-view and node-rendering selectors; architecture
-counters and inventory status follow. This whole context appears only in
+Its initial view places resource and itinerary search inside Explorer,
+immediately below the navigation tabs and before camera and rendering controls.
+Graph-specific context follows the search: its first row contains zoom, fit
+and reset actions; its second row contains the graph-view and node-rendering
+selectors; architecture counters and inventory status follow. This whole context appears only in
 Explorer, so domain tabs start directly with their own content. A dedicated,
 compact `Displayed nodes and edges` control lets users independently select
 HTTP, Kafka, data-access and other edge categories, and internal services,

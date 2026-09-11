@@ -12,6 +12,7 @@ import typer
 from systemlens import __version__
 from systemlens.application.ai_graph import AiGraphError, load_ai_graph, load_fact_manifest
 from systemlens.application.architecture import (
+    ArchitectureCatalog,
     analyze as analyze_architecture,
     build_catalog,
     endpoint_implementation,
@@ -26,11 +27,18 @@ from systemlens.application.architecture import (
     trace_topic_flows,
 )
 from systemlens.application.architecture_inventory import load_architecture_inventory
+from systemlens.application.code_flows import (
+    list_code_flows,
+    render_code_flow_text,
+    render_code_flows_text,
+    show_code_flow,
+)
 from systemlens.application.architecture_projection import project_architecture_graph
 from systemlens.application.audit import assess_architecture, render_audit_json, render_audit_text
 from systemlens.infrastructure.config import ConfigError, init_config, load_config
 from systemlens.application.flow import resolve_topic
 from systemlens.domain.graph import GraphEdge, find_outbound_calls_in_consumers
+from systemlens.domain.code_flows import CodeFlow
 from systemlens.indexing.service import index_repo
 from systemlens.indexing.freshness import endpoint_inventory_warning
 from systemlens.domain.models import GraphFact, MessageEndpoint
@@ -96,6 +104,12 @@ apis_app = typer.Typer(
 mongodb_app = typer.Typer(
     help="Explorer les collections MongoDB indexées.\n\nExemples : `systemlens mongodb`, `systemlens mongodb services orders`."
 )
+flows_app = typer.Typer(
+    help=(
+        "Explore potential flows materialized from source code.\n\n"
+        "Examples: `systemlens flows`, `systemlens flows show <id>`."
+    )
+)
 microservices_app = typer.Typer(
     help="Explorer les microservices indexés.\n\nExemples : `systemlens microservices`, `systemlens microservices show orders`."
 )
@@ -113,6 +127,7 @@ app.add_typer(topics_app, name="topics")
 app.add_typer(dtos_app, name="dtos")
 app.add_typer(apis_app, name="apis")
 app.add_typer(mongodb_app, name="mongodb")
+app.add_typer(flows_app, name="flows")
 app.add_typer(microservices_app, name="microservices")
 app.add_typer(modules_app, name="projects")
 app.add_typer(modules_app, name="modules", hidden=True)
@@ -177,6 +192,138 @@ def _emit_architecture(result: object, json_output: bool) -> None:
     typer.echo(json.dumps(result) if json_output else render_architecture_text(result))
 
 
+@dataclass(frozen=True)
+class _CatalogCommandSpec:
+    kind: Literal["topic", "dto", "api", "collection"]
+    commands: frozenset[str]
+    list_usage: str
+    usage: str
+    required_target: str | None
+    missing_target: str
+
+
+_TOPICS = _CatalogCommandSpec(
+    kind="topic",
+    commands=frozenset({"show", "neighbors", "consumers", "producers", "search", "trace"}),
+    list_usage="Usage : `systemlens topics [list] --root <workspace>`.",
+    usage="Usage : `systemlens topics [list|show|neighbors|search] [topic]`.",
+    required_target="`systemlens topics {command}` requiert un topic.",
+    missing_target="Topic introuvable : {target}",
+)
+_DTOS = _CatalogCommandSpec(
+    kind="dto",
+    commands=frozenset({"show", "neighbors", "consumers", "producers", "search"}),
+    list_usage="Usage : `systemlens dtos [list] --root <workspace>`.",
+    usage="Usage : `systemlens dtos [list|show|neighbors|producers|consumers|search] [dto]`.",
+    required_target="`systemlens dtos {command}` requiert un DTO.",
+    missing_target="DTO introuvable : {target}",
+)
+_APIS = _CatalogCommandSpec(
+    kind="api",
+    commands=frozenset({"show", "neighbors", "providers", "consumers", "search"}),
+    list_usage="Usage : `systemlens apis [list] --root <workspace>`.",
+    usage="Usage : `systemlens apis [list|show|neighbors|search] [api]`.",
+    required_target="`systemlens apis {command}` requiert une API HTTP.",
+    missing_target="API HTTP introuvable : {target}",
+)
+_MONGODB = _CatalogCommandSpec(
+    kind="collection",
+    commands=frozenset({"show", "neighbors", "services", "search"}),
+    list_usage="Usage : `systemlens mongodb [list] --root <workspace>`.",
+    usage="Usage : `systemlens mongodb [list|show|neighbors|search] [collection]`.",
+    required_target=None,
+    missing_target="Collection MongoDB introuvable : {target}",
+)
+
+
+def _catalog_command_result(
+    spec: _CatalogCommandSpec,
+    command: str,
+    target: str,
+    root: Path,
+    catalog: ArchitectureCatalog,
+    *,
+    max_depth: int,
+    limit: int,
+) -> object | None:
+    if command == "show":
+        return show_architecture_object(catalog, spec.kind, target)
+    if command == "neighbors":
+        return architecture_neighbors(catalog, spec.kind, target)
+    if command == "search":
+        if spec.kind == "topic":
+            return _search_architecture_object(root, catalog, "topic", "kafka", target)
+        if spec.kind == "api":
+            return _search_architecture_object(root, catalog, "api", "rest", target)
+        if spec.kind == "dto":
+            return _search_dto(catalog, target)
+        return _search_mongodb_collection(catalog, target)
+    if command == "trace":
+        return trace_topic_flows(catalog, target, max_depth=max_depth, limit=limit)
+    if spec.kind == "topic":
+        return analyze_architecture(catalog, command, target)
+    if spec.kind == "dto":
+        summary = show_architecture_object(catalog, "dto", target)
+        if summary is None:
+            return None
+        key = "producer_microservices" if command == "producers" else "consumer_microservices"
+        return {"query": command, "dto": target, "microservices": summary[key]}
+    if spec.kind == "api":
+        summary = show_architecture_object(catalog, "api", target)
+        return (
+            {"query": command, "api": target, "microservices": summary[command]}
+            if summary is not None
+            else None
+        )
+    return _mongodb_services(catalog, target)
+
+
+def _run_catalog_command(
+    spec: _CatalogCommandSpec,
+    arguments: list[str] | None,
+    root: Path | None,
+    json_output: bool,
+    *,
+    max_depth: int = 6,
+    limit: int = 50,
+) -> None:
+    resolved_arguments = arguments or []
+    resolved_json = _option_json(json_output)
+    workspace_root = _option_root(root)
+    catalog = _microservice_catalog(workspace_root)
+    if not resolved_arguments or resolved_arguments[0] == "list":
+        if len(resolved_arguments) > 1:
+            typer.echo(spec.list_usage, err=True)
+            raise typer.Exit(code=2)
+        _emit_architecture(
+            list_architecture_objects(catalog, spec.kind), resolved_json
+        )
+        return
+
+    command = resolved_arguments[0]
+    if command not in spec.commands or len(resolved_arguments) != 2:
+        if command in spec.commands and spec.required_target is not None:
+            typer.echo(spec.required_target.format(command=command), err=True)
+        else:
+            typer.echo(spec.usage, err=True)
+        raise typer.Exit(code=2)
+
+    target = resolved_arguments[1]
+    result = _catalog_command_result(
+        spec,
+        command,
+        target,
+        workspace_root,
+        catalog,
+        max_depth=max_depth,
+        limit=limit,
+    )
+    if result is None:
+        typer.echo(spec.missing_target.format(target=target), err=True)
+        raise typer.Exit(code=2)
+    _emit_architecture(result, resolved_json)
+
+
 def topics_cmd(
     arguments: list[str] = typer.Argument(
         None, help="Commande : list, show, neighbors ou search."
@@ -207,46 +354,14 @@ def topics_cmd(
     Exemples : `systemlens topics`, `systemlens topics show orders.created`,
     `systemlens topics neighbors orders.created`.
     """
-    arguments = arguments or []
-    json_output = _option_json(json_output)
-    workspace_root = _option_root(root)
-    catalog = _microservice_catalog(workspace_root)
-    if not arguments or arguments[0] == "list":
-        if len(arguments) > 1:
-            typer.echo(
-                "Usage : `systemlens topics [list] --root <workspace>`.", err=True
-            )
-            raise typer.Exit(code=2)
-        _emit_architecture(list_architecture_objects(catalog, "topic"), json_output)
-        return
-    command = arguments[0]
-    if command in {"show", "neighbors", "consumers", "producers", "search", "trace"}:
-        if len(arguments) != 2:
-            typer.echo(f"`systemlens topics {command}` requiert un topic.", err=True)
-            raise typer.Exit(code=2)
-        topic = arguments[1]
-        result: object
-        if command == "show":
-            result = show_architecture_object(catalog, "topic", topic)
-        elif command == "neighbors":
-            result = architecture_neighbors(catalog, "topic", topic)
-        elif command == "search":
-            result = _search_architecture_object(
-                workspace_root, catalog, "topic", "kafka", topic
-            )
-        elif command == "trace":
-            result = trace_topic_flows(catalog, topic, max_depth=max_depth, limit=limit)
-        else:
-            result = analyze_architecture(catalog, command, topic)
-        if result is None:
-            typer.echo(f"Topic introuvable : {topic}", err=True)
-            raise typer.Exit(code=2)
-        _emit_architecture(result, json_output)
-        return
-    typer.echo(
-        "Usage : `systemlens topics [list|show|neighbors|search] [topic]`.", err=True
+    _run_catalog_command(
+        _TOPICS,
+        arguments,
+        root,
+        json_output,
+        max_depth=max_depth,
+        limit=limit,
     )
-    raise typer.Exit(code=2)
 
 
 def dtos_cmd(
@@ -263,51 +378,7 @@ def dtos_cmd(
     Exemples : `systemlens dtos`, `systemlens dtos show OrderCreated`,
     `systemlens dtos consumers OrderCreated`.
     """
-    arguments = arguments or []
-    json_output = _option_json(json_output)
-    workspace_root = _option_root(root)
-    catalog = _microservice_catalog(workspace_root)
-    if not arguments or arguments[0] == "list":
-        if len(arguments) > 1:
-            typer.echo("Usage : `systemlens dtos [list] --root <workspace>`.", err=True)
-            raise typer.Exit(code=2)
-        _emit_architecture(list_architecture_objects(catalog, "dto"), json_output)
-        return
-    command = arguments[0]
-    if command in {"show", "neighbors", "consumers", "producers", "search"}:
-        if len(arguments) != 2:
-            typer.echo(f"`systemlens dtos {command}` requiert un DTO.", err=True)
-            raise typer.Exit(code=2)
-        dto = arguments[1]
-        result: object
-        if command == "show":
-            result = show_architecture_object(catalog, "dto", dto)
-        elif command == "neighbors":
-            result = architecture_neighbors(catalog, "dto", dto)
-        elif command == "search":
-            result = _search_dto(catalog, dto)
-        else:
-            summary = show_architecture_object(catalog, "dto", dto)
-            key = (
-                "producer_microservices"
-                if command == "producers"
-                else "consumer_microservices"
-            )
-            result = (
-                {"query": command, "dto": dto, "microservices": summary[key]}
-                if summary
-                else None
-            )
-        if result is None:
-            typer.echo(f"DTO introuvable : {dto}", err=True)
-            raise typer.Exit(code=2)
-        _emit_architecture(result, json_output)
-        return
-    typer.echo(
-        "Usage : `systemlens dtos [list|show|neighbors|producers|consumers|search] [dto]`.",
-        err=True,
-    )
-    raise typer.Exit(code=2)
+    _run_catalog_command(_DTOS, arguments, root, json_output)
 
 
 def apis_cmd(
@@ -324,47 +395,7 @@ def apis_cmd(
     Exemples : `systemlens apis`, `systemlens apis show "POST /payments"`,
     `systemlens apis search payments`.
     """
-    arguments = arguments or []
-    json_output = _option_json(json_output)
-    workspace_root = _option_root(root)
-    catalog = _microservice_catalog(workspace_root)
-    if not arguments or arguments[0] == "list":
-        if len(arguments) > 1:
-            typer.echo("Usage : `systemlens apis [list] --root <workspace>`.", err=True)
-            raise typer.Exit(code=2)
-        _emit_architecture(list_architecture_objects(catalog, "api"), json_output)
-        return
-    command = arguments[0]
-    if command in {"show", "neighbors", "providers", "consumers", "search"}:
-        if len(arguments) != 2:
-            typer.echo(f"`systemlens apis {command}` requiert une API HTTP.", err=True)
-            raise typer.Exit(code=2)
-        api = arguments[1]
-        result: object
-        if command == "show":
-            result = show_architecture_object(catalog, "api", api)
-        elif command == "neighbors":
-            result = architecture_neighbors(catalog, "api", api)
-        elif command == "search":
-            result = _search_architecture_object(
-                workspace_root, catalog, "api", "rest", api
-            )
-        else:
-            summary = show_architecture_object(catalog, "api", api)
-            result = (
-                {"query": command, "api": api, "microservices": summary[command]}
-                if summary is not None
-                else None
-            )
-        if result is None:
-            typer.echo(f"API HTTP introuvable : {api}", err=True)
-            raise typer.Exit(code=2)
-        _emit_architecture(result, json_output)
-        return
-    typer.echo(
-        "Usage : `systemlens apis [list|show|neighbors|search] [api]`.", err=True
-    )
-    raise typer.Exit(code=2)
+    _run_catalog_command(_APIS, arguments, root, json_output)
 
 
 def mongodb_cmd(
@@ -381,43 +412,7 @@ def mongodb_cmd(
     Exemples : `systemlens mongodb`, `systemlens mongodb show orders`,
     `systemlens mongodb neighbors orders`.
     """
-    arguments = arguments or []
-    json_output = _option_json(json_output)
-    catalog = _microservice_catalog(_option_root(root))
-    if not arguments or arguments[0] == "list":
-        if len(arguments) > 1:
-            typer.echo(
-                "Usage : `systemlens mongodb [list] --root <workspace>`.", err=True
-            )
-            raise typer.Exit(code=2)
-        _emit_architecture(
-            list_architecture_objects(catalog, "collection"), json_output
-        )
-        return
-    command = arguments[0]
-    if (
-        command not in {"show", "neighbors", "services", "search"}
-        or len(arguments) != 2
-    ):
-        typer.echo(
-            "Usage : `systemlens mongodb [list|show|neighbors|search] [collection]`.",
-            err=True,
-        )
-        raise typer.Exit(code=2)
-    collection = arguments[1]
-    result: object
-    if command == "show":
-        result = show_architecture_object(catalog, "collection", collection)
-    elif command == "neighbors":
-        result = architecture_neighbors(catalog, "collection", collection)
-    elif command == "services":
-        result = _mongodb_services(catalog, collection)
-    else:
-        result = _search_mongodb_collection(catalog, collection)
-    if result is None:
-        typer.echo(f"Collection MongoDB introuvable : {collection}", err=True)
-        raise typer.Exit(code=2)
-    _emit_architecture(result, json_output)
+    _run_catalog_command(_MONGODB, arguments, root, json_output)
 
 
 def analyze_cmd(
@@ -893,6 +888,60 @@ def mongodb_search(
     mongodb_cmd(["search", query], root, json_output)
 
 
+def _load_code_flows(root: Path | None) -> list[CodeFlow]:
+    return load_architecture_inventory(_option_root(root)).code_flows
+
+
+@flows_app.callback(invoke_without_command=True)
+def flows_root(
+    ctx: typer.Context,
+    root: Path | None = typer.Option(
+        None, "--root", help="Indexed repository to explore."
+    ),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """List potential code flows without a subcommand."""
+    if ctx.invoked_subcommand is None:
+        items = list_code_flows(_load_code_flows(root))
+        typer.echo(
+            json.dumps(items)
+            if _option_json(json_output)
+            else render_code_flows_text(items)
+        )
+
+
+@flows_app.command("list")
+def flows_list(
+    root: Path | None = typer.Option(None, "--root"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """List indexed potential code flows."""
+    items = list_code_flows(_load_code_flows(root))
+    typer.echo(
+        json.dumps(items)
+        if _option_json(json_output)
+        else render_code_flows_text(items)
+    )
+
+
+@flows_app.command("show")
+def flows_show(
+    flow: str,
+    root: Path | None = typer.Option(None, "--root"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Show the steps and evidence for one potential code flow."""
+    item = show_code_flow(_load_code_flows(root), flow)
+    if item is None:
+        typer.echo(f"Flow not found or ambiguous: {flow}", err=True)
+        raise typer.Exit(code=2)
+    typer.echo(
+        json.dumps(item)
+        if _option_json(json_output)
+        else render_code_flow_text(item)
+    )
+
+
 @analyze_app.command("audit")
 def analyze_audit(
     workspace: Path | None = typer.Option(
@@ -1209,6 +1258,7 @@ class _MicroserviceGraphData:
     kafka_dto_definitions: list[dict[str, object]] | None = None
     openapi_contracts: list[dict[str, object]] | None = None
     graph_facts: list[GraphFact] | None = None
+    code_flows: list[CodeFlow] | None = None
 
 
 def _load_microservice_graph(
@@ -1247,6 +1297,7 @@ def _load_microservice_graph(
         inventory.kafka_dto_definitions,
         inventory.openapi_contracts,
         graph_facts,
+        inventory.code_flows,
     )
 
 
@@ -1267,7 +1318,7 @@ def _load_ai_graph(path: Path) -> _MicroserviceGraphData:
         ]
     result = render_graph_json(list(services), edges, [], warnings=issues, cross_module_data_available=True)
     return _MicroserviceGraphData(
-        services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, graph_facts
+        services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, graph_facts, []
     )
 
 
@@ -1414,6 +1465,7 @@ def export_microservices_cmd(
                 kafka_dto_definitions=graph_data.kafka_dto_definitions,
                 openapi_contracts=graph_data.openapi_contracts,
                 graph_facts=getattr(graph_data, "graph_facts", []),
+                code_flows=getattr(graph_data, "code_flows", []),
             ),
             encoding="utf-8",
         )

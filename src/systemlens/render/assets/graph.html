@@ -22,13 +22,6 @@
       <div class="brand"><span class="brand-mark">SL</span><strong>SystemLens</strong><span class="brand-subtitle">Espace d’architecture</span></div>
       <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
     </div>
-    <div id="quick-search" class="quick-search">
-      <label class="explore-search-label" for="search">Rechercher une ressource ou un itinéraire</label>
-      <input id="search" type="search" list="node-suggestions" placeholder="orders ou orders -> payments" autocomplete="off" aria-describedby="search-help search-status" aria-label="Rechercher une ressource ou un itinéraire">
-      <datalist id="node-suggestions"></datalist>
-      <p id="search-help" class="explore-search-help">Choisissez une suggestion ou saisissez le nom exact d'un noeud. Utilisez <code>-></code>, puis Entrée, pour afficher l'itinéraire le plus court.</p>
-      <p id="search-status" class="explore-search-status" role="status"></p>
-    </div>
     <div class="toolbar-tabs" role="tablist" aria-label="Vues de l'architecture">
       <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel">Explorer</button>
       <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
@@ -36,37 +29,45 @@
       <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Mongo</button>
       <button id="build-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="dependencies-panel">Build</button>
       <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problemes d'indexation">Qualité</button>
+      <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux</button>
     </div>
-    <section id="graph-context" class="graph-context" aria-label="Contexte du graphe">
-      <div class="graph-actions" aria-label="Navigation du graphe">
-        <div class="graph-action-row camera-actions">
-          <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
-            <button id="zoom-out" type="button" aria-label="Dézoomer" title="Dézoomer">−</button>
-            <button id="zoom-in" type="button" aria-label="Zoomer" title="Zoomer">+</button>
-          </div>
-          <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
-            <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tous les nœuds" title="Afficher tous les nœuds" aria-pressed="false">Tout</button>
-            <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher le graphe à une distance lisible" title="Afficher le graphe à une distance lisible" aria-pressed="true">Lisible</button>
-          </div>
-          <span class="graph-actions-spacer" aria-hidden="true"></span>
-          <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Effacer la sélection" title="Effacer la sélection" disabled>Effacer</button>
-        </div>
-        <div class="graph-action-row display-actions">
-          <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
-            <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Explorer les relations avec des nœuds espacés">Graphe</button>
-            <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
-            <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
-          </div>
-          <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
-            <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
-            <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
-          </div>
-        </div>
-      </div>
-      <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
-      <button id="inventory-status" class="inventory-status" type="button" hidden></button>
-    </section>
     <div id="graph-panel" class="toolbar-panel" role="tabpanel" aria-labelledby="graph-tab">
+      <div id="quick-search" class="quick-search">
+        <label class="explore-search-label" for="search">Rechercher une ressource ou un itinéraire</label>
+        <input id="search" type="search" list="node-suggestions" placeholder="orders ou orders -> payments" autocomplete="off" aria-describedby="search-help search-status" aria-label="Rechercher une ressource ou un itinéraire">
+        <datalist id="node-suggestions"></datalist>
+        <p id="search-help" class="explore-search-help">Choisissez une suggestion ou saisissez le nom exact d'un noeud. Utilisez <code>-></code>, puis Entrée, pour afficher l'itinéraire le plus court.</p>
+        <p id="search-status" class="explore-search-status" role="status"></p>
+      </div>
+      <section id="graph-context" class="graph-context" aria-label="Contexte du graphe">
+        <div class="graph-actions" aria-label="Navigation du graphe">
+          <div class="graph-action-row camera-actions">
+            <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
+              <button id="zoom-out" type="button" aria-label="Dézoomer" title="Dézoomer">−</button>
+              <button id="zoom-in" type="button" aria-label="Zoomer" title="Zoomer">+</button>
+            </div>
+            <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
+              <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tous les nœuds" title="Afficher tous les nœuds" aria-pressed="false">Tout</button>
+              <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher le graphe à une distance lisible" title="Afficher le graphe à une distance lisible" aria-pressed="true">Lisible</button>
+            </div>
+            <span class="graph-actions-spacer" aria-hidden="true"></span>
+            <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Effacer la sélection" title="Effacer la sélection" disabled>Effacer</button>
+          </div>
+          <div class="graph-action-row display-actions">
+            <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
+              <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Explorer les relations avec des nœuds espacés">Graphe</button>
+              <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
+              <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
+            </div>
+            <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
+              <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
+              <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
+            </div>
+          </div>
+        </div>
+        <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
+        <button id="inventory-status" class="inventory-status" type="button" hidden></button>
+      </section>
       <details id="display-controls" class="display-controls">
         <summary>Nœuds et arêtes affichés</summary>
         <div class="display-filter-groups">
@@ -127,6 +128,14 @@
       </div>
       <ul id="indexing-issues" class="indexing-issues-list" aria-label="Problemes d'indexation"></ul>
       <p id="indexing-issues-empty" class="indexing-issues-empty">Aucun probleme d'indexation detecte.</p>
+    </div>
+    <div id="flows-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="flows-tab" hidden>
+      <div class="references-header">
+        <p class="references-kicker">Parcours potentiels du code</p>
+        <h2 id="code-flows-title" class="references-title">Flux de code</h2>
+        <p class="references-description">Parcours ordonnés issus du code source. Ils décrivent un comportement potentiel, pas une trace runtime.</p>
+      </div>
+      <section class="references-section"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Filtrer par service, méthode ou déclencheur" autocomplete="off" aria-label="Filtrer les flux de code"><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux de code indexé.</p></section>
     </div>
     <div id="openapi-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="openapi-tab" hidden>
       <div class="references-header">

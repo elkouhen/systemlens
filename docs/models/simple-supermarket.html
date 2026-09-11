@@ -191,7 +191,7 @@
     .toolbar-panel[hidden] { display: none; }
     .toolbar.has-details .toolbar-panel { display: none; }
     .toolbar.has-details #graph-panel:not([hidden]) { display: grid; }
-    .toolbar.has-details #graph-panel > :not(#layout-status) { display: none; }
+    .toolbar.has-details #graph-panel > :not(#graph-context):not(#layout-status) { display: none; }
     .toolbar.has-details .quick-search, .toolbar.has-details .graph-summary, .toolbar.has-details .inventory-status { display: none; }
     .quick-search { display: grid; gap: 8px; }
     .quick-search[hidden] { display: none; }
@@ -381,7 +381,6 @@
     button.dto-field-type { border: 0; padding: 0; background: transparent; color: #1d4f91; text-align: left; text-decoration: underline; cursor: pointer; font: inherit; }
     .dto-field-name { color: #334155; font-weight: 700; overflow-wrap: anywhere; }
     .dto-tag { display: inline-flex; width: fit-content; padding: 4px 7px; border-radius: 999px; color: #315f9b; background: #dbeafe; font-size: 12px; }
-
     /* SystemLens 2026 visual system: calm canvas, crisp tools, dense data. */
     :root {
       --ink: #17213a;
@@ -818,13 +817,6 @@
       <div class="brand"><span class="brand-mark">SL</span><strong>SystemLens</strong><span class="brand-subtitle">Espace d’architecture</span></div>
       <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
     </div>
-    <div id="quick-search" class="quick-search">
-      <label class="explore-search-label" for="search">Rechercher une ressource ou un itinéraire</label>
-      <input id="search" type="search" list="node-suggestions" placeholder="orders ou orders -> payments" autocomplete="off" aria-describedby="search-help search-status" aria-label="Rechercher une ressource ou un itinéraire">
-      <datalist id="node-suggestions"></datalist>
-      <p id="search-help" class="explore-search-help">Choisissez une suggestion ou saisissez le nom exact d'un noeud. Utilisez <code>-></code>, puis Entrée, pour afficher l'itinéraire le plus court.</p>
-      <p id="search-status" class="explore-search-status" role="status"></p>
-    </div>
     <div class="toolbar-tabs" role="tablist" aria-label="Vues de l'architecture">
       <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel">Explorer</button>
       <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
@@ -833,36 +825,43 @@
       <button id="build-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="dependencies-panel">Build</button>
       <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problemes d'indexation">Qualité</button>
     </div>
-    <section id="graph-context" class="graph-context" aria-label="Contexte du graphe">
-      <div class="graph-actions" aria-label="Navigation du graphe">
-        <div class="graph-action-row camera-actions">
-          <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
-            <button id="zoom-out" type="button" aria-label="Dézoomer" title="Dézoomer">−</button>
-            <button id="zoom-in" type="button" aria-label="Zoomer" title="Zoomer">+</button>
-          </div>
-          <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
-            <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tous les nœuds" title="Afficher tous les nœuds" aria-pressed="false">Tout</button>
-            <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher le graphe à une distance lisible" title="Afficher le graphe à une distance lisible" aria-pressed="true">Lisible</button>
-          </div>
-          <span class="graph-actions-spacer" aria-hidden="true"></span>
-          <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Effacer la sélection" title="Effacer la sélection" disabled>Effacer</button>
-        </div>
-        <div class="graph-action-row display-actions">
-          <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
-            <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Explorer les relations avec des nœuds espacés">Graphe</button>
-            <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
-            <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
-          </div>
-          <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
-            <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
-            <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
-          </div>
-        </div>
-      </div>
-      <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
-      <button id="inventory-status" class="inventory-status" type="button" hidden></button>
-    </section>
     <div id="graph-panel" class="toolbar-panel" role="tabpanel" aria-labelledby="graph-tab">
+      <div id="quick-search" class="quick-search">
+        <label class="explore-search-label" for="search">Rechercher une ressource ou un itinéraire</label>
+        <input id="search" type="search" list="node-suggestions" placeholder="orders ou orders -> payments" autocomplete="off" aria-describedby="search-help search-status" aria-label="Rechercher une ressource ou un itinéraire">
+        <datalist id="node-suggestions"></datalist>
+        <p id="search-help" class="explore-search-help">Choisissez une suggestion ou saisissez le nom exact d'un noeud. Utilisez <code>-></code>, puis Entrée, pour afficher l'itinéraire le plus court.</p>
+        <p id="search-status" class="explore-search-status" role="status"></p>
+      </div>
+      <section id="graph-context" class="graph-context" aria-label="Contexte du graphe">
+        <div class="graph-actions" aria-label="Navigation du graphe">
+          <div class="graph-action-row camera-actions">
+            <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
+              <button id="zoom-out" type="button" aria-label="Dézoomer" title="Dézoomer">−</button>
+              <button id="zoom-in" type="button" aria-label="Zoomer" title="Zoomer">+</button>
+            </div>
+            <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
+              <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tous les nœuds" title="Afficher tous les nœuds" aria-pressed="false">Tout</button>
+              <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher le graphe à une distance lisible" title="Afficher le graphe à une distance lisible" aria-pressed="true">Lisible</button>
+            </div>
+            <span class="graph-actions-spacer" aria-hidden="true"></span>
+            <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Effacer la sélection" title="Effacer la sélection" disabled>Effacer</button>
+          </div>
+          <div class="graph-action-row display-actions">
+            <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
+              <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Explorer les relations avec des nœuds espacés">Graphe</button>
+              <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
+              <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
+            </div>
+            <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
+              <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
+              <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
+            </div>
+          </div>
+        </div>
+        <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
+        <button id="inventory-status" class="inventory-status" type="button" hidden></button>
+      </section>
       <details id="display-controls" class="display-controls">
         <summary>Nœuds et arêtes affichés</summary>
         <div class="display-filter-groups">

@@ -51,7 +51,8 @@ systemlens import-facts architecture.ai-graph.pass-001.json \
 
 For terminal-oriented exploration, use `systemlens microservices`,
 `systemlens topics`, `systemlens apis`, `systemlens projects`, and
-`systemlens analyze audit`.
+`systemlens analyze audit`. Use `systemlens flows` to list conservative,
+same-method paths from an HTTP/Kafka entry point to its external effects.
 
 ### Choose an interface
 

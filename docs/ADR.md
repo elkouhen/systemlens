@@ -303,3 +303,27 @@ adapters. Moving a module requires updating internal imports and documentation,
 while compatibility packages keep existing Python and console consumers
 working. Large files may still be split further inside their owning package
 without changing the top-level layer model.
+
+## ADR-27 — Persist potential code flows separately from topology and runtime truth
+
+**Status:** Accepted.
+
+**Context:** Topology paths connect services through known integrations but do
+not prove that consuming one input causes every output exposed by the same
+service. Runtime traces are not guaranteed to be available, while source code
+can still establish bounded local relationships.
+
+**Decision:** During indexing, materialize a `CodeFlow` only when an HTTP or
+Kafka entry point and one or more external effects occur inside the same parsed
+Java method. Preserve their lexical order and source evidence. Label every such
+flow `potential` with medium confidence. Store flows in their own additive
+SQLite table; do not represent them as observed telemetry or ordinary topology
+edges. Interprocedural and convention-based flow completion belongs to the
+separate reviewed enrichment workflow until a deterministic extractor can
+support it.
+
+**Consequences:** Users can inspect useful causal candidates without the broad
+consumer-to-all-publications assumption. Conditional execution and calls made
+through other methods remain explicit blind spots. Indexing performs a bounded
+AST traversal for Java files containing eligible endpoints, while exports and
+queries continue to consume only persisted snapshots.

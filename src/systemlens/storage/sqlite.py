@@ -10,6 +10,7 @@ from types import TracebackType
 from typing import Any
 
 from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, Finding, GraphFact, MessageEndpoint
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
 from systemlens.domain.module_inventory import (
     BlockingPoint,
     DiscoveredModule,
@@ -23,7 +24,7 @@ from systemlens.domain.module_inventory import (
 from systemlens.domain.runtime import KubernetesWorkload
 from systemlens.infrastructure.paths import db_path
 
-SCHEMA_VERSION = "26"
+SCHEMA_VERSION = "27"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
@@ -335,6 +336,20 @@ class Store:
                 ,source_revision TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_graph_facts_type ON graph_facts(fact_type);
+            CREATE TABLE IF NOT EXISTS code_flows (
+                id TEXT PRIMARY KEY,
+                module TEXT NOT NULL,
+                method TEXT NOT NULL,
+                path TEXT NOT NULL,
+                start_line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                confidence TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                steps TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_code_flows_module ON code_flows(module);
+            CREATE INDEX IF NOT EXISTS idx_code_flows_path ON code_flows(path);
             """
         )
         self._migrate_module_columns()
@@ -592,6 +607,53 @@ class Store:
                 start_line=row["start_line"],
                 end_line=row["end_line"],
                 qualified_name=row["qualified_name"],
+            )
+            for row in rows
+        ]
+
+    # -- potential code flows --
+
+    def replace_code_flows(self, flows: list[CodeFlow]) -> None:
+        self.conn.execute("DELETE FROM code_flows")
+        self.conn.executemany(
+            """INSERT INTO code_flows
+            (id, module, method, path, start_line, end_line, status, confidence, reason, steps)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                (
+                    flow.id,
+                    flow.module,
+                    flow.method,
+                    flow.path,
+                    flow.start_line,
+                    flow.end_line,
+                    flow.status,
+                    flow.confidence,
+                    flow.reason,
+                    json.dumps([step.__dict__ for step in flow.steps]),
+                )
+                for flow in flows
+            ],
+        )
+
+    def all_code_flows(self) -> list[CodeFlow]:
+        rows = self.conn.execute(
+            "SELECT * FROM code_flows ORDER BY module, path, start_line, id"
+        ).fetchall()
+        return [
+            CodeFlow(
+                id=row["id"],
+                module=row["module"],
+                method=row["method"],
+                path=row["path"],
+                start_line=row["start_line"],
+                end_line=row["end_line"],
+                status=row["status"],
+                confidence=row["confidence"],
+                reason=row["reason"],
+                steps=tuple(
+                    CodeFlowStep(**step) for step in json.loads(row["steps"])
+                ),
             )
             for row in rows
         ]

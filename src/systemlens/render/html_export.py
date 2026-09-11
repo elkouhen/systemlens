@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from systemlens.domain.graph import GraphEdge
+from systemlens.domain.code_flows import CodeFlow
 from systemlens.domain.models import (
     ArchitectureRelation,
     ExtractionDiagnostic,
@@ -46,28 +47,57 @@ def render_graph_html(
     graph_facts: list[GraphFact] | None = None,
     strategy1: bool = False,
     architecture_relations: list[ArchitectureRelation] | None = None,
+    code_flows: list[CodeFlow] | None = None,
 ) -> str:
     """Render a graph view model as one self-contained HTML document."""
+    view_model = build_graph_view_model(
+        endpoints_by_service=endpoints_by_service,
+        edges=edges,
+        collections_by_service=collections_by_service,
+        modules_by_service=modules_by_service,
+        indexing_warnings=indexing_warnings,
+        build_modules=build_modules,
+        module_dependencies=module_dependencies,
+        source_roots=source_roots,
+        findings_by_service=findings_by_service,
+        root_path=root_path,
+        request_reply_strategy1=request_reply_strategy1,
+        diagnostics=diagnostics,
+        kafka_dto_definitions=kafka_dto_definitions,
+        openapi_contracts=openapi_contracts,
+        graph_facts=graph_facts,
+        strategy1=strategy1,
+        architecture_relations=architecture_relations,
+    )
+    view_model["code_flows"] = [
+        {
+            "id": flow.id,
+            "module": flow.module,
+            "method": flow.method,
+            "path": flow.path,
+            "start_line": flow.start_line,
+            "end_line": flow.end_line,
+            "status": flow.status,
+            "confidence": flow.confidence,
+            "reason": flow.reason,
+            "steps": [
+                {
+                    "order": step.order,
+                    "kind": step.kind,
+                    "name": step.name,
+                    "path": step.path,
+                    "start_line": step.start_line,
+                    "end_line": step.end_line,
+                    "endpoint_id": step.endpoint_id,
+                    "operation": step.operation,
+                }
+                for step in flow.steps
+            ],
+        }
+        for flow in (code_flows or [])
+    ]
     graph_data = json.dumps(
-        build_graph_view_model(
-            endpoints_by_service=endpoints_by_service,
-            edges=edges,
-            collections_by_service=collections_by_service,
-            modules_by_service=modules_by_service,
-            indexing_warnings=indexing_warnings,
-            build_modules=build_modules,
-            module_dependencies=module_dependencies,
-            source_roots=source_roots,
-            findings_by_service=findings_by_service,
-            root_path=root_path,
-            request_reply_strategy1=request_reply_strategy1,
-            diagnostics=diagnostics,
-            kafka_dto_definitions=kafka_dto_definitions,
-            openapi_contracts=openapi_contracts,
-            graph_facts=graph_facts,
-            strategy1=strategy1,
-            architecture_relations=architecture_relations,
-        ),
+        view_model,
         ensure_ascii=False,
     ).replace("</", "<\\/")
     return (

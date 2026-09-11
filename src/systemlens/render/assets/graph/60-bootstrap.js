@@ -158,6 +158,7 @@
     persistenceTab.addEventListener("click", () => setToolbarTab("persistence"));
     buildTab.addEventListener("click", () => setToolbarTab("dependencies"));
     issuesTab.addEventListener("click", () => setToolbarTab("issues"));
+    flowsTab.addEventListener("click", () => setToolbarTab("flows"));
     inventoryStatus.addEventListener("click", () => setToolbarTab("issues"));
     [
       relationHttp,
