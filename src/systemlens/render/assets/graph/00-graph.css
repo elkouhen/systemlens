@@ -1,0 +1,99 @@
+    :root {
+      --type-kicker: 10px;
+      --type-control: 11px;
+      --type-body: 12px;
+      --type-section: 13px;
+      --type-view-title: 16px;
+      --type-entity-title: 19px;
+      --control-height: 30px;
+      --control-radius: 8px;
+      --widget-radius: 12px;
+      --panel-radius: 18px;
+      color: #172033;
+      background: #f5f7fb;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; }
+    #graph, #dependency-graph { background: #f8fafc; touch-action: none; }
+    /* Keep Sigma's canvas in a dedicated background layer. The workspace
+       controls must remain above it, regardless of DOM order. */
+    /* Sigma and every HTML overlay must share the same containing rectangle.
+       The workspace variables reserve the space used by the controls. */
+    #graph, #dependency-graph {
+      position: fixed;
+      left: var(--workspace-left, 0px);
+      right: var(--workspace-right, 0px);
+      top: var(--workspace-top, 0px);
+      bottom: var(--workspace-bottom, 0px);
+      width: auto;
+      height: auto;
+      z-index: 0;
+    }
+    #graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
+    #graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
+    #graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
+    #graph-layers, #graph-groups, #graph-node-labels {
+      left: var(--workspace-left, 0px);
+      right: var(--workspace-right, 0px);
+      top: var(--workspace-top, 0px);
+      bottom: var(--workspace-bottom, 0px);
+    }
+    .graph-layer-band { position: absolute; border-top: 2px solid color-mix(in srgb, var(--layer-accent, #64748b) 58%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--layer-accent, #64748b) 30%, transparent); background: color-mix(in srgb, var(--layer-accent, #64748b) 5%, transparent); }
+    .graph-layer-title { position: absolute; top: 8px; left: 14px; min-width: 154px; padding: 3px 8px; box-sizing: border-box; color: var(--layer-accent, #64748b); background: color-mix(in srgb, #f8fafc 94%, var(--layer-accent, #64748b)); border-radius: 5px; font-size: 11px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+    .graph-namespace-group { position: absolute; border: 1px dashed color-mix(in srgb, var(--namespace-accent, #64748b) 72%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--namespace-accent, #64748b) 8%, transparent); }
+    .graph-namespace-group.is-selected { border-style: solid; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--namespace-accent, #64748b) 28%, transparent), 0 0 18px color-mix(in srgb, var(--namespace-accent, #64748b) 28%, transparent); }
+    .graph-namespace-title { position: absolute; z-index: 4; top: 7px; left: 8px; right: 8px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 92%, var(--namespace-accent, #64748b)); border-radius: 5px; font: inherit; font-size: 10px; font-weight: 750; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+    .graph-namespace-title:hover, .graph-namespace-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--namespace-accent, #64748b) 58%, transparent); outline-offset: 1px; }
+    .graph-project-group { position: absolute; padding: 25px 13px 13px; border: 1px dashed var(--group-accent, #64748b); border-radius: 12px; background: color-mix(in srgb, var(--group-accent, #64748b) 4%, transparent); color: var(--group-accent, #64748b); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .graph-project-group.is-selected { border-style: solid; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--group-accent, #64748b) 28%, transparent), 0 0 18px color-mix(in srgb, var(--group-accent, #64748b) 28%, transparent); }
+    .graph-project-group-title { position: absolute; z-index: 5; top: 8px; left: 10px; right: 10px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: inherit; background: color-mix(in srgb, #f8fafc 94%, var(--group-accent, #64748b)); border-radius: 5px; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: center; text-overflow: ellipsis; text-transform: inherit; white-space: nowrap; }
+    .graph-namespace-title:hover, .graph-project-group-title:hover { filter: brightness(.97); box-shadow: 0 1px 5px color-mix(in srgb, currentColor 18%, transparent); }
+    .graph-project-group-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--group-accent, #64748b) 58%, transparent); outline-offset: 1px; }
+    :root[data-theme="dark"] .graph-project-group { background: color-mix(in srgb, var(--group-accent, #64748b) 8%, transparent); }
+    .graph-node-card-label { position: absolute; width: 110px; height: 70px; min-height: 70px; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; box-sizing: border-box; transform: translate(-50%, -50%) scale(var(--graph-card-scale, 1)); transform-origin: center; pointer-events: auto; cursor: pointer; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #ffffff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; overflow: hidden; }
+    .graph-node-card-icon { position: static; grid-column: 2; grid-row: 1; align-self: center; display: grid; place-items: center; width: 14px; height: 14px; border: 0; border-radius: 0; color: var(--card-accent, #64748b); line-height: 1; }
+    .graph-node-card-icon::before { display: block; width: 12px; height: 12px; box-sizing: border-box; }
+    .graph-node-card-icon.is-service::before { content: "⚙"; width: 14px; height: 14px; font-size: 17px; line-height: 14px; text-align: center; }
+    .graph-node-card-icon.is-database { border: 0; border-radius: 0; }
+    .graph-node-card-icon.is-database::before { content: ""; width: 11px; height: 13px; border: 1.25px solid currentColor; border-radius: 50% / 18%; background: linear-gradient(to bottom, transparent 0 17%, currentColor 18% 23%, transparent 24% 76%, currentColor 77% 82%, transparent 83%); }
+    .graph-node-card-icon.is-topic { border: 0; border-radius: 0; }
+    .graph-node-card-icon.is-topic::before { content: ""; width: 12px; height: 13px; border: 0; border-radius: 1px; background: linear-gradient(to right, currentColor 0 1.5px, transparent 1.5px 5.25px, currentColor 5.25px 6.75px, transparent 6.75px 10.5px, currentColor 10.5px 12px); }
+    .graph-node-card-name { min-width: 0; grid-column: 1; grid-row: 1; align-self: end; font-weight: 750; }
+    .graph-node-card-kind { min-width: 0; grid-column: 1 / 3; grid-row: 2; margin-top: 3px; color: #64748b; font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #graph-node-labels.is-symbol-mode { overflow: visible; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label { width: 30px; height: 30px; min-height: 0; display: block; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon { position: absolute; z-index: 1; inset: 2px; display: block; width: 26px; height: 26px; color: var(--card-accent, #64748b); background: linear-gradient(145deg, color-mix(in srgb, #fff 96%, var(--card-accent, #64748b)), color-mix(in srgb, #fff 76%, var(--card-accent, #64748b))); border: 2px solid color-mix(in srgb, var(--card-accent, #64748b) 88%, #172033); box-sizing: border-box; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .82), 0 3px 9px color-mix(in srgb, var(--card-accent, #64748b) 28%, transparent); transition: transform .12s ease, box-shadow .12s ease, filter .12s ease; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon::before { display: none; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service::before,
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service::after { content: ""; position: absolute; display: block; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service::before { inset: 0; background: color-mix(in srgb, var(--card-accent, #64748b) 88%, #172033); clip-path: polygon(7px 1px, 19px 1px, 25px 13px, 19px 25px, 7px 25px, 1px 13px); filter: drop-shadow(0 3px 4px color-mix(in srgb, var(--card-accent, #64748b) 28%, transparent)); }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service::after { inset: 3px; background: linear-gradient(145deg, color-mix(in srgb, #fff 96%, var(--card-accent, #64748b)), color-mix(in srgb, #fff 76%, var(--card-accent, #64748b))); clip-path: polygon(5px 0, 15px 0, 20px 10px, 15px 20px, 5px 20px, 0 10px); }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-topic { border-radius: 50%; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-database { inset: 5px; width: 20px; height: 20px; border-radius: 3px; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-name { position: absolute; z-index: 2; top: 50%; left: 34px; display: block; width: max-content; max-width: none; padding: 3px 6px; visibility: hidden; opacity: 0; pointer-events: none; color: #172033; background: color-mix(in srgb, #fff 91%, var(--card-accent, #64748b)); border: 1px solid color-mix(in srgb, var(--card-accent, #64748b) 32%, transparent); border-radius: 5px; box-shadow: 0 3px 10px rgba(15, 23, 42, .14); font-size: 10px; line-height: 1.2; white-space: nowrap; overflow: visible; overflow-wrap: normal; transform: translateY(-50%); transition: opacity .1s ease; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-label-left .graph-node-card-name { right: 34px; left: auto; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label:hover,
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered { z-index: 20; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label:hover .graph-node-card-name,
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered .graph-node-card-name,
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-name,
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.has-adaptive-label .graph-node-card-name { visibility: visible; opacity: 1; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-kind { display: none; }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-icon { transform: scale(1.1); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .88), 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 20%, transparent), 0 0 18px color-mix(in srgb, var(--card-accent, #64748b) 72%, transparent); }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-icon.is-service { box-shadow: none; filter: drop-shadow(0 0 7px color-mix(in srgb, var(--card-accent, #64748b) 72%, transparent)); }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered:not(.is-selected) .graph-node-card-icon { transform: scale(1.06); filter: saturate(1.08); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .88), 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 16%, transparent), 0 5px 13px color-mix(in srgb, var(--card-accent, #64748b) 38%, transparent); }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered:not(.is-selected) .graph-node-card-icon.is-service { box-shadow: none; filter: saturate(1.08) drop-shadow(0 4px 5px color-mix(in srgb, var(--card-accent, #64748b) 38%, transparent)); }
+    .graph-node-card-label.is-selected { border-width: 1.5px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 0 22px color-mix(in srgb, var(--card-accent, #64748b) 52%, transparent), 0 8px 20px rgba(15, 23, 42, .18); }
+    .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 9%, transparent), 0 0 13px color-mix(in srgb, var(--card-accent, #64748b) 27%, transparent), 0 6px 17px rgba(15, 23, 42, .14); }
+    .graph-node-card-label.is-dimmed { opacity: 1; }
+    :root[data-theme="dark"] .graph-node-card-label { color: #e5edf8; background: #17263d; box-shadow: 0 5px 18px rgba(0, 0, 0, .28); }
+    :root[data-theme="dark"] .graph-node-card-label.is-selected { box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 22%, transparent), 0 0 24px color-mix(in srgb, var(--card-accent, #64748b) 64%, transparent), 0 8px 22px rgba(0, 0, 0, .35); }
+    :root[data-theme="dark"] .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 12%, transparent), 0 0 15px color-mix(in srgb, var(--card-accent, #64748b) 36%, transparent), 0 6px 18px rgba(0, 0, 0, .28); }
+    :root[data-theme="dark"] .graph-node-card-kind { color: #9aabc2; }
+    :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon { color: #e5edf8; background: linear-gradient(145deg, color-mix(in srgb, #243650 82%, var(--card-accent, #64748b)), color-mix(in srgb, #101b2d 72%, var(--card-accent, #64748b))); border-color: color-mix(in srgb, var(--card-accent, #64748b) 78%, #dce8f7); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 4px 11px rgba(0, 0, 0, .34); }
+    :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service { background: transparent; box-shadow: none; }
+    :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service::before { background: color-mix(in srgb, var(--card-accent, #64748b) 78%, #dce8f7); }
+    :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service::after { background: linear-gradient(145deg, color-mix(in srgb, #243650 82%, var(--card-accent, #64748b)), color-mix(in srgb, #101b2d 72%, var(--card-accent, #64748b))); }
+    :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: color-mix(in srgb, #17263d 88%, var(--card-accent, #64748b)); border-color: color-mix(in srgb, var(--card-accent, #64748b) 46%, #52647d); box-shadow: 0 4px 12px rgba(0, 0, 0, .32); }

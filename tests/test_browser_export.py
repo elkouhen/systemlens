@@ -32,10 +32,8 @@ _GRAPH_TEMPLATE = (
 _LAYER_GEOMETRY = (
     Path(__file__).parents[1] / "src" / "systemlens" / "render" / "assets" / "layer_geometry.js"
 )
-_GRAPH_CSS = (
-    Path(__file__).parents[1] / "src" / "systemlens" / "render" / "assets" / "graph.css"
-)
 _GRAPH_ASSETS = Path(__file__).parents[1] / "src" / "systemlens" / "render" / "assets"
+_GRAPH_CSS_MODULES = tuple(sorted(_GRAPH_ASSETS.joinpath("graph").glob("*.css")))
 _GRAPH_JS_MODULES = tuple(sorted(_GRAPH_ASSETS.joinpath("graph").glob("*.js")))
 
 
@@ -137,7 +135,10 @@ def _complex_dataset_document() -> str:
     template = _GRAPH_TEMPLATE.read_text(encoding="utf-8")
     return (
         template
-        .replace("__GRAPH_CSS__", _GRAPH_CSS.read_text(encoding="utf-8"))
+        .replace(
+            "__GRAPH_CSS__",
+            "".join(path.read_text(encoding="utf-8") for path in _GRAPH_CSS_MODULES),
+        )
         .replace(
             "__GRAPH_JS__",
             "\n".join(path.read_text(encoding="utf-8") for path in _GRAPH_JS_MODULES),

@@ -1,0 +1,143 @@
+    /* One visual charter for every widget. Graph colors remain semantic data. */
+    .toolbar, .legend, .inspector-dialog { color: var(--ui-text); background: var(--ui-panel); }
+    .toolbar, .legend { border-color: var(--ui-border); }
+    .toolbar-header { background: var(--ui-panel); }
+    .brand strong,
+    .details-title,
+    .path-details-title,
+    .dependency-view h2,
+    .references-title,
+    .indexing-issues-title,
+    .inspector-title { color: var(--ui-title); }
+    .explore-search-label,
+    .details-kicker,
+    .path-details-kicker,
+    .dependency-view-kicker,
+    .references-kicker,
+    .indexing-issues-kicker,
+    .details-section h2,
+    .references-section h3,
+    .details-group > summary,
+    .display-controls > summary,
+    .advanced-controls > summary,
+    .advanced-tools > summary,
+    .path-controls summary,
+    .resource-analyses summary,
+    .legend summary { color: var(--ui-accent-text); }
+    .brand-subtitle,
+    .explore-search-help,
+    .layout-status,
+    .references-description,
+    .references-empty,
+    .indexing-issues-description,
+    .indexing-issues-empty,
+    .reference-meta,
+    .details-empty,
+    .path-details-summary,
+    .dependency-view p:last-child,
+    .dto-summary { color: var(--ui-muted); }
+    .toolbar-tabs,
+    .graph-control-group,
+    .display-controls,
+    .advanced-controls,
+    .advanced-tools,
+    .reference-item,
+    .indexing-issue,
+    .service-kafka-item,
+    .details-section li,
+    .relation-link,
+    .dto-section { border-color: var(--ui-border); background: var(--ui-widget); }
+    .toolbar input:not([type="checkbox"]),
+    .toolbar button,
+    .relation-filter,
+    .layout-option,
+    .path-lock,
+    .detail-badge,
+    .inspector-close,
+    .dto-field { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
+    .toolbar input:not([type="checkbox"])::placeholder { color: var(--ui-muted); }
+    .toolbar input:not([type="checkbox"]):focus {
+      border-color: var(--ui-selected);
+      outline-color: var(--ui-focus);
+    }
+    .toolbar-tab,
+    .graph-control-group button { color: var(--ui-text) !important; background: transparent !important; }
+    .toolbar-tab:hover,
+    .graph-control-group button:hover,
+    .toolbar button:hover,
+    .layout-option:hover { color: var(--ui-title) !important; background: var(--ui-control) !important; }
+    .toolbar-tab.is-active,
+    .fit-controls .fit-mode.is-active,
+    .view-controls .view-mode.is-active,
+    .render-controls .render-mode.is-active,
+    .layout-option.is-active {
+      border-color: var(--ui-selected) !important;
+      color: var(--ui-on-accent) !important;
+      background: var(--ui-selected) !important;
+      box-shadow: 0 2px 6px color-mix(in srgb, var(--ui-selected) 30%, transparent);
+    }
+    .toolbar-tab.is-active:hover,
+    .fit-controls .fit-mode.is-active:hover,
+    .view-controls .view-mode.is-active:hover,
+    .render-controls .render-mode.is-active:hover,
+    .layout-option.is-active:hover { color: var(--ui-on-accent) !important; background: var(--ui-selected-hover) !important; }
+    .details-group,
+    .details-section,
+    .details-group[open] > summary,
+    .inspector-header { border-color: var(--ui-divider); }
+    .details-group[open] > summary,
+    .inspector-header { background: var(--ui-widget); }
+    .path-details-header {
+      border-color: var(--ui-divider);
+      background: var(--ui-widget);
+    }
+    .path-overview-item { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control) !important; }
+    .reference-title,
+    .indexing-issue-category,
+    .details-section li,
+    .dto-field-name { color: var(--ui-text); }
+    .relation-link,
+    .service-kafka-topic,
+    .dto-field-type,
+    button.dto-field-type { color: var(--ui-accent-text) !important; }
+    .reference-action,
+    .simple-path-choice,
+    #show-simple-paths,
+    .service-kafka-meta button,
+    .module-open-action,
+    .dto-back {
+      border-color: var(--ui-accent-border) !important;
+      color: var(--ui-accent-text) !important;
+      background: var(--ui-accent-soft) !important;
+    }
+    .reference-action:hover,
+    .simple-path-choice:hover,
+    #show-simple-paths:hover,
+    .service-kafka-meta button:hover,
+    .module-open-action:hover,
+    .dto-back:hover { background: var(--ui-accent-soft-hover) !important; }
+    .reference-action:disabled {
+      border-color: var(--ui-border) !important;
+      color: var(--ui-muted) !important;
+      background: var(--ui-widget) !important;
+    }
+    .service-kafka-meta a,
+    .service-kafka-meta span { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
+    .dto-tag { color: var(--ui-accent-text); background: var(--ui-accent-soft); }
+    .theme-toggle { width: auto !important; padding: 0 9px !important; font-size: 11px !important; font-weight: 750; }
+    @media (max-width: 1024px) {
+      .toolbar { width: min(320px, calc(100vw - 20px)); max-height: min(82vh, 620px); }
+      .brand-subtitle { display: none; }
+      .quick-search .explore-search-help { display: none; }
+      .toolbar-tabs { margin-right: -2px; }
+    }
+    @media (max-width: 700px) {
+      .toolbar { top: 8px; left: 8px; width: calc(100vw - 16px); max-height: calc(62vh - 12px); padding: 10px; border-radius: 14px; }
+      .toolbar-header { align-items: start; }
+      .brand-subtitle { display: none; }
+      .graph-actions { gap: 6px; }
+      .graph-actions .graph-action-label { padding: 0 7px; font-size: 10px; }
+      .legend { right: 10px; bottom: 10px; }
+      .inspector-modal { padding: 10px; }
+      .inspector-dialog { border-radius: 16px; }
+    }

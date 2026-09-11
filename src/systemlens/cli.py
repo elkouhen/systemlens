@@ -589,10 +589,6 @@ def analyze_cmd(
     raise typer.Exit(code=2)
 
 
-def _catalog_root(root: Path | None) -> Path:
-    return _option_root(root)
-
-
 def _option_root(root: Path | None) -> Path:
     """Resolve --root from a command or its parent Typer group."""
     if root is not None:
@@ -959,7 +955,7 @@ def analyze_microservices_calls(
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Lister les appels sortants d'un microservice."""
-    _render_microservice_analysis("calls", service, _catalog_root(root), json_output)
+    _render_microservice_analysis("calls", service, _option_root(root), json_output)
 
 
 @analyze_microservices_app.command("dependencies")
@@ -970,7 +966,7 @@ def analyze_microservices_dependencies(
 ) -> None:
     """Lister les dépendances d'un microservice."""
     _render_microservice_analysis(
-        "dependencies", service, _catalog_root(root), json_output
+        "dependencies", service, _option_root(root), json_output
     )
 
 
@@ -981,7 +977,7 @@ def analyze_microservices_impact(
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Identifier les composants impactés par un microservice."""
-    _render_microservice_analysis("impact", service, _catalog_root(root), json_output)
+    _render_microservice_analysis("impact", service, _option_root(root), json_output)
 
 
 @analyze_microservices_app.command("external-apis")
@@ -992,7 +988,7 @@ def analyze_microservices_external_apis(
 ) -> None:
     """Lister les APIs externes utilisées, éventuellement par microservice."""
     _render_microservice_analysis(
-        "external-apis", service, _catalog_root(root), json_output
+        "external-apis", service, _option_root(root), json_output
     )
 
 
@@ -1004,7 +1000,7 @@ def analyze_microservices_orphan_integrations(
 ) -> None:
     """Identifier les intégrations sans relation résolue."""
     _render_microservice_analysis(
-        "orphan-integrations", service, _catalog_root(root), json_output
+        "orphan-integrations", service, _option_root(root), json_output
     )
 
 
@@ -1021,7 +1017,7 @@ def analyze_microservices_path(
     _render_microservice_path(
         source,
         target,
-        _catalog_root(root),
+        _option_root(root),
         json_output,
         max_depth=max_depth,
         limit=limit,

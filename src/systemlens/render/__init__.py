@@ -25,7 +25,7 @@ from systemlens.render.graph_json import (
     render_graph_json,
     render_graph_text,
 )
-from systemlens.render.html_export import _live_kafka_dto_views, render_graph_html
+from systemlens.render.html_export import render_graph_html
 from systemlens.render.likec4_export import (
     ComplexityRanking,
     render_graph_likec4,
@@ -76,7 +76,6 @@ __all__ = [
     "render_graph_json",
     "render_graph_text",
     "render_graph_html",
-    "_live_kafka_dto_views",
     "ComplexityRanking",
     "render_graph_likec4",
     "render_request_reply_html",

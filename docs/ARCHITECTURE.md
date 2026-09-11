@@ -57,6 +57,9 @@ flowchart TD
     ModuleDiscovery --> ModuleFacts["DiscoveredModule + dependencies"]
     Facts --> Persist["Store replaces facts"]
     ModuleFacts --> Persist
+    Facts --> DTOInventory["dto_inventory.materialize_kafka_dto_definitions"]
+    ModuleFacts --> DTOInventory
+    DTOInventory --> Persist
     Persist --> Relations["relations.build_architecture_relations"]
     Relations --> Store
 ```
@@ -152,20 +155,27 @@ directly from outside the package.
 |---|---|
 | `search.py` | Text/JSON rendering for `search`/`summary` findings output |
 | `graph_json.py` | JSON/text rendering of the endpoint-derived microservice graph |
-| `html_export.py` | Interactive Sigma.js HTML export (`systemlens export microservices --html`); builds the JSON payload injected into `assets/graph.html` |
+| `graph_view_model.py` | Projects a persisted architecture snapshot into the browser-facing graph model; it performs no source discovery |
+| `html_export.py` | Small standalone-document assembler for `systemlens export microservices --html`; serializes the graph model and injects ordered CSS/JavaScript modules into `assets/graph.html` |
 | `likec4_export.py` | LikeC4 project export (`--c4`) and the request/reply HTML fragment |
 | `module_graph.py` | Endpoint/module/workspace/flow rendering, plus the module-dependency HTML export (`assets/module_graph.html`) |
 | `software_layers.py` | Dedicated software-layer rendering (`systemlens export layers`) with Strategy1 layer classification and `assets/software_layers.html` |
-| `_graph_view_helpers.py` | Low-level helpers (VS Code deep links, MongoDB/REST visual edges) shared by `html_export.py` and `likec4_export.py` |
-| `assets/graph.html`, `assets/module_graph.html` | Static HTML/CSS/JS templates, injected with `.replace("__..._DATA__", json_payload)`; kept as plain HTML files rather than Python string constants |
+| `_graph_view_helpers.py` | Low-level helpers (VS Code deep links, MongoDB/REST visual edges) shared by graph projections |
+| `assets/graph/*.css`, `assets/graph/*.js` | Ordered browser modules for the interactive graph; numeric prefixes make concatenation deterministic |
+| `assets/graph.html`, `assets/module_graph.html` | Static HTML templates, injected with `.replace("__..._DATA__", json_payload)`; kept as plain HTML files rather than Python string constants |
 
 `_graph_view_helpers.py` and the cross-import of `_complexity_ranking` /
-`_live_kafka_dto_views` / `_vscode_file_uri` between these submodules are an
+`_vscode_file_uri` between these submodules are an
 intentional, narrow exception to dependency rule 3 below: sharing a
 leading-underscore helper is acceptable **within** the `render/` package,
 because the package boundary (its `__init__.py`), not the file boundary, is
 the actual contract. Reaching into `render/<submodule>.py` from *outside* the
 package remains prohibited.
+
+Kafka DTO materialization is owned by the top-level `dto_inventory.py` index
+projection. `indexer.py` invokes its public function before persistence;
+renderers consume the resulting snapshot facts and never participate in Java
+source extraction.
 
 ## Dependency rules
 

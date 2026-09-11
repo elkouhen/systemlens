@@ -11,6 +11,7 @@ from typing import Callable
 import yaml
 
 from systemlens.config import Config
+from systemlens.dto_inventory import materialize_kafka_dto_definitions
 from systemlens.inventory_freshness import current_endpoint_inventory_signature
 from systemlens import java_parser
 from systemlens.models import ExtractionDiagnostic, MessageEndpoint
@@ -410,7 +411,6 @@ def _index_repo(
                 ))
         store.replace_extraction_diagnostics_for_files(changed, diagnostics)
 
-    # Les empreintes de fichiers sont l'état de l'inventaire, indépendant du
     # Les empreintes de fichiers sont persistées afin de garder l'indexation
     # incrémentale.
     for path in changed:
@@ -438,20 +438,13 @@ def _index_repo(
     relation_dependencies = (
         module_dependencies if "properties" not in disabled else store.all_module_dependencies()
     )
-    from systemlens.render import _live_kafka_dto_views
-
     endpoints_by_service: dict[str, list[MessageEndpoint]] = {}
     for endpoint in store.all_endpoints():
         if endpoint.module:
             endpoints_by_service.setdefault(endpoint.module, []).append(endpoint)
-    root_dtos, nested_dtos = _live_kafka_dto_views(endpoints_by_service, relation_modules)
-    for definition in root_dtos:
-        definition.pop("vscode_uri", None)
-        definition["root"] = True
-    for definition in nested_dtos:
-        definition.pop("vscode_uri", None)
-        definition["root"] = False
-    store.replace_kafka_dto_definitions([*root_dtos, *nested_dtos])
+    store.replace_kafka_dto_definitions(
+        materialize_kafka_dto_definitions(endpoints_by_service, relation_modules)
+    )
     openapi_contracts: list[dict[str, object]] = []
     indexed_openapi_paths: set[Path] = set()
     # Also normalize a persisted module snapshot when module inventory refresh

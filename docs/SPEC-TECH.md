@@ -44,7 +44,15 @@ API context; it is never enabled by default.
 Tree-sitter parsing and syntax helpers. `modules.py`, `maven.py` and `gradle.py`
 discover build units; `relations.py` derives typed architecture relations from
 modules, endpoints and build dependencies. `indexer.py` orchestrates the
-incremental transaction. `store.py` owns SQLite persistence.
+incremental transaction. `dto_inventory.py` materializes the conservative Java
+DTO closure referenced by Kafka endpoints before that closure is persisted.
+`store.py` owns SQLite persistence.
+
+Within `render/`, `graph_view_model.py` owns the projection from persisted
+facts to the browser data model. `html_export.py` only serializes that model
+and assembles the standalone document from the HTML template and ordered
+browser assets. Rendering code must not be imported by indexing or discovery
+code.
 
 `cli.py`, `mcp_server.py`, and the standard-library local HTTP server in
 `web.py` are thin delivery layers over the domain modules. `systemlens web`
@@ -174,9 +182,11 @@ the module that truly encloses the file.
 
 A DTO definition retains its qualified name, owning module, module-relative
 Java source path, declared fields, enum values, and conservative nested-type
-references. The HTML export
-uses those stored facts and only derives its VS Code URI at render time; it
-does not reopen a Java or OpenAPI source file.
+references. `dto_inventory.py` resolves a simple nested type only through an
+explicit import, the containing package, or a globally unique simple name; an
+ambiguous name remains unresolved. The HTML export uses those stored facts and
+only derives its VS Code URI at render time; it does not reopen a Java or
+OpenAPI source file.
 
 For Strategy1 OpenAPI publication, `xxx.rest` selects both same-named contract
 files anywhere in the repository and all YAML or JSON candidates under a
@@ -378,7 +388,10 @@ workspace-local overlay coordinates.
 The browser controller is maintained as ordered source modules under
 `src/systemlens/render/assets/graph/`: core setup, graph rebuilding and camera
 events, controls, layouts, details, path exploration, and bootstrap wiring.
-The export assembler concatenates these modules into the standalone script.
+The stylesheet follows the same ordered-module convention: base graph,
+widgets, presentation theme, then the shared visual charter. The export
+assembler concatenates both CSS and JavaScript modules into the standalone
+document.
 Mutable selection, view, layout, and camera state is held in one
 `graphState` object. Overlay refreshes go through one animation-frame
 scheduler (`requestGraphRender`) so canvas and HTML overlays observe one

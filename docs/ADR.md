@@ -253,3 +253,26 @@ Python model names remain unchanged for index and JSON compatibility. The CLI
 uses `projects` for the Maven/Gradle catalog and build export, and `export
 modules` for the structural hierarchy; legacy unambiguous spellings remain
 hidden aliases.
+
+## ADR-25 — Separate indexed DTO materialization from graph rendering
+
+**Status:** Accepted.
+
+**Context:** Kafka DTO discovery was implemented as a private HTML-renderer
+helper that `indexer.py` imported directly. The same renderer also combined
+source extraction, graph-model projection, serialization, and standalone HTML
+assembly. This reversed the intended dependency direction and made indexing
+depend on an output adapter.
+
+**Decision:** `dto_inventory.py` owns the conservative Java DTO closure created
+during indexing and exposes one public materialization function. The persisted
+snapshot remains the only DTO input to exports. Within `render/`,
+`graph_view_model.py` projects snapshot facts into browser data, while
+`html_export.py` only serializes and assembles the standalone document. Graph
+CSS and JavaScript remain source modules with deterministic numeric ordering.
+
+**Consequences:** Indexing no longer imports rendering code, DTO resolution can
+be tested independently, and HTML assembly stays small. Adding a browser field
+requires changing the view-model projection, while changing Java DTO discovery
+requires changing the inventory module and its focused tests. Asset ordering is
+an explicit build-time convention rather than an implicit monolithic file.
