@@ -5,6 +5,7 @@ from pathlib import Path
 
 from systemlens.domain.models import GraphFact, MessageEndpoint, compute_endpoint_id
 from systemlens.domain.graph import GraphEdge
+from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.discovery.kubernetes import KubernetesWorkload
 from systemlens.modules import (
     DiscoveredModule,
@@ -60,6 +61,33 @@ def _html_graph_data(document: str) -> dict[str, object]:
     )
     assert match is not None
     return json.loads(match.group(1))
+
+
+def test_microservice_ports_expose_direction_type_and_java_method() -> None:
+    endpoint = _rest_endpoint("serve", "POST /orders", "OrderController.java")
+    endpoint = replace(endpoint, id="receive-order", qualified_name="com.example.OrderController")
+    document = render_graph_html(
+        {"orders": [endpoint]}, [],
+        integration_methods=[IntegrationMethod(
+            id="method", module="orders",
+            qualified_method="com.example.OrderController.placeOrder",
+            path="OrderController.java", start_line=12, end_line=22,
+            input_endpoint_ids=(endpoint.id,), output_endpoint_ids=(),
+        )],
+    )
+
+    data = _html_graph_data(document)
+    node = next(item for item in data["nodes"] if item["id"] == "microservice:orders")
+    assert node["ports"] == [{
+        "direction": "in", "type": "HTTP receive",
+        "method": "com.example.OrderController::placeOrder", "name": "POST /orders",
+        "endpoint_id": "receive-order",
+    }]
+    assert 'createDetailsGroup("Ports d\'intégration")' in document
+    assert 'appendList("Entrées", ports.filter(port => port.direction === "in")' in document
+    assert 'createDetailsGroup("Liens entrée → sortie")' in document
+    assert 'appendPortFlowList("Flux potentiels", uniqueConnections, flowGroup)' in document
+    assert 'port-flow-arrow' in document
 
 
 def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> None:

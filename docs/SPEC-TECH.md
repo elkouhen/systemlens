@@ -169,7 +169,8 @@ a partially parsed Java file while ignoring subtrees that contain an error or
 missing token. The file-level diagnostic remains visible so partial coverage is
 never presented as a complete parse.
 
-`CodeFlow` is a persisted, ordered potential path through one Java method. Its
+`CodeFlow` is a persisted, ordered potential path through one Java method or a
+CodeQL-resolved chain of Java methods. Its
 first `CodeFlowStep` is an indexed HTTP or Kafka entry point; later steps are
 HTTP calls, Kafka publications, or MongoDB reads/writes located within the
 same Tree-sitter `method_declaration`. Steps retain relative evidence paths and
@@ -179,15 +180,24 @@ not replace the logical flow. The materializer runs during indexing and never du
 query. It is linear in the indexed endpoint and Mongo-operation inventory plus
 the traversed AST nodes for Java files that contain eligible endpoints. A
 same-method relation remains `potential` with medium confidence because static
-lexical order does not prove branch execution. Interprocedural calls, dynamic
-dispatch, reflection, and runtime-only routing remain outside this
-deterministic layer.
+lexical order does not prove branch execution. With an explicitly supplied
+CodeQL Java database, resolved `MethodAccess` facts join persisted AST method
+facts to form bounded (12-hop) interprocedural flows; `method_call` steps keep
+the call-site line. Dynamic dispatch, reflection, and runtime-only routing
+remain outside this deterministic layer.
+
+The HTML graph model joins endpoint identifiers to the persisted
+`integration_methods` projection. It displays source-evidenced ports on a
+microservice card with their direction, integration action, and qualified Java
+class/method name; rendering does not read source files.
 
 The SQLite store is standard-library-only: it does not load native vector
 extensions or persist/query vector representations. The retained findings
 search compatibility path uses deterministic lexical matching.
 
-Schema version 27 adds the `code_flows` table and its module/path indexes. The
+Schema version 28 adds the `integration_methods` table for AST method evidence
+and input/output endpoint identifiers. Schema version 27 added the
+`code_flows` table and its module/path indexes. The
 migration is additive and occurs when the writable store opens, before the
 index transaction. Stored steps are JSON projections of immutable domain
 facts; source paths remain relative to the indexed root.
@@ -331,9 +341,10 @@ transaction. Read-only stores open SQLite in `mode=ro` and never migrate or
 commit. A concurrent reader sees the last committed snapshot until the writer
 commits the next one.
 
-No subprocess is used to analyze source code. A failed index leaves the whole
-previous successful snapshot intact; isolated extraction failures are reported
-as diagnostics when that capability is enabled.
+AST analysis uses no subprocess. An explicit `--codeql-database` opt-in runs
+local `codeql database analyze` against that database only; it never builds the
+project, downloads dependencies, or persists an absolute database path. A
+failed index leaves the whole previous successful snapshot intact.
 
 ## Extractors
 
@@ -344,6 +355,10 @@ Spring property expressions conservatively.
 
 REST graph construction first resolves an explicit target identity from an HTTP
 host, `lb://` URI, configured client domain, or an opt-in Strategy1 convention.
+For a URL expression that concatenates a local `@Value`-annotated field and a
+path, the extractor resolves the Spring property and retains its HTTP host as
+endpoint evidence while persisting only the normalized route as the endpoint
+topic.
 The normalized alias must match exactly one indexed service; prefix, suffix and
 substring matching are not used. Route compatibility is evaluated only within
 that service. A targetless or ambiguous call remains an endpoint fact and is

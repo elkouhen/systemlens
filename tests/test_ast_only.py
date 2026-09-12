@@ -50,6 +50,30 @@ def test_ast_extractors_find_rest_and_kafka_facts() -> None:
     assert any(endpoint.role == "consume" and endpoint.message_type for endpoint in kafka)
 
 
+def test_resttemplate_value_url_preserves_explicit_service_alias(tmp_path: Path) -> None:
+    source = tmp_path / "src/main/java/com/example/OrderController.java"
+    source.parent.mkdir(parents=True)
+    source.write_text("""
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.client.RestTemplate;
+class OrderController {
+  @Value("${order.inventory-url}") String inventoryUrl;
+  RestTemplate restTemplate;
+  void place() { restTemplate.postForObject(inventoryUrl + "/api/reservations", null, String.class); }
+}
+""", encoding="utf-8")
+    properties = tmp_path / "src/main/resources/application.yml"
+    properties.parent.mkdir(parents=True)
+    properties.write_text("order:\n  inventory-url: http://inventory-service:3001\n", encoding="utf-8")
+
+    endpoints = infer_framework_endpoints(tmp_path)
+
+    endpoint = next(item for item in endpoints if item.role == "call")
+    assert endpoint.topic == "POST /api/reservations"
+    assert endpoint.topic_dynamic is False
+    assert "systemlens-api-domain:inventory-service" in endpoint.snippet
+
+
 def test_kafka_template_send_is_detected_when_receiver_has_generic_name(tmp_path: Path) -> None:
     source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
     source.parent.mkdir(parents=True)

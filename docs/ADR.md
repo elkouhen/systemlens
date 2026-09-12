@@ -313,17 +313,17 @@ not prove that consuming one input causes every output exposed by the same
 service. Runtime traces are not guaranteed to be available, while source code
 can still establish bounded local relationships.
 
-**Decision:** During indexing, materialize a `CodeFlow` only when an HTTP or
-Kafka entry point and one or more external effects occur inside the same parsed
-Java method. Preserve their lexical order and source evidence. Label every such
-flow `potential` with medium confidence. Store flows in their own additive
-SQLite table; do not represent them as observed telemetry or ordinary topology
-edges. Interprocedural and convention-based flow completion belongs to the
-separate reviewed enrichment workflow until a deterministic extractor can
-support it.
+**Decision:** During indexing, materialize AST method facts for Java methods
+that contain indexed HTTP/message inputs or outputs, and retain same-method
+flows. When the user explicitly supplies an already-built Java CodeQL database,
+join these facts with CodeQL-resolved static method calls to materialize bounded
+interprocedural flows. Preserve call-site evidence and label every flow
+`potential` with medium confidence. Store flows separately from topology and
+runtime facts. SystemLens does not create a CodeQL database, invoke a project
+build, download packs, or persist the supplied database location.
 
 **Consequences:** Users can inspect useful causal candidates without the broad
-consumer-to-all-publications assumption. Conditional execution and calls made
-through other methods remain explicit blind spots. Indexing performs a bounded
-AST traversal for Java files containing eligible endpoints, while exports and
-queries continue to consume only persisted snapshots.
+consumer-to-all-publications assumption. Conditional execution, unresolved
+dispatch, reflection, and runtime-only routing remain explicit blind spots.
+Indexing performs AST traversal and an optional bounded CodeQL call-graph join,
+while exports and queries continue to consume only persisted snapshots.

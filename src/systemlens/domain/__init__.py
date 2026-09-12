@@ -1,6 +1,6 @@
 """Stable domain facts shared across SystemLens layers."""
 
-from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.domain.module_inventory import (
     BlockingPoint,
     DiscoveredModule,
@@ -19,6 +19,7 @@ __all__ = [
     "BlockingPoint",
     "CodeFlow",
     "CodeFlowStep",
+    "IntegrationMethod",
     "DiscoveredModule",
     "JavaArchitectureExtension",
     "KafkaMethod",

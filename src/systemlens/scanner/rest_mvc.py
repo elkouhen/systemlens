@@ -136,9 +136,14 @@ def _split_java_concat(expr: str) -> list[str]:
     if tail:
         parts.append(tail)
     return parts
-def _resolve_rest_path_expression(
+def _resolve_rest_expression(
     expr: str, repo_root: Path, source_path: str, *, preserve_dynamic_segments: bool = False
 ) -> tuple[str, bool]:
+    """Resolve literals and local ``@Value`` fields without discarding a host.
+
+    The caller may need the explicit host as service-identity evidence even
+    though the endpoint topic itself intentionally stores only the route.
+    """
     resolved_parts: list[str] = []
     dynamic = False
     for part in _split_java_concat(expr.strip()):
@@ -169,7 +174,24 @@ def _resolve_rest_path_expression(
     raw = "".join(resolved_parts).strip()
     if not raw:
         return "<dynamic>", True
+    return raw, dynamic
+
+
+def _resolve_rest_path_expression(
+    expr: str, repo_root: Path, source_path: str, *, preserve_dynamic_segments: bool = False
+) -> tuple[str, bool]:
+    raw, dynamic = _resolve_rest_expression(
+        expr, repo_root, source_path, preserve_dynamic_segments=preserve_dynamic_segments
+    )
+    if raw == "<dynamic>":
+        return raw, True
     return _normalize_rest_path(raw), dynamic
+
+
+def _resolved_http_host(expr: str, repo_root: Path, source_path: str) -> str | None:
+    raw, _dynamic = _resolve_rest_expression(expr, repo_root, source_path)
+    match = re.match(r"https?://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", raw, re.IGNORECASE)
+    return match.group(1).lower() if match is not None else None
 
 
 @lru_cache(maxsize=1024)
@@ -1045,14 +1067,17 @@ def _infer_resttemplate_exchange_endpoints(
                 continue
         else:
             http_method = direct_methods[method_name]
-        route, dynamic = _resolve_rest_path_expression(
-            java_parser.node_text(source, args[0]), repo_root, rel_path
-        )
+        expression = java_parser.node_text(source, args[0])
+        route, dynamic = _resolve_rest_path_expression(expression, repo_root, rel_path)
+        snippet = java_parser.node_text(source, invocation)
+        host = _resolved_http_host(expression, repo_root, rel_path)
+        if host is not None:
+            snippet = f"{snippet}\n// systemlens-api-domain:{host}"
         inferred.append(
             _build_endpoint(
                 repo_root, rel_path, invocation.start_point.row + 1,
                 invocation.end_point.row + 1, "call", "rest", f"{http_method} {route}",
-                "resttemplate", java_parser.node_text(source, invocation), topic_dynamic=dynamic,
+                "resttemplate", snippet, topic_dynamic=dynamic,
             )
         )
     return inferred

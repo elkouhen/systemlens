@@ -39,6 +39,7 @@ from systemlens.infrastructure.config import ConfigError, init_config, load_conf
 from systemlens.application.flow import resolve_topic
 from systemlens.domain.graph import GraphEdge, find_outbound_calls_in_consumers
 from systemlens.domain.code_flows import CodeFlow
+from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.indexing.service import index_repo
 from systemlens.indexing.freshness import endpoint_inventory_warning
 from systemlens.domain.models import GraphFact, MessageEndpoint
@@ -1168,6 +1169,11 @@ def index_cmd(
         "--kubernetes-namespace",
         help="Namespace Kubernetes à interroger (tous par défaut).",
     ),
+    codeql_database: Optional[Path] = typer.Option(
+        None,
+        "--codeql-database",
+        help="Base Java CodeQL déjà créée, utilisée pour les flux interprocéduraux.",
+    ),
     disable: list[str] = typer.Option(
         None,
         "--disable",
@@ -1221,6 +1227,7 @@ def index_cmd(
             topic_strategy=topic_strategy,
             kubernetes=kubernetes,
             kubernetes_namespace=kubernetes_namespace,
+            codeql_database=codeql_database,
         )
         store.set_meta("index_engine", "manual")
         _trace_index("store.close.begin")
@@ -1259,6 +1266,7 @@ class _MicroserviceGraphData:
     openapi_contracts: list[dict[str, object]] | None = None
     graph_facts: list[GraphFact] | None = None
     code_flows: list[CodeFlow] | None = None
+    integration_methods: list[IntegrationMethod] | None = None
 
 
 def _load_microservice_graph(
@@ -1298,6 +1306,7 @@ def _load_microservice_graph(
         inventory.openapi_contracts,
         graph_facts,
         inventory.code_flows,
+        projection.integration_methods,
     )
 
 
@@ -1318,7 +1327,7 @@ def _load_ai_graph(path: Path) -> _MicroserviceGraphData:
         ]
     result = render_graph_json(list(services), edges, [], warnings=issues, cross_module_data_available=True)
     return _MicroserviceGraphData(
-        services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, graph_facts, []
+        services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, graph_facts, [], []
     )
 
 
@@ -1466,6 +1475,7 @@ def export_microservices_cmd(
                 openapi_contracts=graph_data.openapi_contracts,
                 graph_facts=getattr(graph_data, "graph_facts", []),
                 code_flows=getattr(graph_data, "code_flows", []),
+                integration_methods=getattr(graph_data, "integration_methods", []),
             ),
             encoding="utf-8",
         )

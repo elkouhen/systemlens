@@ -614,6 +614,36 @@
           action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
         }] : [], architectureGroup);
         discardEmptyDetailsGroup(architectureGroup);
+        const ports = node.ports || [];
+        if (ports.length) {
+          const portsGroup = createDetailsGroup("Ports d'intégration");
+          const portLabel = port => `${port.type} · ${port.method} · ${port.name}`;
+          appendList("Entrées", ports.filter(port => port.direction === "in").map(portLabel), portsGroup);
+          appendList("Sorties", ports.filter(port => port.direction === "out").map(portLabel), portsGroup);
+          discardEmptyDetailsGroup(portsGroup);
+          const portsByEndpointId = new Map(ports.map(port => [port.endpoint_id, port]));
+          const connections = (graphData.code_flows || []).flatMap(flow => {
+            if (flow.module !== node.name) return [];
+            const input = portsByEndpointId.get(flow.steps?.[0]?.endpoint_id);
+            if (!input) return [];
+            const via = flow.steps.filter(step => step.kind === "method_call")
+              .map(step => step.name);
+            return flow.steps.slice(1).flatMap(step => {
+              const output = portsByEndpointId.get(step.endpoint_id);
+              if (!output || output.direction !== "out") return [];
+              return [{ input, output, target: output.target || null, via }];
+            });
+          });
+          const flowGroup = createDetailsGroup("Liens entrée → sortie");
+          const uniqueConnections = connections.filter((connection, index) => (
+            connections.findIndex(candidate => (
+              candidate.input.endpoint_id === connection.input.endpoint_id
+              && candidate.output.endpoint_id === connection.output.endpoint_id
+            )) === index
+          ));
+          appendPortFlowList("Flux potentiels", uniqueConnections, flowGroup);
+          discardEmptyDetailsGroup(flowGroup);
+        }
         if (kubernetesWorkloads.length) {
           const kubernetesGroup = createDetailsGroup("Kubernetes");
           appendList("Workloads", kubernetesWorkloads.map(workload => {

@@ -43,7 +43,7 @@ but does not alter AST endpoint extraction.
 | `systemlens init` | Creates `.systemlens/config.yml`; it never overwrites an existing file. |
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
-| `systemlens index [MANIFEST]... [--full] [--topic-strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. `--kubernetes` queries the active `kubectl` context for Deployments and StatefulSets; `--kubernetes-namespace` restricts it to one runtime namespace. `--disable` can independently disable the `properties`, `module-architecture`, or `module-tree-sitter` extractor and may be repeated. |
+| `systemlens index [MANIFEST]... [--full] [--topic-strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--codeql-database DIR] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. `--kubernetes` queries the active `kubectl` context for Deployments and StatefulSets; `--kubernetes-namespace` restricts it to one runtime namespace. `--codeql-database` reads an already-built Java CodeQL database to extend code flows across resolved method calls. `--disable` can independently disable the `properties`, `module-architecture`, or `module-tree-sitter` extractor and may be repeated. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts an AI fact manifest into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
 | `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows whose entry point and external effects occur in the same Java method. |
@@ -97,24 +97,37 @@ WebClient, Spring Cloud Gateway, Spring Data REST, Spring Kafka and Spring
 Cloud Stream. Markdown and JSON Kafka manifests are supported as explicit
 sources and are labelled `source=manifest`.
 
-Indexing also materializes conservative same-method code flows. An HTTP
-`serve` or Topic `consume` endpoint is a flow entry point; HTTP `call`, Topic
-`produce`, and concrete Data operations located in the same Java method are
-ordered by source position as external effects. These flows have
-`status=potential` and `confidence=medium`: lexical containment does not prove
-that a conditional branch executes. Effects reached only through another
-method, dynamic dispatch, reflection, or runtime configuration are not added
-to this deterministic flow layer.
+Indexing materializes AST method facts that associate each Java method with its
+HTTP/message entry endpoints and HTTP/message output endpoints. By default it
+then materializes conservative same-method code flows. When
+`--codeql-database DIR` names an existing Java CodeQL database, it also follows
+CodeQL-resolved static method calls from an indexed entry method to an indexed
+output method and includes `method_call` steps. SystemLens never creates a
+CodeQL database, invokes a project build, downloads packs, or persists the
+supplied database path. Unresolved dispatch, reflection, dynamic routing, and
+runtime-only routing are not added; all flows remain `potential` with medium
+confidence.
 
 A REST call forms an internal architecture relation only when its target
 service is identified by an exact normalized explicit alias, such as an HTTP
-host, an `lb://` service name, or a configured client domain. A matching HTTP
+host, an `lb://` service name, a configured client domain, or an HTTP host
+resolved from a local field annotated `@Value("${…}")`. A matching HTTP
 method and route only refines a resource within that already identified
 service; it never identifies a service by itself. Calls without a unique target
 remain indexed as unresolved evidence and are reported by coverage and indexing
 issues rather than being linked to a coincidentally similar route.
 
 ### HTML export behaviour
+
+Microservice cards in the Explorer view remain compact rectangles. Selecting a
+microservice lists its indexed integration ports in the inspector widget,
+separated into inputs and outputs with their direction, technology/action
+(`HTTP receive`, `HTTP call`, `Kafka receive`, or `Kafka publish`), persisted
+Java `qualifiedClass::method`, and route or topic.
+When a persisted code flow links an input endpoint to an output endpoint of the
+same service, the widget also lists that source-evidenced potential connection
+and any CodeQL-resolved intermediate method calls. It does not imply that every
+input reaches every output.
 
 The HTML microservice export provides an inspector for each statically typed
 Topic message. It shows the indexed payload-type identity, message topic, and

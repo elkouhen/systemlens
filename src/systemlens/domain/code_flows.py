@@ -41,3 +41,22 @@ class CodeFlow:
     confidence: str
     reason: str
     steps: tuple[CodeFlowStep, ...]
+
+
+@dataclass(frozen=True)
+class IntegrationMethod:
+    """A Java method that receives or emits an indexed integration event.
+
+    Endpoint facts remain the source of truth for the integration itself. This
+    projection makes their method-level role explicit for interprocedural
+    analysis without inferring a class-level relationship.
+    """
+
+    id: str
+    module: str
+    qualified_method: str
+    path: str
+    start_line: int
+    end_line: int
+    input_endpoint_ids: tuple[str, ...]
+    output_endpoint_ids: tuple[str, ...]

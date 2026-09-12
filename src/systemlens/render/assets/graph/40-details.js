@@ -204,6 +204,57 @@
       section.append(heading, list);
       container.append(section);
     }
+    function appendPortFlowList(title, connections, container = details) {
+      if (!connections.length) return;
+      const section = document.createElement("section");
+      section.className = "details-section";
+      const heading = document.createElement("h2");
+      heading.textContent = title;
+      const list = document.createElement("div");
+      list.className = "port-flow-list";
+      const appendLeg = (flow, role, port) => {
+        const leg = document.createElement("div");
+        leg.className = "port-flow-leg";
+        const roleLabel = document.createElement("span");
+        roleLabel.className = "port-flow-role";
+        roleLabel.textContent = role;
+        const type = document.createElement("strong");
+        type.textContent = port.type;
+        const method = document.createElement("code");
+        method.textContent = port.method;
+        const resource = document.createElement("span");
+        resource.className = "port-flow-resource";
+        resource.textContent = port.name;
+        leg.append(roleLabel, type, method, resource);
+        flow.append(leg);
+      };
+      connections.forEach(connection => {
+        const flow = document.createElement("article");
+        flow.className = "port-flow";
+        appendLeg(flow, "Entrée locale", connection.input);
+        const localArrow = document.createElement("span");
+        localArrow.className = "port-flow-arrow";
+        localArrow.textContent = "↓ déclenche";
+        flow.append(localArrow);
+        appendLeg(flow, "Sortie locale", connection.output);
+        if (connection.target) {
+          const targetArrow = document.createElement("span");
+          targetArrow.className = "port-flow-arrow";
+          targetArrow.textContent = "↓ cible résolue";
+          flow.append(targetArrow);
+          appendLeg(flow, `Entrée de ${connection.target.service}`, connection.target);
+        }
+        if (connection.via.length) {
+          const via = document.createElement("span");
+          via.className = "port-flow-via";
+          via.textContent = `Via ${connection.via.join(" → ")}`;
+          flow.append(via);
+        }
+        list.append(flow);
+      });
+      section.append(heading, list);
+      container.append(section);
+    }
     function appendActionList(title, entries, container = details) {
       if (!entries.length) return;
       const section = document.createElement("section");

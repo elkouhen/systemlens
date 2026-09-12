@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from systemlens.application.architecture_inventory import ArchitectureInventory, is_deployable_service
 from systemlens.domain.graph import GraphEdge, graph_edges_from_relations
 from systemlens.domain.models import MessageEndpoint
+from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.module_inventory import DiscoveredModule
 
 
@@ -14,6 +15,7 @@ class ArchitectureGraphProjection:
     edges: list[GraphEdge]
     collections_by_service: dict[str, list[str]]
     modules_by_service: dict[str, DiscoveredModule]
+    integration_methods: list[IntegrationMethod]
 
 
 def is_exportable_microservice(name: str) -> bool:
@@ -56,4 +58,7 @@ def project_architecture_graph(
         for service, module in modules.items()
         if module.mongo_collections
     }
-    return ArchitectureGraphProjection(services, edges, collections, modules)
+    return ArchitectureGraphProjection(
+        services, edges, collections, modules,
+        [method for method in inventory.integration_methods if method.module in services],
+    )

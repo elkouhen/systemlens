@@ -21,6 +21,7 @@ from systemlens.domain.module_inventory import (
     MongoPersistenceClass,
     module_identity,
 )
+from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.render.namespaces import project_namespace, project_namespace_path
 from systemlens.render.software_layers import software_layer
 from systemlens.render._graph_view_helpers import (
@@ -183,6 +184,7 @@ def build_graph_view_model(
     graph_facts: list[GraphFact] | None = None,
     strategy1: bool = False,
     architecture_relations: list[ArchitectureRelation] | None = None,
+    integration_methods: list[IntegrationMethod] | None = None,
 ) -> dict[str, object]:
     """Render an interactive Sigma.js graph as a self-contained HTML document.
 
@@ -324,8 +326,53 @@ def build_graph_view_model(
         if namespace
     })
     fact_namespaces = sorted({fact.namespace for fact in graph_facts or [] if fact.namespace})
+    method_by_endpoint_id = {
+        endpoint_id: method.qualified_method
+        for method in integration_methods or []
+        for endpoint_id in (*method.input_endpoint_ids, *method.output_endpoint_ids)
+    }
+    resolved_http_target_by_call_id = {
+        edge.from_endpoint.id: (edge.to_service, edge.to_endpoint)
+        for edge in edges
+        if edge.kind == "rest" and edge.to_endpoint is not None
+    }
+    def port_method_label(endpoint: MessageEndpoint) -> str:
+        qualified = method_by_endpoint_id.get(endpoint.id)
+        if qualified is None:
+            return endpoint.qualified_name or "<unknown>"
+        owner, separator, method = qualified.rpartition(".")
+        return f"{owner}::{method}" if separator else qualified
+
+    def resolved_port_target(endpoint: MessageEndpoint) -> dict[str, str] | None:
+        resolved = resolved_http_target_by_call_id.get(endpoint.id)
+        if resolved is None:
+            return None
+        service, target = resolved
+        return {
+            "service": service,
+            "type": "HTTP receive",
+            "method": port_method_label(target),
+            "name": target.topic,
+        }
     for name in ordered_services:
         endpoints = endpoints_by_service.get(name, [])
+        ports = [
+            {
+                "direction": "in" if endpoint.role in {"serve", "consume"} else "out",
+                "type": {
+                    ("rest", "serve"): "HTTP receive",
+                    ("rest", "call"): "HTTP call",
+                    ("kafka", "consume"): "Kafka receive",
+                    ("kafka", "produce"): "Kafka publish",
+                }.get((endpoint.system, endpoint.role), f"{endpoint.system} {endpoint.role}"),
+                "method": port_method_label(endpoint),
+                "name": endpoint.topic,
+                "endpoint_id": endpoint.id,
+                **({"target": resolved_port_target(endpoint)} if resolved_port_target(endpoint) else {}),
+            }
+            for endpoint in sorted(endpoints, key=lambda item: (item.path, item.start_line, item.id))
+            if endpoint.system in {"rest", "kafka"}
+        ]
         resources = _rest_resources_served(endpoints)
         contract_resources: dict[str, set[str]] = {}
         contract_owner_identity: dict[str, str] = {}
@@ -401,6 +448,7 @@ def build_graph_view_model(
                 **({"project_namespace_path": project_namespace_path(module, root_path)} if module else {}),
                 **({"cluster_path": project_namespace_path(module, root_path)} if module else {}),
                 "architecture_layer": module_layer,
+                "ports": ports,
                 "kafka_endpoints": [
                     {
                         "role": endpoint.role,

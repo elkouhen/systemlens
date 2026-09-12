@@ -78,6 +78,7 @@ class SystemLensWebApplication:
             kafka_dto_definitions=inventory.kafka_dto_definitions,
             openapi_contracts=inventory.openapi_contracts,
             architecture_relations=inventory.relations,
+            integration_methods=projection.integration_methods,
         )
         return HTTPStatus.OK, document
 

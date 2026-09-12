@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, replace
@@ -17,7 +18,11 @@ from systemlens.indexing.file_inventory import (
     strategy1_requires_full_reindex as _strategy1_requires_full_reindex,
 )
 from systemlens.indexing.materializers import materialize_openapi_contracts
-from systemlens.indexing.code_flows import CODE_FLOW_SIGNATURE, materialize_code_flows
+from systemlens.indexing.code_flows import (
+    CODE_FLOW_SIGNATURE, materialize_code_flows, materialize_codeql_code_flows,
+)
+from systemlens.indexing.integration_methods import materialize_integration_methods
+from systemlens.indexing.codeql import CodeQLError, extract_codeql_calls
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import ExtractionDiagnostic, MessageEndpoint
 from systemlens.discovery.build.modules import (
@@ -78,6 +83,7 @@ def _index_repo(
     progress: ProgressCallback | None = None,
     kubernetes: bool = False,
     kubernetes_namespace: str | None = None,
+    codeql_database: Path | None = None,
 ) -> IndexReport:
     # BACKLOG-16 P2 : purge les lru_cache d'analyse best-effort (package
     # Java, propriétés Spring, module Maven/Gradle) avant de relire le
@@ -298,11 +304,22 @@ def _index_repo(
         full
         or changed
         or deleted
+        or codeql_database is not None
         or store.get_meta("code_flow_signature") != CODE_FLOW_SIGNATURE
     ):
-        flows = materialize_code_flows(
-            repo_root, store.all_endpoints(), relation_modules
+        all_endpoints = store.all_endpoints()
+        methods = materialize_integration_methods(
+            repo_root, all_endpoints, list(current_hashes), relation_modules
         )
+        store.replace_integration_methods(methods)
+        flows = materialize_code_flows(repo_root, all_endpoints, relation_modules)
+        if codeql_database is not None:
+            _report_progress(progress, "→ Indexation : analyse interprocédurale CodeQL...")
+            try:
+                calls = extract_codeql_calls(codeql_database)
+            except (CodeQLError, OSError, subprocess.TimeoutExpired) as exc:
+                raise RuntimeError(str(exc)) from exc
+            flows.extend(materialize_codeql_code_flows(methods, all_endpoints, calls))
         store.replace_code_flows(flows)
         store.set_meta("code_flow_signature", CODE_FLOW_SIGNATURE)
         _report_progress(
@@ -333,6 +350,7 @@ def index_repo(
     progress: ProgressCallback | None = None,
     kubernetes: bool = False,
     kubernetes_namespace: str | None = None,
+    codeql_database: Path | None = None,
 ) -> IndexReport:
     """Index one repository and publish its facts as an atomic snapshot."""
     with store.transaction():
@@ -347,4 +365,5 @@ def index_repo(
             progress=progress,
             kubernetes=kubernetes,
             kubernetes_namespace=kubernetes_namespace,
+            codeql_database=codeql_database,
         )

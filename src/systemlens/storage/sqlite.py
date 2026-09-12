@@ -10,7 +10,7 @@ from types import TracebackType
 from typing import Any
 
 from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, Finding, GraphFact, MessageEndpoint
-from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.domain.module_inventory import (
     BlockingPoint,
     DiscoveredModule,
@@ -24,7 +24,7 @@ from systemlens.domain.module_inventory import (
 from systemlens.domain.runtime import KubernetesWorkload
 from systemlens.infrastructure.paths import db_path
 
-SCHEMA_VERSION = "27"
+SCHEMA_VERSION = "28"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
@@ -350,6 +350,18 @@ class Store:
             );
             CREATE INDEX IF NOT EXISTS idx_code_flows_module ON code_flows(module);
             CREATE INDEX IF NOT EXISTS idx_code_flows_path ON code_flows(path);
+            CREATE TABLE IF NOT EXISTS integration_methods (
+                id TEXT PRIMARY KEY,
+                module TEXT NOT NULL,
+                qualified_method TEXT NOT NULL,
+                path TEXT NOT NULL,
+                start_line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL,
+                input_endpoint_ids TEXT NOT NULL,
+                output_endpoint_ids TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_integration_methods_path ON integration_methods(path);
+            CREATE INDEX IF NOT EXISTS idx_integration_methods_module ON integration_methods(module);
             """
         )
         self._migrate_module_columns()
@@ -612,6 +624,34 @@ class Store:
         ]
 
     # -- potential code flows --
+
+    def replace_integration_methods(self, methods: list[IntegrationMethod]) -> None:
+        self.conn.execute("DELETE FROM integration_methods")
+        self.conn.executemany(
+            """INSERT INTO integration_methods
+            (id, module, qualified_method, path, start_line, end_line, input_endpoint_ids, output_endpoint_ids)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                (item.id, item.module, item.qualified_method, item.path,
+                 item.start_line, item.end_line, json.dumps(item.input_endpoint_ids),
+                 json.dumps(item.output_endpoint_ids))
+                for item in methods
+            ],
+        )
+
+    def all_integration_methods(self) -> list[IntegrationMethod]:
+        rows = self.conn.execute(
+            "SELECT * FROM integration_methods ORDER BY module, path, start_line, id"
+        ).fetchall()
+        return [
+            IntegrationMethod(
+                id=row["id"], module=row["module"], qualified_method=row["qualified_method"],
+                path=row["path"], start_line=row["start_line"], end_line=row["end_line"],
+                input_endpoint_ids=tuple(json.loads(row["input_endpoint_ids"])),
+                output_endpoint_ids=tuple(json.loads(row["output_endpoint_ids"])),
+            )
+            for row in rows
+        ]
 
     def replace_code_flows(self, flows: list[CodeFlow]) -> None:
         self.conn.execute("DELETE FROM code_flows")

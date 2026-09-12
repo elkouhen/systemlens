@@ -14,6 +14,7 @@
         http_entry: "Entrée HTTP",
         message_entry: "Entrée message",
         http_call: "Appel HTTP",
+        method_call: "Appel de méthode",
         message_publish: "Publication message",
         data_read: "Lecture de Data",
         data_write: "Écriture de Data",

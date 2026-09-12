@@ -1,4 +1,4 @@
-ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v19-kafka-payload-local-declarations"
+ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v20-value-url-service-alias"
 
 
 def current_endpoint_inventory_signature() -> str:

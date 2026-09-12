@@ -5,11 +5,13 @@ from pathlib import Path
 
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, compute_code_flow_id
+from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod, module_identity
+from systemlens.indexing.codeql import CodeQLCall
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v1-same-method"
+CODE_FLOW_SIGNATURE = "code-flow-v2-ast-methods-codeql"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -163,3 +165,72 @@ def materialize_code_flows(
                     steps=tuple(steps),
                 ))
     return sorted(flows, key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
+
+
+def materialize_codeql_code_flows(
+    methods: list[IntegrationMethod], endpoints: list[MessageEndpoint], calls: list[CodeQLCall]
+) -> list[CodeFlow]:
+    """Join AST method facts through resolved CodeQL calls.
+
+    A flow is emitted only for one unambiguous, bounded call path from an AST
+    input method to an AST output method. This deliberately excludes dispatch
+    targets CodeQL cannot resolve and paths with a cycle.
+    """
+    endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
+    by_locator = {(item.qualified_method, item.path, item.start_line): item for item in methods}
+    def locate(name: str, path: str, line: int) -> IntegrationMethod | None:
+        exact = by_locator.get((name, path, line))
+        if exact is not None:
+            return exact
+        candidates = [item for item in methods if item.qualified_method == name and item.path.endswith(path)]
+        return candidates[0] if len(candidates) == 1 else None
+
+    adjacency: dict[str, list[tuple[IntegrationMethod, CodeQLCall]]] = defaultdict(list)
+    for call in calls:
+        caller = locate(call.caller, call.caller_path, call.caller_line)
+        callee = locate(call.callee, call.callee_path, call.callee_line)
+        if caller is not None and callee is not None:
+            adjacency[caller.id].append((callee, call))
+
+    flows: list[CodeFlow] = []
+    for entry in methods:
+        if not entry.input_endpoint_ids:
+            continue
+        for trigger_id in entry.input_endpoint_ids:
+            trigger = endpoint_by_id.get(trigger_id)
+            if trigger is None:
+                continue
+            queue: list[tuple[IntegrationMethod, list[tuple[IntegrationMethod, CodeQLCall]]]] = [(entry, [])]
+            while queue:
+                current, route = queue.pop(0)
+                if len(route) >= 12:
+                    continue
+                for target, call in adjacency.get(current.id, []):
+                    next_route = [*route, (target, call)]
+                    if target.id == entry.id or any(previous.id == target.id for previous, _ in route):
+                        continue
+                    if target.output_endpoint_ids:
+                        steps = [_endpoint_step(trigger, 1)]
+                        for order, (hop, edge) in enumerate(next_route, start=2):
+                            steps.append(CodeFlowStep(
+                                order=order, kind="method_call", name=hop.qualified_method,
+                                path=edge.caller_path, start_line=edge.call_line, end_line=edge.call_line,
+                            ))
+                        for output_id in target.output_endpoint_ids:
+                            output = endpoint_by_id.get(output_id)
+                            if output is None:
+                                continue
+                            flow_id = compute_code_flow_id(
+                                entry.module, entry.path, entry.qualified_method,
+                                _endpoint_step(trigger, 1).kind, f"{trigger.topic}|{output.id}|" + ".".join(hop.id for hop, _ in next_route),
+                            )
+                            flows.append(CodeFlow(
+                                id=flow_id, module=entry.module, method=entry.qualified_method,
+                                path=entry.path, start_line=entry.start_line, end_line=entry.end_line,
+                                status="potential", confidence="medium",
+                                reason="CodeQL resolved a static call path from an indexed entry method to an indexed output method.",
+                                steps=tuple([*steps, _endpoint_step(output, len(steps) + 1)]),
+                            ))
+                    queue.append((target, next_route))
+    unique = {flow.id: flow for flow in flows}
+    return sorted(unique.values(), key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))

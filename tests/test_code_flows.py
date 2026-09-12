@@ -9,6 +9,9 @@ from systemlens.cli import app
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod
 from systemlens.indexing.code_flows import materialize_code_flows
+from systemlens.indexing.code_flows import materialize_codeql_code_flows
+from systemlens.indexing.codeql import CodeQLCall
+from systemlens.indexing.integration_methods import materialize_integration_methods
 from systemlens.infrastructure.config import Config
 from systemlens.indexing.service import index_repo
 from systemlens.storage.sqlite import Store
@@ -197,4 +200,53 @@ def test_store_additively_migrates_previous_schema_for_code_flows(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'code_flows'"
         ).fetchone()
         assert table is not None
-        assert store.get_meta("schema_version") == "27"
+        methods_table = store.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'integration_methods'"
+        ).fetchone()
+        assert methods_table is not None
+        assert store.get_meta("schema_version") == "28"
+
+
+def test_codeql_calls_join_ast_entry_and_output_methods(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    target = "orders/src/main/java/com/example/OrderPublisher.java"
+    for path, content in {
+        source: """package com.example;
+class OrderController {
+  void receive() { publish(); }
+  void publish() {}
+}
+""",
+        target: """package com.example;
+class OrderPublisher {
+  void send() { kafka.send(); }
+}
+""",
+    }.items():
+        file = tmp_path / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(content, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        _endpoint("entry", "consume", "kafka", "orders.in", source, 3),
+        replace(
+            _endpoint("output", "produce", "kafka", "orders.out", target, 3),
+            qualified_name="com.example.OrderPublisher",
+        ),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
+    calls = [
+        CodeQLCall("com.example.OrderController.receive", source, 3,
+                   "com.example.OrderController.publish", source, 4, 3),
+        CodeQLCall("com.example.OrderController.publish", source, 4,
+                   "com.example.OrderPublisher.send", target, 3, 4),
+    ]
+    flows = materialize_codeql_code_flows(methods, endpoints, calls)
+
+    assert len(flows) == 1
+    assert [step.kind for step in flows[0].steps] == [
+        "message_entry", "method_call", "method_call", "message_publish",
+    ]

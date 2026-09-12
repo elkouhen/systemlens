@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from systemlens.domain.graph import GraphEdge
-from systemlens.domain.code_flows import CodeFlow
+from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
 from systemlens.domain.models import (
     ArchitectureRelation,
     ExtractionDiagnostic,
@@ -48,6 +48,7 @@ def render_graph_html(
     strategy1: bool = False,
     architecture_relations: list[ArchitectureRelation] | None = None,
     code_flows: list[CodeFlow] | None = None,
+    integration_methods: list[IntegrationMethod] | None = None,
 ) -> str:
     """Render a graph view model as one self-contained HTML document."""
     view_model = build_graph_view_model(
@@ -68,6 +69,7 @@ def render_graph_html(
         graph_facts=graph_facts,
         strategy1=strategy1,
         architecture_relations=architecture_relations,
+        integration_methods=integration_methods,
     )
     view_model["code_flows"] = [
         {
