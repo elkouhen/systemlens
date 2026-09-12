@@ -50,7 +50,7 @@
 
     <section aria-labelledby="skill" style="margin-top: 48px">
       <h2 id="skill">Use SystemLens with a coding agent</h2>
-      <p><a href="https://github.com/elkouhen/systemlens-skill">systemlens-skill</a> gives a coding agent a disciplined, evidence-first workflow. It starts from the local SystemLens inventory, makes blind spots explicit, and keeps any AI-enriched architecture facts separate from source-derived facts.</p>
+      <p><a href="https://github.com/elkouhen/systemlens-skill">systemlens-skill</a> gives a coding agent a disciplined, evidence-first workflow. The reviewable JSON facts manifest is the durable handoff: import it into its own namespace to complete the local inventory without changing source-derived facts.</p>
       <pre><code>npx skills add elkouhen/systemlens-skill
 uv tool install systemlens
 

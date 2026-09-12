@@ -28,6 +28,10 @@ The product answers questions such as:
 - Which Maven/Gradle projects, OpenAPI contracts, MongoDB collections and
   Spring properties belong to a service?
 
+When deterministic extraction leaves a bounded gap, a reviewable, namespaced
+JSON fact manifest is the durable handoff for complementary facts. Importing
+that manifest never replaces source-derived evidence.
+
 ## Users and primary workflows
 
 | User | Need | Surface |
@@ -36,13 +40,17 @@ The product answers questions such as:
 | Developer | Inspect the evidence behind a service, API, topic, project or architecture module | CLI catalog commands and HTML export |
 | Architect | Review topology, uncertainty and static architecture risks across services | `analyze`, graph export |
 
-The primary workflow is `systemlens init`, `systemlens index`, then an agent
-uses the MCP catalog, graph, coverage and trace tools before making a bounded
-change. Source evidence is available from the catalog and graph; coverage and
-indexing-issue tools expose unresolved facts. The agent then reindexes after
-the edit. Developers can follow the same workflow through `microservices`,
-`topics`, `apis`, `projects`, `analyze`, and HTML export. Indexing is
-incremental; `--full` refreshes every eligible source file.
+The primary workflow is `systemlens init`, `systemlens doctor`, and
+`systemlens index`, then an agent uses the catalog or graph only for the
+question at hand. When deterministic extraction leaves a bounded gap, the
+agent writes a reviewable JSON fact manifest, imports it into its own
+namespace, and exports or queries the merged model. `coverage`,
+`indexing-issues`, and `audit` are optional diagnostics: use them respectively
+when inventory completeness is in doubt, extraction needs investigation, or a
+static topology-risk review is requested. The agent reindexes after an edit.
+Developers can follow the same workflow through `microservices`, `topics`,
+`apis`, `projects`, `analyze`, and HTML export. Indexing is incremental;
+`--full` refreshes every eligible source file.
 
 ## Scope and non-goals
 
