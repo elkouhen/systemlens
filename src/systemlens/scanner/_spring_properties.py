@@ -146,10 +146,18 @@ def _load_flat_spring_properties(path_str: str) -> dict[str, str]:
     if path.suffix == ".properties":
         return _parse_dotted_properties_file(text)
     try:
-        data = yaml.safe_load(text)
+        documents = yaml.safe_load_all(text)
     except yaml.YAMLError:
         return {}
-    return _flatten_properties(data or {})
+    flat: dict[str, str] = {}
+    for data in documents:
+        # A Spring YAML file may contain a base document followed by
+        # profile-specific documents.  Indexing has no active-profile input,
+        # so retain the first (base) value rather than rejecting the complete
+        # file or pretending that a later profile is universally active.
+        for key, value in _flatten_properties(data or {}).items():
+            flat.setdefault(key, value)
+    return flat
 def resolve_spring_property(
     repo_root: Path, property_key: str, source_path: str | None = None
 ) -> str | None:

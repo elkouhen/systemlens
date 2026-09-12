@@ -21,6 +21,7 @@ from systemlens.scanner import (
     infer_kafka_endpoints,
     infer_kafka_topic_strategy1_endpoints,
 )
+from systemlens.scanner._spring_properties import _load_flat_spring_properties
 from systemlens.store import Store
 
 
@@ -72,6 +73,43 @@ class OrderController {
     assert endpoint.topic == "POST /api/reservations"
     assert endpoint.topic_dynamic is False
     assert "systemlens-api-domain:inventory-service" in endpoint.snippet
+
+
+def test_webclient_static_local_base_url_preserves_service_alias(tmp_path: Path) -> None:
+    source = tmp_path / "src/main/java/com/example/VetsClient.java"
+    source.parent.mkdir(parents=True)
+    source.write_text("""
+import org.springframework.web.reactive.function.client.WebClient;
+class VetsClient {
+  WebClient webClient;
+  void load() {
+    String vetsHostname = "http://vets-service/";
+    webClient.get().uri(vetsHostname + "vets").retrieve();
+  }
+}
+""", encoding="utf-8")
+
+    endpoints = infer_framework_endpoints(tmp_path)
+
+    endpoint = next(item for item in endpoints if item.role == "call")
+    assert endpoint.topic == "GET /vets"
+    assert endpoint.topic_dynamic is False
+    assert "systemlens-api-domain:vets-service" in endpoint.snippet
+
+
+def test_multidocument_spring_yaml_keeps_base_application_name(tmp_path: Path) -> None:
+    properties = tmp_path / "application.yml"
+    properties.write_text("""spring:
+  application:
+    name: customers-service
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+""", encoding="utf-8")
+
+    assert _load_flat_spring_properties(str(properties))["spring.application.name"] == "customers-service"
 
 
 def test_kafka_template_send_is_detected_when_receiver_has_generic_name(tmp_path: Path) -> None:

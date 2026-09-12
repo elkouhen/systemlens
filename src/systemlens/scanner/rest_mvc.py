@@ -136,6 +136,47 @@ def _split_java_concat(expr: str) -> list[str]:
     if tail:
         parts.append(tail)
     return parts
+
+
+@lru_cache(maxsize=512)
+def _local_static_string_initializer(path_str: str, variable_name: str) -> str | None:
+    """Return a unique, never-reassigned local/field string initializer.
+
+    This deliberately handles only a literal initializer.  A value supplied
+    by a parameter, method call, or a mutable field remains dynamic.  That
+    makes a local ``String baseUrl = "http://service/"`` usable as target
+    evidence without turning configurable URLs into guessed dependencies.
+    """
+    try:
+        source = Path(path_str).read_bytes()
+    except OSError:
+        return None
+    root = java_parser.java_parser("rest_local_strings").parse(source).root_node
+    if root.has_error:
+        return None
+    initializers: list[str] = []
+    reassigned = False
+    for node in java_parser.walk(root):
+        if node.type == "variable_declarator":
+            name_node = node.child_by_field_name("name")
+            value_node = node.child_by_field_name("value")
+            if (
+                name_node is not None
+                and java_parser.node_text(source, name_node) == variable_name
+                and value_node is not None
+                and value_node.type == "string_literal"
+            ):
+                initializers.append(java_parser.node_text(source, value_node))
+        elif node.type == "assignment_expression":
+            left = node.child_by_field_name("left")
+            if left is None:
+                continue
+            target = java_parser.node_text(source, left)
+            if target == variable_name or target.endswith(f".{variable_name}"):
+                reassigned = True
+    if reassigned or len(initializers) != 1:
+        return None
+    return initializers[0]
 def _resolve_rest_expression(
     expr: str, repo_root: Path, source_path: str, *, preserve_dynamic_segments: bool = False
 ) -> tuple[str, bool]:
@@ -161,6 +202,12 @@ def _resolve_rest_expression(
             continue
         if re.fullmatch(r"[A-Za-z_]\w*", part):
             resolved = _resolve_value_annotated_variable(repo_root, source_path, part)
+            if resolved is None:
+                initializer = _local_static_string_initializer(
+                    str(repo_root / source_path), part
+                )
+                if initializer is not None:
+                    resolved = initializer[1:-1]
             if resolved is None:
                 dynamic = True
                 if preserve_dynamic_segments and resolved_parts:
@@ -1104,11 +1151,16 @@ def _infer_webclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageEn
             java_parser.node_text(source, args[0]), repo_root, rel_path,
             preserve_dynamic_segments=True,
         )
+        expression = java_parser.node_text(source, args[0])
+        snippet = java_parser.node_text(source, invocation)
+        host = _resolved_http_host(expression, repo_root, rel_path)
+        if host is not None:
+            snippet = f"{snippet}\n// systemlens-api-domain:{host}"
         endpoints.append(
             _build_endpoint(
                 repo_root, rel_path, anchor.start_point.row + 1, invocation.end_point.row + 1,
                 "call", "rest", f"{http_method} {route}", "webclient",
-                java_parser.node_text(source, invocation), topic_dynamic=dynamic,
+                snippet, topic_dynamic=dynamic,
             )
         )
     return endpoints

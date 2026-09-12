@@ -97,6 +97,13 @@ WebClient, Spring Cloud Gateway, Spring Data REST, Spring Kafka and Spring
 Cloud Stream. Markdown and JSON Kafka manifests are supported as explicit
 sources and are labelled `source=manifest`.
 
+For REST clients, a literal URL or a unique, never-reassigned local string
+base URL is normalized to its route and retains its HTTP host as target
+evidence. Spring application names are read from multi-document YAML files;
+profile-specific values do not override the base document without an explicit
+active-profile selection. A mutable or otherwise unresolved URL remains a
+dynamic, unresolved port rather than a guessed service link.
+
 Indexing materializes AST method facts that associate each Java method with its
 HTTP/message entry endpoints and HTTP/message output endpoints. By default it
 then materializes conservative same-method code flows. When

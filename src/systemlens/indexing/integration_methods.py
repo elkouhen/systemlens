@@ -13,8 +13,18 @@ _INPUT_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _OUTPUT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
 
-def _method_id(module: str, path: str, qualified_method: str) -> str:
-    return hashlib.sha256(f"{module}|{path}|{qualified_method}".encode()).hexdigest()[:16]
+def _method_id(
+    module: str, path: str, qualified_method: str, parameter_signature: str
+) -> str:
+    """Return a stable method identity, including Java overload parameters.
+
+    ``qualified_method`` intentionally remains class-and-method only because
+    CodeQL's call result uses that form.  It is not, however, a database key:
+    Java permits overloaded methods.  The AST parameter node distinguishes
+    those declarations without making the identity depend on a source line.
+    """
+    coordinate = f"{module}|{path}|{qualified_method}|{parameter_signature}"
+    return hashlib.sha256(coordinate.encode()).hexdigest()[:16]
 
 
 def materialize_integration_methods(
@@ -86,8 +96,15 @@ def materialize_integration_methods(
                 next((endpoint.qualified_name for endpoint in path_endpoints if endpoint.qualified_name), None),
             )
             qualified_method = f"{owner}.{name}" if owner else name
+            parameter_node = declaration.child_by_field_name("parameters")
+            parameter_signature = (
+                source[parameter_node.start_byte:parameter_node.end_byte]
+                .decode("utf-8")
+                if parameter_node is not None
+                else "()"
+            )
             methods.append(IntegrationMethod(
-                id=_method_id(module, path, qualified_method),
+                id=_method_id(module, path, qualified_method, parameter_signature),
                 module=module,
                 qualified_method=qualified_method,
                 path=path,

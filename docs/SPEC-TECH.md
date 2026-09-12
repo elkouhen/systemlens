@@ -187,9 +187,10 @@ the call-site line. Dynamic dispatch, reflection, and runtime-only routing
 remain outside this deterministic layer.
 
 The HTML graph model joins endpoint identifiers to the persisted
-`integration_methods` projection. It displays source-evidenced ports on a
-microservice card with their direction, integration action, and qualified Java
-class/method name; rendering does not read source files.
+`integration_methods` projection. Microservice cards remain simple rectangles;
+the selected-service widget displays source-evidenced ports with their
+direction, integration action, and qualified Java class/method name. Rendering
+does not read source files.
 
 The SQLite store is standard-library-only: it does not load native vector
 extensions or persist/query vector representations. The retained findings
@@ -350,15 +351,17 @@ failed index leaves the whole previous successful snapshot intact.
 
 `infer_framework_endpoints` walks Java declarations, annotations and method
 invocations to discover Spring MVC/WebFlux routes, Feign clients, RestTemplate,
-WebClient, Spring Data REST and gateway routes. It resolves literals and known
-Spring property expressions conservatively.
+WebClient, Spring Data REST and gateway routes. It resolves literals, known
+Spring property expressions, and unique never-reassigned local string base
+URLs conservatively. Multi-document Spring YAML is read document by document;
+base-document values take precedence where no active-profile selection exists.
 
 REST graph construction first resolves an explicit target identity from an HTTP
 host, `lb://` URI, configured client domain, or an opt-in Strategy1 convention.
-For a URL expression that concatenates a local `@Value`-annotated field and a
-path, the extractor resolves the Spring property and retains its HTTP host as
-endpoint evidence while persisting only the normalized route as the endpoint
-topic.
+For a URL expression that concatenates a local `@Value`-annotated field, or a
+unique never-reassigned local string base URL, and a path, the extractor
+resolves the value and retains its HTTP host as endpoint evidence while
+persisting only the normalized route as the endpoint topic.
 The normalized alias must match exactly one indexed service; prefix, suffix and
 substring matching are not used. Route compatibility is evaluated only within
 that service. A targetless or ambiguous call remains an endpoint fact and is

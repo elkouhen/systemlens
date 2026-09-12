@@ -250,3 +250,39 @@ class OrderPublisher {
     assert [step.kind for step in flows[0].steps] == [
         "message_entry", "method_call", "method_call", "message_publish",
     ]
+
+
+def test_integration_method_ids_distinguish_java_overloads(tmp_path: Path) -> None:
+    relative_source = "orders/src/main/java/com/example/OrderController.java"
+    source = tmp_path / relative_source
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """package com.example;
+class OrderController {
+  void publish(String order) { kafka.send(); }
+  void publish(int order) { kafka.send(); }
+}
+""",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        replace(
+            _endpoint("first", "produce", "kafka", "orders.string", relative_source, 3),
+            qualified_name="com.example.OrderController",
+        ),
+        replace(
+            _endpoint("second", "produce", "kafka", "orders.int", relative_source, 4),
+            qualified_name="com.example.OrderController",
+        ),
+    ]
+
+    methods = materialize_integration_methods(
+        tmp_path, endpoints, [relative_source], [module]
+    )
+
+    assert len(methods) == 2
+    assert len({method.id for method in methods}) == 2
