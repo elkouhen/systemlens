@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="SystemLens documentation and interactive architecture examples.">
+  <meta name="description" content="SystemLens documentation, the systemlens-skill workflow, and interactive architecture examples.">
   <title>SystemLens — Architecture context for coding agents</title>
   <style>
     :root { color-scheme: dark; --ink: #e6edf7; --muted: #aab9ce; --surface: #111d33; --line: #29405f; --accent: #59b4ff; --mint: #4fe0ae; }
@@ -20,6 +20,11 @@
     .button.primary { color: #061426; background: var(--accent); }
     .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
     .card { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+    .workflow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 22px; }
+    .step { padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+    .step strong { display: block; color: var(--mint); font-size: .82rem; letter-spacing: .06em; text-transform: uppercase; }
+    pre { overflow-x: auto; margin: 20px 0 0; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: #0b172b; color: #cce8ff; }
+    pre code { padding: 0; background: transparent; color: inherit; }
     .facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 22px; }
     .facts span { padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--mint); font-size: .86rem; }
     code { padding: .12em .35em; border-radius: 4px; background: #182844; color: #cce8ff; }
@@ -34,12 +39,36 @@
     <div class="actions">
       <a class="button primary" href="models/simple-supermarket.html">Open the observability-lab model</a>
       <a class="button" href="models/supermarket.html">Explore the supermarket model</a>
+      <a class="button" href="https://github.com/elkouhen/systemlens-skill">Get the coding-agent skill</a>
       <a class="button" href="https://github.com/elkouhen/systemlens">View on GitHub</a>
     </div>
 
     <section aria-labelledby="quickstart">
       <h2 id="quickstart">Quick start</h2>
       <p>At the root of a Java/Spring repository, run <code>systemlens init</code>, <code>systemlens doctor</code>, and <code>systemlens index</code>. Use <code>systemlens mcp</code> for an agent workflow, or export an interactive graph with <code>systemlens export microservices --html architecture.html</code>.</p>
+    </section>
+
+    <section aria-labelledby="skill" style="margin-top: 48px">
+      <h2 id="skill">Use SystemLens with a coding agent</h2>
+      <p><a href="https://github.com/elkouhen/systemlens-skill">systemlens-skill</a> gives a coding agent a disciplined, evidence-first workflow. It starts from the local SystemLens inventory, makes blind spots explicit, and keeps any AI-enriched architecture facts separate from source-derived facts.</p>
+      <pre><code>npx skills add elkouhen/systemlens-skill
+uv tool install systemlens
+
+# In the Java/Spring repository you want to understand
+systemlens init
+systemlens doctor
+systemlens index
+systemlens analyze coverage
+systemlens analyze indexing-issues
+systemlens analyze audit</code></pre>
+      <div class="workflow" aria-label="systemlens-skill workflow">
+        <article class="step"><strong>1. Baseline</strong>Install the skill, then initialize and index the repository locally.</article>
+        <article class="step"><strong>2. Explore</strong>Ask the agent to inspect services, APIs, topics, data stores, flows, and source evidence.</article>
+        <article class="step"><strong>3. Complete</strong>For unsupported conventions, run focused boundaries, HTTP, messaging, data, and deployment passes.</article>
+        <article class="step"><strong>4. Review</strong>Import only reviewed, namespaced facts; then export the merged architecture graph.</article>
+      </div>
+      <p>For a focused question, the agent can use only the relevant pass. For a full topology, it begins with <code>boundaries</code>, then examines HTTP, messaging, and data before mapping deployment. Dynamic and unresolved integrations remain visible instead of being guessed.</p>
+      <p><a href="https://github.com/elkouhen/systemlens-skill/blob/main/SKILL.md">Read the full skill workflow →</a></p>
     </section>
 
     <section aria-labelledby="documentation" style="margin-top: 48px">
