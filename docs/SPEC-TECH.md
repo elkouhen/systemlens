@@ -277,6 +277,23 @@ selection. Light and dark themes override those tokens rather than individual
 components. Selectors may retain local colours only when they visualize graph
 data or a semantic status such as warning, confidence, relation type, or
 resource type.
+Code-flow cards and their nested timeline steps consume the same semantic
+widget, control, text and muted-text tokens. Only the potential-flow marker may
+retain a status accent; source paths must wrap instead of widening the panel.
+Selecting a reconciled code flow records its persisted ID only in transient
+graph state. Node and edge reducers use the exact reconciled path sets to raise
+their size and contrast, while HTML card overlays add flow-specific highlight
+and dimming classes. This presentation state does not infer or persist any new
+architecture relation. Flow selection does not activate the graph detail
+panel: the Flux panel and its existing DOM stay mounted with unchanged geometry;
+selection only updates the card marker and action label in place.
+The code-flow camera fit projects only the reconciled path nodes, derives a
+zoom ratio from their viewport span and the fixed card envelope, then shifts
+their graph-space centre to the usable viewport centre. The usable region
+excludes the toolbar on the side or below it when enough room exists; the fit
+does not change persisted positions or rerun a layout. Its ratio is bounded by
+the current camera ratio so flow selection may zoom out but never zoom in, and
+the resize handler reapplies this flow fit instead of the global graph fit.
 Clearing the selection reverses that state; selecting a navigation tab clears
 details before displaying its ordinary panel. Path parsing
 filters same-name candidates by the grammar before accepting an itinerary

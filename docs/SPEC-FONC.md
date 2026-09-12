@@ -122,22 +122,39 @@ producer and consumer services. When the matching Java type is indexed, its
 inspector also shows its source, declared fields, enum values, and conservative
 recursive project-type navigation.
 
+The Flux tab presents each persisted potential code flow as a compact ordered
+timeline. User-facing step and confidence labels are localized, source paths
+wrap within the panel, and the card, nested steps, metadata and action use the
+shared light/dark semantic palette. A flow that can be reconciled with the
+displayed topology offers an action to highlight that path in Explorer. The
+selected flow keeps every participating node at full opacity with a visible
+halo, emphasizes its edges, gently subdues unrelated edges while leaving
+unrelated node cards opaque and unchanged. Selecting it keeps the Flux tab and
+its card geometry unchanged; the selected card is marked in place instead of
+replacing the left widget with the graph detail view. The camera frames the selected flow inside the visible
+workspace beside the toolbar on wide screens and below it when that is the
+larger available region, while preserving margins for fixed-size cards. This
+fit never zooms in beyond the current readable view, is reapplied after a
+viewport resize, and cannot make the toolbar scroll horizontally.
+Clearing or replacing the selection
+removes this flow-specific emphasis.
+
 The architecture vocabulary is extensible: a `data_schema` node represents a
 persisted data resource or contract (MongoDB collection, SQL table, Redis
 keyspace or object-store dataset), while a `message_channel` node represents
 a messaging channel (Kafka, RabbitMQ, SQS or a webhook stream). The concrete
 technology is carried as metadata.
 
-The export uses a responsive workspace layout with six navigation tabs:
-Explorer, OpenAPI, Kafka, Mongo, Build, and Quality. It includes
+The export uses a responsive workspace layout with seven navigation tabs:
+Explorer, OpenAPI, Kafka, Mongo, Build, Quality, and Flux. It includes
 compact architecture counters, contextual details integrated into the left
 panel, and a full-size resource inspector. On narrow viewports the left panel
 uses one bounded, scrollable region so the graph remains visible while users
 inspect controls or resource details. At intermediate widths up to 1024 px it
 is limited to 320 px and 82% of the viewport height. Its branded header remains
 visible while the panel content scrolls, and its navigation tabs use one
-balanced three-column, two-row grid immediately after the branded header, so
-all six destinations remain visible without horizontal scrolling. The extended search
+balanced four-column, two-row grid immediately after the branded header, so
+all seven destinations remain visible without horizontal scrolling. The extended search
 hint is hidden at those widths while its label and example placeholder remain
 visible.
 

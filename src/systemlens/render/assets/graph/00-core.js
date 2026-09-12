@@ -178,6 +178,7 @@
       hoveredId: null,
       relatedNodes: null,
       relatedEdges: null,
+      selectedCodeFlowId: null,
       pathMicroserviceOrder: new Map(),
       layeredView: false,
       clusteredView: false,

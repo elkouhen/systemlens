@@ -163,27 +163,37 @@
     #graph-node-labels.is-symbol-mode .graph-node-card-label.has-adaptive-label .graph-node-card-name { visibility: visible; opacity: 1; }
     #graph-node-labels.is-symbol-mode .graph-node-card-kind { display: none; }
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-icon { transform: scale(1.1); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .88), 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 20%, transparent), 0 0 18px color-mix(in srgb, var(--card-accent, #64748b) 72%, transparent); }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-code-flow-node .graph-node-card-icon { transform: scale(1.18); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .88), 0 0 0 4px rgba(124, 58, 237, .3), 0 0 22px rgba(124, 58, 237, .72); filter: saturate(1.18); }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-code-flow-node .graph-node-card-icon.is-service { box-shadow: none; filter: saturate(1.18) drop-shadow(0 0 8px rgba(124, 58, 237, .88)); }
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-icon.is-service { box-shadow: none; filter: drop-shadow(0 0 7px color-mix(in srgb, var(--card-accent, #64748b) 72%, transparent)); }
+    #graph-node-labels.is-symbol-mode .graph-node-card-label.is-code-flow-node.is-selected .graph-node-card-icon.is-service { filter: saturate(1.18) drop-shadow(0 0 8px rgba(124, 58, 237, .88)); }
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered:not(.is-selected) .graph-node-card-icon { transform: scale(1.06); filter: saturate(1.08); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .88), 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 16%, transparent), 0 5px 13px color-mix(in srgb, var(--card-accent, #64748b) 38%, transparent); }
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered:not(.is-selected) .graph-node-card-icon.is-service { box-shadow: none; filter: saturate(1.08) drop-shadow(0 4px 5px color-mix(in srgb, var(--card-accent, #64748b) 38%, transparent)); }
     .graph-node-card-label.is-selected { border-width: 1.5px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 0 22px color-mix(in srgb, var(--card-accent, #64748b) 52%, transparent), 0 8px 20px rgba(15, 23, 42, .18); }
+    .graph-node-card-label.is-code-flow-node { z-index: 20; border-width: 2px; border-color: #7c3aed; opacity: 1; box-shadow: 0 0 0 4px rgba(124, 58, 237, .22), 0 0 28px rgba(124, 58, 237, .48), 0 9px 22px rgba(15, 23, 42, .2); }
     .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 9%, transparent), 0 0 13px color-mix(in srgb, var(--card-accent, #64748b) 27%, transparent), 0 6px 17px rgba(15, 23, 42, .14); }
     .graph-node-card-label.is-dimmed { opacity: 1; }
     :root[data-theme="dark"] .graph-node-card-label { color: #e5edf8; background: #17263d; box-shadow: 0 5px 18px rgba(0, 0, 0, .28); }
     :root[data-theme="dark"] .graph-node-card-label.is-selected { box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 22%, transparent), 0 0 24px color-mix(in srgb, var(--card-accent, #64748b) 64%, transparent), 0 8px 22px rgba(0, 0, 0, .35); }
+    :root[data-theme="dark"] .graph-node-card-label.is-code-flow-node { border-color: #c4b5fd; box-shadow: 0 0 0 4px rgba(196, 181, 253, .22), 0 0 30px rgba(167, 139, 250, .62), 0 9px 24px rgba(0, 0, 0, .4); }
     :root[data-theme="dark"] .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 12%, transparent), 0 0 15px color-mix(in srgb, var(--card-accent, #64748b) 36%, transparent), 0 6px 18px rgba(0, 0, 0, .28); }
     :root[data-theme="dark"] .graph-node-card-kind { color: #9aabc2; }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon { color: #e5edf8; background: linear-gradient(145deg, color-mix(in srgb, #243650 82%, var(--card-accent, #64748b)), color-mix(in srgb, #101b2d 72%, var(--card-accent, #64748b))); border-color: color-mix(in srgb, var(--card-accent, #64748b) 78%, #dce8f7); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 4px 11px rgba(0, 0, 0, .34); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service { background: transparent; box-shadow: none; }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service::before { background: color-mix(in srgb, var(--card-accent, #64748b) 78%, #dce8f7); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service::after { background: linear-gradient(145deg, color-mix(in srgb, #243650 82%, var(--card-accent, #64748b)), color-mix(in srgb, #101b2d 72%, var(--card-accent, #64748b))); }
+    :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-label.is-code-flow-node .graph-node-card-icon { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 0 0 4px rgba(196, 181, 253, .3), 0 0 24px rgba(167, 139, 250, .82); }
+    :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-label.is-code-flow-node .graph-node-card-icon.is-service { box-shadow: none; filter: saturate(1.18) drop-shadow(0 0 9px rgba(196, 181, 253, .92)); }
+    :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-label.is-code-flow-node.is-selected .graph-node-card-icon.is-service { filter: saturate(1.18) drop-shadow(0 0 9px rgba(196, 181, 253, .92)); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: color-mix(in srgb, #17263d 88%, var(--card-accent, #64748b)); border-color: color-mix(in srgb, var(--card-accent, #64748b) 46%, #52647d); box-shadow: 0 4px 12px rgba(0, 0, 0, .32); }
     #dependency-graph[hidden] { display: none; }
     .toolbar { position: fixed; z-index: 10; top: 16px; left: 16px; display: grid; gap: 10px; width: min(390px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 12px; overflow-y: auto; border: 1px solid #d7dee9; border-radius: 10px; background: rgba(255, 255, 255, .96); box-shadow: 0 4px 20px rgba(15, 23, 42, .12); }
+    .toolbar { overflow-x: hidden; }
     .toolbar-header { position: sticky; z-index: 20; top: -10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -10px -2px 0; padding: 10px 2px 6px; background: rgba(255, 255, 255, .98); }
     .toolbar strong { color: #172033; font-size: 15px; white-space: nowrap; }
     .toolbar input:not([type="checkbox"]) { height: 34px; padding: 0 10px; border: 1px solid #b9c5d6; border-radius: 6px; color: #172033; background: #fff; font: inherit; font-size: 13px; }
     .toolbar-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border-radius: 8px; background: #edf2f7; }
+    .toolbar > .toolbar-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .toolbar-tab { min-width: 0; height: 30px !important; width: auto !important; padding: 0 7px; overflow: hidden; border: 0 !important; border-radius: 6px !important; color: #52616b !important; background: transparent !important; font-size: 11px !important; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
     .toolbar-tab:hover { background: rgba(255, 255, 255, .65) !important; }
     .toolbar-tab.is-active { color: #1d4f91 !important; background: #fff !important; box-shadow: 0 1px 3px rgba(15, 23, 42, .12); }
@@ -283,6 +293,21 @@
     .reference-meta { margin-top: 2px; color: #64748b; font-size: 10px; overflow-wrap: anywhere; }
     .reference-action { width: auto !important; height: 29px !important; padding: 0 8px !important; color: #1d4f91 !important; border-color: #bfdbfe !important; background: #eff6ff !important; font-size: 11px !important; font-weight: 700; white-space: nowrap; }
     .reference-action:disabled { color: #94a3b8 !important; border-color: #e2e8f0 !important; background: #f8fafc !important; cursor: not-allowed; }
+    .code-flow-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; min-width: 0; padding: 11px; border: 1px solid #e2e8f0; border-left: 3px solid #7c3aed; border-radius: var(--widget-radius); background: #faf8ff; }
+    .code-flow-item.is-selected { border-color: var(--ui-selected); border-left-color: var(--ui-selected); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-selected) 18%, transparent); }
+    .code-flow-header { display: grid; gap: 5px; min-width: 0; }
+    .code-flow-title { font-size: 13px; line-height: 1.35; }
+    .code-flow-badges { display: flex; flex-wrap: wrap; gap: 5px; }
+    .code-flow-badges .detail-badge { min-height: 22px; padding: 2px 7px; }
+    .code-flow-reason { margin: 0; color: #64748b; font-size: 12px; line-height: 1.45; }
+    .code-flow-steps { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: code-flow-step; }
+    .code-flow-step { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; padding: 8px 9px 8px 39px; border: 1px solid #e2e8f0; border-radius: var(--control-radius); color: #334155; background: #fff; counter-increment: code-flow-step; }
+    .code-flow-step::before { position: absolute; top: 8px; left: 8px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #5b21b6; background: #ede9fe; content: counter(code-flow-step); font-size: 10px; font-weight: 850; }
+    .code-flow-step-summary { display: grid; gap: 1px; min-width: 0; }
+    .code-flow-step-kind { color: #7c3aed; font-size: 9px; font-weight: 800; letter-spacing: .06em; line-height: 1.3; text-transform: uppercase; }
+    .code-flow-step strong { min-width: 0; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; white-space: normal; }
+    .code-flow-step code { display: block; min-width: 0; max-width: 100%; color: #64748b; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; word-break: break-word; }
+    .code-flow-item > .reference-action { justify-self: start; }
     #details { position: relative; width: 100%; overflow: visible; color: #475569; font-size: 13px; line-height: 1.45; }
     #details.is-empty { display: none; }
     .details-header { padding: 12px; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #f8fafc, #eef5ff); }
@@ -326,9 +351,9 @@
     .service-kafka-meta button { color: #1d4f91; border-color: #bfdbfe; cursor: pointer; }
     .service-kafka-meta button:hover, .service-kafka-meta button:focus-visible { background: #eff6ff; outline: none; }
     .details-empty { padding: 18px; color: #64748b; text-align: center; }
-    .path-details-header { padding: 16px; border-bottom: 1px solid #dbeafe; background: linear-gradient(135deg, #eff6ff, #f8fafc 60%, #f0fdf4); }
+    .path-details-header { min-width: 0; padding: 16px; border-bottom: 1px solid #dbeafe; background: linear-gradient(135deg, #eff6ff, #f8fafc 60%, #f0fdf4); }
     .path-details-kicker { margin: 0 0 4px; color: #1d4f91; font-size: var(--type-kicker); font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
-    .path-details-title { margin: 0; color: #172033; font-size: var(--type-entity-title); line-height: 1.22; }
+    .path-details-title { min-width: 0; margin: 0; color: #172033; font-size: var(--type-entity-title); line-height: 1.22; overflow-wrap: anywhere; }
     .path-details-summary { margin: 8px 0 0; color: #52616b; font-size: 12px; }
     .path-overview { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
     .path-overview-item { position: relative; padding: 7px 9px 7px 31px !important; border: 1px solid #e2e8f0; background: #fff !important; }
@@ -397,7 +422,7 @@
       --widget-surface-strong: #fff;
       --ui-title: #24355f;
       --ui-text: #40506a;
-      --ui-muted: #6b7a90;
+      --ui-muted: #596980;
       --ui-accent-text: #3156d3;
       --ui-on-accent: #f8faff;
       --ui-panel: rgba(255, 255, 255, .94);
@@ -665,7 +690,6 @@
     :root[data-theme="dark"] .path-overview-item { border-color: rgba(148, 163, 184, .2); color: #cfdbeb; background: #17263d !important; }
     :root[data-theme="dark"] .inspector-dialog { background: #101d31; }
     :root[data-theme="dark"] code { color: #b9c8ff; }
-
     /* One visual charter for every widget. Graph colors remain semantic data. */
     .toolbar, .legend, .inspector-dialog { color: var(--ui-text); background: var(--ui-panel); }
     .toolbar, .legend { border-color: var(--ui-border); }
@@ -709,6 +733,7 @@
     .display-controls,
     .advanced-controls,
     .advanced-tools,
+    .code-flow-item,
     .reference-item,
     .indexing-issue,
     .service-kafka-item,
@@ -723,6 +748,11 @@
     .detail-badge,
     .inspector-close,
     .dto-field { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
+    .code-flow-step { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
+    .code-flow-reason,
+    .code-flow-step code { color: var(--ui-muted); }
+    .code-flow-step-kind { color: var(--ui-accent-text); }
+    .code-flow-step::before { color: var(--ui-on-accent); background: var(--ui-selected); }
     .toolbar input:not([type="checkbox"])::placeholder { color: var(--ui-muted); }
     .toolbar input:not([type="checkbox"]):focus {
       border-color: var(--ui-selected);
@@ -824,6 +854,7 @@
       <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Mongo</button>
       <button id="build-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="dependencies-panel">Build</button>
       <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problemes d'indexation">Qualité</button>
+      <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux</button>
     </div>
     <div id="graph-panel" class="toolbar-panel" role="tabpanel" aria-labelledby="graph-tab">
       <div id="quick-search" class="quick-search">
@@ -923,6 +954,14 @@
       <ul id="indexing-issues" class="indexing-issues-list" aria-label="Problemes d'indexation"></ul>
       <p id="indexing-issues-empty" class="indexing-issues-empty">Aucun probleme d'indexation detecte.</p>
     </div>
+    <div id="flows-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="flows-tab" hidden>
+      <div class="references-header">
+        <p class="references-kicker">Parcours potentiels du code</p>
+        <h2 id="code-flows-title" class="references-title">Flux de code</h2>
+        <p class="references-description">Parcours ordonnés issus du code source. Ils décrivent un comportement potentiel, pas une trace runtime.</p>
+      </div>
+      <section class="references-section"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Filtrer par service, méthode ou déclencheur" autocomplete="off" aria-label="Filtrer les flux de code"><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux de code indexé.</p></section>
+    </div>
     <div id="openapi-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="openapi-tab" hidden>
       <div class="references-header">
         <p class="references-kicker">Documentation d'API</p>
@@ -980,7 +1019,7 @@
       <div id="inspector-body" class="inspector-body"></div>
     </div>
   </div>
-  <script id="graph-data" type="application/json">{"nodes": [{"id": "microservice:inventory-service", "kind": "microservice", "name": "inventory-service", "layer": "application", "layer_label": "Application", "color": "#dc2626", "runtime_namespaces": [], "fact_namespaces": [], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "kafka_endpoints": [{"role": "consume", "topic": "supermarket.order.placed", "message_type": "OrderPlaced", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18"}, {"role": "consume", "topic": "supermarket.stock.restock-requested", "message_type": "StockRestockRequested", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaStockRestockConsumer.java:18", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaStockRestockConsumer.java:18"}, {"role": "produce", "topic": "supermarket.stock.depleted", "message_type": "String", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java:13", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java:13"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service", "resources": ["GET /api/health", "POST /api/reservations"], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "label": "inventory-service", "width": 190, "height": 42, "complexity": {"score": 4, "level": "high", "relations": 4, "breakdown": {"http": 0, "kafka": 3, "mongodb": 1}, "rank": 3, "population": 3, "tier_start": 3, "tier_end": 3}, "size": 50}, {"id": "microservice:order-service", "kind": "microservice", "name": "order-service", "layer": "application", "layer_label": "Application", "color": "#2563eb", "runtime_namespaces": [], "fact_namespaces": [], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "kafka_endpoints": [{"role": "produce", "topic": "supermarket.order.placed", "message_type": "OrderPlaced", "location": "order-service/src/main/java/io/systemlens/supermarket/order/ScheduledOrderPublisher.java:39", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/java/io/systemlens/supermarket/order/ScheduledOrderPublisher.java:39"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service", "resources": ["GET /api/error", "GET /api/health", "POST /api/orders"], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "label": "order-service", "width": 190, "height": 42, "complexity": {"score": 1, "level": "low", "relations": 1, "breakdown": {"http": 0, "kafka": 1, "mongodb": 0}, "rank": 1, "population": 3, "tier_start": 1, "tier_end": 1}, "size": 50}, {"id": "microservice:restock-service", "kind": "microservice", "name": "restock-service", "layer": "application", "layer_label": "Application", "color": "#d97706", "runtime_namespaces": [], "fact_namespaces": [], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "kafka_endpoints": [{"role": "consume", "topic": "supermarket.stock.depleted", "message_type": "StockDepleted", "location": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37"}, {"role": "produce", "topic": "supermarket.stock.restock-requested", "message_type": "StockRestockRequested", "location": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:44", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:44"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service", "resources": [], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "label": "restock-service", "width": 190, "height": 42, "complexity": {"score": 2, "level": "medium", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 2, "population": 3, "tier_start": 2, "tier_end": 2}, "size": 50}, {"id": "kafka_topic:supermarket.order.placed", "kind": "kafka_topic", "name": "supermarket.order.placed", "label": "supermarket.order.placed", "published_message_types": ["OrderPlaced"], "consumed_message_types": ["OrderPlaced"], "width": 190, "height": 42, "owner_service": "order-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "low", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 1, "population": 3, "tier_start": 1, "tier_end": 1}, "color": "#2563eb", "size": 50}, {"id": "kafka_topic:supermarket.stock.depleted", "kind": "kafka_topic", "name": "supermarket.stock.depleted", "label": "supermarket.stock.depleted", "published_message_types": ["String"], "consumed_message_types": ["StockDepleted"], "width": 190, "height": 42, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "medium", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 2, "population": 3, "tier_start": 2, "tier_end": 2}, "color": "#d97706", "size": 50}, {"id": "kafka_topic:supermarket.stock.restock-requested", "kind": "kafka_topic", "name": "supermarket.stock.restock-requested", "label": "supermarket.stock.restock-requested", "published_message_types": ["StockRestockRequested"], "consumed_message_types": ["StockRestockRequested"], "width": 190, "height": 42, "owner_service": "restock-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "high", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 3, "population": 3, "tier_start": 3, "tier_end": 3}, "color": "#dc2626", "size": 50}, {"id": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb_collection", "name": "order_fulfillments", "owner": "inventory-service", "label": "order_fulfillments", "persistence_classes": [{"id": "inventory-service:inventory-service:io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "service": "inventory-service", "module": "inventory-service", "collection": "order_fulfillments", "name": "OrderFulfillmentDocument", "qualified_name": "io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "source": "src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "line": 7, "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "fields": [{"name": "orderId", "type": "String", "references": []}, {"name": "productId", "type": "String", "references": []}, {"name": "productName", "type": "String", "references": []}, {"name": "quantity", "type": "int", "references": []}, {"name": "remainingStock", "type": "int", "references": []}, {"name": "channel", "type": "String", "references": []}, {"name": "requestedAt", "type": "Instant", "references": []}, {"name": "createdAt", "type": "Instant", "references": []}]}], "width": 190, "height": 42, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 1, "level": "low", "relations": 1, "breakdown": {"http": 0, "kafka": 0, "mongodb": 1}, "rank": 1, "population": 1, "tier_start": 1, "tier_end": 1}, "color": "#2563eb", "size": 50}], "links": [{"source": "microservice:order-service", "target": "kafka_topic:supermarket.order.placed", "kind": "kafka", "direction": "outgoing", "label": "supermarket.order.placed", "confidence": "proved", "provenance": "code", "published_message_types": ["OrderPlaced"]}, {"source": "kafka_topic:supermarket.order.placed", "target": "microservice:inventory-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.order.placed", "confidence": "proved", "provenance": "code", "consumed_message_types": ["OrderPlaced"]}, {"source": "microservice:restock-service", "target": "kafka_topic:supermarket.stock.restock-requested", "kind": "kafka", "direction": "outgoing", "label": "supermarket.stock.restock-requested", "confidence": "proved", "provenance": "code", "published_message_types": ["StockRestockRequested"]}, {"source": "kafka_topic:supermarket.stock.restock-requested", "target": "microservice:inventory-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.stock.restock-requested", "confidence": "proved", "provenance": "code", "consumed_message_types": ["StockRestockRequested"]}, {"source": "microservice:inventory-service", "target": "kafka_topic:supermarket.stock.depleted", "kind": "kafka", "direction": "outgoing", "label": "supermarket.stock.depleted", "confidence": "proved", "provenance": "code", "published_message_types": ["String"]}, {"source": "kafka_topic:supermarket.stock.depleted", "target": "microservice:restock-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.stock.depleted", "confidence": "proved", "provenance": "code", "consumed_message_types": ["StockDepleted"]}, {"source": "microservice:inventory-service", "target": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb", "direction": "data_access", "label": "stocke", "confidence": "inferred", "provenance": "module inventory"}], "software_layers": ["application"], "runtime_namespaces": [], "fact_namespaces": [], "groups": [{"name": "supermarket-demo", "namespace": ".", "children": ["microservice:inventory-service", "microservice:order-service", "microservice:restock-service"]}], "build_dependencies": {"nodes": [{"id": "module:inventory-service", "name": "inventory-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:order-service", "name": "order-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:restock-service", "name": "restock-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:supermarket-contracts", "name": "supermarket-contracts", "kind": "build_module", "build_system": "maven", "color": "#64748b", "size": 14}, {"id": "module:supermarket-demo-parent", "name": "supermarket-demo-parent", "kind": "build_module", "build_system": "maven", "color": "#64748b", "size": 14}], "links": [{"source": "module:inventory-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}, {"source": "module:order-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}, {"source": "module:restock-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}]}, "kafka_dtos": [{"id": "io.systemlens.supermarket.contract.OrderPlaced", "name": "OrderPlaced", "qualified_name": "io.systemlens.supermarket.contract.OrderPlaced", "fields": [{"type": "String", "name": "orderId"}, {"type": "String", "name": "productId"}, {"type": "int", "name": "quantity"}, {"type": "Instant", "name": "requestedAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/OrderPlaced.java", "module": "supermarket-contracts", "producers": ["order-service"], "consumers": ["inventory-service"], "topics": ["supermarket.order.placed"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/OrderPlaced.java"}, {"id": "io.systemlens.supermarket.contract.StockDepleted", "name": "StockDepleted", "qualified_name": "io.systemlens.supermarket.contract.StockDepleted", "fields": [{"type": "String", "name": "productId"}, {"type": "Instant", "name": "occurredAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/StockDepleted.java", "module": "supermarket-contracts", "producers": [], "consumers": ["restock-service"], "topics": ["supermarket.stock.depleted"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/StockDepleted.java"}, {"id": "io.systemlens.supermarket.contract.StockRestockRequested", "name": "StockRestockRequested", "qualified_name": "io.systemlens.supermarket.contract.StockRestockRequested", "fields": [{"type": "String", "name": "productId"}, {"type": "int", "name": "quantity"}, {"type": "Instant", "name": "requestedAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/StockRestockRequested.java", "module": "supermarket-contracts", "producers": ["restock-service"], "consumers": ["inventory-service"], "topics": ["supermarket.stock.restock-requested"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/StockRestockRequested.java"}, {"id": "unresolved:String", "name": "String", "qualified_name": null, "fields": [], "source": null, "module": null, "producers": ["inventory-service"], "consumers": [], "topics": ["supermarket.stock.depleted"], "root": true}], "project_dto_definitions": [], "mongo_persistence_classes": [{"id": "inventory-service:inventory-service:io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "service": "inventory-service", "module": "inventory-service", "collection": "order_fulfillments", "name": "OrderFulfillmentDocument", "qualified_name": "io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "source": "src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "line": 7, "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "fields": [{"name": "orderId", "type": "String", "references": []}, {"name": "productId", "type": "String", "references": []}, {"name": "productName", "type": "String", "references": []}, {"name": "quantity", "type": "int", "references": []}, {"name": "remainingStock", "type": "int", "references": []}, {"name": "channel", "type": "String", "references": []}, {"name": "requestedAt", "type": "Instant", "references": []}, {"name": "createdAt", "type": "Instant", "references": []}]}], "indexing_issues": [{"severity": "info", "category": "Appel HTTP non rapproche", "message": "order-service : aucun microservice fournisseur n'a ete identifie pour 'POST /api/reservations'.", "location": "order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:47", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:47"}, {"severity": "info", "category": "Appel HTTP non rapproche", "message": "order-service : aucun microservice fournisseur n'a ete identifie pour 'POST /api/reservations'.", "location": "order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:61", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:61"}]}</script>
+  <script id="graph-data" type="application/json">{"nodes": [{"id": "microservice:inventory-service", "kind": "microservice", "name": "inventory-service", "layer": "application", "layer_label": "Application", "color": "#dc2626", "runtime_namespaces": [], "fact_namespaces": [], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "kafka_endpoints": [{"role": "consume", "topic": "supermarket.order.placed", "message_type": "OrderPlaced", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18"}, {"role": "consume", "topic": "supermarket.stock.restock-requested", "message_type": "StockRestockRequested", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaStockRestockConsumer.java:18", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaStockRestockConsumer.java:18"}, {"role": "produce", "topic": "supermarket.stock.depleted", "message_type": "String", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java:13", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java:13"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service", "resources": ["GET /api/health", "POST /api/reservations"], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "label": "inventory-service", "width": 190, "height": 42, "complexity": {"score": 4, "level": "high", "relations": 4, "breakdown": {"http": 0, "kafka": 3, "mongodb": 1}, "rank": 3, "population": 3, "tier_start": 3, "tier_end": 3}, "size": 50}, {"id": "microservice:order-service", "kind": "microservice", "name": "order-service", "layer": "application", "layer_label": "Application", "color": "#2563eb", "runtime_namespaces": [], "fact_namespaces": [], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "kafka_endpoints": [{"role": "produce", "topic": "supermarket.order.placed", "message_type": "OrderPlaced", "location": "order-service/src/main/java/io/systemlens/supermarket/order/ScheduledOrderPublisher.java:39", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/java/io/systemlens/supermarket/order/ScheduledOrderPublisher.java:39"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service", "resources": ["GET /api/error", "GET /api/health", "POST /api/orders"], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "label": "order-service", "width": 190, "height": 42, "complexity": {"score": 1, "level": "low", "relations": 1, "breakdown": {"http": 0, "kafka": 1, "mongodb": 0}, "rank": 1, "population": 3, "tier_start": 1, "tier_end": 1}, "size": 50}, {"id": "microservice:restock-service", "kind": "microservice", "name": "restock-service", "layer": "application", "layer_label": "Application", "color": "#d97706", "runtime_namespaces": [], "fact_namespaces": [], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "kafka_endpoints": [{"role": "consume", "topic": "supermarket.stock.depleted", "message_type": "StockDepleted", "location": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37"}, {"role": "produce", "topic": "supermarket.stock.restock-requested", "message_type": "StockRestockRequested", "location": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:44", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:44"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service", "resources": [], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "label": "restock-service", "width": 190, "height": 42, "complexity": {"score": 2, "level": "medium", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 2, "population": 3, "tier_start": 2, "tier_end": 2}, "size": 50}, {"id": "kafka_topic:supermarket.order.placed", "kind": "kafka_topic", "name": "supermarket.order.placed", "label": "supermarket.order.placed", "published_message_types": ["OrderPlaced"], "consumed_message_types": ["OrderPlaced"], "width": 190, "height": 42, "owner_service": "order-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "low", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 1, "population": 3, "tier_start": 1, "tier_end": 1}, "color": "#2563eb", "size": 50}, {"id": "kafka_topic:supermarket.stock.depleted", "kind": "kafka_topic", "name": "supermarket.stock.depleted", "label": "supermarket.stock.depleted", "published_message_types": ["String"], "consumed_message_types": ["StockDepleted"], "width": 190, "height": 42, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "medium", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 2, "population": 3, "tier_start": 2, "tier_end": 2}, "color": "#d97706", "size": 50}, {"id": "kafka_topic:supermarket.stock.restock-requested", "kind": "kafka_topic", "name": "supermarket.stock.restock-requested", "label": "supermarket.stock.restock-requested", "published_message_types": ["StockRestockRequested"], "consumed_message_types": ["StockRestockRequested"], "width": 190, "height": 42, "owner_service": "restock-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "high", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 3, "population": 3, "tier_start": 3, "tier_end": 3}, "color": "#dc2626", "size": 50}, {"id": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb_collection", "name": "order_fulfillments", "owner": "inventory-service", "label": "order_fulfillments", "persistence_classes": [{"id": "inventory-service:inventory-service:io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "service": "inventory-service", "module": "inventory-service", "collection": "order_fulfillments", "name": "OrderFulfillmentDocument", "qualified_name": "io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "source": "src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "line": 7, "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "fields": [{"name": "orderId", "type": "String", "references": []}, {"name": "productId", "type": "String", "references": []}, {"name": "productName", "type": "String", "references": []}, {"name": "quantity", "type": "int", "references": []}, {"name": "remainingStock", "type": "int", "references": []}, {"name": "channel", "type": "String", "references": []}, {"name": "requestedAt", "type": "Instant", "references": []}, {"name": "createdAt", "type": "Instant", "references": []}]}], "width": 190, "height": 42, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 1, "level": "low", "relations": 1, "breakdown": {"http": 0, "kafka": 0, "mongodb": 1}, "rank": 1, "population": 1, "tier_start": 1, "tier_end": 1}, "color": "#2563eb", "size": 50}], "links": [{"source": "microservice:order-service", "target": "kafka_topic:supermarket.order.placed", "kind": "kafka", "direction": "outgoing", "label": "supermarket.order.placed", "confidence": "proved", "provenance": "code", "published_message_types": ["OrderPlaced"]}, {"source": "kafka_topic:supermarket.order.placed", "target": "microservice:inventory-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.order.placed", "confidence": "proved", "provenance": "code", "consumed_message_types": ["OrderPlaced"]}, {"source": "microservice:restock-service", "target": "kafka_topic:supermarket.stock.restock-requested", "kind": "kafka", "direction": "outgoing", "label": "supermarket.stock.restock-requested", "confidence": "proved", "provenance": "code", "published_message_types": ["StockRestockRequested"]}, {"source": "kafka_topic:supermarket.stock.restock-requested", "target": "microservice:inventory-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.stock.restock-requested", "confidence": "proved", "provenance": "code", "consumed_message_types": ["StockRestockRequested"]}, {"source": "microservice:inventory-service", "target": "kafka_topic:supermarket.stock.depleted", "kind": "kafka", "direction": "outgoing", "label": "supermarket.stock.depleted", "confidence": "proved", "provenance": "code", "published_message_types": ["String"]}, {"source": "kafka_topic:supermarket.stock.depleted", "target": "microservice:restock-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.stock.depleted", "confidence": "proved", "provenance": "code", "consumed_message_types": ["StockDepleted"]}, {"source": "microservice:inventory-service", "target": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb", "direction": "data_access", "label": "stocke", "confidence": "inferred", "provenance": "module inventory"}], "software_layers": ["application"], "runtime_namespaces": [], "fact_namespaces": [], "groups": [{"name": "supermarket-demo", "namespace": ".", "children": ["microservice:inventory-service", "microservice:order-service", "microservice:restock-service"]}], "build_dependencies": {"nodes": [{"id": "module:inventory-service", "name": "inventory-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:order-service", "name": "order-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:restock-service", "name": "restock-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:supermarket-contracts", "name": "supermarket-contracts", "kind": "build_module", "build_system": "maven", "color": "#64748b", "size": 14}, {"id": "module:supermarket-demo-parent", "name": "supermarket-demo-parent", "kind": "build_module", "build_system": "maven", "color": "#64748b", "size": 14}], "links": [{"source": "module:inventory-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}, {"source": "module:order-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}, {"source": "module:restock-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}]}, "kafka_dtos": [{"id": "io.systemlens.supermarket.contract.OrderPlaced", "name": "OrderPlaced", "qualified_name": "io.systemlens.supermarket.contract.OrderPlaced", "fields": [{"type": "String", "name": "orderId"}, {"type": "String", "name": "productId"}, {"type": "int", "name": "quantity"}, {"type": "Instant", "name": "requestedAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/OrderPlaced.java", "module": "supermarket-contracts", "producers": ["order-service"], "consumers": ["inventory-service"], "topics": ["supermarket.order.placed"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/OrderPlaced.java"}, {"id": "io.systemlens.supermarket.contract.StockDepleted", "name": "StockDepleted", "qualified_name": "io.systemlens.supermarket.contract.StockDepleted", "fields": [{"type": "String", "name": "productId"}, {"type": "Instant", "name": "occurredAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/StockDepleted.java", "module": "supermarket-contracts", "producers": [], "consumers": ["restock-service"], "topics": ["supermarket.stock.depleted"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/StockDepleted.java"}, {"id": "io.systemlens.supermarket.contract.StockRestockRequested", "name": "StockRestockRequested", "qualified_name": "io.systemlens.supermarket.contract.StockRestockRequested", "fields": [{"type": "String", "name": "productId"}, {"type": "int", "name": "quantity"}, {"type": "Instant", "name": "requestedAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/StockRestockRequested.java", "module": "supermarket-contracts", "producers": ["restock-service"], "consumers": ["inventory-service"], "topics": ["supermarket.stock.restock-requested"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/StockRestockRequested.java"}, {"id": "unresolved:String", "name": "String", "qualified_name": null, "fields": [], "source": null, "module": null, "producers": ["inventory-service"], "consumers": [], "topics": ["supermarket.stock.depleted"], "root": true}], "project_dto_definitions": [], "mongo_persistence_classes": [{"id": "inventory-service:inventory-service:io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "service": "inventory-service", "module": "inventory-service", "collection": "order_fulfillments", "name": "OrderFulfillmentDocument", "qualified_name": "io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "source": "src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "line": 7, "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "fields": [{"name": "orderId", "type": "String", "references": []}, {"name": "productId", "type": "String", "references": []}, {"name": "productName", "type": "String", "references": []}, {"name": "quantity", "type": "int", "references": []}, {"name": "remainingStock", "type": "int", "references": []}, {"name": "channel", "type": "String", "references": []}, {"name": "requestedAt", "type": "Instant", "references": []}, {"name": "createdAt", "type": "Instant", "references": []}]}], "indexing_issues": [{"severity": "info", "category": "Appel HTTP non rapproche", "message": "order-service : aucun microservice fournisseur n'a ete identifie pour 'POST /api/reservations'.", "location": "order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:47", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:47"}, {"severity": "info", "category": "Appel HTTP non rapproche", "message": "order-service : aucun microservice fournisseur n'a ete identifie pour 'POST /api/reservations'.", "location": "order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:61", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/java/io/systemlens/supermarket/order/OrderController.java:61"}], "code_flows": [{"id": "simple-restock-flow", "module": "restock-service", "method": "io.systemlens.supermarket.restock.StockDepletedConsumer.requestRestock", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 37, "end_line": 50, "status": "potential", "confidence": "medium", "reason": "The entry point and external effects occur in the same Java method.", "steps": [{"order": 1, "kind": "message_entry", "name": "supermarket.stock.depleted", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 37, "end_line": 37, "endpoint_id": null, "operation": null}, {"order": 2, "kind": "message_publish", "name": "supermarket.stock.restock-requested", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 44, "end_line": 44, "endpoint_id": null, "operation": null}]}]}</script>
   <script type="module">// Ordered source module: 00-core.js
     const graphData = JSON.parse(document.getElementById("graph-data").textContent);
     // HTML cards are rendered in screen space. Layouts and collision envelopes
@@ -1161,6 +1200,7 @@
       hoveredId: null,
       relatedNodes: null,
       relatedEdges: null,
+      selectedCodeFlowId: null,
       pathMicroserviceOrder: new Map(),
       layeredView: false,
       clusteredView: false,
@@ -1729,6 +1769,17 @@
         nodeReducer: (node, data) => {
           if (!isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
           const renderedData = graphState.renderMode === "symbols" ? { ...data, size: .5 } : data;
+          if (graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)) {
+            const order = graphState.pathMicroserviceOrder.get(node);
+            return {
+              ...renderedData,
+              label: order ? `${order}. ${data.label}` : renderedData.label,
+              size: renderedData.size * 1.22,
+              highlighted: true,
+              zIndex: 2,
+            };
+          }
+          if (graphState.selectedCodeFlowId) return renderedData;
           if (!graphState.selectedId || graphState.relatedNodes.has(node)) {
             const order = graphState.pathMicroserviceOrder.get(node);
             return order ? { ...renderedData, label: `${order}. ${data.label}` } : renderedData;
@@ -1737,6 +1788,20 @@
         },
         edgeReducer: (edge, data) => {
           if (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge))) return { ...data, hidden: true };
+          if (graphState.selectedCodeFlowId) {
+            if (graphState.relatedEdges.has(edge)) return {
+              ...data,
+              color: document.documentElement.dataset.theme === "dark" ? "#c4b5fd" : "#6d28d9",
+              size: 3.5,
+              zIndex: 2,
+            };
+            return {
+              ...data,
+              color: document.documentElement.dataset.theme === "dark" ? "#25334a" : "#d8dee9",
+              size: .25,
+              zIndex: 0,
+            };
+          }
           if (graphState.selectedId && graphState.relatedEdges.has(edge)) return { ...data, size: 1.5 };
           if (graphState.clusteredView || graphState.layeredClusterView) return { ...data, size: .5 };
           if (graphState.selectedId) return { ...data, color: "#d8dee9", size: .35 };
@@ -2057,7 +2122,8 @@
           const isDatabase = node.kind === "data_schema" || node.kind === "mongodb_collection";
           const isResource = isTopic || isDatabase;
           const adaptiveLabelSide = adaptiveLabels.get(id);
-          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}`;
+          const isCodeFlowNode = graphState.selectedCodeFlowId && graphState.relatedNodes?.has(id);
+          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}${isCodeFlowNode ? " is-code-flow-node" : ""}`;
           label.dataset.nodeKind = node.kind;
           label.dataset.nodeId = id;
           const cardScale = GRAPH_CARD_SCALE;
@@ -2288,10 +2354,12 @@
     const persistenceTab = document.getElementById("persistence-tab");
     const buildTab = document.getElementById("build-tab");
     const issuesTab = document.getElementById("issues-tab");
+    const flowsTab = document.getElementById("flows-tab");
     const graphLegend = document.getElementById("graph-legend");
     const graphPanel = document.getElementById("graph-panel");
     const dependenciesPanel = document.getElementById("dependencies-panel");
     const issuesPanel = document.getElementById("issues-panel");
+    const flowsPanel = document.getElementById("flows-panel");
     const openApiPanel = document.getElementById("openapi-panel");
     const kafkaPanel = document.getElementById("kafka-panel");
     const persistencePanel = document.getElementById("persistence-panel");
@@ -3034,8 +3102,10 @@
           hoveredId: null,
           relatedNodes: null,
           relatedEdges: null,
+          selectedCodeFlowId: null,
           pathMicroserviceOrder: new Map(),
         });
+        delete graphCanvas.dataset.selectedCodeFlow;
         clearPathControls();
         setDetailsEmpty("Selectionnez un noeud ou un module pour afficher ses informations.");
       }
@@ -3133,6 +3203,9 @@
         renderer.refresh();
         await fitCameraToVisibleGraph(renderer);
       }
+      if (graphState.selectedCodeFlowId && graphState.relatedNodes?.size) {
+        centerCameraOnPath({ nodes: [...graphState.relatedNodes] });
+      }
       // Sigma's noverlap solver works with Sigma node radii, while the
       // readable labels are larger HTML rectangles. Resolve any residual
       // collision using the actual projected card envelope after the camera
@@ -3160,6 +3233,7 @@
       const showingOpenApi = tab === "openapi";
       const showingKafka = tab === "kafka";
       const showingPersistence = tab === "persistence";
+      const showingFlows = tab === "flows";
       graphTab.classList.toggle("is-active", showingGraph);
       graphTab.setAttribute("aria-selected", String(showingGraph));
       openApiTab.classList.toggle("is-active", showingOpenApi);
@@ -3172,6 +3246,8 @@
       buildTab.setAttribute("aria-selected", String(showingDependencies));
       issuesTab.classList.toggle("is-active", showingIssues);
       issuesTab.setAttribute("aria-selected", String(showingIssues));
+      flowsTab.classList.toggle("is-active", showingFlows);
+      flowsTab.setAttribute("aria-selected", String(showingFlows));
       graphPanel.hidden = !showingGraph;
       quickSearch.hidden = !showingGraph;
       graphContext.hidden = !showingGraph;
@@ -3180,9 +3256,11 @@
       openApiPanel.hidden = !showingOpenApi;
       kafkaPanel.hidden = !showingKafka;
       persistencePanel.hidden = !showingPersistence;
+      flowsPanel.hidden = !showingFlows;
       graphLegend.hidden = !showingGraph;
       graphCanvas.hidden = showingDependencies;
       dependencyCanvas.hidden = !showingDependencies;
+      if (showingFlows) flowsPanel.dispatchEvent(new Event("systemlens:flows-open"));
       if (showingDependencies) {
         const activeDependencyRenderer = ensureDependencyRenderer();
         requestAnimationFrame(() => {
@@ -3708,6 +3786,9 @@
     function clearPathControls() {
       pathQuery.value = "";
       pathStops.splice(0, pathStops.length);
+      graphState.selectedCodeFlowId = null;
+      delete graphCanvas.dataset.selectedCodeFlow;
+      delete graphCanvas.dataset.flowFocusRatio;
     }
     function restResourceLabel(link, target) {
       const servicePrefix = `${target.name}: `;
@@ -3875,7 +3956,7 @@
         order += 1;
       });
     }
-    function renderPathDetails(path) {
+    function renderPathDetails(path, context = {}) {
       revealDetails();
       details.replaceChildren();
       const pathNodeLabel = (id, index) => {
@@ -3892,10 +3973,11 @@
       header.className = "path-details-header";
       const kicker = document.createElement("p");
       kicker.className = "path-details-kicker";
-      kicker.textContent = "Analyse de flux";
+      kicker.textContent = context.codeFlow ? "Flux de code sélectionné" : "Analyse de flux";
       const title = document.createElement("h1");
       title.className = "path-details-title";
-      title.textContent = pathStops.length > 2 ? "Chemin avec noeuds intermediaires" : "Chemin le plus court";
+      title.textContent = context.codeFlow?.method
+        || (pathStops.length > 2 ? "Chemin avec noeuds intermediaires" : "Chemin le plus court");
       const summary = document.createElement("p");
       summary.className = "path-details-summary";
       const serviceCount = path.nodes.filter(id => nodeDataById.get(id).kind === "microservice").length;
@@ -3926,16 +4008,96 @@
       overview.append(overviewTitle, overviewList);
       details.append(overview);
     }
-    function showPath(path, stops = path.nodes) {
+    function centerCameraOnPath(path) {
+      const nodeIds = path.nodes.filter(id => network.hasNode(id) && isVisibleNodeId(id));
+      if (!nodeIds.length) return;
+      const viewport = graphCanvas.getBoundingClientRect();
+      const toolbarRect = document.querySelector(".toolbar").getBoundingClientRect();
+      const margin = 24;
+      const focusArea = {
+        left: margin,
+        right: viewport.width - margin,
+        top: margin,
+        bottom: viewport.height - margin,
+      };
+      const roomBesideToolbar = viewport.right - toolbarRect.right;
+      const roomBelowToolbar = viewport.bottom - toolbarRect.bottom;
+      if (roomBesideToolbar >= 260) {
+        focusArea.left = toolbarRect.right - viewport.left + margin;
+      } else if (roomBelowToolbar >= 180) {
+        focusArea.top = toolbarRect.bottom - viewport.top + margin;
+      }
+      const projected = nodeIds.map(id => {
+        const attributes = network.getNodeAttributes(id);
+        return renderer.graphToViewport({ x: attributes.x, y: attributes.y });
+      });
+      const spanX = Math.max(...projected.map(point => point.x))
+        - Math.min(...projected.map(point => point.x));
+      const spanY = Math.max(...projected.map(point => point.y))
+        - Math.min(...projected.map(point => point.y));
+      const cardWidth = graphState.renderMode === "symbols" ? 34 : GRAPH_CARD_WIDTH;
+      const cardHeight = graphState.renderMode === "symbols" ? 34 : GRAPH_CARD_HEIGHT;
+      const availableWidth = Math.max(1, focusArea.right - focusArea.left - cardWidth - 2 * margin);
+      const availableHeight = Math.max(1, focusArea.bottom - focusArea.top - cardHeight - 2 * margin);
+      const camera = renderer.getCamera();
+      const currentState = camera.getState();
+      const ratioFactor = Math.max(1, spanX / availableWidth, spanY / availableHeight);
+      const ratio = Math.max(.01, Math.min(100, currentState.ratio * ratioFactor));
+      camera.setState({ ...currentState, ratio });
+
+      const targetCenter = {
+        x: (focusArea.left + focusArea.right) / 2,
+        y: (focusArea.top + focusArea.bottom) / 2,
+      };
+      for (let pass = 0; pass < 8; pass += 1) {
+        const projectedAfterZoom = nodeIds.map(id => {
+          const attributes = network.getNodeAttributes(id);
+          return renderer.graphToViewport({ x: attributes.x, y: attributes.y });
+        });
+        const projectedCenter = {
+          x: (Math.min(...projectedAfterZoom.map(point => point.x))
+            + Math.max(...projectedAfterZoom.map(point => point.x))) / 2,
+          y: (Math.min(...projectedAfterZoom.map(point => point.y))
+            + Math.max(...projectedAfterZoom.map(point => point.y))) / 2,
+        };
+        const deltaX = targetCenter.x - projectedCenter.x;
+        const deltaY = targetCenter.y - projectedCenter.y;
+        if (Math.abs(deltaX) <= .5 && Math.abs(deltaY) <= .5) break;
+        const ratioState = camera.getState();
+        camera.setState({
+          ...ratioState,
+          x: ratioState.x - deltaX / Math.max(viewport.width, 1),
+          y: ratioState.y + deltaY / Math.max(viewport.height, 1),
+        });
+        renderer.refresh();
+      }
+      graphCanvas.dataset.flowFocusRatio = String(ratio);
+      renderer.refresh();
+      requestGraphRender();
+    }
+    function showPath(path, stops = path.nodes, context = {}) {
       pathStops.splice(0, pathStops.length, ...stops);
       renderPathQuery();
       graphState.selectedId = path.nodes[0];
       graphState.relatedNodes = new Set(path.nodes);
       graphState.relatedEdges = new Set(path.edges.map(step => step.edge));
+      graphState.selectedCodeFlowId = context.codeFlow?.id || null;
+      if (graphState.selectedCodeFlowId) graphCanvas.dataset.selectedCodeFlow = graphState.selectedCodeFlowId;
+      else delete graphCanvas.dataset.selectedCodeFlow;
       setPathMicroserviceOrder(path);
       renderer.refresh();
-      renderPathDetails(path);
-      renderer.getCamera().animatedReset({ duration: 220 });
+      if (context.showDetails !== false) renderPathDetails(path, context);
+      else {
+        resetButton.disabled = false;
+        resetButton.textContent = "Effacer";
+        resetButton.title = "Effacer la sélection";
+        resetButton.setAttribute("aria-label", resetButton.title);
+      }
+      if (context.codeFlow) centerCameraOnPath(path);
+      else {
+        delete graphCanvas.dataset.flowFocusRatio;
+        renderer.getCamera().animatedReset({ duration: 220 });
+      }
       persistState();
     }
     function renderSimplePathChoices(paths, limited) {
@@ -4341,8 +4503,10 @@
         selectedClusterKey: resolvedCluster.key,
         relatedNodes: null,
         relatedEdges: null,
+        selectedCodeFlowId: null,
         pathMicroserviceOrder: new Map(),
       });
+      delete graphCanvas.dataset.selectedCodeFlow;
       renderer.refresh();
       requestGraphRender();
       renderClusterDetails(resolvedCluster);
@@ -4355,6 +4519,8 @@
       graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
+      graphState.selectedCodeFlowId = null;
+      delete graphCanvas.dataset.selectedCodeFlow;
       network.forEachEdge((edge, attributes, source, target) => {
         if (!isVisibleRelation(attributes, source, target) || !matches(attributes, source, target)) return;
         graphState.relatedEdges.add(edge); graphState.relatedNodes.add(source); graphState.relatedNodes.add(target);
@@ -4376,6 +4542,8 @@
       graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
+      graphState.selectedCodeFlowId = null;
+      delete graphCanvas.dataset.selectedCodeFlow;
       network.forEachEdge((edge, attributes, source, target) => {
         if (!isVisibleRelation(attributes, source, target)) return;
         if (source === id || target === id) {
@@ -4384,18 +4552,210 @@
       });
       renderer.refresh();
       renderDetails(id);
-
-// Ordered source module: 60-bootstrap.js
       persistState();
     }
+
+// Ordered source module: 55-code-flows.js
+    const codeFlows = Array.isArray(graphData.code_flows) ? graphData.code_flows : [];
+    const codeFlowsList = document.getElementById("code-flows");
+    const codeFlowsEmpty = document.getElementById("code-flows-empty");
+    const codeFlowFilter = document.getElementById("code-flow-filter");
+    const codeFlowsTitle = document.getElementById("code-flows-title");
+
+    function codeFlowLocation(step) {
+      return `${step.path}:${step.start_line}`;
+    }
+
+    function codeFlowStepLabel(kind) {
+      return ({
+        http_entry: "Entrée HTTP",
+        message_entry: "Entrée message",
+        http_call: "Appel HTTP",
+        message_publish: "Publication message",
+        data_read: "Lecture de données",
+        data_write: "Écriture de données",
+      })[kind] || String(kind || "Étape").replaceAll("_", " ");
+    }
+
+    function codeFlowConfidenceLabel(confidence) {
+      return ({ low: "faible", medium: "moyenne", high: "élevée" })[confidence]
+        || confidence
+        || "inconnue";
+    }
+
+    function nodeIdForCodeFlowResource(name, kind) {
+      return graphData.nodes.find(node => node.name === name && node.kind === kind)?.id || null;
+    }
+
+    function graphLinkBetween(source, target, accepts = () => true) {
+      const index = graphData.links.findIndex(link => (
+        link.source === source && link.target === target && accepts(link)
+      ));
+      return index < 0 ? null : { edge: `edge-${index}`, link: graphData.links[index] };
+    }
+
+    function pathForCodeFlow(flow) {
+      const serviceId = nodeIdForCodeFlowResource(flow.module, "microservice");
+      if (!serviceId) return null;
+      const nodes = [];
+      const edges = [];
+      const addFirst = id => { if (!nodes.length) nodes.push(id); };
+      const addHop = (target, accepts) => {
+        const source = nodes.at(-1);
+        const edge = source ? graphLinkBetween(source, target, accepts) : null;
+        if (!edge) return false;
+        nodes.push(target);
+        edges.push(edge);
+        return true;
+      };
+      const topicId = name => nodeIdForCodeFlowResource(name, "kafka_topic");
+      const steps = flow.steps || [];
+      const trigger = steps[0];
+      if (!trigger) return null;
+
+      if (trigger.kind === "message_entry") {
+        const topic = topicId(trigger.name);
+        if (!topic) return null;
+        addFirst(topic);
+        if (!addHop(serviceId, link => link.kind === "kafka")) return null;
+      } else {
+        addFirst(serviceId);
+      }
+
+      for (const step of steps.slice(1)) {
+        if (step.kind === "http_call") {
+          const source = nodes.at(-1);
+          const candidate = graphData.links.find((link, index) => (
+            link.source === source
+            && ["rest", "mcp_http"].includes(link.kind)
+            && (String(link.label || "").includes(step.name) || link.kind === "mcp_http")
+            && !edges.some(edge => edge.edge === `edge-${index}`)
+          ));
+          if (!candidate || !addHop(candidate.target, link => link === candidate)) return null;
+          continue;
+        }
+        if (step.kind === "message_publish") {
+          if (nodes.at(-1) !== serviceId && !addHop(serviceId, link => link.kind === "kafka")) return null;
+          const topic = topicId(step.name);
+          if (!topic || !addHop(topic, link => link.kind === "kafka")) return null;
+        }
+      }
+      return edges.length ? { nodes, edges } : null;
+    }
+
+    function showCodeFlow(flow) {
+      const path = pathForCodeFlow(flow);
+      if (!path) return;
+      showPath(path, path.nodes, { codeFlow: flow, showDetails: false });
+      syncCodeFlowSelection();
+    }
+
+    function syncCodeFlowSelection() {
+      codeFlowsList.querySelectorAll(".code-flow-item").forEach(item => {
+        const selected = item.dataset.flowId === graphState.selectedCodeFlowId;
+        item.classList.toggle("is-selected", selected);
+        const action = item.querySelector(".reference-action");
+        if (!action) return;
+        action.textContent = selected ? "Affiché dans le graphe" : "Afficher dans le graphe";
+        action.setAttribute("aria-pressed", String(selected));
+      });
+    }
+
+    function codeFlowItem(flow) {
+      const item = document.createElement("li");
+      const selected = graphState.selectedCodeFlowId === flow.id;
+      item.className = `code-flow-item${selected ? " is-selected" : ""}`;
+      item.dataset.flowId = flow.id;
+      const header = document.createElement("div");
+      header.className = "code-flow-header";
+      const title = document.createElement("div");
+      title.className = "reference-title code-flow-title";
+      title.textContent = flow.method;
+      const badges = document.createElement("div");
+      badges.className = "code-flow-badges";
+      [flow.status === "potential" ? "Potentiel" : (flow.status || "Statut inconnu"), `Confiance ${codeFlowConfidenceLabel(flow.confidence)}`].forEach(label => {
+        const badge = document.createElement("span");
+        badge.className = "detail-badge";
+        badge.textContent = label;
+        badges.append(badge);
+      });
+      header.append(title, badges);
+      const path = pathForCodeFlow(flow);
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "reference-action";
+      action.textContent = selected ? "Affiché dans le graphe" : "Afficher dans le graphe";
+      action.setAttribute("aria-pressed", String(selected));
+      action.disabled = path === null;
+      action.title = path
+        ? "Surligner les relations de ce flux dans le graphe principal"
+        : "Ce flux ne peut pas être rapproché de la topologie affichée";
+      if (path) action.addEventListener("click", () => showCodeFlow(flow));
+      const meta = document.createElement("div");
+      meta.className = "reference-meta";
+      const trigger = flow.steps?.[0];
+      meta.textContent = `${flow.module} · ${codeFlowStepLabel(trigger?.kind)} : ${trigger?.name || ""} · ${flow.steps?.length - 1 || 0} effet(s)`;
+      const reason = document.createElement("p");
+      reason.className = "code-flow-reason";
+      reason.textContent = flow.reason === "The entry point and external effects occur in the same Java method."
+        ? "Le point d’entrée et les effets externes se trouvent dans la même méthode Java."
+        : flow.reason || "Parcours potentiel issu du code source.";
+      const steps = document.createElement("ol");
+      steps.className = "code-flow-steps";
+      (flow.steps || []).forEach(step => {
+        const stepItem = document.createElement("li");
+        stepItem.className = "code-flow-step";
+        const summary = document.createElement("div");
+        summary.className = "code-flow-step-summary";
+        const kind = document.createElement("span");
+        kind.className = "code-flow-step-kind";
+        kind.textContent = codeFlowStepLabel(step.kind);
+        const name = document.createElement("strong");
+        name.textContent = step.name;
+        summary.append(kind, name);
+        const location = document.createElement("code");
+        location.textContent = codeFlowLocation(step);
+        stepItem.append(summary, location);
+        steps.append(stepItem);
+      });
+      item.append(header, meta, reason, steps, action);
+      return item;
+    }
+
+    function renderCodeFlows() {
+      const query = codeFlowFilter.value.trim().toLocaleLowerCase();
+      const visible = codeFlows.filter(flow => {
+        const haystack = [
+          flow.id,
+          flow.module,
+          flow.method,
+          flow.reason,
+          ...(flow.steps || []).flatMap(step => [step.kind, step.name, step.path]),
+        ].join(" ").toLocaleLowerCase();
+        return !query || haystack.includes(query);
+      });
+      codeFlowsList.replaceChildren(...visible.map(codeFlowItem));
+      syncCodeFlowSelection();
+      codeFlowsEmpty.hidden = visible.length > 0;
+      codeFlowsTitle.textContent = `Flux de code (${codeFlows.length})`;
+    }
+
+    codeFlowFilter.addEventListener("input", renderCodeFlows);
+    document.getElementById("flows-panel").addEventListener("systemlens:flows-open", renderCodeFlows);
+    renderCodeFlows();
+
+// Ordered source module: 60-bootstrap.js
     function reset() {
       updateGraphState({
         selectedId: null,
         selectedClusterKey: null,
         relatedNodes: null,
         relatedEdges: null,
+        selectedCodeFlowId: null,
         pathMicroserviceOrder: new Map(),
       });
+      delete graphCanvas.dataset.selectedCodeFlow;
+      delete graphCanvas.dataset.flowFocusRatio;
       renderer.refresh();
       setDetailsEmpty("Selectionnez un noeud ou un module pour afficher ses informations.");
       search.value = "";
@@ -4545,6 +4905,7 @@
     persistenceTab.addEventListener("click", () => setToolbarTab("persistence"));
     buildTab.addEventListener("click", () => setToolbarTab("dependencies"));
     issuesTab.addEventListener("click", () => setToolbarTab("issues"));
+    flowsTab.addEventListener("click", () => setToolbarTab("flows"));
     inventoryStatus.addEventListener("click", () => setToolbarTab("issues"));
     [
       relationHttp,
@@ -4596,7 +4957,13 @@
       renderer?.refresh();
       dependencyRenderer?.refresh();
       requestGraphRender();
-      if (refit) fitCameraToVisibleGraph(activeRenderer());
+      if (refit) {
+        if (graphState.selectedCodeFlowId && graphState.relatedNodes?.size) {
+          centerCameraOnPath({ nodes: [...graphState.relatedNodes] });
+        } else {
+          fitCameraToVisibleGraph(activeRenderer());
+        }
+      }
     }
     updateWorkspaceViewport(false);
     applyLayout("forceatlas2-noverlap");

@@ -13,6 +13,7 @@ from playwright.sync_api import Playwright, sync_playwright
 
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.domain.graph import GraphEdge
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
 from systemlens.modules import DiscoveredModule, MongoField, MongoPersistenceClass
 from systemlens.render import render_graph_html
 
@@ -145,6 +146,70 @@ def _complex_dataset_document() -> str:
         )
         .replace("__GRAPH_DATA__", json.dumps(data))
         .replace("__LAYER_GEOMETRY__", _LAYER_GEOMETRY.read_text(encoding="utf-8"))
+    )
+
+
+def _code_flow_document() -> str:
+    def kafka_endpoint(role: str, topic: str, path: str, module: str) -> MessageEndpoint:
+        return MessageEndpoint(
+            id=compute_endpoint_id(role, topic, path),
+            role=role,
+            system="kafka",
+            topic=topic,
+            topic_dynamic=False,
+            source="code",
+            framework="spring-kafka",
+            path=path,
+            start_line=42,
+            end_line=42,
+            snippet="",
+            module=module,
+        )
+
+    orders_publish = kafka_endpoint("produce", "orders.created", "OrderPublisher.java", "orders")
+    payments_consume = kafka_endpoint("consume", "orders.created", "PaymentHandler.java", "payments")
+    payments_publish = kafka_endpoint("produce", "payments.completed", "PaymentHandler.java", "payments")
+    inventory_consume = kafka_endpoint("consume", "payments.completed", "InventoryHandler.java", "inventory")
+    flow = CodeFlow(
+        id="flow-readable",
+        module="payments",
+        method="com.example.payments.application.PaymentHandler.handle",
+        path="payments/src/main/java/com/example/payments/application/PaymentHandler.java",
+        start_line=42,
+        end_line=73,
+        status="potential",
+        confidence="medium",
+        reason="The entry point and external effects occur in the same Java method.",
+        steps=(
+            CodeFlowStep(
+                order=1,
+                kind="message_entry",
+                name="orders.created",
+                path="payments/src/main/java/com/example/payments/application/PaymentHandler.java",
+                start_line=42,
+                end_line=42,
+            ),
+            CodeFlowStep(
+                order=2,
+                kind="message_publish",
+                name="payments.completed",
+                path="payments/src/main/java/com/example/payments/application/PaymentHandler.java",
+                start_line=68,
+                end_line=68,
+            ),
+        ),
+    )
+    return render_graph_html(
+        {
+            "orders": [orders_publish],
+            "payments": [payments_consume, payments_publish],
+            "inventory": [inventory_consume],
+        },
+        [
+            GraphEdge("kafka", "orders", "payments", orders_publish, payments_consume),
+            GraphEdge("kafka", "payments", "inventory", payments_publish, inventory_consume),
+        ],
+        code_flows=[flow],
     )
 
 
@@ -811,6 +876,202 @@ def _assert_geometry_contract(page, *, layered: bool) -> None:
 
 
 @pytest.mark.slow
+def test_code_flow_widget_is_readable_in_both_themes() -> None:
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 390, "height": 760})
+        page = context.new_page()
+        page.set_default_timeout(10_000)
+        page.set_content(_code_flow_document(), wait_until="load")
+        page.locator("#flows-tab").click()
+        page.locator(".code-flow-item").wait_for(state="visible")
+
+        assert page.locator(".code-flow-step-kind").all_text_contents() == [
+            "Entrée message", "Publication message",
+        ]
+        assert page.locator(".code-flow-badges").inner_text().splitlines() == [
+            "Potentiel", "Confiance moyenne",
+        ]
+        assert page.locator(".code-flow-reason").inner_text().startswith(
+            "Le point d’entrée"
+        )
+
+        metrics = page.evaluate(
+            """() => {
+                const rgb = value => value.match(/[\\d.]+/g).slice(0, 3).map(Number);
+                const luminance = value => {
+                    const channels = rgb(value).map(channel => {
+                        const normalized = channel / 255;
+                        return normalized <= .04045
+                            ? normalized / 12.92
+                            : ((normalized + .055) / 1.055) ** 2.4;
+                    });
+                    return .2126 * channels[0] + .7152 * channels[1] + .0722 * channels[2];
+                };
+                const contrast = (foreground, background) => {
+                    const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+                    return (values[0] + .05) / (values[1] + .05);
+                };
+                const inspect = theme => {
+                    document.documentElement.dataset.theme = theme;
+                    const item = document.querySelector('.code-flow-item');
+                    const step = document.querySelector('.code-flow-step');
+                    const pairs = [
+                        ['.code-flow-title', item],
+                        ['.code-flow-reason', item],
+                        ['.code-flow-step strong', step],
+                        ['.code-flow-step code', step],
+                        ['.code-flow-step-kind', step],
+                    ];
+                    return {
+                        cardBackground: getComputedStyle(item).backgroundColor,
+                        stepBackground: getComputedStyle(step).backgroundColor,
+                        contrasts: pairs.map(([selector, background]) => contrast(
+                            getComputedStyle(document.querySelector(selector)).color,
+                            getComputedStyle(background).backgroundColor,
+                        )),
+                    };
+                };
+                const item = document.querySelector('.code-flow-item');
+                const steps = [...document.querySelectorAll('.code-flow-step')];
+                return {
+                    light: inspect('light'),
+                    dark: inspect('dark'),
+                    overflowWidths: {
+                        item: [item.clientWidth, item.scrollWidth],
+                        steps: steps.map(step => [step.clientWidth, step.scrollWidth]),
+                    },
+                    noHorizontalOverflow: item.scrollWidth <= item.clientWidth
+                        && steps.every(step => step.scrollWidth <= step.clientWidth),
+                };
+            }"""
+        )
+        assert metrics["light"]["cardBackground"] == "rgb(244, 247, 251)"
+        assert metrics["light"]["stepBackground"] == "rgb(255, 255, 255)"
+        assert metrics["dark"]["cardBackground"] == "rgb(20, 34, 56)"
+        assert metrics["dark"]["stepBackground"] == "rgb(25, 42, 67)"
+        assert min(metrics["light"]["contrasts"]) >= 4.5
+        assert min(metrics["dark"]["contrasts"]) >= 4.5
+        assert metrics["noHorizontalOverflow"], metrics["overflowWidths"]
+
+        page.set_viewport_size({"width": 1100, "height": 760})
+        toolbar_before_selection = page.locator(".toolbar").bounding_box()
+        page.locator(".code-flow-item").evaluate(
+            "element => { element.dataset.selectionSentinel = 'preserved'; }"
+        )
+        page.get_by_role("button", name="Afficher dans le graphe").click()
+        page.locator(".graph-node-card-label.is-code-flow-node").first.wait_for(
+            state="visible"
+        )
+        toolbar_after_selection = page.locator(".toolbar").bounding_box()
+        assert toolbar_before_selection == toolbar_after_selection
+        assert page.locator("#flows-tab").get_attribute("aria-selected") == "true"
+        assert page.locator(".code-flow-item.is-selected").count() == 1
+        assert page.locator(".code-flow-item").get_attribute(
+            "data-selection-sentinel"
+        ) == "preserved"
+        assert page.get_by_role("button", name="Affiché dans le graphe").count() == 1
+        assert page.locator("#graph").get_attribute("data-selected-code-flow") == (
+            "flow-readable"
+        )
+        assert float(page.locator("#graph").get_attribute("data-flow-focus-ratio")) > 0
+        assert page.locator(".graph-node-card-label.is-code-flow-node").count() == 3
+        assert page.locator(
+            ".graph-node-card-label:not(.is-code-flow-node)"
+        ).count() == 2
+        assert page.locator(".toolbar").get_attribute("class") == "toolbar"
+        assert page.locator("#details").get_attribute("class") == "is-empty"
+        flow_node_style = page.locator(
+            ".graph-node-card-label.is-code-flow-node"
+        ).first.evaluate(
+            "element => ({ opacity: getComputedStyle(element).opacity, boxShadow: getComputedStyle(element).boxShadow })"
+        )
+        context_node_style = page.locator(
+            ".graph-node-card-label:not(.is-code-flow-node)"
+        ).first.evaluate(
+            "element => ({ opacity: getComputedStyle(element).opacity, background: getComputedStyle(element).backgroundColor, filter: getComputedStyle(element).filter })"
+        )
+        assert flow_node_style["opacity"] == "1"
+        assert flow_node_style["boxShadow"] != "none"
+        assert context_node_style["opacity"] == "1"
+        assert context_node_style["background"] == "rgb(23, 38, 61)"
+        assert context_node_style["filter"] == "none"
+        assert page.locator(".toolbar").evaluate(
+            "element => element.scrollLeft === 0 && element.scrollWidth <= element.clientWidth"
+        )
+
+        page.wait_for_function(
+            """() => {
+                const toolbar = document.querySelector('.toolbar').getBoundingClientRect();
+                const cards = [...document.querySelectorAll('.graph-node-card-label.is-code-flow-node')]
+                    .map(card => card.getBoundingClientRect());
+                const centerX = (Math.min(...cards.map(card => (card.left + card.right) / 2))
+                    + Math.max(...cards.map(card => (card.left + card.right) / 2))) / 2;
+                const centerY = (Math.min(...cards.map(card => (card.top + card.bottom) / 2))
+                    + Math.max(...cards.map(card => (card.top + card.bottom) / 2))) / 2;
+                const targetX = (toolbar.right + 24 + innerWidth - 24) / 2;
+                return Math.abs(centerX - targetX) <= 8 && Math.abs(centerY - innerHeight / 2) <= 8;
+            }"""
+        )
+        focus_bounds = page.evaluate(
+            """() => {
+                const toolbar = document.querySelector('.toolbar').getBoundingClientRect();
+                const cards = [...document.querySelectorAll('.graph-node-card-label.is-code-flow-node')]
+                    .map(card => card.getBoundingClientRect().toJSON());
+                return { toolbarRight: toolbar.right, width: innerWidth, height: innerHeight, cards };
+            }"""
+        )
+        assert all(
+            card["left"] >= focus_bounds["toolbarRight"] + 20
+            and card["right"] <= focus_bounds["width"] - 20
+            and card["top"] >= 20
+            and card["bottom"] <= focus_bounds["height"] - 20
+            for card in focus_bounds["cards"]
+        )
+
+        page.locator("#graph-tab").click()
+        page.locator("#render-symbols").click()
+        page.wait_for_function(
+            "() => document.querySelector('#graph')?.dataset.renderMode === 'symbols'"
+        )
+        symbol_filter = page.locator(
+            ".graph-node-card-label.is-code-flow-node .graph-node-card-icon"
+        ).first.evaluate("element => getComputedStyle(element).filter")
+        assert symbol_filter != "none"
+        assert page.locator(".toolbar").evaluate(
+            "element => element.scrollLeft === 0 && element.scrollWidth <= element.clientWidth"
+        )
+
+        page.set_viewport_size({"width": 700, "height": 700})
+        page.wait_for_function(
+            """() => {
+                const toolbar = document.querySelector('.toolbar').getBoundingClientRect();
+                const cards = [...document.querySelectorAll('.graph-node-card-label.is-code-flow-node')]
+                    .map(card => card.getBoundingClientRect());
+                return cards.every(card => (
+                    card.left >= 20 && card.right <= innerWidth - 20
+                    && card.top >= toolbar.bottom + 20 && card.bottom <= innerHeight - 20
+                ));
+            }"""
+        )
+
+        page.locator("#graph-tab").click()
+        page.locator("#reset").click()
+        page.wait_for_function(
+            "() => !document.querySelector('.graph-node-card-label.is-code-flow-node')"
+        )
+        assert page.locator("#graph").get_attribute("data-selected-code-flow") is None
+        assert page.locator("#graph").get_attribute("data-flow-focus-ratio") is None
+        assert page.locator(".graph-node-card-label.is-code-flow-node").count() == 0
+
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
 def test_primary_view_selector_opens_each_view_directly() -> None:
     with sync_playwright() as playwright:
         try:
@@ -1152,6 +1413,20 @@ def test_generated_simple_supermarket_starts_with_every_node_in_view() -> None:
             }"""
         )
         assert 1 < float(page.locator("#graph").get_attribute("data-fit-ratio") or "nan") <= 2
+
+        page.locator("#flows-tab").click()
+        assert page.locator(".code-flow-item").count() == 1
+        toolbar_before_selection = page.locator(".toolbar").bounding_box()
+        page.get_by_role("button", name="Afficher dans le graphe").click()
+        page.locator(".graph-node-card-label.is-code-flow-node").first.wait_for(
+            state="visible"
+        )
+        assert page.locator("#flows-tab").get_attribute("aria-selected") == "true"
+        assert page.locator(".code-flow-item.is-selected").count() == 1
+        assert page.locator(".toolbar").bounding_box() == toolbar_before_selection
+        assert page.locator("#graph").get_attribute("data-selected-code-flow") == (
+            "simple-restock-flow"
+        )
         context.close()
         browser.close()
 

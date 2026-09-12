@@ -43,6 +43,7 @@
       graphLegend.hidden = !showingGraph;
       graphCanvas.hidden = showingDependencies;
       dependencyCanvas.hidden = !showingDependencies;
+      if (showingFlows) flowsPanel.dispatchEvent(new Event("systemlens:flows-open"));
       if (showingDependencies) {
         const activeDependencyRenderer = ensureDependencyRenderer();
         requestAnimationFrame(() => {

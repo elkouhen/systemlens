@@ -205,6 +205,17 @@
         nodeReducer: (node, data) => {
           if (!isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
           const renderedData = graphState.renderMode === "symbols" ? { ...data, size: .5 } : data;
+          if (graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)) {
+            const order = graphState.pathMicroserviceOrder.get(node);
+            return {
+              ...renderedData,
+              label: order ? `${order}. ${data.label}` : renderedData.label,
+              size: renderedData.size * 1.22,
+              highlighted: true,
+              zIndex: 2,
+            };
+          }
+          if (graphState.selectedCodeFlowId) return renderedData;
           if (!graphState.selectedId || graphState.relatedNodes.has(node)) {
             const order = graphState.pathMicroserviceOrder.get(node);
             return order ? { ...renderedData, label: `${order}. ${data.label}` } : renderedData;
@@ -213,6 +224,20 @@
         },
         edgeReducer: (edge, data) => {
           if (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge))) return { ...data, hidden: true };
+          if (graphState.selectedCodeFlowId) {
+            if (graphState.relatedEdges.has(edge)) return {
+              ...data,
+              color: document.documentElement.dataset.theme === "dark" ? "#c4b5fd" : "#6d28d9",
+              size: 3.5,
+              zIndex: 2,
+            };
+            return {
+              ...data,
+              color: document.documentElement.dataset.theme === "dark" ? "#25334a" : "#d8dee9",
+              size: .25,
+              zIndex: 0,
+            };
+          }
           if (graphState.selectedId && graphState.relatedEdges.has(edge)) return { ...data, size: 1.5 };
           if (graphState.clusteredView || graphState.layeredClusterView) return { ...data, size: .5 };
           if (graphState.selectedId) return { ...data, color: "#d8dee9", size: .35 };
@@ -533,7 +558,8 @@
           const isDatabase = node.kind === "data_schema" || node.kind === "mongodb_collection";
           const isResource = isTopic || isDatabase;
           const adaptiveLabelSide = adaptiveLabels.get(id);
-          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}`;
+          const isCodeFlowNode = graphState.selectedCodeFlowId && graphState.relatedNodes?.has(id);
+          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}${isCodeFlowNode ? " is-code-flow-node" : ""}`;
           label.dataset.nodeKind = node.kind;
           label.dataset.nodeId = id;
           const cardScale = GRAPH_CARD_SCALE;

@@ -68,6 +68,9 @@
     function clearPathControls() {
       pathQuery.value = "";
       pathStops.splice(0, pathStops.length);
+      graphState.selectedCodeFlowId = null;
+      delete graphCanvas.dataset.selectedCodeFlow;
+      delete graphCanvas.dataset.flowFocusRatio;
     }
     function restResourceLabel(link, target) {
       const servicePrefix = `${target.name}: `;
@@ -235,7 +238,7 @@
         order += 1;
       });
     }
-    function renderPathDetails(path) {
+    function renderPathDetails(path, context = {}) {
       revealDetails();
       details.replaceChildren();
       const pathNodeLabel = (id, index) => {
@@ -252,10 +255,11 @@
       header.className = "path-details-header";
       const kicker = document.createElement("p");
       kicker.className = "path-details-kicker";
-      kicker.textContent = "Analyse de flux";
+      kicker.textContent = context.codeFlow ? "Flux de code sélectionné" : "Analyse de flux";
       const title = document.createElement("h1");
       title.className = "path-details-title";
-      title.textContent = pathStops.length > 2 ? "Chemin avec noeuds intermediaires" : "Chemin le plus court";
+      title.textContent = context.codeFlow?.method
+        || (pathStops.length > 2 ? "Chemin avec noeuds intermediaires" : "Chemin le plus court");
       const summary = document.createElement("p");
       summary.className = "path-details-summary";
       const serviceCount = path.nodes.filter(id => nodeDataById.get(id).kind === "microservice").length;
@@ -286,16 +290,96 @@
       overview.append(overviewTitle, overviewList);
       details.append(overview);
     }
-    function showPath(path, stops = path.nodes) {
+    function centerCameraOnPath(path) {
+      const nodeIds = path.nodes.filter(id => network.hasNode(id) && isVisibleNodeId(id));
+      if (!nodeIds.length) return;
+      const viewport = graphCanvas.getBoundingClientRect();
+      const toolbarRect = document.querySelector(".toolbar").getBoundingClientRect();
+      const margin = 24;
+      const focusArea = {
+        left: margin,
+        right: viewport.width - margin,
+        top: margin,
+        bottom: viewport.height - margin,
+      };
+      const roomBesideToolbar = viewport.right - toolbarRect.right;
+      const roomBelowToolbar = viewport.bottom - toolbarRect.bottom;
+      if (roomBesideToolbar >= 260) {
+        focusArea.left = toolbarRect.right - viewport.left + margin;
+      } else if (roomBelowToolbar >= 180) {
+        focusArea.top = toolbarRect.bottom - viewport.top + margin;
+      }
+      const projected = nodeIds.map(id => {
+        const attributes = network.getNodeAttributes(id);
+        return renderer.graphToViewport({ x: attributes.x, y: attributes.y });
+      });
+      const spanX = Math.max(...projected.map(point => point.x))
+        - Math.min(...projected.map(point => point.x));
+      const spanY = Math.max(...projected.map(point => point.y))
+        - Math.min(...projected.map(point => point.y));
+      const cardWidth = graphState.renderMode === "symbols" ? 34 : GRAPH_CARD_WIDTH;
+      const cardHeight = graphState.renderMode === "symbols" ? 34 : GRAPH_CARD_HEIGHT;
+      const availableWidth = Math.max(1, focusArea.right - focusArea.left - cardWidth - 2 * margin);
+      const availableHeight = Math.max(1, focusArea.bottom - focusArea.top - cardHeight - 2 * margin);
+      const camera = renderer.getCamera();
+      const currentState = camera.getState();
+      const ratioFactor = Math.max(1, spanX / availableWidth, spanY / availableHeight);
+      const ratio = Math.max(.01, Math.min(100, currentState.ratio * ratioFactor));
+      camera.setState({ ...currentState, ratio });
+
+      const targetCenter = {
+        x: (focusArea.left + focusArea.right) / 2,
+        y: (focusArea.top + focusArea.bottom) / 2,
+      };
+      for (let pass = 0; pass < 8; pass += 1) {
+        const projectedAfterZoom = nodeIds.map(id => {
+          const attributes = network.getNodeAttributes(id);
+          return renderer.graphToViewport({ x: attributes.x, y: attributes.y });
+        });
+        const projectedCenter = {
+          x: (Math.min(...projectedAfterZoom.map(point => point.x))
+            + Math.max(...projectedAfterZoom.map(point => point.x))) / 2,
+          y: (Math.min(...projectedAfterZoom.map(point => point.y))
+            + Math.max(...projectedAfterZoom.map(point => point.y))) / 2,
+        };
+        const deltaX = targetCenter.x - projectedCenter.x;
+        const deltaY = targetCenter.y - projectedCenter.y;
+        if (Math.abs(deltaX) <= .5 && Math.abs(deltaY) <= .5) break;
+        const ratioState = camera.getState();
+        camera.setState({
+          ...ratioState,
+          x: ratioState.x - deltaX / Math.max(viewport.width, 1),
+          y: ratioState.y + deltaY / Math.max(viewport.height, 1),
+        });
+        renderer.refresh();
+      }
+      graphCanvas.dataset.flowFocusRatio = String(ratio);
+      renderer.refresh();
+      requestGraphRender();
+    }
+    function showPath(path, stops = path.nodes, context = {}) {
       pathStops.splice(0, pathStops.length, ...stops);
       renderPathQuery();
       graphState.selectedId = path.nodes[0];
       graphState.relatedNodes = new Set(path.nodes);
       graphState.relatedEdges = new Set(path.edges.map(step => step.edge));
+      graphState.selectedCodeFlowId = context.codeFlow?.id || null;
+      if (graphState.selectedCodeFlowId) graphCanvas.dataset.selectedCodeFlow = graphState.selectedCodeFlowId;
+      else delete graphCanvas.dataset.selectedCodeFlow;
       setPathMicroserviceOrder(path);
       renderer.refresh();
-      renderPathDetails(path);
-      renderer.getCamera().animatedReset({ duration: 220 });
+      if (context.showDetails !== false) renderPathDetails(path, context);
+      else {
+        resetButton.disabled = false;
+        resetButton.textContent = "Effacer";
+        resetButton.title = "Effacer la sélection";
+        resetButton.setAttribute("aria-label", resetButton.title);
+      }
+      if (context.codeFlow) centerCameraOnPath(path);
+      else {
+        delete graphCanvas.dataset.flowFocusRatio;
+        renderer.getCamera().animatedReset({ duration: 220 });
+      }
       persistState();
     }
     function renderSimplePathChoices(paths, limited) {
@@ -701,8 +785,10 @@
         selectedClusterKey: resolvedCluster.key,
         relatedNodes: null,
         relatedEdges: null,
+        selectedCodeFlowId: null,
         pathMicroserviceOrder: new Map(),
       });
+      delete graphCanvas.dataset.selectedCodeFlow;
       renderer.refresh();
       requestGraphRender();
       renderClusterDetails(resolvedCluster);
@@ -715,6 +801,8 @@
       graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
+      graphState.selectedCodeFlowId = null;
+      delete graphCanvas.dataset.selectedCodeFlow;
       network.forEachEdge((edge, attributes, source, target) => {
         if (!isVisibleRelation(attributes, source, target) || !matches(attributes, source, target)) return;
         graphState.relatedEdges.add(edge); graphState.relatedNodes.add(source); graphState.relatedNodes.add(target);
@@ -736,6 +824,8 @@
       graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
+      graphState.selectedCodeFlowId = null;
+      delete graphCanvas.dataset.selectedCodeFlow;
       network.forEachEdge((edge, attributes, source, target) => {
         if (!isVisibleRelation(attributes, source, target)) return;
         if (source === id || target === id) {
@@ -744,3 +834,5 @@
       });
       renderer.refresh();
       renderDetails(id);
+      persistState();
+    }

@@ -464,8 +464,10 @@
           hoveredId: null,
           relatedNodes: null,
           relatedEdges: null,
+          selectedCodeFlowId: null,
           pathMicroserviceOrder: new Map(),
         });
+        delete graphCanvas.dataset.selectedCodeFlow;
         clearPathControls();
         setDetailsEmpty("Selectionnez un noeud ou un module pour afficher ses informations.");
       }
@@ -562,6 +564,9 @@
         resolveGraphCardOverlaps();
         renderer.refresh();
         await fitCameraToVisibleGraph(renderer);
+      }
+      if (graphState.selectedCodeFlowId && graphState.relatedNodes?.size) {
+        centerCameraOnPath({ nodes: [...graphState.relatedNodes] });
       }
       // Sigma's noverlap solver works with Sigma node radii, while the
       // readable labels are larger HTML rectangles. Resolve any residual

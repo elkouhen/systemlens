@@ -14,7 +14,7 @@
       --widget-surface-strong: #fff;
       --ui-title: #24355f;
       --ui-text: #40506a;
-      --ui-muted: #6b7a90;
+      --ui-muted: #596980;
       --ui-accent-text: #3156d3;
       --ui-on-accent: #f8faff;
       --ui-panel: rgba(255, 255, 255, .94);
@@ -282,4 +282,3 @@
     :root[data-theme="dark"] .path-overview-item { border-color: rgba(148, 163, 184, .2); color: #cfdbeb; background: #17263d !important; }
     :root[data-theme="dark"] .inspector-dialog { background: #101d31; }
     :root[data-theme="dark"] code { color: #b9c8ff; }
-

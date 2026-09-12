@@ -412,6 +412,15 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "--type-entity-title: 19px" in document
     assert ".details-title { margin: 0; overflow-wrap: anywhere; color: #172033; font-size: var(--type-entity-title);" in document
     assert ".toolbar-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));" in document
+    assert ".toolbar > .toolbar-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in document
+    assert ".code-flow-step { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }" in document
+    assert 'http_entry: "Entrée HTTP"' in document
+    assert "graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)" in document
+    assert 'size: 3.5' in document
+    assert 'is-code-flow-node' in document
+    assert "if (graphState.selectedCodeFlowId) return renderedData;" in document
+    assert "const ratioFactor = Math.max(1, spanX / availableWidth, spanY / availableHeight);" in document
+    assert ".toolbar { overflow-x: hidden; }" in document
     assert 'id="graph-context"' in document
     assert "graphContext.hidden = !showingGraph" in document
     assert 'id="quick-search"' in document

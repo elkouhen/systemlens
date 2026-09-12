@@ -1,14 +1,15 @@
 // Ordered source module: 60-bootstrap.js
-      persistState();
-    }
     function reset() {
       updateGraphState({
         selectedId: null,
         selectedClusterKey: null,
         relatedNodes: null,
         relatedEdges: null,
+        selectedCodeFlowId: null,
         pathMicroserviceOrder: new Map(),
       });
+      delete graphCanvas.dataset.selectedCodeFlow;
+      delete graphCanvas.dataset.flowFocusRatio;
       renderer.refresh();
       setDetailsEmpty("Selectionnez un noeud ou un module pour afficher ses informations.");
       search.value = "";
@@ -210,7 +211,13 @@
       renderer?.refresh();
       dependencyRenderer?.refresh();
       requestGraphRender();
-      if (refit) fitCameraToVisibleGraph(activeRenderer());
+      if (refit) {
+        if (graphState.selectedCodeFlowId && graphState.relatedNodes?.size) {
+          centerCameraOnPath({ nodes: [...graphState.relatedNodes] });
+        } else {
+          fitCameraToVisibleGraph(activeRenderer());
+        }
+      }
     }
     updateWorkspaceViewport(false);
     applyLayout("forceatlas2-noverlap");

@@ -41,6 +41,7 @@
     .display-controls,
     .advanced-controls,
     .advanced-tools,
+    .code-flow-item,
     .reference-item,
     .indexing-issue,
     .service-kafka-item,
@@ -55,6 +56,11 @@
     .detail-badge,
     .inspector-close,
     .dto-field { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
+    .code-flow-step { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
+    .code-flow-reason,
+    .code-flow-step code { color: var(--ui-muted); }
+    .code-flow-step-kind { color: var(--ui-accent-text); }
+    .code-flow-step::before { color: var(--ui-on-accent); background: var(--ui-selected); }
     .toolbar input:not([type="checkbox"])::placeholder { color: var(--ui-muted); }
     .toolbar input:not([type="checkbox"]):focus {
       border-color: var(--ui-selected);
