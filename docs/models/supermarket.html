@@ -900,7 +900,7 @@
             <legend>Types d’arêtes</legend>
             <label class="relation-filter" title="Afficher les appels d’API"><input id="relation-http" type="checkbox" checked aria-label="Afficher les arêtes d’API">APIs</label>
             <label class="relation-filter" title="Afficher les publications, consommations et échanges request/reply"><input id="relation-kafka" type="checkbox" checked aria-label="Afficher les arêtes de Topics">Topics</label>
-            <label class="relation-filter" title="Afficher les lectures et écritures de données"><input id="relation-mongodb" type="checkbox" checked aria-label="Afficher les arêtes d’accès aux données">Données</label>
+            <label class="relation-filter" title="Afficher les lectures et écritures de Data"><input id="relation-mongodb" type="checkbox" checked aria-label="Afficher les arêtes d’accès à la Data">Data</label>
             <label class="relation-filter" title="Afficher les autres types de relations"><input id="relation-other" type="checkbox" checked aria-label="Afficher les autres types d’arêtes">Autres</label>
           </fieldset>
           <fieldset class="relation-filters">
@@ -1095,7 +1095,7 @@
     const summaryItems = [
       `${summaryCounts.microservices} service${summaryCounts.microservices > 1 ? "s" : ""}`,
       `${summaryCounts.channels} Topic${summaryCounts.channels > 1 ? "s" : ""}`,
-      `${summaryCounts.dataResources} ressource${summaryCounts.dataResources > 1 ? "s" : ""} de données`,
+      `${summaryCounts.dataResources} Data`,
       `${graphData.links.length} relation${graphData.links.length > 1 ? "s" : ""}`,
       ...(isolatedNodeIds.size
         ? [`${isolatedNodeIds.size} ressource${isolatedNodeIds.size > 1 ? "s" : ""} isolée${isolatedNodeIds.size > 1 ? "s" : ""}`]
@@ -4267,7 +4267,7 @@
         [
           `${publishedApiCount} API${publishedApiCount > 1 ? "s" : ""} exposee${publishedApiCount > 1 ? "s" : ""}`,
           `${publishedTopicCount} topic${publishedTopicCount > 1 ? "s" : ""} publie${publishedTopicCount > 1 ? "s" : ""}`,
-          `${collectionCount} donnée${collectionCount > 1 ? "s" : ""} utilisée${collectionCount > 1 ? "s" : ""}`,
+          `${collectionCount} Data utilisée${collectionCount > 1 ? "s" : ""}`,
         ].forEach(label => { const badge = document.createElement("span"); badge.className = "detail-badge"; badge.textContent = label; meta.append(badge); });
       }
       const confidenceLabels = { proved: "prouvee", inferred: "inferee", conventional: "conventionnelle" };
@@ -4568,8 +4568,8 @@
         message_entry: "Entrée message",
         http_call: "Appel HTTP",
         message_publish: "Publication message",
-        data_read: "Lecture de données",
-        data_write: "Écriture de données",
+        data_read: "Lecture de Data",
+        data_write: "Écriture de Data",
       })[kind] || String(kind || "Étape").replaceAll("_", " ");
     }
 

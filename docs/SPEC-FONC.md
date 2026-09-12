@@ -59,7 +59,7 @@ but does not alter AST endpoint extraction.
 | `systemlens analyze microservices impact NAME [--root DIR] [--json]` | Lists direct and transitive impact paths. |
 | `systemlens analyze microservices path FROM TO [--root DIR] [--json] [--max-depth N] [--limit N]` | Lists bounded paths between services. |
 | `systemlens analyze request-reply [--root DIR] [--json]` | Lists Strategy1 Topic request/reply candidates. |
-| `systemlens export microservices (--html FILE | --c4 DIRECTORY | --json) [--graph FILE] [--workspace DIRECTORY] [--root-path DIRECTORY]` | Exports the deployable microservice, API, data-schema and message-channel topology. Non-deployable indexed projects (libraries and aggregators without an application entry point) are excluded from this view and remain available to `export projects` and `export layers`. Persisted MCP graph facts are included in the HTML export. `--graph FILE` reads a validated `systemlens-ai-graph-v1` manifest; `--workspace` federates separately indexed services below one parent directory; `--root-path` provides the local source root for HTML source links. |
+| `systemlens export microservices (--html FILE | --c4 DIRECTORY | --json) [--graph FILE] [--workspace DIRECTORY] [--root-path DIRECTORY]` | Exports the deployable microservice, API, Data, and Topic topology. Non-deployable indexed projects (libraries and aggregators without an application entry point) are excluded from this view and remain available to `export projects` and `export layers`. Persisted MCP graph facts are included in the HTML export. `--graph FILE` reads a validated `systemlens-ai-graph-v1` manifest; `--workspace` federates separately indexed services below one parent directory; `--root-path` provides the local source root for HTML source links. |
 | `systemlens export projects --html FILE` | Exports the Maven/Gradle build-dependency view. |
 | `systemlens export layers --html FILE` | Exports a dedicated software-layer view. With the persisted Strategy1 profile, the project groups `PORTAIL` and `CYCLE-DE-VIE` are rendered in API/contracts and Orchestration, `DOMAIN-*` projects in Domain, and the documented layer-name prefixes/suffixes in their matching layers; shared libraries and other non-deployable projects are omitted, and without Strategy1 the repository-specific conventions are disabled. |
 | `systemlens export modules --html FILE` | Exports the structural hierarchy where a module can contain child modules and indexed projects. Membership comes from project directory paths, never from Kubernetes namespaces. The legacy `export clusters` and `export namespaces` spellings remain hidden compatibility aliases. |
@@ -139,7 +139,7 @@ viewport resize, and cannot make the toolbar scroll horizontally.
 Clearing or replacing the selection
 removes this flow-specific emphasis.
 
-The architecture vocabulary is extensible: `Data` represents a persisted data
+The architecture vocabulary is extensible: `Data` represents a persisted Data
 resource or contract, while `Topic` represents a messaging channel. MongoDB
 collections, SQL tables, Redis keyspaces, object-store datasets, Kafka,
 RabbitMQ, SQS, and webhook streams are technology-specific evidence, not the
@@ -187,7 +187,7 @@ selectors; architecture counters and inventory status follow. This whole context
 Explorer, so domain tabs start directly with their own content. A dedicated,
 compact `Displayed nodes and edges` control lets users independently select
 API, Topic, Data-access and other edge categories, and internal services,
-external services, messaging resources, data resources and other node
+external services, messaging resources, Data resources and other node
 categories. This filtering applies equally to native and MCP-enriched graph
 vocabularies. Placement strategies remain available as advanced controls.
 The toolbar does not expose a separate path-history section. Paths remain
@@ -468,23 +468,23 @@ Microservices with no indexed inter-service relation remain visible in a
 separate isolated area of the graph, so their absence of dependencies is not
 confused with an absent service.
 
-Microservices, topics, and data resources are marked by their
+Microservices, Topics, and Data resources are marked by their
 relative connectivity. In the HTML graph, the shape identifies the resource
-type. Microservices, topics, and data resources use a coloured
+type. Microservices, Topics, and Data resources use a coloured
 outline around a neutral interior; the fill never carries connectivity or risk
 meaning.
 
-The relation count includes their indexed HTTP, topic, and data dependencies,
+The relation count includes their indexed API, Topic, and Data dependencies,
 while low/medium/high relative tiers are calculated separately for each
 resource type.
 
 For a microservice, the count is its distinct direct
-HTTP clients and targets, topic producer/consumer relations, and data
+API clients and targets, Topic producer/consumer relations, and Data
 relations; multiple HTTP routes between the same client and target
 are counted once.
 
 The HTML complexity badge exposes the HTTP, topic, and
-data breakdown as a tooltip, along with the resource rank and its soft
+Data breakdown as a tooltip, along with the resource rank and its soft
 tercile bounds. The lowest third is blue, the middle third orange, and the
 highest third red; the terciles are recalculated separately for each resource
 type in every export. The graph label of each coloured resource also displays
@@ -495,7 +495,7 @@ The Explore search suggests indexed resource names and accepts either one
 exact, unambiguous graph-node name or a topic itinerary written with `->`.
 
 An itinerary starts and ends with a microservice and follows only directed topic
-relations through topics; it never traverses HTTP or data dependencies.
+relations through Topics; it never traverses APIs or Data dependencies.
 
 When a microservice and another resource have the same display name, a direct
 resource search remains ambiguous, while an itinerary endpoint resolves the

@@ -2,7 +2,7 @@
 
 Local, source-evidenced Java/Spring architecture context for coding agents.
 
-SystemLens indexes REST integrations, topics, data resources, Maven/Gradle projects, OpenAPI
+SystemLens indexes REST integrations, Topics, Data resources, Maven/Gradle projects, OpenAPI
 contracts, and derived architecture relations in a local
 SQLite database. It gives agents dependencies, impact paths, and unresolved
 facts before they change a system. Source code is neither sent to a service nor
@@ -116,7 +116,7 @@ local installation state and must not be committed.
 - Feign, RestTemplate, WebClient and gateway HTTP calls.
 - Topic producers/consumers (including Spring Kafka and Spring Cloud Stream), including explicit
   payload types when available.
-- Maven/Gradle projects and dependencies, OpenAPI contracts, data usage and
+- Maven/Gradle projects and dependencies, OpenAPI contracts, Data usage and
   Spring properties.
 - Optional Kafka facts from Markdown and JSON manifests.
 - Optional Deployment and StatefulSet CPU/RAM dimensions from the active local

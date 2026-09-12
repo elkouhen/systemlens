@@ -15,8 +15,8 @@
         message_entry: "Entrée message",
         http_call: "Appel HTTP",
         message_publish: "Publication message",
-        data_read: "Lecture de données",
-        data_write: "Écriture de données",
+        data_read: "Lecture de Data",
+        data_write: "Écriture de Data",
       })[kind] || String(kind || "Étape").replaceAll("_", " ");
     }
 

@@ -25,7 +25,7 @@ The product answers questions such as:
 - Which services expose or call an API?
 - Which topics are produced and consumed, and with which payload type?
 - What are the dependencies and likely impact paths between services?
-- Which Maven/Gradle projects, OpenAPI contracts, data resources and
+- Which Maven/Gradle projects, OpenAPI contracts, Data resources and
   Spring properties belong to a service?
 
 When deterministic extraction leaves a bounded gap, a reviewable, namespaced
@@ -60,7 +60,7 @@ Developers can follow the same workflow through `microservices`, `topics`,
   RestTemplate/WebClient, Spring Cloud Gateway and Spring Data REST endpoints.
 - Topic producers and consumers, dynamic-topic evidence and explicit Java
   payload types.
-- Maven/Gradle project discovery, OpenAPI and data inventory.
+- Maven/Gradle project discovery, OpenAPI and Data inventory.
 - Local SQLite persistence, architecture relations, graph/audit views and
   workspace federation.
 - Markdown/JSON Kafka manifests and the opt-in Strategy1 conventions.
@@ -71,7 +71,7 @@ Developers can follow the same workflow through `microservices`, `topics`,
 
 ### Planned
 
-- Conservative presentation of observed API, topic, data, and S3 activity
+- Conservative presentation of observed API, Topic, Data, and S3 activity
   beside the static architecture, without inventing a source mapping.
 - Explicit Kubernetes capacity context for runtime hotspots where a verified
   workload-to-service match exists. A future matcher must prefer an exact name,

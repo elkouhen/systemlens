@@ -73,7 +73,7 @@
     const summaryItems = [
       `${summaryCounts.microservices} service${summaryCounts.microservices > 1 ? "s" : ""}`,
       `${summaryCounts.channels} Topic${summaryCounts.channels > 1 ? "s" : ""}`,
-      `${summaryCounts.dataResources} ressource${summaryCounts.dataResources > 1 ? "s" : ""} de données`,
+      `${summaryCounts.dataResources} Data`,
       `${graphData.links.length} relation${graphData.links.length > 1 ? "s" : ""}`,
       ...(isolatedNodeIds.size
         ? [`${isolatedNodeIds.size} ressource${isolatedNodeIds.size > 1 ? "s" : ""} isolée${isolatedNodeIds.size > 1 ? "s" : ""}`]
