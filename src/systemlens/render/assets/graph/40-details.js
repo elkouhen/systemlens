@@ -148,7 +148,7 @@
       dtoReferencesEmpty.hidden = visibleDtos.length > 0;
       dtoReferencesEmpty.textContent = query && !visibleDtos.length
         ? "Aucun DTO ne correspond à ce filtre."
-        : "Aucun DTO Kafka détecté.";
+        : "Aucun DTO de Topics détecté.";
       visibleDtos.forEach(dto => {
         const exchangeCount = (dto.producers?.length || 0) + (dto.consumers?.length || 0);
         dtoReferencesList.append(referenceItem(
@@ -159,7 +159,7 @@
         ));
       });
       openapiReferencesTitle.textContent = `Contrats OpenAPI (${visibleContracts.length}/${contracts.length})`;
-      dtoReferencesTitle.textContent = `DTO Kafka (${visibleDtos.length}/${dtos.length})`;
+      dtoReferencesTitle.textContent = `DTO de Topics (${visibleDtos.length}/${dtos.length})`;
       mongoClassReferencesList.replaceChildren();
       const persistenceClasses = (graphData.mongo_persistence_classes || []).filter(
         item => item.root !== false
@@ -171,7 +171,7 @@
       mongoClassReferencesEmpty.hidden = visiblePersistenceClasses.length > 0;
       mongoClassReferencesEmpty.textContent = mongoQuery && !visiblePersistenceClasses.length
         ? "Aucune classe de persistance ne correspond à ce filtre."
-        : "Aucune classe de persistance MongoDB détectée.";
+        : "Aucune classe de persistance Data détectée.";
       visiblePersistenceClasses.forEach(item => mongoClassReferencesList.append(referenceItem(
         item.qualified_name,
         `${item.collection} · ${item.service} / ${item.module} · ${item.fields?.length || 0} champ(s)`,
@@ -366,7 +366,7 @@
     function renderMongoPersistenceInspector(classId) {
       const item = (graphData.mongo_persistence_classes || []).find(candidate => candidate.id === classId);
       if (!item) return;
-      openInspector(`Persistance MongoDB · ${item.name}`);
+      openInspector(`Persistance Data · ${item.name}`);
       inspectorBody.classList.add("dto-inspector");
       if (mongoNavigation.length) {
         const navigation = document.createElement("div");
@@ -421,7 +421,7 @@
         section.append(heading, list);
         inspectorBody.append(section);
       }
-      appendDtoInspectorSection("Collection", [item.collection]);
+      appendDtoInspectorSection("Data", [item.collection]);
       appendDtoInspectorSection("Microservice", [item.service]);
       appendDtoInspectorSection("Projet de persistance", [item.module]);
     }
@@ -436,7 +436,7 @@
     function renderDtoInspector(dtoName) {
       const dto = dtoDefinition(dtoName);
       if (!dto) return;
-      openInspector(`DTO Kafka · ${dto.name}`);
+      openInspector(`DTO de Topic · ${dto.name}`);
       inspectorBody.classList.add("dto-inspector");
       if (dtoNavigation.length) {
         const navigation = document.createElement("div");
@@ -454,7 +454,7 @@
       summary.className = "dto-summary";
       summary.textContent = dto.source
         ? `Classe source : ${dto.source}`
-        : "Classe Java non retrouvee dans les sources indexees ; les relations Kafka restent disponibles.";
+        : "Classe Java non retrouvee dans les sources indexees ; les relations de Topics restent disponibles.";
       inspectorBody.append(summary);
       if (dto.vscode_uri) {
         const sourceLink = document.createElement("a");

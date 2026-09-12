@@ -122,4 +122,4 @@ def test_catalog_command_preserves_missing_object_error(
     result = runner.invoke(app, ["apis", "show", "GET /missing"])
 
     assert result.exit_code == 2
-    assert "API HTTP introuvable : GET /missing" in result.output
+    assert "API introuvable : GET /missing" in result.output

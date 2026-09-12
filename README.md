@@ -2,8 +2,8 @@
 
 Local, source-evidenced Java/Spring architecture context for coding agents.
 
-SystemLens indexes REST and Kafka integrations, Maven/Gradle projects, OpenAPI
-contracts, MongoDB collections, and derived architecture relations in a local
+SystemLens indexes REST integrations, topics, data resources, Maven/Gradle projects, OpenAPI
+contracts, and derived architecture relations in a local
 SQLite database. It gives agents dependencies, impact paths, and unresolved
 facts before they change a system. Source code is neither sent to a service nor
 analysed by an external engine.
@@ -52,7 +52,7 @@ systemlens import-facts architecture.ai-graph.pass-001.json \
 For terminal-oriented exploration, use `systemlens microservices`,
 `systemlens topics`, `systemlens apis`, `systemlens projects`, and
 `systemlens analyze audit`. Use `systemlens flows` to list conservative,
-same-method paths from an HTTP/Kafka entry point to its external effects.
+same-method paths from an API or topic entry point to its external effects.
 
 ### Choose an interface
 
@@ -114,9 +114,9 @@ local installation state and must not be committed.
 
 - Spring MVC/WebFlux routes and Spring Data REST exposure.
 - Feign, RestTemplate, WebClient and gateway HTTP calls.
-- Spring Kafka and Spring Cloud Stream producers/consumers, including explicit
+- Topic producers/consumers (including Spring Kafka and Spring Cloud Stream), including explicit
   payload types when available.
-- Maven/Gradle projects and dependencies, OpenAPI contracts, MongoDB usage and
+- Maven/Gradle projects and dependencies, OpenAPI contracts, data usage and
   Spring properties.
 - Optional Kafka facts from Markdown and JSON manifests.
 - Optional Deployment and StatefulSet CPU/RAM dimensions from the active local

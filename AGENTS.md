@@ -103,6 +103,19 @@ test when Chrome is available:
 SYSTEMLENS_CHROME_BIN=/path/to/chrome uv run pytest -m slow tests/test_browser_export.py
 ```
 
+When a CLI, indexing, flow, graph-contract, or companion-skill change can affect
+the documented agent workflow, validate the development checkout against both
+sibling repositories:
+
+```bash
+uv run python scripts/check_companion_contracts.py
+```
+
+This check validates the skill metadata, local links, and JSON examples; copies
+the Java lab application to a temporary directory; creates a fresh index there;
+verifies its potential flows; and exports an HTML graph. It must never modify
+the laboratory checkout or reuse its persisted index.
+
 If the prescribed environment or command is unavailable, do not substitute an
 unverified setup silently: report the missing prerequisite and the validation
 that could not be performed.

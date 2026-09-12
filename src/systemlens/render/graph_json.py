@@ -185,9 +185,9 @@ def render_graph_text(result: GraphResult) -> str:
 
     kafka_topics = [node["name"] for node in nodes if node["kind"] == "kafka_topic"]
     if kafka_topics:
-        lines.append(f"Topics Kafka ({len(kafka_topics)}) : {', '.join(kafka_topics)}")
+        lines.append(f"Topics ({len(kafka_topics)}) : {', '.join(kafka_topics)}")
     else:
-        lines.append("Aucun topic Kafka inter-service détecté.")
+        lines.append("Aucun Topic inter-service détecté.")
 
     if edges:
         lines.append(f"Arêtes du graphe ({len(edges)}) :")
@@ -211,7 +211,7 @@ def render_graph_text(result: GraphResult) -> str:
 
     calls = result["outbound_calls_in_consumers"]
     if calls:
-        lines.append(f"Appels REST dans un handler Kafka ({len(calls)}) :")
+        lines.append(f"Appels REST dans un handler de Topic ({len(calls)}) :")
         for hit in calls:
             call, consumer = hit["call"], hit["consumer"]
             lines.append(
@@ -220,9 +220,8 @@ def render_graph_text(result: GraphResult) -> str:
                 f"{consumer['path']}:{consumer['start_line']}-{consumer['end_line']})"
             )
     else:
-        lines.append("Aucun appel REST détecté dans un handler Kafka.")
+        lines.append("Aucun appel REST détecté dans un handler de Topic.")
 
     if result["note"]:
         lines.append(result["note"])
     return "\n".join(lines)
-

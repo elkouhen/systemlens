@@ -25,8 +25,8 @@
     <div class="toolbar-tabs" role="tablist" aria-label="Vues de l'architecture">
       <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel">Explorer</button>
       <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
-      <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Kafka</button>
-      <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Mongo</button>
+      <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Topics</button>
+      <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Data</button>
       <button id="build-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="dependencies-panel">Build</button>
       <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problemes d'indexation">Qualité</button>
       <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux</button>
@@ -73,8 +73,8 @@
         <div class="display-filter-groups">
           <fieldset class="relation-filters">
             <legend>Types d’arêtes</legend>
-            <label class="relation-filter" title="Afficher les appels HTTP"><input id="relation-http" type="checkbox" checked aria-label="Afficher les arêtes HTTP">HTTP</label>
-            <label class="relation-filter" title="Afficher les publications, consommations et échanges request/reply"><input id="relation-kafka" type="checkbox" checked aria-label="Afficher les arêtes Kafka">Kafka</label>
+            <label class="relation-filter" title="Afficher les appels d’API"><input id="relation-http" type="checkbox" checked aria-label="Afficher les arêtes d’API">APIs</label>
+            <label class="relation-filter" title="Afficher les publications, consommations et échanges request/reply"><input id="relation-kafka" type="checkbox" checked aria-label="Afficher les arêtes de Topics">Topics</label>
             <label class="relation-filter" title="Afficher les lectures et écritures de données"><input id="relation-mongodb" type="checkbox" checked aria-label="Afficher les arêtes d’accès aux données">Données</label>
             <label class="relation-filter" title="Afficher les autres types de relations"><input id="relation-other" type="checkbox" checked aria-label="Afficher les autres types d’arêtes">Autres</label>
           </fieldset>
@@ -82,8 +82,8 @@
             <legend>Types de nœuds</legend>
             <label class="relation-filter" title="Afficher les microservices indexés"><input id="node-microservice" type="checkbox" checked aria-label="Afficher les microservices">Microservices</label>
             <label class="relation-filter" title="Afficher les microservices externes"><input id="node-external-microservice" type="checkbox" checked aria-label="Afficher les microservices externes">Externes</label>
-            <label class="relation-filter" title="Afficher les topics et canaux de messages"><input id="node-kafka-topic" type="checkbox" checked aria-label="Afficher les topics et canaux de messages">Topics / canaux</label>
-            <label class="relation-filter" title="Afficher les collections et schémas de données"><input id="node-mongodb-collection" type="checkbox" checked aria-label="Afficher les collections et schémas de données">Collections / schémas</label>
+            <label class="relation-filter" title="Afficher les Topics"><input id="node-kafka-topic" type="checkbox" checked aria-label="Afficher les Topics">Topics</label>
+            <label class="relation-filter" title="Afficher les Data"><input id="node-mongodb-collection" type="checkbox" checked aria-label="Afficher les Data">Data</label>
             <label class="relation-filter" title="Afficher les autres types de ressources"><input id="node-other" type="checkbox" checked aria-label="Afficher les autres types de nœuds">Autres</label>
           </fieldset>
         </div>
@@ -118,7 +118,7 @@
     <div id="dependencies-panel" class="toolbar-panel dependency-view" role="tabpanel" aria-labelledby="build-tab" hidden>
       <p class="dependency-view-kicker">Structure de build</p>
       <h2>Arbre des dépendances</h2>
-      <p>Disposition Sugiyama : les projets sont rangés par niveaux de dépendance. Un lien part du projet dépendant, à gauche, vers le projet requis, à droite. Les interactions HTTP, Kafka et données restent dans la vue Explorer.</p>
+      <p>Disposition Sugiyama : les projets sont rangés par niveaux de dépendance. Un lien part du projet dépendant, à gauche, vers le projet requis, à droite. Les interactions APIs, Topics et Data restent dans la vue Explorer.</p>
     </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
       <div class="indexing-issues-header">
@@ -147,19 +147,19 @@
     </div>
     <div id="kafka-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="kafka-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker">Événements Kafka</p>
-        <h2 id="dto-references-title" class="references-title">DTO Kafka</h2>
-        <p class="references-description">Inspectez les classes Java échangées via Kafka.</p>
+        <p class="references-kicker">Événements de Topics</p>
+        <h2 id="dto-references-title" class="references-title">DTO de Topics</h2>
+        <p class="references-description">Inspectez les classes Java échangées via les Topics.</p>
       </div>
-      <section class="references-section"><input id="dto-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTO par nom ou package" autocomplete="off" aria-label="Filtrer les DTO Kafka"><ul id="dto-references" class="references-list"></ul><p id="dto-references-empty" class="references-empty">Aucun DTO Kafka détecté.</p></section>
+      <section class="references-section"><input id="dto-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTO par nom ou package" autocomplete="off" aria-label="Filtrer les DTO de Topics"><ul id="dto-references" class="references-list"></ul><p id="dto-references-empty" class="references-empty">Aucun DTO de Topics détecté.</p></section>
     </div>
     <div id="persistence-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="persistence-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker">Persistance MongoDB</p>
+        <p class="references-kicker">Data</p>
         <h2 id="mongo-class-references-title" class="references-title">Classes de persistance</h2>
-        <p class="references-description">Inspectez les classes Java associées aux collections MongoDB.</p>
+        <p class="references-description">Inspectez les classes Java associées aux Data.</p>
       </div>
-      <section class="references-section"><input id="mongo-class-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou collection" autocomplete="off" aria-label="Filtrer les classes de persistance MongoDB"><ul id="mongo-class-references" class="references-list"></ul><p id="mongo-class-references-empty" class="references-empty">Aucune classe de persistance MongoDB détectée.</p></section>
+      <section class="references-section"><input id="mongo-class-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou Data" autocomplete="off" aria-label="Filtrer les classes de persistance Data"><ul id="mongo-class-references" class="references-list"></ul><p id="mongo-class-references-empty" class="references-empty">Aucune classe de persistance Data détectée.</p></section>
     </div>
     <div id="details" class="is-empty"><div class="details-empty">Selectionnez un noeud pour isoler ses relations et afficher ses APIs.</div></div>
   </div>
@@ -171,13 +171,13 @@
       <div class="legend-row"><span class="legend-mark" style="background:#dc2626"></span>Connectivité relative élevée (dernier tiers)</div>
       <div class="legend-row">La connectivité est relative à chaque type de ressource, pas un niveau de risque.</div>
       <div class="legend-row"><span class="legend-mark legend-resource-mark microservice"></span>Microservice</div>
-      <div class="legend-row"><span class="legend-mark legend-resource-mark topic"></span>Topic Kafka</div>
-      <div class="legend-row"><span class="legend-mark legend-resource-mark collection"></span>Collection MongoDB</div>
-      <div class="legend-row"><span class="legend-line" style="background:#D55E00"></span>Appel HTTP</div>
-      <div class="legend-row"><span class="legend-line" style="background:#009E73"></span>Publication Kafka</div>
-      <div class="legend-row"><span class="legend-line" style="background:#0072B2"></span>Consommation Kafka</div>
-      <div class="legend-row"><span class="legend-line" style="background:#7C3AED"></span>Pattern request/reply Kafka</div>
-      <div class="legend-row"><span class="legend-line" style="background:#CC79A7"></span>Acces MongoDB</div>
+      <div class="legend-row"><span class="legend-mark legend-resource-mark topic"></span>Topic</div>
+      <div class="legend-row"><span class="legend-mark legend-resource-mark collection"></span>Data</div>
+      <div class="legend-row"><span class="legend-line" style="background:#D55E00"></span>Appel d’API</div>
+      <div class="legend-row"><span class="legend-line" style="background:#009E73"></span>Publication de Topic</div>
+      <div class="legend-row"><span class="legend-line" style="background:#0072B2"></span>Consommation de Topic</div>
+      <div class="legend-row"><span class="legend-line" style="background:#7C3AED"></span>Pattern request/reply de Topic</div>
+      <div class="legend-row"><span class="legend-line" style="background:#CC79A7"></span>Accès Data</div>
       <div class="legend-row"><span class="legend-mark" style="background:#16a34a"></span>Relation prouvee : code ou manifeste</div>
       <div class="legend-row"><span class="legend-mark" style="background:#d97706"></span>Relation inferee : OpenAPI ou inventaire</div>
       <div class="legend-row"><span class="legend-mark" style="background:#7c3aed"></span>Relation conventionnelle : Strategy1</div>

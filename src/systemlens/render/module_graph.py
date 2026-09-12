@@ -197,20 +197,20 @@ def render_workspace_text(result: WorkspaceResult) -> str:
             f"integrations={info['integration_count']} findings={info['finding_count']}"
         )
         lines.append(
-            f"  HTTP exposées: {', '.join(info['http_apis_exposed']) or '-'} | "
-            f"HTTP consommées: {', '.join(info['http_apis_consumed']) or '-'}"
+            f"  APIs exposées: {', '.join(info['http_apis_exposed']) or '-'} | "
+            f"APIs consommées: {', '.join(info['http_apis_consumed']) or '-'}"
         )
         lines.append(
-            f"  Kafka publiés: {', '.join(info['kafka_topics_published']) or '-'} | "
-            f"Kafka consommés: {', '.join(info['kafka_topics_consumed']) or '-'} | "
-            f"Mongo: {', '.join(info['mongo_collections']) or '-'}"
+            f"  Topics publiés: {', '.join(info['kafka_topics_published']) or '-'} | "
+            f"Topics consommés: {', '.join(info['kafka_topics_consumed']) or '-'} | "
+            f"Data: {', '.join(info['mongo_collections']) or '-'}"
         )
         if info["openapi_files"]:
             lines.append(f"  OpenAPI: {', '.join(info['openapi_files'])}")
         if info["kafka_message_types_published"] or info["kafka_message_types_consumed"]:
             lines.append(
-                f"  Types Kafka publiés: {info['kafka_message_types_published'] or '-'} | "
-                f"Types Kafka consommés: {info['kafka_message_types_consumed'] or '-'}"
+                f"  Types de Topics publiés: {info['kafka_message_types_published'] or '-'} | "
+                f"Types de Topics consommés: {info['kafka_message_types_consumed'] or '-'}"
             )
     for warning in result["warnings"]:
         lines.append(f"⚠ {warning}")
@@ -458,9 +458,9 @@ def render_module_detail_text(module: ModuleDetail) -> str:
         f"[{module['build_system']}/{module['kind']}] {module['name']}\n"
         f"version={version}\nchemin={module['path']}\n"
         f"démarre l'application={module['starts_application']}\n"
-        f"collections Mongo={', '.join(module['mongo_collections']) or 'aucune'}\n"
-        f"opérations Mongo={module['mongo_method_count']}\n"
-        f"opérations Kafka={module['kafka_method_count']}\n"
+        f"Data={', '.join(module['mongo_collections']) or 'aucune'}\n"
+        f"opérations Data={module['mongo_method_count']}\n"
+        f"opérations Topics={module['kafka_method_count']}\n"
         f"points bloquants={module['blocking_point_count']}\n"
         f"OpenAPI={', '.join(module['openapi_files']) or 'aucun'}\n"
         f"Contrôleurs REST ({len(module['rest_controllers'])})={', '.join(module['rest_controllers']) or 'aucun'}\n"

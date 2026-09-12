@@ -46,14 +46,10 @@
     const nodeLabelOverlay = document.getElementById("graph-node-labels");
     const showProjectGroups = document.getElementById("show-project-groups");
     const nodeKindLabel = node => {
-      if (node.kind === "kafka_topic") return "Topic Kafka";
-      if (node.kind === "mongodb_collection") return "Collection MongoDB";
-      if (node.kind === "data_schema") {
-        const technology = (node.technology || "").toLowerCase();
-        return ["sql", "postgresql", "mysql", "mariadb"].includes(technology)
-          ? "Table SQL" : "Schéma de données";
-      }
-      if (node.kind === "message_channel") return "Canal de messages";
+      if (node.kind === "kafka_topic") return "Topic";
+      if (node.kind === "mongodb_collection") return "Data";
+      if (node.kind === "data_schema") return "Data";
+      if (node.kind === "message_channel") return "Topic";
       return node.external ? "Service externe" : "Microservice";
     };
     const nodeKindSuggestion = node => (
@@ -76,7 +72,7 @@
     };
     const summaryItems = [
       `${summaryCounts.microservices} service${summaryCounts.microservices > 1 ? "s" : ""}`,
-      `${summaryCounts.channels} ${summaryCounts.channels > 1 ? "canaux" : "canal"}`,
+      `${summaryCounts.channels} Topic${summaryCounts.channels > 1 ? "s" : ""}`,
       `${summaryCounts.dataResources} ressource${summaryCounts.dataResources > 1 ? "s" : ""} de données`,
       `${graphData.links.length} relation${graphData.links.length > 1 ? "s" : ""}`,
       ...(isolatedNodeIds.size

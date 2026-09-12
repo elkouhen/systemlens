@@ -93,16 +93,16 @@ export_app = typer.Typer(
     )
 )
 topics_app = typer.Typer(
-    help="Explorer les topics Kafka indexés.\n\nExemples : `systemlens topics`, `systemlens topics consumers orders.created`."
+    help="Explorer les topics indexés.\n\nExemples : `systemlens topics`, `systemlens topics consumers orders.created`."
 )
 dtos_app = typer.Typer(
-    help="Explorer les DTOs Java échangés via Kafka.\n\nExemples : `systemlens dtos`, `systemlens dtos consumers OrderCreated`."
+    help="Explorer les DTOs Java échangés via les topics.\n\nExemples : `systemlens dtos`, `systemlens dtos consumers OrderCreated`."
 )
 apis_app = typer.Typer(
-    help="Explorer les APIs HTTP indexées.\n\nExemples : `systemlens apis`, `systemlens apis consumers 'POST /payments'`."
+    help="Explorer les APIs indexées.\n\nExemples : `systemlens apis`, `systemlens apis consumers 'POST /payments'`."
 )
 mongodb_app = typer.Typer(
-    help="Explorer les collections MongoDB indexées.\n\nExemples : `systemlens mongodb`, `systemlens mongodb services orders`."
+    help="Explorer les données indexées.\n\nExemples : `systemlens mongodb`, `systemlens mongodb services orders`."
 )
 flows_app = typer.Typer(
     help=(
@@ -175,7 +175,7 @@ def _manifest_rel_paths(repo_root: Path, paths: list[Path]) -> list[str]:
             raise typer.BadParameter(f"Manifeste introuvable : {raw_path}")
         if path.suffix.lower() not in {".md", ".json"}:
             raise typer.BadParameter(
-                f"Le manifeste doit être un fichier Markdown (.md) ou un flux Kafka JSON (.json) : {raw_path}"
+                f"Le manifeste doit être un fichier Markdown (.md) ou un flux de Topics JSON (.json) : {raw_path}"
             )
         if rel_path not in seen:
             seen.add(rel_path)
@@ -223,8 +223,8 @@ _APIS = _CatalogCommandSpec(
     commands=frozenset({"show", "neighbors", "providers", "consumers", "search"}),
     list_usage="Usage : `systemlens apis [list] --root <workspace>`.",
     usage="Usage : `systemlens apis [list|show|neighbors|search] [api]`.",
-    required_target="`systemlens apis {command}` requiert une API HTTP.",
-    missing_target="API HTTP introuvable : {target}",
+    required_target="`systemlens apis {command}` requiert une API.",
+    missing_target="API introuvable : {target}",
 )
 _MONGODB = _CatalogCommandSpec(
     kind="collection",
@@ -232,7 +232,7 @@ _MONGODB = _CatalogCommandSpec(
     list_usage="Usage : `systemlens mongodb [list] --root <workspace>`.",
     usage="Usage : `systemlens mongodb [list|show|neighbors|search] [collection]`.",
     required_target=None,
-    missing_target="Collection MongoDB introuvable : {target}",
+    missing_target="Donnée introuvable : {target}",
 )
 
 
@@ -349,7 +349,7 @@ def topics_cmd(
         hidden=True,
     ),
 ) -> None:
-    """Parcourir les topics Kafka et les services qui les publient ou consomment.
+    """Parcourir les topics et les services qui les publient ou consomment.
 
     Exemples : `systemlens topics`, `systemlens topics show orders.created`,
     `systemlens topics neighbors orders.created`.
@@ -373,7 +373,7 @@ def dtos_cmd(
     ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Parcourir les DTOs Java utilisés par les producers et consumers Kafka.
+    """Parcourir les DTOs Java utilisés par les producteurs et consommateurs de topics.
 
     Exemples : `systemlens dtos`, `systemlens dtos show OrderCreated`,
     `systemlens dtos consumers OrderCreated`.
@@ -390,7 +390,7 @@ def apis_cmd(
     ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Parcourir les APIs HTTP et les services qui les exposent ou appellent.
+    """Parcourir les APIs et les services qui les exposent ou appellent.
 
     Exemples : `systemlens apis`, `systemlens apis show "POST /payments"`,
     `systemlens apis search payments`.
@@ -407,7 +407,7 @@ def mongodb_cmd(
     ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Parcourir les collections MongoDB et les microservices qui les utilisent.
+    """Parcourir les données et les microservices qui les utilisent.
 
     Exemples : `systemlens mongodb`, `systemlens mongodb show orders`,
     `systemlens mongodb neighbors orders`.
@@ -544,7 +544,7 @@ def analyze_cmd(
             _microservice_catalog(workspace_root), "api", api
         )
         if summary is None:
-            typer.echo(f"API HTTP introuvable : {api}", err=True)
+            typer.echo(f"API introuvable : {api}", err=True)
             raise typer.Exit(code=2)
         _emit_architecture(
             {"query": query, "api": api, "microservices": summary[query]}, json_output
@@ -559,7 +559,7 @@ def analyze_cmd(
         collection = arguments[2]
         result = _mongodb_services(_microservice_catalog(workspace_root), collection)
         if result is None:
-            typer.echo(f"Collection MongoDB introuvable : {collection}", err=True)
+            typer.echo(f"Donnée introuvable : {collection}", err=True)
             raise typer.Exit(code=2)
         _emit_architecture(result, json_output)
         return
@@ -616,7 +616,7 @@ def topics_list(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Lister les topics Kafka."""
+    """Lister les topics."""
     topics_cmd([], root, json_output, 6, 50)
 
 
@@ -626,7 +626,7 @@ def topics_show(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Résumer un topic Kafka."""
+    """Résumer un topic."""
     topics_cmd(["show", topic], root, json_output, 6, 50)
 
 
@@ -678,7 +678,7 @@ def topics_trace(
     max_depth: int = typer.Option(6, "--max-depth", min=1, max=12),
     limit: int = typer.Option(50, "--limit", min=1, max=200),
 ) -> None:
-    """Afficher les flux Kafka potentiels issus d'un topic."""
+    """Afficher les flux potentiels issus d'un topic."""
     topics_cmd(["trace", topic], root, json_output, max_depth, limit)
 
 
@@ -690,7 +690,7 @@ def dtos_root(
     ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Lister les DTOs Kafka sans sous-commande."""
+    """Lister les DTOs de topics sans sous-commande."""
     if ctx.invoked_subcommand is None:
         dtos_cmd([], root, json_output)
 
@@ -700,7 +700,7 @@ def dtos_list(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Lister les DTOs Java connus dans les échanges Kafka."""
+    """Lister les DTOs Java connus dans les échanges de topics."""
     dtos_cmd([], root, json_output)
 
 
@@ -772,7 +772,7 @@ def apis_list(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Lister les APIs HTTP."""
+    """Lister les APIs."""
     apis_cmd([], root, json_output)
 
 
@@ -782,7 +782,7 @@ def apis_show(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Résumer une API HTTP."""
+    """Résumer une API."""
     apis_cmd(["show", api], root, json_output)
 
 
@@ -834,7 +834,7 @@ def mongodb_root(
     ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Lister les collections sans sous-commande."""
+    """Lister les données sans sous-commande."""
     if ctx.invoked_subcommand is None:
         mongodb_cmd([], root, json_output)
 
@@ -844,7 +844,7 @@ def mongodb_list(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Lister les collections MongoDB."""
+    """Lister les données indexées."""
     mongodb_cmd([], root, json_output)
 
 
@@ -854,7 +854,7 @@ def mongodb_show(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Résumer une collection MongoDB."""
+    """Résumer une donnée."""
     mongodb_cmd(["show", collection], root, json_output)
 
 
@@ -864,7 +864,7 @@ def mongodb_neighbors(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Afficher les microservices liés à une collection."""
+    """Afficher les microservices liés à une donnée."""
     mongodb_cmd(["neighbors", collection], root, json_output)
 
 
@@ -874,7 +874,7 @@ def mongodb_services(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Lister les microservices utilisant une collection."""
+    """Lister les microservices utilisant une donnée."""
     mongodb_cmd(["services", collection], root, json_output)
 
 
@@ -884,7 +884,7 @@ def mongodb_search(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Retrouver une collection par son nom."""
+    """Retrouver une donnée par son nom."""
     mongodb_cmd(["search", query], root, json_output)
 
 
@@ -988,7 +988,7 @@ def analyze_request_reply(
     ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Lister les patterns Kafka request/reply détectés par Strategy1."""
+    """Lister les patterns Topic request/reply détectés par Strategy1."""
     _render_request_reply_patterns(_option_root(root), _option_json(json_output))
 
 
@@ -1147,11 +1147,11 @@ def init() -> None:
 @app.command(name="index")
 def index_cmd(
     manifest_args: Optional[list[Path]] = typer.Argument(  # noqa: UP007
-        None, help="Manifeste(s) Kafka Markdown ou JSON à indexer explicitement."
+        None, help="Manifeste(s) de Topics Markdown ou JSON à indexer explicitement."
     ),
     full: bool = typer.Option(False, "--full", help="Force un scan complet."),
     manifests: Optional[list[Path]] = typer.Option(  # noqa: UP007
-        None, "--manifest", help="Manifeste Kafka Markdown ou JSON (répétable)."
+        None, "--manifest", help="Manifeste de Topics Markdown ou JSON (répétable)."
     ),
     topic_strategy: Literal["default", "strategy1"] = typer.Option(
         "default",
@@ -1374,12 +1374,12 @@ The generated site is written to `dist/`.
 
 ## Read the graph
 
-- Views: `runtime` maps HTTP, Kafka and MongoDB interactions; `contracts` exposes REST/OpenAPI and Kafka payload information; `build` maps Maven/Gradle dependencies; `quality` reports connectivity complexity, findings and indexing warnings.
-- Shapes: component for a microservice and build module, queue for a Kafka topic, rectangle for a MongoDB collection, and browser for an external HTTP API.
+- Views: `runtime` maps API, topic and data interactions; `contracts` exposes API contracts and message payload information; `build` maps Maven/Gradle dependencies; `quality` reports connectivity complexity, findings and indexing warnings.
+- Shapes: component for a microservice and build module, queue for a topic, rectangle for data, and browser for an external API.
 - Microservice colors split them into three equally sized complexity groups: blue for the lowest third, amber for the middle third and red for the highest third.
-- A microservice score is its number of direct HTTP, Kafka and MongoDB relations. Findings remain visible in details but do not affect the color.
-- Outbound calls and publications are green; Kafka consumptions are orange; MongoDB reads and writes are blue and teal.
-- Kafka relation labels include statically inferred Java payload types. Microservice descriptions list detected OpenAPI contracts.
+- A microservice score is its number of direct API, topic and data relations. Findings remain visible in details but do not affect the color.
+- Outbound calls and publications are green; topic consumptions are orange; data reads and writes are blue and teal.
+- Topic relation labels include statically inferred Java payload types. Microservice descriptions list detected OpenAPI contracts.
 """
     (destination / "architecture.c4").write_text(model, encoding="utf-8")
     (destination / "likec4.config.json").write_text(
@@ -1419,7 +1419,7 @@ def export_microservices_cmd(
         False, "--json", help="Écrire le graphe structuré sur la sortie standard."
     ),
 ) -> None:
-    """Exporter les dépendances microservices, topics Kafka et collections MongoDB.
+    """Exporter les dépendances microservices, topics et données.
 
     Exemples : `systemlens export microservices --html graph.html`,
     `systemlens export microservices --c4 architecture-likec4`,
@@ -1624,7 +1624,7 @@ def export_namespaces_cmd(
 def export_request_reply_cmd(
     html: Path | None = typer.Option(None, "--html", help="Fichier HTML à produire."),
 ) -> None:
-    """Exporter une vue dédiée des patterns Kafka request/reply Strategy1.
+    """Exporter une vue dédiée des patterns Topic request/reply Strategy1.
 
     Exemple : `systemlens export request-reply --html request-reply.html`.
     """
@@ -2034,7 +2034,7 @@ def _render_microservice_implementation(
 
 
 def _render_microservice_topics(service: str, root: Path, json_output: bool) -> None:
-    """Liste les topics Kafka publiés et consommés par un microservice."""
+    """Liste les topics publiés et consommés par un microservice."""
     summary = show_architecture_object(
         _microservice_catalog(root), "microservice", service
     )
@@ -2054,7 +2054,7 @@ def _render_microservice_topics(service: str, root: Path, json_output: bool) -> 
 
 
 def _render_microservice_apis(service: str, root: Path, json_output: bool) -> None:
-    """Liste les APIs HTTP exposées et appelées par un microservice."""
+    """Liste les APIs exposées et appelées par un microservice."""
     summary = show_architecture_object(
         _microservice_catalog(root), "microservice", service
     )
@@ -2072,7 +2072,7 @@ def _render_microservice_apis(service: str, root: Path, json_output: bool) -> No
 
 
 def _render_microservice_mongodb(service: str, root: Path, json_output: bool) -> None:
-    """Liste les collections MongoDB utilisées par un microservice."""
+    """Liste les données utilisées par un microservice."""
     summary = show_architecture_object(
         _microservice_catalog(root), "microservice", service
     )
@@ -2327,7 +2327,7 @@ def microservices_mongodb(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Lister les collections MongoDB utilisées par un microservice."""
+    """Lister les données utilisées par un microservice."""
     microservices_cmd(["mongodb", service], root, json_output, 12, 20)
 
 

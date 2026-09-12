@@ -22,10 +22,10 @@ code to a service.
 
 The product answers questions such as:
 
-- Which services expose or call an HTTP API?
-- Which Kafka topics are produced and consumed, and with which payload type?
+- Which services expose or call an API?
+- Which topics are produced and consumed, and with which payload type?
 - What are the dependencies and likely impact paths between services?
-- Which Maven/Gradle projects, OpenAPI contracts, MongoDB collections and
+- Which Maven/Gradle projects, OpenAPI contracts, data resources and
   Spring properties belong to a service?
 
 When deterministic extraction leaves a bounded gap, a reviewable, namespaced
@@ -58,20 +58,20 @@ Developers can follow the same workflow through `microservices`, `topics`,
 
 - Tree-sitter Java AST extraction for Spring MVC/WebFlux, Feign,
   RestTemplate/WebClient, Spring Cloud Gateway and Spring Data REST endpoints.
-- Kafka producers and consumers, dynamic-topic evidence and explicit Java
+- Topic producers and consumers, dynamic-topic evidence and explicit Java
   payload types.
-- Maven/Gradle project discovery, OpenAPI and MongoDB inventory.
+- Maven/Gradle project discovery, OpenAPI and data inventory.
 - Local SQLite persistence, architecture relations, graph/audit views and
   workspace federation.
 - Markdown/JSON Kafka manifests and the opt-in Strategy1 conventions.
 - Optional Kubernetes Deployment and StatefulSet resource dimensions from the
   active local `kubectl` context, matched conservatively to indexed projects.
-- Persisted potential code flows from an HTTP/Kafka entry point to external
+- Persisted potential code flows from an API or topic entry point to external
   effects located in the same Java method.
 
 ### Planned
 
-- Conservative presentation of observed HTTP, Kafka, MongoDB, and S3 activity
+- Conservative presentation of observed API, topic, data, and S3 activity
   beside the static architecture, without inventing a source mapping.
 - Explicit Kubernetes capacity context for runtime hotspots where a verified
   workload-to-service match exists. A future matcher must prefer an exact name,
@@ -104,7 +104,7 @@ Developers can follow the same workflow through `microservices`, `topics`,
 ## Success measures
 
 - On each supported reference repository, an MCP client can answer the primary
-  pre-edit questions (service dependencies, HTTP APIs, Kafka flow and impact)
+  pre-edit questions (service dependencies, APIs, topic flow and impact)
   after one local index, with a bounded result and its evidence.
 - Every emitted source integration is traceable to a concrete source location
   or an explicitly named manifest entry; optional Kubernetes facts identify the

@@ -92,16 +92,16 @@
       if (link.kind === "rest") {
         const resource = restResourceLabel(link, target);
         return resource
-          ? `HTTP · ${source.name} appelle ${target.name} (${resource})`
-          : `HTTP · ${source.name} appelle ${target.name} (contrat non indexe)`;
+          ? `API · ${source.name} appelle ${target.name} (${resource})`
+          : `API · ${source.name} appelle ${target.name} (contrat non indexe)`;
       }
-      if (link.kind === "mongodb") return `MongoDB · ${source.name} stocke dans ${target.name}`;
-      if (link.kind === "request_reply") return `Kafka request/reply · ${source.name} → ${target.name}`;
+      if (link.kind === "mongodb") return `Data · ${source.name} stocke dans ${target.name}`;
+      if (link.kind === "request_reply") return `Topic request/reply · ${source.name} → ${target.name}`;
       if (source.kind === "microservice") {
         const types = link.published_message_types || [];
-        return `Kafka · ${source.name} publie${types.length ? ` <${types.join(", ")}>` : ""} sur ${target.name}`;
+        return `Topic · ${source.name} publie${types.length ? ` <${types.join(", ")}>` : ""} sur ${target.name}`;
       }
-      return `Kafka · ${target.name} consomme ${source.name}`;
+      return `Topic · ${target.name} consomme ${source.name}`;
     }
     function shortestPath(sourceId, targetId, matchesLink = () => true) {
       const outgoing = new Map();
@@ -213,10 +213,10 @@
         stops.push(resolved.id);
       }
       if (stops.some(id => !["microservice", "kafka_topic"].includes(nodeDataById.get(id).kind))) {
-        return { error: "Un itineraire Kafka ne peut contenir que des microservices et des topics Kafka." };
+        return { error: "Un itineraire de topics ne peut contenir que des microservices et des topics." };
       }
       if (nodeDataById.get(stops[0]).kind !== "microservice" || nodeDataById.get(stops.at(-1)).kind !== "microservice") {
-        return { error: "Un itineraire Kafka doit commencer et se terminer par un microservice." };
+        return { error: "Un itineraire de topics doit commencer et se terminer par un microservice." };
       }
       if (new Set(stops).size !== stops.length) {
         return { error: "Un itineraire ne peut pas repeter le meme noeud." };
@@ -264,7 +264,7 @@
       summary.className = "path-details-summary";
       const serviceCount = path.nodes.filter(id => nodeDataById.get(id).kind === "microservice").length;
       const topicCount = path.nodes.filter(id => nodeDataById.get(id).kind === "kafka_topic").length;
-      summary.textContent = `${serviceCount} microservice${serviceCount > 1 ? "s" : ""} · ${topicCount} topic${topicCount > 1 ? "s" : ""} Kafka`;
+      summary.textContent = `${serviceCount} microservice${serviceCount > 1 ? "s" : ""} · ${topicCount} topic${topicCount > 1 ? "s" : ""}`;
       header.append(kicker, title, summary);
       details.append(header);
       const overview = document.createElement("section");
@@ -421,7 +421,7 @@
       const stops = parsed.stops;
       const path = shortestPathThrough(stops);
       if (path === null) {
-        const message = "Aucun itineraire Kafka oriente ne passe par les noeuds demandes dans cet ordre.";
+        const message = "Aucun itineraire de topics oriente ne passe par les noeuds demandes dans cet ordre.";
         if (preserveGraphOnError) { searchStatus.textContent = message; return false; }
         graphState.selectedId = null; graphState.relatedNodes = null; graphState.relatedEdges = null; graphState.pathMicroserviceOrder = new Map();
         renderer.refresh();
@@ -553,7 +553,7 @@
         [
           `${publishedApiCount} API${publishedApiCount > 1 ? "s" : ""} exposee${publishedApiCount > 1 ? "s" : ""}`,
           `${publishedTopicCount} topic${publishedTopicCount > 1 ? "s" : ""} publie${publishedTopicCount > 1 ? "s" : ""}`,
-          `${collectionCount} collection${collectionCount > 1 ? "s" : ""} utilisee${collectionCount > 1 ? "s" : ""}`,
+          `${collectionCount} donnée${collectionCount > 1 ? "s" : ""} utilisée${collectionCount > 1 ? "s" : ""}`,
         ].forEach(label => { const badge = document.createElement("span"); badge.className = "detail-badge"; badge.textContent = label; meta.append(badge); });
       }
       const confidenceLabels = { proved: "prouvee", inferred: "inferee", conventional: "conventionnelle" };
@@ -572,7 +572,7 @@
         const connectivityLabels = { low: "basse", medium: "médiane", high: "élevée" };
         scoreBadge.textContent = `Connectivité relative : ${connectivityLabels[complexity.level]} (${complexity.score})`;
         const breakdown = complexity.breakdown || {};
-        scoreBadge.title = `HTTP : ${breakdown.http || 0} · Kafka : ${breakdown.kafka || 0} · MongoDB : ${breakdown.mongodb || 0} · Rang relatif ${complexity.rank}/${complexity.population} · Tiers : ${complexity.tier_start}-${complexity.tier_end}`;
+        scoreBadge.title = `APIs : ${breakdown.http || 0} · Topics : ${breakdown.kafka || 0} · Data : ${breakdown.mongodb || 0} · Rang relatif ${complexity.rank}/${complexity.population} · Tiers : ${complexity.tier_start}-${complexity.tier_end}`;
         meta.append(scoreBadge);
       }
       header.append(kicker, title, meta);
@@ -632,8 +632,8 @@
           ...(node.resources || [])
             .filter(resource => !contractsForPublishedRestResource(node, resource).length)
             .map(resource => ({
-              label: `REST · ${resource}`,
-              title: "Mettre en evidence les consommateurs de cette API REST",
+              label: `API · ${resource}`,
+              title: "Mettre en evidence les consommateurs de cette API",
               action: () => focusPublishedRestResource(id, resource),
             })),
         ];
@@ -644,7 +644,7 @@
         appendActionList("APIs publiees", publishedApis, relationsGroup);
         appendServiceKafkaActivities(node, "consume", "Topics consommes", kafkaConsumptions, relationsGroup);
         appendServiceKafkaActivities(node, "produce", "Topics publies", kafkaPublications, relationsGroup);
-        appendRelationList("Collections MongoDB", mongoCollections, id, link => (
+        appendRelationList("Data", mongoCollections, id, link => (
           nodeDataById.get(link.target).name
         ), relationsGroup);
         discardEmptyDetailsGroup(relationsGroup);
@@ -655,7 +655,7 @@
             action: () => { if (contract.vscode_uri) window.location.href = contract.vscode_uri; },
           })),
           ...(node.kafka_endpoints || []).map(endpoint => ({
-            label: `Kafka · ${endpoint.location}`,
+            label: `Topic · ${endpoint.location}`,
             title: `Ouvrir ${endpoint.location} dans VS Code`,
             action: () => { if (endpoint.vscode_uri) window.location.href = endpoint.vscode_uri; },
           })),
@@ -675,9 +675,9 @@
         const dtos = (graphData.kafka_dtos || [])
           .filter(dto => (dto.topics || []).includes(node.name))
           .sort((left, right) => dtoLabel(left).localeCompare(dtoLabel(right)));
-        appendActionList("DTO Kafka", dtos.map(dto => ({
+        appendActionList("DTO de topic", dtos.map(dto => ({
           label: dtoLabel(dto),
-          title: "Afficher les champs et les relations Kafka de ce DTO",
+          title: "Afficher les champs et les relations de topic de ce DTO",
           action: () => openDtoInspector(dto.id),
         })), relationsGroup);
         const indexedDtoTypes = new Set(dtos.flatMap(dto => [dto.id, dto.name, dto.qualified_name].filter(Boolean)));
@@ -700,7 +700,7 @@
       if (node.kind === "mongodb_collection") {
         const relationsGroup = createDetailsGroup("Relations");
         const persistenceClasses = node.persistence_classes || [];
-        appendRelationList("Services utilisant cette collection", edges.filter(link => link.kind === "mongodb" && link.target === id), id,
+        appendRelationList("Services utilisant cette donnée", edges.filter(link => link.kind === "mongodb" && link.target === id), id,
           link => nodeDataById.get(link.source).name, relationsGroup);
         appendActionList("Classes Java de persistance", persistenceClasses.map(item => ({
           label: item.qualified_name,

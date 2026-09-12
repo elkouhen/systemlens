@@ -1,6 +1,6 @@
 """LikeC4 project export of the inferred architecture.
 
-Renders a text-based LikeC4 model (services, topics, collections, external
+Renders a text-based LikeC4 model (services, Topics, Data resources, external
 APIs, build modules) with dedicated runtime/contracts/build/quality views.
 """
 
@@ -55,8 +55,8 @@ def _complexity_levels(relation_counts: dict[str, int]) -> dict[str, str]:
     """Répartit un type de ressource en trois tiers de complexité équilibrés.
 
     Le score est le degré du nœud dans le graphe de dépendances. Les niveaux
-    sont calculés séparément pour les microservices, topics Kafka et collections
-    MongoDB afin qu'une catégorie peu nombreuse reste lisible. Les égalités de
+    sont calculés séparément pour les microservices, Topics et Data afin qu'une
+    catégorie peu nombreuse reste lisible. Les égalités de
     score sont départagées par l'identifiant pour conserver un export déterministe.
     """
     ranked_nodes = sorted(relation_counts, key=lambda node_id: (relation_counts[node_id], node_id))
@@ -127,9 +127,9 @@ def render_request_reply_html(result: dict[str, object]) -> str:
     count = int(str(result["count"]))
     return f"""<!doctype html>
 <html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-<title>Kafka request/reply patterns</title><style>
+<title>Topic request/reply patterns</title><style>
 :root{{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:#101827;color:#e6edf7}}body{{max-width:1120px;margin:0 auto;padding:42px 24px}}h1{{margin:0 0 8px}}.subtitle{{color:#9aabc4;margin:0 0 30px}}.badge{{display:inline-block;background:#5b21b6;color:#f5f3ff;border-radius:99px;padding:4px 10px;font-size:.85rem}}.pattern{{display:grid;grid-template-columns:minmax(180px,1fr) 72px minmax(180px,1fr);gap:16px;align-items:center;background:#172235;border:1px solid #263854;border-radius:14px;padding:20px;margin:14px 0}}.topic{{border-radius:9px;padding:13px;font-weight:650;overflow-wrap:anywhere}}.request{{background:#12375c;border:1px solid #2586d7}}.reply{{background:#402064;border:1px solid #9666e9}}.arrow{{text-align:center;font-size:2rem;color:#b794f6}}.arrow small{{display:block;font-size:.72rem;color:#9aabc4}}dl{{grid-column:1 / -1;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:4px 0 0}}dt{{font-size:.76rem;color:#9aabc4}}dd{{margin:4px 0 0;overflow-wrap:anywhere}}.empty{{padding:24px;background:#172235;border-radius:12px}}@media(max-width:700px){{.pattern{{grid-template-columns:1fr}}.arrow{{transform:rotate(90deg)}}dl{{grid-template-columns:1fr 1fr}}}}
-</style></head><body><span class=\"badge\">Strategy1 convention</span><h1>Kafka request/reply</h1><p class=\"subtitle\">{count} candidate pair(s) detected from <code>retour_&lt;request-topic&gt;</code>. This view is convention-based, not a runtime trace.</p>{body}</body></html>"""
+</style></head><body><span class=\"badge\">Strategy1 convention</span><h1>Topic request/reply</h1><p class=\"subtitle\">{count} candidate pair(s) detected from <code>retour_&lt;request-topic&gt;</code>. This view is convention-based, not a runtime trace.</p>{body}</body></html>"""
 
 
 def _likec4_complexity(
@@ -297,15 +297,15 @@ def render_graph_likec4(
         "    style { shape triangle }",
         "  }",
         "  element kafka_topic {",
-        "    notation 'Kafka topic'",
+        "    notation 'Topic'",
         "    style { shape queue }",
         "  }",
         "  element mongodb_collection {",
-        "    notation 'MongoDB collection'",
+        "    notation 'Data'",
         "    style { shape rectangle }",
         "  }",
         "  element external_api {",
-        "    notation 'External HTTP API'",
+        "    notation 'External API'",
         "    style { shape browser }",
         "  }",
         "  element build_module {",
@@ -387,11 +387,11 @@ def render_graph_likec4(
         if openapi_files:
             description = f"{description}; OpenAPI contracts: {', '.join(openapi_files)}"
         if published_resources:
-            description = f"{description}; HTTP published: {', '.join(published_resources)}"
+            description = f"{description}; APIs published: {', '.join(published_resources)}"
         if produced_messages:
-            description = f"{description}; Kafka published: {', '.join(produced_messages)}"
+            description = f"{description}; Topic messages published: {', '.join(produced_messages)}"
         if consumed_messages:
-            description = f"{description}; Kafka consumed: {', '.join(consumed_messages)}"
+            description = f"{description}; Topic messages consumed: {', '.join(consumed_messages)}"
         if service in external_services:
             description = f"{description}; External microservice"
         lines.extend(
@@ -413,7 +413,7 @@ def render_graph_likec4(
             description = f"{description}; Consumed Java types: {', '.join(consumed_types)}"
         lines.extend([
             f"    {topic_ids[topic]} = kafka_topic '{_likec4_string(topic)}' {{",
-            "      technology 'Kafka'",
+                "      technology 'Messaging'",
             f"      description '{_likec4_string(description)}'",
             *([f"      style {{ color {color} }}"] if color else []),
             "    }",
@@ -425,7 +425,7 @@ def render_graph_likec4(
         lines.extend(
             [
                 f"    {collection_ids[identity]} = mongodb_collection '{_likec4_string(collection)}' {{",
-                "      technology 'MongoDB'",
+                "      technology 'Data store'",
                 f"      description '{_likec4_string(description)}'",
                 *([f"      style {{ color {color} }}"] if color else []),
                 "    }",
@@ -489,11 +489,11 @@ def render_graph_likec4(
             "",
             "views {",
             "  view runtime {",
-            "    title 'Runtime interactions: HTTP, Kafka and MongoDB'",
+            "    title 'Runtime interactions: APIs, Topics and Data'",
             "    include radar.**",
             "  }",
             "  view contracts {",
-            "    title 'Published HTTP contracts and Kafka message types'",
+            "    title 'Published API contracts and Topic message types'",
             "    include radar.**",
             "  }",
         ]

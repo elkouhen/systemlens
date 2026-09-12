@@ -58,12 +58,12 @@ but does not alter AST endpoint extraction.
 | `systemlens analyze microservices calls\|dependencies\|external-apis\|orphan-integrations [NAME] [--root DIR] [--json]` | Lists a service's outgoing calls, dependencies, external APIs, or integrations with no resolved caller/callee, depending on the subcommand. `external-apis` and `orphan-integrations` accept an optional `NAME` to scope the result to one service. |
 | `systemlens analyze microservices impact NAME [--root DIR] [--json]` | Lists direct and transitive impact paths. |
 | `systemlens analyze microservices path FROM TO [--root DIR] [--json] [--max-depth N] [--limit N]` | Lists bounded paths between services. |
-| `systemlens analyze request-reply [--root DIR] [--json]` | Lists Strategy1 Kafka request/reply candidates. |
+| `systemlens analyze request-reply [--root DIR] [--json]` | Lists Strategy1 Topic request/reply candidates. |
 | `systemlens export microservices (--html FILE | --c4 DIRECTORY | --json) [--graph FILE] [--workspace DIRECTORY] [--root-path DIRECTORY]` | Exports the deployable microservice, API, data-schema and message-channel topology. Non-deployable indexed projects (libraries and aggregators without an application entry point) are excluded from this view and remain available to `export projects` and `export layers`. Persisted MCP graph facts are included in the HTML export. `--graph FILE` reads a validated `systemlens-ai-graph-v1` manifest; `--workspace` federates separately indexed services below one parent directory; `--root-path` provides the local source root for HTML source links. |
 | `systemlens export projects --html FILE` | Exports the Maven/Gradle build-dependency view. |
 | `systemlens export layers --html FILE` | Exports a dedicated software-layer view. With the persisted Strategy1 profile, the project groups `PORTAIL` and `CYCLE-DE-VIE` are rendered in API/contracts and Orchestration, `DOMAIN-*` projects in Domain, and the documented layer-name prefixes/suffixes in their matching layers; shared libraries and other non-deployable projects are omitted, and without Strategy1 the repository-specific conventions are disabled. |
 | `systemlens export modules --html FILE` | Exports the structural hierarchy where a module can contain child modules and indexed projects. Membership comes from project directory paths, never from Kubernetes namespaces. The legacy `export clusters` and `export namespaces` spellings remain hidden compatibility aliases. |
-| `systemlens export request-reply --html FILE` | Exports Strategy1 Kafka request/reply candidates. |
+| `systemlens export request-reply --html FILE` | Exports Strategy1 Topic request/reply candidates. |
 | `systemlens web [--host HOST] [--port PORT]` | Starts the local Python web application at `http://127.0.0.1:8765/` by default. Its home page links to Architecture. Architecture renders the persisted snapshot for each request, excluding test-fixture microservices and every relation attached to them; when no index exists, it offers an explicit local button that creates the default configuration when needed and indexes the repository. The default loopback host prevents network exposure unless the user explicitly changes `--host`. |
 | `simpleweb [DIRECTORY] [--host HOST] [--port PORT]` | Serves static files from `DIRECTORY`, or from the current directory when omitted, for opening generated HTML files that load adjacent JSON. It binds to `http://127.0.0.1:8000/` by default, has no write routes, and does not create or modify files. The directory must exist. |
 | `systemlens mcp` | Starts the stdio MCP server. |
@@ -87,7 +87,7 @@ the index and reused by incremental MCP reindexing and all derived views.
 
 ### Core extraction rules
 
-An endpoint has a role (`serve`/`call` for REST, `produce`/`consume` for Kafka),
+An endpoint has a role (`serve`/`call` for REST, `produce`/`consume` for a topic),
 a system, a topic (`METHOD /path` for REST), source location, framework and
 optional module, qualified name and Java message type. A value that cannot be
 resolved statically is flagged `topic_dynamic=true`; it is never fabricated.
@@ -98,8 +98,8 @@ Cloud Stream. Markdown and JSON Kafka manifests are supported as explicit
 sources and are labelled `source=manifest`.
 
 Indexing also materializes conservative same-method code flows. An HTTP
-`serve` or Kafka `consume` endpoint is a flow entry point; HTTP `call`, Kafka
-`produce`, and concrete MongoDB operations located in the same Java method are
+`serve` or Topic `consume` endpoint is a flow entry point; HTTP `call`, Topic
+`produce`, and concrete Data operations located in the same Java method are
 ordered by source position as external effects. These flows have
 `status=potential` and `confidence=medium`: lexical containment does not prove
 that a conditional branch executes. Effects reached only through another
@@ -117,7 +117,7 @@ issues rather than being linked to a coincidentally similar route.
 ### HTML export behaviour
 
 The HTML microservice export provides an inspector for each statically typed
-Kafka message. It shows the indexed payload-type identity, message topic, and
+Topic message. It shows the indexed payload-type identity, message topic, and
 producer and consumer services. When the matching Java type is indexed, its
 inspector also shows its source, declared fields, enum values, and conservative
 recursive project-type navigation.
@@ -139,14 +139,14 @@ viewport resize, and cannot make the toolbar scroll horizontally.
 Clearing or replacing the selection
 removes this flow-specific emphasis.
 
-The architecture vocabulary is extensible: a `data_schema` node represents a
-persisted data resource or contract (MongoDB collection, SQL table, Redis
-keyspace or object-store dataset), while a `message_channel` node represents
-a messaging channel (Kafka, RabbitMQ, SQS or a webhook stream). The concrete
-technology is carried as metadata.
+The architecture vocabulary is extensible: `Data` represents a persisted data
+resource or contract, while `Topic` represents a messaging channel. MongoDB
+collections, SQL tables, Redis keyspaces, object-store datasets, Kafka,
+RabbitMQ, SQS, and webhook streams are technology-specific evidence, not the
+primary architecture category.
 
 The export uses a responsive workspace layout with seven navigation tabs:
-Explorer, OpenAPI, Kafka, Mongo, Build, Quality, and Flux. It includes
+Explorer, OpenAPI, Topics, Data, Build, Quality, and Flux. It includes
 compact architecture counters, contextual details integrated into the left
 panel, and a full-size resource inspector. On narrow viewports the left panel
 uses one bounded, scrollable region so the graph remains visible while users
@@ -186,7 +186,7 @@ and reset actions; its second row contains the graph-view and node-rendering
 selectors; architecture counters and inventory status follow. This whole context appears only in
 Explorer, so domain tabs start directly with their own content. A dedicated,
 compact `Displayed nodes and edges` control lets users independently select
-HTTP, Kafka, data-access and other edge categories, and internal services,
+API, Topic, Data-access and other edge categories, and internal services,
 external services, messaging resources, data resources and other node
 categories. This filtering applies equally to native and MCP-enriched graph
 vocabularies. Placement strategies remain available as advanced controls.
@@ -227,8 +227,8 @@ MUST NOT compound the previous zoom.
 
 Users can pan and zoom to explore the remaining graph. In the layers and
 modules views, relations are visually subdued. In every view, microservice,
-Kafka topic, message channel,
-MongoDB collection, data schema, and equivalent resource cards share the same
+Topic, message channel,
+Data resource, data schema, and equivalent resource cards share the same
 rendered width, height, and scale. Their semantic differences are conveyed by
 compact icons aligned with the name, plus border and color. The secondary kind
 label uses the full inner card width instead of reserving a permanent icon
@@ -238,8 +238,8 @@ Users can switch node rendering between `Cards` and `Symbols` without changing
 the active graph, filters, layout, selection, node positions, or current camera
 framing. The switch redraws node representations in place and MUST NOT reapply
 either fit mode or rerun collision placement. `Cards` remains the default.
-In `Symbols`, microservices use compact hexagons, Kafka topics and message
-channels use circles, and MongoDB collections and data schemas use small
+In `Symbols`, microservices use compact hexagons, Topics and message
+channels use circles, and Data resources and data schemas use small
 squares. Symbols use the same visual rule as cards: a light surface tinted by
 the resource accent, a defined accent border and a restrained depth shadow;
 the dark theme uses an accent-tinted slate surface rather than a saturated
@@ -341,7 +341,7 @@ ELK is used only for the architectural layer layout, while Sigma.js provides
 the interactive rendering for both views. Architecture relations remain
 visible even when they are not used as placement edges.
 
-It also provides dedicated OpenAPI, Kafka, Mongo, and Build
+It also provides dedicated OpenAPI, Topics, Data, and Build
 views, which keep their domain inventories separate.
 
 Changing a relation-type filter rebuilds and relayouts the graph from only the
@@ -370,7 +370,7 @@ The HTML architecture view MUST preserve these visual invariants:
   fully contained inside its owning layer, including its header and padding.
 - A module MAY use several rows. The default placement uses at most five
   boxes per row; additional boxes wrap onto subsequent rows.
-- Microservices, Kafka topics, message channels, MongoDB collections, data
+- Microservices, Topics, message channels, Data resources, data
   schemas and other rendered resources MUST NOT overlap. Placement MUST keep a
   positive horizontal and vertical gap greater than the projected card size.
 - Microservice and resource cards MUST use one shared rendered width, height,
@@ -416,7 +416,7 @@ handles card separation.
 
 The details panel MUST display the resolved software layer and the module
 path once, in its `Architecture` section, for microservices and resources
-(topics, collections, and enriched resources). Architecture fields already
+(Topics, Data resources, and enriched resources). Architecture fields already
 shown there MUST NOT be repeated as header badges or raw metadata. The module
 path MUST be the slash-separated path of grouping
 directories, such as `group1/group2`, without a structural-group prefix.
@@ -432,7 +432,7 @@ The module view MUST preserve these visual invariants:
 
 - Module membership MUST use the same resolver for placement and for the
   visible module rectangle.
-- A Kafka topic, message channel, collection, or other resource MUST be
+- A Topic, message channel, Data resource, or other resource MUST be
   assigned first to the module of its producing microservice, using the
   incoming source relation. A consumer module MUST NOT move the resource
   into its module. Resources without an identifiable producer remain in
@@ -440,7 +440,7 @@ The module view MUST preserve these visual invariants:
 - Resources inside one module MUST be placed on a grid with a positive
   horizontal and vertical gap greater than the projected card size.
 - Within each module, microservices MUST occupy the first
-  sub-layer and Kafka, MongoDB, and other resources MUST occupy a second
+  sub-layer and Topics, Data, and other resources MUST occupy a second
   sub-layer below them. Empty sub-layers are omitted. This ordering is conveyed
   by placement only; the renderer MUST NOT add visible `Microservices` or
   `Resources` sub-layer labels inside the module.
@@ -468,23 +468,23 @@ Microservices with no indexed inter-service relation remain visible in a
 separate isolated area of the graph, so their absence of dependencies is not
 confused with an absent service.
 
-Microservices, Kafka topics, and MongoDB collections are marked by their
+Microservices, topics, and data resources are marked by their
 relative connectivity. In the HTML graph, the shape identifies the resource
-type. Microservices, Kafka topics, and MongoDB collections use a coloured
+type. Microservices, topics, and data resources use a coloured
 outline around a neutral interior; the fill never carries connectivity or risk
 meaning.
 
-The relation count includes their indexed HTTP, Kafka, and MongoDB dependencies,
+The relation count includes their indexed HTTP, topic, and data dependencies,
 while low/medium/high relative tiers are calculated separately for each
 resource type.
 
 For a microservice, the count is its distinct direct
-HTTP clients and targets, Kafka producer/consumer topic relations, and MongoDB
-collection relations; multiple HTTP routes between the same client and target
+HTTP clients and targets, topic producer/consumer relations, and data
+relations; multiple HTTP routes between the same client and target
 are counted once.
 
-The HTML complexity badge exposes the HTTP, Kafka, and
-MongoDB breakdown as a tooltip, along with the resource rank and its soft
+The HTML complexity badge exposes the HTTP, topic, and
+data breakdown as a tooltip, along with the resource rank and its soft
 tercile bounds. The lowest third is blue, the middle third orange, and the
 highest third red; the terciles are recalculated separately for each resource
 type in every export. The graph label of each coloured resource also displays
@@ -492,10 +492,10 @@ its relative connectivity through its coloured outline; the exact details are
 available after selecting the node.
 
 The Explore search suggests indexed resource names and accepts either one
-exact, unambiguous graph-node name or a Kafka itinerary written with `->`.
+exact, unambiguous graph-node name or a topic itinerary written with `->`.
 
-An itinerary starts and ends with a microservice and follows only directed Kafka
-relations through Kafka topics; it never traverses HTTP or MongoDB dependencies.
+An itinerary starts and ends with a microservice and follows only directed topic
+relations through topics; it never traverses HTTP or data dependencies.
 
 When a microservice and another resource have the same display name, a direct
 resource search remains ambiguous, while an itinerary endpoint resolves the
@@ -503,19 +503,19 @@ unique microservice candidate required by the itinerary grammar.
 
 Invalid, ambiguous, repeated, or unreachable stops leave the current graph
 unchanged and produce an actionable message. The itinerary detail is an
-ordered, clickable list of node names and types. A Kafka topic lists its
-associated DTO names in parentheses. Selecting any path stop reveals its
-ordinary detail view, including the indexed Kafka source links where present.
+ordered, clickable list of node names and types. A Topic lists its associated
+DTO names in parentheses. Selecting any path stop reveals its ordinary detail
+view, including the indexed Topic source links where present.
 
 Every graph resource detail starts with one relation count when every indexed
 relation is visible. When filters hide relations, it instead distinguishes the
 indexed and visible counts. A `Relations` section follows. For a microservice,
 that section separates
-consumed and published API and Kafka resources, plus MongoDB collections. Each
+consumed and published API and Topic resources, plus Data resources. Each
 microservice resolved to an indexed Maven or Gradle project also provides a
-visible action that opens the module root directory in VS Code. Kafka topics
-list their applicable DTOs. A collapsed `Sources` section lists the indexed
-OpenAPI and Kafka files that provide the evidence, avoiding repetition in every
+visible action that opens the module root directory in VS Code. Topics list
+their applicable DTOs. A collapsed `Sources` section lists the indexed OpenAPI
+and Topic files that provide the evidence, avoiding repetition in every
 topic.
 
 At constrained viewport sizes, the empty context panel is hidden. Once it
@@ -548,13 +548,13 @@ dependency metadata is unavailable, a workspace-wide class is used only if it
 is the unique candidate for that collection name; ambiguous candidates remain
 unassociated rather than being guessed.
 
-The topic detail lists resolved Kafka DTOs once. It lists message types only
+The Topic detail lists resolved DTOs once. It lists message types only
 when no matching DTO has been resolved, avoiding duplicate published and
 consumed type lists when they describe the same contract.
 
 Indexing issues that have a source endpoint expose a VS Code link to the
-associated file and line. The HTML export provides dedicated OpenAPI, Kafka,
-Mongo, and Build views. OpenAPI and Kafka both support
+associated file and line. The HTML export provides dedicated OpenAPI, Topics,
+Data, and Build views. OpenAPI and Topics both support
 filtering their complete list (OpenAPI by path or service, DTOs by simple name
 or package); Persistence filters by class, package, collection, or service. A
 persistent inventory status reports whether unresolved indexing facts exist and
@@ -610,7 +610,7 @@ index-then-enrich workflow. It no longer mirrors every read-only CLI command:
 | `import_graph_facts` | Validate and atomically upsert a `systemlens-ai-graph-v1` manifest into one enrichment namespace, optionally removing stale facts for a complete snapshot. |
 | `remove_graph_fact` | Remove an assertion previously added through MCP; never removes extracted source facts. |
 | `list_graph_facts` | List the persisted enrichment layer. |
-| `architecture_graph` | Return the complete generic dependency graph (services, APIs, topics, data schemas and external resources) merged with persisted enrichment facts. |
+| `architecture_graph` | Return the complete generic dependency graph (services, APIs, Topics, Data resources and external resources) merged with persisted enrichment facts. |
 
 Only `index_repository` creates or refreshes source-derived facts. Enrichment
 facts are stored separately in `graph_facts`, survive reindexing, and are never

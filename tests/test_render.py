@@ -209,7 +209,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="openapi-tab"' in document
     assert 'id="kafka-tab"' in document
     assert 'id="persistence-tab"' in document
-    assert '>Mongo</button>' in document
+    assert '>Topics</button>' in document
+    assert '>Data</button>' in document
+    assert 'Topic Kafka' not in document
+    assert 'Collection MongoDB' not in document
     assert 'id="request-reply-tab"' not in document
     assert 'id="build-tab"' in document
     assert 'class="graph-control-group zoom-controls"' in document
@@ -286,14 +289,14 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'placeholder="orders ou orders -> payments"' in document
     assert "function resolveExactNodeName(name, allowedKinds = null)" in document
     assert "function runExploreSearch()" in document
-    assert "Aucun itineraire Kafka oriente ne passe par les noeuds demandes dans cet ordre." in document
+    assert "Aucun itineraire de topics oriente ne passe par les noeuds demandes dans cet ordre." in document
     assert 'link => link.kind === "kafka"' in document
     assert "${nodeKindLabel(node)}${dtoSuffix}" in document
     assert "function appendServiceKafkaActivities" in document
     assert document.count('createDetailsGroup("Relations")') == 3
     assert 'appendRelationList("APIs consommees"' in document
     assert 'appendServiceKafkaActivities(node, "produce", "Topics publies"' in document
-    assert 'appendRelationList("Services utilisant cette collection"' in document
+    assert 'appendRelationList("Services utilisant cette donnée"' in document
     assert 'appendList("Stockee par", [node.owner], relationsGroup)' not in document
     assert "function rebuildGraph()" in document
     assert 'id="display-controls"' in document
