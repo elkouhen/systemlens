@@ -58,16 +58,18 @@ uv tool install systemlens
 systemlens init
 systemlens doctor
 systemlens index
-systemlens analyze coverage
-systemlens analyze indexing-issues
-systemlens analyze audit</code></pre>
+
+# Have the agent write reviewable, relative-evidence facts
+systemlens import-facts architecture.ai-graph.pass-001.json \
+  --namespace ai-architecture
+systemlens export microservices --html architecture.html</code></pre>
       <div class="workflow" aria-label="systemlens-skill workflow">
-        <article class="step"><strong>1. Baseline</strong>Install the skill, then initialize and index the repository locally.</article>
-        <article class="step"><strong>2. Explore</strong>Ask the agent to inspect services, APIs, topics, data stores, flows, and source evidence.</article>
-        <article class="step"><strong>3. Complete</strong>For unsupported conventions, run focused boundaries, HTTP, messaging, data, and deployment passes.</article>
-        <article class="step"><strong>4. Review</strong>Import only reviewed, namespaced facts; then export the merged architecture graph.</article>
+        <article class="step"><strong>1. Index</strong>Install the skill, then initialize and index the repository locally.</article>
+        <article class="step"><strong>2. Describe</strong>Have the agent inspect source evidence and write a JSON facts manifest for what needs enriching.</article>
+        <article class="step"><strong>3. Import</strong>Import the reviewed manifest into its own namespace; source-derived facts remain unchanged.</article>
+        <article class="step"><strong>4. Export</strong>Generate the merged architecture graph for review or handoff.</article>
       </div>
-      <p>For a focused question, the agent can use only the relevant pass. For a full topology, it begins with <code>boundaries</code>, then examines HTTP, messaging, and data before mapping deployment. Dynamic and unresolved integrations remain visible instead of being guessed.</p>
+      <p>For a focused question, the agent can write only the relevant facts. For a full topology, it can work in boundaries, HTTP, messaging, data, and deployment passes. Each pass is replaceable and keeps dynamic or unresolved integrations visible instead of guessing them.</p>
       <p><a href="https://github.com/elkouhen/systemlens-skill/blob/main/SKILL.md">Read the full skill workflow →</a></p>
     </section>
 
