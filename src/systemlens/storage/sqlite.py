@@ -24,7 +24,7 @@ from systemlens.domain.module_inventory import (
 from systemlens.domain.runtime import KubernetesWorkload
 from systemlens.infrastructure.paths import db_path
 
-SCHEMA_VERSION = "28"
+SCHEMA_VERSION = "29"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
@@ -313,6 +313,12 @@ class Store:
                 spec TEXT NOT NULL,
                 PRIMARY KEY (module, path)
             );
+            CREATE TABLE IF NOT EXISTS asyncapi_contracts (
+                module TEXT NOT NULL,
+                path TEXT NOT NULL,
+                spec TEXT NOT NULL,
+                PRIMARY KEY (module, path)
+            );
             CREATE TABLE IF NOT EXISTS graph_facts (
                 id TEXT PRIMARY KEY,
                 fact_type TEXT NOT NULL,
@@ -485,6 +491,16 @@ class Store:
                 "SELECT module, path, spec FROM openapi_contracts ORDER BY module, path"
             )
         ]
+
+    def replace_asyncapi_contracts(self, contracts: list[dict[str, object]]) -> None:
+        self.conn.execute("DELETE FROM asyncapi_contracts")
+        self.conn.executemany("INSERT INTO asyncapi_contracts (module, path, spec) VALUES (?, ?, ?)", [
+            (str(contract["module"]), str(contract["path"]), json.dumps(contract["spec"])) for contract in contracts
+        ])
+
+    def all_asyncapi_contracts(self) -> list[dict[str, object]]:
+        return [{"module": row["module"], "path": row["path"], "spec": json.loads(row["spec"])}
+                for row in self.conn.execute("SELECT module, path, spec FROM asyncapi_contracts ORDER BY module, path")]
 
     # -- modules --
 

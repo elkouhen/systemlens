@@ -367,7 +367,7 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
         candidate_files = [
             path.relative_to(repo_root).as_posix()
             for path in repo_root.rglob("*.java")
-            if path.is_file()
+            if path.is_file() and not {"target", "build"}.intersection(path.relative_to(repo_root).parts)
         ]
     else:
         candidate_files = sorted(path for path in files if path.endswith(".java"))

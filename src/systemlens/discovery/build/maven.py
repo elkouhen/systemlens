@@ -142,6 +142,8 @@ def _resolve_openapi_spec_path(
         candidate = pom_path.parent / candidate
     if not candidate.is_file():
         return None
+    if {"target", "build"}.intersection(candidate.parts):
+        return None
     try:
         module_relative = Path(os.path.relpath(candidate.resolve(strict=False), pom_path.parent.resolve()))
     except ValueError:
@@ -169,12 +171,14 @@ def _resolve_openapi_spec_root_directory(
         candidate = pom_path.parent / candidate
     if not candidate.is_dir():
         return ()
+    if {"target", "build"}.intersection(candidate.parts):
+        return ()
     module_dir = pom_path.parent.resolve()
     try:
         return tuple(
             os.path.relpath(path.resolve(), module_dir).replace(os.sep, "/")
             for path in sorted(candidate.rglob("*"))
-            if path.is_file()
+            if path.is_file() and not {"target", "build"}.intersection(path.parts)
         )
     except (OSError, ValueError):
         return ()
@@ -291,38 +295,9 @@ def detect_openapi_generated_clients(pom_path: Path) -> tuple[str, ...]:
 
     Retourne un tuple des chemins relatifs des fichiers Java générés.
     """
-    if not _has_openapi_generator_plugin(pom_path):
-        return ()
-
-    module_dir = pom_path.parent
-
-    # Chemins typiques pour les sources générées par openapi-generator
-    possible_paths = [
-        module_dir / "target" / "generated-sources" / "openapi",
-        module_dir / "target" / "generated-sources" / "openapi-mapstruct",
-        module_dir / "target" / "generated-sources" / "openapi-nullable",
-    ]
-
-    generated_sources = None
-    for path in possible_paths:
-        if path.exists() and path.is_dir():
-            generated_sources = path
-            break
-
-    if not generated_sources:
-        return ()
-
-    client_files = []
-    for java_file in generated_sources.rglob("*.java"):
-        # Calculer le chemin relatif par rapport au module
-        try:
-            rel_path = java_file.relative_to(module_dir)
-            client_files.append(str(rel_path))
-        except ValueError:
-            # Si le fichier n'est pas relatif au module, on l'ignore
-            continue
-
-    return tuple(sorted(set(client_files)))
+    # Build output is deliberately outside the SystemLens source perimeter.
+    # Generated clients are derived artefacts, not indexed architecture facts.
+    return ()
 
 
 @lru_cache(maxsize=512)
@@ -341,6 +316,7 @@ def _cached_module_identity(repo_root_str: str, pom_path_str: str) -> str:
     matching_paths = [
         candidate
         for candidate in repo_root.rglob("pom.xml")
+        if not {"target", "build"}.intersection(candidate.relative_to(repo_root).parts)
         if _cached_module_name(str(candidate)) == name
     ]
     if len(matching_paths) <= 1:

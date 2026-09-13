@@ -246,6 +246,8 @@ def _rest_configuration_client_domains_in_module(
     clients: list[tuple[str, str, str]] = []
     for candidate in module_root.rglob("*.java"):
         candidate_rel = candidate.relative_to(repo_root).as_posix()
+        if {"target", "build"}.intersection(candidate_rel.split("/")):
+            continue
         _trace_rest_client(
             "rest_client.search.source", microservice=service_name, path=candidate_rel
         )
@@ -353,7 +355,15 @@ def discover_rest_api_client_configurations(repo_root: Path) -> None:
     toute configuration `Rest*Config*` doit tout de même être cherchée dans chaque
     microservice Maven du workspace.
     """
-    module_roots = sorted({pom_path.parent for pom_path in repo_root.rglob("pom.xml")})
+    module_roots = sorted(
+        {
+            pom_path.parent
+            for pom_path in repo_root.rglob("pom.xml")
+            if not {"target", "build"}.intersection(
+                pom_path.relative_to(repo_root).parts
+            )
+        }
+    )
     if not module_roots:
         module_roots = [repo_root]
     _trace_rest_client(

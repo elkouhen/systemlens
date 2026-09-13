@@ -337,6 +337,8 @@ def _module_files(module_dir: Path, module_roots: set[Path], pattern: str):
     for path in sorted(module_dir.rglob(pattern)):
         if not path.is_file():
             continue
+        if {"target", "build"}.intersection(path.relative_to(module_dir).parts):
+            continue
         if any(
             parent in module_roots
             and parent != module_dir

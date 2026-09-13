@@ -232,6 +232,17 @@
     .inspector-close { flex: 0 0 auto; width: 32px; height: 32px; border: 1px solid #cbd5e1; border-radius: 6px; color: #475569; background: #fff; font-size: 20px; cursor: pointer; }
     .inspector-body { min-height: 0; overflow: auto; padding: 18px; }
     .inspector-body.swagger-ui { padding: 0; }
+    .inspector-body.asyncapi-inspector { padding: 0; }
+    .asyncapi-shell { min-height: 100%; background: #f6f8fc; }
+    .asyncapi-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 20px 22px; border-bottom: 1px solid #dce5f0; background: linear-gradient(135deg, #fafdff, #eef4ff); }
+    .asyncapi-summary-copy { min-width: 0; }
+    .asyncapi-summary-kicker { margin: 0 0 4px; color: #315f9b; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .asyncapi-summary-title { margin: 0; color: #172033; font-size: 20px; line-height: 1.25; }
+    .asyncapi-summary-description { margin: 6px 0 0; color: #52647a; font-size: 13px; line-height: 1.45; }
+    .asyncapi-summary-meta { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+    .asyncapi-summary-badge { padding: 4px 8px; border: 1px solid #cbd8e8; border-radius: 999px; color: #315f9b; background: #fff; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .asyncapi-source-link { display: inline-block; margin: 12px 22px 0; color: #315f9b; font-size: 13px; font-weight: 700; }
+    .asyncapi-shell > asyncapi-component { display: block; min-height: 100%; }
     .dto-inspector { display: grid; gap: 16px; max-width: 720px; }
     .dto-navigation { display: flex; align-items: center; gap: 8px; }
     .dto-back { width: fit-content; padding: 6px 9px; border: 1px solid #bfdbfe; border-radius: 6px; color: #1d4f91; background: #eff6ff; font-size: 12px; font-weight: 700; cursor: pointer; }

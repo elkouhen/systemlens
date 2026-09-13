@@ -338,6 +338,28 @@ def test_index_persists_kafka_dto_source_definitions(tmp_path: Path) -> None:
     }]
 
 
+def test_index_excludes_openapi_contracts_copied_to_target(tmp_path: Path) -> None:
+    (tmp_path / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion><artifactId>orders</artifactId></project>",
+        encoding="utf-8",
+    )
+    source_contract = tmp_path / "src" / "main" / "resources" / "openapi.yaml"
+    source_contract.parent.mkdir(parents=True)
+    source_contract.write_text("openapi: 3.0.0\npaths: {}\n", encoding="utf-8")
+    copied_contract = tmp_path / "target" / "classes" / "openapi.yaml"
+    copied_contract.parent.mkdir(parents=True)
+    copied_contract.write_text("openapi: 3.0.0\npaths: {}\n", encoding="utf-8")
+
+    with Store(tmp_path) as store:
+        index_repo(tmp_path, Config(), store, full=True)
+        contracts = store.all_openapi_contracts()
+
+    assert contracts == [{
+        "module": "orders", "path": "src/main/resources/openapi.yaml",
+        "spec": {"openapi": "3.0.0", "paths": {}},
+    }]
+
+
 def test_index_stores_nested_module_openapi_contract_once(tmp_path: Path) -> None:
     (tmp_path / "pom.xml").write_text(
         "<project><modelVersion>4.0.0</modelVersion><artifactId>workspace</artifactId>"

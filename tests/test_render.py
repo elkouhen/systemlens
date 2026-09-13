@@ -98,7 +98,8 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     assert 'appendList("Entrées", ports.filter(port => port.direction === "in")' not in document
     assert 'createDetailsGroup("Flux internes", false)' in document
     assert 'appendPortFlowList("Flux potentiels", uniqueConnections, internalFlowsGroup)' in document
-    assert 'appendAssociatedCodeFlows("Flux associés", associatedFlows);' in document
+    assert 'createDetailsGroup("Flux associés")' in document
+    assert 'appendAssociatedCodeFlows("Flux associés", associatedFlows, associatedFlowsGroup);' in document
     assert 'listAction.textContent = "Flux";' in document
     assert 'graphAction.textContent = "Graphe";' in document
     assert 'sourceAction.textContent = "Java";' in document
@@ -579,6 +580,25 @@ def test_graph_html_uses_persisted_openapi_specs() -> None:
     assert graph_data["nodes"][0]["openapi_contracts"][0]["spec"] == {
         "openapi": "3.0.0", "paths": {}
     }
+
+
+def test_graph_html_embeds_the_official_asyncapi_component_only_when_needed() -> None:
+    module = DiscoveredModule(
+        name="orders", path=Path("/workspace/orders"), build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    without_contract = render_graph_html({"orders": []}, [], modules_by_service={"orders": module})
+    with_contract = render_graph_html(
+        {"orders": []}, [], modules_by_service={"orders": module},
+        asyncapi_contracts=[{
+            "module": "orders", "path": "src/main/resources/orders.asyncapi.yaml",
+            "spec": {"asyncapi": "3.0.0", "info": {"title": "Orders", "version": "1.0.0"}},
+        }],
+    )
+
+    assert "asyncapi-web-component-3.1.8.js" not in without_contract
+    assert '"asyncapi-component"' in with_contract
+    assert "data:text/css;base64," in with_contract
 
 def test_graph_html_deduplicates_repository_and_module_relative_openapi_paths() -> None:
     module = DiscoveredModule(

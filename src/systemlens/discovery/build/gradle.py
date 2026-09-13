@@ -78,6 +78,8 @@ def _service_root_artifacts(repo_root_str: str) -> tuple[tuple[str, str], ...]:
     repo_root = Path(repo_root_str)
     roots: dict[str, str] = {}
     for java_file in repo_root.rglob("*.java"):
+        if {"target", "build"}.intersection(java_file.relative_to(repo_root).parts):
+            continue
         try:
             source = java_file.read_bytes()
         except OSError:

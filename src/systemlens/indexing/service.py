@@ -21,7 +21,7 @@ from systemlens.conventions.strategy1.kafka import (
     apply_kafka_endpoints,
     infer_kafka_endpoints as infer_strategy1_kafka_endpoints,
 )
-from systemlens.indexing.materializers import materialize_openapi_contracts
+from systemlens.indexing.materializers import materialize_asyncapi_contracts, materialize_openapi_contracts
 from systemlens.indexing.code_flows import (
     CODE_FLOW_SIGNATURE, materialize_code_flows, materialize_codeql_code_flows,
     materialize_kafka_flow_continuations,
@@ -301,6 +301,7 @@ def _index_repo(
     # Also normalize a persisted module snapshot when module inventory refresh
     # is disabled for this run.
     store.replace_openapi_contracts(materialize_openapi_contracts(relation_modules))
+    store.replace_asyncapi_contracts(materialize_asyncapi_contracts(relation_modules))
     relations = build_architecture_relations(
         relation_modules,
         store.all_endpoints(),

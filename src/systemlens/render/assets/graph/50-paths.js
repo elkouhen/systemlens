@@ -624,8 +624,8 @@
         const kafkaConsumptions = edges.filter(link => link.kind === "kafka" && link.target === id);
         const mongoCollections = edges.filter(link => link.kind === "mongodb" && link.source === id);
         const openApiContracts = node.openapi_contracts || [];
+        const asyncApiContracts = node.asyncapi_contracts || [];
         const kubernetesWorkloads = node.kubernetes_workloads || [];
-        appendFindings(node.findings || []);
         const clusterPath = clusterPathForNode(id);
         const architectureGroup = createDetailsGroup("Architecture");
         appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
@@ -641,7 +641,6 @@
         flow.module === node.name
         || (flow.steps || []).some(step => associatedEndpointIds.has(step.endpoint_id))
       ));
-      appendAssociatedCodeFlows("Flux associés", associatedFlows);
       if (ports.length) {
         const portsByEndpointId = new Map(ports.map(port => [port.endpoint_id, port]));
           const connections = (graphData.code_flows || []).flatMap(flow => {
@@ -694,12 +693,20 @@
           `API de ${nodeDataById.get(link.target).name}`
         ), relationsGroup);
         appendActionList("APIs publiees", publishedApis, relationsGroup);
+        appendActionList("Contrats AsyncAPI", asyncApiContracts.map(contract => ({
+          label: `AsyncAPI · ${contract.path}`,
+          title: `Inspecter le contrat AsyncAPI ${contract.path}`,
+          action: () => openAsyncApiContract(contract),
+        })), relationsGroup);
         appendServiceKafkaActivities(node, "consume", "Topics consommes", kafkaConsumptions, relationsGroup);
         appendServiceKafkaActivities(node, "produce", "Topics publies", kafkaPublications, relationsGroup);
         appendRelationList("Data", mongoCollections, id, link => (
           nodeDataById.get(link.target).name
         ), relationsGroup);
         discardEmptyDetailsGroup(relationsGroup);
+        const associatedFlowsGroup = createDetailsGroup("Flux associés");
+        appendAssociatedCodeFlows("Flux associés", associatedFlows, associatedFlowsGroup);
+        discardEmptyDetailsGroup(associatedFlowsGroup);
         const sourceEntries = [
           ...openApiContracts.map(contract => ({
             label: `OpenAPI · ${contract.path}`,
@@ -715,6 +722,18 @@
         const sourcesGroup = createDetailsGroup("Sources", false);
         appendActionList("Fichiers de preuve", sourceEntries, sourcesGroup);
         discardEmptyDetailsGroup(sourcesGroup);
+        const qualityGroup = createDetailsGroup("Qualité", false);
+        appendFindings(node.findings || [], qualityGroup);
+        discardEmptyDetailsGroup(qualityGroup);
+        const groupOrder = ["Architecture", "Relations", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Qualité"];
+        [...details.querySelectorAll(":scope > .details-group")]
+          .sort((left, right) => {
+            const leftRank = groupOrder.indexOf(left.querySelector("summary")?.textContent);
+            const rightRank = groupOrder.indexOf(right.querySelector("summary")?.textContent);
+            return (leftRank === -1 ? groupOrder.length : leftRank)
+              - (rightRank === -1 ? groupOrder.length : rightRank);
+          })
+          .forEach(group => details.append(group));
       }
       if (node.kind === "kafka_topic") {
         const relationsGroup = createDetailsGroup("Relations");

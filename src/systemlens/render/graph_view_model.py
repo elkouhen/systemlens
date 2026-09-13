@@ -182,6 +182,7 @@ def build_graph_view_model(
     diagnostics: list[ExtractionDiagnostic] | None = None,
     kafka_dto_definitions: list[dict[str, object]] | None = None,
     openapi_contracts: list[dict[str, object]] | None = None,
+    asyncapi_contracts: list[dict[str, object]] | None = None,
     graph_facts: list[GraphFact] | None = None,
     strategy1: bool = False,
     architecture_relations: list[ArchitectureRelation] | None = None,
@@ -232,6 +233,10 @@ def build_graph_view_model(
     openapi_specs = {
         (str(contract["module"]), str(contract["path"])): contract["spec"]
         for contract in openapi_contracts or []
+    }
+    asyncapi_specs = {
+        (str(contract["module"]), str(contract["path"])): contract["spec"]
+        for contract in asyncapi_contracts or []
     }
 
     def module_owns_openapi_file(module: DiscoveredModule, path: str) -> bool:
@@ -485,6 +490,15 @@ def build_graph_view_model(
                             )} if module else {}),
                     }
                     for path in openapi_files
+                ],
+                "asyncapi_contracts": [
+                    {
+                        "path": path,
+                        "spec": spec,
+                        "vscode_uri": _vscode_file_uri(module.path / path, root_path, source_roots),
+                    }
+                    for (owner, path), spec in asyncapi_specs.items()
+                    if module is not None and owner == module_identity(module)
                 ],
                 **(
                     {
@@ -896,6 +910,7 @@ def build_graph_view_model(
             "kafka_dtos": kafka_dtos,
             "project_dto_definitions": project_dto_definitions,
             "mongo_persistence_classes": mongo_persistence_classes,
+            "asyncapi_contracts": asyncapi_contracts or [],
             "indexing_issues": _indexing_issues(
                 endpoints_by_service,
                 edges,

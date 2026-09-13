@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from base64 import b64encode
 from collections import Counter
 from pathlib import Path
 from typing import cast
@@ -30,6 +31,16 @@ _GRAPH_CSS = "".join(
 _GRAPH_JS_MODULES = tuple(sorted((_ASSET_ROOT / "graph").glob("*.js")))
 _GRAPH_JS = "\n".join(path.read_text(encoding="utf-8") for path in _GRAPH_JS_MODULES)
 _LAYER_GEOMETRY_JS = (_ASSET_ROOT / "layer_geometry.js").read_text(encoding="utf-8")
+_ASYNCAPI_WEB_COMPONENT_JS = (
+    _ASSET_ROOT / "vendor" / "asyncapi-web-component-3.1.8.js"
+).read_text(encoding="utf-8")
+_ASYNCAPI_WEB_COMPONENT_CSS = (
+    _ASSET_ROOT / "vendor" / "asyncapi-react-component-3.1.8.min.css"
+).read_text(encoding="utf-8")
+_ASYNCAPI_WEB_COMPONENT_CSS_IMPORT_PATH = (
+    "data:text/css;base64,"
+    + b64encode(_ASYNCAPI_WEB_COMPONENT_CSS.encode("utf-8")).decode("ascii")
+)
 
 
 def render_graph_html(
@@ -47,6 +58,7 @@ def render_graph_html(
     diagnostics: list[ExtractionDiagnostic] | None = None,
     kafka_dto_definitions: list[dict[str, object]] | None = None,
     openapi_contracts: list[dict[str, object]] | None = None,
+    asyncapi_contracts: list[dict[str, object]] | None = None,
     graph_facts: list[GraphFact] | None = None,
     strategy1: bool = False,
     architecture_relations: list[ArchitectureRelation] | None = None,
@@ -69,6 +81,7 @@ def render_graph_html(
         diagnostics=diagnostics,
         kafka_dto_definitions=kafka_dto_definitions,
         openapi_contracts=openapi_contracts,
+        asyncapi_contracts=asyncapi_contracts,
         graph_facts=graph_facts,
         strategy1=strategy1,
         architecture_relations=architecture_relations,
@@ -120,9 +133,17 @@ def render_graph_html(
         view_model,
         ensure_ascii=False,
     ).replace("</", "<\\/")
+    asyncapi_assets = ""
+    if asyncapi_contracts:
+        asyncapi_assets = (
+            "<script>window.systemlensAsyncApiCssImportPath="
+            f"{json.dumps(_ASYNCAPI_WEB_COMPONENT_CSS_IMPORT_PATH)};</script>"
+            f"<script>{_ASYNCAPI_WEB_COMPONENT_JS}</script>"
+        )
     return (
         _GRAPH_HTML_TEMPLATE.replace("__GRAPH_CSS__", _GRAPH_CSS)
         .replace("__GRAPH_JS__", _GRAPH_JS)
         .replace("__GRAPH_DATA__", graph_data)
         .replace("__LAYER_GEOMETRY__", _LAYER_GEOMETRY_JS)
+        .replace("__ASYNCAPI_WEB_COMPONENT__", asyncapi_assets)
     )

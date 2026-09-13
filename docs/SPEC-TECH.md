@@ -222,7 +222,12 @@ The SQLite store is standard-library-only: it does not load native vector
 extensions or persist/query vector representations. The retained findings
 search compatibility path uses deterministic lexical matching.
 
-Schema version 28 adds the `integration_methods` table for AST method evidence
+Schema version 29 adds the `asyncapi_contracts` table for validated AsyncAPI
+documents owned by a module and rendered from the persisted snapshot. When an
+export contains at least one such document, it embeds the Apache-2.0 licensed
+AsyncAPI web component (version 3.1.8) and its distributed stylesheet; exports
+without AsyncAPI facts do not carry this payload. Schema
+version 28 adds the `integration_methods` table for AST method evidence
 and input/output endpoint identifiers. Schema version 27 added the
 `code_flows` table and its module/path indexes. The
 migration is additive and occurs when the writable store opens, before the
@@ -273,6 +278,11 @@ under a module's own `src/main/resources/openapi/` directory, regardless of
 its filename. This list is the physical contract ownership used for persistence;
 a Strategy1 declaration only reattributes the published endpoint facts to its
 declaring module.
+
+AsyncAPI documents are materialized from module source trees after build-module
+discovery. Build-output paths (`target/` and `build/`) are excluded at inventory,
+discovery, and scanner boundaries, so generated artifacts never enter the
+snapshot even when a scanner is invoked outside the normal index pipeline.
 
 ## Export snapshot contract
 

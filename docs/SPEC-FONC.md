@@ -667,6 +667,10 @@ changes. Spring properties and build descriptors can affect facts attributed to
 otherwise unchanged Java source files. Explicit manifests are included even when
 otherwise excluded.
 
+Maven `target/` and Gradle `build/` directories are never eligible source input:
+their generated code, copied contracts, nested build descriptors, and derived
+manifests cannot create or refresh indexed facts.
+
 The index is `.systemlens/findings.db` for compatibility with prior releases. It is a
 local implementation detail, not a contract for direct SQL writes.
 

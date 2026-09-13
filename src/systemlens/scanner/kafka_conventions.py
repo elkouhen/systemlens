@@ -69,7 +69,7 @@ def infer_kafka_topic_strategy1_endpoints(
         candidate_files = [
             path.relative_to(repo_root).as_posix()
             for path in repo_root.rglob("*.java")
-            if path.is_file()
+            if path.is_file() and not {"target", "build"}.intersection(path.relative_to(repo_root).parts)
         ]
     else:
         candidate_files = sorted(path for path in files if path.endswith(".java"))
@@ -264,6 +264,7 @@ def infer_markdown_topic_manifest_endpoints(
             path.relative_to(repo_root).as_posix()
             for path in repo_root.rglob("*.md")
             if path.is_file()
+            and not {"target", "build"}.intersection(path.relative_to(repo_root).parts)
         ]
     else:
         candidate_files = sorted(path for path in files if path.endswith(".md"))
@@ -341,6 +342,7 @@ def infer_json_kafka_flow_graph_endpoints(
             path.relative_to(repo_root).as_posix()
             for path in repo_root.rglob("*.json")
             if path.is_file()
+            and not {"target", "build"}.intersection(path.relative_to(repo_root).parts)
         ]
     else:
         candidate_files = sorted(path for path in files if path.endswith(".json"))
@@ -350,4 +352,3 @@ def infer_json_kafka_flow_graph_endpoints(
         for endpoint in _parse_json_kafka_flow_graph_manifest(repo_root, rel_path):
             inferred[endpoint.id] = endpoint
     return list(inferred.values())
-

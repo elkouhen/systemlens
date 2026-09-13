@@ -1274,6 +1274,7 @@ class _MicroserviceGraphData:
     result: GraphResult
     kafka_dto_definitions: list[dict[str, object]] | None = None
     openapi_contracts: list[dict[str, object]] | None = None
+    asyncapi_contracts: list[dict[str, object]] | None = None
     graph_facts: list[GraphFact] | None = None
     code_flows: list[CodeFlow] | None = None
     integration_methods: list[IntegrationMethod] | None = None
@@ -1316,6 +1317,7 @@ def _load_microservice_graph(
         result,
         inventory.kafka_dto_definitions,
         inventory.openapi_contracts,
+        inventory.asyncapi_contracts,
         graph_facts,
         inventory.code_flows,
         projection.integration_methods,
@@ -1340,7 +1342,7 @@ def _load_ai_graph(path: Path) -> _MicroserviceGraphData:
         ]
     result = render_graph_json(list(services), edges, [], warnings=issues, cross_module_data_available=True)
     return _MicroserviceGraphData(
-        services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, graph_facts, [], [], []
+        services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, None, graph_facts, [], [], []
     )
 
 
@@ -1493,6 +1495,7 @@ def export_microservices_cmd(
                 diagnostics=graph_data.diagnostics,
                 kafka_dto_definitions=graph_data.kafka_dto_definitions,
                 openapi_contracts=graph_data.openapi_contracts,
+                asyncapi_contracts=graph_data.asyncapi_contracts,
                 graph_facts=getattr(graph_data, "graph_facts", []),
                 architecture_relations=getattr(graph_data, "architecture_relations", []),
                 code_flows=getattr(graph_data, "code_flows", []),

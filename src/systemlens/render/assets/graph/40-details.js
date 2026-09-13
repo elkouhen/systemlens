@@ -164,6 +164,20 @@
       });
       openapiReferencesTitle.textContent = `Contrats OpenAPI (${visibleContracts.length}/${contracts.length})`;
       dtoReferencesTitle.textContent = `DTO de Topics (${visibleDtos.length}/${dtos.length})`;
+      const asyncContracts = graphData.nodes.flatMap(node => (
+        node.kind === "microservice"
+          ? (node.asyncapi_contracts || []).map(contract => ({ ...contract, module: node.name }))
+          : []
+      ));
+      asyncApiReferencesList.replaceChildren();
+      asyncApiReferencesEmpty.hidden = asyncContracts.length > 0;
+      asyncContracts.forEach(contract => asyncApiReferencesList.append(referenceItem(
+        contract.path,
+        `${contract.module} · AsyncAPI ${contract.spec?.asyncapi || ""}`,
+        "Inspecter",
+        () => openAsyncApiContract(contract),
+      )));
+      asyncApiReferencesTitle.textContent = `Contrats AsyncAPI (${asyncContracts.length})`;
       mongoClassReferencesList.replaceChildren();
       const persistenceClasses = (graphData.mongo_persistence_classes || []).filter(
         item => item.root !== false
@@ -449,6 +463,64 @@
         docExpansion: "list",
         supportedSubmitMethods: [],
       });
+    }
+    function openAsyncApiContract(contract) {
+      openInspector(`AsyncAPI · ${contract.path}`);
+      if (!contract.spec || !customElements.get("asyncapi-component")) {
+        const message = document.createElement("p");
+        message.className = "dto-summary";
+        message.textContent = "Le composant AsyncAPI officiel n'est pas disponible dans cet export.";
+        inspectorBody.append(message);
+        return;
+      }
+      inspectorBody.classList.add("asyncapi-inspector");
+      const shell = document.createElement("div");
+      shell.className = "asyncapi-shell";
+      const spec = contract.spec;
+      const summary = document.createElement("header");
+      summary.className = "asyncapi-summary";
+      const summaryCopy = document.createElement("div");
+      summaryCopy.className = "asyncapi-summary-copy";
+      const kicker = document.createElement("p");
+      kicker.className = "asyncapi-summary-kicker";
+      kicker.textContent = "Contrat événementiel";
+      const title = document.createElement("h2");
+      title.className = "asyncapi-summary-title";
+      title.textContent = spec.info?.title || contract.path;
+      summaryCopy.append(kicker, title);
+      if (spec.info?.description) {
+        const description = document.createElement("p");
+        description.className = "asyncapi-summary-description";
+        description.textContent = spec.info.description;
+        summaryCopy.append(description);
+      }
+      const meta = document.createElement("div");
+      meta.className = "asyncapi-summary-meta";
+      [
+        `v${spec.info?.version || "?"}`,
+        `${Object.keys(spec.channels || {}).length} channel${Object.keys(spec.channels || {}).length > 1 ? "s" : ""}`,
+        `${Object.keys(spec.operations || {}).length} opération${Object.keys(spec.operations || {}).length > 1 ? "s" : ""}`,
+      ].forEach(label => {
+        const badge = document.createElement("span");
+        badge.className = "asyncapi-summary-badge";
+        badge.textContent = label;
+        meta.append(badge);
+      });
+      summary.append(summaryCopy, meta);
+      shell.append(summary);
+      if (contract.vscode_uri) {
+        const link = document.createElement("a");
+        link.href = contract.vscode_uri;
+        link.textContent = "Ouvrir le fichier dans VS Code";
+        link.className = "asyncapi-source-link";
+        shell.append(link);
+      }
+      const component = document.createElement("asyncapi-component");
+      component.schema = JSON.stringify(contract.spec);
+      component.config = { show: { info: false, errors: false } };
+      component.cssImportPath = window.systemlensAsyncApiCssImportPath || "";
+      shell.append(component);
+      inspectorBody.append(shell);
     }
     function appendDtoInspectorSection(title, entries, itemClass = "dto-tag") {
       if (!entries.length) return;

@@ -89,6 +89,7 @@ def _nested_build_roots(repo_root: Path) -> tuple[Path, ...]:
         for descriptor in descriptors
         for path in repo_root.rglob(descriptor)
         if not is_git_metadata(path.relative_to(repo_root).as_posix())
+        if not is_build_output(path.relative_to(repo_root).as_posix())
         if len(path.parent.relative_to(repo_root).parts) <= 5
     }
     return tuple(

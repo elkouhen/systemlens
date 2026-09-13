@@ -77,6 +77,7 @@ class SystemLensWebApplication:
             diagnostics=inventory.diagnostics,
             kafka_dto_definitions=inventory.kafka_dto_definitions,
             openapi_contracts=inventory.openapi_contracts,
+            asyncapi_contracts=inventory.asyncapi_contracts,
             architecture_relations=inventory.relations,
             integration_methods=projection.integration_methods,
         )

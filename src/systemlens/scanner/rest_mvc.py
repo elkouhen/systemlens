@@ -756,6 +756,8 @@ def _openapi_generator_contract_owners(repo_root_str: str) -> dict[str, str | No
     repo_root = Path(repo_root_str).resolve()
     owners: dict[str, str | None] = {}
     for pom_path in sorted(repo_root.rglob("pom.xml")):
+        if {"target", "build"}.intersection(pom_path.relative_to(repo_root).parts):
+            continue
         try:
             module_dir = pom_path.parent
             if not discover_rest_controllers(module_dir, set()):
@@ -917,7 +919,8 @@ def _strategy1_openapi_contracts(repo_root_str: str, api_name: str) -> tuple[str
     model_module_name = f"model-{api_name}"
     for path in sorted(repo_root.rglob("*")):
         try:
-            if not path.is_file() or path.suffix.casefold() not in {".json", ".yaml", ".yml"}:
+            if (not path.is_file() or {"target", "build"}.intersection(path.relative_to(repo_root).parts)
+                    or path.suffix.casefold() not in {".json", ".yaml", ".yml"}):
                 continue
             contract_name = path.stem.casefold().replace("_", "-")
             relative_path = path.resolve().relative_to(repo_root)
@@ -1418,7 +1421,8 @@ def infer_framework_endpoints(
     """
     if files is None:
         candidate_files = [
-            path.relative_to(repo_root).as_posix() for path in repo_root.rglob("*") if path.is_file()
+            path.relative_to(repo_root).as_posix() for path in repo_root.rglob("*")
+            if path.is_file() and not {"target", "build"}.intersection(path.relative_to(repo_root).parts)
         ]
     else:
         candidate_files = sorted(files)

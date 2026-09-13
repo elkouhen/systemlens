@@ -149,6 +149,9 @@
     const dtoReferencesFilter = document.getElementById("dto-reference-filter");
     const openapiReferencesTitle = document.getElementById("openapi-references-title");
     const dtoReferencesTitle = document.getElementById("dto-references-title");
+    const asyncApiReferencesList = document.getElementById("asyncapi-references");
+    const asyncApiReferencesEmpty = document.getElementById("asyncapi-references-empty");
+    const asyncApiReferencesTitle = document.getElementById("asyncapi-references-title");
     const mongoClassReferencesList = document.getElementById("mongo-class-references");
     const mongoClassReferencesEmpty = document.getElementById("mongo-class-references-empty");
     const mongoClassReferencesFilter = document.getElementById("mongo-class-reference-filter");

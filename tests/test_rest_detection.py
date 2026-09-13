@@ -190,8 +190,8 @@ def test_has_openapi_generator_plugin_without_plugin(tmp_path: Path) -> None:
     assert _has_openapi_generator_plugin(pom_file) is False
 
 
-def test_detect_openapi_generated_clients_with_plugin(tmp_path: Path) -> None:
-    """Teste la détection des clients OpenAPI générés."""
+def test_detect_openapi_generated_clients_with_plugin_excludes_build_output(tmp_path: Path) -> None:
+    """Les artefacts sous target ne font pas partie des faits indexés."""
     # Créer le pom.xml avec le plugin
     pom_file = tmp_path / "pom.xml"
     _write_pom_with_openapi_plugin(pom_file)
@@ -210,10 +210,7 @@ def test_detect_openapi_generated_clients_with_plugin(tmp_path: Path) -> None:
 
     clients = detect_openapi_generated_clients(pom_file)
 
-    assert len(clients) == 3
-    assert any("UserApi.java" in client for client in clients)
-    assert any("OrderApi.java" in client for client in clients)
-    assert any("ProductApi.java" in client for client in clients)
+    assert clients == ()
 
 
 def test_detect_openapi_generator_input_specs_resolves_maven_properties(tmp_path: Path) -> None:
@@ -275,10 +272,10 @@ def test_detect_openapi_generated_clients_no_generated_files(tmp_path: Path) -> 
     assert len(clients) == 0
 
 
-def test_module_enrichment_includes_rest_controllers_and_generated_clients(
+def test_module_enrichment_excludes_generated_clients(
     tmp_path: Path,
 ) -> None:
-    """Teste que l'enrichissement de module inclut les contrôleurs REST et clients générés."""
+    """Les contrôleurs source sont conservés, les clients sous target sont exclus."""
     # Créer la structure Maven
     java_dir = tmp_path / "src" / "main" / "java" / "com" / "example" / "controller"
     java_dir.mkdir(parents=True)
@@ -303,9 +300,7 @@ def test_module_enrichment_includes_rest_controllers_and_generated_clients(
     assert len(module.rest_controllers) == 1
     assert any("UserController" in ctrl for ctrl in module.rest_controllers)
 
-    # Vérifier que les clients générés sont détectés
-    assert len(module.openapi_generated_clients) == 1
-    assert any("ExternalApi.java" in client for client in module.openapi_generated_clients)
+    assert module.openapi_generated_clients == ()
 
 
 def test_module_enrichment_includes_plugin_referenced_openapi_spec_for_rest_controller(
