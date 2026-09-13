@@ -1154,8 +1154,8 @@ def index_cmd(
     manifests: Optional[list[Path]] = typer.Option(  # noqa: UP007
         None, "--manifest", help="Manifeste de Topics Markdown ou JSON (répétable)."
     ),
-    topic_strategy: Literal["default", "strategy1"] = typer.Option(
-        "default",
+    topic_strategy: Optional[Literal["default", "strategy1"]] = typer.Option(
+        None,
         "--topic-strategy",
         help="Stratégie de conventions : default ou strategy1 (Kafka getTopics/KafkaListener et constantes REST en majuscules).",
     ),
@@ -1456,6 +1456,13 @@ def export_microservices_cmd(
         typer.echo(json.dumps(graph_data.result))
         return
     if html is not None:
+        try:
+            configured_root = load_config(Path.cwd()).root_path
+        except ConfigError:
+            configured_root = None
+        configured_root_path = Path(configured_root) if configured_root else Path.cwd()
+        if not configured_root_path.is_absolute():
+            configured_root_path = Path.cwd() / configured_root_path
         html.write_text(
             render_graph_html(
                 graph_data.services_by_name,
@@ -1467,7 +1474,7 @@ def export_microservices_cmd(
                 graph_data.module_dependencies,
                 graph_data.source_roots,
                 None,
-                root_path or Path.cwd(),
+                root_path or configured_root_path,
                 request_reply_strategy1=graph_data.strategy1,
                 strategy1=graph_data.strategy1,
                 diagnostics=graph_data.diagnostics,

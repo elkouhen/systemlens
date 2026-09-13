@@ -85,12 +85,14 @@ def _index_repo(
     full: bool = False,
     disabled: frozenset[str] = frozenset(),
     extra_files: list[str] | None = None,
-    topic_strategy: str = "default",
+    topic_strategy: str | None = None,
     progress: ProgressCallback | None = None,
     kubernetes: bool = False,
     kubernetes_namespace: str | None = None,
     codeql_database: Path | None = None,
 ) -> IndexReport:
+    topic_strategy = topic_strategy or config.topic_strategy
+    disabled = disabled or frozenset(config.disabled_extractors)
     # BACKLOG-16 P2 : purge les lru_cache d'analyse best-effort (package
     # Java, propriétés Spring, module Maven/Gradle) avant de relire le
     # repo — nécessaire dans un process long-vivant (serveur MCP) où
@@ -319,7 +321,7 @@ def _index_repo(
         )
         store.replace_integration_methods(methods)
         flows = materialize_code_flows(repo_root, all_endpoints, relation_modules)
-        if methods and (codeql_database is not None or codeql_executable() is not None):
+        if methods and config.codeql_enabled and (codeql_database is not None or codeql_executable() is not None):
             _report_progress(progress, "→ CodeQL 1/3 : préparation de l'analyse interprocédurale...")
             try:
                 if codeql_database is not None:
@@ -336,7 +338,7 @@ def _index_repo(
             codeql_flows = materialize_codeql_code_flows(methods, all_endpoints, calls)
             flows.extend(codeql_flows)
             _report_progress(progress, f"→ CodeQL 3/3 : {len(codeql_flows)} flux interprocédural(aux) trouvé(s).")
-        elif methods:
+        elif methods and config.codeql_enabled:
             _report_progress(
                 progress,
                 "→ Indexation : CodeQL indisponible ; flux interprocéduraux ignorés.",
@@ -368,7 +370,7 @@ def index_repo(
     full: bool = False,
     disabled: frozenset[str] = frozenset(),
     extra_files: list[str] | None = None,
-    topic_strategy: str = "default",
+    topic_strategy: str | None = None,
     progress: ProgressCallback | None = None,
     kubernetes: bool = False,
     kubernetes_namespace: str | None = None,

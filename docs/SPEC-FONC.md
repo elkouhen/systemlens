@@ -24,6 +24,11 @@ The keywords **MUST** and **MUST NOT** identify compatibility requirements.
 include: ["**/*"]
 exclude: [".git/**", ".venv/**", "node_modules/**", ".systemlens/**"]
 min_severity: INFO
+root_path: .
+analysis:
+  topic_strategy: default
+  codeql: true
+  disabled_extractors: []
 ```
 
 This is a breaking rename from `cccr`, `archlens`, and `codeatlas`: SystemLens
@@ -35,6 +40,10 @@ Run `systemlens init` and
 sets (`src/test`, `src/componentTest`, and names ending in `Test`) are always
 excluded. The `min_severity` setting remains accepted for database compatibility
 but does not alter AST endpoint extraction.
+`analysis` is the versionable source of truth for the topic convention, CodeQL
+use, and disabled extractors. `root_path` is local export configuration only:
+it resolves relative source evidence into VS Code links and is never persisted
+in the architecture snapshot.
 
 ## CLI
 
