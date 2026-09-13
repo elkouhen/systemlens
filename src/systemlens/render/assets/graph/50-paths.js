@@ -134,6 +134,22 @@
       }
       return { nodes, edges };
     }
+    function isValidPathStops(stops) {
+      return stops.length >= 2
+        && stops.every(id => nodeDataById.has(id)
+          && ["microservice", "kafka_topic"].includes(nodeDataById.get(id).kind))
+        && new Set(stops).size === stops.length;
+    }
+    function exactPathForStops(stops) {
+      if (!isValidPathStops(stops)) return null;
+      const edges = [];
+      for (let index = 0; index < stops.length - 1; index += 1) {
+        const edge = graphLinkBetween(stops[index], stops[index + 1]);
+        if (!edge) return null;
+        edges.push(edge);
+      }
+      return { nodes: [...stops], edges };
+    }
     function shortestPathThrough(stops) {
       const path = { nodes: [], edges: [] };
       for (let index = 0; index < stops.length - 1; index += 1) {

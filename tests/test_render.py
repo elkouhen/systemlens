@@ -115,6 +115,15 @@ def test_code_flow_reconciliation_publishes_from_the_current_consumer_service() 
     assert 'nodes.at(-1) !== serviceId && !addHop(serviceId' not in document
 
 
+def test_graph_restores_exact_topic_chain_from_a_hash_fragment() -> None:
+    document = render_graph_html({}, [])
+
+    assert "function isValidPathStops(stops)" in document
+    assert "function exactPathForStops(stops)" in document
+    assert "const exactPath = exactPathForStops(restoredStops);" in document
+    assert "showPath(exactPath, restoredStops);" in document
+
+
 def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> None:
     document = render_graph_html({}, [])
 

@@ -335,8 +335,12 @@ does not change persisted positions or rerun a layout. Its ratio is bounded by
 the current camera ratio so flow selection may zoom out but never zoom in, and
 the resize handler reapplies this flow fit instead of the global graph fit.
 Clearing the selection reverses that state; selecting a navigation tab clears
-details before displaying its ordinary panel. Path parsing
-filters same-name candidates by the grammar before accepting an itinerary
+details before displaying its ordinary panel. URL restoration first rebuilds
+an exact directed sequence when every successive persisted link is present.
+This supports code-flow deep links whose first or last node is a Kafka topic.
+Fragments that do not encode direct links continue through the bounded
+itinerary parser, whose endpoints are services. Path parsing filters same-name
+candidates by the grammar before accepting an itinerary
 endpoint: only a microservice can be first or last, while intermediate stops
 can be microservices or Kafka topics. Direct resource search continues to
 report multiple same-name resources as ambiguous.

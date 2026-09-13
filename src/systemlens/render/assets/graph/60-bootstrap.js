@@ -27,10 +27,19 @@
         && targetId
         && isValidPathStops(restoredStops)
       ) {
-        pathStops.push(...restoredStops);
-        renderPathQuery();
-        showShortestPath();
-        return;
+        const exactPath = exactPathForStops(restoredStops);
+        if (exactPath) {
+          showPath(exactPath, restoredStops);
+          return;
+        }
+        const startsAndEndsWithServices = [restoredStops[0], restoredStops.at(-1)]
+          .every(id => nodeDataById.get(id).kind === "microservice");
+        if (startsAndEndsWithServices) {
+          pathStops.push(...restoredStops);
+          renderPathQuery();
+          showShortestPath();
+          return;
+        }
       }
       const selectedIdFromUrl = params.get("selected");
       if (selectedIdFromUrl && nodeDataById.has(selectedIdFromUrl)) selectNode(selectedIdFromUrl);

@@ -169,6 +169,10 @@ potential `cycle` flows. They are visually distinguished and listed before
 non-cyclic flows; within each category, longer flows appear first.
 The Flux tab provides a `Cycles only` control with the detected-cycle count to
 isolate them immediately.
+The Explorer URL fragment preserves the exact selected directed chain, including
+Kafka topics at either end of a code-flow path. Reloading that URL restores the
+same indexed nodes and edges; only a fragment that does not encode direct edges
+falls back to the bounded topic-itinerary search.
 Selecting a microservice distinguishes two flow views. `Flux associés` remains
 visible and lists every persisted flow owned by the service or traversing one
 of its indexed ports; each compact entry identifies its trigger, length, cycle
