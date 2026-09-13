@@ -69,6 +69,7 @@
       pathQuery.value = "";
       pathStops.splice(0, pathStops.length);
       graphState.selectedCodeFlowId = null;
+      graphFlowStatus.hidden = true;
       delete graphCanvas.dataset.selectedCodeFlow;
       delete graphCanvas.dataset.flowFocusRatio;
     }
@@ -364,6 +365,10 @@
       graphState.relatedNodes = new Set(path.nodes);
       graphState.relatedEdges = new Set(path.edges.map(step => step.edge));
       graphState.selectedCodeFlowId = context.codeFlow?.id || null;
+      graphFlowStatus.hidden = context.topologyReconciled !== false;
+      if (!graphFlowStatus.hidden) {
+        graphFlowStatus.textContent = "Relations topologiques incomplètes : les étapes sont surlignées sans arête vérifiée.";
+      }
       if (graphState.selectedCodeFlowId) graphCanvas.dataset.selectedCodeFlow = graphState.selectedCodeFlowId;
       else delete graphCanvas.dataset.selectedCodeFlow;
       setPathMicroserviceOrder(path);
@@ -614,14 +619,9 @@
           action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
         }] : [], architectureGroup);
         discardEmptyDetailsGroup(architectureGroup);
-        const ports = node.ports || [];
-        if (ports.length) {
-          const portsGroup = createDetailsGroup("Ports d'intégration");
-          const portLabel = port => `${port.type} · ${port.method} · ${port.name}`;
-          appendList("Entrées", ports.filter(port => port.direction === "in").map(portLabel), portsGroup);
-          appendList("Sorties", ports.filter(port => port.direction === "out").map(portLabel), portsGroup);
-          discardEmptyDetailsGroup(portsGroup);
-          const portsByEndpointId = new Map(ports.map(port => [port.endpoint_id, port]));
+      const ports = node.ports || [];
+      if (ports.length) {
+        const portsByEndpointId = new Map(ports.map(port => [port.endpoint_id, port]));
           const connections = (graphData.code_flows || []).flatMap(flow => {
             if (flow.module !== node.name) return [];
             const input = portsByEndpointId.get(flow.steps?.[0]?.endpoint_id);
@@ -634,7 +634,7 @@
               return [{ input, output, target: output.target || null, via }];
             });
           });
-          const flowGroup = createDetailsGroup("Liens entrée → sortie");
+        const flowGroup = createDetailsGroup("Flux internes");
           const uniqueConnections = connections.filter((connection, index) => (
             connections.findIndex(candidate => (
               candidate.input.endpoint_id === connection.input.endpoint_id

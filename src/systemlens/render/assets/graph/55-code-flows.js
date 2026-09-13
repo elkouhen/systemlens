@@ -27,6 +27,10 @@
         || "inconnue";
     }
 
+    function isGraphPortStep(step) {
+      return ["http_entry", "message_entry", "http_call", "message_publish"].includes(step?.kind);
+    }
+
     function nodeIdForCodeFlowResource(name, kind) {
       return graphData.nodes.find(node => node.name === name && node.kind === kind)?.id || null;
     }
@@ -53,6 +57,10 @@
         return true;
       };
       const topicId = name => nodeIdForCodeFlowResource(name, "kafka_topic");
+      const serviceForEndpoint = endpointId => graphData.nodes.find(node => (
+        node.kind === "microservice"
+        && (node.ports || []).some(port => port.endpoint_id === endpointId)
+      ))?.id || null;
       const steps = flow.steps || [];
       const trigger = steps[0];
       if (!trigger) return null;
@@ -82,16 +90,62 @@
           if (nodes.at(-1) !== serviceId && !addHop(serviceId, link => link.kind === "kafka")) return null;
           const topic = topicId(step.name);
           if (!topic || !addHop(topic, link => link.kind === "kafka")) return null;
+          continue;
+        }
+        if (step.kind === "message_entry") {
+          const topic = topicId(step.name);
+          const consumer = serviceForEndpoint(step.endpoint_id);
+          if (!topic || !consumer) return null;
+          if (nodes.at(-1) !== topic && !addHop(topic, link => link.kind === "kafka")) return null;
+          if (!addHop(consumer, link => link.kind === "kafka")) return null;
         }
       }
       return edges.length ? { nodes, edges } : null;
     }
 
     function showCodeFlow(flow) {
-      const path = pathForCodeFlow(flow);
+      const exactPath = pathForCodeFlow(flow);
+      const path = exactPath || nodePathForCodeFlow(flow);
       if (!path) return;
-      showPath(path, path.nodes, { codeFlow: flow, showDetails: false });
+      setToolbarTab("graph");
+      showPath(path, path.nodes, {
+        codeFlow: flow,
+        showDetails: false,
+        topologyReconciled: Boolean(exactPath),
+      });
       syncCodeFlowSelection();
+    }
+
+    function nodePathForCodeFlow(flow) {
+      const serviceId = nodeIdForCodeFlowResource(flow.module, "microservice");
+      if (!serviceId) return null;
+      const nodes = [];
+      const add = id => { if (id && nodes.at(-1) !== id) nodes.push(id); };
+      const serviceForEndpoint = endpointId => graphData.nodes.find(node => (
+        node.kind === "microservice"
+        && (node.ports || []).some(port => port.endpoint_id === endpointId)
+      ));
+      const steps = flow.steps || [];
+      const trigger = steps[0];
+      if (!trigger) return null;
+      if (trigger.kind === "message_entry") {
+        add(nodeIdForCodeFlowResource(trigger.name, "kafka_topic"));
+      }
+      add(serviceId);
+      steps.slice(1).forEach(step => {
+        if (step.kind === "message_publish") add(nodeIdForCodeFlowResource(step.name, "kafka_topic"));
+        if (step.kind === "message_entry") {
+          add(nodeIdForCodeFlowResource(step.name, "kafka_topic"));
+          add(serviceForEndpoint(step.endpoint_id)?.id);
+        }
+        if (step.kind === "http_call") {
+          const source = serviceForEndpoint(step.endpoint_id);
+          add(source?.ports?.find(port => port.endpoint_id === step.endpoint_id)?.target?.service
+            ? nodeIdForCodeFlowResource(source.ports.find(port => port.endpoint_id === step.endpoint_id).target.service, "microservice")
+            : null);
+        }
+      });
+      return nodes.length ? { nodes, edges: [] } : null;
     }
 
     function syncCodeFlowSelection() {
@@ -112,9 +166,13 @@
       item.dataset.flowId = flow.id;
       const header = document.createElement("div");
       header.className = "code-flow-header";
+      const trigger = flow.steps?.[0];
       const title = document.createElement("div");
       title.className = "reference-title code-flow-title";
-      title.textContent = flow.method;
+      title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`;
+      const javaMethod = document.createElement("code");
+      javaMethod.className = "code-flow-method";
+      javaMethod.textContent = `Méthode Java : ${flow.method}`;
       const badges = document.createElement("div");
       badges.className = "code-flow-badges";
       [flow.status === "potential" ? "Potentiel" : (flow.status || "Statut inconnu"), `Confiance ${codeFlowConfidenceLabel(flow.confidence)}`].forEach(label => {
@@ -123,22 +181,36 @@
         badge.textContent = label;
         badges.append(badge);
       });
-      header.append(title, badges);
-      const path = pathForCodeFlow(flow);
+      header.append(title, javaMethod, badges);
+      const exactPath = pathForCodeFlow(flow);
+      const path = exactPath || nodePathForCodeFlow(flow);
+      if (path && !exactPath) {
+        const topologyNotice = document.createElement("p");
+        topologyNotice.className = "code-flow-topology-notice";
+        topologyNotice.textContent = "Relations topologiques incomplètes : les étapes sont visibles, sans arête vérifiée.";
+        header.append(topologyNotice);
+      }
       const action = document.createElement("button");
       action.type = "button";
       action.className = "reference-action";
-      action.textContent = selected ? "Affiché dans le graphe" : "Afficher dans le graphe";
+      action.textContent = selected
+        ? (exactPath ? "Affiché dans le graphe" : "Étapes affichées (arêtes partielles)")
+        : (exactPath ? "Afficher dans le graphe" : "Afficher les étapes (arêtes partielles)");
       action.setAttribute("aria-pressed", String(selected));
       action.disabled = path === null;
       action.title = path
         ? "Surligner les relations de ce flux dans le graphe principal"
         : "Ce flux ne peut pas être rapproché de la topologie affichée";
-      if (path) action.addEventListener("click", () => showCodeFlow(flow));
+      if (path) {
+        action.addEventListener("click", () => showCodeFlow(flow));
+        item.addEventListener("click", event => {
+          if (!event.target.closest("button")) showCodeFlow(flow);
+        });
+        item.title = "Afficher ce flux dans le graphe";
+      }
       const meta = document.createElement("div");
       meta.className = "reference-meta";
-      const trigger = flow.steps?.[0];
-      meta.textContent = `${flow.module} · ${codeFlowStepLabel(trigger?.kind)} : ${trigger?.name || ""} · ${flow.steps?.length - 1 || 0} effet(s)`;
+      meta.textContent = `${flow.module} · ${(flow.steps?.length || 1) - 1} étape(s) après l’entrée`;
       const reason = document.createElement("p");
       reason.className = "code-flow-reason";
       reason.textContent = flow.reason === "The entry point and external effects occur in the same Java method."
@@ -146,9 +218,15 @@
         : flow.reason || "Parcours potentiel issu du code source.";
       const steps = document.createElement("ol");
       steps.className = "code-flow-steps";
+      let portStepNumber = 0;
       (flow.steps || []).forEach(step => {
         const stepItem = document.createElement("li");
         stepItem.className = "code-flow-step";
+        if (isGraphPortStep(step)) {
+          portStepNumber += 1;
+          stepItem.classList.add("is-graph-port-step");
+          stepItem.dataset.flowPortStep = String(portStepNumber);
+        }
         const summary = document.createElement("div");
         summary.className = "code-flow-step-summary";
         const kind = document.createElement("span");
@@ -178,7 +256,42 @@
         ].join(" ").toLocaleLowerCase();
         return !query || haystack.includes(query);
       });
-      codeFlowsList.replaceChildren(...visible.map(codeFlowItem));
+      const byService = new Map();
+      visible.forEach(flow => {
+        const trigger = flow.steps?.[0];
+        const triggerKey = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`;
+        const service = byService.get(flow.module) || new Map();
+        const group = service.get(triggerKey) || [];
+        group.push(flow);
+        service.set(triggerKey, group);
+        byService.set(flow.module, service);
+      });
+      const serviceGroups = [...byService.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([service, triggers], serviceIndex) => {
+          const group = document.createElement("li");
+          group.className = "code-flow-service-group";
+          const serviceDetails = document.createElement("details");
+          serviceDetails.open = Boolean(query) || serviceIndex === 0;
+          const summary = document.createElement("summary");
+          const count = [...triggers.values()].reduce((total, flows) => total + flows.length, 0);
+          summary.textContent = `${service} · ${count} flux · cliquer pour afficher`;
+          serviceDetails.append(summary);
+          [...triggers.entries()].sort(([left], [right]) => left.localeCompare(right)).forEach(([trigger, flows]) => {
+            const triggerDetails = document.createElement("details");
+            triggerDetails.open = Boolean(query) || serviceIndex === 0;
+            const triggerSummary = document.createElement("summary");
+            triggerSummary.textContent = `${trigger} · ${flows.length} flux · cliquer pour afficher`;
+            const list = document.createElement("ul");
+            list.className = "references-list code-flow-group-list";
+            list.append(...flows.map(codeFlowItem));
+            triggerDetails.append(triggerSummary, list);
+            serviceDetails.append(triggerDetails);
+          });
+          group.append(serviceDetails);
+          return group;
+        });
+      codeFlowsList.replaceChildren(...serviceGroups);
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
       codeFlowsTitle.textContent = `Flux de code (${codeFlows.length})`;

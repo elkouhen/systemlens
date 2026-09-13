@@ -33,6 +33,9 @@
     #graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
     #graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
     #graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
+    /* Only flow tooltips rise over fixed widgets; graph cards stay below. */
+    #graph-flow-tooltips { position: fixed; inset: 0; z-index: 11; pointer-events: none; overflow: visible; }
+    #graph-flow-status { position: fixed; z-index: 10; top: 16px; left: 50%; max-width: min(460px, calc(100vw - 32px)); margin: 0; padding: 8px 11px; transform: translateX(-50%); border: 1px solid #f59e0b; border-radius: 8px; color: #78350f; background: #fffbeb; box-shadow: 0 5px 16px rgba(15, 23, 42, .18); font-size: 11px; font-weight: 700; line-height: 1.35; text-align: center; pointer-events: none; }
     #graph-layers, #graph-groups, #graph-node-labels {
       left: var(--workspace-left, 0px);
       right: var(--workspace-right, 0px);
@@ -61,6 +64,7 @@
     .graph-node-card-icon.is-topic::before { content: ""; width: 12px; height: 13px; border: 0; border-radius: 1px; background: linear-gradient(to right, currentColor 0 1.5px, transparent 1.5px 5.25px, currentColor 5.25px 6.75px, transparent 6.75px 10.5px, currentColor 10.5px 12px); }
     .graph-node-card-name { min-width: 0; grid-column: 1; grid-row: 1; align-self: end; font-weight: 750; }
     .graph-node-card-kind { min-width: 0; grid-column: 1 / 3; grid-row: 2; margin-top: 3px; color: #64748b; font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .graph-flow-step { position: absolute; top: -8px; left: -8px; display: grid; place-items: center; width: 19px; height: 19px; border-radius: 50%; color: #fff; background: #7c3aed; box-shadow: 0 2px 6px rgba(76, 29, 149, .35); font-size: 10px; font-weight: 850; }
     #graph-node-labels.is-symbol-mode { overflow: visible; }
     #graph-node-labels.is-symbol-mode .graph-node-card-label { width: 30px; height: 30px; min-height: 0; display: block; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
     #graph-node-labels.is-symbol-mode .graph-node-card-icon { position: absolute; z-index: 1; inset: 2px; display: block; width: 26px; height: 26px; color: var(--card-accent, #64748b); background: linear-gradient(145deg, color-mix(in srgb, #fff 96%, var(--card-accent, #64748b)), color-mix(in srgb, #fff 76%, var(--card-accent, #64748b))); border: 2px solid color-mix(in srgb, var(--card-accent, #64748b) 88%, #172033); box-sizing: border-box; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .82), 0 3px 9px color-mix(in srgb, var(--card-accent, #64748b) 28%, transparent); transition: transform .12s ease, box-shadow .12s ease, filter .12s ease; }
@@ -90,6 +94,13 @@
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered:not(.is-selected) .graph-node-card-icon.is-service { box-shadow: none; filter: saturate(1.08) drop-shadow(0 4px 5px color-mix(in srgb, var(--card-accent, #64748b) 38%, transparent)); }
     .graph-node-card-label.is-selected { border-width: 1.5px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 0 22px color-mix(in srgb, var(--card-accent, #64748b) 52%, transparent), 0 8px 20px rgba(15, 23, 42, .18); }
     .graph-node-card-label.is-code-flow-node { z-index: 20; border-width: 2px; border-color: #7c3aed; opacity: 1; box-shadow: 0 0 0 4px rgba(124, 58, 237, .22), 0 0 28px rgba(124, 58, 237, .48), 0 9px 22px rgba(15, 23, 42, .2); }
+    .graph-node-card-label.is-code-flow-node { width: 150px; height: 78px; min-height: 78px; overflow: visible; }
+    .graph-node-card-label.is-code-flow-node .graph-node-card-name { align-self: center; line-height: 1.25; overflow: hidden; }
+    .graph-node-card-label.is-code-flow-node .graph-node-card-kind { overflow: hidden; }
+    .graph-flow-port-label { position: absolute; top: -9px; right: calc(7px + var(--flow-port-index) * 30px); display: grid; place-items: center; min-width: 24px; height: 19px; padding: 0 3px; border: 1px solid #7c3aed; border-radius: 10px; color: #4c1d95; background: #faf5ff; box-shadow: 0 2px 6px rgba(76,29,149,.2); font-size: 10px; font-weight: 850; }
+    .graph-flow-port-tooltip { position: fixed; z-index: 1; display: grid; gap: 4px; width: max-content; max-width: min(320px, calc(100vw - 32px)); padding: 9px 10px; pointer-events: none; border: 1px solid #6d28d9; border-radius: 8px; color: #f8fafc; background: #24103f; box-shadow: 0 8px 22px rgba(15, 23, 42, .35); font-size: 11px; font-weight: 500; line-height: 1.35; text-align: left; white-space: normal; }
+    .graph-flow-port-tooltip strong { color: #ddd6fe; font-size: 11px; font-weight: 850; }
+    .graph-flow-port-tooltip code { color: #f5f3ff; font: 600 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
     .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 9%, transparent), 0 0 13px color-mix(in srgb, var(--card-accent, #64748b) 27%, transparent), 0 6px 17px rgba(15, 23, 42, .14); }
     .graph-node-card-label.is-dimmed { opacity: 1; }
     :root[data-theme="dark"] .graph-node-card-label { color: #e5edf8; background: #17263d; box-shadow: 0 5px 18px rgba(0, 0, 0, .28); }

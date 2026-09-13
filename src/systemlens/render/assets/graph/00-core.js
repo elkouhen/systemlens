@@ -44,6 +44,8 @@
     const graphLayersOverlay = document.getElementById("graph-layers");
     const graphGroupsOverlay = document.getElementById("graph-groups");
     const nodeLabelOverlay = document.getElementById("graph-node-labels");
+    const flowTooltipOverlay = document.getElementById("graph-flow-tooltips");
+    const graphFlowStatus = document.getElementById("graph-flow-status");
     const showProjectGroups = document.getElementById("show-project-groups");
     const nodeKindLabel = node => {
       if (node.kind === "kafka_topic") return "Topic";

@@ -74,6 +74,16 @@ def is_git_metadata(rel_path: str) -> bool:
     return ".git" in rel_path.split("/")
 
 
+def is_build_output(rel_path: str) -> bool:
+    """Exclude standard Maven/Gradle output trees from source evidence.
+
+    A CodeQL capture or a local Maven build can populate ``target/classes``
+    with copied YAML files.  Treating those as source duplicates REST gateway
+    ports and makes an index depend on whether someone compiled beforehand.
+    """
+    return bool({"target", "build"}.intersection(rel_path.split("/")))
+
+
 def _nested_build_roots(repo_root: Path) -> tuple[Path, ...]:
     """Return outermost build roots when the input is a workspace container."""
     descriptors = (
@@ -121,7 +131,7 @@ def list_repo_files(
         if nested_roots and not any(root == path.parent or root in path.parents for root in nested_roots):
             continue
         rel_path = path.relative_to(repo_root).as_posix()
-        if is_git_metadata(rel_path) or is_test_source(rel_path):
+        if is_git_metadata(rel_path) or is_build_output(rel_path) or is_test_source(rel_path):
             continue
         if config.exclude and _matches_any(rel_path, config.exclude):
             continue

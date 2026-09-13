@@ -1,4 +1,4 @@
-ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v21-webclient-local-url-and-multidoc-yaml"
+ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v23-helm-template-yaml"
 
 
 def current_endpoint_inventory_signature() -> str:

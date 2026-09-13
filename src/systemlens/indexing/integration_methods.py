@@ -27,6 +27,35 @@ def _method_id(
     return hashlib.sha256(coordinate.encode()).hexdigest()[:16]
 
 
+def _qualified_method_owner(declaration, root, source: bytes) -> str | None:
+    """Return the lexical Java owner instead of borrowing one from an endpoint.
+
+    A file can contain several declarations, including nested helper classes.
+    Methods without a port cannot safely inherit the first endpoint owner's
+    name from that file: identical helper method names would then collide in
+    the persisted method projection.
+    """
+    package = next(
+        (java_parser.node_text(source, node)
+         .removeprefix("package").removesuffix(";").strip()
+         for node in java_parser.walk(root)
+         if node.type == "package_declaration"),
+        "",
+    )
+    owners: list[str] = []
+    current = declaration.parent
+    type_nodes = {"class_declaration", "interface_declaration", "record_declaration", "enum_declaration"}
+    while current is not None:
+        if current.type in type_nodes:
+            if name := java_parser.declaration_name(current, source):
+                owners.append(name)
+        current = current.parent
+    if not owners:
+        return None
+    parts = [part for part in (package, *reversed(owners)) if part]
+    return ".".join(parts)
+
+
 def materialize_integration_methods(
     repo_root: Path, endpoints: list[MessageEndpoint], java_paths: list[str], modules: list[DiscoveredModule]
 ) -> list[IntegrationMethod]:
@@ -91,10 +120,12 @@ def materialize_integration_methods(
                 module = max(candidates, default=(0, None))[1]
             if module is None:
                 continue
-            owner = next(
-                (endpoint.qualified_name for endpoint in contained if endpoint.qualified_name),
-                next((endpoint.qualified_name for endpoint in path_endpoints if endpoint.qualified_name), None),
-            )
+            owner = _qualified_method_owner(declaration, root, source)
+            if owner is None:
+                owner = next(
+                    (endpoint.qualified_name for endpoint in contained if endpoint.qualified_name),
+                    next((endpoint.qualified_name for endpoint in path_endpoints if endpoint.qualified_name), None),
+                )
             qualified_method = f"{owner}.{name}" if owner else name
             parameter_node = declaration.child_by_field_name("parameters")
             parameter_signature = (

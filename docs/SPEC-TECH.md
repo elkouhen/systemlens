@@ -178,19 +178,40 @@ line ranges. Flow identity uses the module, relative path, qualified method,
 and trigger semantics rather than line numbers, so ordinary line movement does
 not replace the logical flow. The materializer runs during indexing and never during export or
 query. It is linear in the indexed endpoint and Mongo-operation inventory plus
-the traversed AST nodes for Java files that contain eligible endpoints. A
+the traversed AST nodes for Java files that contain eligible endpoints. Maven
+`target/` and Gradle `build/` output trees are excluded from the inventory, so
+copied resources and generated classes cannot duplicate source facts. A
 same-method relation remains `potential` with medium confidence because static
 lexical order does not prove branch execution. With an explicitly supplied
-CodeQL Java database, resolved `MethodAccess` facts join persisted AST method
+CodeQL Java database, resolved `MethodCall` facts join persisted AST method
 facts to form bounded (12-hop) interprocedural flows; `method_call` steps keep
-the call-site line. Dynamic dispatch, reflection, and runtime-only routing
-remain outside this deterministic layer.
+the call-site line. By default, SystemLens creates this database in a temporary
+directory with CodeQL's `--build-mode=none` source-only mode, then deletes it;
+an explicit CLI database remains an override. When the CodeQL executable is
+absent, it records no interprocedural paths and reports that limitation without
+discarding AST-only flows. When CodeQL represents a lambda as a synthetic
+anonymous callable, SystemLens attributes its call site to the narrowest
+persisted Java method enclosing that line in the same file. Dynamic dispatch,
+reflection, and runtime-only routing remain outside this deterministic layer.
+For a virtual call, CodeQL's unique `exactVirtualMethod` target is retained at
+medium confidence. If no unique target can be proven, its `viableCallable`
+candidates are retained individually at low confidence; SystemLens does not
+select an implementation on Spring bean metadata alone.
+
+Kafka flow continuations join only concrete, statically resolved Kafka endpoint
+identifiers. A continuation is not materialized when the producer has a later
+external effect, because a linear composed flow would otherwise omit that
+evidence. A composed flow can follow up to four Kafka producer-to-consumer
+hops, using only original persisted message-entry flows as consumers and never
+revisiting the same consumer flow. This makes cyclic topics finite while
+retaining the complete ordered evidence for each bounded candidate.
 
 The HTML graph model joins endpoint identifiers to the persisted
-`integration_methods` projection. Microservice cards remain simple rectangles;
-the selected-service widget displays source-evidenced ports with their
-direction, integration action, and qualified Java class/method name. Rendering
-does not read source files.
+`integration_methods` projection. Microservice cards remain simple rectangles
+and receive an export-time count of persisted internal flows for that service.
+The selected-service widget renders only resolved input-to-output flow evidence,
+not a standalone input/output port inventory. Rendering does not read source
+files.
 
 The SQLite store is standard-library-only: it does not load native vector
 extensions or persist/query vector representations. The retained findings
@@ -342,10 +363,13 @@ transaction. Read-only stores open SQLite in `mode=ro` and never migrate or
 commit. A concurrent reader sees the last committed snapshot until the writer
 commits the next one.
 
-AST analysis uses no subprocess. An explicit `--codeql-database` opt-in runs
-local `codeql database analyze` against that database only; it never builds the
-project, downloads dependencies, or persists an absolute database path. A
-failed index leaves the whole previous successful snapshot intact.
+AST endpoint analysis uses no subprocess. For interprocedural flows, the local
+CodeQL executable is used by default to create a temporary source-only Java
+database, query it, and decode the result as CSV; `--codeql-database` reuses a
+database supplied by the caller. The temporary query pack is locked through the
+local CodeQL package manager before execution. No database path is persisted.
+An absent CodeQL executable is reported and keeps AST-only results; a failing
+available executable leaves the whole previous successful snapshot intact.
 
 ## Extractors
 
@@ -355,6 +379,8 @@ WebClient, Spring Data REST and gateway routes. It resolves literals, known
 Spring property expressions, and unique never-reassigned local string base
 URLs conservatively. Multi-document Spring YAML is read document by document;
 base-document values take precedence where no active-profile selection exists.
+YAML parse failures, including unrendered Helm Go-template expressions, leave
+that file without Spring-property facts and never abort the repository index.
 
 REST graph construction first resolves an explicit target identity from an HTTP
 host, `lb://` URI, configured client domain, or an opt-in Strategy1 convention.

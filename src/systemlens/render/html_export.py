@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
+from typing import cast
 
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
@@ -71,7 +73,7 @@ def render_graph_html(
         architecture_relations=architecture_relations,
         integration_methods=integration_methods,
     )
-    view_model["code_flows"] = [
+    serialized_code_flows = [
         {
             "id": flow.id,
             "module": flow.module,
@@ -98,6 +100,13 @@ def render_graph_html(
         }
         for flow in (code_flows or [])
     ]
+    view_model["code_flows"] = serialized_code_flows
+    flow_counts = Counter(flow.module for flow in (code_flows or []))
+    nodes = cast(list[dict[str, object]], view_model["nodes"])
+    for node in nodes:
+        name = node.get("name")
+        if node.get("kind") == "microservice" and isinstance(name, str):
+            node["internal_flow_count"] = flow_counts[name]
     graph_data = json.dumps(
         view_model,
         ensure_ascii=False,

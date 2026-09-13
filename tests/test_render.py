@@ -5,7 +5,7 @@ from pathlib import Path
 
 from systemlens.domain.models import GraphFact, MessageEndpoint, compute_endpoint_id
 from systemlens.domain.graph import GraphEdge
-from systemlens.domain.code_flows import IntegrationMethod
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.discovery.kubernetes import KubernetesWorkload
 from systemlens.modules import (
     DiscoveredModule,
@@ -63,11 +63,21 @@ def _html_graph_data(document: str) -> dict[str, object]:
     return json.loads(match.group(1))
 
 
-def test_microservice_ports_expose_direction_type_and_java_method() -> None:
+def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> None:
     endpoint = _rest_endpoint("serve", "POST /orders", "OrderController.java")
     endpoint = replace(endpoint, id="receive-order", qualified_name="com.example.OrderController")
     document = render_graph_html(
         {"orders": [endpoint]}, [],
+        code_flows=[CodeFlow(
+            id="flow", module="orders", method="com.example.OrderController.placeOrder",
+            path="OrderController.java", start_line=12, end_line=22,
+            steps=(CodeFlowStep(
+                order=1, kind="http_entry", name="POST /orders",
+                path="OrderController.java", start_line=12, end_line=12,
+                endpoint_id=endpoint.id,
+            ),),
+            status="potential", confidence="medium", reason="test",
+        )],
         integration_methods=[IntegrationMethod(
             id="method", module="orders",
             qualified_method="com.example.OrderController.placeOrder",
@@ -83,11 +93,13 @@ def test_microservice_ports_expose_direction_type_and_java_method() -> None:
         "method": "com.example.OrderController::placeOrder", "name": "POST /orders",
         "endpoint_id": "receive-order",
     }]
-    assert 'createDetailsGroup("Ports d\'intégration")' in document
-    assert 'appendList("Entrées", ports.filter(port => port.direction === "in")' in document
-    assert 'createDetailsGroup("Liens entrée → sortie")' in document
+    assert node["internal_flow_count"] == 1
+    assert 'createDetailsGroup("Ports d\'intégration")' not in document
+    assert 'appendList("Entrées", ports.filter(port => port.direction === "in")' not in document
+    assert 'createDetailsGroup("Flux internes")' in document
     assert 'appendPortFlowList("Flux potentiels", uniqueConnections, flowGroup)' in document
     assert 'port-flow-arrow' in document
+    assert 'flux interne${flowCount > 1 ? "s" : ""}' in document
 
 
 def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> None:
@@ -102,6 +114,8 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     assert "#graph, #dependency-graph {\n      position: fixed;" in document
     assert "#graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }" in document
     assert "#graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }" in document
+    assert '<div id="graph-flow-tooltips" aria-hidden="true"></div>' in document
+    assert '<p id="graph-flow-status" hidden></p>' in document
     assert ".graph-namespace-title { position: absolute; z-index: 4;" in document
     assert "#graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }" in document
     assert ".graph-project-group-title { position: absolute; z-index: 5;" in document
@@ -446,9 +460,18 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert ".toolbar > .toolbar-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in document
     assert ".code-flow-step { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }" in document
     assert 'http_entry: "Entrée HTTP"' in document
+    assert 'function isGraphPortStep(step)' in document
+    assert 'stepItem.classList.add("is-graph-port-step")' in document
+    assert 'title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`' in document
+    assert 'Relations topologiques incomplètes' in document
+    assert 'graphFlowStatus.hidden = context.topologyReconciled !== false;' in document
     assert "graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)" in document
     assert 'size: 3.5' in document
     assert 'is-code-flow-node' in document
+    assert 'tooltip.className = "graph-flow-port-tooltip"' in document
+    assert '`${isTrigger ? "Déclencheur" : "Effet"} : ${flowStep.name}`' in document
+    assert '`Méthode Java : ${indexedPort?.method || "inconnue"}`' in document
+    assert "flowTooltipOverlay.replaceChildren(tooltip);" in document
     assert "if (graphState.selectedCodeFlowId) return renderedData;" in document
     assert "const ratioFactor = Math.max(1, spanX / availableWidth, spanY / availableHeight);" in document
     assert ".toolbar { overflow-x: hidden; }" in document

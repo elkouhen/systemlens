@@ -112,6 +112,19 @@ spring:
     assert _load_flat_spring_properties(str(properties))["spring.application.name"] == "customers-service"
 
 
+def test_helm_template_yaml_does_not_abort_spring_property_inventory(tmp_path: Path) -> None:
+    template = tmp_path / "configmap.yaml"
+    template.write_text("""apiVersion: v1
+kind: ConfigMap
+data:
+{{ toYaml .Values.mysql.configFiles | indent 2 }}
+  server-id.cnf: |
+    [mysqld]
+""", encoding="utf-8")
+
+    assert _load_flat_spring_properties(str(template)) == {}
+
+
 def test_kafka_template_send_is_detected_when_receiver_has_generic_name(tmp_path: Path) -> None:
     source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
     source.parent.mkdir(parents=True)

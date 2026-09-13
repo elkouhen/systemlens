@@ -7,12 +7,12 @@ functional or technical contract.
 
 | Topic | ADRs |
 |---|---|
-| Local, conservative extraction | [ADR-1](#adr-1--local-ast-extraction-is-the-sole-static-architecture-analysis-source), [ADR-3](#adr-3--conservative-static-resolution) |
+| Local, conservative extraction | [ADR-1](#adr-1--local-static-architecture-analysis), [ADR-3](#adr-3--conservative-static-resolution) |
 | Snapshot storage and compatibility | [ADR-2](#adr-2--sqlite-is-the-local-fact-store), [ADR-7](#adr-7--publish-each-index-as-an-atomic-sqlite-snapshot), [ADR-11](#adr-11--separate-module-identity-from-its-display-alias) |
 | Delivery and graph projection | [ADR-8](#adr-8--persisted-relations-are-the-canonical-architecture-projection), [ADR-9](#adr-9--exports-never-enrich-a-snapshot-from-live-source-files), [ADR-23](#adr-23--mcp-control-in-two-phases-with-a-graph-enrichment-layer) |
 | Optional or repository-specific behaviour | [ADR-5](#adr-5--strategy1-conventions-are-opt-in), [ADR-12](#adr-12--kubernetes-discovery-is-explicit-and-snapshot-based) |
 
-## ADR-1 — Local AST extraction is the sole static architecture analysis source
+## ADR-1 — Local static architecture analysis
 
 **Status:** Accepted.
 
@@ -21,11 +21,13 @@ to source locations without a separate analysis runtime.
 
 **Decision:** Parse Java source locally with Tree-sitter and derive static Spring
 REST, Kafka and module facts from AST nodes and deterministic local
-configuration.
+configuration. Use the locally installed CodeQL CLI by default to create a
+temporary source-only Java call graph for bounded interprocedural flow facts.
 
-**Consequences:** The project has no external analyzer, rule-pack or source-code
-search dependency. Dynamic values are surfaced as unresolved facts instead of
-being guessed.
+**Consequences:** The project has no remote analyzer or source-code search
+dependency. CodeQL is an optional local prerequisite: when absent, the index
+keeps AST-only results and reports the reduced interprocedural coverage. Dynamic
+values are surfaced as unresolved facts instead of being guessed.
 
 ## ADR-2 — SQLite is the local fact store
 
@@ -315,15 +317,27 @@ can still establish bounded local relationships.
 
 **Decision:** During indexing, materialize AST method facts for Java methods
 that contain indexed HTTP/message inputs or outputs, and retain same-method
-flows. When the user explicitly supplies an already-built Java CodeQL database,
-join these facts with CodeQL-resolved static method calls to materialize bounded
-interprocedural flows. Preserve call-site evidence and label every flow
-`potential` with medium confidence. Store flows separately from topology and
-runtime facts. SystemLens does not create a CodeQL database, invoke a project
-build, download packs, or persist the supplied database location.
+flows. When the local CodeQL CLI is available, create a temporary source-only
+Java database with `--build-mode=none`, then join these facts with
+CodeQL-resolved static method calls to materialize bounded interprocedural
+flows. `--codeql-database` remains an override for an existing database.
+Preserve call-site evidence and label every flow `potential` with medium
+confidence when dispatch is unique; retain multiple CodeQL virtual-dispatch
+candidates at low confidence instead of choosing an implementation. Store flows
+separately from topology and runtime facts. The
+temporary database and supplied database path are never persisted; an absent
+CodeQL CLI is reported and leaves AST-only flows available.
+
+Concrete Kafka publications may continue into persisted concrete Kafka entry
+flows. The join is bounded to four asynchronous hops and prevents a consumer
+flow from recurring in one candidate, so cyclic topics cannot grow the result
+without bound. Dynamic topics and producer flows with a later external effect
+are not composed because the static evidence cannot support a complete linear
+causal path in those cases.
 
 **Consequences:** Users can inspect useful causal candidates without the broad
 consumer-to-all-publications assumption. Conditional execution, unresolved
 dispatch, reflection, and runtime-only routing remain explicit blind spots.
-Indexing performs AST traversal and an optional bounded CodeQL call-graph join,
-while exports and queries continue to consume only persisted snapshots.
+Indexing performs AST traversal and a bounded CodeQL call-graph join when the
+local prerequisite is available, while exports and queries continue to consume
+only persisted snapshots.

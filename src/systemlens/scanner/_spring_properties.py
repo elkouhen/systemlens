@@ -146,7 +146,10 @@ def _load_flat_spring_properties(path_str: str) -> dict[str, str]:
     if path.suffix == ".properties":
         return _parse_dotted_properties_file(text)
     try:
-        documents = yaml.safe_load_all(text)
+        # ``safe_load_all`` returns a lazy generator: materialize it here so
+        # parser failures from later YAML documents (notably Helm templates)
+        # remain inside the protected boundary.
+        documents = list(yaml.safe_load_all(text))
     except yaml.YAMLError:
         return {}
     flat: dict[str, str] = {}

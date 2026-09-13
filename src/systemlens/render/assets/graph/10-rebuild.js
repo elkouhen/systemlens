@@ -140,6 +140,7 @@
       graphLayersOverlay.replaceChildren();
       graphGroupsOverlay.replaceChildren();
       nodeLabelOverlay.replaceChildren();
+      flowTooltipOverlay.replaceChildren();
       renderer?.kill();
       network = new graphology.MultiDirectedGraph();
       const visualNodeKind = node => {
@@ -206,10 +207,8 @@
           if (!isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
           const renderedData = graphState.renderMode === "symbols" ? { ...data, size: .5 } : data;
           if (graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)) {
-            const order = graphState.pathMicroserviceOrder.get(node);
             return {
               ...renderedData,
-              label: order ? `${order}. ${data.label}` : renderedData.label,
               size: renderedData.size * 1.22,
               highlighted: true,
               zIndex: 2,
@@ -217,8 +216,7 @@
           }
           if (graphState.selectedCodeFlowId) return renderedData;
           if (!graphState.selectedId || graphState.relatedNodes.has(node)) {
-            const order = graphState.pathMicroserviceOrder.get(node);
-            return order ? { ...renderedData, label: `${order}. ${data.label}` } : renderedData;
+            return renderedData;
           }
           return { ...renderedData, color: "#d8e0ea", label: "" };
         },
@@ -574,11 +572,63 @@
           const name = document.createElement("span");
           name.className = "graph-node-card-name";
           name.textContent = node.name;
+          name.title = node.name;
           const kind = document.createElement("span");
           kind.className = "graph-node-card-kind";
-          kind.textContent = node.technology || nodeKindLabel(node);
+          const kindLabel = node.technology || nodeKindLabel(node);
+          const flowCount = node.internal_flow_count || 0;
+          kind.textContent = flowCount
+            ? `${kindLabel} · ${flowCount} flux interne${flowCount > 1 ? "s" : ""}`
+            : kindLabel;
           label.append(icon);
           label.append(name, kind);
+          const selectedFlow = (graphData.code_flows || []).find(flow => (
+            flow.id === graphState.selectedCodeFlowId
+          ));
+          const allPortSteps = (selectedFlow?.steps || []).filter(flowStep => (
+            ["http_entry", "message_entry", "http_call", "message_publish"].includes(flowStep.kind)
+          ));
+          const portSteps = (selectedFlow?.steps || []).filter(flowStep => (
+            ["http_entry", "message_entry", "http_call", "message_publish"].includes(flowStep.kind)
+            && (node.ports || []).some(port => port.endpoint_id === flowStep.endpoint_id)
+          ));
+          portSteps.forEach((flowStep, index) => {
+            const port = document.createElement("span");
+            port.className = "graph-flow-port-label";
+            port.style.setProperty("--flow-port-index", String(index));
+            const stepNumber = allPortSteps.indexOf(flowStep) + 1;
+            port.textContent = `(${stepNumber})`;
+            const portKind = {
+              http_entry: "Entrée HTTP", message_entry: "Entrée message",
+              http_call: "Sortie HTTP", message_publish: "Sortie Kafka",
+            }[flowStep.kind];
+            const isTrigger = ["http_entry", "message_entry"].includes(flowStep.kind);
+            const indexedPort = (node.ports || []).find(item => (
+              item.endpoint_id === flowStep.endpoint_id
+            ));
+            // Do not use the browser's native (often grey) title bubble. The
+            // exported graph owns a high-contrast, structured tooltip instead.
+            const tooltip = document.createElement("span");
+            tooltip.className = "graph-flow-port-tooltip";
+            const tooltipTitle = document.createElement("strong");
+            tooltipTitle.textContent = `Étape ${stepNumber} — ${portKind}`;
+            const triggerOrEffect = document.createElement("span");
+            triggerOrEffect.textContent = `${isTrigger ? "Déclencheur" : "Effet"} : ${flowStep.name}`;
+            const javaMethod = document.createElement("code");
+            javaMethod.textContent = `Méthode Java : ${indexedPort?.method || "inconnue"}`;
+            tooltip.append(tooltipTitle, triggerOrEffect, javaMethod);
+            const showTooltip = () => {
+              flowTooltipOverlay.replaceChildren(tooltip);
+              const anchor = port.getBoundingClientRect();
+              const width = tooltip.offsetWidth;
+              const height = tooltip.offsetHeight;
+              tooltip.style.left = `${Math.max(8, Math.min(window.innerWidth - width - 8, anchor.right))}px`;
+              tooltip.style.top = `${anchor.top - height - 8 >= 8 ? anchor.top - height - 8 : anchor.bottom + 8}px`;
+            };
+            port.addEventListener("pointerenter", showTooltip);
+            port.addEventListener("pointerleave", () => tooltip.remove());
+            label.append(port);
+          });
           // Cards sit above Sigma's canvas and therefore normally consume the
           // pointer stream. Pan the camera directly when a drag starts on a
           // card, while preserving a plain click for node selection. Keeping

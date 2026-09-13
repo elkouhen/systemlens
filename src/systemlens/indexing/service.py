@@ -20,9 +20,15 @@ from systemlens.indexing.file_inventory import (
 from systemlens.indexing.materializers import materialize_openapi_contracts
 from systemlens.indexing.code_flows import (
     CODE_FLOW_SIGNATURE, materialize_code_flows, materialize_codeql_code_flows,
+    materialize_kafka_flow_continuations,
 )
 from systemlens.indexing.integration_methods import materialize_integration_methods
-from systemlens.indexing.codeql import CodeQLError, extract_codeql_calls
+from systemlens.indexing.codeql import (
+    CodeQLError,
+    automatic_codeql_database,
+    codeql_executable,
+    extract_codeql_calls,
+)
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import ExtractionDiagnostic, MessageEndpoint
 from systemlens.discovery.build.modules import (
@@ -313,13 +319,29 @@ def _index_repo(
         )
         store.replace_integration_methods(methods)
         flows = materialize_code_flows(repo_root, all_endpoints, relation_modules)
-        if codeql_database is not None:
-            _report_progress(progress, "→ Indexation : analyse interprocédurale CodeQL...")
+        if methods and (codeql_database is not None or codeql_executable() is not None):
+            _report_progress(progress, "→ CodeQL 1/3 : préparation de l'analyse interprocédurale...")
             try:
-                calls = extract_codeql_calls(codeql_database)
+                if codeql_database is not None:
+                    calls = extract_codeql_calls(codeql_database)
+                else:
+                    _report_progress(progress, "→ CodeQL 1/3 : création de la base Java temporaire...")
+                    with automatic_codeql_database(repo_root) as database:
+                        assert database is not None
+                        _report_progress(progress, "→ CodeQL 2/3 : extraction des appels Java...")
+                        calls = extract_codeql_calls(database)
             except (CodeQLError, OSError, subprocess.TimeoutExpired) as exc:
                 raise RuntimeError(str(exc)) from exc
-            flows.extend(materialize_codeql_code_flows(methods, all_endpoints, calls))
+            _report_progress(progress, f"→ CodeQL 2/3 : {len(calls)} appel(s) extrait(s), jointure des méthodes...")
+            codeql_flows = materialize_codeql_code_flows(methods, all_endpoints, calls)
+            flows.extend(codeql_flows)
+            _report_progress(progress, f"→ CodeQL 3/3 : {len(codeql_flows)} flux interprocédural(aux) trouvé(s).")
+        elif methods:
+            _report_progress(
+                progress,
+                "→ Indexation : CodeQL indisponible ; flux interprocéduraux ignorés.",
+            )
+        flows = materialize_kafka_flow_continuations(flows, all_endpoints)
         store.replace_code_flows(flows)
         store.set_meta("code_flow_signature", CODE_FLOW_SIGNATURE)
         _report_progress(

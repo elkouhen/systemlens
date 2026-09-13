@@ -18,7 +18,8 @@ evidence and uncertainty; do not guess dependencies.
 they modify a Java/Spring system. Developers and architects use the same
 evidence to inspect and review the result. It derives source facts directly
 from local ASTs, without starting an external rule engine or sending source
-code to a service.
+code to a service. When CodeQL is installed locally, it also creates a temporary
+source-only call graph to establish bounded inter-method flows.
 
 The product answers questions such as:
 

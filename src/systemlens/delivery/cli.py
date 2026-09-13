@@ -1172,7 +1172,7 @@ def index_cmd(
     codeql_database: Optional[Path] = typer.Option(
         None,
         "--codeql-database",
-        help="Base Java CodeQL déjà créée, utilisée pour les flux interprocéduraux.",
+        help="Base Java CodeQL existante à réutiliser au lieu de la base temporaire automatique.",
     ),
     disable: list[str] = typer.Option(
         None,

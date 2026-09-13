@@ -11,7 +11,7 @@ from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod, mo
 from systemlens.indexing.codeql import CodeQLCall
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v2-ast-methods-codeql"
+CODE_FLOW_SIGNATURE = "code-flow-v8-conservative-kafka-continuations"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -91,7 +91,21 @@ def materialize_code_flows(
         if parsed is None:
             continue
         source, root = parsed
-        for method_node in java_parser.walk(root):
+        method_nodes = [
+            node for node in java_parser.walk(root)
+            if node.type == "method_declaration"
+        ]
+        endpoint_owners: dict[str, object] = {}
+        for endpoint in path_endpoints:
+            candidates = [
+                node for node in method_nodes
+                if node.start_point.row + 1 <= endpoint.start_line <= node.end_point.row + 1
+            ]
+            if candidates:
+                endpoint_owners[endpoint.id] = min(
+                    candidates, key=lambda node: node.end_byte - node.start_byte
+                )
+        for method_node in method_nodes:
             if method_node.type != "method_declaration":
                 continue
             method_name = java_parser.declaration_name(method_node, source)
@@ -102,7 +116,7 @@ def materialize_code_flows(
             local_endpoints = [
                 endpoint
                 for endpoint in path_endpoints
-                if start_line <= endpoint.start_line <= end_line
+                if endpoint_owners.get(endpoint.id) == method_node
             ]
             triggers = [
                 endpoint
@@ -177,17 +191,53 @@ def materialize_codeql_code_flows(
     targets CodeQL cannot resolve and paths with a cycle.
     """
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
-    by_locator = {(item.qualified_method, item.path, item.start_line): item for item in methods}
+    def normalized_method_name(name: str) -> str:
+        """Align CodeQL's ``Outer$Inner`` names with Java source names."""
+        return name.replace("$", ".")
+
+    by_locator = {
+        (normalized_method_name(item.qualified_method), item.path, item.start_line): item
+        for item in methods
+    }
     def locate(name: str, path: str, line: int) -> IntegrationMethod | None:
-        exact = by_locator.get((name, path, line))
+        normalized_name = normalized_method_name(name)
+        exact = by_locator.get((normalized_name, path, line))
         if exact is not None:
             return exact
-        candidates = [item for item in methods if item.qualified_method == name and item.path.endswith(path)]
+        candidates = [
+            item for item in methods
+            if normalized_method_name(item.qualified_method) == normalized_name
+            and item.path == path
+        ]
+        containing = [
+            item for item in candidates if item.start_line <= line <= item.end_line
+        ]
+        if containing:
+            return min(containing, key=lambda item: item.end_line - item.start_line)
         return candidates[0] if len(candidates) == 1 else None
+
+    def locate_caller(call: CodeQLCall) -> IntegrationMethod | None:
+        """Locate a caller, including a lambda's enclosing Java method.
+
+        CodeQL represents a Java lambda as a synthetic anonymous ``apply``
+        method. Its qualified name has no direct AST counterpart, but its call
+        site remains within the lexical method declaration SystemLens stored.
+        Prefer the narrowest containing declaration to avoid attributing a
+        local/anonymous-class method to an outer method when both are present.
+        """
+        direct = locate(call.caller, call.caller_path, call.caller_line)
+        if direct is not None:
+            return direct
+        enclosing = [
+            item for item in methods
+            if item.path == call.caller_path
+            and item.start_line <= call.call_line <= item.end_line
+        ]
+        return min(enclosing, key=lambda item: item.end_line - item.start_line) if enclosing else None
 
     adjacency: dict[str, list[tuple[IntegrationMethod, CodeQLCall]]] = defaultdict(list)
     for call in calls:
-        caller = locate(call.caller, call.caller_path, call.caller_line)
+        caller = locate_caller(call)
         callee = locate(call.callee, call.callee_path, call.callee_line)
         if caller is not None and callee is not None:
             adjacency[caller.id].append((callee, call))
@@ -224,13 +274,100 @@ def materialize_codeql_code_flows(
                                 entry.module, entry.path, entry.qualified_method,
                                 _endpoint_step(trigger, 1).kind, f"{trigger.topic}|{output.id}|" + ".".join(hop.id for hop, _ in next_route),
                             )
+                            has_possible_dispatch = any(
+                                edge.dispatch_confidence == "possible"
+                                for _hop, edge in next_route
+                            )
                             flows.append(CodeFlow(
                                 id=flow_id, module=entry.module, method=entry.qualified_method,
                                 path=entry.path, start_line=entry.start_line, end_line=entry.end_line,
-                                status="potential", confidence="medium",
-                                reason="CodeQL resolved a static call path from an indexed entry method to an indexed output method.",
+                                status="potential",
+                                confidence="low" if has_possible_dispatch else "medium",
+                                reason=(
+                                    "CodeQL found a possible virtual-dispatch path from an indexed entry method to an indexed output method."
+                                    if has_possible_dispatch
+                                    else "CodeQL resolved a static call path from an indexed entry method to an indexed output method."
+                                ),
                                 steps=tuple([*steps, _endpoint_step(output, len(steps) + 1)]),
                             ))
                     queue.append((target, next_route))
     unique = {flow.id: flow for flow in flows}
+    return sorted(unique.values(), key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
+
+
+def materialize_kafka_flow_continuations(
+    flows: list[CodeFlow], endpoints: list[MessageEndpoint]
+) -> list[CodeFlow]:
+    """Add bounded, source-evidenced Kafka producer-to-consumer continuations.
+
+    Only the original, persisted trigger flows can be consumers.  Composed
+    flows are then placed back on the work queue so a later publication can be
+    followed as well, without treating an arbitrary intermediate step as a
+    new entry point.  The hop cap prevents cyclic topics from producing an
+    unbounded number of candidates.
+    """
+    max_hops = 4
+    concrete_kafka_endpoints = {
+        endpoint.id for endpoint in endpoints
+        if endpoint.system == "kafka" and not endpoint.topic_dynamic
+    }
+    consumers: dict[str, list[CodeFlow]] = defaultdict(list)
+    for flow in flows:
+        if (
+            flow.steps
+            and flow.steps[0].kind == "message_entry"
+            and flow.steps[0].endpoint_id in concrete_kafka_endpoints
+        ):
+            consumers[flow.steps[0].name].append(flow)
+    continuations: list[CodeFlow] = []
+    # ``seen_consumers`` is intentionally carried independently from the
+    # rendered steps: a cycle can revisit a topic without ever revisiting the
+    # exact source location of a message entry.
+    queue: list[tuple[CodeFlow, tuple[str, ...], int]] = [
+        (flow, (), 0) for flow in flows
+    ]
+    while queue:
+        flow, seen_consumers, hop_count = queue.pop(0)
+        if hop_count >= max_hops:
+            continue
+        for publish_index, publish in enumerate(flow.steps):
+            if publish.kind != "message_publish":
+                continue
+            if publish.endpoint_id not in concrete_kafka_endpoints:
+                continue
+            # A composed line must not silently discard effects that occur
+            # after publication in the producer method.
+            if any(step.kind in {"http_call", "message_publish", "data_read", "data_write"}
+                   for step in flow.steps[publish_index + 1:]):
+                continue
+            for consumer in consumers.get(publish.name, []):
+                if consumer.id == flow.id or consumer.id in seen_consumers:
+                    continue
+                combined_steps = [*flow.steps[:publish_index + 1], *consumer.steps]
+                steps = tuple(
+                    CodeFlowStep(**{**step.__dict__, "order": order})
+                    for order, step in enumerate(combined_steps, start=1)
+                )
+                continuation = CodeFlow(
+                    id=compute_code_flow_id(
+                        flow.module, flow.path, flow.method, steps[0].kind,
+                        f"{steps[0].name}|kafka|{'|'.join((*seen_consumers, consumer.id))}",
+                    ),
+                    module=flow.module, method=flow.method, path=flow.path,
+                    start_line=flow.start_line, end_line=flow.end_line,
+                    status="potential",
+                    confidence="low" if "low" in {flow.confidence, consumer.confidence} else "medium",
+                    reason=(
+                        "A concrete Kafka publication matches the indexed message entry "
+                        "of a downstream potential flow."
+                    ),
+                    steps=steps,
+                )
+                continuations.append(continuation)
+                queue.append((
+                    continuation,
+                    (*seen_consumers, consumer.id),
+                    hop_count + 1,
+                ))
+    unique = {flow.id: flow for flow in [*flows, *continuations]}
     return sorted(unique.values(), key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
