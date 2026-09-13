@@ -255,12 +255,15 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "Qui produit ou consomme un topic Kafka ?" not in document
     assert 'id="advanced-controls"' in document
     assert 'id="openapi-tab"' in document
+    assert 'id="resources-tab"' in document
+    assert 'id="resources-panel"' in document
+    assert 'id="resources-filter"' in document
     assert 'id="kafka-tab"' in document
     assert 'id="persistence-tab"' in document
     assert '>Topics</button>' in document
     assert '>Data</button>' in document
-    assert 'Topic Kafka' not in document
-    assert 'Collection MongoDB' not in document
+    assert 'Schémas de données d’événements' in document
+    assert 'Schémas de données persistées' in document
     assert 'id="request-reply-tab"' not in document
     assert 'id="build-tab"' in document
     assert 'class="graph-control-group zoom-controls"' in document

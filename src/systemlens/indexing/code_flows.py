@@ -11,7 +11,7 @@ from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod, mo
 from systemlens.indexing.codeql import CodeQLCall
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v8-conservative-kafka-continuations"
+CODE_FLOW_SIGNATURE = "code-flow-v9-bounded-codeql-kafka-continuations"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -182,7 +182,8 @@ def materialize_code_flows(
 
 
 def materialize_codeql_code_flows(
-    methods: list[IntegrationMethod], endpoints: list[MessageEndpoint], calls: list[CodeQLCall]
+    methods: list[IntegrationMethod], endpoints: list[MessageEndpoint], calls: list[CodeQLCall],
+    *, max_hops: int = 12, max_paths: int = 10_000, stats: dict[str, int] | None = None,
 ) -> list[CodeFlow]:
     """Join AST method facts through resolved CodeQL calls.
 
@@ -243,6 +244,8 @@ def materialize_codeql_code_flows(
             adjacency[caller.id].append((callee, call))
 
     flows: list[CodeFlow] = []
+    explored = 0
+    truncated = 0
     for entry in methods:
         if not entry.input_endpoint_ids:
             continue
@@ -253,9 +256,14 @@ def materialize_codeql_code_flows(
             queue: list[tuple[IntegrationMethod, list[tuple[IntegrationMethod, CodeQLCall]]]] = [(entry, [])]
             while queue:
                 current, route = queue.pop(0)
-                if len(route) >= 12:
+                if len(route) >= max_hops:
                     continue
                 for target, call in adjacency.get(current.id, []):
+                    if explored >= max_paths:
+                        truncated += 1
+                        queue.clear()
+                        break
+                    explored += 1
                     next_route = [*route, (target, call)]
                     if target.id == entry.id or any(previous.id == target.id for previous, _ in route):
                         steps = [_endpoint_step(trigger, 1)]
@@ -310,6 +318,11 @@ def materialize_codeql_code_flows(
                                 steps=tuple([*steps, _endpoint_step(output, len(steps) + 1)]),
                             ))
                     queue.append((target, next_route))
+    if stats is not None:
+        stats.update({
+            "calls": len(calls), "joined_calls": sum(len(targets) for targets in adjacency.values()),
+            "explored_paths": explored, "truncated_paths": truncated,
+        })
     unique = {flow.id: flow for flow in flows}
     return sorted(unique.values(), key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
 

@@ -24,6 +24,7 @@
     </div>
     <div class="toolbar-tabs" role="tablist" aria-label="Vues de l'architecture">
       <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel">Explorer</button>
+      <button id="resources-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="resources-panel">Ressources</button>
       <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
       <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Topics</button>
       <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Data</button>
@@ -115,6 +116,14 @@
       </details>
       <p id="layout-status" class="layout-status" role="status">Chargement du graphe…</p>
     </div>
+    <div id="resources-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="resources-tab" hidden>
+      <div class="references-header">
+        <p class="references-kicker">Inventaire indexé</p>
+        <h2 id="resources-title" class="references-title">Ressources</h2>
+        <p class="references-description">Recherchez un microservice, un topic, une Data ou toute autre ressource par son nom.</p>
+      </div>
+      <section class="references-section"><input id="resources-filter" class="reference-filter-input" type="search" placeholder="Rechercher une ressource par nom" autocomplete="off" aria-label="Rechercher une ressource par nom"><ul id="resources-list" class="references-list"></ul><p id="resources-empty" class="references-empty">Aucune ressource ne correspond à ce filtre.</p></section>
+    </div>
     <div id="dependencies-panel" class="toolbar-panel dependency-view" role="tabpanel" aria-labelledby="build-tab" hidden>
       <p class="dependency-view-kicker">Structure de build</p>
       <h2>Arbre des dépendances</h2>
@@ -147,17 +156,17 @@
     </div>
     <div id="kafka-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="kafka-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker">Événements de Topics</p>
-        <h2 id="dto-references-title" class="references-title">DTO de Topics</h2>
-        <p class="references-description">Inspectez les classes Java échangées via les Topics.</p>
+        <p class="references-kicker">Schémas de données d’événements</p>
+        <h2 id="dto-references-title" class="references-title">Schémas de données Topics</h2>
+        <p class="references-description">Inspectez les classes Java qui définissent les données échangées via les Topics.</p>
       </div>
       <section class="references-section"><input id="dto-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTO par nom ou package" autocomplete="off" aria-label="Filtrer les DTO de Topics"><ul id="dto-references" class="references-list"></ul><p id="dto-references-empty" class="references-empty">Aucun DTO de Topics détecté.</p></section>
     </div>
     <div id="persistence-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="persistence-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker">Data</p>
-        <h2 id="mongo-class-references-title" class="references-title">Classes de persistance</h2>
-        <p class="references-description">Inspectez les classes Java associées aux Data.</p>
+        <p class="references-kicker">Schémas de données persistées</p>
+        <h2 id="mongo-class-references-title" class="references-title">Schémas de données Data</h2>
+        <p class="references-description">Inspectez les classes Java qui définissent les données persistées.</p>
       </div>
       <section class="references-section"><input id="mongo-class-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou Data" autocomplete="off" aria-label="Filtrer les classes de persistance Data"><ul id="mongo-class-references" class="references-list"></ul><p id="mongo-class-references-empty" class="references-empty">Aucune classe de persistance Data détectée.</p></section>
     </div>

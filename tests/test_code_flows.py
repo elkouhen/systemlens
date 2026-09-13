@@ -448,6 +448,41 @@ class SecondPublisher { void send() { kafka.send(); } }
     assert all("possible virtual-dispatch" in flow.reason for flow in flows)
 
 
+def test_codeql_flow_materialization_bounds_exploration(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    target = "orders/src/main/java/com/example/OrderPublisher.java"
+    for path, content in {
+        source: "package com.example; class OrderController { void receive() {} }\n",
+        target: "package com.example; class OrderPublisher { void send() {} }\n",
+    }.items():
+        file = tmp_path / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(content, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        _endpoint("entry", "consume", "kafka", "orders.in", source, 1),
+        replace(_endpoint("output", "produce", "kafka", "orders.out", target, 1),
+                qualified_name="com.example.OrderPublisher"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
+    stats: dict[str, int] = {}
+
+    flows = materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        [CodeQLCall("com.example.OrderController.receive", source, 1,
+                    "com.example.OrderPublisher.send", target, 1, 1)],
+        max_paths=1,
+        stats=stats,
+    )
+
+    assert len(flows) == 1
+    assert stats == {"calls": 1, "joined_calls": 1, "explored_paths": 1, "truncated_paths": 0}
+
+
 def test_integration_method_ids_distinguish_java_overloads(tmp_path: Path) -> None:
     relative_source = "orders/src/main/java/com/example/OrderController.java"
     source = tmp_path / relative_source

@@ -313,7 +313,11 @@ def _index_repo(
         or changed
         or deleted
         or codeql_database is not None
-        or store.get_meta("code_flow_signature") != CODE_FLOW_SIGNATURE
+        or store.get_meta("code_flow_signature") != (
+            f"{CODE_FLOW_SIGNATURE}|enabled={config.codeql_enabled}|"
+            f"available={codeql_executable() is not None}|hops={config.codeql_max_hops}|"
+            f"paths={config.codeql_max_paths}"
+        )
     ):
         all_endpoints = store.all_endpoints()
         methods = materialize_integration_methods(
@@ -335,9 +339,25 @@ def _index_repo(
             except (CodeQLError, OSError, subprocess.TimeoutExpired) as exc:
                 raise RuntimeError(str(exc)) from exc
             _report_progress(progress, f"→ CodeQL 2/3 : {len(calls)} appel(s) extrait(s), jointure des méthodes...")
-            codeql_flows = materialize_codeql_code_flows(methods, all_endpoints, calls)
+            codeql_stats: dict[str, int] = {}
+            codeql_flows = materialize_codeql_code_flows(
+                methods, all_endpoints, calls,
+                max_hops=config.codeql_max_hops,
+                max_paths=config.codeql_max_paths,
+                stats=codeql_stats,
+            )
             flows.extend(codeql_flows)
-            _report_progress(progress, f"→ CodeQL 3/3 : {len(codeql_flows)} flux interprocédural(aux) trouvé(s).")
+            limit_note = (
+                f" limite atteinte ({config.codeql_max_paths} transitions)."
+                if codeql_stats["truncated_paths"] else ""
+            )
+            _report_progress(
+                progress,
+                "→ CodeQL 3/3 : "
+                f"{codeql_stats['calls']} appel(s), {codeql_stats['joined_calls']} jointure(s), "
+                f"{codeql_stats['explored_paths']} transition(s), "
+                f"{len(codeql_flows)} flux interprocédural(aux).{limit_note}",
+            )
         elif methods and config.codeql_enabled:
             _report_progress(
                 progress,
@@ -345,7 +365,12 @@ def _index_repo(
             )
         flows = materialize_kafka_flow_continuations(flows, all_endpoints)
         store.replace_code_flows(flows)
-        store.set_meta("code_flow_signature", CODE_FLOW_SIGNATURE)
+        store.set_meta(
+            "code_flow_signature",
+            f"{CODE_FLOW_SIGNATURE}|enabled={config.codeql_enabled}|"
+            f"available={codeql_executable() is not None}|hops={config.codeql_max_hops}|"
+            f"paths={config.codeql_max_paths}",
+        )
         _report_progress(
             progress,
             f"→ Indexation : {len(flows)} parcours de code potentiel(s) matérialisé(s).",

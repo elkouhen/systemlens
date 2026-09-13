@@ -28,6 +28,8 @@ root_path: .
 analysis:
   topic_strategy: default
   codeql: true
+  codeql_max_hops: 12
+  codeql_max_paths: 10000
   disabled_extractors: []
 ```
 
@@ -201,8 +203,14 @@ collections, SQL tables, Redis keyspaces, object-store datasets, Kafka,
 RabbitMQ, SQS, and webhook streams are technology-specific evidence, not the
 primary architecture category.
 
-The export uses a responsive workspace layout with seven navigation tabs:
-Explorer, OpenAPI, Topics, Data, Build, Quality, and Flux. It includes
+The export uses a responsive workspace layout with eight navigation tabs:
+Explorer, Resources, OpenAPI, Topics, Data, Build, Quality, and Flux.
+`Resources` is a filterable inventory of every persisted graph node; selecting
+an item opens it in Explorer and focuses its graph card. `Topics` and `Data`
+are data-schema reference views: Java classes defining exchanged event data
+and persisted data respectively. They retain the generic `Topic` and `Data`
+architecture categories rather than implying a single storage or messaging
+technology. It includes
 compact architecture counters, contextual details integrated into the left
 panel, and a full-size resource inspector. On narrow viewports the left panel
 uses one bounded, scrollable region so the graph remains visible while users
@@ -210,7 +218,7 @@ inspect controls or resource details. At intermediate widths up to 1024 px it
 is limited to 320 px and 82% of the viewport height. Its branded header remains
 visible while the panel content scrolls, and its navigation tabs use one
 balanced four-column, two-row grid immediately after the branded header, so
-all seven destinations remain visible without horizontal scrolling. The extended search
+all eight destinations remain visible without horizontal scrolling. The extended search
 hint is hidden at those widths while its label and example placeholder remain
 visible.
 

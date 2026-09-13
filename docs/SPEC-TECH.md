@@ -184,8 +184,11 @@ copied resources and generated classes cannot duplicate source facts. A
 same-method relation remains `potential` with medium confidence because static
 lexical order does not prove branch execution. With an explicitly supplied
 CodeQL Java database, resolved `MethodCall` facts join persisted AST method
-facts to form bounded (12-hop) interprocedural flows; `method_call` steps keep
-the call-site line. By default, SystemLens creates this database in a temporary
+facts to form bounded interprocedural flows; `method_call` steps keep
+the call-site line. The `analysis.codeql_max_hops` and
+`analysis.codeql_max_paths` configuration values bound depth and explored call
+transitions respectively; reaching the latter is reported in indexing progress
+instead of silently dropping candidates. By default, SystemLens creates this database in a temporary
 directory with CodeQL's `--build-mode=none` source-only mode, then deletes it;
 an explicit CLI database remains an override. When the CodeQL executable is
 absent, it records no interprocedural paths and reports that limitation without
@@ -196,7 +199,9 @@ reflection, and runtime-only routing remain outside this deterministic layer.
 For a virtual call, CodeQL's unique `exactVirtualMethod` target is retained at
 medium confidence. If no unique target can be proven, its `viableCallable`
 candidates are retained individually at low confidence; SystemLens does not
-select an implementation on Spring bean metadata alone.
+select an implementation on Spring bean metadata alone. The analysis profile,
+including CodeQL availability, activation and its bounds, participates in the
+code-flow signature so switching profile recalculates unchanged repositories.
 
 Kafka flow continuations join only concrete, statically resolved Kafka endpoint
 identifiers. A continuation is not materialized when the producer has a later
@@ -366,8 +371,10 @@ commits the next one.
 AST endpoint analysis uses no subprocess. For interprocedural flows, the local
 CodeQL executable is used by default to create a temporary source-only Java
 database, query it, and decode the result as CSV; `--codeql-database` reuses a
-database supplied by the caller. The temporary query pack is locked through the
-local CodeQL package manager before execution. No database path is persisted.
+database supplied by the caller. The temporary query pack pins
+`codeql/java-all` and resolves it only from the already installed local CodeQL
+pack cache; indexing never runs `codeql pack install` or downloads analyzer
+dependencies. No database path is persisted.
 An absent CodeQL executable is reported and keeps AST-only results; a failing
 available executable leaves the whole previous successful snapshot intact.
 

@@ -154,6 +154,7 @@
     document.getElementById("show-simple-paths").addEventListener("click", showSimplePaths);
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
+    resourcesTab.addEventListener("click", () => setToolbarTab("resources"));
     openApiTab.addEventListener("click", () => setToolbarTab("openapi"));
     kafkaTab.addEventListener("click", () => setToolbarTab("kafka"));
     persistenceTab.addEventListener("click", () => setToolbarTab("persistence"));
@@ -195,12 +196,14 @@
     openApiReferencesFilter.addEventListener("input", renderReferences);
     dtoReferencesFilter.addEventListener("input", renderReferences);
     mongoClassReferencesFilter.addEventListener("input", renderReferences);
+    resourcesFilter.addEventListener("input", renderResources);
     pathLock.addEventListener("change", persistState);
     pathQuery.addEventListener("keydown", event => {
       if (event.key === "Enter") showShortestPath();
     });
     renderIndexingIssues();
     renderReferences();
+    renderResources();
     restoreState();
     function updateWorkspaceViewport(refit = false) {
       const root = document.documentElement;

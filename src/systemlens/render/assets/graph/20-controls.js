@@ -9,6 +9,7 @@
     const pathQuery = document.getElementById("path-query");
     const pathLock = document.getElementById("path-lock");
     const graphTab = document.getElementById("graph-tab");
+    const resourcesTab = document.getElementById("resources-tab");
     const openApiTab = document.getElementById("openapi-tab");
     const kafkaTab = document.getElementById("kafka-tab");
     const persistenceTab = document.getElementById("persistence-tab");
@@ -17,6 +18,7 @@
     const flowsTab = document.getElementById("flows-tab");
     const graphLegend = document.getElementById("graph-legend");
     const graphPanel = document.getElementById("graph-panel");
+    const resourcesPanel = document.getElementById("resources-panel");
     const dependenciesPanel = document.getElementById("dependencies-panel");
     const issuesPanel = document.getElementById("issues-panel");
     const flowsPanel = document.getElementById("flows-panel");
@@ -135,6 +137,10 @@
     const indexingIssuesTitle = document.getElementById("indexing-issues-title");
     const indexingIssues = graphData.indexing_issues || [];
     const inventoryStatus = document.getElementById("inventory-status");
+    const resourcesList = document.getElementById("resources-list");
+    const resourcesEmpty = document.getElementById("resources-empty");
+    const resourcesFilter = document.getElementById("resources-filter");
+    const resourcesTitle = document.getElementById("resources-title");
     const openApiReferencesList = document.getElementById("openapi-references");
     const openApiReferencesEmpty = document.getElementById("openapi-references-empty");
     const openApiReferencesFilter = document.getElementById("openapi-reference-filter");

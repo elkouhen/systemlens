@@ -26,7 +26,14 @@ class CodeQLError(RuntimeError):
     pass
 
 
-_QLPACK = """name: systemlens/codeql-flow\nversion: 0.0.0\ndependencies:\n  codeql/java-all: \"*\"\n"""
+# Keep the query pack reproducible and offline during indexing.  Users install
+# this one dependency as part of provisioning CodeQL; indexing must never
+# download or upgrade an analyzer package implicitly.
+CODEQL_JAVA_PACK_VERSION = "9.3.0"
+_QLPACK = (
+    "name: systemlens/codeql-flow\nversion: 0.0.0\ndependencies:\n"
+    f"  codeql/java-all: \"{CODEQL_JAVA_PACK_VERSION}\"\n"
+)
 _QUERY = """import java
 import semmle.code.java.dispatch.VirtualDispatch
 
@@ -81,10 +88,13 @@ def automatic_codeql_database(repo_root: Path) -> Iterator[Path | None]:
         yield database
 
 
-def extract_codeql_calls(database: Path) -> list[CodeQLCall]:
+def extract_codeql_calls(database: Path, executable: str | None = None) -> list[CodeQLCall]:
     """Return statically resolved Java method calls from one CodeQL database."""
     if not database.is_dir():
         raise CodeQLError(f"CodeQL database not found: {database}")
+    executable = executable or codeql_executable()
+    if executable is None:
+        raise CodeQLError("CodeQL executable not found.")
     with tempfile.TemporaryDirectory(prefix="systemlens-codeql-") as directory:
         work = Path(directory)
         query = work / "calls.ql"
@@ -92,27 +102,17 @@ def extract_codeql_calls(database: Path) -> list[CodeQLCall]:
         (work / "qlpack.yml").write_text(_QLPACK, encoding="utf-8")
         bqrs = work / "calls.bqrs"
         output = work / "calls.csv"
-        # A query outside a named CodeQL pack cannot import the Java library.
-        # Resolve its lock file in the temporary directory, so the installed
-        # CodeQL package set is reproducible for this single analysis and no
-        # repository state is modified.
-        pack_install = subprocess.run(
-            ["codeql", "pack", "install"], cwd=work,
-            capture_output=True, text=True, timeout=180, check=False,
-        )
-        if pack_install.returncode != 0:
-            detail = (pack_install.stderr or pack_install.stdout).strip()
-            raise CodeQLError(f"CodeQL Java pack resolution failed: {detail}")
         command = [
-            "codeql", "query", "run", str(query), f"--database={database}",
+            executable, "query", "run", str(query), f"--database={database}",
             f"--output={bqrs}",
         ]
         # The ad-hoc query lives in a fresh temporary pack.  Make an already
-        # installed user pack cache visible to CodeQL's dependency resolver;
-        # this only selects local packs and never invokes `codeql pack install`.
+        # installed user pack cache visible to CodeQL's dependency resolver.
+        # The exact qlpack dependency above means this is an offline lookup;
+        # absence of the pack produces an actionable CodeQL error.
         user_packs = Path.home() / ".codeql" / "packages"
         if user_packs.is_dir():
-            command.append(f"--search-path={user_packs}")
+            command.append(f"--additional-packs={user_packs}")
         completed = subprocess.run(
             command,
             capture_output=True,
@@ -124,7 +124,7 @@ def extract_codeql_calls(database: Path) -> list[CodeQLCall]:
             detail = (completed.stderr or completed.stdout).strip()
             raise CodeQLError(f"CodeQL call graph failed: {detail}")
         decoded = subprocess.run(
-            ["codeql", "bqrs", "decode", str(bqrs), "--format=csv", f"--output={output}"],
+            [executable, "bqrs", "decode", str(bqrs), "--format=csv", f"--output={output}"],
             capture_output=True, text=True, timeout=180, check=False,
         )
         if decoded.returncode != 0:

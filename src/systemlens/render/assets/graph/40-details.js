@@ -11,6 +11,7 @@
         setDetailsEmpty("Selectionnez un noeud pour afficher ses details.");
       }
       const showingGraph = tab === "graph";
+      const showingResources = tab === "resources";
       const showingDependencies = tab === "dependencies";
       const showingIssues = tab === "issues";
       const showingOpenApi = tab === "openapi";
@@ -19,6 +20,8 @@
       const showingFlows = tab === "flows";
       graphTab.classList.toggle("is-active", showingGraph);
       graphTab.setAttribute("aria-selected", String(showingGraph));
+      resourcesTab.classList.toggle("is-active", showingResources);
+      resourcesTab.setAttribute("aria-selected", String(showingResources));
       openApiTab.classList.toggle("is-active", showingOpenApi);
       openApiTab.setAttribute("aria-selected", String(showingOpenApi));
       kafkaTab.classList.toggle("is-active", showingKafka);
@@ -32,6 +35,7 @@
       flowsTab.classList.toggle("is-active", showingFlows);
       flowsTab.setAttribute("aria-selected", String(showingFlows));
       graphPanel.hidden = !showingGraph;
+      resourcesPanel.hidden = !showingResources;
       quickSearch.hidden = !showingGraph;
       graphContext.hidden = !showingGraph;
       dependenciesPanel.hidden = !showingDependencies;
@@ -179,6 +183,31 @@
         () => openMongoPersistenceInspector(item.id),
       )));
       mongoClassReferencesTitle.textContent = `Classes de persistance (${visiblePersistenceClasses.length}/${persistenceClasses.length})`;
+    }
+    function renderResources() {
+      resourcesList.replaceChildren();
+      const query = resourcesFilter.value.trim().toLocaleLowerCase();
+      const resources = graphData.nodes
+        .slice()
+        .sort((left, right) => left.name.localeCompare(right.name));
+      const visibleResources = resources.filter(node => (
+        !query || `${node.name} ${nodeKindLabel(node)}`.toLocaleLowerCase().includes(query)
+      ));
+      resourcesTitle.textContent = `Ressources (${visibleResources.length}/${resources.length})`;
+      resourcesEmpty.hidden = visibleResources.length > 0;
+      visibleResources.forEach(node => {
+        const incoming = graphData.links.filter(link => link.target === node.id).length;
+        const outgoing = graphData.links.filter(link => link.source === node.id).length;
+        resourcesList.append(referenceItem(
+          node.name,
+          `${nodeKindLabel(node)} · ${incoming} entrée${incoming > 1 ? "s" : ""} · ${outgoing} sortie${outgoing > 1 ? "s" : ""}`,
+          "Voir",
+          () => {
+            setToolbarTab("graph");
+            selectNode(node.id);
+          },
+        ));
+      });
     }
     function createDetailsGroup(title, open = true) {
       const group = document.createElement("details");

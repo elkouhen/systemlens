@@ -328,6 +328,14 @@ separately from topology and runtime facts. The
 temporary database and supplied database path are never persisted; an absent
 CodeQL CLI is reported and leaves AST-only flows available.
 
+The temporary query pack pins its Java library version and resolves only the
+locally provisioned package cache. The analysis profile records CodeQL
+availability, activation and explicit depth/transition bounds so a profile
+change invalidates the persisted code-flow snapshot. Spring bean annotations
+are not used to choose one virtual-dispatch implementation: qualifiers,
+profiles and runtime factory conditions remain ambiguity rather than guessed
+execution evidence.
+
 Concrete Kafka publications may continue into persisted concrete Kafka entry
 flows. The join is bounded to four asynchronous hops and prevents a consumer
 flow from recurring in one candidate, so cyclic topics cannot grow the result

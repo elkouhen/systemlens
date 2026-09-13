@@ -23,6 +23,8 @@ class Config:
     min_severity: str = DEFAULT_MIN_SEVERITY
     topic_strategy: str = "default"
     codeql_enabled: bool = True
+    codeql_max_hops: int = 12
+    codeql_max_paths: int = 10_000
     disabled_extractors: list[str] = field(default_factory=list)
     root_path: str | None = None
 
@@ -52,6 +54,12 @@ def load_config(repo_root: Path) -> Config:
     codeql_enabled = analysis.get("codeql", True)
     if not isinstance(codeql_enabled, bool):
         raise ConfigError("analysis.codeql doit être un booléen.")
+    codeql_max_hops = analysis.get("codeql_max_hops", 12)
+    codeql_max_paths = analysis.get("codeql_max_paths", 10_000)
+    if not isinstance(codeql_max_hops, int) or codeql_max_hops < 1:
+        raise ConfigError("analysis.codeql_max_hops doit être un entier positif.")
+    if not isinstance(codeql_max_paths, int) or codeql_max_paths < 1:
+        raise ConfigError("analysis.codeql_max_paths doit être un entier positif.")
 
     return Config(
         include=list(raw.get("include", DEFAULT_INCLUDE)),
@@ -59,6 +67,8 @@ def load_config(repo_root: Path) -> Config:
         min_severity=min_severity,
         topic_strategy=topic_strategy,
         codeql_enabled=codeql_enabled,
+        codeql_max_hops=codeql_max_hops,
+        codeql_max_paths=codeql_max_paths,
         disabled_extractors=list(analysis.get("disabled_extractors", [])),
         root_path=raw.get("root_path"),
     )
@@ -75,7 +85,11 @@ def init_config(repo_root: Path) -> Path:
         "exclude": DEFAULT_EXCLUDE,
         "min_severity": DEFAULT_MIN_SEVERITY,
         "root_path": ".",
-        "analysis": {"topic_strategy": "default", "codeql": True, "disabled_extractors": []},
+        "analysis": {
+            "topic_strategy": "default", "codeql": True,
+            "codeql_max_hops": 12, "codeql_max_paths": 10_000,
+            "disabled_extractors": [],
+        },
     }
     path.write_text(yaml.dump(content, sort_keys=False))
     return path
