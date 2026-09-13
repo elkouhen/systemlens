@@ -620,6 +620,12 @@
         }] : [], architectureGroup);
         discardEmptyDetailsGroup(architectureGroup);
       const ports = node.ports || [];
+      const associatedEndpointIds = new Set(ports.map(port => port.endpoint_id));
+      const associatedFlows = (graphData.code_flows || []).filter(flow => (
+        flow.module === node.name
+        || (flow.steps || []).some(step => associatedEndpointIds.has(step.endpoint_id))
+      ));
+      appendAssociatedCodeFlows("Flux associés", associatedFlows);
       if (ports.length) {
         const portsByEndpointId = new Map(ports.map(port => [port.endpoint_id, port]));
           const connections = (graphData.code_flows || []).flatMap(flow => {

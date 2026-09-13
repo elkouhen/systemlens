@@ -156,6 +156,9 @@ potential `cycle` flows. They are visually distinguished and listed before
 non-cyclic flows; within each category, longer flows appear first.
 The Flux tab provides a `Cycles only` control with the detected-cycle count to
 isolate them immediately.
+Selecting a microservice also lists every persisted code flow owned by or
+traversing one of its indexed ports. Each compact entry identifies its trigger,
+length, cycle status and Java method, and can display that flow in Explorer.
 
 The HTML microservice export provides an inspector for each statically typed
 Topic message. It shows the indexed payload-type identity, message topic, and

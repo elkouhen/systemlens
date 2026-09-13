@@ -255,6 +255,38 @@
       section.append(heading, list);
       container.append(section);
     }
+    function appendAssociatedCodeFlows(title, flows, container = details) {
+      if (!flows.length) return;
+      const section = document.createElement("section");
+      section.className = "details-section";
+      const heading = document.createElement("h2");
+      heading.textContent = title;
+      const list = document.createElement("ul");
+      list.className = "references-list associated-code-flows";
+      [...flows].sort(compareCodeFlows).forEach(flow => {
+        const item = document.createElement("li");
+        item.className = `reference-item${flow.status === "cycle" ? " is-cycle" : ""}`;
+        const summary = document.createElement("div");
+        const trigger = flow.steps?.[0];
+        const label = document.createElement("strong");
+        label.className = "reference-title";
+        label.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`;
+        const meta = document.createElement("div");
+        meta.className = "reference-meta";
+        meta.textContent = `${flow.status === "cycle" ? "Cycle détecté · " : ""}${flow.steps?.length || 0} étape(s) · ${flow.method}`;
+        summary.append(label, meta);
+        const action = document.createElement("button");
+        action.type = "button";
+        action.className = "reference-action";
+        action.textContent = "Afficher";
+        action.title = "Afficher ce flux dans le graphe";
+        action.addEventListener("click", () => showCodeFlow(flow));
+        item.append(summary, action);
+        list.append(item);
+      });
+      section.append(heading, list);
+      container.append(section);
+    }
     function appendActionList(title, entries, container = details) {
       if (!entries.length) return;
       const section = document.createElement("section");
