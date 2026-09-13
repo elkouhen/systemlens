@@ -28,6 +28,18 @@ from systemlens.domain.module_inventory import (
 )
 from systemlens.domain.topic_expressions import spring_topic_reference
 
+
+def _is_build_output_path(root: Path, path: Path) -> bool:
+    """Return whether *path* is nested under Maven or Gradle build output.
+
+    Module discovery is independent from the incremental file inventory, so it
+    must enforce the same boundary itself.  Generated ``pom.xml`` files (for
+    example OpenAPI output below ``target/generated-sources``) are not source
+    modules and must never affect the persisted module graph.
+    """
+    return bool({"target", "build"}.intersection(path.relative_to(root).parts))
+
+
 @dataclass(frozen=True)
 class _JavaPersistenceCandidate:
     name: str
@@ -876,7 +888,7 @@ def discover_modules(
     modules: list[DiscoveredModule] = []
     seen_paths: set[Path] = set()
     for pom_path in sorted(root.rglob("pom.xml")):
-        if ".git" in pom_path.relative_to(root).parts:
+        if ".git" in pom_path.relative_to(root).parts or _is_build_output_path(root, pom_path):
             continue
         module_dir = pom_path.parent.resolve()
         if not _is_module_within_depth(root, module_dir):

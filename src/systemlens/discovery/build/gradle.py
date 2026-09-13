@@ -18,6 +18,11 @@ _GRADLE_BUILD_FILENAMES = ("build.gradle", "build.gradle.kts", "settings.gradle"
 _MAX_NESTED_MODULE_DEPTH = 5
 
 
+def _is_build_output_path(root: Path, path: Path) -> bool:
+    """Return whether *path* is nested under Maven or Gradle build output."""
+    return bool({"target", "build"}.intersection(path.relative_to(root).parts))
+
+
 def _is_module_within_depth(root: Path, module_dir: Path) -> bool:
     return len(module_dir.relative_to(root).parts) <= _MAX_NESTED_MODULE_DEPTH
 
@@ -117,6 +122,7 @@ def discover_gradle_modules(repo_root: Path) -> list[tuple[str, Path, str | None
         for filename in ("build.gradle", "build.gradle.kts")
         for path in root.rglob(filename)
         if _is_module_within_depth(root, path.parent)
+        if not _is_build_output_path(root, path)
     }
     if any((root / filename).is_file() for filename in ("settings.gradle", "settings.gradle.kts")):
         module_dirs.add(root)

@@ -195,6 +195,20 @@ def test_discover_modules_excludes_maven_and_gradle_modules_in_test_directories(
     ]
 
 
+def test_discover_modules_excludes_maven_and_gradle_build_outputs(tmp_path: Path) -> None:
+    production = tmp_path / "orders"
+    generated_maven = production / "target/generated-sources/openapi"
+    generated_gradle = production / "build/generated/source/openapi"
+    production.mkdir(parents=True)
+    generated_maven.mkdir(parents=True)
+    generated_gradle.mkdir(parents=True)
+    _write_pom(production / "pom.xml", "orders-api", "1.0.0")
+    _write_pom(generated_maven / "pom.xml", "openapi-spring", "1.0.0")
+    (generated_gradle / "build.gradle").write_text("archivesBaseName = 'generated-api'\n")
+
+    assert [module.name for module in discover_modules(tmp_path)] == ["orders-api"]
+
+
 def test_duplicate_artifact_names_are_persisted_with_distinct_identities(tmp_path: Path) -> None:
     north = tmp_path / "north"
     south = tmp_path / "south"
