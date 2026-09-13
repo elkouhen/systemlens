@@ -18,6 +18,7 @@ from systemlens.domain.models import (
 )
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency
 from systemlens.render.graph_view_model import build_graph_view_model
+from systemlens.render._graph_view_helpers import _vscode_file_uri
 
 
 _ASSET_ROOT = Path(__file__).parent / "assets"
@@ -73,6 +74,13 @@ def render_graph_html(
         architecture_relations=architecture_relations,
         integration_methods=integration_methods,
     )
+    def flow_vscode_uri(flow: CodeFlow) -> str | None:
+        if root_path is not None:
+            return _vscode_file_uri(root_path / flow.path, root_path, source_roots, flow.start_line)
+        if source_roots:
+            return _vscode_file_uri(source_roots[0] / flow.path, root_path, source_roots, flow.start_line)
+        return None
+
     serialized_code_flows = [
         {
             "id": flow.id,
@@ -84,6 +92,7 @@ def render_graph_html(
             "status": flow.status,
             "confidence": flow.confidence,
             "reason": flow.reason,
+            "vscode_uri": flow_vscode_uri(flow),
             "steps": [
                 {
                     "order": step.order,

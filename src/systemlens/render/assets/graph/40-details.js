@@ -275,13 +275,30 @@
         meta.className = "reference-meta";
         meta.textContent = `${flow.status === "cycle" ? "Cycle détecté · " : ""}${flow.steps?.length || 0} étape(s) · ${flow.method}`;
         summary.append(label, meta);
-        const action = document.createElement("button");
-        action.type = "button";
-        action.className = "reference-action";
-        action.textContent = "Afficher";
-        action.title = "Afficher ce flux dans le graphe";
-        action.addEventListener("click", () => showCodeFlow(flow));
-        item.append(summary, action);
+        const actions = document.createElement("div");
+        actions.className = "associated-code-flow-actions";
+        const listAction = document.createElement("button");
+        listAction.type = "button";
+        listAction.className = "reference-action";
+        listAction.textContent = "Flux";
+        listAction.title = "Ouvrir ce flux dans l’onglet Flux";
+        listAction.addEventListener("click", () => openCodeFlowInList(flow));
+        const graphAction = document.createElement("button");
+        graphAction.type = "button";
+        graphAction.className = "reference-action";
+        graphAction.textContent = "Graphe";
+        graphAction.title = "Afficher ce flux dans le graphe";
+        graphAction.addEventListener("click", () => showCodeFlow(flow));
+        actions.append(listAction, graphAction);
+        if (flow.vscode_uri) {
+          const sourceAction = document.createElement("a");
+          sourceAction.className = "reference-action";
+          sourceAction.href = flow.vscode_uri;
+          sourceAction.textContent = "Java";
+          sourceAction.title = `Ouvrir ${flow.method} dans VS Code`;
+          actions.append(sourceAction);
+        }
+        item.append(summary, actions);
         list.append(item);
       });
       section.append(heading, list);

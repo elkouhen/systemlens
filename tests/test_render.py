@@ -99,7 +99,10 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     assert 'createDetailsGroup("Flux internes")' in document
     assert 'appendPortFlowList("Flux potentiels", uniqueConnections, flowGroup)' in document
     assert 'appendAssociatedCodeFlows("Flux associés", associatedFlows);' in document
-    assert 'action.textContent = "Afficher";' in document
+    assert 'listAction.textContent = "Flux";' in document
+    assert 'graphAction.textContent = "Graphe";' in document
+    assert 'sourceAction.textContent = "Java";' in document
+    assert 'function openCodeFlowInList(flow)' in document
     assert 'port-flow-arrow' in document
     assert 'flux interne${flowCount > 1 ? "s" : ""}' in document
 

@@ -127,6 +127,14 @@
       syncCodeFlowSelection();
     }
 
+    function openCodeFlowInList(flow) {
+      codeFlowCycles.setAttribute("aria-pressed", "false");
+      codeFlowFilter.value = flow.id;
+      setToolbarTab("flows");
+      renderCodeFlows();
+      requestAnimationFrame(() => codeFlowsList.querySelector(`[data-flow-id="${flow.id}"]`)?.scrollIntoView({ block: "nearest" }));
+    }
+
     function nodePathForCodeFlow(flow) {
       const serviceId = nodeIdForCodeFlowResource(flow.module, "microservice");
       if (!serviceId) return null;
@@ -181,9 +189,13 @@
       const title = document.createElement("div");
       title.className = "reference-title code-flow-title";
       title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`;
-      const javaMethod = document.createElement("code");
+      const javaMethod = flow.vscode_uri ? document.createElement("a") : document.createElement("code");
       javaMethod.className = "code-flow-method";
       javaMethod.textContent = `Méthode Java : ${flow.method}`;
+      if (flow.vscode_uri) {
+        javaMethod.href = flow.vscode_uri;
+        javaMethod.title = `Ouvrir ${flow.method} dans VS Code`;
+      }
       const badges = document.createElement("div");
       badges.className = "code-flow-badges";
       [flow.status === "cycle" ? "Cycle détecté" : (flow.status === "potential" ? "Potentiel" : (flow.status || "Statut inconnu")), `Confiance ${codeFlowConfidenceLabel(flow.confidence)}`].forEach(label => {

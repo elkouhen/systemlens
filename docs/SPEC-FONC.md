@@ -159,6 +159,9 @@ isolate them immediately.
 Selecting a microservice also lists every persisted code flow owned by or
 traversing one of its indexed ports. Each compact entry identifies its trigger,
 length, cycle status and Java method, and can display that flow in Explorer.
+Those entries provide separate actions to open the Flux tab, highlight the
+flow in Explorer, or open its persisted Java method evidence in VS Code when
+the export has a resolvable source root.
 
 The HTML microservice export provides an inspector for each statically typed
 Topic message. It shows the indexed payload-type identity, message topic, and
