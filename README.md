@@ -124,17 +124,18 @@ apm run typecheck
 Keep `apm.yml` under version control. The generated `apm_modules/` directory is
 local installation state and must not be committed.
 
-## What SystemLens extracts
+## What SystemLens indexes
 
-- Spring MVC/WebFlux routes and Spring Data REST exposure.
-- Feign, RestTemplate, WebClient and gateway HTTP calls.
-- Topic producers/consumers (including Spring Kafka and Spring Cloud Stream), including explicit
-  payload types when available.
-- Maven/Gradle projects and dependencies, OpenAPI contracts, Data usage and
-  Spring properties.
-- Optional Kafka facts from Markdown and JSON manifests.
-- Optional Deployment and StatefulSet CPU/RAM dimensions from the active local
-  Kubernetes context with `systemlens index --kubernetes`.
+SystemLens builds a local inventory of the following architecture resources:
+
+| Resource | Source evidence indexed |
+|---|---|
+| Microservices and Java modules | Maven/Gradle projects, Spring application entry points, and build dependencies. |
+| REST APIs | Spring MVC/WebFlux and Spring Data REST routes, plus Feign, RestTemplate, WebClient, and gateway calls. |
+| Messaging topics | Kafka producers and consumers, including Spring Kafka and Spring Cloud Stream; known Java payload types are retained. |
+| MongoDB collections | MongoDB collection access and the Java method that reads or writes it. |
+| Supporting contracts | OpenAPI contracts, Spring properties, and optional Kafka facts from Markdown or JSON manifests. |
+| Kubernetes capacity (optional) | Deployment and StatefulSet CPU/RAM dimensions from the active local context, with `systemlens index --kubernetes`. |
 
 Dynamic paths and topic values are retained as dynamic facts; the tool does not
 guess a concrete dependency.
@@ -145,16 +146,16 @@ SystemLens stores source-evidenced, typed relations rather than inferring a
 generic dependency graph. The main relations are:
 
 - **Build:** a Maven or Gradle project `depends_on` another project.
-- **REST:** a service `provides` a route or `calls` an API. It creates a
-  service-to-service `calls_service` link only when the client target is
-  explicitly and uniquely resolved (for example from an HTTP host, `lb://`
-  name, or configured client alias).
-- **Messaging:** a service `publishes` to or `consumes` a Kafka topic; a
-  concrete producer/consumer match also produces a `publishes_to`
-  service-to-service link. When known, the graph links a topic to the Java
-  payload type it publishes or consumes.
-- **Data:** a service and the owning method `reads` or `writes` an indexed
-  MongoDB collection.
+- **API calls:** a microservice `provides` a REST route or `calls` an API. A
+  `calls_service` relation between two microservices is created only when the
+  client target is explicitly and uniquely resolved (for example from an HTTP
+  host, `lb://` name, or configured client alias).
+- **Topic read/write:** a microservice `publishes` (writes) to or `consumes`
+  (reads) a Kafka topic. A concrete producer/consumer match also produces a
+  `publishes_to` relation between the two microservices. When known, the graph
+  links a topic to the Java payload type it publishes or consumes.
+- **MongoDB read/write:** a microservice and its owning Java method `reads` or
+  `writes` an indexed MongoDB collection.
 - **Implementation and configuration:** an indexed Java class `implements` an
   API or topic endpoint and may `uses_configuration` a referenced Spring
   property.
