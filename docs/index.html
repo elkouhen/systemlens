@@ -48,6 +48,41 @@
       <p>At the root of a Java/Spring repository, run <code>systemlens init</code>, <code>systemlens doctor</code>, and <code>systemlens index</code>. Use <code>systemlens mcp</code> for an agent workflow, or export an interactive graph with <code>systemlens export microservices --html architecture.html</code>.</p>
     </section>
 
+    <section aria-labelledby="indexed-architecture" style="margin-top: 48px">
+      <h2 id="indexed-architecture">What gets indexed</h2>
+      <p>SystemLens creates a local, source-evidenced inventory of the resources that make up a Java/Spring architecture and the links between them.</p>
+      <div class="cards">
+        <article class="card">
+          <h2>Microservices and APIs</h2>
+          <p>Indexes Maven/Gradle projects, Spring application entry points, REST routes, and outbound Feign, RestTemplate, WebClient, or gateway calls.</p>
+        </article>
+        <article class="card">
+          <h2>Topics and data</h2>
+          <p>Indexes Kafka topics, their producers and consumers, known Java message types, MongoDB collections, and the Java methods that access them.</p>
+        </article>
+        <article class="card">
+          <h2>Supporting evidence</h2>
+          <p>Also retains build dependencies, OpenAPI contracts, Spring properties, and optional Kafka manifests or Kubernetes capacity facts.</p>
+        </article>
+      </div>
+      <h2 style="margin-top: 28px">Relations in the graph</h2>
+      <div class="cards">
+        <article class="card">
+          <h2>API calls</h2>
+          <p>A microservice provides a REST route or calls an API. A direct microservice-to-microservice link is added only when the target is explicit and uniquely resolved.</p>
+        </article>
+        <article class="card">
+          <h2>Topic read/write</h2>
+          <p>A microservice writes to a topic by publishing and reads from it by consuming. A concrete producer/consumer match creates a directed link between the two services.</p>
+        </article>
+        <article class="card">
+          <h2>MongoDB read/write</h2>
+          <p>A microservice and its Java method are linked to each indexed MongoDB collection they read or write.</p>
+        </article>
+      </div>
+      <p>Every relation retains source evidence and confidence. Dynamic or unresolved values remain visible as evidence; SystemLens never turns them into a guessed internal dependency.</p>
+    </section>
+
     <section aria-labelledby="skill" style="margin-top: 48px">
       <h2 id="skill">Use SystemLens with a coding agent</h2>
       <p><a href="https://github.com/elkouhen/systemlens-skill">systemlens-skill</a> gives a coding agent a disciplined, evidence-first workflow. The reviewable JSON facts manifest is the durable handoff: import it into its own namespace to complete the local inventory without changing source-derived facts.</p>
