@@ -258,6 +258,25 @@ def materialize_codeql_code_flows(
                 for target, call in adjacency.get(current.id, []):
                     next_route = [*route, (target, call)]
                     if target.id == entry.id or any(previous.id == target.id for previous, _ in route):
+                        steps = [_endpoint_step(trigger, 1)]
+                        for order, (hop, edge) in enumerate(next_route, start=2):
+                            steps.append(CodeFlowStep(
+                                order=order, kind="method_call", name=hop.qualified_method,
+                                path=edge.caller_path, start_line=edge.call_line, end_line=edge.call_line,
+                            ))
+                        flows.append(CodeFlow(
+                            id=compute_code_flow_id(
+                                entry.module, entry.path, entry.qualified_method,
+                                _endpoint_step(trigger, 1).kind,
+                                f"{trigger.topic}|cycle|" + ".".join(hop.id for hop, _ in next_route),
+                            ),
+                            module=entry.module, method=entry.qualified_method,
+                            path=entry.path, start_line=entry.start_line, end_line=entry.end_line,
+                            status="cycle",
+                            confidence="low" if any(edge.dispatch_confidence == "possible" for _hop, edge in next_route) else "medium",
+                            reason="CodeQL found a cyclic call path from this indexed entry method.",
+                            steps=tuple(steps),
+                        ))
                         continue
                     if target.output_endpoint_ids:
                         steps = [_endpoint_step(trigger, 1)]
@@ -342,6 +361,22 @@ def materialize_kafka_flow_continuations(
                 continue
             for consumer in consumers.get(publish.name, []):
                 if consumer.id == flow.id or consumer.id in seen_consumers:
+                    cycle_steps = [*flow.steps[:publish_index + 1], consumer.steps[0]]
+                    steps = tuple(
+                        CodeFlowStep(**{**step.__dict__, "order": order})
+                        for order, step in enumerate(cycle_steps, start=1)
+                    )
+                    continuations.append(CodeFlow(
+                        id=compute_code_flow_id(
+                            flow.module, flow.path, flow.method, steps[0].kind,
+                            f"{steps[0].name}|kafka-cycle|{consumer.id}",
+                        ),
+                        module=flow.module, method=flow.method, path=flow.path,
+                        start_line=flow.start_line, end_line=flow.end_line,
+                        status="cycle", confidence="low" if "low" in {flow.confidence, consumer.confidence} else "medium",
+                        reason="A concrete Kafka publication returns to an already traversed message entry.",
+                        steps=steps,
+                    ))
                     continue
                 combined_steps = [*flow.steps[:publish_index + 1], *consumer.steps]
                 steps = tuple(

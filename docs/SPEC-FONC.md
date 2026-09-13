@@ -151,6 +151,11 @@ Its primary card title is the input trigger, while the Java method remains
 visible as source evidence. If SystemLens cannot reconcile every displayed
 step to a persisted topology edge, the card explicitly marks the graph view as
 having partial edges rather than presenting it as a verified path.
+Detected CodeQL call cycles and concrete Kafka topic cycles are retained as
+potential `cycle` flows. They are visually distinguished and listed before
+non-cyclic flows; within each category, longer flows appear first.
+The Flux tab provides a `Cycles only` control with the detected-cycle count to
+isolate them immediately.
 
 The HTML microservice export provides an inspector for each statically typed
 Topic message. It shows the indexed payload-type identity, message topic, and

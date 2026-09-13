@@ -96,6 +96,10 @@
     .references-section h3 { margin: 0; color: #59708d; font-size: var(--type-kicker); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .references-list { display: grid; gap: 7px; max-height: min(50vh, 460px); margin: 0; padding: 0 3px 8px 0; overflow: auto; scroll-padding-bottom: 8px; list-style: none; }
     .reference-filter-input { width: 100%; }
+    .code-flow-filter-controls { display: flex; gap: 6px; align-items: center; }
+    .code-flow-filter-controls .reference-filter-input { min-width: 0; flex: 1 1 auto; }
+    .code-flow-cycle-filter { width: auto !important; height: 30px !important; padding: 0 8px !important; border-color: #fecaca !important; color: #991b1b !important; background: #fff7f7 !important; font-size: 10px !important; font-weight: 800; white-space: nowrap; }
+    .code-flow-cycle-filter[aria-pressed="true"] { border-color: #dc2626 !important; color: #fff !important; background: #dc2626 !important; }
     .resource-analyses { border-top: 1px solid #e2e8f0; padding-top: 10px; }
     .resource-analyses summary { color: #315f9b; font-size: 12px; font-weight: 700; cursor: pointer; }
     .resource-analysis-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
@@ -106,6 +110,7 @@
     .reference-action { width: auto !important; height: 29px !important; padding: 0 8px !important; color: #1d4f91 !important; border-color: #bfdbfe !important; background: #eff6ff !important; font-size: 11px !important; font-weight: 700; white-space: nowrap; }
     .reference-action:disabled { color: #94a3b8 !important; border-color: #e2e8f0 !important; background: #f8fafc !important; cursor: not-allowed; }
     .code-flow-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; min-width: 0; padding: 11px; border: 1px solid #e2e8f0; border-left: 3px solid #7c3aed; border-radius: var(--widget-radius); background: #faf8ff; }
+    .code-flow-item.is-cycle { border-color: #ef4444; border-left-color: #dc2626; background: #fff7f7; }
     .code-flow-item.is-selected { border-color: var(--ui-selected); border-left-color: var(--ui-selected); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-selected) 18%, transparent); }
     .code-flow-header { display: grid; gap: 5px; min-width: 0; }
     .code-flow-title { font-size: 13px; line-height: 1.35; }

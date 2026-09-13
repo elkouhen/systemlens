@@ -3,6 +3,7 @@
     const codeFlowsList = document.getElementById("code-flows");
     const codeFlowsEmpty = document.getElementById("code-flows-empty");
     const codeFlowFilter = document.getElementById("code-flow-filter");
+    const codeFlowCycles = document.getElementById("code-flow-cycles");
     const codeFlowsTitle = document.getElementById("code-flows-title");
 
     function codeFlowLocation(step) {
@@ -25,6 +26,16 @@
       return ({ low: "faible", medium: "moyenne", high: "élevée" })[confidence]
         || confidence
         || "inconnue";
+    }
+
+    function codeFlowPriority(flow) {
+      return flow.status === "cycle" ? 1 : 0;
+    }
+
+    function compareCodeFlows(left, right) {
+      return codeFlowPriority(right) - codeFlowPriority(left)
+        || (right.steps?.length || 0) - (left.steps?.length || 0)
+        || left.id.localeCompare(right.id);
     }
 
     function isGraphPortStep(step) {
@@ -162,7 +173,7 @@
     function codeFlowItem(flow) {
       const item = document.createElement("li");
       const selected = graphState.selectedCodeFlowId === flow.id;
-      item.className = `code-flow-item${selected ? " is-selected" : ""}`;
+      item.className = `code-flow-item${flow.status === "cycle" ? " is-cycle" : ""}${selected ? " is-selected" : ""}`;
       item.dataset.flowId = flow.id;
       const header = document.createElement("div");
       header.className = "code-flow-header";
@@ -175,7 +186,7 @@
       javaMethod.textContent = `Méthode Java : ${flow.method}`;
       const badges = document.createElement("div");
       badges.className = "code-flow-badges";
-      [flow.status === "potential" ? "Potentiel" : (flow.status || "Statut inconnu"), `Confiance ${codeFlowConfidenceLabel(flow.confidence)}`].forEach(label => {
+      [flow.status === "cycle" ? "Cycle détecté" : (flow.status === "potential" ? "Potentiel" : (flow.status || "Statut inconnu")), `Confiance ${codeFlowConfidenceLabel(flow.confidence)}`].forEach(label => {
         const badge = document.createElement("span");
         badge.className = "detail-badge";
         badge.textContent = label;
@@ -246,6 +257,7 @@
 
     function renderCodeFlows() {
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
+      const cyclesOnly = codeFlowCycles.getAttribute("aria-pressed") === "true";
       const visible = codeFlows.filter(flow => {
         const haystack = [
           flow.id,
@@ -254,7 +266,7 @@
           flow.reason,
           ...(flow.steps || []).flatMap(step => [step.kind, step.name, step.path]),
         ].join(" ").toLocaleLowerCase();
-        return !query || haystack.includes(query);
+        return (!query || haystack.includes(query)) && (!cyclesOnly || flow.status === "cycle");
       });
       const byService = new Map();
       visible.forEach(flow => {
@@ -267,7 +279,11 @@
         byService.set(flow.module, service);
       });
       const serviceGroups = [...byService.entries()]
-        .sort(([left], [right]) => left.localeCompare(right))
+        .sort(([leftName, leftTriggers], [rightName, rightTriggers]) => (
+          Math.max(...[...rightTriggers.values()].flat().map(codeFlowPriority))
+          - Math.max(...[...leftTriggers.values()].flat().map(codeFlowPriority))
+          || leftName.localeCompare(rightName)
+        ))
         .map(([service, triggers], serviceIndex) => {
           const group = document.createElement("li");
           group.className = "code-flow-service-group";
@@ -284,7 +300,7 @@
             triggerSummary.textContent = `${trigger} · ${flows.length} flux · cliquer pour afficher`;
             const list = document.createElement("ul");
             list.className = "references-list code-flow-group-list";
-            list.append(...flows.map(codeFlowItem));
+            list.append(...flows.sort(compareCodeFlows).map(codeFlowItem));
             triggerDetails.append(triggerSummary, list);
             serviceDetails.append(triggerDetails);
           });
@@ -294,9 +310,18 @@
       codeFlowsList.replaceChildren(...serviceGroups);
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
-      codeFlowsTitle.textContent = `Flux de code (${codeFlows.length})`;
+      const cycleCount = codeFlows.filter(flow => flow.status === "cycle").length;
+      codeFlowCycles.textContent = `Cycles uniquement (${cycleCount})`;
+      codeFlowCycles.disabled = cycleCount === 0;
+      codeFlowsTitle.textContent = cyclesOnly
+        ? `Cycles détectés (${visible.length})`
+        : `Flux de code (${visible.length}/${codeFlows.length})`;
     }
 
     codeFlowFilter.addEventListener("input", renderCodeFlows);
+    codeFlowCycles.addEventListener("click", () => {
+      codeFlowCycles.setAttribute("aria-pressed", String(codeFlowCycles.getAttribute("aria-pressed") !== "true"));
+      renderCodeFlows();
+    });
     document.getElementById("flows-panel").addEventListener("systemlens:flows-open", renderCodeFlows);
     renderCodeFlows();

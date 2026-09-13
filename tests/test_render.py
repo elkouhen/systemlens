@@ -116,6 +116,7 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     assert "#graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }" in document
     assert '<div id="graph-flow-tooltips" aria-hidden="true"></div>' in document
     assert '<p id="graph-flow-status" hidden></p>' in document
+    assert 'id="code-flow-cycles"' in document
     assert ".graph-namespace-title { position: absolute; z-index: 4;" in document
     assert "#graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }" in document
     assert ".graph-project-group-title { position: absolute; z-index: 5;" in document
@@ -465,9 +466,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`' in document
     assert 'Relations topologiques incomplètes' in document
     assert 'graphFlowStatus.hidden = context.topologyReconciled !== false;' in document
+    assert 'Cycles uniquement (${cycleCount})' in document
     assert "graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)" in document
     assert 'size: 3.5' in document
     assert 'is-code-flow-node' in document
+    assert 'Selection must not change the card geometry' in document
     assert 'tooltip.className = "graph-flow-port-tooltip"' in document
     assert '`${isTrigger ? "Déclencheur" : "Effet"} : ${flowStep.name}`' in document
     assert '`Méthode Java : ${indexedPort?.method || "inconnue"}`' in document
