@@ -139,6 +139,32 @@ local installation state and must not be committed.
 Dynamic paths and topic values are retained as dynamic facts; the tool does not
 guess a concrete dependency.
 
+## Relations in the indexed graph
+
+SystemLens stores source-evidenced, typed relations rather than inferring a
+generic dependency graph. The main relations are:
+
+- **Build:** a Maven or Gradle project `depends_on` another project.
+- **REST:** a service `provides` a route or `calls` an API. It creates a
+  service-to-service `calls_service` link only when the client target is
+  explicitly and uniquely resolved (for example from an HTTP host, `lb://`
+  name, or configured client alias).
+- **Messaging:** a service `publishes` to or `consumes` a Kafka topic; a
+  concrete producer/consumer match also produces a `publishes_to`
+  service-to-service link. When known, the graph links a topic to the Java
+  payload type it publishes or consumes.
+- **Data:** a service and the owning method `reads` or `writes` an indexed
+  MongoDB collection.
+- **Implementation and configuration:** an indexed Java class `implements` an
+  API or topic endpoint and may `uses_configuration` a referenced Spring
+  property.
+
+Each relation retains its relative source location, origin and confidence.
+Unresolved or dynamic endpoints remain visible as evidence, but never become a
+guessed internal link. CodeQL, when installed, additionally extends potential
+code flows across statically resolved Java method calls; these flows are kept
+separate from asserted topology relations.
+
 ## Connect an MCP client
 
 Start the stdio server from an initialized repository:
