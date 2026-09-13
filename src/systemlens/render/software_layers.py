@@ -5,7 +5,8 @@ from pathlib import Path
 
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
-from systemlens.render.namespaces import project_namespace, project_namespace_path
+from systemlens.render.namespaces import project_namespace_path
+from systemlens.conventions.strategy1.layers import classify_module
 
 _SOFTWARE_LAYERS_HTML_TEMPLATE = (
     Path(__file__).parent / "assets" / "software_layers.html"
@@ -47,26 +48,8 @@ def software_layer(
     identify their matching layers. Without Strategy1, these names remain
     ordinary project names and do not alter the portable default classification.
     """
-    name = module.name.casefold()
-    if strategy1 and project_namespace(module, root_path).casefold() == "portail":
-        return "api"
-    if strategy1 and project_namespace(module, root_path).casefold() == "cycle-de-vie":
-        return "orchestration"
-    if strategy1 and name.startswith(("persistence-", "repository-", "storage-", "data-")) or (
-        strategy1 and name.endswith(("-persistence", "-repository", "-storage", "-data"))
-    ):
-        return "persistence"
-    if strategy1 and name.startswith("domain-"):
-        return "domain"
-    if strategy1 and (
-        name.startswith(("api-", "contract-", "contracts-", "infra-", "infrastructure-", "shared-", "common-", "lib-", "library-"))
-        or name.endswith(("-api", "-contract", "-contracts", "-infra", "-infrastructure"))
-    ):
-        if name.startswith(("api-", "contract-", "contracts-")) or name.endswith(("-api", "-contract", "-contracts")):
-            return "api"
-        if name.startswith(("infra-", "infrastructure-")) or name.endswith(("-infra", "-infrastructure")):
-            return "infrastructure"
-        return "shared"
+    if strategy1 and (layer := classify_module(module, root_path)) is not None:
+        return layer
     if module.starts_application:
         return "application"
     return "module"

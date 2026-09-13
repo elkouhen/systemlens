@@ -7,6 +7,7 @@ from systemlens.domain.models import ArchitectureRelation, MessageEndpoint, comp
 from systemlens.domain.graph import build_graph, group_endpoints_by_module
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.scanner import local_spring_application_names
+from systemlens.conventions.strategy1.kafka import request_reply_topic_pairs
 
 
 class _RelationEvidence(TypedDict):
@@ -135,15 +136,11 @@ def build_architecture_relations(
             for endpoint in endpoints
             if endpoint.system == "kafka" and not endpoint.topic_dynamic
         }
-        for reply_topic in sorted(kafka_topics):
-            if not reply_topic.casefold().startswith("retour_"):
-                continue
-            request_topic = reply_topic[len("retour_"):]
-            if request_topic and request_topic in kafka_topics:
-                add(_relation(
-                    "topic", request_topic, "request_reply", "topic", reply_topic,
-                    origin="derived", confidence="high",
-                ))
+        for request_topic, reply_topic in request_reply_topic_pairs(kafka_topics):
+            add(_relation(
+                "topic", request_topic, "request_reply", "topic", reply_topic,
+                origin="derived", confidence="high",
+            ))
 
     for module in modules:
         identity = module_identity(module)

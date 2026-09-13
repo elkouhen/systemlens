@@ -76,7 +76,7 @@ index and reports incomplete or stale sources as warnings.
 **Context:** Some repositories encode Kafka and REST dependencies through
 project-specific naming conventions.
 
-**Decision:** Keep these in `--topic-strategy strategy1`, separate from the
+**Decision:** Keep these in `--strategy strategy1`, separate from the
 default AST extractor. Strategy1 also enables the repository-specific layer
 conventions: project namespace `PORTAIL` identifies API modules, project
 namespace `CYCLE-DE-VIE` identifies Orchestration modules, and the `DOMAIN-*`
@@ -87,6 +87,27 @@ related forms) are also Strategy1-only conventions.
 
 **Consequences:** Default indexing remains framework-oriented and portable;
 Strategy1 facts are explicitly identified as convention-derived.
+
+## ADR-5a — Strategy1 conventions live behind one pack boundary
+
+**Status:** Accepted.
+
+**Context:** Strategy1 rules had grown across Kafka extraction, REST target
+resolution, OpenAPI declaration invalidation, topic request/reply derivation,
+and layer classification. Passing a `strategy1` boolean through generic modules
+made it easy for repository-specific rules to leak into portable analysis.
+
+**Decision:** Place Strategy1 rules in `systemlens.conventions.strategy1` and
+make generic indexing, relation, graph, and rendering modules call that pack's
+explicit operations. Scanner modules retain compatibility façades for their
+historical public imports, but the indexing pipeline uses the convention pack.
+The pack owns convention normalization and matching; the core retains CLI
+selection, persisted profile metadata, SQLite facts, and generic graph/export
+mechanics.
+
+**Consequences:** The default profile does not invoke Strategy1 matching.
+Future repository convention packs get a clear extension boundary without a
+schema fork, while existing third-party scanner imports remain usable.
 
 ## ADR-6 — SystemLens is the public product and state namespace
 

@@ -21,7 +21,7 @@ class Config:
     include: list[str] = field(default_factory=lambda: list(DEFAULT_INCLUDE))
     exclude: list[str] = field(default_factory=lambda: list(DEFAULT_EXCLUDE))
     min_severity: str = DEFAULT_MIN_SEVERITY
-    topic_strategy: str = "default"
+    strategy: str = "default"
     codeql_enabled: bool = True
     codeql_max_hops: int = 12
     codeql_max_paths: int = 10_000
@@ -48,9 +48,14 @@ def load_config(repo_root: Path) -> Config:
     analysis = raw.get("analysis", {})
     if not isinstance(analysis, dict):
         raise ConfigError("analysis doit être un objet YAML.")
-    topic_strategy = analysis.get("topic_strategy", "default")
-    if topic_strategy not in VALID_TOPIC_STRATEGIES:
-        raise ConfigError(f"analysis.topic_strategy invalide : {topic_strategy!r}.")
+    if "strategy" in analysis and "topic_strategy" in analysis:
+        raise ConfigError(
+            "analysis.strategy et analysis.topic_strategy ne peuvent pas être utilisés ensemble."
+        )
+    strategy_key = "strategy" if "strategy" in analysis else "topic_strategy"
+    strategy = analysis.get(strategy_key, "default")
+    if strategy not in VALID_TOPIC_STRATEGIES:
+        raise ConfigError(f"analysis.{strategy_key} invalide : {strategy!r}.")
     codeql_enabled = analysis.get("codeql", True)
     if not isinstance(codeql_enabled, bool):
         raise ConfigError("analysis.codeql doit être un booléen.")
@@ -65,7 +70,7 @@ def load_config(repo_root: Path) -> Config:
         include=list(raw.get("include", DEFAULT_INCLUDE)),
         exclude=list(raw.get("exclude", DEFAULT_EXCLUDE)),
         min_severity=min_severity,
-        topic_strategy=topic_strategy,
+        strategy=strategy,
         codeql_enabled=codeql_enabled,
         codeql_max_hops=codeql_max_hops,
         codeql_max_paths=codeql_max_paths,
@@ -86,7 +91,7 @@ def init_config(repo_root: Path) -> Path:
         "min_severity": DEFAULT_MIN_SEVERITY,
         "root_path": ".",
         "analysis": {
-            "topic_strategy": "default", "codeql": True,
+            "strategy": "default", "codeql": True,
             "codeql_max_hops": 12, "codeql_max_paths": 10_000,
             "disabled_extractors": [],
         },

@@ -1156,7 +1156,7 @@ def index_cmd(
     ),
     topic_strategy: Optional[Literal["default", "strategy1"]] = typer.Option(
         None,
-        "--topic-strategy",
+        "--strategy",
         help="Stratégie de conventions : default ou strategy1 (Kafka getTopics/KafkaListener et constantes REST en majuscules).",
     ),
     kubernetes: bool = typer.Option(
@@ -1191,7 +1191,7 @@ def index_cmd(
     """Indexe le code avec les extracteurs AST (incrémental par défaut).
 
     Exemples : `systemlens index`, `systemlens index --full`,
-    `systemlens index --topic-strategy strategy1`, `systemlens index --no-codeql`,
+    `systemlens index --strategy strategy1`, `systemlens index --no-codeql`,
     `systemlens index --manifest TOPICS.md`,
     `systemlens index --manifest kafka-flow-graph-anonymous.json`.
     """

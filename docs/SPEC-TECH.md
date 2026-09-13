@@ -414,7 +414,7 @@ explicit listener parameter or client generic signature. For topic-based
 `KafkaTemplate.send` overloads, the final argument is the payload: preceding
 arguments are a partition and/or key and are never reported as a message type.
 
-With `--topic-strategy strategy1`, every method whose name starts with
+With `--strategy strategy1`, every method whose name starts with
 `envoyerMessageKafka` is an additional producer convention, including
 `envoyerMessageKafkaRequest(topic, payload)` and
 `envoyerMessageKafkaReply(topic, payload)`. A first argument shaped as
@@ -478,6 +478,15 @@ six edges visually even at the compact symbol size.
 The manifest extractors add explicitly declared Kafka facts from Markdown and
 JSON. Strategy1 is separate and opt-in because it embeds repository-specific
 naming conventions.
+
+Strategy1 is implemented behind the `systemlens.conventions.strategy1` pack.
+The pack owns Kafka topic normalization and replacement, REST target hints,
+OpenAPI-declaration invalidation, request/reply topic pairing, and module-layer
+classification. Generic indexing, graph, relation, and rendering modules call
+those explicit operations only when the persisted profile selects Strategy1.
+CLI selection, profile persistence, SQLite snapshots, and export mechanics
+remain outside the pack. Historical scanner imports remain compatibility
+façades and do not make Strategy1 active by default.
 
 `systemlens analyze indexing-issues --json` exposes unresolved facts as a structured
 remediation review payload. Each endpoint-backed issue has a stable code,

@@ -41,6 +41,14 @@ def test_init_writes_ast_only_configuration(tmp_path: Path, monkeypatch) -> None
     assert "embedding_model:" not in content
 
 
+def test_index_cli_exposes_the_generic_strategy_option() -> None:
+    result = RUNNER.invoke(app, ["index", "--help"])
+
+    assert result.exit_code == 0
+    assert "--strategy" in result.output
+    assert "--topic-strategy" not in result.output
+
+
 def test_ast_extractors_find_rest_and_kafka_facts() -> None:
     rest = infer_framework_endpoints(FIXTURES / "rest_repo")
     kafka = infer_kafka_endpoints(FIXTURES / "kafka_repo")

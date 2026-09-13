@@ -26,7 +26,7 @@ exclude: [".git/**", ".venv/**", "node_modules/**", ".systemlens/**"]
 min_severity: INFO
 root_path: .
 analysis:
-  topic_strategy: default
+  strategy: default
   codeql: true
   codeql_max_hops: 12
   codeql_max_paths: 10000
@@ -54,7 +54,7 @@ in the architecture snapshot.
 | `systemlens init` | Creates `.systemlens/config.yml`; it never overwrites an existing file. |
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
-| `systemlens index [MANIFEST]... [--full] [--topic-strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--codeql-database DIR] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. When the local CodeQL CLI is available, it creates a temporary source-only Java database and extends code flows across resolved method calls. `--codeql-database` reuses an already-built Java database instead. `--no-codeql` disables CodeQL for this run only and retains AST-only flows; it cannot be combined with `--codeql-database`. `--kubernetes` queries the active `kubectl` context for Deployments and StatefulSets; `--kubernetes-namespace` restricts it to one runtime namespace. `--disable` can independently disable the `properties`, `module-architecture`, or `module-tree-sitter` extractor and may be repeated. |
+| `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--codeql-database DIR] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. When the local CodeQL CLI is available, it creates a temporary source-only Java database and extends code flows across resolved method calls. `--codeql-database` reuses an already-built Java database instead. `--strategy` selects the convention pack for this index; `--no-codeql` disables CodeQL for this run only and retains AST-only flows; it cannot be combined with `--codeql-database`. `--kubernetes` queries the active `kubectl` context for Deployments and StatefulSets; `--kubernetes-namespace` restricts it to one runtime namespace. `--disable` can independently disable the `properties`, `module-architecture`, or `module-tree-sitter` extractor and may be repeated. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts an AI fact manifest into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
 | `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows from an entry point to a source-evidenced external effect, within one method or across CodeQL-resolved method calls. |
@@ -89,7 +89,7 @@ scanned=<N> skipped=<N> +integrations=<N> -integrations=<N>
 
 The first AST-only run removes stale results from the retired analyzer.
 
-`--topic-strategy strategy1` is opt-in. The selected strategy is persisted with
+`--strategy strategy1` is opt-in. The selected strategy is persisted with
 the index and reused by incremental MCP reindexing and all derived views.
 `--no-codeql` is a one-run override of `analysis.codeql`; it is intended for a
 fast AST-only index and does not modify `.systemlens/config.yml`.
@@ -633,7 +633,7 @@ or package); Persistence filters by class, package, collection, or service. A
 persistent inventory status reports whether unresolved indexing facts exist and
 opens their review view.
 
-`--topic-strategy strategy1` adds opt-in convention extraction for selected
+`--strategy strategy1` adds opt-in convention extraction for selected
 `getTopics()` accessors and `envoyerMessageKafka*(kafkaProperties.getTopics().getXxx(), payload)` calls
 (including `envoyerMessageKafkaRequest` and `envoyerMessageKafkaReply`),
 `${kafka.topics.*.name}` expressions and configured REST client constants. It

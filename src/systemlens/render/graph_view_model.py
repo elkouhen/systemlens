@@ -22,6 +22,7 @@ from systemlens.domain.module_inventory import (
     module_identity,
 )
 from systemlens.domain.code_flows import IntegrationMethod
+from systemlens.conventions.strategy1.kafka import request_reply_topic_pairs
 from systemlens.render.namespaces import project_namespace, project_namespace_path
 from systemlens.render.software_layers import software_layer
 from systemlens.render._graph_view_helpers import (
@@ -775,7 +776,6 @@ def build_graph_view_model(
             )
         ]
     if request_reply_strategy1:
-        known_topics = set(kafka_topics)
         links += [
             {
                 "source": f"kafka_topic:{request_topic}",
@@ -786,9 +786,7 @@ def build_graph_view_model(
                 "confidence": "conventional",
                 "provenance": "Strategy1 · retour_",
             }
-            for reply_topic in kafka_topics
-            if reply_topic.casefold().startswith("retour_")
-            if (request_topic := reply_topic[len("retour_"):]) in known_topics
+            for request_topic, reply_topic in request_reply_topic_pairs(set(kafka_topics))
         ]
     # Complexity is derived from the links exported to the browser, rather
     # than from a parallel graph projection. A microservice score is exactly:

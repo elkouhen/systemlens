@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 import yaml
 
 from systemlens.discovery.java import parser as java_parser
+from systemlens.conventions.strategy1.indexing import is_openapi_declaration_path
 from systemlens.discovery.build import maven as maven_module
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.discovery.build.modules import discover_rest_controllers, maven_module_dependencies
@@ -773,13 +774,8 @@ def _openapi_generator_contract_owners(repo_root_str: str) -> dict[str, str | No
 def _openapi_generator_contract_paths(repo_root_str: str) -> tuple[str, ...]:
     return tuple(sorted(_openapi_generator_contract_owners(repo_root_str)))
 def _is_strategy1_openapi_declaration_path(rel_path: str) -> bool:
-    """Recognize a Strategy1 microservice API publication declaration."""
-    path = Path(rel_path)
-    parts = path.parts
-    return path.suffix.casefold() == ".rest" and any(
-        parts[index:index + 4] == ("src", "main", "resources", "openapi")
-        for index in range(max(0, len(parts) - 3))
-    )
+    """Compatibility façade for the moved Strategy1 declaration rule."""
+    return is_openapi_declaration_path(rel_path)
 def _is_openapi_contract_path(repo_root: Path, rel_path: str) -> bool:
     path = repo_root / rel_path
     return path.name in {

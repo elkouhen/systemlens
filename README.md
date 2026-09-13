@@ -99,7 +99,7 @@ It serves the current directory at `http://127.0.0.1:8000/`; use `--port` or
 `--host` to change the local address.
 
 Indexing is incremental. Use `systemlens index --full` after a broad change.
-Use `systemlens index --topic-strategy strategy1` only for repositories that
+Use `systemlens index --strategy strategy1` only for repositories that
 follow the documented Strategy1 Kafka and REST conventions.
 
 ## Agent Package Manager (APM)

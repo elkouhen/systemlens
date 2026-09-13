@@ -6,6 +6,10 @@ from pathlib import Path
 
 from systemlens.infrastructure.config import Config
 from systemlens.domain.module_inventory import DiscoveredModule
+from systemlens.conventions.strategy1.indexing import (
+    is_openapi_declaration_path,
+    requires_full_reindex,
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -41,12 +45,8 @@ def is_test_source(rel_path: str) -> bool:
 
 
 def _is_strategy1_openapi_declaration(rel_path: str) -> bool:
-    path = Path(rel_path)
-    parts = path.parts
-    return path.suffix.casefold() == ".rest" and any(
-        parts[index:index + 4] == ("src", "main", "resources", "openapi")
-        for index in range(max(0, len(parts) - 3))
-    )
+    """Compatibility façade for the moved Strategy1 convention."""
+    return is_openapi_declaration_path(rel_path)
 
 
 def strategy1_requires_full_reindex(
@@ -54,19 +54,8 @@ def strategy1_requires_full_reindex(
     repo_root: Path,
     modules: list[DiscoveredModule],
 ) -> bool:
-    """Return whether a delta can change service-to-contract attribution."""
-    model_roots = {
-        module.path.resolve().relative_to(repo_root.resolve()).as_posix()
-        for module in modules
-        if module.name.casefold().startswith("model-")
-        and module.path.resolve() != repo_root.resolve()
-    }
-    for rel_path in changed_or_deleted:
-        if rel_path.endswith("pom.xml") or _is_strategy1_openapi_declaration(rel_path):
-            return True
-        if any(rel_path == root or rel_path.startswith(f"{root}/") for root in model_roots):
-            return True
-    return False
+    """Compatibility façade for the moved Strategy1 convention."""
+    return requires_full_reindex(changed_or_deleted, repo_root, modules)
 
 
 def is_git_metadata(rel_path: str) -> bool:

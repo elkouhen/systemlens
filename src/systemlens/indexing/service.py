@@ -15,7 +15,11 @@ from systemlens.indexing.file_inventory import (
     is_in_excluded_module as _is_in_excluded_module,
     list_repo_files as _list_repo_files,
     sha256_file as _sha256_file,
-    strategy1_requires_full_reindex as _strategy1_requires_full_reindex,
+)
+from systemlens.conventions.strategy1.indexing import requires_full_reindex
+from systemlens.conventions.strategy1.kafka import (
+    apply_kafka_endpoints,
+    infer_kafka_endpoints as infer_strategy1_kafka_endpoints,
 )
 from systemlens.indexing.materializers import materialize_openapi_contracts
 from systemlens.indexing.code_flows import (
@@ -41,10 +45,8 @@ from systemlens.scanner import (
     clear_analysis_caches,
     infer_framework_endpoints,
     infer_kafka_endpoints,
-    infer_kafka_topic_strategy1_endpoints,
     infer_json_kafka_flow_graph_endpoints,
     infer_markdown_topic_manifest_endpoints,
-    apply_kafka_topic_strategy1,
 )
 from systemlens.storage.sqlite import Store
 from systemlens.discovery.kubernetes import KubernetesDiscoveryError, discover_workloads
@@ -91,7 +93,7 @@ def _index_repo(
     kubernetes_namespace: str | None = None,
     codeql_database: Path | None = None,
 ) -> IndexReport:
-    topic_strategy = topic_strategy or config.topic_strategy
+    topic_strategy = topic_strategy or config.strategy
     disabled = disabled or frozenset(config.disabled_extractors)
     # BACKLOG-16 P2 : purge les lru_cache d'analyse best-effort (package
     # Java, propriétés Spring, module Maven/Gradle) avant de relire le
@@ -188,7 +190,7 @@ def _index_repo(
     if (
         topic_strategy == "strategy1"
         and not full
-        and _strategy1_requires_full_reindex(
+        and requires_full_reindex(
             set(changed) | set(deleted), repo_root, discovered_modules
         )
     ):
@@ -235,8 +237,8 @@ def _index_repo(
         endpoints.extend(infer_markdown_topic_manifest_endpoints(repo_root, changed))
         endpoints.extend(infer_json_kafka_flow_graph_endpoints(repo_root, changed))
         if topic_strategy == "strategy1":
-            endpoints = apply_kafka_topic_strategy1(
-                endpoints, infer_kafka_topic_strategy1_endpoints(repo_root, changed)
+            endpoints = apply_kafka_endpoints(
+                endpoints, infer_strategy1_kafka_endpoints(repo_root, changed)
             )
         _trace("endpoint_inference.end", endpoints=len(endpoints))
 

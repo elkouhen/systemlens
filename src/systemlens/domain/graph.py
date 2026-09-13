@@ -9,6 +9,10 @@ import time
 from typing import Literal
 
 from systemlens.domain.models import ArchitectureRelation, MessageEndpoint
+from systemlens.conventions.strategy1.rest import (
+    external_service_name as _strategy1_external_service_name,
+    rest_target_service_hint,
+)
 
 
 @dataclass(frozen=True)
@@ -114,17 +118,9 @@ def _segment_matches(call_segment: str, serve_segment: str) -> bool:
     return _is_template_segment(serve_segment) or _is_template_segment(call_segment)
 
 
-_SERVICE_URL_GETTER_RE = re.compile(r"\.get([A-Z][A-Za-z0-9]*)ServiceUrl\(")
 _SERVICE_URL_HOST_RE = re.compile(r"https?://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", re.IGNORECASE)
 _LOAD_BALANCED_URI_RE = re.compile(r"lb://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", re.IGNORECASE)
 _CONFIGURED_API_DOMAIN_RE = re.compile(r"\bsystemlens-api-domain:([a-z0-9][a-z0-9-]*)\b", re.IGNORECASE)
-_EXTERNAL_MICROSERVICE_RE = re.compile(
-    r"\bsystemlens-external-microservice:([a-z0-9][a-z0-9-]*)\b", re.IGNORECASE
-)
-
-
-def _camel_to_kebab(name: str) -> str:
-    return re.sub(r"(?<!^)(?=[A-Z])", "-", name).lower()
 
 
 def configured_api_client_domain(endpoint: MessageEndpoint) -> str | None:
@@ -142,8 +138,7 @@ def configured_api_client_domain(endpoint: MessageEndpoint) -> str | None:
 
 def external_microservice_name(endpoint: MessageEndpoint) -> str | None:
     """Return the external microservice explicitly named by a Strategy1 call."""
-    match = _EXTERNAL_MICROSERVICE_RE.search(endpoint.snippet)
-    return match.group(1).lower() if match is not None else None
+    return _strategy1_external_service_name(endpoint)
 
 
 def external_microservice_names(edges: list[GraphEdge]) -> set[str]:
@@ -159,9 +154,8 @@ def _rest_target_service_hint(
     call: MessageEndpoint, *, strategy1: bool = False
 ) -> str | None:
     if strategy1:
-        getter_match = _SERVICE_URL_GETTER_RE.search(call.snippet)
-        if getter_match is not None:
-            return f"{_camel_to_kebab(getter_match.group(1))}-service"
+        if hint := rest_target_service_hint(call):
+            return hint
     host_match = _SERVICE_URL_HOST_RE.search(call.snippet)
     if host_match is not None:
         return host_match.group(1).lower()
