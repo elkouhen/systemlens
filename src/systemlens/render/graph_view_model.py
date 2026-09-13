@@ -737,20 +737,43 @@ def build_graph_view_model(
         if link_key not in link_keys:
             links.append(link)
             link_keys.add(link_key)
-    links += [
-        {
-            "source": f"{source_kind}:{source_name}",
-            "target": f"{target_kind}:{target_name}",
-            "kind": kind,
-            "direction": "data_access",
-            "label": label,
-            "confidence": "inferred",
-            "provenance": "module inventory",
-        }
-        for source_kind, source_name, target_kind, target_name, label, kind in _mongodb_visual_graph_edges(
-            collections_by_service
-        )
+    persisted_mongodb_relations = [
+        relation
+        for relation in architecture_relations or []
+        if relation.source_kind in {"microservice", "service"}
+        and relation.target_kind == "collection"
+        and relation.relation in {"reads", "writes"}
     ]
+    if persisted_mongodb_relations:
+        links += [
+            {
+                "source": f"microservice:{relation.source_name}",
+                "target": f"mongodb_collection:{relation.source_name}:{relation.target_name}",
+                "kind": "mongodb",
+                "direction": "data_access",
+                "label": "lit" if relation.relation == "reads" else "écrit",
+                "confidence": "proved" if relation.confidence == "high" else "inferred",
+                "provenance": relation.origin,
+            }
+            for relation in persisted_mongodb_relations
+        ]
+    else:
+        # Compatibility fallback for callers that only provide the older module
+        # inventory and therefore have no source-level MongoDB relation proof.
+        links += [
+            {
+                "source": f"{source_kind}:{source_name}",
+                "target": f"{target_kind}:{target_name}",
+                "kind": kind,
+                "direction": "data_access",
+                "label": label,
+                "confidence": "inferred",
+                "provenance": "module inventory",
+            }
+            for source_kind, source_name, target_kind, target_name, label, kind in _mongodb_visual_graph_edges(
+                collections_by_service
+            )
+        ]
     if request_reply_strategy1:
         known_topics = set(kafka_topics)
         links += [

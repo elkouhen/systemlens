@@ -321,7 +321,10 @@ Selecting a reconciled code flow records its persisted ID only in transient
 graph state. Node and edge reducers use the exact reconciled path sets to raise
 their size and contrast, while HTML card overlays add flow-specific highlight
 and dimming classes. This presentation state does not infer or persist any new
-architecture relation. Flow selection does not activate the graph detail
+architecture relation. During Kafka-flow reconciliation, each publication starts
+from the service reached by the preceding step; a composed
+`topic → consumer → topic` chain therefore preserves its concrete topic-read
+and topic-write edges across microservices. Flow selection does not activate the graph detail
 panel: the Flux panel and its existing DOM stay mounted with unchanged geometry;
 selection only updates the card marker and action label in place.
 The code-flow camera fit projects only the reconciled path nodes, derives a
@@ -403,7 +406,9 @@ reported as unresolved rather than creating an internal edge.
 `infer_kafka_endpoints` recognises Spring Kafka listeners and send sites,
 KafkaTemplate/ProducerRecord usage and Spring Cloud Stream StreamBridge calls.
 It preserves dynamic topic expressions and derives a payload type only from an
-explicit listener parameter or client generic signature.
+explicit listener parameter or client generic signature. For topic-based
+`KafkaTemplate.send` overloads, the final argument is the payload: preceding
+arguments are a partition and/or key and are never reported as a message type.
 
 With `--topic-strategy strategy1`, every method whose name starts with
 `envoyerMessageKafka` is an additional producer convention, including
@@ -421,6 +426,11 @@ The graph export exposes only the indexed Java payload-type identities linked
 to Kafka endpoints. It does not resolve Java DTO fields or enums from source
 roots at render time; recursive DTO inspection requires a future persisted
 schema contract.
+
+When persisted architecture relations are available, the HTML topology projects
+their source evidence and confidence for MongoDB reads and writes. The older
+module-inventory projection remains only as a compatibility fallback when that
+snapshot relation set is absent.
 
 The graph export keeps an exact-name index of its visual nodes. Its client-side
 itinerary algorithm performs directed breadth-first searches for each pair of

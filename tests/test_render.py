@@ -3,7 +3,7 @@ import re
 from dataclasses import replace
 from pathlib import Path
 
-from systemlens.domain.models import GraphFact, MessageEndpoint, compute_endpoint_id
+from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint, compute_endpoint_id
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.discovery.kubernetes import KubernetesWorkload
@@ -96,8 +96,8 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     assert node["internal_flow_count"] == 1
     assert 'createDetailsGroup("Ports d\'intégration")' not in document
     assert 'appendList("Entrées", ports.filter(port => port.direction === "in")' not in document
-    assert 'createDetailsGroup("Flux internes")' in document
-    assert 'appendPortFlowList("Flux potentiels", uniqueConnections, flowGroup)' in document
+    assert 'createDetailsGroup("Flux internes", false)' in document
+    assert 'appendPortFlowList("Flux potentiels", uniqueConnections, internalFlowsGroup)' in document
     assert 'appendAssociatedCodeFlows("Flux associés", associatedFlows);' in document
     assert 'listAction.textContent = "Flux";' in document
     assert 'graphAction.textContent = "Graphe";' in document
@@ -105,6 +105,14 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     assert 'function openCodeFlowInList(flow)' in document
     assert 'port-flow-arrow' in document
     assert 'flux interne${flowCount > 1 ? "s" : ""}' in document
+
+
+def test_code_flow_reconciliation_publishes_from_the_current_consumer_service() -> None:
+    document = render_graph_html({}, [])
+
+    assert 'const publishingService = nodes.at(-1);' in document
+    assert 'nodeDataById.get(publishingService)?.kind !== "microservice"' in document
+    assert 'nodes.at(-1) !== serviceId && !addHop(serviceId' not in document
 
 
 def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> None:
@@ -128,6 +136,26 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     assert "left: var(--workspace-left, 0px);" in document
     assert '<div id="details" class="is-empty">' in document
     assert "#details.is-empty { display: none; }" in document
+
+
+def test_graph_uses_persisted_mongodb_relation_evidence_when_available() -> None:
+    document = render_graph_html(
+        {"inventory": []}, [], {"inventory": ["orders"]},
+        architecture_relations=[ArchitectureRelation(
+            id="mongo-write", source_kind="microservice", source_name="inventory",
+            relation="writes", target_kind="collection", target_name="orders",
+            origin="code", confidence="high", path="src/InventoryPersistence.java", start_line=12,
+        )],
+    )
+
+    links = _html_graph_data(document)["links"]
+
+    assert {
+        "source": "microservice:inventory", "target": "mongodb_collection:inventory:orders",
+        "kind": "mongodb", "direction": "data_access", "label": "écrit",
+        "confidence": "proved", "provenance": "code",
+    } in links
+    assert not any(link["provenance"] == "module inventory" for link in links)
     assert '.toolbar.has-details .toolbar-panel { display: none; }' in document
     assert (
         '.toolbar.has-details #graph-panel > :not(#graph-context):not(#layout-status) '

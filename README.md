@@ -17,6 +17,20 @@ then inspect the result through MCP, the CLI, or the HTML export.
 uv tool install systemlens
 ```
 
+### Development dependencies
+
+On macOS and Ubuntu, provision the local development tools (uv, Java 17, and
+the optional CodeQL Java analyser) with:
+
+```bash
+scripts/install-dependencies.sh
+```
+
+Use `scripts/install-dependencies.sh --help` to omit an optional component or
+preview the commands. The script runs `uv sync --group dev` to create the
+project environment. CodeQL extends indexed flows across resolved Java method
+calls; SystemLens remains usable with AST-only flows when it is absent.
+
 ## Quick start
 
 From the root of the Java/Spring repository:

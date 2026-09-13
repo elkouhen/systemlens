@@ -272,6 +272,24 @@ def test_index_uses_automatic_codeql_database_when_available(
     assert observed_roots == [repo]
 
 
+def test_cli_no_codeql_keeps_ast_only_flow_indexing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
+    monkeypatch.chdir(repo)
+    assert RUNNER.invoke(app, ["init"]).exit_code == 0
+
+    result = RUNNER.invoke(app, ["index", "--no-codeql"])
+
+    assert result.exit_code == 0
+    assert "CodeQL" not in result.output
+    with Store(repo, readonly=True) as store:
+        assert [step.kind for step in store.all_code_flows()[0].steps] == [
+            "message_entry", "http_call",
+        ]
+
+
 def test_store_round_trips_code_flow_steps(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     shutil.copytree(FIXTURES / "endpoint_index_repo", repo)

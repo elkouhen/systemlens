@@ -2,7 +2,7 @@ import json
 import os
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal, Optional, cast
 
@@ -42,7 +42,7 @@ from systemlens.domain.code_flows import CodeFlow
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.indexing.service import index_repo
 from systemlens.indexing.freshness import endpoint_inventory_warning
-from systemlens.domain.models import GraphFact, MessageEndpoint
+from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.models import ExtractionDiagnostic
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.discovery.build.modules import (
@@ -1174,6 +1174,11 @@ def index_cmd(
         "--codeql-database",
         help="Base Java CodeQL existante à réutiliser au lieu de la base temporaire automatique.",
     ),
+    no_codeql: bool = typer.Option(
+        False,
+        "--no-codeql",
+        help="Désactive CodeQL pour cette indexation ; conserve les flux AST locaux.",
+    ),
     disable: list[str] = typer.Option(
         None,
         "--disable",
@@ -1186,7 +1191,7 @@ def index_cmd(
     """Indexe le code avec les extracteurs AST (incrémental par défaut).
 
     Exemples : `systemlens index`, `systemlens index --full`,
-    `systemlens index --topic-strategy strategy1`,
+    `systemlens index --topic-strategy strategy1`, `systemlens index --no-codeql`,
     `systemlens index --manifest TOPICS.md`,
     `systemlens index --manifest kafka-flow-graph-anonymous.json`.
     """
@@ -1207,11 +1212,16 @@ def index_cmd(
             err=True,
         )
         raise typer.Exit(code=2)
+    if no_codeql and codeql_database is not None:
+        typer.echo("`--no-codeql` ne peut pas être combiné avec `--codeql-database`.", err=True)
+        raise typer.Exit(code=2)
     try:
         config = load_config(repo_root)
     except ConfigError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
+    if no_codeql:
+        config = replace(config, codeql_enabled=False)
 
     _trace_index("store.open.begin")
     with Store(repo_root) as store:
@@ -1267,6 +1277,7 @@ class _MicroserviceGraphData:
     graph_facts: list[GraphFact] | None = None
     code_flows: list[CodeFlow] | None = None
     integration_methods: list[IntegrationMethod] | None = None
+    architecture_relations: list[ArchitectureRelation] | None = None
 
 
 def _load_microservice_graph(
@@ -1290,6 +1301,7 @@ def _load_microservice_graph(
     )
     with Store(repo_root, readonly=True) as store:
         graph_facts = store.all_graph_facts()
+        architecture_relations = store.all_architecture_relations()
     return _MicroserviceGraphData(
         projection.services_by_name,
         projection.edges,
@@ -1307,6 +1319,7 @@ def _load_microservice_graph(
         graph_facts,
         inventory.code_flows,
         projection.integration_methods,
+        architecture_relations,
     )
 
 
@@ -1327,7 +1340,7 @@ def _load_ai_graph(path: Path) -> _MicroserviceGraphData:
         ]
     result = render_graph_json(list(services), edges, [], warnings=issues, cross_module_data_available=True)
     return _MicroserviceGraphData(
-        services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, graph_facts, [], []
+        services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, graph_facts, [], [], []
     )
 
 
@@ -1481,6 +1494,7 @@ def export_microservices_cmd(
                 kafka_dto_definitions=graph_data.kafka_dto_definitions,
                 openapi_contracts=graph_data.openapi_contracts,
                 graph_facts=getattr(graph_data, "graph_facts", []),
+                architecture_relations=getattr(graph_data, "architecture_relations", []),
                 code_flows=getattr(graph_data, "code_flows", []),
                 integration_methods=getattr(graph_data, "integration_methods", []),
             ),

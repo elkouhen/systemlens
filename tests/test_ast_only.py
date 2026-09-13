@@ -148,6 +148,32 @@ record OrderCreated(String id) {}
     ] == [("produce", "orders.created", "OrderCreated", "spring-kafka")]
 
 
+def test_kafka_template_send_uses_final_argument_as_payload_when_a_key_is_present(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """package com.example;
+import org.springframework.kafka.core.KafkaTemplate;
+class Publisher {
+  private KafkaTemplate<String, StockDepleted> template;
+  void publish(String productId) {
+    template.send("stock.depleted", productId, new StockDepleted(productId));
+  }
+}
+record StockDepleted(String productId) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_endpoints(tmp_path)
+
+    assert [(endpoint.topic, endpoint.message_type) for endpoint in endpoints] == [
+        ("stock.depleted", "StockDepleted")
+    ]
+
+
 def test_strategy1_recognizes_envoyer_message_kafka_method_family_as_producers(tmp_path: Path) -> None:
     source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
     source.parent.mkdir(parents=True)

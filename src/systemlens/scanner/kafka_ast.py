@@ -265,12 +265,17 @@ def _declared_identifier_payload_type(source: bytes, invocation, var_name: str) 
                 return _message_payload_type(java_parser.node_text(source, type_node))
     return None
 def _producer_send_payload_type(source: bytes, invocation) -> str | None:
-    """Type de payload d'un ``send(topic, payload, ...)`` : 2e argument
-    résolu contre une déclaration Java proche."""
+    """Type de payload d'un ``KafkaTemplate.send``.
+
+    Spring Kafka places the value last in every topic-based overload, including
+    ``send(topic, key, value)`` and ``send(topic, partition, key, value)``.
+    Resolve that argument first so a key (often ``String``) is never reported
+    as the message payload.
+    """
     method = java_parser.enclosing(invocation, "method_declaration")
     if method is None:
         return None
-    for arg in java_parser.argument_nodes(invocation)[1:]:
+    for arg in reversed(java_parser.argument_nodes(invocation)[1:]):
         if arg.type == "identifier":
             variable_name = java_parser.node_text(source, arg)
             payload = _method_param_payload_type(source, method, variable_name)

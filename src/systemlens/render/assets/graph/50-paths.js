@@ -640,15 +640,15 @@
               return [{ input, output, target: output.target || null, via }];
             });
           });
-        const flowGroup = createDetailsGroup("Flux internes");
           const uniqueConnections = connections.filter((connection, index) => (
             connections.findIndex(candidate => (
               candidate.input.endpoint_id === connection.input.endpoint_id
               && candidate.output.endpoint_id === connection.output.endpoint_id
             )) === index
           ));
-          appendPortFlowList("Flux potentiels", uniqueConnections, flowGroup);
-          discardEmptyDetailsGroup(flowGroup);
+          const internalFlowsGroup = createDetailsGroup("Flux internes", false);
+          appendPortFlowList("Flux potentiels", uniqueConnections, internalFlowsGroup);
+          discardEmptyDetailsGroup(internalFlowsGroup);
         }
         if (kubernetesWorkloads.length) {
           const kubernetesGroup = createDetailsGroup("Kubernetes");

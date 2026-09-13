@@ -54,7 +54,7 @@ in the architecture snapshot.
 | `systemlens init` | Creates `.systemlens/config.yml`; it never overwrites an existing file. |
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
-| `systemlens index [MANIFEST]... [--full] [--topic-strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--codeql-database DIR] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. When the local CodeQL CLI is available, it creates a temporary source-only Java database and extends code flows across resolved method calls. `--codeql-database` reuses an already-built Java database instead. `--kubernetes` queries the active `kubectl` context for Deployments and StatefulSets; `--kubernetes-namespace` restricts it to one runtime namespace. `--disable` can independently disable the `properties`, `module-architecture`, or `module-tree-sitter` extractor and may be repeated. |
+| `systemlens index [MANIFEST]... [--full] [--topic-strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--codeql-database DIR] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. When the local CodeQL CLI is available, it creates a temporary source-only Java database and extends code flows across resolved method calls. `--codeql-database` reuses an already-built Java database instead. `--no-codeql` disables CodeQL for this run only and retains AST-only flows; it cannot be combined with `--codeql-database`. `--kubernetes` queries the active `kubectl` context for Deployments and StatefulSets; `--kubernetes-namespace` restricts it to one runtime namespace. `--disable` can independently disable the `properties`, `module-architecture`, or `module-tree-sitter` extractor and may be repeated. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts an AI fact manifest into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
 | `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows from an entry point to a source-evidenced external effect, within one method or across CodeQL-resolved method calls. |
@@ -91,6 +91,8 @@ The first AST-only run removes stale results from the retired analyzer.
 
 `--topic-strategy strategy1` is opt-in. The selected strategy is persisted with
 the index and reused by incremental MCP reindexing and all derived views.
+`--no-codeql` is a one-run override of `analysis.codeql`; it is intended for a
+fast AST-only index and does not modify `.systemlens/config.yml`.
 `--disable` accepts `properties`,
 `module-architecture`, and `module-tree-sitter`.
 
@@ -167,12 +169,15 @@ potential `cycle` flows. They are visually distinguished and listed before
 non-cyclic flows; within each category, longer flows appear first.
 The Flux tab provides a `Cycles only` control with the detected-cycle count to
 isolate them immediately.
-Selecting a microservice also lists every persisted code flow owned by or
-traversing one of its indexed ports. Each compact entry identifies its trigger,
-length, cycle status and Java method, and can display that flow in Explorer.
-Those entries provide separate actions to open the Flux tab, highlight the
-flow in Explorer, or open its persisted Java method evidence in VS Code when
-the export has a resolvable source root.
+Selecting a microservice distinguishes two flow views. `Flux associés` remains
+visible and lists every persisted flow owned by the service or traversing one
+of its indexed ports; each compact entry identifies its trigger, length, cycle
+status and Java method, and can display that flow in Explorer. `Flux internes`
+is a separate collapsed disclosure by default: it contains only the potential
+local input-to-output paths inferred within that service, so the primary
+inspector remains focused on topology. Associated-flow entries provide actions
+to open the Flux tab, highlight the flow in Explorer, or open its persisted
+Java method evidence in VS Code when the export has a resolvable source root.
 
 The HTML microservice export provides an inspector for each statically typed
 Topic message. It shows the indexed payload-type identity, message topic, and

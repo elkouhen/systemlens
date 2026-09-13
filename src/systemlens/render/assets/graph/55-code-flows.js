@@ -98,7 +98,8 @@
           continue;
         }
         if (step.kind === "message_publish") {
-          if (nodes.at(-1) !== serviceId && !addHop(serviceId, link => link.kind === "kafka")) return null;
+          const publishingService = nodes.at(-1);
+          if (nodeDataById.get(publishingService)?.kind !== "microservice") return null;
           const topic = topicId(step.name);
           if (!topic || !addHop(topic, link => link.kind === "kafka")) return null;
           continue;
