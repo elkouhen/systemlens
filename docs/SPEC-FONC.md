@@ -28,6 +28,7 @@ root_path: .
 analysis:
   strategy: default
   codeql: true
+  codeql_timeout_seconds: 600
   codeql_max_hops: 12
   codeql_max_paths: 10000
   disabled_extractors: []
@@ -80,7 +81,8 @@ in the architecture snapshot.
 | `systemlens mcp` | Starts the stdio MCP server. |
 
 `systemlens index` reports its file delta, AST analysis stage, persisted endpoint
-count and materialized relations. It then prints a next-step hint towards the
+count and materialized relations. Each completed indexing stage prints its elapsed
+wall-clock duration with two decimal places, followed by the total duration. It then prints a next-step hint towards the
 interactive microservice HTML export. Its result line is:
 
 ```text
@@ -93,6 +95,9 @@ The first AST-only run removes stale results from the retired analyzer.
 the index and reused by incremental MCP reindexing and all derived views.
 `--no-codeql` is a one-run override of `analysis.codeql`; it is intended for a
 fast AST-only index and does not modify `.systemlens/config.yml`.
+`analysis.codeql_timeout_seconds` sets the positive timeout in seconds for each
+CodeQL subprocess (temporary database creation, query execution, and BQRS
+decoding); its default is `600` seconds.
 `--disable` accepts `properties`,
 `module-architecture`, and `module-tree-sitter`.
 

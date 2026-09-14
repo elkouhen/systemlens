@@ -72,6 +72,30 @@ def _report_progress(progress: ProgressCallback | None, message: str) -> None:
         progress(message)
 
 
+class _IndexStageTimer:
+    """Emit elapsed durations for the human-facing indexing stages."""
+
+    def __init__(self, progress: ProgressCallback | None) -> None:
+        self.progress = progress
+        self.started_at: dict[str, float] = {}
+        self.total_started_at = time.perf_counter()
+
+    def begin(self, stage: str, message: str) -> None:
+        _report_progress(self.progress, message)
+        self.started_at[stage] = time.perf_counter()
+
+    def end(self, stage: str, label: str) -> None:
+        started_at = self.started_at.pop(stage, None)
+        if started_at is not None:
+            _report_progress(self.progress, f"  ✓ {label} : {time.perf_counter() - started_at:.2f} s")
+
+    def total(self) -> None:
+        _report_progress(
+            self.progress,
+            f"✓ Indexation terminée en {time.perf_counter() - self.total_started_at:.2f} s.",
+        )
+
+
 def _trace(stage: str, **fields: object) -> None:
     """Emit an opt-in, flush-on-write checkpoint for native crash diagnosis."""
     if os.environ.get("SYSTEMLENS_TRACE") != "1":
@@ -93,6 +117,7 @@ def _index_repo(
     kubernetes_namespace: str | None = None,
     codeql_database: Path | None = None,
 ) -> IndexReport:
+    timer = _IndexStageTimer(progress)
     topic_strategy = topic_strategy or config.strategy
     disabled = disabled or frozenset(config.disabled_extractors)
     # BACKLOG-16 P2 : purge les lru_cache d'analyse best-effort (package
@@ -107,7 +132,7 @@ def _index_repo(
     )
     discovered_modules = []
     if "properties" not in disabled:
-        _report_progress(progress, "→ Indexation : découverte des projets Maven/Gradle...")
+        timer.begin("modules", "→ Indexation : découverte des projets Maven/Gradle...")
         _trace("modules.begin")
         discovered_modules = discover_modules(
             repo_root,
@@ -123,6 +148,7 @@ def _index_repo(
                 )
         else:
             _report_progress(progress, "  • aucun projet Maven/Gradle détecté ; scan de la racine.")
+        timer.end("modules", "découverte des projets Maven/Gradle")
     # Les signatures d'inventaire d'endpoints pilotent aussi l'analyse locale
     # (REST/Kafka/manifests) : une évolution du code
     # d'inférence ou de stratégie Kafka doit forcer un rescan complet.
@@ -135,7 +161,7 @@ def _index_repo(
     if store.get_meta("analysis_inputs_signature") != analysis_inputs_signature:
         full = True
 
-    _report_progress(progress, "→ Indexation : inventaire des fichiers du dépôt...")
+    timer.begin("files", "→ Indexation : inventaire des fichiers du dépôt...")
     _trace("files.begin")
     excluded_module_paths = discover_excluded_module_paths(repo_root)
     current_hashes = _list_repo_files(
@@ -164,6 +190,7 @@ def _index_repo(
             current_hashes[rel_path] = _sha256_file(candidate)
     previous_hashes = store.get_file_hashes()
     _trace("files.end", current=len(current_hashes), previous=len(previous_hashes))
+    timer.end("files", "inventaire des fichiers")
 
     # The module inventory is intentionally materialized with the index rather
     # than reconstructed by `systemlens modules`: its configuration examples describe
@@ -224,7 +251,7 @@ def _index_repo(
     diagnostics: list[ExtractionDiagnostic] = []
     if changed:
         endpoints_removed += store.count_endpoints_for_paths(changed)
-        _report_progress(progress, f"→ Indexation : analyse AST sur {len(changed)} fichier(s)...")
+        timer.begin("ast", f"→ Indexation : analyse AST sur {len(changed)} fichier(s)...")
         _trace("endpoint_inference.begin")
         endpoints.extend(
             infer_framework_endpoints(
@@ -241,13 +268,15 @@ def _index_repo(
                 endpoints, infer_strategy1_kafka_endpoints(repo_root, changed)
             )
         _trace("endpoint_inference.end", endpoints=len(endpoints))
+        timer.end("ast", "analyse AST")
 
-        _report_progress(
-            progress,
+        timer.begin(
+            "endpoints",
             "→ Indexation : écriture des résultats "
             f"({len(endpoints)} endpoint(s)).",
         )
         store.replace_endpoints_for_files(changed, endpoints)
+        timer.end("endpoints", "écriture des endpoints")
         _trace("store.endpoints_written", endpoints=len(endpoints))
         endpoints_added = len(endpoints)
 
@@ -278,12 +307,13 @@ def _index_repo(
     # transactional with the rest of the index and represents the audited
     # repository state, not a partially failed scan.
     if "properties" not in disabled:
-        _report_progress(progress, "→ Indexation : inventaire des projets et propriétés...")
+        timer.begin("properties", "→ Indexation : inventaire des projets et propriétés...")
         _trace("store.modules.begin", count=len(discovered_modules))
         store.replace_modules(discovered_modules)
         module_dependencies = discover_module_dependencies(repo_root, discovered_modules)
         store.replace_module_dependencies(module_dependencies)
         _trace("store.modules.end")
+        timer.end("properties", "inventaire des projets et propriétés")
     else:
         _report_progress(progress, "→ Indexation : propriétés et inventaire des projets désactivés, snapshot conservé.")
 
@@ -291,6 +321,7 @@ def _index_repo(
     relation_dependencies = (
         module_dependencies if "properties" not in disabled else store.all_module_dependencies()
     )
+    timer.begin("relations", "→ Indexation : matérialisation des relations d'architecture...")
     endpoints_by_service: dict[str, list[MessageEndpoint]] = {}
     for endpoint in store.all_endpoints():
         if endpoint.module:
@@ -310,6 +341,7 @@ def _index_repo(
     )
     store.replace_architecture_relations(relations)
     _report_progress(progress, f"→ Indexation : {len(relations)} relation(s) d'architecture matérialisée(s).")
+    timer.end("relations", "matérialisation des relations d'architecture")
 
     if (
         full
@@ -322,6 +354,7 @@ def _index_repo(
             f"paths={config.codeql_max_paths}"
         )
     ):
+        timer.begin("flows", "→ Indexation : matérialisation des flux de code...")
         all_endpoints = store.all_endpoints()
         methods = materialize_integration_methods(
             repo_root, all_endpoints, list(current_hashes), relation_modules
@@ -332,13 +365,19 @@ def _index_repo(
             _report_progress(progress, "→ CodeQL 1/3 : préparation de l'analyse interprocédurale...")
             try:
                 if codeql_database is not None:
-                    calls = extract_codeql_calls(codeql_database)
+                    calls = extract_codeql_calls(
+                        codeql_database, timeout_seconds=config.codeql_timeout_seconds
+                    )
                 else:
                     _report_progress(progress, "→ CodeQL 1/3 : création de la base Java temporaire...")
-                    with automatic_codeql_database(repo_root) as database:
+                    with automatic_codeql_database(
+                        repo_root, timeout_seconds=config.codeql_timeout_seconds
+                    ) as database:
                         assert database is not None
                         _report_progress(progress, "→ CodeQL 2/3 : extraction des appels Java...")
-                        calls = extract_codeql_calls(database)
+                        calls = extract_codeql_calls(
+                            database, timeout_seconds=config.codeql_timeout_seconds
+                        )
             except (CodeQLError, OSError, subprocess.TimeoutExpired) as exc:
                 raise RuntimeError(str(exc)) from exc
             _report_progress(progress, f"→ CodeQL 2/3 : {len(calls)} appel(s) extrait(s), jointure des méthodes...")
@@ -378,8 +417,10 @@ def _index_repo(
             progress,
             f"→ Indexation : {len(flows)} parcours de code potentiel(s) matérialisé(s).",
         )
+        timer.end("flows", "matérialisation des flux de code")
 
     _trace("index_repo.end", scanned=len(changed), skipped=len(unchanged))
+    timer.total()
     return IndexReport(
         scanned=len(changed),
         skipped=len(unchanged),

@@ -62,7 +62,9 @@ def codeql_executable() -> str | None:
 
 
 @contextmanager
-def automatic_codeql_database(repo_root: Path) -> Iterator[Path | None]:
+def automatic_codeql_database(
+    repo_root: Path, timeout_seconds: int = 600,
+) -> Iterator[Path | None]:
     """Create a temporary source-only Java database for one index run.
 
     CodeQL is an optional local prerequisite.  Its absence leaves the AST-only
@@ -80,7 +82,7 @@ def automatic_codeql_database(repo_root: Path) -> Iterator[Path | None]:
             f"--source-root={repo_root.resolve()}", "--build-mode=none",
         ]
         completed = subprocess.run(
-            command, capture_output=True, text=True, timeout=600, check=False,
+            command, capture_output=True, text=True, timeout=timeout_seconds, check=False,
         )
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip()
@@ -88,7 +90,9 @@ def automatic_codeql_database(repo_root: Path) -> Iterator[Path | None]:
         yield database
 
 
-def extract_codeql_calls(database: Path, executable: str | None = None) -> list[CodeQLCall]:
+def extract_codeql_calls(
+    database: Path, executable: str | None = None, timeout_seconds: int = 600,
+) -> list[CodeQLCall]:
     """Return statically resolved Java method calls from one CodeQL database."""
     if not database.is_dir():
         raise CodeQLError(f"CodeQL database not found: {database}")
@@ -117,7 +121,7 @@ def extract_codeql_calls(database: Path, executable: str | None = None) -> list[
             command,
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=timeout_seconds,
             check=False,
         )
         if completed.returncode != 0:
@@ -125,7 +129,7 @@ def extract_codeql_calls(database: Path, executable: str | None = None) -> list[
             raise CodeQLError(f"CodeQL call graph failed: {detail}")
         decoded = subprocess.run(
             [executable, "bqrs", "decode", str(bqrs), "--format=csv", f"--output={output}"],
-            capture_output=True, text=True, timeout=180, check=False,
+            capture_output=True, text=True, timeout=timeout_seconds, check=False,
         )
         if decoded.returncode != 0:
             detail = (decoded.stderr or decoded.stdout).strip()

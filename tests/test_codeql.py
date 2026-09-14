@@ -7,26 +7,26 @@ from systemlens.indexing import codeql
 def test_automatic_codeql_database_is_source_only_and_temporary(
     tmp_path: Path, monkeypatch
 ) -> None:
-    commands: list[list[str]] = []
+    commands: list[tuple[list[str], int | None]] = []
 
     def run(command: list[str], **_kwargs: object) -> CompletedProcess[str]:
-        commands.append(command)
+        commands.append((command, _kwargs.get("timeout")))
         Path(command[3]).mkdir()
         return CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
     monkeypatch.setattr(codeql.subprocess, "run", run)
 
-    with codeql.automatic_codeql_database(tmp_path) as database:
+    with codeql.automatic_codeql_database(tmp_path, timeout_seconds=42) as database:
         assert database is not None
         assert database.is_dir()
         database_path = database
 
     assert not database_path.exists()
-    assert commands == [[
+    assert commands == [([
         "codeql", "database", "create", str(database_path), "--language=java",
         f"--source-root={tmp_path.resolve()}", "--build-mode=none",
-    ]]
+    ], 42)]
 
 
 def test_automatic_codeql_database_skips_when_codeql_is_unavailable(
@@ -43,10 +43,10 @@ def test_extract_codeql_calls_uses_pinned_local_pack_without_installing(
 ) -> None:
     database = tmp_path / "database"
     database.mkdir()
-    commands: list[list[str]] = []
+    commands: list[tuple[list[str], int | None]] = []
 
     def run(command: list[str], **_kwargs: object) -> CompletedProcess[str]:
-        commands.append(command)
+        commands.append((command, _kwargs.get("timeout")))
         if command[1:3] == ["bqrs", "decode"]:
             output = next(part.removeprefix("--output=") for part in command if part.startswith("--output="))
             Path(output).write_text(
@@ -58,10 +58,13 @@ def test_extract_codeql_calls_uses_pinned_local_pack_without_installing(
 
     monkeypatch.setattr(codeql.subprocess, "run", run)
 
-    calls = codeql.extract_codeql_calls(database, executable="custom-codeql")
+    calls = codeql.extract_codeql_calls(
+        database, executable="custom-codeql", timeout_seconds=42
+    )
 
     assert calls == [codeql.CodeQLCall(
         "com.example.A.run", "A.java", 1, "com.example.B.send", "B.java", 2, 3,
     )]
-    assert all("pack" not in command[1:3] for command in commands)
-    assert all(command[0] == "custom-codeql" for command in commands)
+    assert all("pack" not in command[1:3] for command, _timeout in commands)
+    assert all(command[0] == "custom-codeql" for command, _timeout in commands)
+    assert all(timeout == 42 for _command, timeout in commands)

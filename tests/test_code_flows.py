@@ -258,13 +258,16 @@ def test_index_uses_automatic_codeql_database_when_available(
     observed_roots = []
 
     @contextmanager
-    def automatic_database(root: Path):
+    def automatic_database(root: Path, *, timeout_seconds: int = 600):
         observed_roots.append(root)
+        assert timeout_seconds == 600
         yield tmp_path / "codeql-db"
 
     monkeypatch.setattr(indexing_service, "codeql_executable", lambda: "codeql")
     monkeypatch.setattr(indexing_service, "automatic_codeql_database", automatic_database)
-    monkeypatch.setattr(indexing_service, "extract_codeql_calls", lambda _database: [])
+    monkeypatch.setattr(
+        indexing_service, "extract_codeql_calls", lambda _database, **_kwargs: []
+    )
 
     with Store(repo) as store:
         index_repo(repo, Config(), store)

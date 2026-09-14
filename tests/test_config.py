@@ -20,6 +20,14 @@ def test_load_config_accepts_legacy_topic_strategy_key(tmp_path: Path) -> None:
     assert load_config(tmp_path).strategy == "strategy1"
 
 
+def test_load_config_reads_codeql_timeout_seconds(tmp_path: Path) -> None:
+    state = tmp_path / ".systemlens"
+    state.mkdir()
+    (state / "config.yml").write_text("analysis:\n  codeql_timeout_seconds: 1200\n")
+
+    assert load_config(tmp_path).codeql_timeout_seconds == 1200
+
+
 def test_load_config_rejects_ambiguous_strategy_keys(tmp_path: Path) -> None:
     state = tmp_path / ".systemlens"
     state.mkdir()
