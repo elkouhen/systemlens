@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Give coding agents verified, local Java/Spring architecture context before they change a system.">
-  <title>SystemLens — Verified architecture context for coding agents</title>
+  <meta name="description" content="Understand Java/Spring architecture with a verified, local map of services, APIs, topics, and data.">
+  <title>SystemLens — Understand your Java/Spring architecture</title>
   <style>
     :root { color-scheme: dark; --ink: #e6edf7; --muted: #aab9ce; --surface: #111d33; --line: #29405f; --accent: #59b4ff; --mint: #4fe0ae; }
     * { box-sizing: border-box; }
@@ -59,11 +59,11 @@
 
     <header class="hero">
       <div>
-        <div class="eyebrow">Local architecture intelligence for Java/Spring</div>
-        <h1>Give coding agents verified context before they change your system.</h1>
-        <p>SystemLens indexes services, APIs, Kafka topics, data, and their source evidence into a local snapshot—so an agent can investigate a real architecture without inventing dependencies.</p>
+        <div class="eyebrow">Local architecture intelligence for Java/Spring teams</div>
+        <h1>Understand your system before you change it.</h1>
+        <p>SystemLens turns services, APIs, Kafka topics, data, and their source evidence into a local architecture map. Investigate dependencies, review change impact, and share a trustworthy view of a real codebase.</p>
         <div class="actions">
-          <a class="button primary" href="https://github.com/elkouhen/systemlens-skill">Install the coding-agent skill</a>
+          <a class="button primary" href="https://github.com/elkouhen/systemlens">Get started on GitHub</a>
           <a class="button" href="models/simple-supermarket.html">Explore the live model</a>
         </div>
         <div class="proofs" aria-label="SystemLens guarantees">
@@ -82,7 +82,7 @@
 
     <section aria-labelledby="quickstart">
       <h2 id="quickstart">Get a verified map in three commands</h2>
-      <p>At the root of a Java/Spring repository: <code>systemlens init</code>, <code>systemlens doctor</code>, then <code>systemlens index</code>. Connect with <code>systemlens mcp</code> for an agent workflow, or export the interactive graph with <code>systemlens export microservices --html architecture.html</code>.</p>
+      <p>At the root of a Java/Spring repository, run <code>systemlens init</code>, <code>systemlens doctor</code>, then <code>systemlens index</code>. Export an interactive graph with <code>systemlens export microservices --html architecture.html</code> and use it in a review, investigation, or design discussion.</p>
     </section>
 
     <section aria-labelledby="indexed-architecture" style="margin-top: 48px">
@@ -120,30 +120,25 @@
       <p>Every relation retains source evidence and confidence. Dynamic or unresolved values remain visible as evidence; SystemLens never turns them into a guessed internal dependency.</p>
     </section>
 
-    <section aria-labelledby="skill" style="margin-top: 48px">
-      <h2 id="skill">Use SystemLens with a coding agent</h2>
-      <p><a href="https://github.com/elkouhen/systemlens-skill">systemlens-skill</a> gives a coding agent a disciplined, evidence-first workflow. The reviewable JSON facts manifest is the durable handoff: import it into its own namespace to complete the local inventory without changing source-derived facts.</p>
-      <pre><code>npx skills add elkouhen/systemlens-skill
-uv tool install systemlens
+    <section aria-labelledby="workflows" style="margin-top: 48px">
+      <h2 id="workflows">Use the map in your daily work</h2>
+      <p>SystemLens keeps its findings local and grounded in source evidence, so the same map can support investigation, delivery, and architecture review without replacing engineering judgement.</p>
+      <pre><code>uv tool install systemlens
 
 # In the Java/Spring repository you want to understand
 systemlens init
 systemlens doctor
 systemlens index
 
-# Have the agent write reviewable, relative-evidence facts in JSON.
-# Import the facts into the AI architecture namespace.
-systemlens import-facts architecture.ai-graph.pass-001.json \
-  --namespace ai-architecture
+# Export a model for a review, an investigation, or a handoff.
 systemlens export microservices --html architecture.html</code></pre>
-      <div class="workflow" aria-label="systemlens-skill workflow">
-        <article class="step"><strong>1. Index</strong>Install the skill, then initialize and index the repository locally.</article>
-        <article class="step"><strong>2. Describe</strong>Have the agent inspect source evidence and write a JSON facts manifest for what needs enriching.</article>
-        <article class="step"><strong>3. Import</strong>Import the reviewed manifest into its own namespace; source-derived facts remain unchanged.</article>
-        <article class="step"><strong>4. Export</strong>Generate the merged architecture graph for review or handoff.</article>
+      <div class="workflow" aria-label="SystemLens user workflow">
+        <article class="step"><strong>1. Index</strong>Build a local snapshot of the repository you need to understand.</article>
+        <article class="step"><strong>2. Explore</strong>Follow services, APIs, Topics, data, and their source evidence.</article>
+        <article class="step"><strong>3. Decide</strong>Use impact paths and unresolved facts to guide a change or review.</article>
+        <article class="step"><strong>4. Share</strong>Export an interactive model for your team or stakeholders.</article>
       </div>
-      <p>For a focused question, the agent can write only the relevant facts. For a full topology, it can work in boundaries, HTTP, messaging, data, and deployment passes. Each pass is replaceable and keeps dynamic or unresolved integrations visible instead of guessing them.</p>
-      <p><a href="https://github.com/elkouhen/systemlens-skill/blob/main/SKILL.md">Read the full skill workflow →</a></p>
+      <p>For a focused question, start from one service, endpoint, or Topic. For a full topology, explore boundaries, HTTP, messaging, data, and deployment in separate passes. Dynamic or unresolved integrations stay visible instead of becoming guessed dependencies.</p>
     </section>
 
     <section aria-labelledby="documentation" style="margin-top: 48px">
