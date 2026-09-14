@@ -59,6 +59,45 @@ def test_ast_extractors_find_rest_and_kafka_facts() -> None:
     assert any(endpoint.role == "consume" and endpoint.message_type for endpoint in kafka)
 
 
+def test_rest_ports_keep_declared_controller_and_feign_parameter_types(tmp_path: Path) -> None:
+    controller = tmp_path / "src/main/java/com/example/OrdersController.java"
+    controller.parent.mkdir(parents=True)
+    controller.write_text(
+        """package com.example;
+import org.springframework.web.bind.annotation.*;
+@RestController
+class OrdersController {
+  @PostMapping("/orders") void create(@RequestBody CreateOrder request) {}
+}
+record CreateOrder(String id) {}
+""",
+        encoding="utf-8",
+    )
+    client = tmp_path / "src/main/java/com/example/PaymentsClient.java"
+    client.write_text(
+        """package com.example;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.*;
+@FeignClient(name = "payments")
+interface PaymentsClient {
+  @PostMapping("/payments") void pay(@RequestBody PaymentRequest request);
+}
+record PaymentRequest(String orderId) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_framework_endpoints(tmp_path)
+
+    assert {
+        (endpoint.role, endpoint.topic): endpoint.message_type
+        for endpoint in endpoints
+    } == {
+        ("serve", "POST /orders"): "CreateOrder",
+        ("call", "POST /payments"): "PaymentRequest",
+    }
+
+
 def test_resttemplate_value_url_preserves_explicit_service_alias(tmp_path: Path) -> None:
     source = tmp_path / "src/main/java/com/example/OrderController.java"
     source.parent.mkdir(parents=True)

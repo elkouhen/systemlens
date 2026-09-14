@@ -35,6 +35,7 @@ from systemlens.indexing.codeql import (
 )
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import ExtractionDiagnostic, MessageEndpoint
+from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 from systemlens.discovery.build.modules import (
     discover_module_dependencies,
     discover_modules,
@@ -88,6 +89,40 @@ def _project_file_batches(
         )
         grouped.setdefault(owner, []).append(path)
     return [(name, sorted(files)) for name, files in sorted(grouped.items())]
+
+
+def _codeql_module_roots(
+    repo_root: Path, java_paths: Sequence[str], modules: Sequence[DiscoveredModule]
+) -> list[tuple[str, Path, str]]:
+    """Return the source-owning build roots for module-scoped CodeQL runs.
+
+    Each Java source belongs to its deepest discovered build module. This
+    avoids treating an aggregator as a second analysis unit for its children,
+    while preserving a root-level fallback for sources outside a descriptor.
+    The returned prefix maps CodeQL's module-relative paths to repository
+    relative evidence paths.
+    """
+    roots = sorted(modules, key=lambda module: len(module.path.resolve().parts), reverse=True)
+    selected: dict[Path, str] = {}
+    for relative_path in java_paths:
+        candidate = repo_root / relative_path
+        owner = next(
+            (
+                module for module in roots
+                if module.path.resolve() == candidate.parent
+                or module.path.resolve() in candidate.parents
+            ),
+            None,
+        )
+        if owner is None:
+            selected.setdefault(repo_root.resolve(), "racine du dépôt")
+        else:
+            selected.setdefault(owner.path.resolve(), module_identity(owner))
+    result: list[tuple[str, Path, str]] = []
+    for root, name in sorted(selected.items(), key=lambda item: (item[1], str(item[0]))):
+        prefix = "" if root == repo_root.resolve() else root.relative_to(repo_root.resolve()).as_posix()
+        result.append((name, root, prefix))
+    return result
 
 
 def _report_progress(progress: ProgressCallback | None, message: str) -> None:
@@ -394,26 +429,49 @@ def _index_repo(
         store.replace_integration_methods(methods)
         flows = materialize_code_flows(repo_root, all_endpoints, relation_modules)
         if methods and config.codeql_enabled and (codeql_database is not None or codeql_executable() is not None):
-            _report_progress(progress, "→ CodeQL 1/3 : préparation de l'analyse interprocédurale...")
+            _report_progress(progress, "→ CodeQL : préparation de l'analyse interprocédurale...")
             try:
                 if codeql_database is not None:
+                    timer.begin("codeql-extract", "→ CodeQL : extraction des appels Java depuis la base fournie...")
                     calls = extract_codeql_calls(
                         codeql_database, timeout_seconds=config.codeql_timeout_seconds
                     )
+                    timer.end("codeql-extract", "extraction des appels CodeQL")
                 else:
-                    _report_progress(progress, "→ CodeQL 1/3 : création de la base Java temporaire...")
-                    with automatic_codeql_database(
-                        repo_root, timeout_seconds=config.codeql_timeout_seconds
-                    ) as database:
-                        assert database is not None
-                        _report_progress(progress, "→ CodeQL 2/3 : extraction des appels Java...")
-                        calls = extract_codeql_calls(
-                            database, timeout_seconds=config.codeql_timeout_seconds
+                    roots = _codeql_module_roots(
+                        repo_root,
+                        [path for path in current_hashes if path.endswith(".java")],
+                        relation_modules,
+                    )
+                    calls = []
+                    timer.begin(
+                        "codeql-database", "→ CodeQL : création et extraction par projet..."
+                    )
+                    for number, (name, root, prefix) in enumerate(roots, start=1):
+                        _report_progress(
+                            progress,
+                            f"  • CodeQL projet {number}/{len(roots)} : {name}",
                         )
+                        with automatic_codeql_database(
+                            root, timeout_seconds=config.codeql_timeout_seconds
+                        ) as database:
+                            assert database is not None
+                            project_calls = extract_codeql_calls(
+                                database,
+                                timeout_seconds=config.codeql_timeout_seconds,
+                                path_prefix=prefix,
+                            )
+                        calls.extend(project_calls)
+                        _report_progress(
+                            progress,
+                            f"    ✓ {name} : {len(project_calls)} appel(s) extrait(s).",
+                        )
+                    timer.end("codeql-database", "création et extraction CodeQL par projet")
             except (CodeQLError, OSError, subprocess.TimeoutExpired) as exc:
                 raise RuntimeError(str(exc)) from exc
-            _report_progress(progress, f"→ CodeQL 2/3 : {len(calls)} appel(s) extrait(s), jointure des méthodes...")
+            _report_progress(progress, f"→ CodeQL : {len(calls)} appel(s) extrait(s), jointure des méthodes...")
             codeql_stats: dict[str, int] = {}
+            timer.begin("codeql-join", "→ CodeQL : jointure des méthodes et matérialisation des flux...")
             codeql_flows = materialize_codeql_code_flows(
                 methods, all_endpoints, calls,
                 max_hops=config.codeql_max_hops,
@@ -421,13 +479,14 @@ def _index_repo(
                 stats=codeql_stats,
             )
             flows.extend(codeql_flows)
+            timer.end("codeql-join", "jointure CodeQL et matérialisation des flux")
             limit_note = (
                 f" limite atteinte ({config.codeql_max_paths} transitions)."
                 if codeql_stats["truncated_paths"] else ""
             )
             _report_progress(
                 progress,
-                "→ CodeQL 3/3 : "
+                "→ CodeQL : "
                 f"{codeql_stats['calls']} appel(s), {codeql_stats['joined_calls']} jointure(s), "
                 f"{codeql_stats['explored_paths']} transition(s), "
                 f"{len(codeql_flows)} flux interprocédural(aux).{limit_note}",

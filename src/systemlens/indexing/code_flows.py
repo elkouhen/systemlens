@@ -11,7 +11,7 @@ from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod, mo
 from systemlens.indexing.codeql import CodeQLCall
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v9-bounded-codeql-kafka-continuations"
+CODE_FLOW_SIGNATURE = "code-flow-v10-module-codeql-kafka-continuations"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -200,11 +200,20 @@ def materialize_codeql_code_flows(
         (normalized_method_name(item.qualified_method), item.path, item.start_line): item
         for item in methods
     }
-    def locate(name: str, path: str, line: int) -> IntegrationMethod | None:
+    def locate(
+        name: str, path: str, line: int, *, allow_signature_fallback: bool = False
+    ) -> tuple[IntegrationMethod, bool] | None:
+        """Resolve an extracted method and state whether its path was proven.
+
+        Module-scoped CodeQL databases cannot always expose the source path of
+        a callee from another module. A unique global qualified-method match
+        remains useful, but is deliberately marked as a signature join so the
+        resulting flow cannot claim CodeQL proved both source locations.
+        """
         normalized_name = normalized_method_name(name)
         exact = by_locator.get((normalized_name, path, line))
         if exact is not None:
-            return exact
+            return exact, False
         candidates = [
             item for item in methods
             if normalized_method_name(item.qualified_method) == normalized_name
@@ -214,8 +223,16 @@ def materialize_codeql_code_flows(
             item for item in candidates if item.start_line <= line <= item.end_line
         ]
         if containing:
-            return min(containing, key=lambda item: item.end_line - item.start_line)
-        return candidates[0] if len(candidates) == 1 else None
+            return min(containing, key=lambda item: item.end_line - item.start_line), False
+        if len(candidates) == 1:
+            return candidates[0], False
+        if not allow_signature_fallback:
+            return None
+        named = [
+            item for item in methods
+            if normalized_method_name(item.qualified_method) == normalized_name
+        ]
+        return (named[0], True) if len(named) == 1 else None
 
     def locate_caller(call: CodeQLCall) -> IntegrationMethod | None:
         """Locate a caller, including a lambda's enclosing Java method.
@@ -226,7 +243,8 @@ def materialize_codeql_code_flows(
         Prefer the narrowest containing declaration to avoid attributing a
         local/anonymous-class method to an outer method when both are present.
         """
-        direct = locate(call.caller, call.caller_path, call.caller_line)
+        resolved = locate(call.caller, call.caller_path, call.caller_line)
+        direct = resolved[0] if resolved is not None else None
         if direct is not None:
             return direct
         enclosing = [
@@ -236,12 +254,15 @@ def materialize_codeql_code_flows(
         ]
         return min(enclosing, key=lambda item: item.end_line - item.start_line) if enclosing else None
 
-    adjacency: dict[str, list[tuple[IntegrationMethod, CodeQLCall]]] = defaultdict(list)
+    adjacency: dict[str, list[tuple[IntegrationMethod, CodeQLCall, bool]]] = defaultdict(list)
     for call in calls:
         caller = locate_caller(call)
-        callee = locate(call.callee, call.callee_path, call.callee_line)
-        if caller is not None and callee is not None:
-            adjacency[caller.id].append((callee, call))
+        resolved_callee = locate(
+            call.callee, call.callee_path, call.callee_line, allow_signature_fallback=True
+        )
+        if caller is not None and resolved_callee is not None:
+            callee, signature_join = resolved_callee
+            adjacency[caller.id].append((callee, call, signature_join))
 
     flows: list[CodeFlow] = []
     explored = 0
@@ -253,21 +274,21 @@ def materialize_codeql_code_flows(
             trigger = endpoint_by_id.get(trigger_id)
             if trigger is None:
                 continue
-            queue: list[tuple[IntegrationMethod, list[tuple[IntegrationMethod, CodeQLCall]]]] = [(entry, [])]
+            queue: list[tuple[IntegrationMethod, list[tuple[IntegrationMethod, CodeQLCall, bool]]]] = [(entry, [])]
             while queue:
                 current, route = queue.pop(0)
                 if len(route) >= max_hops:
                     continue
-                for target, call in adjacency.get(current.id, []):
+                for target, call, signature_join in adjacency.get(current.id, []):
                     if explored >= max_paths:
                         truncated += 1
                         queue.clear()
                         break
                     explored += 1
-                    next_route = [*route, (target, call)]
-                    if target.id == entry.id or any(previous.id == target.id for previous, _ in route):
+                    next_route = [*route, (target, call, signature_join)]
+                    if target.id == entry.id or any(previous.id == target.id for previous, _edge, _signature in route):
                         steps = [_endpoint_step(trigger, 1)]
-                        for order, (hop, edge) in enumerate(next_route, start=2):
+                        for order, (hop, edge, _signature_join) in enumerate(next_route, start=2):
                             steps.append(CodeFlowStep(
                                 order=order, kind="method_call", name=hop.qualified_method,
                                 path=edge.caller_path, start_line=edge.call_line, end_line=edge.call_line,
@@ -276,19 +297,28 @@ def materialize_codeql_code_flows(
                             id=compute_code_flow_id(
                                 entry.module, entry.path, entry.qualified_method,
                                 _endpoint_step(trigger, 1).kind,
-                                f"{trigger.topic}|cycle|" + ".".join(hop.id for hop, _ in next_route),
+                                f"{trigger.topic}|cycle|" + ".".join(
+                                    hop.id for hop, _edge, _signature_join in next_route
+                                ),
                             ),
                             module=entry.module, method=entry.qualified_method,
                             path=entry.path, start_line=entry.start_line, end_line=entry.end_line,
                             status="cycle",
-                            confidence="low" if any(edge.dispatch_confidence == "possible" for _hop, edge in next_route) else "medium",
-                            reason="CodeQL found a cyclic call path from this indexed entry method.",
+                            confidence="low" if any(
+                                edge.dispatch_confidence == "possible" or signature
+                                for _hop, edge, signature in next_route
+                            ) else "medium",
+                            reason=(
+                                "A module-local CodeQL call path was joined across modules by a unique method signature."
+                                if any(signature for _hop, _edge, signature in next_route)
+                                else "CodeQL found a cyclic call path from this indexed entry method."
+                            ),
                             steps=tuple(steps),
                         ))
                         continue
                     if target.output_endpoint_ids:
                         steps = [_endpoint_step(trigger, 1)]
-                        for order, (hop, edge) in enumerate(next_route, start=2):
+                        for order, (hop, edge, _signature_join) in enumerate(next_route, start=2):
                             steps.append(CodeFlowStep(
                                 order=order, kind="method_call", name=hop.qualified_method,
                                 path=edge.caller_path, start_line=edge.call_line, end_line=edge.call_line,
@@ -299,18 +329,27 @@ def materialize_codeql_code_flows(
                                 continue
                             flow_id = compute_code_flow_id(
                                 entry.module, entry.path, entry.qualified_method,
-                                _endpoint_step(trigger, 1).kind, f"{trigger.topic}|{output.id}|" + ".".join(hop.id for hop, _ in next_route),
+                                _endpoint_step(trigger, 1).kind,
+                                f"{trigger.topic}|{output.id}|" + ".".join(
+                                    hop.id for hop, _edge, _signature_join in next_route
+                                ),
                             )
                             has_possible_dispatch = any(
                                 edge.dispatch_confidence == "possible"
-                                for _hop, edge in next_route
+                                for _hop, edge, _signature_join in next_route
+                            )
+                            has_signature_join = any(
+                                signature_join for _hop, _edge, signature_join in next_route
                             )
                             flows.append(CodeFlow(
                                 id=flow_id, module=entry.module, method=entry.qualified_method,
                                 path=entry.path, start_line=entry.start_line, end_line=entry.end_line,
                                 status="potential",
-                                confidence="low" if has_possible_dispatch else "medium",
+                                confidence="low" if has_possible_dispatch or has_signature_join else "medium",
                                 reason=(
+                                    "A module-local CodeQL call path was joined across modules by a unique method signature."
+                                    if has_signature_join
+                                    else
                                     "CodeQL found a possible virtual-dispatch path from an indexed entry method to an indexed output method."
                                     if has_possible_dispatch
                                     else "CodeQL resolved a static call path from an indexed entry method to an indexed output method."

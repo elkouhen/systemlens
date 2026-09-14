@@ -183,15 +183,19 @@ the traversed AST nodes for Java files that contain eligible endpoints. Maven
 `target/` and Gradle `build/` output trees are excluded from the inventory, so
 copied resources and generated classes cannot duplicate source facts. A
 same-method relation remains `potential` with medium confidence because static
-lexical order does not prove branch execution. With an explicitly supplied
-CodeQL Java database, resolved `MethodCall` facts join persisted AST method
-facts to form bounded interprocedural flows; `method_call` steps keep
+lexical order does not prove branch execution. CodeQL `MethodCall` facts join
+persisted AST method facts to form bounded interprocedural flows; `method_call` steps keep
 the call-site line. The `analysis.codeql_max_hops` and
 `analysis.codeql_max_paths` configuration values bound depth and explored call
 transitions respectively; reaching the latter is reported in indexing progress
-instead of silently dropping candidates. By default, SystemLens creates this database in a temporary
-directory with CodeQL's `--build-mode=none` source-only mode, then deletes it;
-an explicit CLI database remains an override. When the CodeQL executable is
+instead of silently dropping candidates. By default, SystemLens creates one
+temporary database for each deepest build-module owner of Java source files,
+with CodeQL's `--build-mode=none` source-only mode, then deletes it. The call
+facts are kept in memory, their paths are remapped to root-relative evidence,
+and all module results are aggregated before method-flow materialization. A
+callee without a module-local source location can join a unique global method
+signature; this edge lowers confidence to `low` and retains signature-join
+provenance. An explicit CLI database remains a global-database override. When the CodeQL executable is
 absent, it records no interprocedural paths and reports that limitation without
 discarding AST-only flows. When CodeQL represents a lambda as a synthetic
 anonymous callable, SystemLens attributes its call site to the narrowest
@@ -212,7 +216,8 @@ hops, using only original persisted message-entry flows as consumers and never
 revisiting the same consumer flow. This makes cyclic topics finite while
 retaining the complete ordered evidence for each bounded candidate.
 
-The HTML graph model joins endpoint identifiers to the persisted
+The HTML graph model joins endpoint identifiers and statically inferred message
+types to the persisted
 `integration_methods` projection. Microservice cards remain simple rectangles
 and receive an export-time count of persisted internal flows for that service.
 The selected-service widget renders only resolved input-to-output flow evidence,
@@ -355,10 +360,10 @@ Compact code-flow cards consume the same semantic widget, control, text and
 muted-text tokens. Only the potential-flow marker may retain a status accent;
 source paths must wrap instead of widening the panel.
 Selecting a reconciled code flow records its persisted ID only in transient
-graph state. Node and edge reducers use the exact reconciled path sets to raise
-their size and contrast, while HTML card overlays add flow-specific highlight
-and dimming classes. This presentation state does not infer or persist any new
-architecture relation. The export indexes displayed nodes and visual edges by
+graph state. Node and edge reducers, HTML-card overlays, and port overlays use
+the exact reconciled path sets to hide every unrelated node and edge; selected
+nodes retain flow-specific highlighting. This presentation state does not infer
+or persist any new architecture relation. The export indexes displayed nodes and visual edges by
 persisted endpoint ID once; reconciliation requires exactly one endpoint-backed
 candidate and never selects a relation from a route label, topic name, or first
 matching graph edge. A selected local input-to-output relation is highlighted
@@ -417,9 +422,10 @@ commit. A concurrent reader sees the last committed snapshot until the writer
 commits the next one.
 
 AST endpoint analysis uses no subprocess. For interprocedural flows, the local
-CodeQL executable is used by default to create a temporary source-only Java
-database, query it, and decode the result as CSV; `--codeql-database` reuses a
-database supplied by the caller. The temporary query pack pins
+CodeQL executable is used by default once for each source-owning build module
+to create a temporary source-only Java database, query it, and decode the
+result as CSV; all call facts are aggregated before joining. `--codeql-database`
+reuses one global database supplied by the caller. The temporary query pack pins
 `codeql/java-all` and resolves it only from the already installed local CodeQL
 pack cache; indexing never runs `codeql pack install` or downloads analyzer
 dependencies. No database path is persisted.

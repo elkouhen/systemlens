@@ -68,3 +68,29 @@ def test_extract_codeql_calls_uses_pinned_local_pack_without_installing(
     assert all("pack" not in command[1:3] for command, _timeout in commands)
     assert all(command[0] == "custom-codeql" for command, _timeout in commands)
     assert all(timeout == 42 for _command, timeout in commands)
+
+
+def test_extract_codeql_calls_prefixes_module_relative_evidence_paths(
+    tmp_path: Path, monkeypatch
+) -> None:
+    database = tmp_path / "database"
+    database.mkdir()
+
+    def run(command: list[str], **_kwargs: object) -> CompletedProcess[str]:
+        if command[1:3] == ["bqrs", "decode"]:
+            output = next(part.removeprefix("--output=") for part in command if part.startswith("--output="))
+            Path(output).write_text(
+                "caller,caller_path,caller_line,callee,callee_path,callee_line,call_line,dispatch_confidence\n"
+                "com.example.A.run,src/main/java/A.java,1,com.example.B.send,src/main/java/B.java,2,3,exact\n",
+                encoding="utf-8",
+            )
+        return CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(codeql.subprocess, "run", run)
+
+    calls = codeql.extract_codeql_calls(
+        database, executable="custom-codeql", path_prefix="module-a"
+    )
+
+    assert calls[0].caller_path == "module-a/src/main/java/A.java"
+    assert calls[0].callee_path == "module-a/src/main/java/B.java"

@@ -91,9 +91,17 @@ def automatic_codeql_database(
 
 
 def extract_codeql_calls(
-    database: Path, executable: str | None = None, timeout_seconds: int = 600,
+    database: Path,
+    executable: str | None = None,
+    timeout_seconds: int = 600,
+    path_prefix: str = "",
 ) -> list[CodeQLCall]:
-    """Return statically resolved Java method calls from one CodeQL database."""
+    """Return statically resolved Java method calls from one CodeQL database.
+
+    A database created for a build module reports paths relative to that
+    module. ``path_prefix`` maps those paths back to the indexed repository
+    root so that calls from several module databases can be joined together.
+    """
     if not database.is_dir():
         raise CodeQLError(f"CodeQL database not found: {database}")
     executable = executable or codeql_executable()
@@ -139,13 +147,20 @@ def extract_codeql_calls(
                 rows = list(csv.DictReader(handle))
         except OSError as exc:
             raise CodeQLError("CodeQL did not produce a CSV call graph.") from exc
+    normalized_prefix = path_prefix.strip("/")
+
+    def repository_path(path: str) -> str:
+        if not normalized_prefix or not path:
+            return path
+        return f"{normalized_prefix}/{path.lstrip('/')}"
+
     calls: list[CodeQLCall] = []
     for row in rows:
         try:
             calls.append(CodeQLCall(
-                caller=row["caller"], caller_path=row["caller_path"],
+                caller=row["caller"], caller_path=repository_path(row["caller_path"]),
                 caller_line=int(row["caller_line"]), callee=row["callee"],
-                callee_path=row["callee_path"], callee_line=int(row["callee_line"]),
+                callee_path=repository_path(row["callee_path"]), callee_line=int(row["callee_line"]),
                 call_line=int(row["call_line"]),
                 dispatch_confidence=row.get("dispatch_confidence", "exact"),
             ))

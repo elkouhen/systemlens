@@ -954,6 +954,7 @@ def test_port_to_port_paths_attach_to_rendered_anchors() -> None:
         assert "O1 — Sortie" in tooltip.inner_text()
         assert "Kafka publish : orders.created" in tooltip.inner_text()
         assert "Méthode Java" in tooltip.inner_text()
+        assert "Type Java : OrderCreated" in tooltip.inner_text()
         page.locator(".graph-node-port-reference.is-out").first.dispatch_event("pointerleave")
         page.locator(".graph-node-port-reference.is-in").dispatch_event("pointerenter")
         assert "Sorties internes mappées :" in tooltip.inner_text()
@@ -1052,7 +1053,7 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert page.locator(".graph-local-port-path.is-code-flow-path").count() == 1
         assert page.locator(
             ".graph-node-card-label:not(.is-code-flow-node)"
-        ).count() == 2
+        ).count() == 0
         assert page.locator(".toolbar").get_attribute("class") == "toolbar"
         assert page.locator("#details").get_attribute("class") == "is-empty"
         flow_node_style = page.locator(
@@ -1060,16 +1061,8 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         ).first.evaluate(
             "element => ({ opacity: getComputedStyle(element).opacity, boxShadow: getComputedStyle(element).boxShadow })"
         )
-        context_node_style = page.locator(
-            ".graph-node-card-label:not(.is-code-flow-node)"
-        ).first.evaluate(
-            "element => ({ opacity: getComputedStyle(element).opacity, background: getComputedStyle(element).backgroundColor, filter: getComputedStyle(element).filter })"
-        )
         assert flow_node_style["opacity"] == "1"
         assert flow_node_style["boxShadow"] != "none"
-        assert context_node_style["opacity"] == "1"
-        assert context_node_style["background"] == "rgb(23, 38, 61)"
-        assert context_node_style["filter"] == "none"
         assert page.locator(".toolbar").evaluate(
             "element => element.scrollLeft === 0 && element.scrollWidth <= element.clientWidth"
         )

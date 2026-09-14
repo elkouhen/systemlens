@@ -275,6 +275,33 @@ def test_index_uses_automatic_codeql_database_when_available(
     assert observed_roots == [repo]
 
 
+def test_codeql_module_roots_assign_each_java_file_to_its_deepest_project(tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    nested = first / "nested"
+    modules = [
+        DiscoveredModule("first", first, "maven", None, "library", False, ""),
+        DiscoveredModule("nested", nested, "maven", None, "library", False, ""),
+        DiscoveredModule("second", second, "gradle", None, "library", False, ""),
+    ]
+
+    roots = indexing_service._codeql_module_roots(
+        tmp_path,
+        [
+            "first/src/main/java/A.java",
+            "first/nested/src/main/java/B.java",
+            "second/src/main/java/C.java",
+        ],
+        modules,
+    )
+
+    assert roots == [
+        ("first", first, "first"),
+        ("nested", nested, "first/nested"),
+        ("second", second, "second"),
+    ]
+
+
 def test_cli_no_codeql_keeps_ast_only_flow_indexing(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -374,6 +401,46 @@ class OrderPublisher {
     assert [step.kind for step in flows[0].steps] == [
         "message_entry", "method_call", "method_call", "message_publish",
     ]
+
+
+def test_codeql_call_joins_unique_cross_module_signature_with_low_confidence(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    target = "publisher/src/main/java/com/example/OrderPublisher.java"
+    for path, content in {
+        source: """package com.example;
+class OrderController { void receive() { publisher.send(); } }
+""",
+        target: """package com.example;
+class OrderPublisher { void send() { kafka.send(); } }
+""",
+    }.items():
+        file = tmp_path / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(content, encoding="utf-8")
+    modules = [
+        DiscoveredModule("orders", tmp_path / "orders", "maven", None, "library", False, ""),
+        DiscoveredModule("publisher", tmp_path / "publisher", "maven", None, "library", False, ""),
+    ]
+    endpoints = [
+        _endpoint("entry", "consume", "kafka", "orders.in", source, 2),
+        replace(
+            _endpoint("output", "produce", "kafka", "orders.out", target, 2),
+            module="publisher",
+            qualified_name="com.example.OrderPublisher",
+        ),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source, target], modules)
+
+    flows = materialize_codeql_code_flows(methods, endpoints, [
+        CodeQLCall(
+            "com.example.OrderController.receive", source, 2,
+            "com.example.OrderPublisher.send", "external/OrderPublisher.java", 1, 2,
+        ),
+    ])
+
+    assert len(flows) == 1
+    assert flows[0].confidence == "low"
+    assert "unique method signature" in flows[0].reason
 
 
 def test_codeql_calls_from_lambda_join_enclosing_entry_method(tmp_path: Path) -> None:

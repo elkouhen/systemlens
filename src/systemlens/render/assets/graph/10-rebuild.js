@@ -206,6 +206,9 @@
         labelAlignment: "center",
         nodeReducer: (node, data) => {
           if (!isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
+          if (graphState.selectedCodeFlowId && !graphState.relatedNodes?.has(node)) {
+            return { ...data, hidden: true, label: "" };
+          }
           const renderedData = graphState.renderMode === "symbols" ? { ...data, size: .5 } : data;
           if (graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)) {
             return {
@@ -230,12 +233,7 @@
               size: 3.5,
               zIndex: 2,
             };
-            return {
-              ...data,
-              color: document.documentElement.dataset.theme === "dark" ? "#25334a" : "#d8dee9",
-              size: .25,
-              zIndex: 0,
-            };
+            return { ...data, hidden: true };
           }
           if (graphState.selectedId && graphState.relatedEdges.has(edge)) return { ...data, size: 1.5 };
           if (graphState.clusteredView || graphState.layeredClusterView) return { ...data, size: .5 };
@@ -315,7 +313,11 @@
           return renderer.graphToViewport(graphPoint);
         };
         network.forEachNode((id, attributes) => {
-          if (!isVisibleNodeId(id) || attributes.hidden) return;
+          if (
+            !isVisibleNodeId(id)
+            || attributes.hidden
+            || (graphState.selectedCodeFlowId && !graphState.relatedNodes?.has(id))
+          ) return;
           // graphToViewport is Sigma's public conversion and includes its
           // current camera, normalization and aspect-ratio handling. The
           // overlays use the same workspace rectangle as the renderer, so
@@ -608,13 +610,18 @@
               const method = document.createElement("code");
               method.textContent = `Méthode Java : ${port.method || "inconnue"}`;
               tooltip.append(title, endpoint, method);
+              if (port.message_type) {
+                const messageType = document.createElement("code");
+                messageType.textContent = `Type Java : ${port.message_type}`;
+                tooltip.append(messageType);
+              }
               if (port.local_outputs?.length) {
                 const localOutputs = document.createElement("span");
                 localOutputs.textContent = "Sorties internes mappées :";
                 const outputList = document.createElement("ul");
                 port.local_outputs.forEach(output => {
                   const item = document.createElement("li");
-                  item.textContent = `${output.label} · ${output.type} : ${output.name} · ${output.method}`;
+                  item.textContent = `${output.label} · ${output.type} : ${output.name} · ${output.method}${output.message_type ? ` · Type Java : ${output.message_type}` : ""}`;
                   outputList.append(item);
                 });
                 tooltip.append(localOutputs, outputList);
@@ -733,6 +740,12 @@
         );
         const overlayBounds = portPathOverlay.getBoundingClientRect();
         (graphData.internal_port_links || []).forEach(link => {
+          if (
+            graphState.selectedCodeFlowId
+            && !graphState.relatedLocalPortLinks?.has(
+              `${link.input_endpoint_id}:${link.output_endpoint_id}`
+            )
+          ) return;
           const input = anchorsByEndpointId.get(link.input_endpoint_id);
           const output = anchorsByEndpointId.get(link.output_endpoint_id);
           if (!input?.classList.contains("is-in") || !output?.classList.contains("is-out")) return;
@@ -754,10 +767,26 @@
           );
           portPathOverlay.append(path);
         });
-        const directedPairs = new Set((graphData.port_links || []).map(link => (
+        const selectedEndpointIds = new Set(
+          graphData.links.flatMap((topologyLink, index) => (
+            graphState.relatedEdges?.has(`edge-${index}`)
+              ? (topologyLink.endpoint_ids || [])
+              : []
+          ))
+        );
+        const selectedPortLinks = (graphData.port_links || []).filter(link => (
+          !graphState.selectedCodeFlowId
+          // Kafka is represented by two topology arcs, producer → topic and
+          // topic → consumer. Each arc carries one endpoint identifier, while
+          // the port link joins those endpoints directly; retain it when
+          // either endpoint belongs to the selected path.
+          || selectedEndpointIds.has(link.source_endpoint_id)
+          || selectedEndpointIds.has(link.target_endpoint_id)
+        ));
+        const directedPairs = new Set(selectedPortLinks.map(link => (
           `${link.source_endpoint_id}:${link.target_endpoint_id}`
         )));
-        (graphData.port_links || []).forEach(link => {
+        selectedPortLinks.forEach(link => {
           const source = anchorsByEndpointId.get(link.source_endpoint_id);
           const target = anchorsByEndpointId.get(link.target_endpoint_id);
           if (!source?.classList.contains("is-out") || !target?.classList.contains("is-in")) return;

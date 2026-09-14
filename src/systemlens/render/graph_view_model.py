@@ -494,6 +494,7 @@ def build_graph_view_model(
                 "method": port_method_label(endpoint),
                 "name": endpoint.topic,
                 "endpoint_id": endpoint.id,
+                **({"message_type": endpoint.message_type} if endpoint.message_type else {}),
                 **(
                     {"local_output_labels": local_output_labels_by_input_id[endpoint.id]}
                     if endpoint.id in local_output_labels_by_input_id else {}
@@ -506,6 +507,10 @@ def build_graph_view_model(
                             "type": port_type_label(endpoint_by_id[output_id]),
                             "name": endpoint_by_id[output_id].topic,
                             "method": port_method_label(endpoint_by_id[output_id]),
+                            **(
+                                {"message_type": endpoint_by_id[output_id].message_type}
+                                if endpoint_by_id[output_id].message_type else {}
+                            ),
                         }
                         for output_id in local_output_ids_by_input_id[endpoint.id]
                     ]}

@@ -225,6 +225,67 @@ def _infer_kafka_message_type(
         if payload_type:
             return payload_type
     return None
+
+
+_HTTP_PARAMETER_METADATA = frozenset({
+    "CookieValue", "Header", "Headers", "PathVariable", "RequestAttribute",
+    "RequestHeader", "RequestParam", "AuthenticationPrincipal",
+})
+_HTTP_INFRASTRUCTURE_TYPES = frozenset({
+    "Authentication", "BindingResult", "HttpServletRequest", "HttpServletResponse",
+    "Model", "Principal", "ServerHttpRequest", "ServerWebExchange", "WebRequest",
+})
+
+
+def _infer_rest_parameter_type(
+    repo_root: Path, rel_path: str, start_line: int, role: str, framework: str
+) -> str | None:
+    """Return one explicit REST method parameter type without guessing.
+
+    Controller inputs and Feign outputs are declared on Java methods. Prefer a
+    ``@RequestBody`` parameter, then retain the first non-framework parameter.
+    Imperative HTTP-client invocations are intentionally excluded: their body
+    argument requires data-flow inference rather than a declaration lookup.
+    """
+    if role != "serve" and framework != "feign":
+        return None
+    parsed = java_parser.parse_java(str(repo_root), rel_path)
+    if parsed is None:
+        return None
+    source, root = parsed
+    candidates = [
+        node for node in java_parser.walk(root)
+        if node.type == "method_declaration"
+        and node.start_point.row + 1 <= start_line <= node.end_point.row + 1
+    ]
+    if not candidates:
+        return None
+    method = min(candidates, key=lambda node: node.end_byte - node.start_byte)
+    parameters = method.child_by_field_name("parameters")
+    if parameters is None:
+        return None
+    body_types: list[str] = []
+    other_types: list[str] = []
+    for parameter in parameters.children:
+        if parameter.type != "formal_parameter":
+            continue
+        annotations = {
+            java_parser.annotation_name(annotation, source)
+            for annotation in java_parser.annotations_of(parameter)
+        }
+        if annotations & _HTTP_PARAMETER_METADATA:
+            continue
+        type_node = parameter.child_by_field_name("type")
+        declared_type = _message_payload_type(
+            java_parser.node_text(source, type_node) if type_node is not None else None
+        )
+        if not declared_type or declared_type.rsplit(".", 1)[-1] in _HTTP_INFRASTRUCTURE_TYPES:
+            continue
+        if "RequestBody" in annotations:
+            body_types.append(declared_type)
+        else:
+            other_types.append(declared_type)
+    return (body_types or other_types or [None])[0]
 def _module_for_path(repo_root: Path, rel_path: str) -> str | None:
     """Module Maven (`pom.xml`) en priorité (choix explicite, ADR-32) ;
     repli sur la détection de service Gradle (BACKLOG-15 H1, ADR-33) quand
@@ -302,6 +363,8 @@ def _build_endpoint(
         message_type=(
             _infer_kafka_message_type(repo_root, rel_path, start_line, role, framework, snippet)
             if system == "kafka"
+            else _infer_rest_parameter_type(repo_root, rel_path, start_line, role, framework)
+            if system == "rest"
             else None
         ),
     )

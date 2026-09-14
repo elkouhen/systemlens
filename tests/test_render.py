@@ -98,6 +98,17 @@ def test_global_input_label_references_its_local_output() -> None:
         "payments-out": "O2",
         "inventory-in": "I2",
     }
+    port_types_by_id = {
+        port["endpoint_id"]: port["message_type"]
+        for node in data["nodes"]
+        for port in node.get("ports", [])
+    }
+    assert port_types_by_id == {
+        "orders-out": "OrderCreated",
+        "payments-in": "OrderCreated",
+        "payments-out": "PaymentCompleted",
+        "inventory-in": "PaymentCompleted",
+    }
     local_outputs_by_id = {
         port["endpoint_id"]: port.get("local_output_labels", [])
         for node in data["nodes"]
@@ -121,6 +132,7 @@ def test_global_input_label_references_its_local_output() -> None:
         "type": "Kafka publish",
         "name": "orders.created",
         "method": "<unknown>",
+        "message_type": "PaymentCompleted",
     }]
     assert data["internal_port_links"] == [
         {"input_endpoint_id": "payments-in", "output_endpoint_id": "payments-out"},
@@ -600,11 +612,16 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'Selection must not change the card geometry' in document
     assert 'graph-flow-port-tooltip' not in document
     assert '"Entrées déclenchées"' in document
-    assert "if (graphState.selectedCodeFlowId) return renderedData;" in document
+    assert "graphState.selectedCodeFlowId && !graphState.relatedNodes?.has(node)" in document
+    assert "return { ...data, hidden: true };" in document
+    assert "Kafka is represented by two topology arcs" in document
+    assert "selectedEndpointIds.has(link.target_endpoint_id)" in document
     assert "const ratioFactor = Math.max(1, spanX / availableWidth, spanY / availableHeight);" in document
     assert ".toolbar { overflow-x: hidden; }" in document
     assert 'id="graph-context"' in document
     assert "graphContext.hidden = !showingGraph" in document
+    assert 'id="flows-tab" class="toolbar-tab is-active"' in document
+    assert 'id="graph-panel" class="toolbar-panel" role="tabpanel" aria-labelledby="graph-tab" hidden' in document
     assert 'id="quick-search"' in document
     assert document.index('class="toolbar-tabs"') < document.index('id="quick-search"')
     assert document.index('id="quick-search"') < document.index('class="graph-actions"')
