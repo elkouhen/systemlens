@@ -5,14 +5,12 @@
     .brand strong,
     .details-title,
     .path-details-title,
-    .dependency-view h2,
     .references-title,
     .indexing-issues-title,
     .inspector-title { color: var(--ui-title); }
     .explore-search-label,
     .details-kicker,
     .path-details-kicker,
-    .dependency-view-kicker,
     .references-kicker,
     .indexing-issues-kicker,
     .details-section h2,
@@ -34,7 +32,6 @@
     .reference-meta,
     .details-empty,
     .path-details-summary,
-    .dependency-view p:last-child,
     .dto-summary { color: var(--ui-muted); }
     .toolbar-tabs,
     .graph-control-group,

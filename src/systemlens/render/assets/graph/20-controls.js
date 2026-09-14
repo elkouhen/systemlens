@@ -1,5 +1,4 @@
 // Ordered source module: 20-controls.js
-    let dependencyRenderer = null;
     const details = document.getElementById("details");
     const quickSearch = document.getElementById("quick-search");
     const graphContext = document.getElementById("graph-context");
@@ -13,125 +12,17 @@
     const openApiTab = document.getElementById("openapi-tab");
     const kafkaTab = document.getElementById("kafka-tab");
     const persistenceTab = document.getElementById("persistence-tab");
-    const buildTab = document.getElementById("build-tab");
     const issuesTab = document.getElementById("issues-tab");
     const flowsTab = document.getElementById("flows-tab");
     const graphLegend = document.getElementById("graph-legend");
     const graphPanel = document.getElementById("graph-panel");
     const resourcesPanel = document.getElementById("resources-panel");
-    const dependenciesPanel = document.getElementById("dependencies-panel");
     const issuesPanel = document.getElementById("issues-panel");
     const flowsPanel = document.getElementById("flows-panel");
     const openApiPanel = document.getElementById("openapi-panel");
     const kafkaPanel = document.getElementById("kafka-panel");
     const persistencePanel = document.getElementById("persistence-panel");
     const graphCanvas = document.getElementById("graph");
-    const dependencyCanvas = document.getElementById("dependency-graph");
-    function ensureDependencyRenderer() {
-      if (dependencyRenderer !== null) return dependencyRenderer;
-      const dependencyData = dependencyGraphData();
-      const dependencyPositions = buildHierarchyPositions(dependencyData.nodes, dependencyData.links);
-      const dependencyNetwork = new graphology.MultiDirectedGraph();
-      dependencyData.nodes.forEach(node => {
-        const position = dependencyPositions.get(node.id) || { x: 0, y: 0 };
-        dependencyNetwork.addNode(node.id, {
-          label: node.name,
-          x: position.x,
-          y: position.y,
-          size: node.size,
-          color: node.color,
-          type: "build_module",
-        });
-      });
-      dependencyData.links.forEach((link, index) => dependencyNetwork.addEdgeWithKey(
-        `dependency-edge-${index}`, link.source, link.target, {
-          label: link.label,
-          size: 1.5,
-          color: relationColor(link),
-          kind: link.kind,
-          type: "arrow",
-        }
-      ));
-      dependencyRenderer = new Sigma(dependencyNetwork, dependencyCanvas, {
-        labelColor: { color: document.documentElement.dataset.theme === "dark" ? "#dce8f7" : "#172033" },
-        nodeProgramClasses: { build_module: createNodeProgram(MICROSERVICE_FRAGMENT_SHADER) },
-        renderEdgeLabels: false,
-        labelDensity: .12,
-        labelGridCellSize: 110,
-        labelRenderedSizeThreshold: 8,
-        // Keep camera behavior consistent with the architecture views. The
-        // shared controls below provide zoom, pan and no-inertia semantics.
-        doubleClickZoomingRatio: 1,
-        enableCameraZooming: false,
-        enableCameraPanning: false,
-        inertiaDuration: 0,
-        inertiaRatio: 0,
-      });
-      dependencyRenderer.on("clickNode", ({ node }) => selectDependencyModule(node));
-      dependencyRenderer.on("clickStage", reset);
-      dependencyRenderer.on("doubleClickStage", event => event.preventSigmaDefault?.());
-      dependencyRenderer.on("doubleClickNode", event => event.preventSigmaDefault?.());
-      const handleDependencyWheel = event => {
-        event.preventDefault();
-        const camera = dependencyRenderer.getCamera();
-        const state = camera.getState();
-        const viewport = dependencyCanvas.getBoundingClientRect();
-        const cursor = { x: event.clientX - viewport.left, y: event.clientY - viewport.top };
-        const graphPoint = dependencyRenderer.viewportToGraph(cursor);
-        const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
-        const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * .0012);
-        const ratio = Math.max(.01, Math.min(100, state.ratio * factor));
-        camera.setState({ ...state, ratio });
-        const projected = dependencyRenderer.graphToViewport(graphPoint);
-        const nextState = camera.getState();
-        const width = Math.max(viewport.width, 1);
-        const height = Math.max(viewport.height, 1);
-        camera.setState({
-          ...nextState,
-          x: nextState.x - (cursor.x - projected.x) / width,
-          y: nextState.y + (cursor.y - projected.y) / height,
-        });
-      };
-      dependencyCanvas.addEventListener("wheel", handleDependencyWheel, { passive: false });
-      let dependencyPan = null;
-      const finishDependencyPan = event => {
-        if (!dependencyPan || event.pointerId !== dependencyPan.pointerId) return;
-        dependencyCanvas.releasePointerCapture?.(event.pointerId);
-        dependencyPan = null;
-        window.removeEventListener("pointermove", moveDependencyPan, true);
-        window.removeEventListener("pointerup", finishDependencyPan, true);
-        window.removeEventListener("pointercancel", finishDependencyPan, true);
-      };
-      const moveDependencyPan = event => {
-        if (!dependencyPan || event.pointerId !== dependencyPan.pointerId) return;
-        const state = dependencyPan.cameraState;
-        const viewport = dependencyCanvas.getBoundingClientRect();
-        const width = Math.max(viewport.width, 1);
-        const height = Math.max(viewport.height, 1);
-        dependencyRenderer.getCamera().setState({
-          ...state,
-          x: state.x - (event.clientX - dependencyPan.startX) / width,
-          y: state.y + (event.clientY - dependencyPan.startY) / height,
-        });
-      };
-      const startDependencyPan = event => {
-        if (event.button !== 0) return;
-        dependencyPan = {
-          pointerId: event.pointerId,
-          startX: event.clientX,
-          startY: event.clientY,
-          cameraState: dependencyRenderer.getCamera().getState(),
-        };
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        dependencyCanvas.setPointerCapture?.(event.pointerId);
-        window.addEventListener("pointermove", moveDependencyPan, true);
-        window.addEventListener("pointerup", finishDependencyPan, true);
-        window.addEventListener("pointercancel", finishDependencyPan, true);
-      };
-      dependencyCanvas.addEventListener("pointerdown", startDependencyPan, true);
-      return dependencyRenderer;
-    }
     const indexingIssuesList = document.getElementById("indexing-issues");
     const indexingIssuesEmpty = document.getElementById("indexing-issues-empty");
     const indexingIssuesTitle = document.getElementById("indexing-issues-title");

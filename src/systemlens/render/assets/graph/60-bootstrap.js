@@ -17,35 +17,10 @@
       persistState();
     }
     function restoreState() {
-      const params = new URLSearchParams(location.hash.slice(1));
-      const sourceId = params.get("from");
-      const targetId = params.get("to");
-      pathLock.checked = params.get("lock") === "1";
-      const restoredStops = [sourceId, ...params.getAll("via"), targetId];
-      if (
-        sourceId
-        && targetId
-        && isValidPathStops(restoredStops)
-      ) {
-        const exactPath = exactPathForStops(restoredStops);
-        if (exactPath) {
-          showPath(exactPath, restoredStops);
-          return;
-        }
-        const startsAndEndsWithServices = [restoredStops[0], restoredStops.at(-1)]
-          .every(id => nodeDataById.get(id).kind === "microservice");
-        if (startsAndEndsWithServices) {
-          pathStops.push(...restoredStops);
-          renderPathQuery();
-          showShortestPath();
-          return;
-        }
-      }
-      const selectedIdFromUrl = params.get("selected");
-      if (selectedIdFromUrl && nodeDataById.has(selectedIdFromUrl)) selectNode(selectedIdFromUrl);
+      pathLock.checked = false;
     }
     function activeRenderer() {
-      return dependencyCanvas.hidden ? renderer : ensureDependencyRenderer();
+      return renderer;
     }
     const fitOverviewButton = document.getElementById("fit-view");
     const fitReadableButton = document.getElementById("fit-readable");
@@ -105,17 +80,13 @@
       if (nextMode === "readable") {
         const state = camera.getState();
         // Start from the complete overview, then move closer. Architecture
-        // cards use the measured projected spacing; the build graph has no
-        // HTML cards and uses the same minimum reading distance.
+        // cards use the measured projected spacing.
         if (compoundView) {
           camera.setState({ ...state, ratio: Math.max(.01, state.ratio / Math.max(1.6, collisionZoom)) });
         } else if (targetRenderer === renderer && network.order <= 12) {
           camera.setState({ ...state, ratio: requiredSmallGraphOverviewRatio(targetRenderer) });
         } else {
-          const zoomIn = targetRenderer === renderer
-            ? Math.max(1.6, requiredCardZoomIn(targetRenderer))
-            : 1.6;
-          camera.setState({ ...state, ratio: Math.max(.01, state.ratio / zoomIn) });
+          camera.setState({ ...state, ratio: Math.max(.01, state.ratio / Math.max(1.6, requiredCardZoomIn(targetRenderer))) });
         }
       } else if (compoundView) {
         const state = camera.getState();
@@ -130,9 +101,8 @@
         await requestGraphRender();
         if (fitRequest !== graphState.fitRequest || layoutRequest !== graphState.layoutRequest) return;
       }
-      const targetCanvas = targetRenderer === renderer ? graphCanvas : dependencyCanvas;
-      targetCanvas.dataset.fitMode = nextMode;
-      targetCanvas.dataset.fitRatio = String(targetRenderer.getCamera().getState().ratio);
+      graphCanvas.dataset.fitMode = nextMode;
+      graphCanvas.dataset.fitRatio = String(targetRenderer.getCamera().getState().ratio);
     }
     document.getElementById("zoom-in").addEventListener("click", () => {
       const renderer = activeRenderer();
@@ -145,10 +115,7 @@
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
-      const maximumRatio = renderer === dependencyRenderer
-        ? 100
-        : graphState.maximumCollisionFreeRatio;
-      camera.setState({ ...state, ratio: Math.min(maximumRatio, state.ratio * 1.25) });
+      camera.setState({ ...state, ratio: Math.min(graphState.maximumCollisionFreeRatio, state.ratio * 1.25) });
       requestGraphRender();
     });
     fitOverviewButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "overview"));
@@ -167,7 +134,6 @@
     openApiTab.addEventListener("click", () => setToolbarTab("openapi"));
     kafkaTab.addEventListener("click", () => setToolbarTab("kafka"));
     persistenceTab.addEventListener("click", () => setToolbarTab("persistence"));
-    buildTab.addEventListener("click", () => setToolbarTab("dependencies"));
     issuesTab.addEventListener("click", () => setToolbarTab("issues"));
     flowsTab.addEventListener("click", () => setToolbarTab("flows"));
     inventoryStatus.addEventListener("click", () => setToolbarTab("issues"));
@@ -214,6 +180,7 @@
     renderReferences();
     renderResources();
     restoreState();
+    setToolbarTab("graph");
     function updateWorkspaceViewport(refit = false) {
       const root = document.documentElement;
       root.style.setProperty("--workspace-left", "0px");
@@ -221,7 +188,6 @@
       root.style.setProperty("--workspace-top", "0px");
       root.style.setProperty("--workspace-bottom", "0px");
       renderer?.refresh();
-      dependencyRenderer?.refresh();
       requestGraphRender();
       if (refit) {
         if (graphState.selectedCodeFlowId && graphState.relatedNodes?.size) {

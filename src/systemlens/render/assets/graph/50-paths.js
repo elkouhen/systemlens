@@ -9,33 +9,6 @@
       resetButton.setAttribute("aria-label", resetButton.title);
       requestAnimationFrame(() => toolbar?.scrollTo({ top: 0 }));
     }
-    function selectDependencyModule(id) {
-      const node = (graphData.build_dependencies?.nodes || []).find(item => item.id === id);
-      if (!node) return;
-      const links = graphData.build_dependencies?.links || [];
-      const dependencies = links
-        .filter(link => link.source === id)
-        .map(link => (graphData.build_dependencies.nodes.find(item => item.id === link.target) || {}).name)
-        .filter(Boolean);
-      const dependents = links
-        .filter(link => link.target === id)
-        .map(link => (graphData.build_dependencies.nodes.find(item => item.id === link.source) || {}).name)
-        .filter(Boolean);
-      revealDetails();
-      details.replaceChildren();
-      const header = document.createElement("header");
-      header.className = "details-header";
-      const kicker = document.createElement("p");
-      kicker.className = "details-kicker";
-      kicker.textContent = `Projet ${node.build_system === "unknown" ? "Maven / Gradle" : node.build_system}`;
-      const title = document.createElement("h1");
-      title.className = "details-title";
-      title.textContent = node.name;
-      header.append(kicker, title);
-      details.append(header);
-      appendList("Depend de", [...new Set(dependencies)].sort());
-      appendList("Utilise par", [...new Set(dependents)].sort());
-    }
     function setDetailsEmpty(message) {
       details.classList.add("is-empty");
       document.querySelector(".toolbar")?.classList.remove("has-details");
@@ -50,20 +23,7 @@
       details.append(empty);
     }
     function persistState() {
-      const params = new URLSearchParams();
-      if (pathStops.length) params.set("from", pathStops[0]);
-      if (pathStops.length > 1) params.set("to", pathStops[pathStops.length - 1]);
-      pathStops.slice(1, -1).forEach(id => params.append("via", id));
-      if (pathLock.checked) params.set("lock", "1");
-      if (!pathStops.length && graphState.selectedId) {
-        params.set("selected", graphState.selectedId);
-      }
-      const fragment = params.toString();
-      try {
-        history.replaceState(null, "", fragment ? `#${fragment}` : location.pathname);
-      } catch (_error) {
-        location.hash = fragment;
-      }
+      // Explorer state is ephemeral; URL fragments never drive rendering.
     }
     function clearPathControls() {
       pathQuery.value = "";
@@ -393,6 +353,10 @@
       else delete graphCanvas.dataset.selectedCodeFlow;
       setPathMicroserviceOrder(path);
       renderer.refresh();
+      // The normal Explorer deliberately has no port overlays. Rebuild them
+      // after setting the selected call graph so its ports and local links
+      // are projected from the selected nodes only.
+      requestGraphRender();
       if (context.showDetails !== false) renderPathDetails(path, context);
       else {
         resetButton.disabled = false;

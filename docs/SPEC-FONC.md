@@ -265,8 +265,8 @@ collections, SQL tables, Redis keyspaces, object-store datasets, Kafka,
 RabbitMQ, SQS, and webhook streams are technology-specific evidence, not the
 primary architecture category.
 
-The export uses a responsive workspace layout with eight navigation tabs:
-Explorer, Resources, OpenAPI, Topics, Data, Build, Quality, and Flux.
+The export uses a responsive workspace layout with seven navigation tabs:
+Explorer, Resources, OpenAPI, Topics, Data, Quality, and Flux.
 `Resources` is a filterable inventory of every persisted graph node; selecting
 an item opens it in Explorer and focuses its graph card. `Topics` and `Data`
 are data-schema reference views: Java classes defining exchanged event data
@@ -280,7 +280,7 @@ inspect controls or resource details. At intermediate widths up to 1024 px it
 is limited to 320 px and 82% of the viewport height. Its branded header remains
 visible while the panel content scrolls, and its navigation tabs use one
 balanced four-column, two-row grid immediately after the branded header, so
-all eight destinations remain visible without horizontal scrolling. The extended search
+all seven destinations remain visible without horizontal scrolling. The extended search
 hint is hidden at those widths while its label and example placeholder remain
 visible.
 
@@ -467,8 +467,8 @@ ELK is used only for the architectural layer layout, while Sigma.js provides
 the interactive rendering for both views. Architecture relations remain
 visible even when they are not used as placement edges.
 
-It also provides dedicated OpenAPI, Topics, Data, and Build
-views, which keep their domain inventories separate.
+It also provides dedicated OpenAPI, Topics, and Data views, which keep their
+domain inventories separate.
 
 Changing a relation-type filter rebuilds and relayouts the graph from only the
 selected dependency types; excluded relations do not influence the resulting
@@ -680,7 +680,7 @@ consumed type lists when they describe the same contract.
 
 Indexing issues that have a source endpoint expose a VS Code link to the
 associated file and line. The HTML export provides dedicated OpenAPI, Topics,
-Data, and Build views. OpenAPI and Topics both support
+and Data views. OpenAPI and Topics both support
 filtering their complete list (OpenAPI by path or service, DTOs by simple name
 or package); Persistence filters by class, package, collection, or service. A
 persistent inventory status reports whether unresolved indexing facts exist and

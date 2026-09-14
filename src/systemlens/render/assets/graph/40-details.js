@@ -12,7 +12,6 @@
       }
       const showingGraph = tab === "graph";
       const showingResources = tab === "resources";
-      const showingDependencies = tab === "dependencies";
       const showingIssues = tab === "issues";
       const showingOpenApi = tab === "openapi";
       const showingKafka = tab === "kafka";
@@ -28,8 +27,6 @@
       kafkaTab.setAttribute("aria-selected", String(showingKafka));
       persistenceTab.classList.toggle("is-active", showingPersistence);
       persistenceTab.setAttribute("aria-selected", String(showingPersistence));
-      buildTab.classList.toggle("is-active", showingDependencies);
-      buildTab.setAttribute("aria-selected", String(showingDependencies));
       issuesTab.classList.toggle("is-active", showingIssues);
       issuesTab.setAttribute("aria-selected", String(showingIssues));
       flowsTab.classList.toggle("is-active", showingFlows);
@@ -38,23 +35,13 @@
       resourcesPanel.hidden = !showingResources;
       quickSearch.hidden = !showingGraph;
       graphContext.hidden = !showingGraph;
-      dependenciesPanel.hidden = !showingDependencies;
       issuesPanel.hidden = !showingIssues;
       openApiPanel.hidden = !showingOpenApi;
       kafkaPanel.hidden = !showingKafka;
       persistencePanel.hidden = !showingPersistence;
       flowsPanel.hidden = !showingFlows;
       graphLegend.hidden = !showingGraph;
-      graphCanvas.hidden = showingDependencies;
-      dependencyCanvas.hidden = !showingDependencies;
       if (showingFlows) flowsPanel.dispatchEvent(new Event("systemlens:flows-open"));
-      if (showingDependencies) {
-        const activeDependencyRenderer = ensureDependencyRenderer();
-        requestAnimationFrame(() => {
-          activeDependencyRenderer.refresh();
-          activeDependencyRenderer.getCamera().animatedReset({ duration: 220 });
-        });
-      }
     }
     function renderIndexingIssues() {
       inventoryStatus.hidden = false;

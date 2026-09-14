@@ -15,12 +15,12 @@
     }
     * { box-sizing: border-box; }
     body { margin: 0; overflow: hidden; }
-    #graph, #dependency-graph { background: #f8fafc; touch-action: none; }
+    #graph { background: #f8fafc; touch-action: none; }
     /* Keep Sigma's canvas in a dedicated background layer. The workspace
        controls must remain above it, regardless of DOM order. */
     /* Sigma and every HTML overlay must share the same containing rectangle.
        The workspace variables reserve the space used by the controls. */
-    #graph, #dependency-graph {
+    #graph {
       position: fixed;
       left: var(--workspace-left, 0px);
       right: var(--workspace-right, 0px);

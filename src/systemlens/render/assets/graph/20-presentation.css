@@ -33,7 +33,7 @@
       font-family: Inter, "SF Pro Text", ui-sans-serif, system-ui, sans-serif;
     }
     body { background: #eef2f8; }
-    #graph, #dependency-graph {
+    #graph {
       left: var(--workspace-left, 0px);
       right: var(--workspace-right, 0px);
       top: var(--workspace-top, 0px);
@@ -228,7 +228,7 @@
       color-scheme: dark; color: var(--ink); background: #0c1525;
     }
     :root[data-theme="dark"] body { background: #0c1525; }
-    :root[data-theme="dark"] #graph, :root[data-theme="dark"] #dependency-graph {
+    :root[data-theme="dark"] #graph {
       background: radial-gradient(circle at 72% 18%, rgba(76, 104, 190, .25), transparent 28%),
         radial-gradient(circle at 34% 84%, rgba(18, 126, 151, .17), transparent 31%),
         linear-gradient(145deg, #13213a 0%, #0f1b2e 55%, #0b1423 100%);
@@ -239,7 +239,7 @@
     }
     :root[data-theme="dark"] .toolbar-header { background: var(--ui-panel); }
     :root[data-theme="dark"] .toolbar strong, :root[data-theme="dark"] .details-title,
-    :root[data-theme="dark"] .path-details-title, :root[data-theme="dark"] .dependency-view h2,
+    :root[data-theme="dark"] .path-details-title,
     :root[data-theme="dark"] .references-title, :root[data-theme="dark"] .indexing-issues-title,
     :root[data-theme="dark"] .inspector-title { color: var(--ui-title); }
     :root[data-theme="dark"] .toolbar input:not([type="checkbox"]), :root[data-theme="dark"] .toolbar button,
@@ -275,7 +275,7 @@
     :root[data-theme="dark"] .details-header { border-color: rgba(148, 163, 184, .2); background: transparent; }
     :root[data-theme="dark"] .details-section h2, :root[data-theme="dark"] .details-kicker,
     :root[data-theme="dark"] .reference-meta, :root[data-theme="dark"] .details-empty,
-    :root[data-theme="dark"] .path-details-summary, :root[data-theme="dark"] .dependency-view p:last-child { color: var(--ui-muted); }
+    :root[data-theme="dark"] .path-details-summary { color: var(--ui-muted); }
     :root[data-theme="dark"] .detail-badge.complexity.low { background: #172f66; }
     :root[data-theme="dark"] .detail-badge.complexity.medium { background: #4a3517; }
     :root[data-theme="dark"] .detail-badge.complexity.high { color: #c4b5fd; background: #35245f; }

@@ -31,8 +31,7 @@
       updateThemeToggle();
       const labelColor = { color: theme === "dark" ? "#dce8f7" : "#172033" };
       renderer?.setSetting("labelColor", labelColor);
-      dependencyRenderer?.setSetting("labelColor", labelColor);
-      renderer?.refresh(); dependencyRenderer?.refresh();
+      renderer?.refresh();
     });
     updateThemeToggle();
     const nodeDataById = new Map(graphData.nodes.map(node => [node.id, node]));
@@ -104,68 +103,6 @@
       if (link.direction === "data_access") return RELATION_COLORS.mongodb;
       if (link.kind.startsWith("mcp_") && ["reads", "writes", "uses"].includes(link.label)) return RELATION_COLORS.mongodb;
       return RELATION_COLORS.kafkaPublish;
-    }
-    function dependencyGraphData() {
-      return graphData.build_dependencies || { nodes: [], links: [] };
-    }
-    function buildHierarchyPositions(nodes, links) {
-      // Sugiyama starts by condensing cycles. The resulting component graph is
-      // acyclic and can therefore be assigned stable dependency layers.
-      const adjacency = new Map(nodes.map(node => [node.id, []]));
-      links.forEach(link => adjacency.get(link.source)?.push(link.target));
-      const indexes = new Map(), lowlinks = new Map(), stack = [], onStack = new Set(), components = [];
-      let nextIndex = 0;
-      function visit(nodeId) {
-        indexes.set(nodeId, nextIndex); lowlinks.set(nodeId, nextIndex); nextIndex += 1;
-        stack.push(nodeId); onStack.add(nodeId);
-        for (const targetId of adjacency.get(nodeId) || []) {
-          if (!indexes.has(targetId)) {
-            visit(targetId);
-            lowlinks.set(nodeId, Math.min(lowlinks.get(nodeId), lowlinks.get(targetId)));
-          } else if (onStack.has(targetId)) {
-            lowlinks.set(nodeId, Math.min(lowlinks.get(nodeId), indexes.get(targetId)));
-          }
-        }
-        if (lowlinks.get(nodeId) !== indexes.get(nodeId)) return;
-        const component = [];
-        for (;;) {
-          const member = stack.pop(); onStack.delete(member); component.push(member);
-          if (member === nodeId) break;
-        }
-        components.push(component.sort());
-      }
-      nodes.map(node => node.id).sort().forEach(nodeId => { if (!indexes.has(nodeId)) visit(nodeId); });
-      const componentByNode = new Map();
-      components.forEach((component, index) => component.forEach(nodeId => componentByNode.set(nodeId, index)));
-      const successors = components.map(() => new Set());
-      const indegrees = components.map(() => 0);
-      links.forEach(link => {
-        const source = componentByNode.get(link.source), target = componentByNode.get(link.target);
-        if (source === target || successors[source].has(target)) return;
-        successors[source].add(target); indegrees[target] += 1;
-      });
-      const levels = components.map(() => 0);
-      const queue = components.map((_component, index) => index).filter(index => indegrees[index] === 0).sort((a, b) => a - b);
-      for (let cursor = 0; cursor < queue.length; cursor += 1) {
-        const component = queue[cursor];
-        [...successors[component]].sort((a, b) => a - b).forEach(target => {
-          levels[target] = Math.max(levels[target], levels[component] + 1);
-          indegrees[target] -= 1;
-          if (indegrees[target] === 0) queue.push(target);
-        });
-      }
-      const layers = new Map();
-      components.forEach((component, index) => {
-        const level = levels[index];
-        layers.set(level, [...(layers.get(level) || []), ...component]);
-      });
-      const positions = new Map();
-      [...layers.entries()].sort(([left], [right]) => left - right).forEach(([level, nodeIds]) => {
-        nodeIds.sort();
-        const center = (nodeIds.length - 1) / 2;
-        nodeIds.forEach((nodeId, row) => positions.set(nodeId, { x: level * 2.8, y: row - center }));
-      });
-      return positions;
     }
     let network;
     let renderer;

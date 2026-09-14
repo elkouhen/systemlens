@@ -136,39 +136,6 @@ def _indexing_issues(
     )
 
 
-def _module_dependency_view(
-    modules: list[DiscoveredModule] | None,
-    dependencies: list[ModuleDependency] | None,
-) -> dict[str, list[dict[str, object]]]:
-    """Serialize the Maven/Gradle dependency tree used by the HTML sub-view."""
-    dependencies = dependencies or []
-    connected = {name for dependency in dependencies for name in (dependency.source, dependency.target)}
-    modules_by_name = {module.name: module for module in modules or []}
-    module_names = set(modules_by_name) | connected
-    return {
-        "nodes": [
-            {
-                "id": f"module:{name}",
-                "name": name,
-                "kind": "build_module",
-                "build_system": modules_by_name[name].build_system if name in modules_by_name else "unknown",
-                "color": "#2563eb" if modules_by_name.get(name, None) and modules_by_name[name].starts_application else "#64748b",
-                "size": 17 if modules_by_name.get(name, None) and modules_by_name[name].starts_application else 14,
-            }
-            for name in sorted(module_names)
-        ],
-        "links": [
-            {
-                "source": f"module:{dependency.source}",
-                "target": f"module:{dependency.target}",
-                "kind": "build",
-                "label": "dépend de",
-            }
-            for dependency in dependencies
-        ],
-    }
-
-
 def build_graph_view_model(
     endpoints_by_service: dict[str, list[MessageEndpoint]],
     edges: list[GraphEdge],
@@ -1122,7 +1089,6 @@ def build_graph_view_model(
             "runtime_namespaces": runtime_namespaces,
             "fact_namespaces": fact_namespaces,
             "groups": project_groups,
-            "build_dependencies": _module_dependency_view(build_modules, module_dependencies),
             "kafka_dtos": kafka_dtos,
             "project_dto_definitions": project_dto_definitions,
             "mongo_persistence_classes": mongo_persistence_classes,

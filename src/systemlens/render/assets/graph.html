@@ -24,16 +24,15 @@
       <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
     </div>
     <div class="toolbar-tabs" role="tablist" aria-label="Vues de l'architecture">
-      <button id="graph-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="graph-panel">Explorer</button>
+      <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel">Explorer</button>
       <button id="resources-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="resources-panel">Ressources</button>
       <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
       <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Topics</button>
       <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Data</button>
-      <button id="build-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="dependencies-panel">Build</button>
       <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problemes d'indexation">Qualité</button>
-      <button id="flows-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="flows-panel">Flux</button>
+      <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux</button>
     </div>
-    <div id="graph-panel" class="toolbar-panel" role="tabpanel" aria-labelledby="graph-tab" hidden>
+    <div id="graph-panel" class="toolbar-panel" role="tabpanel" aria-labelledby="graph-tab">
       <div id="quick-search" class="quick-search">
         <label class="explore-search-label" for="search">Rechercher une ressource ou un itinéraire</label>
         <input id="search" type="search" list="node-suggestions" placeholder="orders ou orders -> payments" autocomplete="off" aria-describedby="search-help search-status" aria-label="Rechercher une ressource ou un itinéraire">
@@ -125,11 +124,6 @@
       </div>
       <section class="references-section"><input id="resources-filter" class="reference-filter-input" type="search" placeholder="Rechercher une ressource par nom" autocomplete="off" aria-label="Rechercher une ressource par nom"><ul id="resources-list" class="references-list"></ul><p id="resources-empty" class="references-empty">Aucune ressource ne correspond à ce filtre.</p></section>
     </div>
-    <div id="dependencies-panel" class="toolbar-panel dependency-view" role="tabpanel" aria-labelledby="build-tab" hidden>
-      <p class="dependency-view-kicker">Structure de build</p>
-      <h2>Arbre des dépendances</h2>
-      <p>Disposition Sugiyama : les projets sont rangés par niveaux de dépendance. Un lien part du projet dépendant, à gauche, vers le projet requis, à droite. Les interactions APIs, Topics et Data restent dans la vue Explorer.</p>
-    </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
       <div class="indexing-issues-header">
         <p class="indexing-issues-kicker">Qualite de l'inventaire</p>
@@ -139,7 +133,7 @@
       <ul id="indexing-issues" class="indexing-issues-list" aria-label="Problemes d'indexation"></ul>
       <p id="indexing-issues-empty" class="indexing-issues-empty">Aucun probleme d'indexation detecte.</p>
     </div>
-    <div id="flows-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="flows-tab">
+    <div id="flows-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="flows-tab" hidden>
       <div class="references-header">
         <p class="references-kicker">Parcours potentiels du code</p>
         <h2 id="code-flows-title" class="references-title">Flux de code</h2>
@@ -201,7 +195,6 @@
   <div id="graph-node-labels" aria-hidden="true"></div>
   <div id="graph-flow-tooltips" aria-hidden="true"></div>
   <p id="graph-flow-status" hidden></p>
-  <div id="dependency-graph" aria-label="Arbre des dependances entre microservices" hidden></div>
   <div id="inspector-modal" class="inspector-modal" role="dialog" aria-modal="true" aria-labelledby="inspector-title" hidden>
     <div class="inspector-dialog">
       <header class="inspector-header"><h1 id="inspector-title" class="inspector-title"></h1><button id="inspector-close" class="inspector-close" type="button" aria-label="Fermer">×</button></header>

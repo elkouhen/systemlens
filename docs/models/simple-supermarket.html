@@ -105,12 +105,12 @@
     }
     * { box-sizing: border-box; }
     body { margin: 0; overflow: hidden; }
-    #graph, #dependency-graph { background: #f8fafc; touch-action: none; }
+    #graph { background: #f8fafc; touch-action: none; }
     /* Keep Sigma's canvas in a dedicated background layer. The workspace
        controls must remain above it, regardless of DOM order. */
     /* Sigma and every HTML overlay must share the same containing rectangle.
        The workspace variables reserve the space used by the controls. */
-    #graph, #dependency-graph {
+    #graph {
       position: fixed;
       left: var(--workspace-left, 0px);
       right: var(--workspace-right, 0px);
@@ -220,7 +220,6 @@
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-label.is-code-flow-node .graph-node-card-icon.is-service { box-shadow: none; filter: saturate(1.18) drop-shadow(0 0 9px rgba(196, 181, 253, .92)); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-label.is-code-flow-node.is-selected .graph-node-card-icon.is-service { filter: saturate(1.18) drop-shadow(0 0 9px rgba(196, 181, 253, .92)); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: color-mix(in srgb, #17263d 88%, var(--card-accent, #64748b)); border-color: color-mix(in srgb, var(--card-accent, #64748b) 46%, #52647d); box-shadow: 0 4px 12px rgba(0, 0, 0, .32); }
-    #dependency-graph[hidden] { display: none; }
     .toolbar { position: fixed; z-index: 10; top: 16px; left: 16px; display: grid; gap: 10px; width: min(390px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 12px; overflow-y: auto; border: 1px solid #d7dee9; border-radius: 10px; background: rgba(255, 255, 255, .96); box-shadow: 0 4px 20px rgba(15, 23, 42, .12); }
     .toolbar { overflow-x: hidden; }
     .toolbar-header { position: sticky; z-index: 20; top: -10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -10px -2px 0; padding: 10px 2px 6px; background: rgba(255, 255, 255, .98); }
@@ -428,10 +427,6 @@
     .path-overview-item.is-collection { border-left: 3px solid #16a34a; }
     .path-overview-stop { width: 100%; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
     .path-overview-stop:hover, .path-overview-stop:focus-visible { color: #1d4f91; text-decoration: underline; outline: none; }
-    .dependency-view { display: grid; gap: 8px; padding: 2px 0; }
-    .dependency-view-kicker { margin: 0 0 3px; color: #1d4f91; font-size: var(--type-kicker); font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
-    .dependency-view h2 { margin: 0; color: #172033; font-size: var(--type-view-title); line-height: 1.25; }
-    .dependency-view p:last-child { margin: 0; color: #52616b; font-size: 12px; line-height: 1.45; }
     .legend { position: fixed; z-index: 10; right: 16px; bottom: 16px; width: 210px; padding: 9px 11px; border: 1px solid #d7dee9; border-radius: 8px; background: rgba(255, 255, 255, .95); color: #475569; font-size: 11px; box-shadow: 0 2px 12px rgba(15, 23, 42, .10); }
     .legend[open] summary { margin-bottom: 8px; }
     .legend-content { display: grid; gap: 5px; }
@@ -514,7 +509,7 @@
       font-family: Inter, "SF Pro Text", ui-sans-serif, system-ui, sans-serif;
     }
     body { background: #eef2f8; }
-    #graph, #dependency-graph {
+    #graph {
       left: var(--workspace-left, 0px);
       right: var(--workspace-right, 0px);
       top: var(--workspace-top, 0px);
@@ -709,7 +704,7 @@
       color-scheme: dark; color: var(--ink); background: #0c1525;
     }
     :root[data-theme="dark"] body { background: #0c1525; }
-    :root[data-theme="dark"] #graph, :root[data-theme="dark"] #dependency-graph {
+    :root[data-theme="dark"] #graph {
       background: radial-gradient(circle at 72% 18%, rgba(76, 104, 190, .25), transparent 28%),
         radial-gradient(circle at 34% 84%, rgba(18, 126, 151, .17), transparent 31%),
         linear-gradient(145deg, #13213a 0%, #0f1b2e 55%, #0b1423 100%);
@@ -720,7 +715,7 @@
     }
     :root[data-theme="dark"] .toolbar-header { background: var(--ui-panel); }
     :root[data-theme="dark"] .toolbar strong, :root[data-theme="dark"] .details-title,
-    :root[data-theme="dark"] .path-details-title, :root[data-theme="dark"] .dependency-view h2,
+    :root[data-theme="dark"] .path-details-title,
     :root[data-theme="dark"] .references-title, :root[data-theme="dark"] .indexing-issues-title,
     :root[data-theme="dark"] .inspector-title { color: var(--ui-title); }
     :root[data-theme="dark"] .toolbar input:not([type="checkbox"]), :root[data-theme="dark"] .toolbar button,
@@ -756,7 +751,7 @@
     :root[data-theme="dark"] .details-header { border-color: rgba(148, 163, 184, .2); background: transparent; }
     :root[data-theme="dark"] .details-section h2, :root[data-theme="dark"] .details-kicker,
     :root[data-theme="dark"] .reference-meta, :root[data-theme="dark"] .details-empty,
-    :root[data-theme="dark"] .path-details-summary, :root[data-theme="dark"] .dependency-view p:last-child { color: var(--ui-muted); }
+    :root[data-theme="dark"] .path-details-summary { color: var(--ui-muted); }
     :root[data-theme="dark"] .detail-badge.complexity.low { background: #172f66; }
     :root[data-theme="dark"] .detail-badge.complexity.medium { background: #4a3517; }
     :root[data-theme="dark"] .detail-badge.complexity.high { color: #c4b5fd; background: #35245f; }
@@ -770,14 +765,12 @@
     .brand strong,
     .details-title,
     .path-details-title,
-    .dependency-view h2,
     .references-title,
     .indexing-issues-title,
     .inspector-title { color: var(--ui-title); }
     .explore-search-label,
     .details-kicker,
     .path-details-kicker,
-    .dependency-view-kicker,
     .references-kicker,
     .indexing-issues-kicker,
     .details-section h2,
@@ -799,7 +792,6 @@
     .reference-meta,
     .details-empty,
     .path-details-summary,
-    .dependency-view p:last-child,
     .dto-summary { color: var(--ui-muted); }
     .toolbar-tabs,
     .graph-control-group,
@@ -926,7 +918,6 @@
       <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
       <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Topics</button>
       <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Data</button>
-      <button id="build-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="dependencies-panel">Build</button>
       <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problemes d'indexation">Qualité</button>
       <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux</button>
     </div>
@@ -1022,11 +1013,6 @@
       </div>
       <section class="references-section"><input id="resources-filter" class="reference-filter-input" type="search" placeholder="Rechercher une ressource par nom" autocomplete="off" aria-label="Rechercher une ressource par nom"><ul id="resources-list" class="references-list"></ul><p id="resources-empty" class="references-empty">Aucune ressource ne correspond à ce filtre.</p></section>
     </div>
-    <div id="dependencies-panel" class="toolbar-panel dependency-view" role="tabpanel" aria-labelledby="build-tab" hidden>
-      <p class="dependency-view-kicker">Structure de build</p>
-      <h2>Arbre des dépendances</h2>
-      <p>Disposition Sugiyama : les projets sont rangés par niveaux de dépendance. Un lien part du projet dépendant, à gauche, vers le projet requis, à droite. Les interactions APIs, Topics et Data restent dans la vue Explorer.</p>
-    </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
       <div class="indexing-issues-header">
         <p class="indexing-issues-kicker">Qualite de l'inventaire</p>
@@ -1098,14 +1084,13 @@
   <div id="graph-node-labels" aria-hidden="true"></div>
   <div id="graph-flow-tooltips" aria-hidden="true"></div>
   <p id="graph-flow-status" hidden></p>
-  <div id="dependency-graph" aria-label="Arbre des dependances entre microservices" hidden></div>
   <div id="inspector-modal" class="inspector-modal" role="dialog" aria-modal="true" aria-labelledby="inspector-title" hidden>
     <div class="inspector-dialog">
       <header class="inspector-header"><h1 id="inspector-title" class="inspector-title"></h1><button id="inspector-close" class="inspector-close" type="button" aria-label="Fermer">×</button></header>
       <div id="inspector-body" class="inspector-body"></div>
     </div>
   </div>
-  <script id="graph-data" type="application/json">{"nodes": [{"id": "microservice:inventory-service", "kind": "microservice", "name": "inventory-service", "layer": "application", "layer_label": "Application", "color": "#dc2626", "runtime_namespaces": [], "fact_namespaces": ["ai-java-architecture"], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "ports": [{"label": "I4 → O4", "direction": "in", "type": "Kafka receive", "method": "io.systemlens.supermarket.inventory.adapter.in.messaging.KafkaOrderConsumer::consume", "name": "supermarket.order.placed", "endpoint_id": "64779fe9b80b67c8", "local_output_labels": ["O4"], "local_outputs": [{"endpoint_id": "0f62d72eb83bc709", "label": "O4", "type": "Kafka publish", "name": "supermarket.stock.depleted", "method": "io.systemlens.supermarket.inventory.adapter.out.messaging.KafkaStockDepletedAdapter::publish"}]}, {"label": "I5", "direction": "in", "type": "Kafka receive", "method": "io.systemlens.supermarket.inventory.adapter.in.messaging.KafkaStockRestockConsumer::consume", "name": "supermarket.stock.restock-requested", "endpoint_id": "e2a44b62e1ceb700"}, {"label": "O4", "direction": "out", "type": "Kafka publish", "method": "io.systemlens.supermarket.inventory.adapter.out.messaging.KafkaStockDepletedAdapter::publish", "name": "supermarket.stock.depleted", "endpoint_id": "0f62d72eb83bc709"}, {"label": "I6", "direction": "in", "type": "HTTP receive", "method": "io.systemlens.supermarket.inventory.adapter.in.web.InventoryController::health", "name": "GET /api/health", "endpoint_id": "879e24faf265196e"}, {"label": "I7 → O4", "direction": "in", "type": "HTTP receive", "method": "io.systemlens.supermarket.inventory.adapter.in.web.InventoryController::reserve", "name": "POST /api/reservations", "endpoint_id": "e3b6f5b662c6717b", "local_output_labels": ["O4"], "local_outputs": [{"endpoint_id": "0f62d72eb83bc709", "label": "O4", "type": "Kafka publish", "name": "supermarket.stock.depleted", "method": "io.systemlens.supermarket.inventory.adapter.out.messaging.KafkaStockDepletedAdapter::publish"}]}], "kafka_endpoints": [{"role": "consume", "topic": "supermarket.order.placed", "message_type": "OrderPlaced", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18"}, {"role": "consume", "topic": "supermarket.stock.restock-requested", "message_type": "StockRestockRequested", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaStockRestockConsumer.java:18", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaStockRestockConsumer.java:18"}, {"role": "produce", "topic": "supermarket.stock.depleted", "message_type": "StockDepleted", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java:15", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java:15"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service", "resources": ["GET /api/health", "POST /api/reservations"], "kubernetes_workloads": [], "openapi_files": ["src/main/resources/static/openapi.yaml"], "openapi_contracts": [{"path": "src/main/resources/static/openapi.yaml", "resources": ["GET /api/health", "POST /api/reservations"], "spec": {"openapi": "3.0.3", "info": {"title": "API des stocks du supermarché", "version": "v1", "description": "Réservation synchrone du stock du catalogue."}, "servers": [{"url": "http://localhost:3001"}], "paths": {"/api/health": {"get": {"tags": ["Stocks"], "summary": "Vérifie la disponibilité du service de stock", "operationId": "health", "responses": {"200": {"description": "Service disponible", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthStatus"}}}}}}}, "/api/reservations": {"post": {"tags": ["Stocks"], "summary": "Réserve le stock d'une commande", "operationId": "reserve", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OrderPlaced"}}}}, "responses": {"200": {"description": "Stock réservé", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReservationResult"}}}}, "400": {"description": "Quantité invalide", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}, "404": {"description": "Produit introuvable", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}, "409": {"description": "Stock insuffisant", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}}}}}, "components": {"schemas": {"HealthStatus": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "example": "ok"}}}, "OrderPlaced": {"type": "object", "required": ["orderId", "productId", "quantity", "requestedAt"], "properties": {"orderId": {"type": "string", "format": "uuid"}, "productId": {"type": "string", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1, "example": 2}, "requestedAt": {"type": "string", "format": "date-time"}}}, "ReservationResult": {"type": "object", "required": ["orderId", "productId", "productName", "quantity", "remainingStock", "channel", "durationMs"], "properties": {"orderId": {"type": "string"}, "productId": {"type": "string"}, "productName": {"type": "string"}, "quantity": {"type": "integer", "format": "int32"}, "remainingStock": {"type": "integer", "format": "int32"}, "channel": {"type": "string", "example": "rest"}, "durationMs": {"type": "integer", "format": "int64"}}}, "ErrorResponse": {"type": "object", "required": ["error"], "properties": {"error": {"type": "string"}}}}}}, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/resources/static/openapi.yaml"}], "asyncapi_contracts": [{"path": "src/main/resources/static/asyncapi.yaml", "spec": {"asyncapi": "3.0.0", "info": {"title": "API asynchrone des stocks du supermarché", "version": "v1", "description": "Traitement des commandes en ligne, signalement des ruptures et application des réassorts."}, "defaultContentType": "application/json", "servers": {"kafka": {"host": "{bootstrapServers}", "protocol": "kafka", "description": "Cluster Kafka configuré par SPRING_KAFKA_BOOTSTRAP_SERVERS.", "variables": {"bootstrapServers": {"default": "localhost:9092"}}}}, "channels": {"onlineOrders": {"address": "supermarket.order.placed", "title": "Commandes en ligne passées", "description": "Commandes publiées par order-service à traiter par inventory-service.", "messages": {"orderPlaced": {"$ref": "#/components/messages/OrderPlaced"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}, "depletedStocks": {"address": "supermarket.stock.depleted", "title": "Stocks épuisés", "description": "Événement publié lorsque la dernière unité d'un produit est réservée.", "messages": {"stockDepleted": {"$ref": "#/components/messages/StockDepleted"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}, "restockRequests": {"address": "supermarket.stock.restock-requested", "title": "Demandes de réassort", "description": "Demandes publiées par restock-service et appliquées par inventory-service.", "messages": {"stockRestockRequested": {"$ref": "#/components/messages/StockRestockRequested"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}}, "operations": {"receiveOnlineOrder": {"action": "receive", "title": "Traiter une commande en ligne", "summary": "Réserve le stock pour une commande reçue du topic des commandes.", "channel": {"$ref": "#/channels/onlineOrders"}, "messages": [{"$ref": "#/channels/onlineOrders/messages/orderPlaced"}], "bindings": {"kafka": {"groupId": {"type": "string", "enum": ["inventory-service"]}, "bindingVersion": "0.5.0"}}}, "publishStockDepleted": {"action": "send", "title": "Signaler un stock épuisé", "summary": "Émet un événement lorsqu'une réservation épuise le stock d'un produit.", "channel": {"$ref": "#/channels/depletedStocks"}, "messages": [{"$ref": "#/channels/depletedStocks/messages/stockDepleted"}]}, "receiveRestockRequest": {"action": "receive", "title": "Appliquer une demande de réassort", "summary": "Augmente le stock pour une demande provenant de restock-service.", "channel": {"$ref": "#/channels/restockRequests"}, "messages": [{"$ref": "#/channels/restockRequests/messages/stockRestockRequested"}], "bindings": {"kafka": {"groupId": {"type": "string", "enum": ["inventory-restock-service"]}, "bindingVersion": "0.5.0"}}}}, "components": {"messages": {"OrderPlaced": {"name": "OrderPlaced", "title": "Commande passée", "payload": {"$ref": "#/components/schemas/OrderPlaced"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant de la commande, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}, "StockDepleted": {"name": "StockDepleted", "title": "Stock épuisé", "payload": {"$ref": "#/components/schemas/StockDepleted"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant du produit, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}, "StockRestockRequested": {"name": "StockRestockRequested", "title": "Réassort demandé", "payload": {"$ref": "#/components/schemas/StockRestockRequested"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant du produit, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}}, "schemas": {"OrderPlaced": {"type": "object", "required": ["orderId", "productId", "quantity", "requestedAt"], "properties": {"orderId": {"type": "string", "description": "Identifiant unique de la commande."}, "productId": {"type": "string", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1}, "requestedAt": {"type": "string", "format": "date-time"}}}, "StockDepleted": {"type": "object", "required": ["productId", "occurredAt"], "properties": {"productId": {"type": "string", "example": "PASTA-500G"}, "occurredAt": {"type": "string", "format": "date-time"}}}, "StockRestockRequested": {"type": "object", "required": ["productId", "quantity", "requestedAt"], "properties": {"productId": {"type": "string", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1, "example": 500}, "requestedAt": {"type": "string", "format": "date-time"}}}}}}, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/resources/static/asyncapi.yaml"}], "label": "inventory-service", "width": 190, "height": 42, "metadata": {"module": "inventory-service", "runtime": "java-21"}, "complexity": {"score": 5, "level": "high", "relations": 5, "breakdown": {"http": 1, "kafka": 3, "mongodb": 1}, "rank": 3, "population": 3, "tier_start": 3, "tier_end": 3}, "size": 50, "internal_flow_count": 4}, {"id": "microservice:order-service", "kind": "microservice", "name": "order-service", "layer": "application", "layer_label": "Application", "color": "#2563eb", "runtime_namespaces": [], "fact_namespaces": ["ai-java-architecture"], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "ports": [{"label": "O1", "direction": "out", "type": "HTTP call", "method": "io.systemlens.supermarket.order.OrderController::placeOrder", "name": "POST /api/reservations", "endpoint_id": "bb20d7a5c7eca367", "target": {"service": "inventory-service", "label": "I7 → O4", "type": "HTTP receive", "method": "io.systemlens.supermarket.inventory.adapter.in.web.InventoryController::reserve", "name": "POST /api/reservations"}}, {"label": "O2", "direction": "out", "type": "HTTP call", "method": "io.systemlens.supermarket.order.OrderController::triggerOutOfStock", "name": "POST /api/reservations", "endpoint_id": "7eb8c1aa24b66e74", "target": {"service": "inventory-service", "label": "I7 → O4", "type": "HTTP receive", "method": "io.systemlens.supermarket.inventory.adapter.in.web.InventoryController::reserve", "name": "POST /api/reservations"}}, {"label": "O3", "direction": "out", "type": "Kafka publish", "method": "io.systemlens.supermarket.order.ScheduledOrderPublisher::publishOnlineOrder", "name": "supermarket.order.placed", "endpoint_id": "32bcfccf0a76226d"}, {"label": "I1", "direction": "in", "type": "HTTP receive", "method": "io.systemlens.supermarket.order.OrderController::health", "name": "GET /api/health", "endpoint_id": "65435b1fef64e44b"}, {"label": "I2", "direction": "in", "type": "HTTP receive", "method": "io.systemlens.supermarket.order.OrderController::placeOrder", "name": "POST /api/orders", "endpoint_id": "cf4e656c5470de40"}, {"label": "I3", "direction": "in", "type": "HTTP receive", "method": "io.systemlens.supermarket.order.OrderController::triggerOutOfStock", "name": "GET /api/error", "endpoint_id": "23f90b03088b9127"}], "kafka_endpoints": [{"role": "produce", "topic": "supermarket.order.placed", "message_type": "OrderPlaced", "location": "order-service/src/main/java/io/systemlens/supermarket/order/ScheduledOrderPublisher.java:39", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/java/io/systemlens/supermarket/order/ScheduledOrderPublisher.java:39"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service", "resources": ["GET /api/error", "GET /api/health", "POST /api/orders"], "kubernetes_workloads": [], "openapi_files": ["src/main/resources/static/openapi.yaml"], "openapi_contracts": [{"path": "src/main/resources/static/openapi.yaml", "resources": ["GET /api/error", "GET /api/health", "POST /api/orders"], "spec": {"openapi": "3.0.3", "info": {"title": "API des commandes du supermarché", "version": "v1", "description": "Prise de commandes en caisse et réservation synchrone du stock."}, "servers": [{"url": "http://localhost:3000"}], "paths": {"/api/health": {"get": {"tags": ["Commandes"], "summary": "Vérifie la disponibilité du service de commande", "operationId": "health", "responses": {"200": {"description": "Service disponible", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthStatus"}}}}}}}, "/api/orders": {"post": {"tags": ["Commandes"], "summary": "Passe une commande", "description": "Réserve le stock auprès d'inventory-service.", "operationId": "placeOrder", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OrderRequest"}}}}, "responses": {"200": {"description": "Commande réservée", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReservationResult"}}}}, "500": {"description": "Erreur lors de la réservation auprès du service de stock", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}}}}, "/api/error": {"get": {"tags": ["Commandes"], "summary": "Déclenche une rupture de stock", "description": "Scénario contrôlé destiné à la démonstration d'observabilité.", "operationId": "triggerOutOfStock", "responses": {"500": {"description": "Rupture de stock propagée par inventory-service", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}}}}}, "components": {"schemas": {"HealthStatus": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "example": "ok"}}}, "OrderRequest": {"type": "object", "required": ["productId", "quantity"], "properties": {"productId": {"type": "string", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1, "example": 2}}}, "ReservationResult": {"type": "object", "required": ["orderId", "productId", "productName", "quantity", "remainingStock", "channel", "durationMs"], "properties": {"orderId": {"type": "string"}, "productId": {"type": "string"}, "productName": {"type": "string"}, "quantity": {"type": "integer", "format": "int32"}, "remainingStock": {"type": "integer", "format": "int32"}, "channel": {"type": "string", "example": "rest"}, "durationMs": {"type": "integer", "format": "int64"}}}, "ErrorResponse": {"type": "object", "required": ["error"], "properties": {"error": {"type": "string"}}}}}}, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/resources/static/openapi.yaml"}], "asyncapi_contracts": [{"path": "src/main/resources/static/asyncapi.yaml", "spec": {"asyncapi": "3.0.0", "info": {"title": "API asynchrone des commandes du supermarché", "version": "v1", "description": "Publication des commandes en ligne destinées à inventory-service."}, "defaultContentType": "application/json", "servers": {"kafka": {"host": "{bootstrapServers}", "protocol": "kafka", "description": "Cluster Kafka configuré par SPRING_KAFKA_BOOTSTRAP_SERVERS.", "variables": {"bootstrapServers": {"default": "localhost:9092"}}}}, "channels": {"onlineOrders": {"address": "supermarket.order.placed", "title": "Commandes en ligne passées", "description": "Commandes publiées périodiquement par order-service et consommées par inventory-service.", "messages": {"orderPlaced": {"$ref": "#/components/messages/OrderPlaced"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}}, "operations": {"publishOnlineOrder": {"action": "send", "title": "Publier une commande en ligne", "summary": "Émet une commande à réserver par inventory-service.", "channel": {"$ref": "#/channels/onlineOrders"}, "messages": [{"$ref": "#/channels/onlineOrders/messages/orderPlaced"}]}}, "components": {"messages": {"OrderPlaced": {"name": "OrderPlaced", "title": "Commande passée", "summary": "Commande créée par order-service.", "payload": {"$ref": "#/components/schemas/OrderPlaced"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant de la commande, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}}, "schemas": {"OrderPlaced": {"type": "object", "required": ["orderId", "productId", "quantity", "requestedAt"], "properties": {"orderId": {"type": "string", "description": "Identifiant unique de la commande.", "example": "550e8400-e29b-41d4-a716-446655440000"}, "productId": {"type": "string", "description": "Référence du produit du catalogue.", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1, "example": 2}, "requestedAt": {"type": "string", "format": "date-time", "description": "Instant de création de la commande."}}}}}}, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/resources/static/asyncapi.yaml"}], "label": "order-service", "width": 190, "height": 42, "metadata": {"module": "order-service", "runtime": "java-21"}, "complexity": {"score": 2, "level": "low", "relations": 2, "breakdown": {"http": 1, "kafka": 1, "mongodb": 0}, "rank": 1, "population": 3, "tier_start": 1, "tier_end": 1}, "size": 50, "internal_flow_count": 0}, {"id": "microservice:restock-service", "kind": "microservice", "name": "restock-service", "layer": "application", "layer_label": "Application", "color": "#d97706", "runtime_namespaces": [], "fact_namespaces": ["ai-java-architecture"], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "ports": [{"label": "I8 → O5", "direction": "in", "type": "Kafka receive", "method": "io.systemlens.supermarket.restock.StockDepletedConsumer::requestRestock", "name": "supermarket.stock.depleted", "endpoint_id": "e0551613e084f3fd", "local_output_labels": ["O5"], "local_outputs": [{"endpoint_id": "5f5b733ab4e3986e", "label": "O5", "type": "Kafka publish", "name": "supermarket.stock.restock-requested", "method": "io.systemlens.supermarket.restock.StockDepletedConsumer::requestRestock"}]}, {"label": "O5", "direction": "out", "type": "Kafka publish", "method": "io.systemlens.supermarket.restock.StockDepletedConsumer::requestRestock", "name": "supermarket.stock.restock-requested", "endpoint_id": "5f5b733ab4e3986e"}], "kafka_endpoints": [{"role": "consume", "topic": "supermarket.stock.depleted", "message_type": "StockDepleted", "location": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37"}, {"role": "produce", "topic": "supermarket.stock.restock-requested", "message_type": "StockRestockRequested", "location": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:44", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:44"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service", "resources": [], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "asyncapi_contracts": [], "label": "restock-service", "width": 190, "height": 42, "metadata": {"module": "restock-service", "runtime": "java-21"}, "complexity": {"score": 2, "level": "medium", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 2, "population": 3, "tier_start": 2, "tier_end": 2}, "size": 50, "internal_flow_count": 1}, {"id": "kafka_topic:supermarket.order.placed", "kind": "kafka_topic", "name": "supermarket.order.placed", "label": "supermarket.order.placed", "published_message_types": ["OrderPlaced"], "consumed_message_types": ["OrderPlaced"], "width": 190, "height": 42, "owner_service": "order-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "low", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 1, "population": 3, "tier_start": 1, "tier_end": 1}, "color": "#2563eb", "size": 50}, {"id": "kafka_topic:supermarket.stock.depleted", "kind": "kafka_topic", "name": "supermarket.stock.depleted", "label": "supermarket.stock.depleted", "published_message_types": ["StockDepleted"], "consumed_message_types": ["StockDepleted"], "width": 190, "height": 42, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "medium", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 2, "population": 3, "tier_start": 2, "tier_end": 2}, "color": "#d97706", "size": 50}, {"id": "kafka_topic:supermarket.stock.restock-requested", "kind": "kafka_topic", "name": "supermarket.stock.restock-requested", "label": "supermarket.stock.restock-requested", "published_message_types": ["StockRestockRequested"], "consumed_message_types": ["StockRestockRequested"], "width": 190, "height": 42, "owner_service": "restock-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "high", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 3, "population": 3, "tier_start": 3, "tier_end": 3}, "color": "#dc2626", "size": 50}, {"id": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb_collection", "name": "order_fulfillments", "owner": "inventory-service", "label": "order_fulfillments", "persistence_classes": [{"id": "inventory-service:inventory-service:io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "service": "inventory-service", "module": "inventory-service", "collection": "order_fulfillments", "name": "OrderFulfillmentDocument", "qualified_name": "io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "source": "src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "line": 7, "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "fields": [{"name": "orderId", "type": "String", "references": []}, {"name": "productId", "type": "String", "references": []}, {"name": "productName", "type": "String", "references": []}, {"name": "quantity", "type": "int", "references": []}, {"name": "remainingStock", "type": "int", "references": []}, {"name": "channel", "type": "String", "references": []}, {"name": "requestedAt", "type": "Instant", "references": []}, {"name": "createdAt", "type": "Instant", "references": []}]}], "width": 190, "height": 42, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 1, "level": "low", "relations": 1, "breakdown": {"http": 0, "kafka": 0, "mongodb": 1}, "rank": 1, "population": 1, "tier_start": 1, "tier_end": 1}, "color": "#2563eb", "size": 50}, {"id": "collection:order_fulfillments", "kind": "collection", "name": "order_fulfillments", "label": "order_fulfillments", "width": 190, "height": 42, "status": "confirmed", "metadata": {"technology": "mongodb", "module": "inventory-service", "mapping": "spring-data-mongodb", "owner": "inventory-service"}, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "color": "#64748b", "size": 50}, {"id": "topic:supermarket.order.placed", "kind": "topic", "name": "supermarket.order.placed", "label": "supermarket.order.placed", "width": 190, "height": 42, "status": "confirmed", "metadata": {"technology": "kafka", "message_type": "OrderPlaced"}, "owner_service": "order-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "color": "#64748b", "size": 50}, {"id": "topic:supermarket.stock.depleted", "kind": "topic", "name": "supermarket.stock.depleted", "label": "supermarket.stock.depleted", "width": 190, "height": 42, "status": "confirmed", "metadata": {"technology": "kafka", "message_type": "StockDepleted"}, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "color": "#64748b", "size": 50}, {"id": "topic:supermarket.stock.restock-requested", "kind": "topic", "name": "supermarket.stock.restock-requested", "label": "supermarket.stock.restock-requested", "width": 190, "height": 42, "status": "confirmed", "metadata": {"technology": "kafka", "message_type": "StockRestockRequested"}, "owner_service": "restock-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "color": "#64748b", "size": 50}], "links": [{"source": "microservice:order-service", "target": "kafka_topic:supermarket.order.placed", "kind": "kafka", "direction": "outgoing", "label": "supermarket.order.placed", "confidence": "proved", "provenance": "code", "endpoint_ids": ["32bcfccf0a76226d"], "published_message_types": ["OrderPlaced"]}, {"source": "kafka_topic:supermarket.order.placed", "target": "microservice:inventory-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.order.placed", "confidence": "proved", "provenance": "code", "endpoint_ids": ["64779fe9b80b67c8"], "consumed_message_types": ["OrderPlaced"]}, {"source": "microservice:restock-service", "target": "kafka_topic:supermarket.stock.restock-requested", "kind": "kafka", "direction": "outgoing", "label": "supermarket.stock.restock-requested", "confidence": "proved", "provenance": "code", "endpoint_ids": ["5f5b733ab4e3986e"], "published_message_types": ["StockRestockRequested"]}, {"source": "kafka_topic:supermarket.stock.restock-requested", "target": "microservice:inventory-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.stock.restock-requested", "confidence": "proved", "provenance": "code", "endpoint_ids": ["e2a44b62e1ceb700"], "consumed_message_types": ["StockRestockRequested"]}, {"source": "microservice:inventory-service", "target": "kafka_topic:supermarket.stock.depleted", "kind": "kafka", "direction": "outgoing", "label": "supermarket.stock.depleted", "confidence": "proved", "provenance": "code", "endpoint_ids": ["0f62d72eb83bc709"], "published_message_types": ["StockDepleted"]}, {"source": "kafka_topic:supermarket.stock.depleted", "target": "microservice:restock-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.stock.depleted", "confidence": "proved", "provenance": "code", "endpoint_ids": ["e0551613e084f3fd"], "consumed_message_types": ["StockDepleted"]}, {"source": "microservice:order-service", "target": "microservice:inventory-service", "kind": "rest", "direction": "outgoing", "label": "inventory-service: POST /api/reservations", "confidence": "inferred", "provenance": "OpenAPI", "endpoint_ids": ["7eb8c1aa24b66e74", "bb20d7a5c7eca367"]}, {"source": "microservice:inventory-service", "target": "microservice:restock-service", "kind": "mcp_event", "direction": "outgoing", "label": "event", "confidence": "high", "status": "confirmed", "provenance": "MCP graph enrichment"}, {"source": "microservice:inventory-service", "target": "collection:order_fulfillments", "kind": "mcp_data", "direction": "outgoing", "label": "data", "confidence": "high", "status": "confirmed", "provenance": "MCP graph enrichment"}, {"source": "microservice:order-service", "target": "microservice:inventory-service", "kind": "mcp_http", "direction": "outgoing", "label": "http", "confidence": "high", "status": "confirmed", "provenance": "MCP graph enrichment"}, {"source": "microservice:order-service", "target": "microservice:inventory-service", "kind": "mcp_event", "direction": "outgoing", "label": "event", "confidence": "high", "status": "confirmed", "provenance": "MCP graph enrichment"}, {"source": "microservice:restock-service", "target": "microservice:inventory-service", "kind": "mcp_event", "direction": "outgoing", "label": "event", "confidence": "high", "status": "confirmed", "provenance": "MCP graph enrichment"}, {"source": "microservice:inventory-service", "target": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb", "direction": "data_access", "label": "lit", "confidence": "proved", "provenance": "code"}, {"source": "microservice:inventory-service", "target": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb", "direction": "data_access", "label": "écrit", "confidence": "proved", "provenance": "code"}], "port_links": [{"source_endpoint_id": "32bcfccf0a76226d", "target_endpoint_id": "64779fe9b80b67c8", "kind": "kafka"}, {"source_endpoint_id": "5f5b733ab4e3986e", "target_endpoint_id": "e2a44b62e1ceb700", "kind": "kafka"}, {"source_endpoint_id": "0f62d72eb83bc709", "target_endpoint_id": "e0551613e084f3fd", "kind": "kafka"}, {"source_endpoint_id": "bb20d7a5c7eca367", "target_endpoint_id": "e3b6f5b662c6717b", "kind": "rest"}, {"source_endpoint_id": "7eb8c1aa24b66e74", "target_endpoint_id": "e3b6f5b662c6717b", "kind": "rest"}], "internal_port_links": [{"input_endpoint_id": "64779fe9b80b67c8", "output_endpoint_id": "0f62d72eb83bc709"}, {"input_endpoint_id": "e3b6f5b662c6717b", "output_endpoint_id": "0f62d72eb83bc709"}, {"input_endpoint_id": "e0551613e084f3fd", "output_endpoint_id": "5f5b733ab4e3986e"}], "software_layers": ["application"], "runtime_namespaces": [], "fact_namespaces": ["ai-java-architecture"], "groups": [{"name": "supermarket-demo", "namespace": ".", "children": ["microservice:inventory-service", "microservice:order-service", "microservice:restock-service"]}], "build_dependencies": {"nodes": [{"id": "module:inventory-service", "name": "inventory-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:order-service", "name": "order-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:restock-service", "name": "restock-service", "kind": "build_module", "build_system": "maven", "color": "#2563eb", "size": 17}, {"id": "module:supermarket-contracts", "name": "supermarket-contracts", "kind": "build_module", "build_system": "maven", "color": "#64748b", "size": 14}, {"id": "module:supermarket-demo-parent", "name": "supermarket-demo-parent", "kind": "build_module", "build_system": "maven", "color": "#64748b", "size": 14}], "links": [{"source": "module:inventory-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}, {"source": "module:order-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}, {"source": "module:restock-service", "target": "module:supermarket-contracts", "kind": "build", "label": "dépend de"}]}, "kafka_dtos": [{"id": "io.systemlens.supermarket.contract.OrderPlaced", "name": "OrderPlaced", "qualified_name": "io.systemlens.supermarket.contract.OrderPlaced", "fields": [{"type": "String", "name": "orderId"}, {"type": "String", "name": "productId"}, {"type": "int", "name": "quantity"}, {"type": "Instant", "name": "requestedAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/OrderPlaced.java", "module": "supermarket-contracts", "producers": ["order-service"], "consumers": ["inventory-service"], "topics": ["supermarket.order.placed"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/OrderPlaced.java"}, {"id": "io.systemlens.supermarket.contract.StockDepleted", "name": "StockDepleted", "qualified_name": "io.systemlens.supermarket.contract.StockDepleted", "fields": [{"type": "String", "name": "productId"}, {"type": "Instant", "name": "occurredAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/StockDepleted.java", "module": "supermarket-contracts", "producers": ["inventory-service"], "consumers": ["restock-service"], "topics": ["supermarket.stock.depleted"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/StockDepleted.java"}, {"id": "io.systemlens.supermarket.contract.StockRestockRequested", "name": "StockRestockRequested", "qualified_name": "io.systemlens.supermarket.contract.StockRestockRequested", "fields": [{"type": "String", "name": "productId"}, {"type": "int", "name": "quantity"}, {"type": "Instant", "name": "requestedAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/StockRestockRequested.java", "module": "supermarket-contracts", "producers": ["restock-service"], "consumers": ["inventory-service"], "topics": ["supermarket.stock.restock-requested"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/StockRestockRequested.java"}], "project_dto_definitions": [], "mongo_persistence_classes": [{"id": "inventory-service:inventory-service:io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "service": "inventory-service", "module": "inventory-service", "collection": "order_fulfillments", "name": "OrderFulfillmentDocument", "qualified_name": "io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "source": "src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "line": 7, "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "fields": [{"name": "orderId", "type": "String", "references": []}, {"name": "productId", "type": "String", "references": []}, {"name": "productName", "type": "String", "references": []}, {"name": "quantity", "type": "int", "references": []}, {"name": "remainingStock", "type": "int", "references": []}, {"name": "channel", "type": "String", "references": []}, {"name": "requestedAt", "type": "Instant", "references": []}, {"name": "createdAt", "type": "Instant", "references": []}]}], "asyncapi_contracts": [{"module": "inventory-service", "path": "src/main/resources/static/asyncapi.yaml", "spec": {"asyncapi": "3.0.0", "info": {"title": "API asynchrone des stocks du supermarché", "version": "v1", "description": "Traitement des commandes en ligne, signalement des ruptures et application des réassorts."}, "defaultContentType": "application/json", "servers": {"kafka": {"host": "{bootstrapServers}", "protocol": "kafka", "description": "Cluster Kafka configuré par SPRING_KAFKA_BOOTSTRAP_SERVERS.", "variables": {"bootstrapServers": {"default": "localhost:9092"}}}}, "channels": {"onlineOrders": {"address": "supermarket.order.placed", "title": "Commandes en ligne passées", "description": "Commandes publiées par order-service à traiter par inventory-service.", "messages": {"orderPlaced": {"$ref": "#/components/messages/OrderPlaced"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}, "depletedStocks": {"address": "supermarket.stock.depleted", "title": "Stocks épuisés", "description": "Événement publié lorsque la dernière unité d'un produit est réservée.", "messages": {"stockDepleted": {"$ref": "#/components/messages/StockDepleted"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}, "restockRequests": {"address": "supermarket.stock.restock-requested", "title": "Demandes de réassort", "description": "Demandes publiées par restock-service et appliquées par inventory-service.", "messages": {"stockRestockRequested": {"$ref": "#/components/messages/StockRestockRequested"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}}, "operations": {"receiveOnlineOrder": {"action": "receive", "title": "Traiter une commande en ligne", "summary": "Réserve le stock pour une commande reçue du topic des commandes.", "channel": {"$ref": "#/channels/onlineOrders"}, "messages": [{"$ref": "#/channels/onlineOrders/messages/orderPlaced"}], "bindings": {"kafka": {"groupId": {"type": "string", "enum": ["inventory-service"]}, "bindingVersion": "0.5.0"}}}, "publishStockDepleted": {"action": "send", "title": "Signaler un stock épuisé", "summary": "Émet un événement lorsqu'une réservation épuise le stock d'un produit.", "channel": {"$ref": "#/channels/depletedStocks"}, "messages": [{"$ref": "#/channels/depletedStocks/messages/stockDepleted"}]}, "receiveRestockRequest": {"action": "receive", "title": "Appliquer une demande de réassort", "summary": "Augmente le stock pour une demande provenant de restock-service.", "channel": {"$ref": "#/channels/restockRequests"}, "messages": [{"$ref": "#/channels/restockRequests/messages/stockRestockRequested"}], "bindings": {"kafka": {"groupId": {"type": "string", "enum": ["inventory-restock-service"]}, "bindingVersion": "0.5.0"}}}}, "components": {"messages": {"OrderPlaced": {"name": "OrderPlaced", "title": "Commande passée", "payload": {"$ref": "#/components/schemas/OrderPlaced"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant de la commande, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}, "StockDepleted": {"name": "StockDepleted", "title": "Stock épuisé", "payload": {"$ref": "#/components/schemas/StockDepleted"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant du produit, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}, "StockRestockRequested": {"name": "StockRestockRequested", "title": "Réassort demandé", "payload": {"$ref": "#/components/schemas/StockRestockRequested"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant du produit, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}}, "schemas": {"OrderPlaced": {"type": "object", "required": ["orderId", "productId", "quantity", "requestedAt"], "properties": {"orderId": {"type": "string", "description": "Identifiant unique de la commande."}, "productId": {"type": "string", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1}, "requestedAt": {"type": "string", "format": "date-time"}}}, "StockDepleted": {"type": "object", "required": ["productId", "occurredAt"], "properties": {"productId": {"type": "string", "example": "PASTA-500G"}, "occurredAt": {"type": "string", "format": "date-time"}}}, "StockRestockRequested": {"type": "object", "required": ["productId", "quantity", "requestedAt"], "properties": {"productId": {"type": "string", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1, "example": 500}, "requestedAt": {"type": "string", "format": "date-time"}}}}}}}, {"module": "order-service", "path": "src/main/resources/static/asyncapi.yaml", "spec": {"asyncapi": "3.0.0", "info": {"title": "API asynchrone des commandes du supermarché", "version": "v1", "description": "Publication des commandes en ligne destinées à inventory-service."}, "defaultContentType": "application/json", "servers": {"kafka": {"host": "{bootstrapServers}", "protocol": "kafka", "description": "Cluster Kafka configuré par SPRING_KAFKA_BOOTSTRAP_SERVERS.", "variables": {"bootstrapServers": {"default": "localhost:9092"}}}}, "channels": {"onlineOrders": {"address": "supermarket.order.placed", "title": "Commandes en ligne passées", "description": "Commandes publiées périodiquement par order-service et consommées par inventory-service.", "messages": {"orderPlaced": {"$ref": "#/components/messages/OrderPlaced"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}}, "operations": {"publishOnlineOrder": {"action": "send", "title": "Publier une commande en ligne", "summary": "Émet une commande à réserver par inventory-service.", "channel": {"$ref": "#/channels/onlineOrders"}, "messages": [{"$ref": "#/channels/onlineOrders/messages/orderPlaced"}]}}, "components": {"messages": {"OrderPlaced": {"name": "OrderPlaced", "title": "Commande passée", "summary": "Commande créée par order-service.", "payload": {"$ref": "#/components/schemas/OrderPlaced"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant de la commande, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}}, "schemas": {"OrderPlaced": {"type": "object", "required": ["orderId", "productId", "quantity", "requestedAt"], "properties": {"orderId": {"type": "string", "description": "Identifiant unique de la commande.", "example": "550e8400-e29b-41d4-a716-446655440000"}, "productId": {"type": "string", "description": "Référence du produit du catalogue.", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1, "example": 2}, "requestedAt": {"type": "string", "format": "date-time", "description": "Instant de création de la commande."}}}}}}}], "indexing_issues": [], "code_flows": [{"id": "35a4a0d07e8c17c9", "module": "inventory-service", "method": "io.systemlens.supermarket.inventory.adapter.in.messaging.KafkaOrderConsumer.consume", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java", "start_line": 18, "end_line": 26, "status": "potential", "confidence": "medium", "reason": "A concrete Kafka publication matches the indexed message entry of a downstream potential flow.", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18", "steps": [{"order": 1, "kind": "message_entry", "name": "supermarket.order.placed", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java", "start_line": 18, "end_line": 26, "endpoint_id": "64779fe9b80b67c8", "port_label": "I4 → O4", "operation": null}, {"order": 2, "kind": "method_call", "name": "io.systemlens.supermarket.inventory.application.InventoryApplicationService.reserve", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java", "start_line": 22, "end_line": 22, "endpoint_id": null, "port_label": null, "operation": null}, {"order": 3, "kind": "method_call", "name": "io.systemlens.supermarket.inventory.adapter.out.messaging.KafkaStockDepletedAdapter.publish", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/application/InventoryApplicationService.java", "start_line": 99, "end_line": 99, "endpoint_id": null, "port_label": null, "operation": null}, {"order": 4, "kind": "message_publish", "name": "supermarket.stock.depleted", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java", "start_line": 15, "end_line": 16, "endpoint_id": "0f62d72eb83bc709", "port_label": "O4", "operation": null}, {"order": 5, "kind": "message_entry", "name": "supermarket.stock.depleted", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 37, "end_line": 50, "endpoint_id": "e0551613e084f3fd", "port_label": "I8 → O5", "operation": null}, {"order": 6, "kind": "message_publish", "name": "supermarket.stock.restock-requested", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 44, "end_line": 44, "endpoint_id": "5f5b733ab4e3986e", "port_label": "O5", "operation": null}]}, {"id": "a6ff7ebd7bc20bce", "module": "inventory-service", "method": "io.systemlens.supermarket.inventory.adapter.in.messaging.KafkaOrderConsumer.consume", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java", "start_line": 18, "end_line": 26, "status": "potential", "confidence": "medium", "reason": "CodeQL resolved a static call path from an indexed entry method to an indexed output method.", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18", "steps": [{"order": 1, "kind": "message_entry", "name": "supermarket.order.placed", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java", "start_line": 18, "end_line": 26, "endpoint_id": "64779fe9b80b67c8", "port_label": "I4 → O4", "operation": null}, {"order": 2, "kind": "method_call", "name": "io.systemlens.supermarket.inventory.application.InventoryApplicationService.reserve", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java", "start_line": 22, "end_line": 22, "endpoint_id": null, "port_label": null, "operation": null}, {"order": 3, "kind": "method_call", "name": "io.systemlens.supermarket.inventory.adapter.out.messaging.KafkaStockDepletedAdapter.publish", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/application/InventoryApplicationService.java", "start_line": 99, "end_line": 99, "endpoint_id": null, "port_label": null, "operation": null}, {"order": 4, "kind": "message_publish", "name": "supermarket.stock.depleted", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java", "start_line": 15, "end_line": 16, "endpoint_id": "0f62d72eb83bc709", "port_label": "O4", "operation": null}]}, {"id": "2b438f1080711f9b", "module": "inventory-service", "method": "io.systemlens.supermarket.inventory.adapter.in.web.InventoryController.reserve", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/web/InventoryController.java", "start_line": 21, "end_line": 27, "status": "potential", "confidence": "medium", "reason": "A concrete Kafka publication matches the indexed message entry of a downstream potential flow.", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/web/InventoryController.java:21", "steps": [{"order": 1, "kind": "http_entry", "name": "POST /api/reservations", "path": "inventory-service/src/main/resources/static/openapi.yaml", "start_line": 22, "end_line": 22, "endpoint_id": "e3b6f5b662c6717b", "port_label": "I7 → O4", "operation": null}, {"order": 2, "kind": "method_call", "name": "io.systemlens.supermarket.inventory.application.InventoryApplicationService.reserve", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/web/InventoryController.java", "start_line": 23, "end_line": 23, "endpoint_id": null, "port_label": null, "operation": null}, {"order": 3, "kind": "method_call", "name": "io.systemlens.supermarket.inventory.adapter.out.messaging.KafkaStockDepletedAdapter.publish", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/application/InventoryApplicationService.java", "start_line": 99, "end_line": 99, "endpoint_id": null, "port_label": null, "operation": null}, {"order": 4, "kind": "message_publish", "name": "supermarket.stock.depleted", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java", "start_line": 15, "end_line": 16, "endpoint_id": "0f62d72eb83bc709", "port_label": "O4", "operation": null}, {"order": 5, "kind": "message_entry", "name": "supermarket.stock.depleted", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 37, "end_line": 50, "endpoint_id": "e0551613e084f3fd", "port_label": "I8 → O5", "operation": null}, {"order": 6, "kind": "message_publish", "name": "supermarket.stock.restock-requested", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 44, "end_line": 44, "endpoint_id": "5f5b733ab4e3986e", "port_label": "O5", "operation": null}]}, {"id": "e639e8a17b99ff0e", "module": "inventory-service", "method": "io.systemlens.supermarket.inventory.adapter.in.web.InventoryController.reserve", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/web/InventoryController.java", "start_line": 21, "end_line": 27, "status": "potential", "confidence": "medium", "reason": "CodeQL resolved a static call path from an indexed entry method to an indexed output method.", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/web/InventoryController.java:21", "steps": [{"order": 1, "kind": "http_entry", "name": "POST /api/reservations", "path": "inventory-service/src/main/resources/static/openapi.yaml", "start_line": 22, "end_line": 22, "endpoint_id": "e3b6f5b662c6717b", "port_label": "I7 → O4", "operation": null}, {"order": 2, "kind": "method_call", "name": "io.systemlens.supermarket.inventory.application.InventoryApplicationService.reserve", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/web/InventoryController.java", "start_line": 23, "end_line": 23, "endpoint_id": null, "port_label": null, "operation": null}, {"order": 3, "kind": "method_call", "name": "io.systemlens.supermarket.inventory.adapter.out.messaging.KafkaStockDepletedAdapter.publish", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/application/InventoryApplicationService.java", "start_line": 99, "end_line": 99, "endpoint_id": null, "port_label": null, "operation": null}, {"order": 4, "kind": "message_publish", "name": "supermarket.stock.depleted", "path": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java", "start_line": 15, "end_line": 16, "endpoint_id": "0f62d72eb83bc709", "port_label": "O4", "operation": null}]}, {"id": "432c14ecee0d2898", "module": "restock-service", "method": "io.systemlens.supermarket.restock.StockDepletedConsumer.requestRestock", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 37, "end_line": 50, "status": "potential", "confidence": "medium", "reason": "The entry point and external effects occur in the same Java method.", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37", "steps": [{"order": 1, "kind": "message_entry", "name": "supermarket.stock.depleted", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 37, "end_line": 50, "endpoint_id": "e0551613e084f3fd", "port_label": "I8 → O5", "operation": null}, {"order": 2, "kind": "message_publish", "name": "supermarket.stock.restock-requested", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 44, "end_line": 44, "endpoint_id": "5f5b733ab4e3986e", "port_label": "O5", "operation": null}]}]}</script>
+  <script id="graph-data" type="application/json">{"nodes": [{"id": "microservice:inventory-service", "kind": "microservice", "name": "inventory-service", "layer": "application", "layer_label": "Application", "color": "#dc2626", "runtime_namespaces": [], "fact_namespaces": ["ai-java-architecture"], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "ports": [{"label": "I4", "direction": "in", "type": "Kafka receive", "method": "io.systemlens.supermarket.inventory.adapter.in.messaging.KafkaOrderConsumer::consume", "name": "supermarket.order.placed", "endpoint_id": "64779fe9b80b67c8", "message_type": "OrderPlaced"}, {"label": "I5", "direction": "in", "type": "Kafka receive", "method": "io.systemlens.supermarket.inventory.adapter.in.messaging.KafkaStockRestockConsumer::consume", "name": "supermarket.stock.restock-requested", "endpoint_id": "e2a44b62e1ceb700", "message_type": "StockRestockRequested"}, {"label": "O4", "direction": "out", "type": "Kafka publish", "method": "io.systemlens.supermarket.inventory.adapter.out.messaging.KafkaStockDepletedAdapter::publish", "name": "supermarket.stock.depleted", "endpoint_id": "0f62d72eb83bc709", "message_type": "StockDepleted"}, {"label": "I6", "direction": "in", "type": "HTTP receive", "method": "io.systemlens.supermarket.inventory.adapter.in.web.InventoryController::health", "name": "GET /api/health", "endpoint_id": "879e24faf265196e"}, {"label": "I7", "direction": "in", "type": "HTTP receive", "method": "io.systemlens.supermarket.inventory.adapter.in.web.InventoryController::reserve", "name": "POST /api/reservations", "endpoint_id": "e3b6f5b662c6717b"}], "kafka_endpoints": [{"role": "consume", "topic": "supermarket.order.placed", "message_type": "OrderPlaced", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaOrderConsumer.java:18"}, {"role": "consume", "topic": "supermarket.stock.restock-requested", "message_type": "StockRestockRequested", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaStockRestockConsumer.java:18", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/in/messaging/KafkaStockRestockConsumer.java:18"}, {"role": "produce", "topic": "supermarket.stock.depleted", "message_type": "StockDepleted", "location": "inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java:15", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/messaging/KafkaStockDepletedAdapter.java:15"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service", "resources": ["GET /api/health", "POST /api/reservations"], "kubernetes_workloads": [], "openapi_files": ["src/main/resources/static/openapi.yaml"], "openapi_contracts": [{"path": "src/main/resources/static/openapi.yaml", "resources": ["GET /api/health", "POST /api/reservations"], "spec": {"openapi": "3.0.3", "info": {"title": "API des stocks du supermarché", "version": "v1", "description": "Réservation synchrone du stock du catalogue."}, "servers": [{"url": "http://localhost:3001"}], "paths": {"/api/health": {"get": {"tags": ["Stocks"], "summary": "Vérifie la disponibilité du service de stock", "operationId": "health", "responses": {"200": {"description": "Service disponible", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthStatus"}}}}}}}, "/api/reservations": {"post": {"tags": ["Stocks"], "summary": "Réserve le stock d'une commande", "operationId": "reserve", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OrderPlaced"}}}}, "responses": {"200": {"description": "Stock réservé", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReservationResult"}}}}, "400": {"description": "Quantité invalide", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}, "404": {"description": "Produit introuvable", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}, "409": {"description": "Stock insuffisant", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}}}}}, "components": {"schemas": {"HealthStatus": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "example": "ok"}}}, "OrderPlaced": {"type": "object", "required": ["orderId", "productId", "quantity", "requestedAt"], "properties": {"orderId": {"type": "string", "format": "uuid"}, "productId": {"type": "string", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1, "example": 2}, "requestedAt": {"type": "string", "format": "date-time"}}}, "ReservationResult": {"type": "object", "required": ["orderId", "productId", "productName", "quantity", "remainingStock", "channel", "durationMs"], "properties": {"orderId": {"type": "string"}, "productId": {"type": "string"}, "productName": {"type": "string"}, "quantity": {"type": "integer", "format": "int32"}, "remainingStock": {"type": "integer", "format": "int32"}, "channel": {"type": "string", "example": "rest"}, "durationMs": {"type": "integer", "format": "int64"}}}, "ErrorResponse": {"type": "object", "required": ["error"], "properties": {"error": {"type": "string"}}}}}}, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/resources/static/openapi.yaml"}], "asyncapi_contracts": [{"path": "src/main/resources/static/asyncapi.yaml", "spec": {"asyncapi": "3.0.0", "info": {"title": "API asynchrone des stocks du supermarché", "version": "v1", "description": "Traitement des commandes en ligne, signalement des ruptures et application des réassorts."}, "defaultContentType": "application/json", "servers": {"kafka": {"host": "{bootstrapServers}", "protocol": "kafka", "description": "Cluster Kafka configuré par SPRING_KAFKA_BOOTSTRAP_SERVERS.", "variables": {"bootstrapServers": {"default": "localhost:9092"}}}}, "channels": {"onlineOrders": {"address": "supermarket.order.placed", "title": "Commandes en ligne passées", "description": "Commandes publiées par order-service à traiter par inventory-service.", "messages": {"orderPlaced": {"$ref": "#/components/messages/OrderPlaced"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}, "depletedStocks": {"address": "supermarket.stock.depleted", "title": "Stocks épuisés", "description": "Événement publié lorsque la dernière unité d'un produit est réservée.", "messages": {"stockDepleted": {"$ref": "#/components/messages/StockDepleted"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}, "restockRequests": {"address": "supermarket.stock.restock-requested", "title": "Demandes de réassort", "description": "Demandes publiées par restock-service et appliquées par inventory-service.", "messages": {"stockRestockRequested": {"$ref": "#/components/messages/StockRestockRequested"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}}, "operations": {"receiveOnlineOrder": {"action": "receive", "title": "Traiter une commande en ligne", "summary": "Réserve le stock pour une commande reçue du topic des commandes.", "channel": {"$ref": "#/channels/onlineOrders"}, "messages": [{"$ref": "#/channels/onlineOrders/messages/orderPlaced"}], "bindings": {"kafka": {"groupId": {"type": "string", "enum": ["inventory-service"]}, "bindingVersion": "0.5.0"}}}, "publishStockDepleted": {"action": "send", "title": "Signaler un stock épuisé", "summary": "Émet un événement lorsqu'une réservation épuise le stock d'un produit.", "channel": {"$ref": "#/channels/depletedStocks"}, "messages": [{"$ref": "#/channels/depletedStocks/messages/stockDepleted"}]}, "receiveRestockRequest": {"action": "receive", "title": "Appliquer une demande de réassort", "summary": "Augmente le stock pour une demande provenant de restock-service.", "channel": {"$ref": "#/channels/restockRequests"}, "messages": [{"$ref": "#/channels/restockRequests/messages/stockRestockRequested"}], "bindings": {"kafka": {"groupId": {"type": "string", "enum": ["inventory-restock-service"]}, "bindingVersion": "0.5.0"}}}}, "components": {"messages": {"OrderPlaced": {"name": "OrderPlaced", "title": "Commande passée", "payload": {"$ref": "#/components/schemas/OrderPlaced"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant de la commande, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}, "StockDepleted": {"name": "StockDepleted", "title": "Stock épuisé", "payload": {"$ref": "#/components/schemas/StockDepleted"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant du produit, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}, "StockRestockRequested": {"name": "StockRestockRequested", "title": "Réassort demandé", "payload": {"$ref": "#/components/schemas/StockRestockRequested"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant du produit, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}}, "schemas": {"OrderPlaced": {"type": "object", "required": ["orderId", "productId", "quantity", "requestedAt"], "properties": {"orderId": {"type": "string", "description": "Identifiant unique de la commande."}, "productId": {"type": "string", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1}, "requestedAt": {"type": "string", "format": "date-time"}}}, "StockDepleted": {"type": "object", "required": ["productId", "occurredAt"], "properties": {"productId": {"type": "string", "example": "PASTA-500G"}, "occurredAt": {"type": "string", "format": "date-time"}}}, "StockRestockRequested": {"type": "object", "required": ["productId", "quantity", "requestedAt"], "properties": {"productId": {"type": "string", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1, "example": 500}, "requestedAt": {"type": "string", "format": "date-time"}}}}}}, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/resources/static/asyncapi.yaml"}], "label": "inventory-service", "width": 190, "height": 42, "metadata": {"module": "inventory-service", "runtime": "java-21"}, "complexity": {"score": 5, "level": "high", "relations": 5, "breakdown": {"http": 1, "kafka": 3, "mongodb": 1}, "rank": 3, "population": 3, "tier_start": 3, "tier_end": 3}, "size": 50, "internal_flow_count": 0}, {"id": "microservice:order-service", "kind": "microservice", "name": "order-service", "layer": "application", "layer_label": "Application", "color": "#2563eb", "runtime_namespaces": [], "fact_namespaces": ["ai-java-architecture"], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "ports": [{"label": "O1", "direction": "out", "type": "HTTP call", "method": "io.systemlens.supermarket.order.OrderController::placeOrder", "name": "POST /api/reservations", "endpoint_id": "bb20d7a5c7eca367", "target": {"service": "inventory-service", "label": "I7", "type": "HTTP receive", "method": "io.systemlens.supermarket.inventory.adapter.in.web.InventoryController::reserve", "name": "POST /api/reservations"}}, {"label": "O2", "direction": "out", "type": "HTTP call", "method": "io.systemlens.supermarket.order.OrderController::triggerOutOfStock", "name": "POST /api/reservations", "endpoint_id": "7eb8c1aa24b66e74", "target": {"service": "inventory-service", "label": "I7", "type": "HTTP receive", "method": "io.systemlens.supermarket.inventory.adapter.in.web.InventoryController::reserve", "name": "POST /api/reservations"}}, {"label": "O3", "direction": "out", "type": "Kafka publish", "method": "io.systemlens.supermarket.order.ScheduledOrderPublisher::publishOnlineOrder", "name": "supermarket.order.placed", "endpoint_id": "32bcfccf0a76226d", "message_type": "OrderPlaced"}, {"label": "I1", "direction": "in", "type": "HTTP receive", "method": "io.systemlens.supermarket.order.OrderController::health", "name": "GET /api/health", "endpoint_id": "65435b1fef64e44b"}, {"label": "I2", "direction": "in", "type": "HTTP receive", "method": "io.systemlens.supermarket.order.OrderController::placeOrder", "name": "POST /api/orders", "endpoint_id": "cf4e656c5470de40"}, {"label": "I3", "direction": "in", "type": "HTTP receive", "method": "io.systemlens.supermarket.order.OrderController::triggerOutOfStock", "name": "GET /api/error", "endpoint_id": "23f90b03088b9127"}], "kafka_endpoints": [{"role": "produce", "topic": "supermarket.order.placed", "message_type": "OrderPlaced", "location": "order-service/src/main/java/io/systemlens/supermarket/order/ScheduledOrderPublisher.java:39", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/java/io/systemlens/supermarket/order/ScheduledOrderPublisher.java:39"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service", "resources": ["GET /api/error", "GET /api/health", "POST /api/orders"], "kubernetes_workloads": [], "openapi_files": ["src/main/resources/static/openapi.yaml"], "openapi_contracts": [{"path": "src/main/resources/static/openapi.yaml", "resources": ["GET /api/error", "GET /api/health", "POST /api/orders"], "spec": {"openapi": "3.0.3", "info": {"title": "API des commandes du supermarché", "version": "v1", "description": "Prise de commandes en caisse et réservation synchrone du stock."}, "servers": [{"url": "http://localhost:3000"}], "paths": {"/api/health": {"get": {"tags": ["Commandes"], "summary": "Vérifie la disponibilité du service de commande", "operationId": "health", "responses": {"200": {"description": "Service disponible", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthStatus"}}}}}}}, "/api/orders": {"post": {"tags": ["Commandes"], "summary": "Passe une commande", "description": "Réserve le stock auprès d'inventory-service.", "operationId": "placeOrder", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OrderRequest"}}}}, "responses": {"200": {"description": "Commande réservée", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReservationResult"}}}}, "500": {"description": "Erreur lors de la réservation auprès du service de stock", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}}}}, "/api/error": {"get": {"tags": ["Commandes"], "summary": "Déclenche une rupture de stock", "description": "Scénario contrôlé destiné à la démonstration d'observabilité.", "operationId": "triggerOutOfStock", "responses": {"500": {"description": "Rupture de stock propagée par inventory-service", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}}}}}, "components": {"schemas": {"HealthStatus": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "example": "ok"}}}, "OrderRequest": {"type": "object", "required": ["productId", "quantity"], "properties": {"productId": {"type": "string", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1, "example": 2}}}, "ReservationResult": {"type": "object", "required": ["orderId", "productId", "productName", "quantity", "remainingStock", "channel", "durationMs"], "properties": {"orderId": {"type": "string"}, "productId": {"type": "string"}, "productName": {"type": "string"}, "quantity": {"type": "integer", "format": "int32"}, "remainingStock": {"type": "integer", "format": "int32"}, "channel": {"type": "string", "example": "rest"}, "durationMs": {"type": "integer", "format": "int64"}}}, "ErrorResponse": {"type": "object", "required": ["error"], "properties": {"error": {"type": "string"}}}}}}, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/resources/static/openapi.yaml"}], "asyncapi_contracts": [{"path": "src/main/resources/static/asyncapi.yaml", "spec": {"asyncapi": "3.0.0", "info": {"title": "API asynchrone des commandes du supermarché", "version": "v1", "description": "Publication des commandes en ligne destinées à inventory-service."}, "defaultContentType": "application/json", "servers": {"kafka": {"host": "{bootstrapServers}", "protocol": "kafka", "description": "Cluster Kafka configuré par SPRING_KAFKA_BOOTSTRAP_SERVERS.", "variables": {"bootstrapServers": {"default": "localhost:9092"}}}}, "channels": {"onlineOrders": {"address": "supermarket.order.placed", "title": "Commandes en ligne passées", "description": "Commandes publiées périodiquement par order-service et consommées par inventory-service.", "messages": {"orderPlaced": {"$ref": "#/components/messages/OrderPlaced"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}}, "operations": {"publishOnlineOrder": {"action": "send", "title": "Publier une commande en ligne", "summary": "Émet une commande à réserver par inventory-service.", "channel": {"$ref": "#/channels/onlineOrders"}, "messages": [{"$ref": "#/channels/onlineOrders/messages/orderPlaced"}]}}, "components": {"messages": {"OrderPlaced": {"name": "OrderPlaced", "title": "Commande passée", "summary": "Commande créée par order-service.", "payload": {"$ref": "#/components/schemas/OrderPlaced"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant de la commande, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}}, "schemas": {"OrderPlaced": {"type": "object", "required": ["orderId", "productId", "quantity", "requestedAt"], "properties": {"orderId": {"type": "string", "description": "Identifiant unique de la commande.", "example": "550e8400-e29b-41d4-a716-446655440000"}, "productId": {"type": "string", "description": "Référence du produit du catalogue.", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1, "example": 2}, "requestedAt": {"type": "string", "format": "date-time", "description": "Instant de création de la commande."}}}}}}, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/order-service/src/main/resources/static/asyncapi.yaml"}], "label": "order-service", "width": 190, "height": 42, "metadata": {"module": "order-service", "runtime": "java-21"}, "complexity": {"score": 2, "level": "low", "relations": 2, "breakdown": {"http": 1, "kafka": 1, "mongodb": 0}, "rank": 1, "population": 3, "tier_start": 1, "tier_end": 1}, "size": 50, "internal_flow_count": 0}, {"id": "microservice:restock-service", "kind": "microservice", "name": "restock-service", "layer": "application", "layer_label": "Application", "color": "#d97706", "runtime_namespaces": [], "fact_namespaces": ["ai-java-architecture"], "project_namespace": "root", "project_namespace_path": ".", "cluster_path": ".", "architecture_layer": "application", "ports": [{"label": "I8 → O5", "direction": "in", "type": "Kafka receive", "method": "io.systemlens.supermarket.restock.StockDepletedConsumer::requestRestock", "name": "supermarket.stock.depleted", "endpoint_id": "e0551613e084f3fd", "message_type": "StockDepleted", "local_output_labels": ["O5"], "local_outputs": [{"endpoint_id": "5f5b733ab4e3986e", "label": "O5", "type": "Kafka publish", "name": "supermarket.stock.restock-requested", "method": "io.systemlens.supermarket.restock.StockDepletedConsumer::requestRestock", "message_type": "StockRestockRequested"}]}, {"label": "O5", "direction": "out", "type": "Kafka publish", "method": "io.systemlens.supermarket.restock.StockDepletedConsumer::requestRestock", "name": "supermarket.stock.restock-requested", "endpoint_id": "5f5b733ab4e3986e", "message_type": "StockRestockRequested"}], "kafka_endpoints": [{"role": "consume", "topic": "supermarket.stock.depleted", "message_type": "StockDepleted", "location": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37"}, {"role": "produce", "topic": "supermarket.stock.restock-requested", "message_type": "StockRestockRequested", "location": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:44", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:44"}], "build_system": "maven", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service", "resources": [], "kubernetes_workloads": [], "openapi_files": [], "openapi_contracts": [], "asyncapi_contracts": [], "label": "restock-service", "width": 190, "height": 42, "metadata": {"module": "restock-service", "runtime": "java-21"}, "complexity": {"score": 2, "level": "medium", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 2, "population": 3, "tier_start": 2, "tier_end": 2}, "size": 50, "internal_flow_count": 1}, {"id": "kafka_topic:supermarket.order.placed", "kind": "kafka_topic", "name": "supermarket.order.placed", "label": "supermarket.order.placed", "published_message_types": ["OrderPlaced"], "consumed_message_types": ["OrderPlaced"], "width": 190, "height": 42, "owner_service": "order-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "low", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 1, "population": 3, "tier_start": 1, "tier_end": 1}, "color": "#2563eb", "size": 50}, {"id": "kafka_topic:supermarket.stock.depleted", "kind": "kafka_topic", "name": "supermarket.stock.depleted", "label": "supermarket.stock.depleted", "published_message_types": ["StockDepleted"], "consumed_message_types": ["StockDepleted"], "width": 190, "height": 42, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "medium", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 2, "population": 3, "tier_start": 2, "tier_end": 2}, "color": "#d97706", "size": 50}, {"id": "kafka_topic:supermarket.stock.restock-requested", "kind": "kafka_topic", "name": "supermarket.stock.restock-requested", "label": "supermarket.stock.restock-requested", "published_message_types": ["StockRestockRequested"], "consumed_message_types": ["StockRestockRequested"], "width": 190, "height": 42, "owner_service": "restock-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 2, "level": "high", "relations": 2, "breakdown": {"http": 0, "kafka": 2, "mongodb": 0}, "rank": 3, "population": 3, "tier_start": 3, "tier_end": 3}, "color": "#dc2626", "size": 50}, {"id": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb_collection", "name": "order_fulfillments", "owner": "inventory-service", "label": "order_fulfillments", "persistence_classes": [{"id": "inventory-service:inventory-service:io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "service": "inventory-service", "module": "inventory-service", "collection": "order_fulfillments", "name": "OrderFulfillmentDocument", "qualified_name": "io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "source": "src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "line": 7, "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "fields": [{"name": "orderId", "type": "String", "references": []}, {"name": "productId", "type": "String", "references": []}, {"name": "productName", "type": "String", "references": []}, {"name": "quantity", "type": "int", "references": []}, {"name": "remainingStock", "type": "int", "references": []}, {"name": "channel", "type": "String", "references": []}, {"name": "requestedAt", "type": "Instant", "references": []}, {"name": "createdAt", "type": "Instant", "references": []}]}], "width": 190, "height": 42, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "complexity": {"score": 1, "level": "low", "relations": 1, "breakdown": {"http": 0, "kafka": 0, "mongodb": 1}, "rank": 1, "population": 1, "tier_start": 1, "tier_end": 1}, "color": "#2563eb", "size": 50}, {"id": "collection:order_fulfillments", "kind": "collection", "name": "order_fulfillments", "label": "order_fulfillments", "width": 190, "height": 42, "status": "confirmed", "metadata": {"technology": "mongodb", "module": "inventory-service", "mapping": "spring-data-mongodb", "owner": "inventory-service"}, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "color": "#64748b", "size": 50}, {"id": "topic:supermarket.order.placed", "kind": "topic", "name": "supermarket.order.placed", "label": "supermarket.order.placed", "width": 190, "height": 42, "status": "confirmed", "metadata": {"technology": "kafka", "message_type": "OrderPlaced"}, "owner_service": "order-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "color": "#64748b", "size": 50}, {"id": "topic:supermarket.stock.depleted", "kind": "topic", "name": "supermarket.stock.depleted", "label": "supermarket.stock.depleted", "width": 190, "height": 42, "status": "confirmed", "metadata": {"technology": "kafka", "message_type": "StockDepleted"}, "owner_service": "inventory-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "color": "#64748b", "size": 50}, {"id": "topic:supermarket.stock.restock-requested", "kind": "topic", "name": "supermarket.stock.restock-requested", "label": "supermarket.stock.restock-requested", "width": 190, "height": 42, "status": "confirmed", "metadata": {"technology": "kafka", "message_type": "StockRestockRequested"}, "owner_service": "restock-service", "architecture_layer": "application", "architecture_namespace": "root", "architecture_namespace_path": ".", "namespace_source": "writer", "color": "#64748b", "size": 50}], "links": [{"source": "microservice:order-service", "target": "kafka_topic:supermarket.order.placed", "kind": "kafka", "direction": "outgoing", "label": "supermarket.order.placed", "confidence": "proved", "provenance": "code", "endpoint_ids": ["32bcfccf0a76226d"], "published_message_types": ["OrderPlaced"]}, {"source": "kafka_topic:supermarket.order.placed", "target": "microservice:inventory-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.order.placed", "confidence": "proved", "provenance": "code", "endpoint_ids": ["64779fe9b80b67c8"], "consumed_message_types": ["OrderPlaced"]}, {"source": "microservice:restock-service", "target": "kafka_topic:supermarket.stock.restock-requested", "kind": "kafka", "direction": "outgoing", "label": "supermarket.stock.restock-requested", "confidence": "proved", "provenance": "code", "endpoint_ids": ["5f5b733ab4e3986e"], "published_message_types": ["StockRestockRequested"]}, {"source": "kafka_topic:supermarket.stock.restock-requested", "target": "microservice:inventory-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.stock.restock-requested", "confidence": "proved", "provenance": "code", "endpoint_ids": ["e2a44b62e1ceb700"], "consumed_message_types": ["StockRestockRequested"]}, {"source": "microservice:inventory-service", "target": "kafka_topic:supermarket.stock.depleted", "kind": "kafka", "direction": "outgoing", "label": "supermarket.stock.depleted", "confidence": "proved", "provenance": "code", "endpoint_ids": ["0f62d72eb83bc709"], "published_message_types": ["StockDepleted"]}, {"source": "kafka_topic:supermarket.stock.depleted", "target": "microservice:restock-service", "kind": "kafka", "direction": "incoming", "label": "supermarket.stock.depleted", "confidence": "proved", "provenance": "code", "endpoint_ids": ["e0551613e084f3fd"], "consumed_message_types": ["StockDepleted"]}, {"source": "microservice:order-service", "target": "microservice:inventory-service", "kind": "rest", "direction": "outgoing", "label": "inventory-service: POST /api/reservations", "confidence": "inferred", "provenance": "OpenAPI", "endpoint_ids": ["7eb8c1aa24b66e74", "bb20d7a5c7eca367"]}, {"source": "microservice:inventory-service", "target": "microservice:restock-service", "kind": "mcp_event", "direction": "outgoing", "label": "event", "confidence": "high", "status": "confirmed", "provenance": "MCP graph enrichment"}, {"source": "microservice:inventory-service", "target": "collection:order_fulfillments", "kind": "mcp_data", "direction": "outgoing", "label": "data", "confidence": "high", "status": "confirmed", "provenance": "MCP graph enrichment"}, {"source": "microservice:order-service", "target": "microservice:inventory-service", "kind": "mcp_http", "direction": "outgoing", "label": "http", "confidence": "high", "status": "confirmed", "provenance": "MCP graph enrichment"}, {"source": "microservice:order-service", "target": "microservice:inventory-service", "kind": "mcp_event", "direction": "outgoing", "label": "event", "confidence": "high", "status": "confirmed", "provenance": "MCP graph enrichment"}, {"source": "microservice:restock-service", "target": "microservice:inventory-service", "kind": "mcp_event", "direction": "outgoing", "label": "event", "confidence": "high", "status": "confirmed", "provenance": "MCP graph enrichment"}, {"source": "microservice:inventory-service", "target": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb", "direction": "data_access", "label": "lit", "confidence": "proved", "provenance": "code"}, {"source": "microservice:inventory-service", "target": "mongodb_collection:inventory-service:order_fulfillments", "kind": "mongodb", "direction": "data_access", "label": "écrit", "confidence": "proved", "provenance": "code"}], "port_links": [{"source_endpoint_id": "32bcfccf0a76226d", "target_endpoint_id": "64779fe9b80b67c8", "kind": "kafka"}, {"source_endpoint_id": "5f5b733ab4e3986e", "target_endpoint_id": "e2a44b62e1ceb700", "kind": "kafka"}, {"source_endpoint_id": "0f62d72eb83bc709", "target_endpoint_id": "e0551613e084f3fd", "kind": "kafka"}, {"source_endpoint_id": "bb20d7a5c7eca367", "target_endpoint_id": "e3b6f5b662c6717b", "kind": "rest"}, {"source_endpoint_id": "7eb8c1aa24b66e74", "target_endpoint_id": "e3b6f5b662c6717b", "kind": "rest"}], "internal_port_links": [{"input_endpoint_id": "e0551613e084f3fd", "output_endpoint_id": "5f5b733ab4e3986e"}], "software_layers": ["application"], "runtime_namespaces": [], "fact_namespaces": ["ai-java-architecture"], "groups": [{"name": "supermarket-demo", "namespace": ".", "children": ["microservice:inventory-service", "microservice:order-service", "microservice:restock-service"]}], "kafka_dtos": [{"id": "io.systemlens.supermarket.contract.OrderPlaced", "name": "OrderPlaced", "qualified_name": "io.systemlens.supermarket.contract.OrderPlaced", "fields": [{"type": "String", "name": "orderId"}, {"type": "String", "name": "productId"}, {"type": "int", "name": "quantity"}, {"type": "Instant", "name": "requestedAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/OrderPlaced.java", "module": "supermarket-contracts", "producers": ["order-service"], "consumers": ["inventory-service"], "topics": ["supermarket.order.placed"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/OrderPlaced.java"}, {"id": "io.systemlens.supermarket.contract.StockDepleted", "name": "StockDepleted", "qualified_name": "io.systemlens.supermarket.contract.StockDepleted", "fields": [{"type": "String", "name": "productId"}, {"type": "Instant", "name": "occurredAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/StockDepleted.java", "module": "supermarket-contracts", "producers": ["inventory-service"], "consumers": ["restock-service"], "topics": ["supermarket.stock.depleted"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/StockDepleted.java"}, {"id": "io.systemlens.supermarket.contract.StockRestockRequested", "name": "StockRestockRequested", "qualified_name": "io.systemlens.supermarket.contract.StockRestockRequested", "fields": [{"type": "String", "name": "productId"}, {"type": "int", "name": "quantity"}, {"type": "Instant", "name": "requestedAt"}], "source": "src/main/java/io/systemlens/supermarket/contract/StockRestockRequested.java", "module": "supermarket-contracts", "producers": ["restock-service"], "consumers": ["inventory-service"], "topics": ["supermarket.stock.restock-requested"], "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/supermarket-contracts/src/main/java/io/systemlens/supermarket/contract/StockRestockRequested.java"}], "project_dto_definitions": [], "mongo_persistence_classes": [{"id": "inventory-service:inventory-service:io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "service": "inventory-service", "module": "inventory-service", "collection": "order_fulfillments", "name": "OrderFulfillmentDocument", "qualified_name": "io.systemlens.supermarket.inventory.adapter.out.persistence.mongodb.OrderFulfillmentDocument", "source": "src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "line": 7, "root": true, "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/inventory-service/src/main/java/io/systemlens/supermarket/inventory/adapter/out/persistence/mongodb/OrderFulfillmentDocument.java", "fields": [{"name": "orderId", "type": "String", "references": []}, {"name": "productId", "type": "String", "references": []}, {"name": "productName", "type": "String", "references": []}, {"name": "quantity", "type": "int", "references": []}, {"name": "remainingStock", "type": "int", "references": []}, {"name": "channel", "type": "String", "references": []}, {"name": "requestedAt", "type": "Instant", "references": []}, {"name": "createdAt", "type": "Instant", "references": []}]}], "asyncapi_contracts": [{"module": "inventory-service", "path": "src/main/resources/static/asyncapi.yaml", "spec": {"asyncapi": "3.0.0", "info": {"title": "API asynchrone des stocks du supermarché", "version": "v1", "description": "Traitement des commandes en ligne, signalement des ruptures et application des réassorts."}, "defaultContentType": "application/json", "servers": {"kafka": {"host": "{bootstrapServers}", "protocol": "kafka", "description": "Cluster Kafka configuré par SPRING_KAFKA_BOOTSTRAP_SERVERS.", "variables": {"bootstrapServers": {"default": "localhost:9092"}}}}, "channels": {"onlineOrders": {"address": "supermarket.order.placed", "title": "Commandes en ligne passées", "description": "Commandes publiées par order-service à traiter par inventory-service.", "messages": {"orderPlaced": {"$ref": "#/components/messages/OrderPlaced"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}, "depletedStocks": {"address": "supermarket.stock.depleted", "title": "Stocks épuisés", "description": "Événement publié lorsque la dernière unité d'un produit est réservée.", "messages": {"stockDepleted": {"$ref": "#/components/messages/StockDepleted"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}, "restockRequests": {"address": "supermarket.stock.restock-requested", "title": "Demandes de réassort", "description": "Demandes publiées par restock-service et appliquées par inventory-service.", "messages": {"stockRestockRequested": {"$ref": "#/components/messages/StockRestockRequested"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}}, "operations": {"receiveOnlineOrder": {"action": "receive", "title": "Traiter une commande en ligne", "summary": "Réserve le stock pour une commande reçue du topic des commandes.", "channel": {"$ref": "#/channels/onlineOrders"}, "messages": [{"$ref": "#/channels/onlineOrders/messages/orderPlaced"}], "bindings": {"kafka": {"groupId": {"type": "string", "enum": ["inventory-service"]}, "bindingVersion": "0.5.0"}}}, "publishStockDepleted": {"action": "send", "title": "Signaler un stock épuisé", "summary": "Émet un événement lorsqu'une réservation épuise le stock d'un produit.", "channel": {"$ref": "#/channels/depletedStocks"}, "messages": [{"$ref": "#/channels/depletedStocks/messages/stockDepleted"}]}, "receiveRestockRequest": {"action": "receive", "title": "Appliquer une demande de réassort", "summary": "Augmente le stock pour une demande provenant de restock-service.", "channel": {"$ref": "#/channels/restockRequests"}, "messages": [{"$ref": "#/channels/restockRequests/messages/stockRestockRequested"}], "bindings": {"kafka": {"groupId": {"type": "string", "enum": ["inventory-restock-service"]}, "bindingVersion": "0.5.0"}}}}, "components": {"messages": {"OrderPlaced": {"name": "OrderPlaced", "title": "Commande passée", "payload": {"$ref": "#/components/schemas/OrderPlaced"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant de la commande, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}, "StockDepleted": {"name": "StockDepleted", "title": "Stock épuisé", "payload": {"$ref": "#/components/schemas/StockDepleted"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant du produit, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}, "StockRestockRequested": {"name": "StockRestockRequested", "title": "Réassort demandé", "payload": {"$ref": "#/components/schemas/StockRestockRequested"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant du produit, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}}, "schemas": {"OrderPlaced": {"type": "object", "required": ["orderId", "productId", "quantity", "requestedAt"], "properties": {"orderId": {"type": "string", "description": "Identifiant unique de la commande."}, "productId": {"type": "string", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1}, "requestedAt": {"type": "string", "format": "date-time"}}}, "StockDepleted": {"type": "object", "required": ["productId", "occurredAt"], "properties": {"productId": {"type": "string", "example": "PASTA-500G"}, "occurredAt": {"type": "string", "format": "date-time"}}}, "StockRestockRequested": {"type": "object", "required": ["productId", "quantity", "requestedAt"], "properties": {"productId": {"type": "string", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1, "example": 500}, "requestedAt": {"type": "string", "format": "date-time"}}}}}}}, {"module": "order-service", "path": "src/main/resources/static/asyncapi.yaml", "spec": {"asyncapi": "3.0.0", "info": {"title": "API asynchrone des commandes du supermarché", "version": "v1", "description": "Publication des commandes en ligne destinées à inventory-service."}, "defaultContentType": "application/json", "servers": {"kafka": {"host": "{bootstrapServers}", "protocol": "kafka", "description": "Cluster Kafka configuré par SPRING_KAFKA_BOOTSTRAP_SERVERS.", "variables": {"bootstrapServers": {"default": "localhost:9092"}}}}, "channels": {"onlineOrders": {"address": "supermarket.order.placed", "title": "Commandes en ligne passées", "description": "Commandes publiées périodiquement par order-service et consommées par inventory-service.", "messages": {"orderPlaced": {"$ref": "#/components/messages/OrderPlaced"}}, "bindings": {"kafka": {"bindingVersion": "0.5.0"}}}}, "operations": {"publishOnlineOrder": {"action": "send", "title": "Publier une commande en ligne", "summary": "Émet une commande à réserver par inventory-service.", "channel": {"$ref": "#/channels/onlineOrders"}, "messages": [{"$ref": "#/channels/onlineOrders/messages/orderPlaced"}]}}, "components": {"messages": {"OrderPlaced": {"name": "OrderPlaced", "title": "Commande passée", "summary": "Commande créée par order-service.", "payload": {"$ref": "#/components/schemas/OrderPlaced"}, "bindings": {"kafka": {"key": {"type": "string", "description": "Identifiant de la commande, utilisé comme clé Kafka."}, "bindingVersion": "0.5.0"}}}}, "schemas": {"OrderPlaced": {"type": "object", "required": ["orderId", "productId", "quantity", "requestedAt"], "properties": {"orderId": {"type": "string", "description": "Identifiant unique de la commande.", "example": "550e8400-e29b-41d4-a716-446655440000"}, "productId": {"type": "string", "description": "Référence du produit du catalogue.", "example": "PASTA-500G"}, "quantity": {"type": "integer", "format": "int32", "minimum": 1, "example": 2}, "requestedAt": {"type": "string", "format": "date-time", "description": "Instant de création de la commande."}}}}}}}], "indexing_issues": [], "code_flows": [{"id": "432c14ecee0d2898", "module": "restock-service", "method": "io.systemlens.supermarket.restock.StockDepletedConsumer.requestRestock", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 37, "end_line": 50, "status": "potential", "confidence": "medium", "reason": "The entry point and external effects occur in the same Java method.", "vscode_uri": "vscode://file//Users/elkouhen/systemlens-observability-lab/apps/supermarket-demo/restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java:37", "steps": [{"order": 1, "kind": "message_entry", "name": "supermarket.stock.depleted", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 37, "end_line": 50, "endpoint_id": "e0551613e084f3fd", "port_label": "I8 → O5", "operation": null}, {"order": 2, "kind": "message_publish", "name": "supermarket.stock.restock-requested", "path": "restock-service/src/main/java/io/systemlens/supermarket/restock/StockDepletedConsumer.java", "start_line": 44, "end_line": 44, "endpoint_id": "5f5b733ab4e3986e", "port_label": "O5", "operation": null}]}]}</script>
   <script type="module">// Ordered source module: 00-core.js
     const graphData = JSON.parse(document.getElementById("graph-data").textContent);
     // HTML cards are rendered in screen space. Layouts and collision envelopes
@@ -1139,8 +1124,7 @@
       updateThemeToggle();
       const labelColor = { color: theme === "dark" ? "#dce8f7" : "#172033" };
       renderer?.setSetting("labelColor", labelColor);
-      dependencyRenderer?.setSetting("labelColor", labelColor);
-      renderer?.refresh(); dependencyRenderer?.refresh();
+      renderer?.refresh();
     });
     updateThemeToggle();
     const nodeDataById = new Map(graphData.nodes.map(node => [node.id, node]));
@@ -1212,68 +1196,6 @@
       if (link.direction === "data_access") return RELATION_COLORS.mongodb;
       if (link.kind.startsWith("mcp_") && ["reads", "writes", "uses"].includes(link.label)) return RELATION_COLORS.mongodb;
       return RELATION_COLORS.kafkaPublish;
-    }
-    function dependencyGraphData() {
-      return graphData.build_dependencies || { nodes: [], links: [] };
-    }
-    function buildHierarchyPositions(nodes, links) {
-      // Sugiyama starts by condensing cycles. The resulting component graph is
-      // acyclic and can therefore be assigned stable dependency layers.
-      const adjacency = new Map(nodes.map(node => [node.id, []]));
-      links.forEach(link => adjacency.get(link.source)?.push(link.target));
-      const indexes = new Map(), lowlinks = new Map(), stack = [], onStack = new Set(), components = [];
-      let nextIndex = 0;
-      function visit(nodeId) {
-        indexes.set(nodeId, nextIndex); lowlinks.set(nodeId, nextIndex); nextIndex += 1;
-        stack.push(nodeId); onStack.add(nodeId);
-        for (const targetId of adjacency.get(nodeId) || []) {
-          if (!indexes.has(targetId)) {
-            visit(targetId);
-            lowlinks.set(nodeId, Math.min(lowlinks.get(nodeId), lowlinks.get(targetId)));
-          } else if (onStack.has(targetId)) {
-            lowlinks.set(nodeId, Math.min(lowlinks.get(nodeId), indexes.get(targetId)));
-          }
-        }
-        if (lowlinks.get(nodeId) !== indexes.get(nodeId)) return;
-        const component = [];
-        for (;;) {
-          const member = stack.pop(); onStack.delete(member); component.push(member);
-          if (member === nodeId) break;
-        }
-        components.push(component.sort());
-      }
-      nodes.map(node => node.id).sort().forEach(nodeId => { if (!indexes.has(nodeId)) visit(nodeId); });
-      const componentByNode = new Map();
-      components.forEach((component, index) => component.forEach(nodeId => componentByNode.set(nodeId, index)));
-      const successors = components.map(() => new Set());
-      const indegrees = components.map(() => 0);
-      links.forEach(link => {
-        const source = componentByNode.get(link.source), target = componentByNode.get(link.target);
-        if (source === target || successors[source].has(target)) return;
-        successors[source].add(target); indegrees[target] += 1;
-      });
-      const levels = components.map(() => 0);
-      const queue = components.map((_component, index) => index).filter(index => indegrees[index] === 0).sort((a, b) => a - b);
-      for (let cursor = 0; cursor < queue.length; cursor += 1) {
-        const component = queue[cursor];
-        [...successors[component]].sort((a, b) => a - b).forEach(target => {
-          levels[target] = Math.max(levels[target], levels[component] + 1);
-          indegrees[target] -= 1;
-          if (indegrees[target] === 0) queue.push(target);
-        });
-      }
-      const layers = new Map();
-      components.forEach((component, index) => {
-        const level = levels[index];
-        layers.set(level, [...(layers.get(level) || []), ...component]);
-      });
-      const positions = new Map();
-      [...layers.entries()].sort(([left], [right]) => left - right).forEach(([level, nodeIds]) => {
-        nodeIds.sort();
-        const center = (nodeIds.length - 1) / 2;
-        nodeIds.forEach((nodeId, row) => positions.set(nodeId, { x: level * 2.8, y: row - center }));
-      });
-      return positions;
     }
     let network;
     let renderer;
@@ -1856,6 +1778,9 @@
         labelAlignment: "center",
         nodeReducer: (node, data) => {
           if (!isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
+          if (graphState.selectedCodeFlowId && !graphState.relatedNodes?.has(node)) {
+            return { ...data, hidden: true, label: "" };
+          }
           const renderedData = graphState.renderMode === "symbols" ? { ...data, size: .5 } : data;
           if (graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)) {
             return {
@@ -1880,12 +1805,7 @@
               size: 3.5,
               zIndex: 2,
             };
-            return {
-              ...data,
-              color: document.documentElement.dataset.theme === "dark" ? "#25334a" : "#d8dee9",
-              size: .25,
-              zIndex: 0,
-            };
+            return { ...data, hidden: true };
           }
           if (graphState.selectedId && graphState.relatedEdges.has(edge)) return { ...data, size: 1.5 };
           if (graphState.clusteredView || graphState.layeredClusterView) return { ...data, size: .5 };
@@ -1965,7 +1885,11 @@
           return renderer.graphToViewport(graphPoint);
         };
         network.forEachNode((id, attributes) => {
-          if (!isVisibleNodeId(id) || attributes.hidden) return;
+          if (
+            !isVisibleNodeId(id)
+            || attributes.hidden
+            || (graphState.selectedCodeFlowId && !graphState.relatedNodes?.has(id))
+          ) return;
           // graphToViewport is Sigma's public conversion and includes its
           // current camera, normalization and aspect-ratio handling. The
           // overlays use the same workspace rectangle as the renderer, so
@@ -2228,13 +2152,11 @@
           const kind = document.createElement("span");
           kind.className = "graph-node-card-kind";
           const kindLabel = node.technology || nodeKindLabel(node);
-          const flowCount = node.internal_flow_count || 0;
-          kind.textContent = flowCount
-            ? `${kindLabel} · ${flowCount} flux interne${flowCount > 1 ? "s" : ""}`
-            : kindLabel;
+          kind.textContent = kindLabel;
           label.append(icon);
           label.append(name, kind);
           const portsByDirection = { in: [], out: [] };
+          if (graphState.selectedCodeFlowId) {
           (node.ports || []).filter(port => port.label).forEach(port => {
             portsByDirection[port.direction]?.push(port);
           });
@@ -2258,13 +2180,18 @@
               const method = document.createElement("code");
               method.textContent = `Méthode Java : ${port.method || "inconnue"}`;
               tooltip.append(title, endpoint, method);
+              if (port.message_type) {
+                const messageType = document.createElement("code");
+                messageType.textContent = `Type Java : ${port.message_type}`;
+                tooltip.append(messageType);
+              }
               if (port.local_outputs?.length) {
                 const localOutputs = document.createElement("span");
                 localOutputs.textContent = "Sorties internes mappées :";
                 const outputList = document.createElement("ul");
                 port.local_outputs.forEach(output => {
                   const item = document.createElement("li");
-                  item.textContent = `${output.label} · ${output.type} : ${output.name} · ${output.method}`;
+                  item.textContent = `${output.label} · ${output.type} : ${output.name} · ${output.method}${output.message_type ? ` · Type Java : ${output.message_type}` : ""}`;
                   outputList.append(item);
                 });
                 tooltip.append(localOutputs, outputList);
@@ -2284,6 +2211,7 @@
             anchor.addEventListener("pointerleave", () => flowTooltipOverlay.replaceChildren());
             label.append(anchor);
           }));
+          }
           // Cards sit above Sigma's canvas and therefore normally consume the
           // pointer stream. Pan the camera directly when a drag starts on a
           // card, while preserving a plain click for node selection. Keeping
@@ -2360,7 +2288,7 @@
         // than from graph nodes. This keeps its endpoints attached to the
         // readable port anchors through every pan, zoom, and card scale.
         portPathOverlay.replaceChildren();
-        if (graphState.renderMode === "symbols") return;
+        if (graphState.renderMode === "symbols" || !graphState.selectedCodeFlowId) return;
         const svgNamespace = "http://www.w3.org/2000/svg";
         const marker = document.createElementNS(svgNamespace, "marker");
         marker.id = "graph-port-arrow";
@@ -2383,6 +2311,12 @@
         );
         const overlayBounds = portPathOverlay.getBoundingClientRect();
         (graphData.internal_port_links || []).forEach(link => {
+          if (
+            graphState.selectedCodeFlowId
+            && !graphState.relatedLocalPortLinks?.has(
+              `${link.input_endpoint_id}:${link.output_endpoint_id}`
+            )
+          ) return;
           const input = anchorsByEndpointId.get(link.input_endpoint_id);
           const output = anchorsByEndpointId.get(link.output_endpoint_id);
           if (!input?.classList.contains("is-in") || !output?.classList.contains("is-out")) return;
@@ -2404,10 +2338,26 @@
           );
           portPathOverlay.append(path);
         });
-        const directedPairs = new Set((graphData.port_links || []).map(link => (
+        const selectedEndpointIds = new Set(
+          graphData.links.flatMap((topologyLink, index) => (
+            graphState.relatedEdges?.has(`edge-${index}`)
+              ? (topologyLink.endpoint_ids || [])
+              : []
+          ))
+        );
+        const selectedPortLinks = (graphData.port_links || []).filter(link => (
+          !graphState.selectedCodeFlowId
+          // Kafka is represented by two topology arcs, producer → topic and
+          // topic → consumer. Each arc carries one endpoint identifier, while
+          // the port link joins those endpoints directly; retain it when
+          // either endpoint belongs to the selected path.
+          || selectedEndpointIds.has(link.source_endpoint_id)
+          || selectedEndpointIds.has(link.target_endpoint_id)
+        ));
+        const directedPairs = new Set(selectedPortLinks.map(link => (
           `${link.source_endpoint_id}:${link.target_endpoint_id}`
         )));
-        (graphData.port_links || []).forEach(link => {
+        selectedPortLinks.forEach(link => {
           const source = anchorsByEndpointId.get(link.source_endpoint_id);
           const target = anchorsByEndpointId.get(link.target_endpoint_id);
           if (!source?.classList.contains("is-out") || !target?.classList.contains("is-in")) return;
@@ -2558,7 +2508,6 @@
     rebuildGraph();
 
 // Ordered source module: 20-controls.js
-    let dependencyRenderer = null;
     const details = document.getElementById("details");
     const quickSearch = document.getElementById("quick-search");
     const graphContext = document.getElementById("graph-context");
@@ -2572,125 +2521,17 @@
     const openApiTab = document.getElementById("openapi-tab");
     const kafkaTab = document.getElementById("kafka-tab");
     const persistenceTab = document.getElementById("persistence-tab");
-    const buildTab = document.getElementById("build-tab");
     const issuesTab = document.getElementById("issues-tab");
     const flowsTab = document.getElementById("flows-tab");
     const graphLegend = document.getElementById("graph-legend");
     const graphPanel = document.getElementById("graph-panel");
     const resourcesPanel = document.getElementById("resources-panel");
-    const dependenciesPanel = document.getElementById("dependencies-panel");
     const issuesPanel = document.getElementById("issues-panel");
     const flowsPanel = document.getElementById("flows-panel");
     const openApiPanel = document.getElementById("openapi-panel");
     const kafkaPanel = document.getElementById("kafka-panel");
     const persistencePanel = document.getElementById("persistence-panel");
     const graphCanvas = document.getElementById("graph");
-    const dependencyCanvas = document.getElementById("dependency-graph");
-    function ensureDependencyRenderer() {
-      if (dependencyRenderer !== null) return dependencyRenderer;
-      const dependencyData = dependencyGraphData();
-      const dependencyPositions = buildHierarchyPositions(dependencyData.nodes, dependencyData.links);
-      const dependencyNetwork = new graphology.MultiDirectedGraph();
-      dependencyData.nodes.forEach(node => {
-        const position = dependencyPositions.get(node.id) || { x: 0, y: 0 };
-        dependencyNetwork.addNode(node.id, {
-          label: node.name,
-          x: position.x,
-          y: position.y,
-          size: node.size,
-          color: node.color,
-          type: "build_module",
-        });
-      });
-      dependencyData.links.forEach((link, index) => dependencyNetwork.addEdgeWithKey(
-        `dependency-edge-${index}`, link.source, link.target, {
-          label: link.label,
-          size: 1.5,
-          color: relationColor(link),
-          kind: link.kind,
-          type: "arrow",
-        }
-      ));
-      dependencyRenderer = new Sigma(dependencyNetwork, dependencyCanvas, {
-        labelColor: { color: document.documentElement.dataset.theme === "dark" ? "#dce8f7" : "#172033" },
-        nodeProgramClasses: { build_module: createNodeProgram(MICROSERVICE_FRAGMENT_SHADER) },
-        renderEdgeLabels: false,
-        labelDensity: .12,
-        labelGridCellSize: 110,
-        labelRenderedSizeThreshold: 8,
-        // Keep camera behavior consistent with the architecture views. The
-        // shared controls below provide zoom, pan and no-inertia semantics.
-        doubleClickZoomingRatio: 1,
-        enableCameraZooming: false,
-        enableCameraPanning: false,
-        inertiaDuration: 0,
-        inertiaRatio: 0,
-      });
-      dependencyRenderer.on("clickNode", ({ node }) => selectDependencyModule(node));
-      dependencyRenderer.on("clickStage", reset);
-      dependencyRenderer.on("doubleClickStage", event => event.preventSigmaDefault?.());
-      dependencyRenderer.on("doubleClickNode", event => event.preventSigmaDefault?.());
-      const handleDependencyWheel = event => {
-        event.preventDefault();
-        const camera = dependencyRenderer.getCamera();
-        const state = camera.getState();
-        const viewport = dependencyCanvas.getBoundingClientRect();
-        const cursor = { x: event.clientX - viewport.left, y: event.clientY - viewport.top };
-        const graphPoint = dependencyRenderer.viewportToGraph(cursor);
-        const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
-        const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * .0012);
-        const ratio = Math.max(.01, Math.min(100, state.ratio * factor));
-        camera.setState({ ...state, ratio });
-        const projected = dependencyRenderer.graphToViewport(graphPoint);
-        const nextState = camera.getState();
-        const width = Math.max(viewport.width, 1);
-        const height = Math.max(viewport.height, 1);
-        camera.setState({
-          ...nextState,
-          x: nextState.x - (cursor.x - projected.x) / width,
-          y: nextState.y + (cursor.y - projected.y) / height,
-        });
-      };
-      dependencyCanvas.addEventListener("wheel", handleDependencyWheel, { passive: false });
-      let dependencyPan = null;
-      const finishDependencyPan = event => {
-        if (!dependencyPan || event.pointerId !== dependencyPan.pointerId) return;
-        dependencyCanvas.releasePointerCapture?.(event.pointerId);
-        dependencyPan = null;
-        window.removeEventListener("pointermove", moveDependencyPan, true);
-        window.removeEventListener("pointerup", finishDependencyPan, true);
-        window.removeEventListener("pointercancel", finishDependencyPan, true);
-      };
-      const moveDependencyPan = event => {
-        if (!dependencyPan || event.pointerId !== dependencyPan.pointerId) return;
-        const state = dependencyPan.cameraState;
-        const viewport = dependencyCanvas.getBoundingClientRect();
-        const width = Math.max(viewport.width, 1);
-        const height = Math.max(viewport.height, 1);
-        dependencyRenderer.getCamera().setState({
-          ...state,
-          x: state.x - (event.clientX - dependencyPan.startX) / width,
-          y: state.y + (event.clientY - dependencyPan.startY) / height,
-        });
-      };
-      const startDependencyPan = event => {
-        if (event.button !== 0) return;
-        dependencyPan = {
-          pointerId: event.pointerId,
-          startX: event.clientX,
-          startY: event.clientY,
-          cameraState: dependencyRenderer.getCamera().getState(),
-        };
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        dependencyCanvas.setPointerCapture?.(event.pointerId);
-        window.addEventListener("pointermove", moveDependencyPan, true);
-        window.addEventListener("pointerup", finishDependencyPan, true);
-        window.addEventListener("pointercancel", finishDependencyPan, true);
-      };
-      dependencyCanvas.addEventListener("pointerdown", startDependencyPan, true);
-      return dependencyRenderer;
-    }
     const indexingIssuesList = document.getElementById("indexing-issues");
     const indexingIssuesEmpty = document.getElementById("indexing-issues-empty");
     const indexingIssuesTitle = document.getElementById("indexing-issues-title");
@@ -3457,7 +3298,6 @@
       }
       const showingGraph = tab === "graph";
       const showingResources = tab === "resources";
-      const showingDependencies = tab === "dependencies";
       const showingIssues = tab === "issues";
       const showingOpenApi = tab === "openapi";
       const showingKafka = tab === "kafka";
@@ -3473,8 +3313,6 @@
       kafkaTab.setAttribute("aria-selected", String(showingKafka));
       persistenceTab.classList.toggle("is-active", showingPersistence);
       persistenceTab.setAttribute("aria-selected", String(showingPersistence));
-      buildTab.classList.toggle("is-active", showingDependencies);
-      buildTab.setAttribute("aria-selected", String(showingDependencies));
       issuesTab.classList.toggle("is-active", showingIssues);
       issuesTab.setAttribute("aria-selected", String(showingIssues));
       flowsTab.classList.toggle("is-active", showingFlows);
@@ -3483,23 +3321,13 @@
       resourcesPanel.hidden = !showingResources;
       quickSearch.hidden = !showingGraph;
       graphContext.hidden = !showingGraph;
-      dependenciesPanel.hidden = !showingDependencies;
       issuesPanel.hidden = !showingIssues;
       openApiPanel.hidden = !showingOpenApi;
       kafkaPanel.hidden = !showingKafka;
       persistencePanel.hidden = !showingPersistence;
       flowsPanel.hidden = !showingFlows;
       graphLegend.hidden = !showingGraph;
-      graphCanvas.hidden = showingDependencies;
-      dependencyCanvas.hidden = !showingDependencies;
       if (showingFlows) flowsPanel.dispatchEvent(new Event("systemlens:flows-open"));
-      if (showingDependencies) {
-        const activeDependencyRenderer = ensureDependencyRenderer();
-        requestAnimationFrame(() => {
-          activeDependencyRenderer.refresh();
-          activeDependencyRenderer.getCamera().animatedReset({ duration: 220 });
-        });
-      }
     }
     function renderIndexingIssues() {
       inventoryStatus.hidden = false;
@@ -4156,33 +3984,6 @@
       resetButton.setAttribute("aria-label", resetButton.title);
       requestAnimationFrame(() => toolbar?.scrollTo({ top: 0 }));
     }
-    function selectDependencyModule(id) {
-      const node = (graphData.build_dependencies?.nodes || []).find(item => item.id === id);
-      if (!node) return;
-      const links = graphData.build_dependencies?.links || [];
-      const dependencies = links
-        .filter(link => link.source === id)
-        .map(link => (graphData.build_dependencies.nodes.find(item => item.id === link.target) || {}).name)
-        .filter(Boolean);
-      const dependents = links
-        .filter(link => link.target === id)
-        .map(link => (graphData.build_dependencies.nodes.find(item => item.id === link.source) || {}).name)
-        .filter(Boolean);
-      revealDetails();
-      details.replaceChildren();
-      const header = document.createElement("header");
-      header.className = "details-header";
-      const kicker = document.createElement("p");
-      kicker.className = "details-kicker";
-      kicker.textContent = `Projet ${node.build_system === "unknown" ? "Maven / Gradle" : node.build_system}`;
-      const title = document.createElement("h1");
-      title.className = "details-title";
-      title.textContent = node.name;
-      header.append(kicker, title);
-      details.append(header);
-      appendList("Depend de", [...new Set(dependencies)].sort());
-      appendList("Utilise par", [...new Set(dependents)].sort());
-    }
     function setDetailsEmpty(message) {
       details.classList.add("is-empty");
       document.querySelector(".toolbar")?.classList.remove("has-details");
@@ -4197,20 +3998,7 @@
       details.append(empty);
     }
     function persistState() {
-      const params = new URLSearchParams();
-      if (pathStops.length) params.set("from", pathStops[0]);
-      if (pathStops.length > 1) params.set("to", pathStops[pathStops.length - 1]);
-      pathStops.slice(1, -1).forEach(id => params.append("via", id));
-      if (pathLock.checked) params.set("lock", "1");
-      if (!pathStops.length && graphState.selectedId) {
-        params.set("selected", graphState.selectedId);
-      }
-      const fragment = params.toString();
-      try {
-        history.replaceState(null, "", fragment ? `#${fragment}` : location.pathname);
-      } catch (_error) {
-        location.hash = fragment;
-      }
+      // Explorer state is ephemeral; URL fragments never drive rendering.
     }
     function clearPathControls() {
       pathQuery.value = "";
@@ -4540,6 +4328,10 @@
       else delete graphCanvas.dataset.selectedCodeFlow;
       setPathMicroserviceOrder(path);
       renderer.refresh();
+      // The normal Explorer deliberately has no port overlays. Rebuild them
+      // after setting the selected call graph so its ports and local links
+      // are projected from the selected nodes only.
+      requestGraphRender();
       if (context.showDetails !== false) renderPathDetails(path, context);
       else {
         resetButton.disabled = false;
@@ -5277,23 +5069,12 @@
       const title = document.createElement("div");
       title.className = "reference-title code-flow-title";
       title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`;
-      const javaMethod = document.createElement("code");
-      javaMethod.className = "code-flow-method";
-      javaMethod.textContent = `Méthode Java : ${flow.method}`;
-      const badges = document.createElement("div");
-      badges.className = "code-flow-badges";
-      [flow.status === "cycle" ? "Cycle détecté" : (flow.status === "potential" ? "Potentiel" : (flow.status || "Statut inconnu")), `Confiance ${codeFlowConfidenceLabel(flow.confidence)}`].forEach(label => {
-        const badge = document.createElement("span");
-        badge.className = "detail-badge";
-        badge.textContent = label;
-        badges.append(badge);
-      });
-      header.append(title, javaMethod, badges);
+      header.append(title);
       const exactPath = pathForCodeFlow(flow);
       const path = exactPath || nodePathForCodeFlow(flow);
       const meta = document.createElement("div");
       meta.className = "reference-meta";
-      meta.textContent = `${flow.module} · ${(flow.steps?.length || 1) - 1} étape(s) après l’entrée`;
+      meta.textContent = flow.module;
       if (path) {
         item.tabIndex = 0;
         item.title = "Afficher ce graphe d’appel dans la vue Graphe";
@@ -5402,35 +5183,10 @@
       persistState();
     }
     function restoreState() {
-      const params = new URLSearchParams(location.hash.slice(1));
-      const sourceId = params.get("from");
-      const targetId = params.get("to");
-      pathLock.checked = params.get("lock") === "1";
-      const restoredStops = [sourceId, ...params.getAll("via"), targetId];
-      if (
-        sourceId
-        && targetId
-        && isValidPathStops(restoredStops)
-      ) {
-        const exactPath = exactPathForStops(restoredStops);
-        if (exactPath) {
-          showPath(exactPath, restoredStops);
-          return;
-        }
-        const startsAndEndsWithServices = [restoredStops[0], restoredStops.at(-1)]
-          .every(id => nodeDataById.get(id).kind === "microservice");
-        if (startsAndEndsWithServices) {
-          pathStops.push(...restoredStops);
-          renderPathQuery();
-          showShortestPath();
-          return;
-        }
-      }
-      const selectedIdFromUrl = params.get("selected");
-      if (selectedIdFromUrl && nodeDataById.has(selectedIdFromUrl)) selectNode(selectedIdFromUrl);
+      pathLock.checked = false;
     }
     function activeRenderer() {
-      return dependencyCanvas.hidden ? renderer : ensureDependencyRenderer();
+      return renderer;
     }
     const fitOverviewButton = document.getElementById("fit-view");
     const fitReadableButton = document.getElementById("fit-readable");
@@ -5490,17 +5246,13 @@
       if (nextMode === "readable") {
         const state = camera.getState();
         // Start from the complete overview, then move closer. Architecture
-        // cards use the measured projected spacing; the build graph has no
-        // HTML cards and uses the same minimum reading distance.
+        // cards use the measured projected spacing.
         if (compoundView) {
           camera.setState({ ...state, ratio: Math.max(.01, state.ratio / Math.max(1.6, collisionZoom)) });
         } else if (targetRenderer === renderer && network.order <= 12) {
           camera.setState({ ...state, ratio: requiredSmallGraphOverviewRatio(targetRenderer) });
         } else {
-          const zoomIn = targetRenderer === renderer
-            ? Math.max(1.6, requiredCardZoomIn(targetRenderer))
-            : 1.6;
-          camera.setState({ ...state, ratio: Math.max(.01, state.ratio / zoomIn) });
+          camera.setState({ ...state, ratio: Math.max(.01, state.ratio / Math.max(1.6, requiredCardZoomIn(targetRenderer))) });
         }
       } else if (compoundView) {
         const state = camera.getState();
@@ -5515,9 +5267,8 @@
         await requestGraphRender();
         if (fitRequest !== graphState.fitRequest || layoutRequest !== graphState.layoutRequest) return;
       }
-      const targetCanvas = targetRenderer === renderer ? graphCanvas : dependencyCanvas;
-      targetCanvas.dataset.fitMode = nextMode;
-      targetCanvas.dataset.fitRatio = String(targetRenderer.getCamera().getState().ratio);
+      graphCanvas.dataset.fitMode = nextMode;
+      graphCanvas.dataset.fitRatio = String(targetRenderer.getCamera().getState().ratio);
     }
     document.getElementById("zoom-in").addEventListener("click", () => {
       const renderer = activeRenderer();
@@ -5530,10 +5281,7 @@
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
-      const maximumRatio = renderer === dependencyRenderer
-        ? 100
-        : graphState.maximumCollisionFreeRatio;
-      camera.setState({ ...state, ratio: Math.min(maximumRatio, state.ratio * 1.25) });
+      camera.setState({ ...state, ratio: Math.min(graphState.maximumCollisionFreeRatio, state.ratio * 1.25) });
       requestGraphRender();
     });
     fitOverviewButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "overview"));
@@ -5552,7 +5300,6 @@
     openApiTab.addEventListener("click", () => setToolbarTab("openapi"));
     kafkaTab.addEventListener("click", () => setToolbarTab("kafka"));
     persistenceTab.addEventListener("click", () => setToolbarTab("persistence"));
-    buildTab.addEventListener("click", () => setToolbarTab("dependencies"));
     issuesTab.addEventListener("click", () => setToolbarTab("issues"));
     flowsTab.addEventListener("click", () => setToolbarTab("flows"));
     inventoryStatus.addEventListener("click", () => setToolbarTab("issues"));
@@ -5599,6 +5346,7 @@
     renderReferences();
     renderResources();
     restoreState();
+    setToolbarTab("graph");
     function updateWorkspaceViewport(refit = false) {
       const root = document.documentElement;
       root.style.setProperty("--workspace-left", "0px");
@@ -5606,7 +5354,6 @@
       root.style.setProperty("--workspace-top", "0px");
       root.style.setProperty("--workspace-bottom", "0px");
       renderer?.refresh();
-      dependencyRenderer?.refresh();
       requestGraphRender();
       if (refit) {
         if (graphState.selectedCodeFlowId && graphState.relatedNodes?.size) {

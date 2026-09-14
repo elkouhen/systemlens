@@ -1,4 +1,3 @@
-    #dependency-graph[hidden] { display: none; }
     .toolbar { position: fixed; z-index: 10; top: 16px; left: 16px; display: grid; gap: 10px; width: min(390px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 12px; overflow-y: auto; border: 1px solid #d7dee9; border-radius: 10px; background: rgba(255, 255, 255, .96); box-shadow: 0 4px 20px rgba(15, 23, 42, .12); }
     .toolbar { overflow-x: hidden; }
     .toolbar-header { position: sticky; z-index: 20; top: -10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -10px -2px 0; padding: 10px 2px 6px; background: rgba(255, 255, 255, .98); }
@@ -206,10 +205,6 @@
     .path-overview-item.is-collection { border-left: 3px solid #16a34a; }
     .path-overview-stop { width: 100%; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
     .path-overview-stop:hover, .path-overview-stop:focus-visible { color: #1d4f91; text-decoration: underline; outline: none; }
-    .dependency-view { display: grid; gap: 8px; padding: 2px 0; }
-    .dependency-view-kicker { margin: 0 0 3px; color: #1d4f91; font-size: var(--type-kicker); font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
-    .dependency-view h2 { margin: 0; color: #172033; font-size: var(--type-view-title); line-height: 1.25; }
-    .dependency-view p:last-child { margin: 0; color: #52616b; font-size: 12px; line-height: 1.45; }
     .legend { position: fixed; z-index: 10; right: 16px; bottom: 16px; width: 210px; padding: 9px 11px; border: 1px solid #d7dee9; border-radius: 8px; background: rgba(255, 255, 255, .95); color: #475569; font-size: 11px; box-shadow: 0 2px 12px rgba(15, 23, 42, .10); }
     .legend[open] summary { margin-bottom: 8px; }
     .legend-content { display: grid; gap: 5px; }
