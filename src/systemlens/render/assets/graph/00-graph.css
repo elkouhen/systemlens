@@ -32,11 +32,20 @@
     }
     #graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
     #graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
+    #graph-port-paths { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; }
+    .graph-port-path { fill: none; stroke: #7c3aed; stroke-width: 2; stroke-linecap: round; opacity: .9; }
+    .graph-port-path.is-kafka { stroke: #009e73; }
+    .graph-local-port-path { fill: none; stroke: #d97706; stroke-width: 1.5; stroke-dasharray: 3 2; stroke-linecap: round; opacity: .9; }
+    .graph-local-port-path.is-code-flow-path { stroke: #7c3aed; stroke-width: 3; stroke-dasharray: none; opacity: 1; }
+    :root[data-theme="dark"] .graph-port-path { stroke: #c4b5fd; }
+    :root[data-theme="dark"] .graph-port-path.is-kafka { stroke: #5eead4; }
+    :root[data-theme="dark"] .graph-local-port-path { stroke: #fbbf24; }
+    :root[data-theme="dark"] .graph-local-port-path.is-code-flow-path { stroke: #c4b5fd; }
     #graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
     /* Only flow tooltips rise over fixed widgets; graph cards stay below. */
     #graph-flow-tooltips { position: fixed; inset: 0; z-index: 11; pointer-events: none; overflow: visible; }
     #graph-flow-status { position: fixed; z-index: 10; top: 16px; left: 50%; max-width: min(460px, calc(100vw - 32px)); margin: 0; padding: 8px 11px; transform: translateX(-50%); border: 1px solid #f59e0b; border-radius: 8px; color: #78350f; background: #fffbeb; box-shadow: 0 5px 16px rgba(15, 23, 42, .18); font-size: 11px; font-weight: 700; line-height: 1.35; text-align: center; pointer-events: none; }
-    #graph-layers, #graph-groups, #graph-node-labels {
+    #graph-layers, #graph-groups, #graph-port-paths, #graph-node-labels {
       left: var(--workspace-left, 0px);
       right: var(--workspace-right, 0px);
       top: var(--workspace-top, 0px);
@@ -54,7 +63,7 @@
     .graph-namespace-title:hover, .graph-project-group-title:hover { filter: brightness(.97); box-shadow: 0 1px 5px color-mix(in srgb, currentColor 18%, transparent); }
     .graph-project-group-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--group-accent, #64748b) 58%, transparent); outline-offset: 1px; }
     :root[data-theme="dark"] .graph-project-group { background: color-mix(in srgb, var(--group-accent, #64748b) 8%, transparent); }
-    .graph-node-card-label { position: absolute; width: 110px; height: 70px; min-height: 70px; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; box-sizing: border-box; transform: translate(-50%, -50%) scale(var(--graph-card-scale, 1)); transform-origin: center; pointer-events: auto; cursor: pointer; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #ffffff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; overflow: hidden; }
+    .graph-node-card-label { position: absolute; width: 110px; height: 70px; min-height: 70px; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; box-sizing: border-box; transform: translate(-50%, -50%) scale(var(--graph-card-scale, 1)); transform-origin: center; pointer-events: auto; cursor: pointer; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #ffffff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; overflow: visible; }
     .graph-node-card-icon { position: static; grid-column: 2; grid-row: 1; align-self: center; display: grid; place-items: center; width: 14px; height: 14px; border: 0; border-radius: 0; color: var(--card-accent, #64748b); line-height: 1; }
     .graph-node-card-icon::before { display: block; width: 12px; height: 12px; box-sizing: border-box; }
     .graph-node-card-icon.is-service::before { content: "⚙"; width: 14px; height: 14px; font-size: 17px; line-height: 14px; text-align: center; }
@@ -64,6 +73,13 @@
     .graph-node-card-icon.is-topic::before { content: ""; width: 12px; height: 13px; border: 0; border-radius: 1px; background: linear-gradient(to right, currentColor 0 1.5px, transparent 1.5px 5.25px, currentColor 5.25px 6.75px, transparent 6.75px 10.5px, currentColor 10.5px 12px); }
     .graph-node-card-name { min-width: 0; grid-column: 1; grid-row: 1; align-self: end; font-weight: 750; }
     .graph-node-card-kind { min-width: 0; grid-column: 1 / 3; grid-row: 2; margin-top: 3px; color: #64748b; font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .graph-node-port-reference { position: absolute; top: var(--port-offset); z-index: 1; display: grid; place-items: center; min-width: 24px; height: 16px; padding: 0 3px; box-sizing: border-box; transform: translateY(-50%); border: 1px solid #8b5cf6; border-radius: 8px; color: #4c1d95; background: #faf5ff; box-shadow: 0 2px 5px rgba(76,29,149,.14); font-size: 9px; font-weight: 800; line-height: 1; white-space: nowrap; }
+    .graph-node-port-reference.is-in { right: calc(100% - 7px); }
+    .graph-node-port-reference.is-out { left: calc(100% - 7px); }
+    .graph-port-tooltip { position: fixed; z-index: 1; display: grid; gap: 3px; width: max-content; max-width: min(340px, calc(100vw - 24px)); padding: 8px 10px; pointer-events: none; border: 1px solid #6d28d9; border-radius: 8px; color: #f8fafc; background: #24103f; box-shadow: 0 8px 22px rgba(15, 23, 42, .35); font-size: 11px; font-weight: 500; line-height: 1.35; text-align: left; white-space: normal; }
+    .graph-port-tooltip strong { color: #ddd6fe; font-size: 11px; font-weight: 850; }
+    .graph-port-tooltip code { color: #f5f3ff; font: 600 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .graph-port-tooltip ul { display: grid; gap: 2px; margin: 0; padding-left: 16px; }
     .graph-flow-step { position: absolute; top: -8px; left: -8px; display: grid; place-items: center; width: 19px; height: 19px; border-radius: 50%; color: #fff; background: #7c3aed; box-shadow: 0 2px 6px rgba(76, 29, 149, .35); font-size: 10px; font-weight: 850; }
     #graph-node-labels.is-symbol-mode { overflow: visible; }
     #graph-node-labels.is-symbol-mode .graph-node-card-label { width: 30px; height: 30px; min-height: 0; display: block; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
@@ -85,6 +101,8 @@
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-name,
     #graph-node-labels.is-symbol-mode .graph-node-card-label.has-adaptive-label .graph-node-card-name { visibility: visible; opacity: 1; }
     #graph-node-labels.is-symbol-mode .graph-node-card-kind { display: none; }
+    #graph-node-labels.is-symbol-mode .graph-node-port-reference { display: none; }
+    #graph-port-paths.is-symbol-mode { display: none; }
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-icon { transform: scale(1.1); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .88), 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 20%, transparent), 0 0 18px color-mix(in srgb, var(--card-accent, #64748b) 72%, transparent); }
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-code-flow-node .graph-node-card-icon { transform: scale(1.18); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .88), 0 0 0 4px rgba(124, 58, 237, .3), 0 0 22px rgba(124, 58, 237, .72); filter: saturate(1.18); }
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-code-flow-node .graph-node-card-icon.is-service { box-shadow: none; filter: saturate(1.18) drop-shadow(0 0 8px rgba(124, 58, 237, .88)); }
@@ -93,16 +111,9 @@
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered:not(.is-selected) .graph-node-card-icon { transform: scale(1.06); filter: saturate(1.08); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .88), 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 16%, transparent), 0 5px 13px color-mix(in srgb, var(--card-accent, #64748b) 38%, transparent); }
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-hovered:not(.is-selected) .graph-node-card-icon.is-service { box-shadow: none; filter: saturate(1.08) drop-shadow(0 4px 5px color-mix(in srgb, var(--card-accent, #64748b) 38%, transparent)); }
     .graph-node-card-label.is-selected { border-width: 1.5px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 0 22px color-mix(in srgb, var(--card-accent, #64748b) 52%, transparent), 0 8px 20px rgba(15, 23, 42, .18); }
-    .graph-node-card-label.is-code-flow-node { z-index: 20; border-width: 2px; border-color: #7c3aed; opacity: 1; box-shadow: 0 0 0 4px rgba(124, 58, 237, .22), 0 0 28px rgba(124, 58, 237, .48), 0 9px 22px rgba(15, 23, 42, .2); }
     /* Selection must not change the card geometry: it would make a stable
        layout look as if the selected flow had moved neighbouring nodes. */
-    .graph-node-card-label.is-code-flow-node { overflow: visible; }
-    .graph-node-card-label.is-code-flow-node .graph-node-card-name { align-self: center; line-height: 1.25; overflow: hidden; }
-    .graph-node-card-label.is-code-flow-node .graph-node-card-kind { overflow: hidden; }
-    .graph-flow-port-label { position: absolute; top: -9px; right: calc(7px + var(--flow-port-index) * 30px); display: grid; place-items: center; min-width: 24px; height: 19px; padding: 0 3px; border: 1px solid #7c3aed; border-radius: 10px; color: #4c1d95; background: #faf5ff; box-shadow: 0 2px 6px rgba(76,29,149,.2); font-size: 10px; font-weight: 850; }
-    .graph-flow-port-tooltip { position: fixed; z-index: 1; display: grid; gap: 4px; width: max-content; max-width: min(320px, calc(100vw - 32px)); padding: 9px 10px; pointer-events: none; border: 1px solid #6d28d9; border-radius: 8px; color: #f8fafc; background: #24103f; box-shadow: 0 8px 22px rgba(15, 23, 42, .35); font-size: 11px; font-weight: 500; line-height: 1.35; text-align: left; white-space: normal; }
-    .graph-flow-port-tooltip strong { color: #ddd6fe; font-size: 11px; font-weight: 850; }
-    .graph-flow-port-tooltip code { color: #f5f3ff; font: 600 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .graph-node-card-label.is-code-flow-node { z-index: 20; border-width: 2px; border-color: #7c3aed; opacity: 1; box-shadow: 0 0 0 4px rgba(124, 58, 237, .22), 0 0 28px rgba(124, 58, 237, .48), 0 9px 22px rgba(15, 23, 42, .2); }
     .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 9%, transparent), 0 0 13px color-mix(in srgb, var(--card-accent, #64748b) 27%, transparent), 0 6px 17px rgba(15, 23, 42, .14); }
     .graph-node-card-label.is-dimmed { opacity: 1; }
     :root[data-theme="dark"] .graph-node-card-label { color: #e5edf8; background: #17263d; box-shadow: 0 5px 18px rgba(0, 0, 0, .28); }
@@ -110,6 +121,7 @@
     :root[data-theme="dark"] .graph-node-card-label.is-code-flow-node { border-color: #c4b5fd; box-shadow: 0 0 0 4px rgba(196, 181, 253, .22), 0 0 30px rgba(167, 139, 250, .62), 0 9px 24px rgba(0, 0, 0, .4); }
     :root[data-theme="dark"] .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 12%, transparent), 0 0 15px color-mix(in srgb, var(--card-accent, #64748b) 36%, transparent), 0 6px 18px rgba(0, 0, 0, .28); }
     :root[data-theme="dark"] .graph-node-card-kind { color: #9aabc2; }
+    :root[data-theme="dark"] .graph-node-port-reference { color: #ddd6fe; border-color: #8b5cf6; background: #2e1a47; }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon { color: #e5edf8; background: linear-gradient(145deg, color-mix(in srgb, #243650 82%, var(--card-accent, #64748b)), color-mix(in srgb, #101b2d 72%, var(--card-accent, #64748b))); border-color: color-mix(in srgb, var(--card-accent, #64748b) 78%, #dce8f7); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 4px 11px rgba(0, 0, 0, .34); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service { background: transparent; box-shadow: none; }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service::before { background: color-mix(in srgb, var(--card-accent, #64748b) 78%, #dce8f7); }

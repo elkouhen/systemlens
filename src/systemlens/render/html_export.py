@@ -42,7 +42,6 @@ _ASYNCAPI_WEB_COMPONENT_CSS_IMPORT_PATH = (
     + b64encode(_ASYNCAPI_WEB_COMPONENT_CSS.encode("utf-8")).decode("ascii")
 )
 
-
 def render_graph_html(
     endpoints_by_service: dict[str, list[MessageEndpoint]],
     edges: list[GraphEdge],
@@ -86,7 +85,14 @@ def render_graph_html(
         strategy1=strategy1,
         architecture_relations=architecture_relations,
         integration_methods=integration_methods,
+        code_flows=code_flows,
     )
+    port_labels = {
+        str(port["endpoint_id"]): str(port["label"])
+        for node in cast(list[dict[str, object]], view_model["nodes"])
+        for port in cast(list[dict[str, object]], node.get("ports", []))
+        if "endpoint_id" in port and "label" in port
+    }
     def flow_vscode_uri(flow: CodeFlow) -> str | None:
         if root_path is not None:
             return _vscode_file_uri(root_path / flow.path, root_path, source_roots, flow.start_line)
@@ -115,6 +121,7 @@ def render_graph_html(
                     "start_line": step.start_line,
                     "end_line": step.end_line,
                     "endpoint_id": step.endpoint_id,
+                    "port_label": port_labels.get(step.endpoint_id) if step.endpoint_id else None,
                     "operation": step.operation,
                 }
                 for step in flow.steps

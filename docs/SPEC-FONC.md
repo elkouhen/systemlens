@@ -155,15 +155,51 @@ an inventory of input and output ports. When a persisted code flow links an
 input endpoint to an output endpoint of the same service, it displays only that
 source-evidenced potential internal flow and any CodeQL-resolved intermediate
 method calls. It does not imply that every input reaches every output.
-When a selected flow displays a numbered input or output label on a service,
-hovering that label separates the step type, its trigger or effect, and the
-associated Java method in a high-contrast tooltip with distinct lines.
-The Flux widget uses the same numbering as those graph labels: only HTTP and
-Kafka ports are numbered; method and Data steps remain ordered but unnumbered.
+Every HTTP/Kafka input and output receives a deterministic identifier that is
+global to the exported graph: `I1`, `I2`, … for inputs and `O1`, `O2`, … for
+outputs. When a persisted code flow proves that an input reaches an output in
+the same service, the exported input label includes those local outputs, for
+example `I4 → O3, O5`. The graph anchor shows its compact global identifier
+(`I4`); its tooltip and the inspector retain the complete label. Inputs and
+outputs are centred and distributed independently on their respective sides
+of a card rather than sharing one positional index. A selected service lists
+only its triggered inputs, while the Flux widget uses the same labels; method
+and Data steps remain ordered but unlabelled.
+
+### Port-to-port call rendering
+
+The Explorer renders a microservice as one compact rectangle with its numbered
+input ports (`I<n>`) distributed along the left side and its numbered output
+ports (`O<n>`) distributed along the right side. A source-evidenced internal
+flow draws its local `I<n> → O<n>` relationship inside that rectangle. When
+one input reaches several local outputs, it draws one directed relationship to
+each output.
+
+When a persisted REST or Kafka topology edge has both a source endpoint and a
+resolved target endpoint, the export draws a directed port-to-port path from
+the source `O<n>` to the target `I<n>`. Kafka topics remain visible as indexed
+resources; the port path is a readable projection of the same evidence, not a
+replacement for the topic relation. Several ports on one side are distributed
+deterministically to avoid overlap. Cycles remain visible as directed return
+paths. An unresolved target, dynamic topic, or ambiguous route MUST NOT create
+a port-to-port path. Hovering a port displays its identifier, direction,
+protocol endpoint, associated Java method and, for a resolved REST call, its
+resolved target. An input tooltip also lists every mapped output (`O<n>`) from
+a persisted local code flow in that same service, including its protocol,
+endpoint and Java method; an external caller is never presented as the input's
+output. The tooltip does not add or infer any architecture fact.
 Its primary card title is the input trigger, while the Java method remains
-visible as source evidence. If SystemLens cannot reconcile every displayed
-step to a persisted topology edge, the card explicitly marks the graph view as
-having partial edges rather than presenting it as a verified path.
+visible as source evidence. Flow selection reconciles every integration step
+only through its persisted endpoint identifier: route labels and resource names
+are never used to choose an edge. A local input-to-output port relation is
+reconciled evidence even though it has no inter-node topology edge. If an
+endpoint is absent, unresolved, or maps to more than one displayed relation,
+the card explicitly marks the graph view as having partial edges rather than
+presenting it as a verified path.
+For a REST input declared only by OpenAPI and implemented through a generated
+interface, the port can display its unique same-module Java `@Override` method
+on a `@RestController` when its name exactly matches the contract
+`operationId`; otherwise the method remains unknown.
 Detected CodeQL call cycles and concrete Kafka topic cycles are retained as
 potential `cycle` flows. They are visually distinguished and listed before
 non-cyclic flows; within each category, longer flows appear first.
@@ -189,12 +225,10 @@ producer and consumer services. When the matching Java type is indexed, its
 inspector also shows its source, declared fields, enum values, and conservative
 recursive project-type navigation.
 
-The Flux tab presents each persisted potential code flow as a compact ordered
-timeline. User-facing step and confidence labels are localized, source paths
-wrap within the panel, and the card, nested steps, metadata and action use the
-shared light/dark semantic palette. A flow that can be reconciled with the
-displayed topology offers an action to highlight that path in Explorer. The
-selected flow keeps every participating node at full opacity with a visible
+The Flux tab initially presents only a compact list of persisted potential
+call graphs, grouped by service and trigger. Selecting a reconciled call graph
+opens the Graph tab and highlights that path in Explorer. The selected flow
+keeps every participating node at full opacity with a visible
 halo, emphasizes its edges, gently subdues unrelated edges while leaving
 unrelated node cards opaque and unchanged. Selecting it keeps the Flux tab and
 its card geometry unchanged; the selected card is marked in place instead of

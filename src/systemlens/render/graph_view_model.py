@@ -1,11 +1,13 @@
 """Build the browser-facing graph model from an architecture snapshot."""
 
+import re
 from pathlib import Path
 from typing import Any
 
 from systemlens.domain.graph import (
     GraphEdge,
     external_microservice_names,
+    graph_edge_rest_resource,
     resolve_rest_target_service,
 )
 from systemlens.domain.models import (
@@ -21,7 +23,7 @@ from systemlens.domain.module_inventory import (
     MongoPersistenceClass,
     module_identity,
 )
-from systemlens.domain.code_flows import IntegrationMethod
+from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
 from systemlens.conventions.strategy1.kafka import request_reply_topic_pairs
 from systemlens.render.namespaces import project_namespace, project_namespace_path
 from systemlens.render.software_layers import software_layer
@@ -187,6 +189,7 @@ def build_graph_view_model(
     strategy1: bool = False,
     architecture_relations: list[ArchitectureRelation] | None = None,
     integration_methods: list[IntegrationMethod] | None = None,
+    code_flows: list[CodeFlow] | None = None,
 ) -> dict[str, object]:
     """Render an interactive Sigma.js graph as a self-contained HTML document.
 
@@ -342,12 +345,125 @@ def build_graph_view_model(
         for edge in edges
         if edge.kind == "rest" and edge.to_endpoint is not None
     }
+    port_label_by_endpoint_id: dict[str, str] = {}
+    service_order = {service: index for index, service in enumerate(ordered_services)}
+    service_successors: dict[str, set[str]] = {service: set() for service in ordered_services}
+    service_indegree = {service: 0 for service in ordered_services}
+    for edge in edges:
+        if edge.from_service not in service_successors or edge.to_service not in service_successors:
+            continue
+        if edge.to_service in service_successors[edge.from_service]:
+            continue
+        service_successors[edge.from_service].add(edge.to_service)
+        service_indegree[edge.to_service] += 1
+    ranked_services: list[str] = []
+    ready_services = sorted(
+        (service for service, degree in service_indegree.items() if degree == 0),
+        key=service_order.__getitem__,
+    )
+    while ready_services:
+        service = ready_services.pop(0)
+        ranked_services.append(service)
+        for successor in sorted(service_successors[service], key=service_order.__getitem__):
+            service_indegree[successor] -= 1
+            if service_indegree[successor] == 0:
+                ready_services.append(successor)
+                ready_services.sort(key=service_order.__getitem__)
+    # A cyclic service component has no topological root.  Preserve every
+    # endpoint and give that component a deterministic order instead of
+    # inventing a direction through the cycle.
+    ranked_services.extend(
+        service for service in ordered_services if service not in ranked_services
+    )
+    ordered_ports = [
+        (service, endpoint)
+        for service in ranked_services
+        for endpoint in sorted(
+            endpoints_by_service.get(service, []),
+            key=lambda item: (item.path, item.start_line, item.id),
+        )
+        if endpoint.system in {"rest", "kafka"}
+    ]
+    input_ports = [
+        endpoint for _, endpoint in ordered_ports
+        if endpoint.role in {"serve", "consume"}
+    ]
+    output_ports = [
+        endpoint for _, endpoint in ordered_ports
+        if endpoint.role in {"call", "produce"}
+    ]
+    # Port identifiers span the complete export rather than resetting per
+    # service.  This lets a consumer point to the exact producer/caller that
+    # statically reaches it, even when the two endpoints belong to different
+    # microservices.
+    port_label_by_endpoint_id.update({
+        endpoint.id: f"I{number}"
+        for number, endpoint in enumerate(input_ports, start=1)
+    })
+    port_label_by_endpoint_id.update({
+        endpoint.id: f"O{number}"
+        for number, endpoint in enumerate(output_ports, start=1)
+    })
+    endpoint_service_by_id = {
+        endpoint.id: service
+        for service, endpoints in endpoints_by_service.items()
+        for endpoint in endpoints
+    }
+    endpoint_by_id = {
+        endpoint.id: endpoint
+        for endpoints in endpoints_by_service.values()
+        for endpoint in endpoints
+    }
+    input_port_ids = {endpoint.id for endpoint in input_ports}
+    output_port_ids = {endpoint.id for endpoint in output_ports}
+    local_output_id_sets_by_input_id: dict[str, set[str]] = {}
+    for flow in code_flows or []:
+        flow_input_ids = {
+            step.endpoint_id for step in flow.steps
+            if step.endpoint_id in input_port_ids
+        }
+        flow_output_ids = {
+            step.endpoint_id for step in flow.steps
+            if step.endpoint_id in output_port_ids
+        }
+        for input_id in flow_input_ids:
+            input_service = endpoint_service_by_id.get(input_id)
+            if input_service is None:
+                continue
+            for output_id in flow_output_ids:
+                if endpoint_service_by_id.get(output_id) == input_service:
+                    local_output_id_sets_by_input_id.setdefault(input_id, set()).add(output_id)
+    local_output_ids_by_input_id = {
+        endpoint_id: sorted(
+            output_ids,
+            key=lambda output_id: int(port_label_by_endpoint_id[output_id][1:]),
+        )
+        for endpoint_id, output_ids in local_output_id_sets_by_input_id.items()
+    }
+    local_output_labels_by_input_id = {
+        endpoint_id: [port_label_by_endpoint_id[output_id] for output_id in output_ids]
+        for endpoint_id, output_ids in local_output_ids_by_input_id.items()
+    }
+    for endpoint in input_ports:
+        local_outputs = local_output_labels_by_input_id.get(endpoint.id, [])
+        if local_outputs:
+            port_label_by_endpoint_id[endpoint.id] = (
+                f"{port_label_by_endpoint_id[endpoint.id]} → {', '.join(local_outputs)}"
+            )
     def port_method_label(endpoint: MessageEndpoint) -> str:
         qualified = method_by_endpoint_id.get(endpoint.id)
         if qualified is None:
             return endpoint.qualified_name or "<unknown>"
         owner, separator, method = qualified.rpartition(".")
         return f"{owner}::{method}" if separator else qualified
+
+    def port_type_label(endpoint: MessageEndpoint) -> str:
+        return {
+            ("rest", "serve"): "HTTP receive",
+            ("rest", "call"): "HTTP call",
+            ("kafka", "consume"): "Kafka receive",
+            ("kafka", "produce"): "Kafka publish",
+        }.get((endpoint.system, endpoint.role), f"{endpoint.system} {endpoint.role}")
 
     def resolved_port_target(endpoint: MessageEndpoint) -> dict[str, str] | None:
         resolved = resolved_http_target_by_call_id.get(endpoint.id)
@@ -356,29 +472,47 @@ def build_graph_view_model(
         service, target = resolved
         return {
             "service": service,
+            "label": port_label_by_endpoint_id.get(target.id, "?"),
             "type": "HTTP receive",
             "method": port_method_label(target),
             "name": target.topic,
-        }
+    }
     for name in ordered_services:
         endpoints = endpoints_by_service.get(name, [])
-        ports = [
-            {
-                "direction": "in" if endpoint.role in {"serve", "consume"} else "out",
-                "type": {
-                    ("rest", "serve"): "HTTP receive",
-                    ("rest", "call"): "HTTP call",
-                    ("kafka", "consume"): "Kafka receive",
-                    ("kafka", "produce"): "Kafka publish",
-                }.get((endpoint.system, endpoint.role), f"{endpoint.system} {endpoint.role}"),
+        ports: list[dict[str, object]] = []
+        for endpoint in sorted(endpoints, key=lambda item: (item.path, item.start_line, item.id)):
+            if endpoint.system not in {"rest", "kafka"}:
+                continue
+            direction = "in" if endpoint.role in {"serve", "consume"} else "out"
+            # A port label identifies an architecture vertex.  It must not use
+            # the position of one CodeQL route: the same port can be incident
+            # to several independently evidenced call-graph arcs.
+            ports.append({
+                "label": port_label_by_endpoint_id[endpoint.id],
+                "direction": direction,
+                "type": port_type_label(endpoint),
                 "method": port_method_label(endpoint),
                 "name": endpoint.topic,
                 "endpoint_id": endpoint.id,
+                **(
+                    {"local_output_labels": local_output_labels_by_input_id[endpoint.id]}
+                    if endpoint.id in local_output_labels_by_input_id else {}
+                ),
+                **(
+                    {"local_outputs": [
+                        {
+                            "endpoint_id": output_id,
+                            "label": port_label_by_endpoint_id[output_id],
+                            "type": port_type_label(endpoint_by_id[output_id]),
+                            "name": endpoint_by_id[output_id].topic,
+                            "method": port_method_label(endpoint_by_id[output_id]),
+                        }
+                        for output_id in local_output_ids_by_input_id[endpoint.id]
+                    ]}
+                    if endpoint.id in local_output_ids_by_input_id else {}
+                ),
                 **({"target": resolved_port_target(endpoint)} if resolved_port_target(endpoint) else {}),
-            }
-            for endpoint in sorted(endpoints, key=lambda item: (item.path, item.start_line, item.id))
-            if endpoint.system in {"rest", "kafka"}
-        ]
+            })
         resources = _rest_resources_served(endpoints)
         contract_resources: dict[str, set[str]] = {}
         contract_owner_identity: dict[str, str] = {}
@@ -690,6 +824,16 @@ def build_graph_view_model(
             node["architecture_namespace_path"] = owner_data["namespace_path"]
         node["namespace_source"] = "writer"
     links: list[dict[str, object]] = []
+
+    def visual_rest_label(edge: GraphEdge) -> str:
+        """Return the REST label used by the visual-edge projection."""
+        label = graph_edge_rest_resource(edge)
+        if edge.from_endpoint.framework == "spring-cloud-gateway":
+            match = re.search(r"Path=([^;]+)", edge.from_endpoint.snippet)
+            if match is not None:
+                label = f"ANY {match.group(1)}"
+        return label.replace("<br/>", "\\n")
+
     for source_kind, source_name, target_kind, target_name, label, kind in _visual_graph_edges(edges):
         confidence, provenance = _visual_link_evidence(
             kind, source_kind, source_name, target_kind, target_name, edges
@@ -703,6 +847,42 @@ def build_graph_view_model(
             "confidence": confidence,
             "provenance": provenance,
         }
+        # Keep the endpoint evidence on the visual relation.  A visual link
+        # can intentionally coalesce several identical architectural facts,
+        # but the browser still needs their endpoint identities to reconcile a
+        # persisted code flow without falling back to a route-label heuristic.
+        if kind == "rest":
+            link["endpoint_ids"] = sorted({
+                edge.from_endpoint.id
+                for edge in edges
+                if (
+                    edge.kind == "rest"
+                    and edge.from_service == source_name
+                    and edge.to_service == target_name
+                    and visual_rest_label(edge) == link["label"]
+                )
+            })
+        elif source_kind == "microservice" and target_kind == "kafka_topic":
+            link["endpoint_ids"] = sorted({
+                edge.from_endpoint.id
+                for edge in edges
+                if (
+                    edge.kind == "kafka"
+                    and edge.from_service == source_name
+                    and edge.from_endpoint.topic == target_name
+                )
+            })
+        elif source_kind == "kafka_topic" and target_kind == "microservice":
+            link["endpoint_ids"] = sorted({
+                edge.to_endpoint.id
+                for edge in edges
+                if (
+                    edge.kind == "kafka"
+                    and edge.to_service == target_name
+                    and edge.from_endpoint.topic == source_name
+                    and edge.to_endpoint is not None
+                )
+            })
         if kind == "kafka" and source_kind == "microservice" and target_kind == "kafka_topic":
             link["published_message_types"] = sorted(
                 published_message_types_by_relation.get((source_name, target_name), set())
@@ -898,6 +1078,37 @@ def build_graph_view_model(
     return {
             "nodes": nodes,
             "links": links,
+            "port_links": [
+                {
+                    "source_endpoint_id": edge.from_endpoint.id,
+                    "target_endpoint_id": edge.to_endpoint.id,
+                    "kind": edge.kind,
+                }
+                for edge in edges
+                if (
+                    edge.to_endpoint is not None
+                    and edge.from_endpoint.system in {"rest", "kafka"}
+                    and edge.to_endpoint.system in {"rest", "kafka"}
+                    and edge.from_endpoint.role in {"call", "produce"}
+                    and edge.to_endpoint.role in {"serve", "consume"}
+                )
+            ],
+            "internal_port_links": [
+                {
+                    "input_endpoint_id": input_id,
+                    "output_endpoint_id": output_id,
+                }
+                for input_id in sorted(
+                    local_output_ids_by_input_id,
+                    key=lambda endpoint_id: int(
+                        port_label_by_endpoint_id[endpoint_id].split(" ", 1)[0][1:]
+                    ),
+                )
+                for output_id in sorted(
+                    local_output_ids_by_input_id[input_id],
+                    key=lambda endpoint_id: int(port_label_by_endpoint_id[endpoint_id][1:]),
+                )
+            ],
             "software_layers": sorted({
                 str(node.get("layer"))
                 for node in nodes

@@ -217,7 +217,24 @@ The HTML graph model joins endpoint identifiers to the persisted
 and receive an export-time count of persisted internal flows for that service.
 The selected-service widget renders only resolved input-to-output flow evidence,
 not a standalone input/output port inventory. Rendering does not read source
-files.
+files. At export time, every HTTP/Kafka endpoint receives a deterministic
+identity global to the complete export: `I<n>` for an input and `O<n>` for an
+output, ordered by a stable topological service order, then relative evidence
+path, source line, and endpoint ID. A cyclic service component falls back to
+the stable service order without inventing a direction. The projection derives
+input-to-output references only from persisted code flows whose endpoint steps
+belong to the same service: each input receives the labels of its locally
+reached outputs (`I4 → O1, O3`). This prevents an external caller from being
+presented as an output of the service it invokes. The renderer adds those
+presentation-only labels to graph details and serialized code-flow endpoint
+steps. Fixed-size graph cards render
+those labels as side anchors: inputs on the left and outputs on the right. An
+SVG overlay projects only persisted REST/Kafka edges with an output source and
+an input target between these anchors; it redraws after camera changes and
+uses deterministic opposing lanes for a direct cycle. The same overlay draws
+dashed, directed local links from each input to the outputs associated with it
+by a persisted code flow. It neither alters
+persisted endpoint identity nor turns a CodeQL fact into a linear route.
 
 The SQLite store is standard-library-only: it does not load native vector
 extensions or persist/query vector representations. The retained findings
@@ -234,6 +251,15 @@ and input/output endpoint identifiers. Schema version 27 added the
 migration is additive and occurs when the writable store opens, before the
 index transaction. Stored steps are JSON projections of immutable domain
 facts; source paths remain relative to the indexed root.
+
+For an OpenAPI-derived REST input whose checked-in Java implementation only
+implements a generated interface, the integration-method projection may attach
+the input to exactly one method in the same module when the contract's exact
+`operationId` equals the Java method name and that declaration carries
+`@Override` on a class carrying `@RestController`. The endpoint keeps its
+OpenAPI file and operation line as source evidence. Zero or multiple candidates
+remain unmatched; this projection never selects a method merely from an HTTP
+route or a class name.
 
 The index persists source evidence only as paths relative to the indexed
 project root. HTML export receives a local `--root-path` and joins it to these
@@ -325,14 +351,18 @@ selection. Light and dark themes override those tokens rather than individual
 components. Selectors may retain local colours only when they visualize graph
 data or a semantic status such as warning, confidence, relation type, or
 resource type.
-Code-flow cards and their nested timeline steps consume the same semantic
-widget, control, text and muted-text tokens. Only the potential-flow marker may
-retain a status accent; source paths must wrap instead of widening the panel.
+Compact code-flow cards consume the same semantic widget, control, text and
+muted-text tokens. Only the potential-flow marker may retain a status accent;
+source paths must wrap instead of widening the panel.
 Selecting a reconciled code flow records its persisted ID only in transient
 graph state. Node and edge reducers use the exact reconciled path sets to raise
 their size and contrast, while HTML card overlays add flow-specific highlight
 and dimming classes. This presentation state does not infer or persist any new
-architecture relation. During Kafka-flow reconciliation, each publication starts
+architecture relation. The export indexes displayed nodes and visual edges by
+persisted endpoint ID once; reconciliation requires exactly one endpoint-backed
+candidate and never selects a relation from a route label, topic name, or first
+matching graph edge. A selected local input-to-output relation is highlighted
+in the card overlay and is reconciled independently from Sigma edges. During Kafka-flow reconciliation, each publication starts
 from the service reached by the preceding step; a composed
 `topic → consumer → topic` chain therefore preserves its concrete topic-read
 and topic-write edges across microservices. Flow selection does not activate the graph detail

@@ -260,7 +260,7 @@
         leg.className = "port-flow-leg";
         const roleLabel = document.createElement("span");
         roleLabel.className = "port-flow-role";
-        roleLabel.textContent = role;
+        roleLabel.textContent = `${port.label || "Port ?"} · ${role}`;
         const type = document.createElement("strong");
         type.textContent = port.type;
         const method = document.createElement("code");

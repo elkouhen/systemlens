@@ -63,6 +63,83 @@ def _html_graph_data(document: str) -> dict[str, object]:
     return json.loads(match.group(1))
 
 
+def test_global_input_label_references_its_local_output() -> None:
+    producer = replace(_kafka_endpoint("produce", "OrderCreated", "Orders.java"), id="orders-out")
+    consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Payments.java"), id="payments-in")
+    next_producer = replace(_kafka_endpoint("produce", "PaymentCompleted", "Payments.java"), id="payments-out")
+    next_consumer = replace(_kafka_endpoint("consume", "PaymentCompleted", "Inventory.java"), id="inventory-in")
+
+    data = _html_graph_data(render_graph_html(
+        {"orders": [producer], "payments": [consumer, next_producer], "inventory": [next_consumer]},
+        [
+            GraphEdge("kafka", "orders", "payments", producer, consumer),
+            GraphEdge("kafka", "payments", "inventory", next_producer, next_consumer),
+        ],
+        code_flows=[CodeFlow(
+            id="payment-flow", module="payments", method="PaymentHandler.handle",
+            path="Payments.java", start_line=1, end_line=2,
+            status="potential", confidence="medium", reason="test",
+            steps=(
+                CodeFlowStep(1, "message_entry", "orders.created", "Payments.java", 1, 1, consumer.id),
+                CodeFlowStep(2, "message_publish", "payment.completed", "Payments.java", 2, 2, next_producer.id),
+            ),
+        )],
+    ))
+
+    ports_by_id = {
+        port["endpoint_id"]
+        : port["label"]
+        for node in data["nodes"]
+        for port in node.get("ports", [])
+    }
+    assert ports_by_id == {
+        "orders-out": "O1",
+        "payments-in": "I1 → O2",
+        "payments-out": "O2",
+        "inventory-in": "I2",
+    }
+    local_outputs_by_id = {
+        port["endpoint_id"]: port.get("local_output_labels", [])
+        for node in data["nodes"]
+        for port in node.get("ports", [])
+    }
+    assert local_outputs_by_id == {
+        "orders-out": [],
+        "payments-in": ["O2"],
+        "payments-out": [],
+        "inventory-in": [],
+    }
+    payment_input = next(
+        port
+        for node in data["nodes"]
+        for port in node.get("ports", [])
+        if port["endpoint_id"] == "payments-in"
+    )
+    assert payment_input["local_outputs"] == [{
+        "endpoint_id": "payments-out",
+        "label": "O2",
+        "type": "Kafka publish",
+        "name": "orders.created",
+        "method": "<unknown>",
+    }]
+    assert data["internal_port_links"] == [
+        {"input_endpoint_id": "payments-in", "output_endpoint_id": "payments-out"},
+    ]
+    assert data["port_links"] == [
+        {"source_endpoint_id": "orders-out", "target_endpoint_id": "payments-in", "kind": "kafka"},
+        {"source_endpoint_id": "payments-out", "target_endpoint_id": "inventory-in", "kind": "kafka"},
+    ]
+    assert {
+        (link["source"], link["target"], tuple(link.get("endpoint_ids", [])))
+        for link in data["links"]
+    } >= {
+        ("microservice:orders", "kafka_topic:orders.created", ("orders-out",)),
+        ("kafka_topic:orders.created", "microservice:payments", ("payments-in",)),
+        ("microservice:payments", "kafka_topic:orders.created", ("payments-out",)),
+        ("kafka_topic:orders.created", "microservice:inventory", ("inventory-in",)),
+    }
+
+
 def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> None:
     endpoint = _rest_endpoint("serve", "POST /orders", "OrderController.java")
     endpoint = replace(endpoint, id="receive-order", qualified_name="com.example.OrderController")
@@ -89,10 +166,11 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     data = _html_graph_data(document)
     node = next(item for item in data["nodes"] if item["id"] == "microservice:orders")
     assert node["ports"] == [{
-        "direction": "in", "type": "HTTP receive",
+        "label": "I1", "direction": "in", "type": "HTTP receive",
         "method": "com.example.OrderController::placeOrder", "name": "POST /orders",
         "endpoint_id": "receive-order",
     }]
+    assert data["code_flows"][0]["steps"][0]["port_label"] == "I1"
     assert node["internal_flow_count"] == 1
     assert 'createDetailsGroup("Ports d\'intégration")' not in document
     assert 'appendList("Entrées", ports.filter(port => port.direction === "in")' not in document
@@ -105,15 +183,21 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     assert 'sourceAction.textContent = "Java";' in document
     assert 'function openCodeFlowInList(flow)' in document
     assert 'port-flow-arrow' in document
+    assert 'item.addEventListener("click", () => showCodeFlow(flow));' in document
+    assert '"Entrées déclenchées"' in document
+    assert 'graph-flow-port-label' not in document
+    assert 'id="call-graph-view"' not in document
     assert 'flux interne${flowCount > 1 ? "s" : ""}' in document
 
 
 def test_code_flow_reconciliation_publishes_from_the_current_consumer_service() -> None:
     document = render_graph_html({}, [])
 
-    assert 'const publishingService = nodes.at(-1);' in document
-    assert 'nodeDataById.get(publishingService)?.kind !== "microservice"' in document
-    assert 'nodes.at(-1) !== serviceId && !addHop(serviceId' not in document
+    assert 'const graphLinksByEndpoint = new Map();' in document
+    assert 'const uniqueTopologyLink = (endpointId, source)' in document
+    assert 'String(link.label || "").includes(step.name)' not in document
+    assert '!edges.some(edge => edge.edge' not in document
+    assert 'const localLinks = [];' in document
 
 
 def test_graph_restores_exact_topic_chain_from_a_hash_fragment() -> None:
@@ -505,22 +589,17 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert ".details-title { margin: 0; overflow-wrap: anywhere; color: #172033; font-size: var(--type-entity-title);" in document
     assert ".toolbar-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));" in document
     assert ".toolbar > .toolbar-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in document
-    assert ".code-flow-step { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }" in document
     assert 'http_entry: "Entrée HTTP"' in document
-    assert 'function isGraphPortStep(step)' in document
-    assert 'stepItem.classList.add("is-graph-port-step")' in document
     assert 'title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`' in document
-    assert 'Relations topologiques incomplètes' in document
+    assert 'item.append(header, meta);' in document
     assert 'graphFlowStatus.hidden = context.topologyReconciled !== false;' in document
     assert 'Cycles uniquement (${cycleCount})' in document
     assert "graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)" in document
     assert 'size: 3.5' in document
     assert 'is-code-flow-node' in document
     assert 'Selection must not change the card geometry' in document
-    assert 'tooltip.className = "graph-flow-port-tooltip"' in document
-    assert '`${isTrigger ? "Déclencheur" : "Effet"} : ${flowStep.name}`' in document
-    assert '`Méthode Java : ${indexedPort?.method || "inconnue"}`' in document
-    assert "flowTooltipOverlay.replaceChildren(tooltip);" in document
+    assert 'graph-flow-port-tooltip' not in document
+    assert '"Entrées déclenchées"' in document
     assert "if (graphState.selectedCodeFlowId) return renderedData;" in document
     assert "const ratioFactor = Math.max(1, spanX / availableWidth, spanY / availableHeight);" in document
     assert ".toolbar { overflow-x: hidden; }" in document

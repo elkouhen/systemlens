@@ -43,6 +43,7 @@
     const nodeSuggestions = document.getElementById("node-suggestions");
     const graphLayersOverlay = document.getElementById("graph-layers");
     const graphGroupsOverlay = document.getElementById("graph-groups");
+    const portPathOverlay = document.getElementById("graph-port-paths");
     const nodeLabelOverlay = document.getElementById("graph-node-labels");
     const flowTooltipOverlay = document.getElementById("graph-flow-tooltips");
     const graphFlowStatus = document.getElementById("graph-flow-status");
@@ -176,6 +177,7 @@
       hoveredId: null,
       relatedNodes: null,
       relatedEdges: null,
+      relatedLocalPortLinks: new Set(),
       selectedCodeFlowId: null,
       pathMicroserviceOrder: new Map(),
       layeredView: false,

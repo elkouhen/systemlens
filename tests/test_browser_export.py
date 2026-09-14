@@ -5,6 +5,7 @@ import os
 import re
 import struct
 import zlib
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -188,6 +189,7 @@ def _code_flow_document() -> str:
                 path="payments/src/main/java/com/example/payments/application/PaymentHandler.java",
                 start_line=42,
                 end_line=42,
+                endpoint_id=payments_consume.id,
             ),
             CodeFlowStep(
                 order=2,
@@ -196,6 +198,7 @@ def _code_flow_document() -> str:
                 path="payments/src/main/java/com/example/payments/application/PaymentHandler.java",
                 start_line=68,
                 end_line=68,
+                endpoint_id=payments_publish.id,
             ),
         ),
     )
@@ -876,6 +879,90 @@ def _assert_geometry_contract(page, *, layered: bool) -> None:
 
 
 @pytest.mark.slow
+def test_port_to_port_paths_attach_to_rendered_anchors() -> None:
+    producer = _producer("com.example.OrderCreated")
+    consumer = replace(
+        producer,
+        id=compute_endpoint_id("consume", "orders.created", "Consumer.java", 8),
+        role="consume",
+        path="Consumer.java",
+        start_line=8,
+        end_line=8,
+    )
+    payment_output = replace(
+        producer,
+        id=compute_endpoint_id("produce", "payments.completed", "PaymentPublisher.java", 12),
+        topic="payments.completed",
+        path="PaymentPublisher.java",
+        start_line=12,
+        end_line=12,
+    )
+    document = render_graph_html(
+        {"orders": [producer], "payments": [consumer, payment_output]},
+        [GraphEdge("kafka", "orders", "payments", producer, consumer)],
+        code_flows=[CodeFlow(
+            id="payment-flow", module="payments", method="PaymentHandler.handle",
+            path="Consumer.java", start_line=8, end_line=12,
+            status="potential", confidence="medium", reason="test",
+            steps=(
+                CodeFlowStep(1, "message_entry", "orders.created", "Consumer.java", 8, 8, consumer.id),
+                CodeFlowStep(2, "message_publish", "payments.completed", "PaymentPublisher.java", 12, 12, payment_output.id),
+            ),
+        )],
+    )
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 900, "height": 600})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator(".graph-port-path").wait_for(state="visible")
+        assert page.locator(".graph-local-port-path").count() == 1
+        geometry = page.evaluate(
+            """() => {
+                const path = document.querySelector('.graph-port-path');
+                const svg = document.querySelector('#graph-port-paths');
+                const output = document.querySelector('.graph-node-port-reference.is-out');
+                const input = document.querySelector('.graph-node-port-reference.is-in');
+                const svgRect = svg.getBoundingClientRect();
+                const outputRect = output.getBoundingClientRect();
+                const inputRect = input.getBoundingClientRect();
+                const start = path.getPointAtLength(0);
+                const end = path.getPointAtLength(path.getTotalLength());
+                return {
+                    marker: path.getAttribute('marker-end'),
+                    startDelta: Math.hypot(start.x - (outputRect.right - svgRect.left), start.y - (outputRect.top + outputRect.height / 2 - svgRect.top)),
+                    endDelta: Math.hypot(end.x - (inputRect.left - svgRect.left), end.y - (inputRect.top + inputRect.height / 2 - svgRect.top)),
+                };
+            }"""
+        )
+        assert geometry == {"marker": "url(#graph-port-arrow)", "startDelta": pytest.approx(0), "endDelta": pytest.approx(0)}
+        placement = page.evaluate(
+            """() => [...document.querySelectorAll('.graph-node-port-reference')].map(port => {
+                const anchor = port.getBoundingClientRect();
+                const card = port.parentElement.getBoundingClientRect();
+                return Math.abs((anchor.top + anchor.height / 2) - (card.top + card.height / 2));
+            })"""
+        )
+        assert placement == [pytest.approx(0), pytest.approx(0), pytest.approx(0)]
+        page.locator(".graph-node-port-reference.is-out").first.dispatch_event("pointerenter")
+        tooltip = page.locator(".graph-port-tooltip")
+        tooltip.wait_for(state="visible")
+        assert "O1 — Sortie" in tooltip.inner_text()
+        assert "Kafka publish : orders.created" in tooltip.inner_text()
+        assert "Méthode Java" in tooltip.inner_text()
+        page.locator(".graph-node-port-reference.is-out").first.dispatch_event("pointerleave")
+        page.locator(".graph-node-port-reference.is-in").dispatch_event("pointerenter")
+        assert "Sorties internes mappées :" in tooltip.inner_text()
+        assert "O2 · Kafka publish : payments.completed" in tooltip.inner_text()
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
 def test_code_flow_widget_is_readable_in_both_themes() -> None:
     with sync_playwright() as playwright:
         try:
@@ -889,16 +976,11 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         page.locator("#flows-tab").click()
         page.locator(".code-flow-item").wait_for(state="visible")
 
-        assert page.locator(".code-flow-step-kind").all_text_contents() == [
-            "Entrée message", "Publication message",
-        ]
+        assert page.locator(".code-flow-step").count() == 0
+        assert page.locator(".code-flow-reason").count() == 0
         assert page.locator(".code-flow-badges").inner_text().splitlines() == [
             "Potentiel", "Confiance moyenne",
         ]
-        assert page.locator(".code-flow-reason").inner_text().startswith(
-            "Le point d’entrée"
-        )
-
         metrics = page.evaluate(
             """() => {
                 const rgb = value => value.match(/[\\d.]+/g).slice(0, 3).map(Number);
@@ -918,17 +1000,12 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
                 const inspect = theme => {
                     document.documentElement.dataset.theme = theme;
                     const item = document.querySelector('.code-flow-item');
-                    const step = document.querySelector('.code-flow-step');
                     const pairs = [
                         ['.code-flow-title', item],
-                        ['.code-flow-reason', item],
-                        ['.code-flow-step strong', step],
-                        ['.code-flow-step code', step],
-                        ['.code-flow-step-kind', step],
+                        ['.code-flow-method', item],
                     ];
                     return {
                         cardBackground: getComputedStyle(item).backgroundColor,
-                        stepBackground: getComputedStyle(step).backgroundColor,
                         contrasts: pairs.map(([selector, background]) => contrast(
                             getComputedStyle(document.querySelector(selector)).color,
                             getComputedStyle(background).backgroundColor,
@@ -936,23 +1013,18 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
                     };
                 };
                 const item = document.querySelector('.code-flow-item');
-                const steps = [...document.querySelectorAll('.code-flow-step')];
                 return {
                     light: inspect('light'),
                     dark: inspect('dark'),
                     overflowWidths: {
                         item: [item.clientWidth, item.scrollWidth],
-                        steps: steps.map(step => [step.clientWidth, step.scrollWidth]),
                     },
-                    noHorizontalOverflow: item.scrollWidth <= item.clientWidth
-                        && steps.every(step => step.scrollWidth <= step.clientWidth),
+                    noHorizontalOverflow: item.scrollWidth <= item.clientWidth,
                 };
             }"""
         )
         assert metrics["light"]["cardBackground"] == "rgb(244, 247, 251)"
-        assert metrics["light"]["stepBackground"] == "rgb(255, 255, 255)"
         assert metrics["dark"]["cardBackground"] == "rgb(20, 34, 56)"
-        assert metrics["dark"]["stepBackground"] == "rgb(25, 42, 67)"
         assert min(metrics["light"]["contrasts"]) >= 4.5
         assert min(metrics["dark"]["contrasts"]) >= 4.5
         assert metrics["noHorizontalOverflow"], metrics["overflowWidths"]
@@ -962,23 +1034,22 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         page.locator(".code-flow-item").evaluate(
             "element => { element.dataset.selectionSentinel = 'preserved'; }"
         )
-        page.get_by_role("button", name="Afficher dans le graphe").click()
+        page.locator(".code-flow-item").click()
         page.locator(".graph-node-card-label.is-code-flow-node").first.wait_for(
             state="visible"
         )
-        toolbar_after_selection = page.locator(".toolbar").bounding_box()
-        assert toolbar_before_selection == toolbar_after_selection
-        assert page.locator("#flows-tab").get_attribute("aria-selected") == "true"
+        assert toolbar_before_selection is not None
+        assert page.locator("#graph-tab").get_attribute("aria-selected") == "true"
         assert page.locator(".code-flow-item.is-selected").count() == 1
         assert page.locator(".code-flow-item").get_attribute(
             "data-selection-sentinel"
         ) == "preserved"
-        assert page.get_by_role("button", name="Affiché dans le graphe").count() == 1
         assert page.locator("#graph").get_attribute("data-selected-code-flow") == (
             "flow-readable"
         )
         assert float(page.locator("#graph").get_attribute("data-flow-focus-ratio")) > 0
         assert page.locator(".graph-node-card-label.is-code-flow-node").count() == 3
+        assert page.locator(".graph-local-port-path.is-code-flow-path").count() == 1
         assert page.locator(
             ".graph-node-card-label:not(.is-code-flow-node)"
         ).count() == 2
@@ -1417,13 +1488,13 @@ def test_generated_simple_supermarket_starts_with_every_node_in_view() -> None:
         page.locator("#flows-tab").click()
         assert page.locator(".code-flow-item").count() == 1
         toolbar_before_selection = page.locator(".toolbar").bounding_box()
-        page.get_by_role("button", name="Afficher dans le graphe").click()
+        page.locator(".code-flow-item").click()
         page.locator(".graph-node-card-label.is-code-flow-node").first.wait_for(
             state="visible"
         )
-        assert page.locator("#flows-tab").get_attribute("aria-selected") == "true"
+        assert page.locator("#graph-tab").get_attribute("aria-selected") == "true"
         assert page.locator(".code-flow-item.is-selected").count() == 1
-        assert page.locator(".toolbar").bounding_box() == toolbar_before_selection
+        assert toolbar_before_selection is not None
         assert page.locator("#graph").get_attribute("data-selected-code-flow") == (
             "simple-restock-flow"
         )

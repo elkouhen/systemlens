@@ -5,11 +5,6 @@
     const codeFlowFilter = document.getElementById("code-flow-filter");
     const codeFlowCycles = document.getElementById("code-flow-cycles");
     const codeFlowsTitle = document.getElementById("code-flows-title");
-
-    function codeFlowLocation(step) {
-      return `${step.path}:${step.start_line}`;
-    }
-
     function codeFlowStepLabel(kind) {
       return ({
         http_entry: "Entrée HTTP",
@@ -38,81 +33,106 @@
         || left.id.localeCompare(right.id);
     }
 
-    function isGraphPortStep(step) {
-      return ["http_entry", "message_entry", "http_call", "message_publish"].includes(step?.kind);
-    }
-
-    function nodeIdForCodeFlowResource(name, kind) {
-      return graphData.nodes.find(node => node.name === name && node.kind === kind)?.id || null;
-    }
-
-    function graphLinkBetween(source, target, accepts = () => true) {
-      const index = graphData.links.findIndex(link => (
-        link.source === source && link.target === target && accepts(link)
+    // Build these once: rendering the Flux list must not repeatedly scan the
+    // complete topology for every flow card.  Endpoint identities are the
+    // persisted evidence; names and route labels are presentation only.
+    const nodeIdsByResource = new Map();
+    const nodeIdsByEndpoint = new Map();
+    graphData.nodes.forEach(node => {
+      const resourceKey = `${node.kind}:${node.name}`;
+      nodeIdsByResource.set(resourceKey, [...(nodeIdsByResource.get(resourceKey) || []), node.id]);
+      (node.ports || []).forEach(port => {
+        if (!port.endpoint_id) return;
+        nodeIdsByEndpoint.set(port.endpoint_id, [...(nodeIdsByEndpoint.get(port.endpoint_id) || []), node.id]);
+      });
+    });
+    const graphLinksByEndpoint = new Map();
+    graphData.links.forEach((link, index) => {
+      (link.endpoint_ids || []).forEach(endpointId => {
+        graphLinksByEndpoint.set(endpointId, [
+          ...(graphLinksByEndpoint.get(endpointId) || []), { edge: `edge-${index}`, link },
+        ]);
+      });
+    });
+    const internalOutputsByInput = new Map();
+    (graphData.internal_port_links || []).forEach(link => {
+      internalOutputsByInput.set(link.input_endpoint_id, new Set([
+        ...(internalOutputsByInput.get(link.input_endpoint_id) || []), link.output_endpoint_id,
+      ]));
+    });
+    const uniqueNodeId = ids => ids?.length === 1 ? ids[0] : null;
+    const nodeIdForCodeFlowResource = (name, kind) => uniqueNodeId(
+      nodeIdsByResource.get(`${kind}:${name}`)
+    );
+    const nodeIdForEndpoint = endpointId => uniqueNodeId(nodeIdsByEndpoint.get(endpointId));
+    const uniqueTopologyLink = (endpointId, source) => {
+      const candidates = (graphLinksByEndpoint.get(endpointId) || []).filter(candidate => (
+        candidate.link.source === source
       ));
-      return index < 0 ? null : { edge: `edge-${index}`, link: graphData.links[index] };
-    }
+      return candidates.length === 1 ? candidates[0] : null;
+    };
 
     function pathForCodeFlow(flow) {
       const serviceId = nodeIdForCodeFlowResource(flow.module, "microservice");
       if (!serviceId) return null;
       const nodes = [];
       const edges = [];
+      const localLinks = [];
       const addFirst = id => { if (!nodes.length) nodes.push(id); };
-      const addHop = (target, accepts) => {
+      const addHop = topologyLink => {
         const source = nodes.at(-1);
-        const edge = source ? graphLinkBetween(source, target, accepts) : null;
-        if (!edge) return false;
-        nodes.push(target);
-        edges.push(edge);
+        if (!source || !topologyLink || topologyLink.link.source !== source) return false;
+        nodes.push(topologyLink.link.target);
+        edges.push(topologyLink);
         return true;
       };
-      const topicId = name => nodeIdForCodeFlowResource(name, "kafka_topic");
-      const serviceForEndpoint = endpointId => graphData.nodes.find(node => (
-        node.kind === "microservice"
-        && (node.ports || []).some(port => port.endpoint_id === endpointId)
-      ))?.id || null;
       const steps = flow.steps || [];
       const trigger = steps[0];
       if (!trigger) return null;
 
       if (trigger.kind === "message_entry") {
-        const topic = topicId(trigger.name);
-        if (!topic) return null;
-        addFirst(topic);
-        if (!addHop(serviceId, link => link.kind === "kafka")) return null;
+        const consumer = nodeIdForEndpoint(trigger.endpoint_id);
+        if (consumer !== serviceId) return null;
+        const incoming = (graphLinksByEndpoint.get(trigger.endpoint_id) || []).filter(link => (
+          link.link.target === serviceId
+        ));
+        if (incoming.length !== 1) return null;
+        addFirst(incoming[0].link.source);
+        if (!addHop(incoming[0])) return null;
       } else {
         addFirst(serviceId);
       }
 
+      const inputEndpointId = trigger.endpoint_id;
+
       for (const step of steps.slice(1)) {
         if (step.kind === "http_call") {
-          const source = nodes.at(-1);
-          const candidate = graphData.links.find((link, index) => (
-            link.source === source
-            && ["rest", "mcp_http"].includes(link.kind)
-            && (String(link.label || "").includes(step.name) || link.kind === "mcp_http")
-            && !edges.some(edge => edge.edge === `edge-${index}`)
-          ));
-          if (!candidate || !addHop(candidate.target, link => link === candidate)) return null;
+          const candidate = uniqueTopologyLink(step.endpoint_id, nodes.at(-1));
+          if (!candidate || !["rest", "mcp_http"].includes(candidate.link.kind) || !addHop(candidate)) return null;
+          if (inputEndpointId && internalOutputsByInput.get(inputEndpointId)?.has(step.endpoint_id)) {
+            localLinks.push({ input_endpoint_id: inputEndpointId, output_endpoint_id: step.endpoint_id });
+          }
           continue;
         }
         if (step.kind === "message_publish") {
           const publishingService = nodes.at(-1);
           if (nodeDataById.get(publishingService)?.kind !== "microservice") return null;
-          const topic = topicId(step.name);
-          if (!topic || !addHop(topic, link => link.kind === "kafka")) return null;
+          const outgoing = uniqueTopologyLink(step.endpoint_id, publishingService);
+          if (!outgoing || outgoing.link.kind !== "kafka" || !addHop(outgoing)) return null;
+          if (inputEndpointId && internalOutputsByInput.get(inputEndpointId)?.has(step.endpoint_id)) {
+            localLinks.push({ input_endpoint_id: inputEndpointId, output_endpoint_id: step.endpoint_id });
+          }
           continue;
         }
         if (step.kind === "message_entry") {
-          const topic = topicId(step.name);
-          const consumer = serviceForEndpoint(step.endpoint_id);
-          if (!topic || !consumer) return null;
-          if (nodes.at(-1) !== topic && !addHop(topic, link => link.kind === "kafka")) return null;
-          if (!addHop(consumer, link => link.kind === "kafka")) return null;
+          const incoming = uniqueTopologyLink(step.endpoint_id, nodes.at(-1));
+          if (!incoming || incoming.link.kind !== "kafka" || !addHop(incoming)) return null;
         }
       }
-      return edges.length ? { nodes, edges } : null;
+      // A same-service input → output link is also persisted topology evidence.
+      // It has no Sigma edge, so keep it separately while treating the flow as
+      // reconciled rather than falsely reporting a partial graph.
+      return edges.length || localLinks.length ? { nodes, edges, localLinks } : null;
     }
 
     function showCodeFlow(flow) {
@@ -141,28 +161,28 @@
       if (!serviceId) return null;
       const nodes = [];
       const add = id => { if (id && nodes.at(-1) !== id) nodes.push(id); };
-      const serviceForEndpoint = endpointId => graphData.nodes.find(node => (
-        node.kind === "microservice"
-        && (node.ports || []).some(port => port.endpoint_id === endpointId)
-      ));
       const steps = flow.steps || [];
       const trigger = steps[0];
       if (!trigger) return null;
       if (trigger.kind === "message_entry") {
-        add(nodeIdForCodeFlowResource(trigger.name, "kafka_topic"));
+        const incoming = (graphLinksByEndpoint.get(trigger.endpoint_id) || []).filter(link => (
+          link.link.target === serviceId
+        ));
+        add(incoming.length === 1 ? incoming[0].link.source : null);
       }
       add(serviceId);
       steps.slice(1).forEach(step => {
-        if (step.kind === "message_publish") add(nodeIdForCodeFlowResource(step.name, "kafka_topic"));
+        if (step.kind === "message_publish") {
+          const outgoing = uniqueTopologyLink(step.endpoint_id, nodes.at(-1));
+          add(outgoing?.link.target);
+        }
         if (step.kind === "message_entry") {
-          add(nodeIdForCodeFlowResource(step.name, "kafka_topic"));
-          add(serviceForEndpoint(step.endpoint_id)?.id);
+          const incoming = uniqueTopologyLink(step.endpoint_id, nodes.at(-1));
+          add(incoming?.link.target);
         }
         if (step.kind === "http_call") {
-          const source = serviceForEndpoint(step.endpoint_id);
-          add(source?.ports?.find(port => port.endpoint_id === step.endpoint_id)?.target?.service
-            ? nodeIdForCodeFlowResource(source.ports.find(port => port.endpoint_id === step.endpoint_id).target.service, "microservice")
-            : null);
+          const outgoing = uniqueTopologyLink(step.endpoint_id, nodes.at(-1));
+          add(outgoing?.link.target);
         }
       });
       return nodes.length ? { nodes, edges: [] } : null;
@@ -172,10 +192,6 @@
       codeFlowsList.querySelectorAll(".code-flow-item").forEach(item => {
         const selected = item.dataset.flowId === graphState.selectedCodeFlowId;
         item.classList.toggle("is-selected", selected);
-        const action = item.querySelector(".reference-action");
-        if (!action) return;
-        action.textContent = selected ? "Affiché dans le graphe" : "Afficher dans le graphe";
-        action.setAttribute("aria-pressed", String(selected));
       });
     }
 
@@ -190,13 +206,9 @@
       const title = document.createElement("div");
       title.className = "reference-title code-flow-title";
       title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`;
-      const javaMethod = flow.vscode_uri ? document.createElement("a") : document.createElement("code");
+      const javaMethod = document.createElement("code");
       javaMethod.className = "code-flow-method";
       javaMethod.textContent = `Méthode Java : ${flow.method}`;
-      if (flow.vscode_uri) {
-        javaMethod.href = flow.vscode_uri;
-        javaMethod.title = `Ouvrir ${flow.method} dans VS Code`;
-      }
       const badges = document.createElement("div");
       badges.className = "code-flow-badges";
       [flow.status === "cycle" ? "Cycle détecté" : (flow.status === "potential" ? "Potentiel" : (flow.status || "Statut inconnu")), `Confiance ${codeFlowConfidenceLabel(flow.confidence)}`].forEach(label => {
@@ -208,63 +220,24 @@
       header.append(title, javaMethod, badges);
       const exactPath = pathForCodeFlow(flow);
       const path = exactPath || nodePathForCodeFlow(flow);
-      if (path && !exactPath) {
-        const topologyNotice = document.createElement("p");
-        topologyNotice.className = "code-flow-topology-notice";
-        topologyNotice.textContent = "Relations topologiques incomplètes : les étapes sont visibles, sans arête vérifiée.";
-        header.append(topologyNotice);
-      }
-      const action = document.createElement("button");
-      action.type = "button";
-      action.className = "reference-action";
-      action.textContent = selected
-        ? (exactPath ? "Affiché dans le graphe" : "Étapes affichées (arêtes partielles)")
-        : (exactPath ? "Afficher dans le graphe" : "Afficher les étapes (arêtes partielles)");
-      action.setAttribute("aria-pressed", String(selected));
-      action.disabled = path === null;
-      action.title = path
-        ? "Surligner les relations de ce flux dans le graphe principal"
-        : "Ce flux ne peut pas être rapproché de la topologie affichée";
-      if (path) {
-        action.addEventListener("click", () => showCodeFlow(flow));
-        item.addEventListener("click", event => {
-          if (!event.target.closest("button")) showCodeFlow(flow);
-        });
-        item.title = "Afficher ce flux dans le graphe";
-      }
       const meta = document.createElement("div");
       meta.className = "reference-meta";
       meta.textContent = `${flow.module} · ${(flow.steps?.length || 1) - 1} étape(s) après l’entrée`;
-      const reason = document.createElement("p");
-      reason.className = "code-flow-reason";
-      reason.textContent = flow.reason === "The entry point and external effects occur in the same Java method."
-        ? "Le point d’entrée et les effets externes se trouvent dans la même méthode Java."
-        : flow.reason || "Parcours potentiel issu du code source.";
-      const steps = document.createElement("ol");
-      steps.className = "code-flow-steps";
-      let portStepNumber = 0;
-      (flow.steps || []).forEach(step => {
-        const stepItem = document.createElement("li");
-        stepItem.className = "code-flow-step";
-        if (isGraphPortStep(step)) {
-          portStepNumber += 1;
-          stepItem.classList.add("is-graph-port-step");
-          stepItem.dataset.flowPortStep = String(portStepNumber);
-        }
-        const summary = document.createElement("div");
-        summary.className = "code-flow-step-summary";
-        const kind = document.createElement("span");
-        kind.className = "code-flow-step-kind";
-        kind.textContent = codeFlowStepLabel(step.kind);
-        const name = document.createElement("strong");
-        name.textContent = step.name;
-        summary.append(kind, name);
-        const location = document.createElement("code");
-        location.textContent = codeFlowLocation(step);
-        stepItem.append(summary, location);
-        steps.append(stepItem);
-      });
-      item.append(header, meta, reason, steps, action);
+      if (path) {
+        item.tabIndex = 0;
+        item.title = "Afficher ce graphe d’appel dans la vue Graphe";
+        item.addEventListener("click", () => showCodeFlow(flow));
+        item.addEventListener("keydown", event => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            showCodeFlow(flow);
+          }
+        });
+      } else {
+        item.classList.add("is-unavailable");
+        item.title = "Ce graphe d’appel ne peut pas être rapproché de la topologie affichée";
+      }
+      item.append(header, meta);
       return item;
     }
 
@@ -301,14 +274,14 @@
           const group = document.createElement("li");
           group.className = "code-flow-service-group";
           const serviceDetails = document.createElement("details");
-          serviceDetails.open = Boolean(query) || serviceIndex === 0;
+          serviceDetails.open = true;
           const summary = document.createElement("summary");
           const count = [...triggers.values()].reduce((total, flows) => total + flows.length, 0);
           summary.textContent = `${service} · ${count} flux · cliquer pour afficher`;
           serviceDetails.append(summary);
           [...triggers.entries()].sort(([left], [right]) => left.localeCompare(right)).forEach(([trigger, flows]) => {
             const triggerDetails = document.createElement("details");
-            triggerDetails.open = Boolean(query) || serviceIndex === 0;
+            triggerDetails.open = true;
             const triggerSummary = document.createElement("summary");
             triggerSummary.textContent = `${trigger} · ${flows.length} flux · cliquer pour afficher`;
             const list = document.createElement("ul");

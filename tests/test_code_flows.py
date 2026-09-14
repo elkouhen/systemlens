@@ -568,3 +568,44 @@ class SecondHelper { void execute() {} }
         "com.example.SecondHelper.execute",
     }
     assert len({method.id for method in methods}) == 3
+
+
+def test_integration_methods_match_unique_openapi_override_by_operation_id(tmp_path: Path) -> None:
+    java_path = "orders/src/main/java/com/example/OrderController.java"
+    contract_path = "orders/src/main/resources/static/openapi.yaml"
+    source = tmp_path / java_path
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """package com.example;
+@RestController
+class OrderController {
+  @Override String placeOrder(Object request) { return \"ok\"; }
+  String helper() { return \"ignored\"; }
+}
+""",
+        encoding="utf-8",
+    )
+    contract = tmp_path / contract_path
+    contract.parent.mkdir(parents=True)
+    contract.write_text(
+        """openapi: 3.0.3
+paths:
+  /api/orders:
+    post:
+      operationId: placeOrder
+""",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoint = replace(
+        _endpoint("openapi-entry", "serve", "rest", "POST /api/orders", contract_path, 4),
+        framework="openapi",
+    )
+
+    methods = materialize_integration_methods(tmp_path, [endpoint], [java_path], [module])
+
+    place_order = next(method for method in methods if method.qualified_method.endswith(".placeOrder"))
+    assert place_order.input_endpoint_ids == ("openapi-entry",)

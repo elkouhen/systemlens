@@ -69,6 +69,7 @@
       pathQuery.value = "";
       pathStops.splice(0, pathStops.length);
       graphState.selectedCodeFlowId = null;
+      graphState.relatedLocalPortLinks = new Set();
       graphFlowStatus.hidden = true;
       delete graphCanvas.dataset.selectedCodeFlow;
       delete graphCanvas.dataset.flowFocusRatio;
@@ -380,6 +381,9 @@
       graphState.selectedId = path.nodes[0];
       graphState.relatedNodes = new Set(path.nodes);
       graphState.relatedEdges = new Set(path.edges.map(step => step.edge));
+      graphState.relatedLocalPortLinks = new Set((path.localLinks || []).map(link => (
+        `${link.input_endpoint_id}:${link.output_endpoint_id}`
+      )));
       graphState.selectedCodeFlowId = context.codeFlow?.id || null;
       graphFlowStatus.hidden = context.topologyReconciled !== false;
       if (!graphFlowStatus.hidden) {
@@ -432,7 +436,7 @@
       const parsed = parsePathQuery(query);
       if (parsed.error) {
         if (preserveGraphOnError) { searchStatus.textContent = parsed.error; return false; }
-        graphState.selectedId = null; graphState.relatedNodes = null; graphState.relatedEdges = null; graphState.pathMicroserviceOrder = new Map();
+        graphState.selectedId = null; graphState.relatedNodes = null; graphState.relatedEdges = null; graphState.relatedLocalPortLinks = new Set(); graphState.pathMicroserviceOrder = new Map();
         renderer.refresh();
         setDetailsEmpty(parsed.error);
         pathStops.splice(0, pathStops.length);
@@ -444,7 +448,7 @@
       if (path === null) {
         const message = "Aucun itineraire de topics oriente ne passe par les noeuds demandes dans cet ordre.";
         if (preserveGraphOnError) { searchStatus.textContent = message; return false; }
-        graphState.selectedId = null; graphState.relatedNodes = null; graphState.relatedEdges = null; graphState.pathMicroserviceOrder = new Map();
+        graphState.selectedId = null; graphState.relatedNodes = null; graphState.relatedEdges = null; graphState.relatedLocalPortLinks = new Set(); graphState.pathMicroserviceOrder = new Map();
         renderer.refresh();
         setDetailsEmpty(message);
         persistState();
@@ -468,7 +472,7 @@
         return;
       }
       const simplePaths = allSimplePaths(parsed.stops[0], parsed.stops[1]);
-      graphState.selectedId = null; graphState.relatedNodes = null; graphState.relatedEdges = null; graphState.pathMicroserviceOrder = new Map();
+      graphState.selectedId = null; graphState.relatedNodes = null; graphState.relatedEdges = null; graphState.relatedLocalPortLinks = new Set(); graphState.pathMicroserviceOrder = new Map();
       pathStops.splice(0, pathStops.length);
       renderer.refresh();
       if (!simplePaths.paths.length) {
@@ -642,6 +646,13 @@
         || (flow.steps || []).some(step => associatedEndpointIds.has(step.endpoint_id))
       ));
       if (ports.length) {
+        const triggeredInputs = ports.filter(port => (
+          port.direction === "in" && String(port.label || "").includes(" ← ")
+        ));
+        appendList(
+          "Entrées déclenchées",
+          triggeredInputs.map(port => `${port.label} · ${port.type} · ${port.name}`),
+        );
         const portsByEndpointId = new Map(ports.map(port => [port.endpoint_id, port]));
           const connections = (graphData.code_flows || []).flatMap(flow => {
             if (flow.module !== node.name) return [];
@@ -856,6 +867,7 @@
         selectedClusterKey: resolvedCluster.key,
         relatedNodes: null,
         relatedEdges: null,
+        relatedLocalPortLinks: new Set(),
         selectedCodeFlowId: null,
         pathMicroserviceOrder: new Map(),
       });
@@ -872,6 +884,7 @@
       graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
+      graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
       delete graphCanvas.dataset.selectedCodeFlow;
       network.forEachEdge((edge, attributes, source, target) => {
@@ -895,6 +908,7 @@
       graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
+      graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
       delete graphCanvas.dataset.selectedCodeFlow;
       network.forEachEdge((edge, attributes, source, target) => {

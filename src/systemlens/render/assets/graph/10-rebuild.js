@@ -139,6 +139,7 @@
       graphState.clusterLayoutPositions = new Map();
       graphLayersOverlay.replaceChildren();
       graphGroupsOverlay.replaceChildren();
+      portPathOverlay.replaceChildren();
       nodeLabelOverlay.replaceChildren();
       flowTooltipOverlay.replaceChildren();
       renderer?.kill();
@@ -308,6 +309,7 @@
       }
       renderOverlays = () => {
         nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
+        portPathOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         const nodePoints = new Map();
         const graphPointToViewport = graphPoint => {
           return renderer.graphToViewport(graphPoint);
@@ -582,53 +584,56 @@
             : kindLabel;
           label.append(icon);
           label.append(name, kind);
-          const selectedFlow = (graphData.code_flows || []).find(flow => (
-            flow.id === graphState.selectedCodeFlowId
-          ));
-          const allPortSteps = (selectedFlow?.steps || []).filter(flowStep => (
-            ["http_entry", "message_entry", "http_call", "message_publish"].includes(flowStep.kind)
-          ));
-          const portSteps = (selectedFlow?.steps || []).filter(flowStep => (
-            ["http_entry", "message_entry", "http_call", "message_publish"].includes(flowStep.kind)
-            && (node.ports || []).some(port => port.endpoint_id === flowStep.endpoint_id)
-          ));
-          portSteps.forEach((flowStep, index) => {
-            const port = document.createElement("span");
-            port.className = "graph-flow-port-label";
-            port.style.setProperty("--flow-port-index", String(index));
-            const stepNumber = allPortSteps.indexOf(flowStep) + 1;
-            port.textContent = `(${stepNumber})`;
-            const portKind = {
-              http_entry: "Entrée HTTP", message_entry: "Entrée message",
-              http_call: "Sortie HTTP", message_publish: "Sortie Kafka",
-            }[flowStep.kind];
-            const isTrigger = ["http_entry", "message_entry"].includes(flowStep.kind);
-            const indexedPort = (node.ports || []).find(item => (
-              item.endpoint_id === flowStep.endpoint_id
-            ));
-            // Do not use the browser's native (often grey) title bubble. The
-            // exported graph owns a high-contrast, structured tooltip instead.
-            const tooltip = document.createElement("span");
-            tooltip.className = "graph-flow-port-tooltip";
-            const tooltipTitle = document.createElement("strong");
-            tooltipTitle.textContent = `Étape ${stepNumber} — ${portKind}`;
-            const triggerOrEffect = document.createElement("span");
-            triggerOrEffect.textContent = `${isTrigger ? "Déclencheur" : "Effet"} : ${flowStep.name}`;
-            const javaMethod = document.createElement("code");
-            javaMethod.textContent = `Méthode Java : ${indexedPort?.method || "inconnue"}`;
-            tooltip.append(tooltipTitle, triggerOrEffect, javaMethod);
-            const showTooltip = () => {
-              flowTooltipOverlay.replaceChildren(tooltip);
-              const anchor = port.getBoundingClientRect();
-              const width = tooltip.offsetWidth;
-              const height = tooltip.offsetHeight;
-              tooltip.style.left = `${Math.max(8, Math.min(window.innerWidth - width - 8, anchor.right))}px`;
-              tooltip.style.top = `${anchor.top - height - 8 >= 8 ? anchor.top - height - 8 : anchor.bottom + 8}px`;
-            };
-            port.addEventListener("pointerenter", showTooltip);
-            port.addEventListener("pointerleave", () => tooltip.remove());
-            label.append(port);
+          const portsByDirection = { in: [], out: [] };
+          (node.ports || []).filter(port => port.label).forEach(port => {
+            portsByDirection[port.direction]?.push(port);
           });
+          Object.entries(portsByDirection).forEach(([portDirection, ports]) => ports.forEach((port, index) => {
+            const anchor = document.createElement("span");
+            anchor.className = `graph-node-port-reference is-${portDirection}`;
+            anchor.dataset.endpointId = port.endpoint_id;
+            // Keep the graph anchor compact. The full persisted presentation
+            // label (including local outputs on an input) remains in the
+            // tooltip and the inspector.
+            anchor.style.setProperty("--port-offset", `${(index + 1) / (ports.length + 1) * 100}%`);
+            anchor.textContent = String(port.label).split(" ← ", 1)[0];
+            const direction = portDirection === "in" ? "Entrée" : "Sortie";
+            const showPortTooltip = () => {
+              const tooltip = document.createElement("span");
+              tooltip.className = "graph-port-tooltip";
+              const title = document.createElement("strong");
+              title.textContent = `${port.label} — ${direction}`;
+              const endpoint = document.createElement("span");
+              endpoint.textContent = `${port.type} : ${port.name}`;
+              const method = document.createElement("code");
+              method.textContent = `Méthode Java : ${port.method || "inconnue"}`;
+              tooltip.append(title, endpoint, method);
+              if (port.local_outputs?.length) {
+                const localOutputs = document.createElement("span");
+                localOutputs.textContent = "Sorties internes mappées :";
+                const outputList = document.createElement("ul");
+                port.local_outputs.forEach(output => {
+                  const item = document.createElement("li");
+                  item.textContent = `${output.label} · ${output.type} : ${output.name} · ${output.method}`;
+                  outputList.append(item);
+                });
+                tooltip.append(localOutputs, outputList);
+              }
+              if (port.target) {
+                const target = document.createElement("span");
+                target.textContent = `Cible résolue : ${port.target.service} · ${port.target.label} · ${port.target.name}`;
+                tooltip.append(target);
+              }
+              flowTooltipOverlay.replaceChildren(tooltip);
+              const bounds = anchor.getBoundingClientRect();
+              const tooltipBounds = tooltip.getBoundingClientRect();
+              tooltip.style.left = `${Math.max(8, Math.min(window.innerWidth - tooltipBounds.width - 8, bounds.left))}px`;
+              tooltip.style.top = `${bounds.bottom + tooltipBounds.height + 8 <= window.innerHeight ? bounds.bottom + 8 : Math.max(8, bounds.top - tooltipBounds.height - 8)}px`;
+            };
+            anchor.addEventListener("pointerenter", showPortTooltip);
+            anchor.addEventListener("pointerleave", () => flowTooltipOverlay.replaceChildren());
+            label.append(anchor);
+          }));
           // Cards sit above Sigma's canvas and therefore normally consume the
           // pointer stream. Pan the camera directly when a drag starts on a
           // card, while preserving a plain click for node selection. Keeping
@@ -700,6 +705,84 @@
             selectNode(id);
           });
           nodeLabelOverlay.append(label);
+        });
+        // The SVG is deliberately projected from the port elements, rather
+        // than from graph nodes. This keeps its endpoints attached to the
+        // readable port anchors through every pan, zoom, and card scale.
+        portPathOverlay.replaceChildren();
+        if (graphState.renderMode === "symbols") return;
+        const svgNamespace = "http://www.w3.org/2000/svg";
+        const marker = document.createElementNS(svgNamespace, "marker");
+        marker.id = "graph-port-arrow";
+        marker.setAttribute("viewBox", "0 0 8 8");
+        marker.setAttribute("refX", "7");
+        marker.setAttribute("refY", "4");
+        marker.setAttribute("markerWidth", "6");
+        marker.setAttribute("markerHeight", "6");
+        marker.setAttribute("orient", "auto-start-reverse");
+        const arrow = document.createElementNS(svgNamespace, "path");
+        arrow.setAttribute("d", "M 0 0 L 8 4 L 0 8 z");
+        arrow.setAttribute("fill", "context-stroke");
+        marker.append(arrow);
+        const definitions = document.createElementNS(svgNamespace, "defs");
+        definitions.append(marker);
+        portPathOverlay.append(definitions);
+        const anchorsByEndpointId = new Map(
+          [...nodeLabelOverlay.querySelectorAll(".graph-node-port-reference")]
+            .map(anchor => [anchor.dataset.endpointId, anchor])
+        );
+        const overlayBounds = portPathOverlay.getBoundingClientRect();
+        (graphData.internal_port_links || []).forEach(link => {
+          const input = anchorsByEndpointId.get(link.input_endpoint_id);
+          const output = anchorsByEndpointId.get(link.output_endpoint_id);
+          if (!input?.classList.contains("is-in") || !output?.classList.contains("is-out")) return;
+          const inputBounds = input.getBoundingClientRect();
+          const outputBounds = output.getBoundingClientRect();
+          const startX = inputBounds.right - overlayBounds.left;
+          const startY = inputBounds.top + inputBounds.height / 2 - overlayBounds.top;
+          const endX = outputBounds.left - overlayBounds.left;
+          const endY = outputBounds.top + outputBounds.height / 2 - overlayBounds.top;
+          const path = document.createElementNS(svgNamespace, "path");
+          path.classList.add("graph-local-port-path");
+          if (graphState.relatedLocalPortLinks?.has(
+            `${link.input_endpoint_id}:${link.output_endpoint_id}`
+          )) path.classList.add("is-code-flow-path");
+          path.setAttribute("marker-end", "url(#graph-port-arrow)");
+          path.setAttribute(
+            "d",
+            `M ${startX} ${startY} C ${startX + 18} ${startY}, ${endX - 18} ${endY}, ${endX} ${endY}`,
+          );
+          portPathOverlay.append(path);
+        });
+        const directedPairs = new Set((graphData.port_links || []).map(link => (
+          `${link.source_endpoint_id}:${link.target_endpoint_id}`
+        )));
+        (graphData.port_links || []).forEach(link => {
+          const source = anchorsByEndpointId.get(link.source_endpoint_id);
+          const target = anchorsByEndpointId.get(link.target_endpoint_id);
+          if (!source?.classList.contains("is-out") || !target?.classList.contains("is-in")) return;
+          const sourceBounds = source.getBoundingClientRect();
+          const targetBounds = target.getBoundingClientRect();
+          const startX = sourceBounds.right - overlayBounds.left;
+          const startY = sourceBounds.top + sourceBounds.height / 2 - overlayBounds.top;
+          const endX = targetBounds.left - overlayBounds.left;
+          const endY = targetBounds.top + targetBounds.height / 2 - overlayBounds.top;
+          const reverseExists = directedPairs.has(`${link.target_endpoint_id}:${link.source_endpoint_id}`);
+          // Opposite calls must not collapse into one indistinguishable
+          // stroke. Stable endpoint IDs choose opposite lanes for a cycle.
+          const lane = reverseExists
+            ? (String(link.source_endpoint_id) < String(link.target_endpoint_id) ? -24 : 24)
+            : 0;
+          const bend = Math.max(34, Math.abs(endX - startX) * .34);
+          const path = document.createElementNS(svgNamespace, "path");
+          path.classList.add("graph-port-path");
+          if (link.kind === "kafka") path.classList.add("is-kafka");
+          path.setAttribute("marker-end", "url(#graph-port-arrow)");
+          path.setAttribute(
+            "d",
+            `M ${startX} ${startY} C ${startX + bend} ${startY + lane}, ${endX - bend} ${endY + lane}, ${endX} ${endY}`,
+          );
+          portPathOverlay.append(path);
         });
       };
       // Camera updates can fire several times during one drag. Coalesce them
