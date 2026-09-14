@@ -1,15 +1,20 @@
 # SystemLens (`systemlens`)
 
-Local, source-evidenced Java/Spring architecture context for coding agents.
+Local, source-evidenced Java/Spring architecture analysis for people who need
+to understand a codebase.
 
 SystemLens indexes REST integrations, Topics, Data resources, Maven/Gradle projects, OpenAPI
 contracts, and derived architecture relations in a local
-SQLite database. It gives agents dependencies, impact paths, and unresolved
-facts before they change a system. Source code is neither sent to a service nor
-analysed by an external engine.
+SQLite database. It gives analysts, developers, and architects dependencies,
+impact paths, and unresolved facts before they change or review a system.
+Source code is neither sent to a service nor analysed by an external engine.
 
 **Start here:** install SystemLens, initialise the repository, run an index,
 then inspect the result through MCP, the CLI, or the HTML export.
+
+The companion `systemlens-skill` is optional: it lets an agent perform a
+focused, evidence-based analysis to enrich the separate graph-fact layer. Its
+findings remain reviewable and never replace source-derived facts.
 
 ## Install
 

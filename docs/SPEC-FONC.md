@@ -12,7 +12,7 @@ workspace root is accepted. Source code never leaves the local machine.
 | Setting up or operating SystemLens | [Configuration](#configuration) and [CLI](#cli) |
 | Changing extraction behaviour | [Extraction contract](#extraction-contract) and [Boundaries](#boundaries) |
 | Changing the HTML export | [HTML export behaviour](#html-export-behaviour), then its rendering rules |
-| Integrating an agent | [MCP](#mcp) |
+| Enriching a graph with the companion skill | [MCP](#mcp) |
 
 The keywords **MUST** and **MUST NOT** identify compatibility requirements.
 
@@ -55,7 +55,7 @@ in the architecture snapshot.
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
 | `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--codeql-database DIR] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. When the local CodeQL CLI is available, it creates a temporary source-only Java database and extends code flows across resolved method calls. `--codeql-database` reuses an already-built Java database instead. `--strategy` selects the convention pack for this index; `--no-codeql` disables CodeQL for this run only and retains AST-only flows; it cannot be combined with `--codeql-database`. `--kubernetes` queries the active `kubectl` context for Deployments and StatefulSets; `--kubernetes-namespace` restricts it to one runtime namespace. `--disable` can independently disable the `properties`, `module-architecture`, or `module-tree-sitter` extractor and may be repeated. |
-| `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts an AI fact manifest into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
+| `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts a reviewable fact manifest, including one produced by an agent through the companion skill, into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
 | `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows from an entry point to a source-evidenced external effect, within one method or across CodeQL-resolved method calls. |
 | `systemlens flows show ID_OR_QUERY [--root DIR] [--json]` | Shows the ordered steps and source evidence of one unambiguously selected potential code flow. |
@@ -683,7 +683,7 @@ index-then-enrich workflow. It no longer mirrors every read-only CLI command:
 |---|---|
 | `index_repository` | Index or refresh the current repository; preserves graph enrichment facts. |
 | `graph_fact_exists` | Check a semantic node/edge fact before proposing it. |
-| `add_graph_fact` | Add an AI/user node or edge assertion with confidence and optional relative evidence; rejects semantic duplicates. |
+| `add_graph_fact` | Add a user assertion or an agent-produced assertion from the companion skill, with confidence and optional relative evidence; rejects semantic duplicates. |
 | `import_graph_facts` | Validate and atomically upsert a `systemlens-ai-graph-v1` manifest into one enrichment namespace, optionally removing stale facts for a complete snapshot. |
 | `remove_graph_fact` | Remove an assertion previously added through MCP; never removes extracted source facts. |
 | `list_graph_facts` | List the persisted enrichment layer. |

@@ -117,9 +117,10 @@ from those persisted relations; adapters may use indexed endpoints only to add
 route, topic, and source presentation details and do not re-resolve targets or
 rescan source.
 
-`GraphFact` is the separate enrichment layer for facts supplied by an AI or
-user through MCP. It supports typed nodes and edges, origin, namespace, status,
-confidence, pass/revision metadata, optional relative evidence and a note. The
+`GraphFact` is the separate enrichment layer for facts supplied by a user, or
+by an agent operating through the companion SystemLens skill, via MCP. It
+supports typed nodes and edges, origin, namespace, status, confidence,
+pass/revision metadata, optional relative evidence and a note. The
 `graph_facts` table is not cleared by indexing. `import_graph_facts` validates
 and upserts a manifest by `(namespace, fact_type, manifest_id)`; complete
 snapshots can remove stale facts only inside their namespace. Source-derived
