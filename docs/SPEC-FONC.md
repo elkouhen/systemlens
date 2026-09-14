@@ -81,9 +81,11 @@ in the architecture snapshot.
 | `systemlens mcp` | Starts the stdio MCP server. |
 
 `systemlens index` reports its file delta, AST analysis stage, persisted endpoint
-count and materialized relations. Each completed indexing stage prints its elapsed
-wall-clock duration with two decimal places, followed by the total duration. It then prints a next-step hint towards the
-interactive microservice HTML export. Its result line is:
+count and materialized relations. During AST analysis, it processes changed files
+project by project and reports the actual `Projet <current>/<total>` batch. Each
+completed indexing stage prints its elapsed wall-clock duration with two decimal
+places, followed by the total duration. It then prints a next-step hint towards
+the interactive microservice HTML export. Its result line is:
 
 ```text
 scanned=<N> skipped=<N> +integrations=<N> -integrations=<N>

@@ -4,7 +4,7 @@ import sys
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Sequence
 
 from systemlens.infrastructure.config import Config
 from systemlens.indexing.dto_inventory import materialize_kafka_dto_definitions
@@ -65,6 +65,29 @@ class IndexReport:
     deleted_files: int
     endpoints_added: int = 0
     endpoints_removed: int = 0
+
+
+def _project_file_batches(
+    repo_root: Path, paths: list[str], modules: Sequence[object]
+) -> list[tuple[str, list[str]]]:
+    """Group changed files by their deepest discovered project root.
+
+    The batches are real indexing units, not an estimated progress bar: each
+    extractor receives one project batch before the next progress update.
+    """
+    roots = sorted(
+        ((getattr(module, "path"), getattr(module, "name")) for module in modules),
+        key=lambda item: len(item[0].parts), reverse=True,
+    )
+    grouped: dict[str, list[str]] = {}
+    for path in paths:
+        candidate = repo_root / path
+        owner = next(
+            (name for root, name in roots if root == candidate.parent or root in candidate.parents),
+            "racine du dépôt",
+        )
+        grouped.setdefault(owner, []).append(path)
+    return [(name, sorted(files)) for name, files in sorted(grouped.items())]
 
 
 def _report_progress(progress: ProgressCallback | None, message: str) -> None:
@@ -251,18 +274,27 @@ def _index_repo(
     diagnostics: list[ExtractionDiagnostic] = []
     if changed:
         endpoints_removed += store.count_endpoints_for_paths(changed)
-        timer.begin("ast", f"→ Indexation : analyse AST sur {len(changed)} fichier(s)...")
-        _trace("endpoint_inference.begin")
-        endpoints.extend(
-            infer_framework_endpoints(
-                repo_root,
-                changed,
-                configured_api_client_strategy1=topic_strategy == "strategy1",
-            )
+        batches = _project_file_batches(repo_root, changed, discovered_modules)
+        timer.begin(
+            "ast",
+            f"→ Indexation : analyse AST sur {len(changed)} fichier(s) dans {len(batches)} projet(s)...",
         )
-        endpoints.extend(infer_kafka_endpoints(repo_root, changed))
-        endpoints.extend(infer_markdown_topic_manifest_endpoints(repo_root, changed))
-        endpoints.extend(infer_json_kafka_flow_graph_endpoints(repo_root, changed))
+        _trace("endpoint_inference.begin")
+        for number, (project, project_paths) in enumerate(batches, start=1):
+            _report_progress(
+                progress,
+                f"  • Projet {number}/{len(batches)} : {project} ({len(project_paths)} fichier(s))",
+            )
+            endpoints.extend(
+                infer_framework_endpoints(
+                    repo_root,
+                    project_paths,
+                    configured_api_client_strategy1=topic_strategy == "strategy1",
+                )
+            )
+            endpoints.extend(infer_kafka_endpoints(repo_root, project_paths))
+            endpoints.extend(infer_markdown_topic_manifest_endpoints(repo_root, project_paths))
+            endpoints.extend(infer_json_kafka_flow_graph_endpoints(repo_root, project_paths))
         if topic_strategy == "strategy1":
             endpoints = apply_kafka_endpoints(
                 endpoints, infer_strategy1_kafka_endpoints(repo_root, changed)
