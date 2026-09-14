@@ -199,7 +199,7 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     assert '"Entrées déclenchées"' in document
     assert 'graph-flow-port-label' not in document
     assert 'id="call-graph-view"' not in document
-    assert 'flux interne${flowCount > 1 ? "s" : ""}' in document
+    assert 'flux interne${flowCount > 1 ? "s" : ""}' not in document
 
 
 def test_code_flow_reconciliation_publishes_from_the_current_consumer_service() -> None:
@@ -212,13 +212,14 @@ def test_code_flow_reconciliation_publishes_from_the_current_consumer_service() 
     assert 'const localLinks = [];' in document
 
 
-def test_graph_restores_exact_topic_chain_from_a_hash_fragment() -> None:
+def test_graph_does_not_restore_path_state_from_a_hash_fragment() -> None:
     document = render_graph_html({}, [])
 
     assert "function isValidPathStops(stops)" in document
     assert "function exactPathForStops(stops)" in document
-    assert "const exactPath = exactPathForStops(restoredStops);" in document
-    assert "showPath(exactPath, restoredStops);" in document
+    assert "URL fragments never drive rendering" in document
+    assert "const params = new URLSearchParams(location.hash.slice(1));" not in document
+    assert "showPath(exactPath, restoredStops);" not in document
 
 
 def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> None:
@@ -230,7 +231,7 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     assert '>Couches</button>' in document
     assert '>Modules</button>' in document
     assert 'id="layer-view-toggle"' not in document
-    assert "#graph, #dependency-graph {\n      position: fixed;" in document
+    assert "#graph {\n      position: fixed;" in document
     assert "#graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }" in document
     assert "#graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }" in document
     assert '<div id="graph-flow-tooltips" aria-hidden="true"></div>' in document
@@ -399,7 +400,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'Schémas de données d’événements' in document
     assert 'Schémas de données persistées' in document
     assert 'id="request-reply-tab"' not in document
-    assert 'id="build-tab"' in document
+    assert 'id="build-tab"' not in document
     assert 'class="graph-control-group zoom-controls"' in document
     assert 'class="graph-control-group fit-controls"' in document
     assert 'class="graph-control-group render-controls"' in document
@@ -454,7 +455,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="kafka-panel"' in document
     assert 'id="persistence-panel"' in document
     assert 'id="request-reply-panel"' not in document
-    assert 'id="dependencies-panel"' in document
+    assert 'id="dependencies-panel"' not in document
     assert 'id="graph-legend"' in document
     assert "layerTitleGutter = 182" in document
     assert "min-width: 154px" in document
@@ -553,8 +554,6 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "graphWheelCleanup?.();" in document
     assert "graphCanvas.removeEventListener(\"wheel\", handleGraphWheel)" in document
     assert "Keep the graph point under the cursor fixed" in document
-    assert "dependencyCanvas.addEventListener(\"wheel\", handleDependencyWheel" in document
-    assert "dependencyCanvas.setPointerCapture?.(event.pointerId)" in document
     assert "const GRAPH_CARD_SCALE = 1" in document
     assert "const GRAPH_CARD_WIDTH = 110 * GRAPH_CARD_SCALE" in document
     assert "const GRAPH_CARD_HEIGHT = 70 * GRAPH_CARD_SCALE" in document
@@ -603,6 +602,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert ".toolbar > .toolbar-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in document
     assert 'http_entry: "Entrée HTTP"' in document
     assert 'title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`' in document
+    assert 'meta.textContent = flow.module;' in document
+    assert 'javaMethod.textContent = `Méthode Java : ${flow.method}`' not in document
     assert 'item.append(header, meta);' in document
     assert 'graphFlowStatus.hidden = context.topologyReconciled !== false;' in document
     assert 'Cycles uniquement (${cycleCount})' in document
@@ -620,14 +621,16 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert ".toolbar { overflow-x: hidden; }" in document
     assert 'id="graph-context"' in document
     assert "graphContext.hidden = !showingGraph" in document
-    assert 'id="flows-tab" class="toolbar-tab is-active"' in document
-    assert 'id="graph-panel" class="toolbar-panel" role="tabpanel" aria-labelledby="graph-tab" hidden' in document
+    assert 'id="graph-tab" class="toolbar-tab is-active"' in document
+    assert 'id="flows-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="flows-tab" hidden' in document
+    assert '<div id="graph" aria-label="Graphe des interactions"></div>' in document
+    assert 'if (graphState.selectedCodeFlowId) {' in document
+    assert 'if (graphState.renderMode === "symbols" || !graphState.selectedCodeFlowId) return;' in document
     assert 'id="quick-search"' in document
     assert document.index('class="toolbar-tabs"') < document.index('id="quick-search"')
     assert document.index('id="quick-search"') < document.index('class="graph-actions"')
     graph_panel_start = document.index('id="graph-panel"')
-    graph_panel_end = document.index('id="dependencies-panel"')
-    assert graph_panel_start < document.index('id="quick-search"') < graph_panel_end
+    assert graph_panel_start < document.index('id="quick-search"')
     assert "@media (max-width: 1024px)" in document
     assert "--accent: #3156d3" in document
     assert "backdrop-filter: blur(18px)" in document

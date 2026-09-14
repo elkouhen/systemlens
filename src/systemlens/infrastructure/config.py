@@ -10,6 +10,7 @@ DEFAULT_EXCLUDE = [".git/**", ".venv/**", "node_modules/**", ".systemlens/**"]
 DEFAULT_MIN_SEVERITY = "INFO"
 VALID_SEVERITIES = ("INFO", "WARNING", "ERROR")
 VALID_TOPIC_STRATEGIES = ("default", "strategy1")
+VALID_CALL_GRAPH_ENGINES = ("codeql", "joern", "none")
 
 
 class ConfigError(Exception):
@@ -23,6 +24,7 @@ class Config:
     min_severity: str = DEFAULT_MIN_SEVERITY
     strategy: str = "default"
     codeql_enabled: bool = True
+    call_graph_engine: str = "codeql"
     codeql_timeout_seconds: int = 600
     codeql_max_hops: int = 12
     codeql_max_paths: int = 10_000
@@ -60,6 +62,14 @@ def load_config(repo_root: Path) -> Config:
     codeql_enabled = analysis.get("codeql", True)
     if not isinstance(codeql_enabled, bool):
         raise ConfigError("analysis.codeql doit être un booléen.")
+    call_graph_engine = analysis.get(
+        "call_graph_engine", "codeql" if codeql_enabled else "none"
+    )
+    if call_graph_engine not in VALID_CALL_GRAPH_ENGINES:
+        raise ConfigError(
+            f"analysis.call_graph_engine invalide : {call_graph_engine!r}. "
+            f"Valeurs autorisées : {', '.join(VALID_CALL_GRAPH_ENGINES)}."
+        )
     codeql_timeout_seconds = analysis.get("codeql_timeout_seconds", 600)
     codeql_max_hops = analysis.get("codeql_max_hops", 12)
     codeql_max_paths = analysis.get("codeql_max_paths", 10_000)
@@ -76,6 +86,7 @@ def load_config(repo_root: Path) -> Config:
         min_severity=min_severity,
         strategy=strategy,
         codeql_enabled=codeql_enabled,
+        call_graph_engine=call_graph_engine,
         codeql_timeout_seconds=codeql_timeout_seconds,
         codeql_max_hops=codeql_max_hops,
         codeql_max_paths=codeql_max_paths,
@@ -96,7 +107,7 @@ def init_config(repo_root: Path) -> Path:
         "min_severity": DEFAULT_MIN_SEVERITY,
         "root_path": ".",
         "analysis": {
-            "strategy": "default", "codeql": True,
+            "strategy": "default", "codeql": True, "call_graph_engine": "codeql",
             "codeql_timeout_seconds": 600,
             "codeql_max_hops": 12, "codeql_max_paths": 10_000,
             "disabled_extractors": [],

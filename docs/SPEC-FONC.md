@@ -1,8 +1,8 @@
 # Functional specification — systemlens (`systemlens`)
 
 `systemlens` builds a local architecture inventory from Java/Spring source ASTs
-and, when the local CodeQL CLI is available, temporary local Java call graphs
-for discovered source-owning projects.
+and, when the selected local call-graph engine is available, temporary local
+Java call graphs for discovered source-owning projects.
 The inventory commands operate on the current repository unless an explicit
 workspace root is accepted. Source code never leaves the local machine.
 
@@ -29,6 +29,7 @@ root_path: .
 analysis:
   strategy: default
   codeql: true
+  call_graph_engine: codeql
   codeql_timeout_seconds: 600
   codeql_max_hops: 12
   codeql_max_paths: 10000
@@ -44,8 +45,8 @@ Run `systemlens init` and
 sets (`src/test`, `src/componentTest`, and names ending in `Test`) are always
 excluded. The `min_severity` setting remains accepted for database compatibility
 but does not alter AST endpoint extraction.
-`analysis` is the versionable source of truth for the topic convention, CodeQL
-use, and disabled extractors. `root_path` is local export configuration only:
+`analysis` is the versionable source of truth for the topic convention,
+call-graph engine, and disabled extractors. `root_path` is local export configuration only:
 it resolves relative source evidence into VS Code links and is never persisted
 in the architecture snapshot.
 
@@ -56,10 +57,10 @@ in the architecture snapshot.
 | `systemlens init` | Creates `.systemlens/config.yml`; it never overwrites an existing file. |
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
-| `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--codeql-database DIR] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. When the local CodeQL CLI is available, it creates one temporary source-only Java database per discovered source-owning project, reports project completion, aggregates their calls, and extends code flows across resolved method calls. `--codeql-database` reuses an already-built global Java database instead. `--strategy` selects the convention pack for this index; `--no-codeql` disables CodeQL for this run only and retains AST-only flows; it cannot be combined with `--codeql-database`. `--kubernetes` queries the active `kubectl` context for Deployments and StatefulSets; `--kubernetes-namespace` restricts it to one runtime namespace. `--disable` can independently disable the `properties`, `module-architecture`, or `module-tree-sitter` extractor and may be repeated. |
+| `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--call-graph-engine codeql\|joern\|none] [--codeql-database DIR] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. The default `codeql` engine creates one temporary source-only Java database per discovered source-owning project; `joern` creates one temporary Java CPG per project. Both aggregate resolved calls and extend code flows across resolved method calls. `none` keeps AST-only flows. `--codeql-database` reuses an already-built global CodeQL database and requires the `codeql` engine. `--no-codeql` is the legacy AST-only alias. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts a reviewable fact manifest, including one produced by an agent through the companion skill, into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
-| `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows from an entry point to a source-evidenced external effect, within one method or across CodeQL-resolved method calls. |
+| `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows from an entry point to a source-evidenced external effect, within one method or across calls resolved by the selected call-graph engine. |
 | `systemlens flows show ID_OR_QUERY [--root DIR] [--json]` | Shows the ordered steps and source evidence of one unambiguously selected potential code flow. |
 | `systemlens microservices topics\|apis\|mongodb\|properties\|openapi NAME [--root DIR] [--json]` | Follow one linked object kind from a single named microservice. |
 | `systemlens microservices implementation KIND ID [--root DIR] [--json]` | Jump to the source implementation of one identified integration. |
@@ -94,18 +95,20 @@ scanned=<N> skipped=<N> +integrations=<N> -integrations=<N>
 
 The first AST-only run removes stale results from the retired analyzer.
 
-Automatic CodeQL analysis creates a separate source-only Java database for
-each discovered build project that owns Java sources. Progress reports the
-completed project over the total and the calls extracted from it. SystemLens
-maps module-relative CodeQL evidence paths back to the repository root,
+Automatic call-graph analysis creates one temporary artifact for each
+discovered build project that owns Java sources. `codeql` creates a source-only
+Java database; `joern` creates a Java Code Property Graph (CPG). Progress
+reports the completed project over the total and the calls extracted from it.
+SystemLens maps module-relative evidence paths back to the repository root,
 aggregates all calls, and only then joins them to the global method inventory.
-An explicit `--codeql-database` remains a caller-managed global-database
-override and is queried once.
+An explicit `--codeql-database` remains a caller-managed CodeQL-only
+global-database override and is queried once.
 
 `--strategy strategy1` is opt-in. The selected strategy is persisted with
 the index and reused by incremental MCP reindexing and all derived views.
-`--no-codeql` is a one-run override of `analysis.codeql`; it is intended for a
-fast AST-only index and does not modify `.systemlens/config.yml`.
+`analysis.call_graph_engine` accepts `codeql` (default), `joern`, or `none`.
+`--call-graph-engine` overrides it for one run and does not modify
+`.systemlens/config.yml`. `--no-codeql` remains a legacy AST-only alias.
 `analysis.codeql_timeout_seconds` sets the positive timeout in seconds for each
 CodeQL subprocess (temporary database creation, query execution, and BQRS
 decoding); its default is `600` seconds.
@@ -135,13 +138,14 @@ dynamic, unresolved port rather than a guessed service link.
 
 Indexing materializes AST method facts that associate each Java method with its
 HTTP/message entry endpoints and HTTP/message output endpoints. It then
-materializes conservative same-method code flows and, when the local CodeQL CLI
-is available, creates temporary source-only Java databases per source-owning
-project to follow CodeQL-resolved static method calls from an indexed entry
-method to an indexed output method. Calls are aggregated before the global flow
-join. `--codeql-database DIR` reuses an existing global database instead.
+materializes conservative same-method code flows and, when the selected local
+call-graph engine is available, creates temporary source-only Java databases
+(CodeQL) or Java CPGs (Joern) per source-owning project to follow resolved
+static method calls from an indexed entry method to an indexed output method.
+Calls are aggregated before the global flow join. `--codeql-database DIR`
+reuses an existing global CodeQL database instead.
 The temporary database and the supplied database path are never persisted. If
-CodeQL is unavailable, indexing reports that interprocedural flows were skipped
+the selected engine is unavailable, indexing reports that interprocedural flows were skipped
 and retains AST-only flows. A uniquely resolved dispatch yields a `potential`
 flow with medium confidence. When CodeQL identifies several compatible virtual
 method implementations, SystemLens retains each candidate as a `potential`
@@ -150,6 +154,13 @@ does not expose a callee source path, a call to a uniquely matching indexed
 global method signature is retained with low confidence and explicit
 signature-join provenance. Ambiguous signatures remain unresolved. Unresolved
 dispatch, reflection, dynamic routing, and runtime-only routing are not added.
+Joern retains every resolved CPG callee. When Java type recovery exposes only a
+non-synthetic `methodFullName`, SystemLens may join it only to one unique
+indexed Java method, records the result as a possible dispatch with low
+confidence, and leaves ambiguous names unresolved. For an unresolved call with
+a recovered receiver type, it also enumerates source methods on that declared
+type and its transitive derived types with the same name and arity. Each is a
+separate possible dispatch at low confidence; no implementation is selected.
 
 For Kafka, SystemLens can continue a potential flow from a concrete,
 statically resolved producer topic to a persisted concrete consumer entry. It
@@ -226,10 +237,8 @@ potential `cycle` flows. They are visually distinguished and listed before
 non-cyclic flows; within each category, longer flows appear first.
 The Flux tab provides a `Cycles only` control with the detected-cycle count to
 isolate them immediately.
-The Explorer URL fragment preserves the exact selected directed chain, including
-Kafka topics at either end of a code-flow path. Reloading that URL restores the
-same indexed nodes and edges; only a fragment that does not encode direct edges
-falls back to the bounded topic-itinerary search.
+Explorer path selections are ephemeral. URL fragments such as `from`, `to`,
+`via`, and `lock` are ignored and never alter the initial graph rendering.
 Selecting a microservice distinguishes two flow views. `Flux associés` remains
 visible and lists every persisted flow owned by the service or traversing one
 of its indexed ports; each compact entry identifies its trigger, length, cycle
@@ -246,9 +255,14 @@ producer and consumer services. When the matching Java type is indexed, its
 inspector also shows its source, declared fields, enum values, and conservative
 recursive project-type navigation.
 
-The HTML export opens on the Flux tab, which presents only a compact list of
-persisted potential call graphs grouped by service and trigger. Selecting a reconciled call graph
-opens the Graph tab and displays only the nodes, topology edges, and local port
+The HTML export opens on the Explorer tab with the global architecture graph.
+Before a call-graph selection it shows only the high-level node cards and
+persisted topology edges: it does not show CodeQL input/output ports,
+port-to-port relations, internal links, or call-graph tooltips. The Flux tab
+presents a compact list of persisted potential call graphs grouped by service
+and trigger; it does not show method, confidence, or status details before a
+selection. Selecting a reconciled call graph opens the Explorer tab and
+displays only the nodes, topology edges, and local port
 links reconciled to that path in Explorer. The selected nodes retain a visible
 halo. Selecting it keeps the Flux tab and
 its card geometry unchanged; the selected card is marked in place instead of

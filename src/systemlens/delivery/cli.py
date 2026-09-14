@@ -1179,6 +1179,11 @@ def index_cmd(
         "--no-codeql",
         help="Désactive CodeQL pour cette indexation ; conserve les flux AST locaux.",
     ),
+    call_graph_engine: Optional[Literal["codeql", "joern", "none"]] = typer.Option(
+        None,
+        "--call-graph-engine",
+        help="Moteur des flux interprocéduraux : codeql, joern ou none.",
+    ),
     disable: list[str] = typer.Option(
         None,
         "--disable",
@@ -1215,13 +1220,21 @@ def index_cmd(
     if no_codeql and codeql_database is not None:
         typer.echo("`--no-codeql` ne peut pas être combiné avec `--codeql-database`.", err=True)
         raise typer.Exit(code=2)
+    if codeql_database is not None and call_graph_engine not in (None, "codeql"):
+        typer.echo("`--codeql-database` requiert `--call-graph-engine codeql`.", err=True)
+        raise typer.Exit(code=2)
+    if no_codeql and call_graph_engine not in (None, "none"):
+        typer.echo("`--no-codeql` ne peut pas être combiné avec un moteur de graphe d'appel.", err=True)
+        raise typer.Exit(code=2)
     try:
         config = load_config(repo_root)
     except ConfigError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
     if no_codeql:
-        config = replace(config, codeql_enabled=False)
+        config = replace(config, codeql_enabled=False, call_graph_engine="none")
+    elif call_graph_engine is not None:
+        config = replace(config, call_graph_engine=call_graph_engine)
 
     _trace_index("store.open.begin")
     with Store(repo_root) as store:

@@ -206,23 +206,12 @@
       const title = document.createElement("div");
       title.className = "reference-title code-flow-title";
       title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`;
-      const javaMethod = document.createElement("code");
-      javaMethod.className = "code-flow-method";
-      javaMethod.textContent = `Méthode Java : ${flow.method}`;
-      const badges = document.createElement("div");
-      badges.className = "code-flow-badges";
-      [flow.status === "cycle" ? "Cycle détecté" : (flow.status === "potential" ? "Potentiel" : (flow.status || "Statut inconnu")), `Confiance ${codeFlowConfidenceLabel(flow.confidence)}`].forEach(label => {
-        const badge = document.createElement("span");
-        badge.className = "detail-badge";
-        badge.textContent = label;
-        badges.append(badge);
-      });
-      header.append(title, javaMethod, badges);
+      header.append(title);
       const exactPath = pathForCodeFlow(flow);
       const path = exactPath || nodePathForCodeFlow(flow);
       const meta = document.createElement("div");
       meta.className = "reference-meta";
-      meta.textContent = `${flow.module} · ${(flow.steps?.length || 1) - 1} étape(s) après l’entrée`;
+      meta.textContent = flow.module;
       if (path) {
         item.tabIndex = 0;
         item.title = "Afficher ce graphe d’appel dans la vue Graphe";

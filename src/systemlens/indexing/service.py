@@ -33,6 +33,12 @@ from systemlens.indexing.codeql import (
     codeql_executable,
     extract_codeql_calls,
 )
+from systemlens.indexing.joern import (
+    JoernError,
+    automatic_joern_cpg,
+    extract_joern_calls,
+    joern_executable,
+)
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import ExtractionDiagnostic, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, module_identity
@@ -176,6 +182,8 @@ def _index_repo(
     codeql_database: Path | None = None,
 ) -> IndexReport:
     timer = _IndexStageTimer(progress)
+    if codeql_database is not None and config.call_graph_engine != "codeql":
+        raise ValueError("A CodeQL database requires the codeql call-graph engine.")
     topic_strategy = topic_strategy or config.strategy
     disabled = disabled or frozenset(config.disabled_extractors)
     # BACKLOG-16 P2 : purge les lru_cache d'analyse best-effort (package
@@ -272,6 +280,17 @@ def _index_repo(
     # Strategy1 resolves service declarations against contracts in model-*
     # modules. Only a change to that cross-module join requires a full pass;
     # ordinary Java/configuration changes keep the incremental fast path.
+    call_graph_engine = config.call_graph_engine
+    engine_available = (
+        codeql_executable() is not None if call_graph_engine == "codeql"
+        else joern_executable() is not None if call_graph_engine == "joern"
+        else False
+    )
+    flow_signature = (
+        f"{CODE_FLOW_SIGNATURE}|engine={call_graph_engine}|"
+        f"available={engine_available}|hops={config.codeql_max_hops}|"
+        f"paths={config.codeql_max_paths}"
+    )
     if (
         topic_strategy == "strategy1"
         and not full
@@ -415,11 +434,7 @@ def _index_repo(
         or changed
         or deleted
         or codeql_database is not None
-        or store.get_meta("code_flow_signature") != (
-            f"{CODE_FLOW_SIGNATURE}|enabled={config.codeql_enabled}|"
-            f"available={codeql_executable() is not None}|hops={config.codeql_max_hops}|"
-            f"paths={config.codeql_max_paths}"
-        )
+        or store.get_meta("code_flow_signature") != flow_signature
     ):
         timer.begin("flows", "→ Indexation : matérialisation des flux de code...")
         all_endpoints = store.all_endpoints()
@@ -428,8 +443,11 @@ def _index_repo(
         )
         store.replace_integration_methods(methods)
         flows = materialize_code_flows(repo_root, all_endpoints, relation_modules)
-        if methods and config.codeql_enabled and (codeql_database is not None or codeql_executable() is not None):
-            _report_progress(progress, "→ CodeQL : préparation de l'analyse interprocédurale...")
+        if methods and call_graph_engine != "none" and (
+            (call_graph_engine == "codeql" and codeql_database is not None) or engine_available
+        ):
+            engine_label = "CodeQL" if call_graph_engine == "codeql" else "Joern"
+            _report_progress(progress, f"→ {engine_label} : préparation de l'analyse interprocédurale...")
             try:
                 if codeql_database is not None:
                     timer.begin("codeql-extract", "→ CodeQL : extraction des appels Java depuis la base fournie...")
@@ -444,34 +462,42 @@ def _index_repo(
                         relation_modules,
                     )
                     calls = []
-                    timer.begin(
-                        "codeql-database", "→ CodeQL : création et extraction par projet..."
-                    )
+                    stage = f"{call_graph_engine}-database"
+                    timer.begin(stage, f"→ {engine_label} : création et extraction par projet...")
                     for number, (name, root, prefix) in enumerate(roots, start=1):
                         _report_progress(
                             progress,
-                            f"  • CodeQL projet {number}/{len(roots)} : {name}",
+                            f"  • {engine_label} projet {number}/{len(roots)} : {name}",
                         )
-                        with automatic_codeql_database(
-                            root, timeout_seconds=config.codeql_timeout_seconds
-                        ) as database:
-                            assert database is not None
-                            project_calls = extract_codeql_calls(
-                                database,
-                                timeout_seconds=config.codeql_timeout_seconds,
-                                path_prefix=prefix,
-                            )
+                        if call_graph_engine == "codeql":
+                            with automatic_codeql_database(
+                                root, timeout_seconds=config.codeql_timeout_seconds
+                            ) as database:
+                                assert database is not None
+                                project_calls = extract_codeql_calls(
+                                    database, timeout_seconds=config.codeql_timeout_seconds,
+                                    path_prefix=prefix,
+                                )
+                        else:
+                            with automatic_joern_cpg(
+                                root, timeout_seconds=config.codeql_timeout_seconds
+                            ) as cpg:
+                                assert cpg is not None
+                                project_calls = extract_joern_calls(
+                                    cpg, timeout_seconds=config.codeql_timeout_seconds,
+                                    path_prefix=prefix, source_root=root,
+                                )
                         calls.extend(project_calls)
                         _report_progress(
                             progress,
                             f"    ✓ {name} : {len(project_calls)} appel(s) extrait(s).",
                         )
-                    timer.end("codeql-database", "création et extraction CodeQL par projet")
-            except (CodeQLError, OSError, subprocess.TimeoutExpired) as exc:
+                    timer.end(stage, f"création et extraction {engine_label} par projet")
+            except (CodeQLError, JoernError, OSError, subprocess.TimeoutExpired) as exc:
                 raise RuntimeError(str(exc)) from exc
-            _report_progress(progress, f"→ CodeQL : {len(calls)} appel(s) extrait(s), jointure des méthodes...")
+            _report_progress(progress, f"→ {engine_label} : {len(calls)} appel(s) extrait(s), jointure des méthodes...")
             codeql_stats: dict[str, int] = {}
-            timer.begin("codeql-join", "→ CodeQL : jointure des méthodes et matérialisation des flux...")
+            timer.begin("call-graph-join", f"→ {engine_label} : jointure des méthodes et matérialisation des flux...")
             codeql_flows = materialize_codeql_code_flows(
                 methods, all_endpoints, calls,
                 max_hops=config.codeql_max_hops,
@@ -479,30 +505,28 @@ def _index_repo(
                 stats=codeql_stats,
             )
             flows.extend(codeql_flows)
-            timer.end("codeql-join", "jointure CodeQL et matérialisation des flux")
+            timer.end("call-graph-join", f"jointure {engine_label} et matérialisation des flux")
             limit_note = (
                 f" limite atteinte ({config.codeql_max_paths} transitions)."
                 if codeql_stats["truncated_paths"] else ""
             )
             _report_progress(
                 progress,
-                "→ CodeQL : "
+                f"→ {engine_label} : "
                 f"{codeql_stats['calls']} appel(s), {codeql_stats['joined_calls']} jointure(s), "
                 f"{codeql_stats['explored_paths']} transition(s), "
                 f"{len(codeql_flows)} flux interprocédural(aux).{limit_note}",
             )
-        elif methods and config.codeql_enabled:
+        elif methods and call_graph_engine != "none":
             _report_progress(
                 progress,
-                "→ Indexation : CodeQL indisponible ; flux interprocéduraux ignorés.",
+                f"→ Indexation : {call_graph_engine} indisponible ; flux interprocéduraux ignorés.",
             )
         flows = materialize_kafka_flow_continuations(flows, all_endpoints)
         store.replace_code_flows(flows)
         store.set_meta(
             "code_flow_signature",
-            f"{CODE_FLOW_SIGNATURE}|enabled={config.codeql_enabled}|"
-            f"available={codeql_executable() is not None}|hops={config.codeql_max_hops}|"
-            f"paths={config.codeql_max_paths}",
+            flow_signature,
         )
         _report_progress(
             progress,

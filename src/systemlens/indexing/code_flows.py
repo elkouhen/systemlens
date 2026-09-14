@@ -11,7 +11,7 @@ from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod, mo
 from systemlens.indexing.codeql import CodeQLCall
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v10-module-codeql-kafka-continuations"
+CODE_FLOW_SIGNATURE = "code-flow-v11-call-graph-engine-joern-fallback"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -193,8 +193,12 @@ def materialize_codeql_code_flows(
     """
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
     def normalized_method_name(name: str) -> str:
-        """Align CodeQL's ``Outer$Inner`` names with Java source names."""
-        return name.replace("$", ".")
+        """Align CodeQL/Joern method names with Java source declarations."""
+        # Joern CPG full names are commonly ``package.Type.method:return(args)``.
+        # The AST inventory deliberately stores the stable Java declaration name
+        # only. Removing the CPG signature is safe because the following lookup
+        # still requires an exact source location or one unique declaration.
+        return name.replace("$", ".").split(":", 1)[0]
 
     by_locator = {
         (normalized_method_name(item.qualified_method), item.path, item.start_line): item

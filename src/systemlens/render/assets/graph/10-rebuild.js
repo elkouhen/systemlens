@@ -580,13 +580,11 @@
           const kind = document.createElement("span");
           kind.className = "graph-node-card-kind";
           const kindLabel = node.technology || nodeKindLabel(node);
-          const flowCount = node.internal_flow_count || 0;
-          kind.textContent = flowCount
-            ? `${kindLabel} · ${flowCount} flux interne${flowCount > 1 ? "s" : ""}`
-            : kindLabel;
+          kind.textContent = kindLabel;
           label.append(icon);
           label.append(name, kind);
           const portsByDirection = { in: [], out: [] };
+          if (graphState.selectedCodeFlowId) {
           (node.ports || []).filter(port => port.label).forEach(port => {
             portsByDirection[port.direction]?.push(port);
           });
@@ -641,6 +639,7 @@
             anchor.addEventListener("pointerleave", () => flowTooltipOverlay.replaceChildren());
             label.append(anchor);
           }));
+          }
           // Cards sit above Sigma's canvas and therefore normally consume the
           // pointer stream. Pan the camera directly when a drag starts on a
           // card, while preserving a plain click for node selection. Keeping
@@ -717,7 +716,7 @@
         // than from graph nodes. This keeps its endpoints attached to the
         // readable port anchors through every pan, zoom, and card scale.
         portPathOverlay.replaceChildren();
-        if (graphState.renderMode === "symbols") return;
+        if (graphState.renderMode === "symbols" || !graphState.selectedCodeFlowId) return;
         const svgNamespace = "http://www.w3.org/2000/svg";
         const marker = document.createElementNS(svgNamespace, "marker");
         marker.id = "graph-port-arrow";

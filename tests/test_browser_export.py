@@ -919,46 +919,8 @@ def test_port_to_port_paths_attach_to_rendered_anchors() -> None:
         page = context.new_page()
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
-        page.locator(".graph-port-path").wait_for(state="visible")
-        assert page.locator(".graph-local-port-path").count() == 1
-        geometry = page.evaluate(
-            """() => {
-                const path = document.querySelector('.graph-port-path');
-                const svg = document.querySelector('#graph-port-paths');
-                const output = document.querySelector('.graph-node-port-reference.is-out');
-                const input = document.querySelector('.graph-node-port-reference.is-in');
-                const svgRect = svg.getBoundingClientRect();
-                const outputRect = output.getBoundingClientRect();
-                const inputRect = input.getBoundingClientRect();
-                const start = path.getPointAtLength(0);
-                const end = path.getPointAtLength(path.getTotalLength());
-                return {
-                    marker: path.getAttribute('marker-end'),
-                    startDelta: Math.hypot(start.x - (outputRect.right - svgRect.left), start.y - (outputRect.top + outputRect.height / 2 - svgRect.top)),
-                    endDelta: Math.hypot(end.x - (inputRect.left - svgRect.left), end.y - (inputRect.top + inputRect.height / 2 - svgRect.top)),
-                };
-            }"""
-        )
-        assert geometry == {"marker": "url(#graph-port-arrow)", "startDelta": pytest.approx(0), "endDelta": pytest.approx(0)}
-        placement = page.evaluate(
-            """() => [...document.querySelectorAll('.graph-node-port-reference')].map(port => {
-                const anchor = port.getBoundingClientRect();
-                const card = port.parentElement.getBoundingClientRect();
-                return Math.abs((anchor.top + anchor.height / 2) - (card.top + card.height / 2));
-            })"""
-        )
-        assert placement == [pytest.approx(0), pytest.approx(0), pytest.approx(0)]
-        page.locator(".graph-node-port-reference.is-out").first.dispatch_event("pointerenter")
-        tooltip = page.locator(".graph-port-tooltip")
-        tooltip.wait_for(state="visible")
-        assert "O1 — Sortie" in tooltip.inner_text()
-        assert "Kafka publish : orders.created" in tooltip.inner_text()
-        assert "Méthode Java" in tooltip.inner_text()
-        assert "Type Java : OrderCreated" in tooltip.inner_text()
-        page.locator(".graph-node-port-reference.is-out").first.dispatch_event("pointerleave")
-        page.locator(".graph-node-port-reference.is-in").dispatch_event("pointerenter")
-        assert "Sorties internes mappées :" in tooltip.inner_text()
-        assert "O2 · Kafka publish : payments.completed" in tooltip.inner_text()
+        assert page.locator(".graph-node-port-reference").count() == 0
+        assert page.locator(".graph-port-path").count() == 0
         context.close()
         browser.close()
 
@@ -974,14 +936,18 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         page = context.new_page()
         page.set_default_timeout(10_000)
         page.set_content(_code_flow_document(), wait_until="load")
+        assert page.locator("#graph-tab").get_attribute("aria-selected") == "true"
+        assert page.locator(".graph-node-card-label").count() == 5
+        assert page.locator(".graph-node-port-reference").count() == 0
+        assert page.locator(".graph-port-path").count() == 0
         page.locator("#flows-tab").click()
         page.locator(".code-flow-item").wait_for(state="visible")
+        assert page.locator("#flows-tab").get_attribute("aria-selected") == "true"
 
         assert page.locator(".code-flow-step").count() == 0
         assert page.locator(".code-flow-reason").count() == 0
-        assert page.locator(".code-flow-badges").inner_text().splitlines() == [
-            "Potentiel", "Confiance moyenne",
-        ]
+        assert page.locator(".code-flow-badges").count() == 0
+        assert page.locator("#flows-panel .reference-meta").inner_text() == "payments"
         metrics = page.evaluate(
             """() => {
                 const rgb = value => value.match(/[\\d.]+/g).slice(0, 3).map(Number);
@@ -1003,7 +969,7 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
                     const item = document.querySelector('.code-flow-item');
                     const pairs = [
                         ['.code-flow-title', item],
-                        ['.code-flow-method', item],
+                        ['.reference-meta', item],
                     ];
                     return {
                         cardBackground: getComputedStyle(item).backgroundColor,
@@ -1219,7 +1185,7 @@ def test_primary_view_selector_opens_each_view_directly() -> None:
                         titleToken: root.getPropertyValue('--ui-title').trim(),
                         titleColors: [...new Set(colors(
                             '.brand strong, .references-title, .indexing-issues-title, '
-                            + '.dependency-view h2, .inspector-title'
+                            + '.inspector-title'
                         ))],
                         widgetToken: root.getPropertyValue('--ui-widget').trim(),
                         widgetBackgrounds: [...new Set(backgrounds(

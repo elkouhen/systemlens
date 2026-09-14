@@ -171,7 +171,7 @@ missing token. The file-level diagnostic remains visible so partial coverage is
 never presented as a complete parse.
 
 `CodeFlow` is a persisted, ordered potential path through one Java method or a
-CodeQL-resolved chain of Java methods. Its
+chain of Java methods resolved by the selected call-graph engine. Its
 first `CodeFlowStep` is an indexed HTTP or Kafka entry point; later steps are
 HTTP calls, Kafka publications, or MongoDB reads/writes located within the
 same Tree-sitter `method_declaration`. Steps retain relative evidence paths and
@@ -183,15 +183,19 @@ the traversed AST nodes for Java files that contain eligible endpoints. Maven
 `target/` and Gradle `build/` output trees are excluded from the inventory, so
 copied resources and generated classes cannot duplicate source facts. A
 same-method relation remains `potential` with medium confidence because static
-lexical order does not prove branch execution. CodeQL `MethodCall` facts join
+lexical order does not prove branch execution. Call-graph facts join
 persisted AST method facts to form bounded interprocedural flows; `method_call` steps keep
 the call-site line. The `analysis.codeql_max_hops` and
 `analysis.codeql_max_paths` configuration values bound depth and explored call
 transitions respectively; reaching the latter is reported in indexing progress
 instead of silently dropping candidates. By default, SystemLens creates one
-temporary database for each deepest build-module owner of Java source files,
-with CodeQL's `--build-mode=none` source-only mode, then deletes it. The call
-facts are kept in memory, their paths are remapped to root-relative evidence,
+temporary CodeQL database for each deepest build-module owner of Java source
+files, with CodeQL's `--build-mode=none` source-only mode, then deletes it.
+Selecting Joern instead creates and deletes one Java CPG for the same module
+unit and exports every `callee`-resolved call. When the CPG exposes only a
+non-synthetic `methodFullName`, it is retained as a possible signature
+candidate and joins only one unique indexed method at low confidence. The call facts are kept in
+memory, their paths are remapped to root-relative evidence,
 and all module results are aggregated before method-flow materialization. A
 callee without a module-local source location can join a unique global method
 signature; this edge lowers confidence to `low` and retains signature-join
@@ -205,7 +209,7 @@ For a virtual call, CodeQL's unique `exactVirtualMethod` target is retained at
 medium confidence. If no unique target can be proven, its `viableCallable`
 candidates are retained individually at low confidence; SystemLens does not
 select an implementation on Spring bean metadata alone. The analysis profile,
-including CodeQL availability, activation and its bounds, participates in the
+including the selected call-graph engine, availability, activation and its bounds, participates in the
 code-flow signature so switching profile recalculates unchanged repositories.
 
 Kafka flow continuations join only concrete, statically resolved Kafka endpoint
@@ -381,12 +385,9 @@ does not change persisted positions or rerun a layout. Its ratio is bounded by
 the current camera ratio so flow selection may zoom out but never zoom in, and
 the resize handler reapplies this flow fit instead of the global graph fit.
 Clearing the selection reverses that state; selecting a navigation tab clears
-details before displaying its ordinary panel. URL restoration first rebuilds
-an exact directed sequence when every successive persisted link is present.
-This supports code-flow deep links whose first or last node is a Kafka topic.
-Fragments that do not encode direct links continue through the bounded
-itinerary parser, whose endpoints are services. Path parsing filters same-name
-candidates by the grammar before accepting an itinerary
+details before displaying its ordinary panel. URL fragments are ignored by the
+Explorer and never restore or persist path selections, so they cannot alter the
+rendering algorithm. Path parsing filters same-name candidates by the grammar before accepting an itinerary
 endpoint: only a microservice can be first or last, while intermediate stops
 can be microservices or Kafka topics. Direct resource search continues to
 report multiple same-name resources as ambiguous.
@@ -424,12 +425,15 @@ commits the next one.
 AST endpoint analysis uses no subprocess. For interprocedural flows, the local
 CodeQL executable is used by default once for each source-owning build module
 to create a temporary source-only Java database, query it, and decode the
-result as CSV; all call facts are aggregated before joining. `--codeql-database`
-reuses one global database supplied by the caller. The temporary query pack pins
+result as CSV; all call facts are aggregated before joining. Selecting Joern
+invokes `joern-parse --language JAVASRC` for the same module unit and its local
+non-interactive interpreter exports only resolved calls as TSV; its CPG and
+query script are temporary. `--codeql-database` reuses one global database
+supplied by the caller. The temporary CodeQL query pack pins
 `codeql/java-all` and resolves it only from the already installed local CodeQL
 pack cache; indexing never runs `codeql pack install` or downloads analyzer
 dependencies. No database path is persisted.
-An absent CodeQL executable is reported and keeps AST-only results; a failing
+An absent selected engine is reported and keeps AST-only results; a failing
 available executable leaves the whole previous successful snapshot intact.
 
 ## Extractors
