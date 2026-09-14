@@ -135,13 +135,29 @@
       return edges.length || localLinks.length ? { nodes, edges, localLinks } : null;
     }
 
+    // The Flux tab is an inter-service navigation surface. Retain only flows
+    // whose reconciled topology path crosses a microservice boundary; local
+    // method paths remain persisted evidence and stay available on a service.
+    const interServiceCodeFlows = codeFlows.filter(flow => {
+      const path = pathForCodeFlow(flow);
+      if (!path) return false;
+      const services = new Set(path.nodes.filter(nodeId => (
+        nodeDataById.get(nodeId)?.kind === "microservice"
+      )));
+      return services.size >= 2;
+    });
+
     function showCodeFlow(flow) {
       const exactPath = pathForCodeFlow(flow);
       const path = exactPath || nodePathForCodeFlow(flow);
       if (!path) return;
+      const rootNodeId = nodeIdForCodeFlowResource(flow.module, "microservice");
+      if (!rootNodeId) return;
       setToolbarTab("graph");
       showPath(path, path.nodes, {
         codeFlow: flow,
+        codeFlowRootNodeId: rootNodeId,
+        codeFlowTrigger: flow.steps?.[0] || null,
         showDetails: false,
         topologyReconciled: Boolean(exactPath),
       });
@@ -233,7 +249,7 @@
     function renderCodeFlows() {
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
       const cyclesOnly = codeFlowCycles.getAttribute("aria-pressed") === "true";
-      const visible = codeFlows.filter(flow => {
+      const visible = interServiceCodeFlows.filter(flow => {
         const haystack = [
           flow.id,
           flow.module,
@@ -285,12 +301,12 @@
       codeFlowsList.replaceChildren(...serviceGroups);
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
-      const cycleCount = codeFlows.filter(flow => flow.status === "cycle").length;
+      const cycleCount = interServiceCodeFlows.filter(flow => flow.status === "cycle").length;
       codeFlowCycles.textContent = `Cycles uniquement (${cycleCount})`;
       codeFlowCycles.disabled = cycleCount === 0;
       codeFlowsTitle.textContent = cyclesOnly
         ? `Cycles détectés (${visible.length})`
-        : `Flux de code (${visible.length}/${codeFlows.length})`;
+        : `Flux inter-services (${visible.length}/${interServiceCodeFlows.length})`;
     }
 
     codeFlowFilter.addEventListener("input", renderCodeFlows);

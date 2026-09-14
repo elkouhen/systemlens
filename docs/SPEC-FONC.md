@@ -259,14 +259,16 @@ The HTML export opens on the Explorer tab with the global architecture graph.
 Before a call-graph selection it shows only the high-level node cards and
 persisted topology edges: it does not show CodeQL input/output ports,
 port-to-port relations, internal links, or call-graph tooltips. The Flux tab
-presents a compact list of persisted potential call graphs grouped by service
-and trigger; it does not show method, confidence, or status details before a
-selection. Selecting a reconciled call graph opens the Explorer tab and
+presents a compact list of persisted potential call graphs that reconcile to a
+topology path across at least two microservices, grouped by service and
+trigger; it does not show method, confidence, or status details before a
+selection. Local single-microservice flows remain persisted source evidence but
+are not listed in Flux. Selecting a reconciled call graph opens the Explorer tab and
 displays only the nodes, topology edges, and local port
 links reconciled to that path in Explorer. The selected nodes retain a visible
 halo. Selecting it keeps the Flux tab and
 its card geometry unchanged; the selected card is marked in place instead of
-replacing the left widget with the graph detail view. The camera frames the selected flow inside the visible
+replacing the left widget with the graph detail view. Its entry microservice is marked `Racine`: in Cards, it appears in the secondary label; in Symbols, it appears as a badge. A second badge makes the persisted entry trigger explicit, with the exact HTTP route or Kafka topic and a protocol-specific color. These markers are presentation state derived from the selected persisted call graph; they do not infer or persist an architecture fact. The camera frames the selected flow inside the visible
 workspace beside the toolbar on wide screens and below it when that is the
 larger available region, while preserving margins for fixed-size cards. This
 fit never zooms in beyond the current readable view, is reapplied after a

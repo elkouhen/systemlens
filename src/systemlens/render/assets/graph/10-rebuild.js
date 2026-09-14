@@ -561,7 +561,9 @@
           const isResource = isTopic || isDatabase;
           const adaptiveLabelSide = adaptiveLabels.get(id);
           const isCodeFlowNode = graphState.selectedCodeFlowId && graphState.relatedNodes?.has(id);
-          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}${isCodeFlowNode ? " is-code-flow-node" : ""}`;
+          const isCodeFlowRoot = graphState.selectedCodeFlowId && graphState.codeFlowRootNodeId === id;
+          const trigger = isCodeFlowRoot ? graphState.codeFlowTrigger : null;
+          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${isCodeFlowRoot ? " is-graph-root" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}${isCodeFlowNode ? " is-code-flow-node" : ""}`;
           label.dataset.nodeKind = node.kind;
           label.dataset.nodeId = id;
           const cardScale = GRAPH_CARD_SCALE;
@@ -580,9 +582,24 @@
           const kind = document.createElement("span");
           kind.className = "graph-node-card-kind";
           const kindLabel = node.technology || nodeKindLabel(node);
-          kind.textContent = kindLabel;
+          kind.textContent = isCodeFlowRoot ? `${kindLabel} · Racine` : kindLabel;
           label.append(icon);
           label.append(name, kind);
+          if (isCodeFlowRoot) {
+            const rootBadge = document.createElement("span");
+            rootBadge.className = "graph-node-root-badge";
+            rootBadge.textContent = "Racine";
+            rootBadge.title = "Racine du graphe d’appel sélectionné";
+            label.append(rootBadge);
+          }
+          if (trigger?.name) {
+            const triggerBadge = document.createElement("span");
+            const isHttpTrigger = trigger.kind === "http_entry";
+            triggerBadge.className = `graph-node-trigger-badge ${isHttpTrigger ? "is-http" : "is-kafka"}`;
+            triggerBadge.textContent = `${isHttpTrigger ? "HTTP" : "Kafka"} · ${trigger.name}`;
+            triggerBadge.title = "Déclencheur du graphe d’appel sélectionné";
+            label.append(triggerBadge);
+          }
           const portsByDirection = { in: [], out: [] };
           if (graphState.selectedCodeFlowId) {
           (node.ports || []).filter(port => port.label).forEach(port => {

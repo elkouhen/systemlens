@@ -73,6 +73,10 @@
     .graph-node-card-icon.is-topic::before { content: ""; width: 12px; height: 13px; border: 0; border-radius: 1px; background: linear-gradient(to right, currentColor 0 1.5px, transparent 1.5px 5.25px, currentColor 5.25px 6.75px, transparent 6.75px 10.5px, currentColor 10.5px 12px); }
     .graph-node-card-name { min-width: 0; grid-column: 1; grid-row: 1; align-self: end; font-weight: 750; }
     .graph-node-card-kind { min-width: 0; grid-column: 1 / 3; grid-row: 2; margin-top: 3px; color: #64748b; font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .graph-node-root-badge { position: absolute; top: -8px; right: -7px; z-index: 2; padding: 2px 5px; border: 1px solid #b45309; border-radius: 8px; color: #78350f; background: #fffbeb; box-shadow: 0 1px 4px rgba(120, 53, 15, .18); font-size: 8px; font-weight: 800; line-height: 1; white-space: nowrap; }
+    .graph-node-trigger-badge { position: absolute; top: -27px; left: -7px; z-index: 3; max-width: 180px; padding: 3px 5px; border: 1px solid; border-radius: 8px; box-shadow: 0 2px 5px rgba(15, 23, 42, .2); font-size: 8px; font-weight: 800; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .graph-node-trigger-badge.is-http { border-color: #2563eb; color: #1e3a8a; background: #eff6ff; }
+    .graph-node-trigger-badge.is-kafka { border-color: #059669; color: #065f46; background: #ecfdf5; }
     .graph-node-port-reference { position: absolute; top: var(--port-offset); z-index: 1; display: grid; place-items: center; min-width: 24px; height: 16px; padding: 0 3px; box-sizing: border-box; transform: translateY(-50%); border: 1px solid #8b5cf6; border-radius: 8px; color: #4c1d95; background: #faf5ff; box-shadow: 0 2px 5px rgba(76,29,149,.14); font-size: 9px; font-weight: 800; line-height: 1; white-space: nowrap; }
     .graph-node-port-reference.is-in { right: calc(100% - 7px); }
     .graph-node-port-reference.is-out { left: calc(100% - 7px); }
@@ -101,6 +105,8 @@
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-name,
     #graph-node-labels.is-symbol-mode .graph-node-card-label.has-adaptive-label .graph-node-card-name { visibility: visible; opacity: 1; }
     #graph-node-labels.is-symbol-mode .graph-node-card-kind { display: none; }
+    #graph-node-labels.is-symbol-mode .graph-node-root-badge { top: -8px; right: -25px; }
+    #graph-node-labels.is-symbol-mode .graph-node-trigger-badge { top: -26px; left: -6px; }
     #graph-node-labels.is-symbol-mode .graph-node-port-reference { display: none; }
     #graph-port-paths.is-symbol-mode { display: none; }
     #graph-node-labels.is-symbol-mode .graph-node-card-label.is-selected .graph-node-card-icon { transform: scale(1.1); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .88), 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 20%, transparent), 0 0 18px color-mix(in srgb, var(--card-accent, #64748b) 72%, transparent); }
@@ -121,6 +127,9 @@
     :root[data-theme="dark"] .graph-node-card-label.is-code-flow-node { border-color: #c4b5fd; box-shadow: 0 0 0 4px rgba(196, 181, 253, .22), 0 0 30px rgba(167, 139, 250, .62), 0 9px 24px rgba(0, 0, 0, .4); }
     :root[data-theme="dark"] .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 12%, transparent), 0 0 15px color-mix(in srgb, var(--card-accent, #64748b) 36%, transparent), 0 6px 18px rgba(0, 0, 0, .28); }
     :root[data-theme="dark"] .graph-node-card-kind { color: #9aabc2; }
+    :root[data-theme="dark"] .graph-node-root-badge { border-color: #fbbf24; color: #fef3c7; background: #78350f; }
+    :root[data-theme="dark"] .graph-node-trigger-badge.is-http { border-color: #60a5fa; color: #dbeafe; background: #1e3a8a; }
+    :root[data-theme="dark"] .graph-node-trigger-badge.is-kafka { border-color: #34d399; color: #d1fae5; background: #065f46; }
     :root[data-theme="dark"] .graph-node-port-reference { color: #ddd6fe; border-color: #8b5cf6; background: #2e1a47; }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon { color: #e5edf8; background: linear-gradient(145deg, color-mix(in srgb, #243650 82%, var(--card-accent, #64748b)), color-mix(in srgb, #101b2d 72%, var(--card-accent, #64748b))); border-color: color-mix(in srgb, var(--card-accent, #64748b) 78%, #dce8f7); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 4px 11px rgba(0, 0, 0, .34); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service { background: transparent; box-shadow: none; }

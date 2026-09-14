@@ -116,6 +116,8 @@
       relatedEdges: null,
       relatedLocalPortLinks: new Set(),
       selectedCodeFlowId: null,
+      codeFlowRootNodeId: null,
+      codeFlowTrigger: null,
       pathMicroserviceOrder: new Map(),
       layeredView: false,
       clusteredView: false,

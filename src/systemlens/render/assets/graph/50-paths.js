@@ -29,6 +29,8 @@
       pathQuery.value = "";
       pathStops.splice(0, pathStops.length);
       graphState.selectedCodeFlowId = null;
+      graphState.codeFlowRootNodeId = null;
+      graphState.codeFlowTrigger = null;
       graphState.relatedLocalPortLinks = new Set();
       graphFlowStatus.hidden = true;
       delete graphCanvas.dataset.selectedCodeFlow;
@@ -345,6 +347,8 @@
         `${link.input_endpoint_id}:${link.output_endpoint_id}`
       )));
       graphState.selectedCodeFlowId = context.codeFlow?.id || null;
+      graphState.codeFlowRootNodeId = context.codeFlowRootNodeId || null;
+      graphState.codeFlowTrigger = context.codeFlowTrigger || null;
       graphFlowStatus.hidden = context.topologyReconciled !== false;
       if (!graphFlowStatus.hidden) {
         graphFlowStatus.textContent = "Relations topologiques incomplètes : les étapes sont surlignées sans arête vérifiée.";
@@ -833,6 +837,8 @@
         relatedEdges: null,
         relatedLocalPortLinks: new Set(),
         selectedCodeFlowId: null,
+        codeFlowRootNodeId: null,
+        codeFlowTrigger: null,
         pathMicroserviceOrder: new Map(),
       });
       delete graphCanvas.dataset.selectedCodeFlow;
@@ -850,6 +856,8 @@
       graphState.relatedEdges = new Set();
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
+      graphState.codeFlowRootNodeId = null;
+      graphState.codeFlowTrigger = null;
       delete graphCanvas.dataset.selectedCodeFlow;
       network.forEachEdge((edge, attributes, source, target) => {
         if (!isVisibleRelation(attributes, source, target) || !matches(attributes, source, target)) return;
@@ -874,6 +882,8 @@
       graphState.relatedEdges = new Set();
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
+      graphState.codeFlowRootNodeId = null;
+      graphState.codeFlowTrigger = null;
       delete graphCanvas.dataset.selectedCodeFlow;
       network.forEachEdge((edge, attributes, source, target) => {
         if (!isVisibleRelation(attributes, source, target)) return;

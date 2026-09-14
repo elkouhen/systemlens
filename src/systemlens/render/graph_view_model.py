@@ -666,7 +666,11 @@ def build_graph_view_model(
     known_node_ids = {str(node["id"]) for node in nodes}
     for fact in graph_facts or []:
         if fact.fact_type == "node" and fact.name is not None:
-            fact_visual_kind = "microservice" if fact.kind == "service" else fact.kind
+            fact_visual_kind = (
+                "microservice"
+                if fact.kind == "service"
+                else _canonical_resource_kind(fact.kind)
+            )
             node_id = f"{fact_visual_kind}:{fact.name}"
             if node_id not in known_node_ids:
                 node = {
@@ -873,9 +877,15 @@ def build_graph_view_model(
             continue
         if not all((fact.source_kind, fact.source_name, fact.target_kind, fact.target_name)):
             continue
-        source_kind = "microservice" if fact.source_kind == "service" else fact.source_kind
+        source_kind = (
+            "microservice"
+            if fact.source_kind == "service"
+            else _canonical_resource_kind(fact.source_kind)
+        )
         target_kind = (
-            "microservice" if fact.target_kind == "service" else str(fact.target_kind)
+            "microservice"
+            if fact.target_kind == "service"
+            else _canonical_resource_kind(fact.target_kind)
         )
         source_id = f"{source_kind}:{fact.source_name}"
         target_id = f"{target_kind}:{fact.target_name}"

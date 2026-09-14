@@ -341,6 +341,77 @@ def test_microservice_graph_exposes_software_layers_and_namespaces() -> None:
     assert "${workload.namespace}/${workload.name}" not in document
 
 
+def test_graph_fact_topic_reuses_the_canonical_kafka_topic_node() -> None:
+    producer = replace(_kafka_endpoint("produce", "OrderCreated", "Orders.java"), id="orders-out")
+    consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Payments.java"), id="payments-in")
+    fact = GraphFact(
+        id="documented-topic",
+        fact_type="node",
+        kind="topic",
+        name="orders.created",
+        source_kind=None,
+        source_name=None,
+        target_kind=None,
+        target_name=None,
+        relation=None,
+        origin="ai",
+        confidence="high",
+        namespace="ai-architecture",
+    )
+
+    graph_data = _html_graph_data(render_graph_html(
+        {"orders": [producer], "payments": [consumer]},
+        [GraphEdge("kafka", "orders", "payments", producer, consumer)],
+        graph_facts=[fact],
+    ))
+
+    topic_nodes = [node for node in graph_data["nodes"] if node["name"] == "orders.created"]
+    assert len(topic_nodes) == 1
+    assert topic_nodes[0]["id"] == "kafka_topic:orders.created"
+    assert topic_nodes[0]["kind"] == "kafka_topic"
+
+
+def test_graph_html_marks_only_the_selected_call_graph_entry_service_as_root() -> None:
+    producer = replace(_kafka_endpoint("produce", "OrderCreated", "Orders.java"), id="orders-out")
+    consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Payments.java"), id="payments-in")
+    entry = replace(_rest_endpoint("serve", "POST /orders", "Orders.java"), id="orders-in")
+
+    document = render_graph_html(
+        {"orders": [entry, producer], "payments": [consumer]},
+        [GraphEdge("kafka", "orders", "payments", producer, consumer)],
+        code_flows=[CodeFlow(
+            id="orders-flow", module="orders", method="Orders.publish",
+            path="Orders.java", start_line=1, end_line=2,
+            status="potential", confidence="medium", reason="test",
+            steps=(
+                CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, entry.id),
+                CodeFlowStep(2, "message_publish", "orders.created", "Orders.java", 2, 2, producer.id),
+            ),
+        )],
+    )
+    graph_data = _html_graph_data(document)
+
+    assert not any("is_graph_root" in node for node in graph_data["nodes"])
+    assert 'graphState.codeFlowRootNodeId === id' in document
+    assert 'codeFlowRootNodeId: rootNodeId' in document
+    assert 'codeFlowTrigger: flow.steps?.[0] || null' in document
+    assert 'isCodeFlowRoot ? `${kindLabel} · Racine` : kindLabel' in document
+    assert 'rootBadge.textContent = "Racine";' in document
+    assert 'triggerBadge.textContent = `${isHttpTrigger ? "HTTP" : "Kafka"} · ${trigger.name}`;' in document
+    assert ".graph-node-trigger-badge.is-http" in document
+    assert ".graph-node-trigger-badge.is-kafka" in document
+
+
+def test_graph_html_flux_lists_only_reconciled_inter_service_code_flows() -> None:
+    document = render_graph_html({}, [])
+
+    assert "const interServiceCodeFlows = codeFlows.filter(flow =>" in document
+    assert 'nodeDataById.get(nodeId)?.kind === "microservice"' in document
+    assert "return services.size >= 2;" in document
+    assert "const visible = interServiceCodeFlows.filter(flow =>" in document
+    assert "Flux inter-services (${visible.length}/${interServiceCodeFlows.length})" in document
+
+
 def test_graph_html_uses_only_indexed_kafka_dto_facts(tmp_path: Path) -> None:
     source_root = tmp_path / "orders" / "src" / "main" / "java" / "com" / "example" / "events"
     source_root.mkdir(parents=True)
