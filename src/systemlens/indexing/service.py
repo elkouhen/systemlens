@@ -452,7 +452,8 @@ def _index_repo(
                 if codeql_database is not None:
                     timer.begin("codeql-extract", "→ CodeQL : extraction des appels Java depuis la base fournie...")
                     calls = extract_codeql_calls(
-                        codeql_database, timeout_seconds=config.codeql_timeout_seconds
+                        codeql_database, timeout_seconds=config.codeql_timeout_seconds,
+                        threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
                     )
                     timer.end("codeql-extract", "extraction des appels CodeQL")
                 else:
@@ -471,12 +472,14 @@ def _index_repo(
                         )
                         if call_graph_engine == "codeql":
                             with automatic_codeql_database(
-                                root, timeout_seconds=config.codeql_timeout_seconds
+                                root, timeout_seconds=config.codeql_timeout_seconds,
+                                threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
                             ) as database:
                                 assert database is not None
                                 project_calls = extract_codeql_calls(
                                     database, timeout_seconds=config.codeql_timeout_seconds,
-                                    path_prefix=prefix,
+                                    path_prefix=prefix, threads=config.codeql_threads,
+                                    ram_mb=config.codeql_ram_mb,
                                 )
                         else:
                             with automatic_joern_cpg(

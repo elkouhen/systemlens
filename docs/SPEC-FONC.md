@@ -31,6 +31,8 @@ analysis:
   codeql: true
   call_graph_engine: codeql
   codeql_timeout_seconds: 600
+  codeql_threads: 1
+  codeql_ram_mb: null
   codeql_max_hops: 12
   codeql_max_paths: 10000
   disabled_extractors: []
@@ -112,6 +114,11 @@ the index and reused by incremental MCP reindexing and all derived views.
 `analysis.codeql_timeout_seconds` sets the positive timeout in seconds for each
 CodeQL subprocess (temporary database creation, query execution, and BQRS
 decoding); its default is `600` seconds.
+`analysis.codeql_threads` sets the number of threads passed to CodeQL database
+creation and query execution; its default is `1`, while `0` delegates one
+thread per available core to CodeQL. `analysis.codeql_ram_mb` optionally sets
+the positive RAM limit in MiB for those operations; it defaults to `null`, so
+CodeQL chooses its own limit.
 `--disable` accepts `properties`,
 `module-architecture`, and `module-tree-sitter`.
 

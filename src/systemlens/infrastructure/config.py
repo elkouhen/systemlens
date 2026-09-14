@@ -26,6 +26,8 @@ class Config:
     codeql_enabled: bool = True
     call_graph_engine: str = "codeql"
     codeql_timeout_seconds: int = 600
+    codeql_threads: int = 1
+    codeql_ram_mb: int | None = None
     codeql_max_hops: int = 12
     codeql_max_paths: int = 10_000
     disabled_extractors: list[str] = field(default_factory=list)
@@ -71,6 +73,8 @@ def load_config(repo_root: Path) -> Config:
             f"Valeurs autorisées : {', '.join(VALID_CALL_GRAPH_ENGINES)}."
         )
     codeql_timeout_seconds = analysis.get("codeql_timeout_seconds", 600)
+    codeql_threads = analysis.get("codeql_threads", 1)
+    codeql_ram_mb = analysis.get("codeql_ram_mb")
     codeql_max_hops = analysis.get("codeql_max_hops", 12)
     codeql_max_paths = analysis.get("codeql_max_paths", 10_000)
     if not isinstance(codeql_max_hops, int) or codeql_max_hops < 1:
@@ -79,6 +83,12 @@ def load_config(repo_root: Path) -> Config:
         raise ConfigError("analysis.codeql_max_paths doit être un entier positif.")
     if not isinstance(codeql_timeout_seconds, int) or codeql_timeout_seconds < 1:
         raise ConfigError("analysis.codeql_timeout_seconds doit être un entier positif.")
+    if isinstance(codeql_threads, bool) or not isinstance(codeql_threads, int) or codeql_threads < 0:
+        raise ConfigError("analysis.codeql_threads doit être un entier supérieur ou égal à zéro.")
+    if codeql_ram_mb is not None and (
+        isinstance(codeql_ram_mb, bool) or not isinstance(codeql_ram_mb, int) or codeql_ram_mb < 1
+    ):
+        raise ConfigError("analysis.codeql_ram_mb doit être un entier positif ou null.")
 
     return Config(
         include=list(raw.get("include", DEFAULT_INCLUDE)),
@@ -88,6 +98,8 @@ def load_config(repo_root: Path) -> Config:
         codeql_enabled=codeql_enabled,
         call_graph_engine=call_graph_engine,
         codeql_timeout_seconds=codeql_timeout_seconds,
+        codeql_threads=codeql_threads,
+        codeql_ram_mb=codeql_ram_mb,
         codeql_max_hops=codeql_max_hops,
         codeql_max_paths=codeql_max_paths,
         disabled_extractors=list(analysis.get("disabled_extractors", [])),
@@ -109,6 +121,7 @@ def init_config(repo_root: Path) -> Path:
         "analysis": {
             "strategy": "default", "codeql": True, "call_graph_engine": "codeql",
             "codeql_timeout_seconds": 600,
+            "codeql_threads": 1, "codeql_ram_mb": None,
             "codeql_max_hops": 12, "codeql_max_paths": 10_000,
             "disabled_extractors": [],
         },

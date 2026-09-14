@@ -432,7 +432,9 @@ query script are temporary. `--codeql-database` reuses one global database
 supplied by the caller. The temporary CodeQL query pack pins
 `codeql/java-all` and resolves it only from the already installed local CodeQL
 pack cache; indexing never runs `codeql pack install` or downloads analyzer
-dependencies. No database path is persisted.
+dependencies. The configured CodeQL thread count and optional RAM limit are
+passed to database creation and query execution only; they tune performance and
+do not alter or invalidate persisted architecture facts. No database path is persisted.
 An absent selected engine is reported and keeps AST-only results; a failing
 available executable leaves the whole previous successful snapshot intact.
 

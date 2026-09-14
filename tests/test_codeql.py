@@ -17,7 +17,9 @@ def test_automatic_codeql_database_is_source_only_and_temporary(
     monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
     monkeypatch.setattr(codeql.subprocess, "run", run)
 
-    with codeql.automatic_codeql_database(tmp_path, timeout_seconds=42) as database:
+    with codeql.automatic_codeql_database(
+        tmp_path, timeout_seconds=42, threads=4, ram_mb=4096
+    ) as database:
         assert database is not None
         assert database.is_dir()
         database_path = database
@@ -25,7 +27,7 @@ def test_automatic_codeql_database_is_source_only_and_temporary(
     assert not database_path.exists()
     assert commands == [([
         "codeql", "database", "create", str(database_path), "--language=java",
-        f"--source-root={tmp_path.resolve()}", "--build-mode=none",
+        f"--source-root={tmp_path.resolve()}", "--build-mode=none", "--threads=4", "--ram=4096",
     ], 42)]
 
 
@@ -59,7 +61,7 @@ def test_extract_codeql_calls_uses_pinned_local_pack_without_installing(
     monkeypatch.setattr(codeql.subprocess, "run", run)
 
     calls = codeql.extract_codeql_calls(
-        database, executable="custom-codeql", timeout_seconds=42
+        database, executable="custom-codeql", timeout_seconds=42, threads=4, ram_mb=4096
     )
 
     assert calls == [codeql.CodeQLCall(
@@ -68,6 +70,8 @@ def test_extract_codeql_calls_uses_pinned_local_pack_without_installing(
     assert all("pack" not in command[1:3] for command, _timeout in commands)
     assert all(command[0] == "custom-codeql" for command, _timeout in commands)
     assert all(timeout == 42 for _command, timeout in commands)
+    assert "--threads=4" in commands[0][0]
+    assert "--ram=4096" in commands[0][0]
 
 
 def test_extract_codeql_calls_prefixes_module_relative_evidence_paths(

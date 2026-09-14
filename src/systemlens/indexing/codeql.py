@@ -63,7 +63,7 @@ def codeql_executable() -> str | None:
 
 @contextmanager
 def automatic_codeql_database(
-    repo_root: Path, timeout_seconds: int = 600,
+    repo_root: Path, timeout_seconds: int = 600, threads: int = 1, ram_mb: int | None = None,
 ) -> Iterator[Path | None]:
     """Create a temporary source-only Java database for one index run.
 
@@ -79,8 +79,10 @@ def automatic_codeql_database(
         database = Path(directory) / "database"
         command = [
             executable, "database", "create", str(database), "--language=java",
-            f"--source-root={repo_root.resolve()}", "--build-mode=none",
+            f"--source-root={repo_root.resolve()}", "--build-mode=none", f"--threads={threads}",
         ]
+        if ram_mb is not None:
+            command.append(f"--ram={ram_mb}")
         completed = subprocess.run(
             command, capture_output=True, text=True, timeout=timeout_seconds, check=False,
         )
@@ -95,6 +97,8 @@ def extract_codeql_calls(
     executable: str | None = None,
     timeout_seconds: int = 600,
     path_prefix: str = "",
+    threads: int = 1,
+    ram_mb: int | None = None,
 ) -> list[CodeQLCall]:
     """Return statically resolved Java method calls from one CodeQL database.
 
@@ -116,8 +120,10 @@ def extract_codeql_calls(
         output = work / "calls.csv"
         command = [
             executable, "query", "run", str(query), f"--database={database}",
-            f"--output={bqrs}",
+            f"--output={bqrs}", f"--threads={threads}",
         ]
+        if ram_mb is not None:
+            command.append(f"--ram={ram_mb}")
         # The ad-hoc query lives in a fresh temporary pack.  Make an already
         # installed user pack cache visible to CodeQL's dependency resolver.
         # The exact qlpack dependency above means this is an offline lookup;
