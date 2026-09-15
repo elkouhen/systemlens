@@ -59,7 +59,7 @@ in the architecture snapshot.
 | `systemlens init` | Creates `.systemlens/config.yml`; it never overwrites an existing file. |
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
-| `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--call-graph-engine codeql\|joern\|none] [--codeql-database DIR] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. The default `codeql` engine creates one temporary source-only Java database per discovered source-owning project; `joern` creates one temporary Java CPG per project. Both aggregate resolved calls and extend code flows across resolved method calls. `none` keeps AST-only flows. `--codeql-database` reuses an already-built global CodeQL database and requires the `codeql` engine. `--no-codeql` is the legacy AST-only alias. |
+| `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--call-graph-engine codeql\|joern\|none] [--codeql-database DIR] [--codeql-progress-html FILE] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. The default `codeql` engine creates one temporary source-only Java database per discovered source-owning project; `joern` creates one temporary Java CPG per project. Both aggregate resolved calls and extend code flows across resolved method calls. `none` keeps AST-only flows. `--codeql-database` reuses an already-built global CodeQL database and requires the `codeql` engine. `--codeql-progress-html` rewrites an explicitly provisional HTML graph after each completed CodeQL project; it requires the `codeql` engine and is not a final export. `--no-codeql` is the legacy AST-only alias. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts a reviewable fact manifest, including one produced by an agent through the companion skill, into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
 | `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows from an entry point to a source-evidenced external effect, within one method or across calls resolved by the selected call-graph engine. |
@@ -111,6 +111,13 @@ the index and reused by incremental MCP reindexing and all derived views.
 `analysis.call_graph_engine` accepts `codeql` (default), `joern`, or `none`.
 `--call-graph-engine` overrides it for one run and does not modify
 `.systemlens/config.yml`. `--no-codeql` remains a legacy AST-only alias.
+`--codeql-progress-html FILE` is an opt-in progress aid: after each completed
+CodeQL project it atomically replaces `FILE` with a graph labelled as
+provisional, including the completed-project count. Users may refresh that
+file in a browser to inspect the current call-graph coverage. It is generated
+from the in-progress indexing facts and must not be treated as an exportable or
+complete architecture snapshot; the normal `export microservices --html`
+command remains the authoritative post-index export.
 `analysis.codeql_timeout_seconds` sets the positive timeout in seconds for each
 CodeQL subprocess (temporary database creation, query execution, and BQRS
 decoding); its default is `600` seconds.

@@ -8,6 +8,7 @@
     .toolbar-tab { min-width: 0; height: 30px !important; width: auto !important; padding: 0 7px; overflow: hidden; border: 0 !important; border-radius: 6px !important; color: #52616b !important; background: transparent !important; font-size: 11px !important; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
     .toolbar-tab:hover { background: rgba(255, 255, 255, .65) !important; }
     .toolbar-tab.is-active { color: #1d4f91 !important; background: #fff !important; box-shadow: 0 1px 3px rgba(15, 23, 42, .12); }
+    .progress-notice { margin: 0; padding: 8px 9px; border: 1px solid #fcd34d; border-left: 3px solid #d97706; border-radius: 7px; color: #92400e; background: #fffbeb; font-size: 11px; font-weight: 700; line-height: 1.4; }
     .toolbar-panel { display: grid; gap: 10px; }
     .toolbar-panel[hidden] { display: none; }
     .toolbar.has-details .toolbar-panel { display: none; }

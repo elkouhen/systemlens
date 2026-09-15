@@ -28,6 +28,7 @@
     const indexingIssuesTitle = document.getElementById("indexing-issues-title");
     const indexingIssues = graphData.indexing_issues || [];
     const inventoryStatus = document.getElementById("inventory-status");
+    const progressNotice = document.getElementById("progress-notice");
     const resourcesList = document.getElementById("resources-list");
     const resourcesEmpty = document.getElementById("resources-empty");
     const resourcesFilter = document.getElementById("resources-filter");

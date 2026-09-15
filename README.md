@@ -109,6 +109,16 @@ Indexing is incremental. Use `systemlens index --full` after a broad change.
 Use `systemlens index --strategy strategy1` only for repositories that
 follow the documented Strategy1 Kafka and REST conventions.
 
+For a long CodeQL run, write a provisional graph after each completed Java
+project and refresh it in a browser to follow progress:
+
+```bash
+systemlens index --codeql-progress-html codeql-progress.html
+```
+
+The progress graph is explicitly incomplete; generate the authoritative HTML
+export after indexing finishes.
+
 ## Agent Package Manager (APM)
 
 This repository includes an `apm.yml` manifest for reproducing its agent setup

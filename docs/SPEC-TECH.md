@@ -212,6 +212,14 @@ select an implementation on Spring bean metadata alone. The analysis profile,
 including the selected call-graph engine, availability, activation and its bounds, participates in the
 code-flow signature so switching profile recalculates unchanged repositories.
 
+When explicitly requested through `systemlens index --codeql-progress-html FILE`,
+the indexing service emits one in-memory checkpoint after each completed
+CodeQL project. The delivery adapter renders that checkpoint to `FILE` by
+atomic replacement and labels it as provisional with its completed-project
+count. These progress documents are deliberately outside the SQLite snapshot
+contract: they are an opt-in observability aid, may omit later call-graph
+facts, and are never read by normal export, query, MCP, or web workflows.
+
 Kafka flow continuations join only concrete, statically resolved Kafka endpoint
 identifiers. A continuation is not materialized when the producer has a later
 external effect, because a linear composed flow would otherwise omit that

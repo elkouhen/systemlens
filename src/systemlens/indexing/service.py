@@ -27,7 +27,9 @@ from systemlens.indexing.code_flows import (
     materialize_kafka_flow_continuations,
 )
 from systemlens.indexing.integration_methods import materialize_integration_methods
+from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
 from systemlens.indexing.codeql import (
+    CodeQLCall,
     CodeQLError,
     automatic_codeql_database,
     codeql_executable,
@@ -40,7 +42,7 @@ from systemlens.indexing.joern import (
     joern_executable,
 )
 from systemlens.discovery.java import parser as java_parser
-from systemlens.domain.models import ExtractionDiagnostic, MessageEndpoint
+from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 from systemlens.discovery.build.modules import (
     discover_module_dependencies,
@@ -72,6 +74,29 @@ class IndexReport:
     deleted_files: int
     endpoints_added: int = 0
     endpoints_removed: int = 0
+
+
+@dataclass(frozen=True)
+class CallGraphProgress:
+    """One explicitly provisional call-graph checkpoint.
+
+    The checkpoint is emitted only after one local analyzer project has
+    completed.  It is intentionally separate from the transactional SQLite
+    snapshot: consumers must label it as incomplete until indexing commits.
+    """
+
+    engine: str
+    completed_projects: int
+    total_projects: int
+    project_name: str
+    endpoints: list[MessageEndpoint]
+    modules: list[DiscoveredModule]
+    relations: list[ArchitectureRelation]
+    integration_methods: list[IntegrationMethod]
+    code_flows: list[CodeFlow]
+
+
+CallGraphProgressCallback = Callable[[CallGraphProgress], None]
 
 
 def _project_file_batches(
@@ -180,6 +205,7 @@ def _index_repo(
     kubernetes: bool = False,
     kubernetes_namespace: str | None = None,
     codeql_database: Path | None = None,
+    call_graph_progress: CallGraphProgressCallback | None = None,
 ) -> IndexReport:
     timer = _IndexStageTimer(progress)
     if codeql_database is not None and config.call_graph_engine != "codeql":
@@ -448,6 +474,37 @@ def _index_repo(
         ):
             engine_label = "CodeQL" if call_graph_engine == "codeql" else "Joern"
             _report_progress(progress, f"→ {engine_label} : préparation de l'analyse interprocédurale...")
+
+            def publish_call_graph_progress(
+                completed_projects: int,
+                total_projects: int,
+                project_name: str,
+                calls: list[CodeQLCall],
+            ) -> None:
+                if call_graph_progress is None:
+                    return
+                partial_flows = [
+                    *flows,
+                    *materialize_codeql_code_flows(
+                        methods,
+                        all_endpoints,
+                        calls,
+                        max_hops=config.codeql_max_hops,
+                        max_paths=config.codeql_max_paths,
+                    ),
+                ]
+                call_graph_progress(CallGraphProgress(
+                    engine=call_graph_engine,
+                    completed_projects=completed_projects,
+                    total_projects=total_projects,
+                    project_name=project_name,
+                    endpoints=all_endpoints,
+                    modules=relation_modules,
+                    relations=relations,
+                    integration_methods=methods,
+                    code_flows=partial_flows,
+                ))
+
             try:
                 if codeql_database is not None:
                     timer.begin("codeql-extract", "→ CodeQL : extraction des appels Java depuis la base fournie...")
@@ -456,6 +513,7 @@ def _index_repo(
                         threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
                     )
                     timer.end("codeql-extract", "extraction des appels CodeQL")
+                    publish_call_graph_progress(1, 1, "base CodeQL fournie", calls)
                 else:
                     roots = _codeql_module_roots(
                         repo_root,
@@ -491,6 +549,7 @@ def _index_repo(
                                     path_prefix=prefix, source_root=root,
                                 )
                         calls.extend(project_calls)
+                        publish_call_graph_progress(number, len(roots), name, calls)
                         _report_progress(
                             progress,
                             f"    ✓ {name} : {len(project_calls)} appel(s) extrait(s).",
@@ -562,6 +621,7 @@ def index_repo(
     kubernetes: bool = False,
     kubernetes_namespace: str | None = None,
     codeql_database: Path | None = None,
+    call_graph_progress: CallGraphProgressCallback | None = None,
 ) -> IndexReport:
     """Index one repository and publish its facts as an atomic snapshot."""
     with store.transaction():
@@ -577,4 +637,5 @@ def index_repo(
             kubernetes=kubernetes,
             kubernetes_namespace=kubernetes_namespace,
             codeql_database=codeql_database,
+            call_graph_progress=call_graph_progress,
         )

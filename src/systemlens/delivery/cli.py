@@ -26,7 +26,11 @@ from systemlens.application.architecture import (
     show_object as show_architecture_object,
     trace_topic_flows,
 )
-from systemlens.application.architecture_inventory import load_architecture_inventory
+from systemlens.application.architecture_inventory import (
+    AnalysisProfile,
+    ArchitectureInventory,
+    load_architecture_inventory,
+)
 from systemlens.application.code_flows import (
     list_code_flows,
     render_code_flow_text,
@@ -37,10 +41,14 @@ from systemlens.application.architecture_projection import project_architecture_
 from systemlens.application.audit import assess_architecture, render_audit_json, render_audit_text
 from systemlens.infrastructure.config import ConfigError, init_config, load_config
 from systemlens.application.flow import resolve_topic
-from systemlens.domain.graph import GraphEdge, find_outbound_calls_in_consumers
+from systemlens.domain.graph import (
+    GraphEdge,
+    find_outbound_calls_in_consumers,
+    group_endpoints_by_module,
+)
 from systemlens.domain.code_flows import CodeFlow
 from systemlens.domain.code_flows import IntegrationMethod
-from systemlens.indexing.service import index_repo
+from systemlens.indexing.service import CallGraphProgress, index_repo
 from systemlens.indexing.freshness import endpoint_inventory_warning
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.models import ExtractionDiagnostic
@@ -1174,6 +1182,14 @@ def index_cmd(
         "--codeql-database",
         help="Base Java CodeQL existante à réutiliser au lieu de la base temporaire automatique.",
     ),
+    codeql_progress_html: Optional[Path] = typer.Option(
+        None,
+        "--codeql-progress-html",
+        help=(
+            "Fichier HTML provisoire réécrit après chaque projet CodeQL terminé "
+            "(à actualiser dans le navigateur)."
+        ),
+    ),
     no_codeql: bool = typer.Option(
         False,
         "--no-codeql",
@@ -1220,6 +1236,9 @@ def index_cmd(
     if no_codeql and codeql_database is not None:
         typer.echo("`--no-codeql` ne peut pas être combiné avec `--codeql-database`.", err=True)
         raise typer.Exit(code=2)
+    if no_codeql and codeql_progress_html is not None:
+        typer.echo("`--codeql-progress-html` requiert CodeQL.", err=True)
+        raise typer.Exit(code=2)
     if codeql_database is not None and call_graph_engine not in (None, "codeql"):
         typer.echo("`--codeql-database` requiert `--call-graph-engine codeql`.", err=True)
         raise typer.Exit(code=2)
@@ -1235,6 +1254,17 @@ def index_cmd(
         config = replace(config, codeql_enabled=False, call_graph_engine="none")
     elif call_graph_engine is not None:
         config = replace(config, call_graph_engine=call_graph_engine)
+    if codeql_progress_html is not None and config.call_graph_engine != "codeql":
+        typer.echo("`--codeql-progress-html` requiert `--call-graph-engine codeql`.", err=True)
+        raise typer.Exit(code=2)
+
+    def write_codeql_progress(checkpoint: CallGraphProgress) -> None:
+        assert codeql_progress_html is not None
+        _write_call_graph_progress_html(repo_root, codeql_progress_html, checkpoint)
+        typer.echo(
+            "  ✓ HTML de progression CodeQL : "
+            f"{codeql_progress_html} ({checkpoint.completed_projects}/{checkpoint.total_projects})"
+        )
 
     _trace_index("store.open.begin")
     with Store(repo_root) as store:
@@ -1251,6 +1281,7 @@ def index_cmd(
             kubernetes=kubernetes,
             kubernetes_namespace=kubernetes_namespace,
             codeql_database=codeql_database,
+            call_graph_progress=write_codeql_progress if codeql_progress_html is not None else None,
         )
         store.set_meta("index_engine", "manual")
         _trace_index("store.close.begin")
@@ -1263,6 +1294,61 @@ def index_cmd(
         "pour explorer le graphe."
     )
     _trace_index("cli.index.end")
+
+
+def _write_call_graph_progress_html(
+    repo_root: Path, destination: Path, checkpoint: CallGraphProgress
+) -> None:
+    """Write one visible, non-authoritative CodeQL progress graph atomically."""
+    endpoints_by_module = group_endpoints_by_module(checkpoint.endpoints)
+    modules_by_service = {
+        module_identity(module): module
+        for module in checkpoint.modules
+    }
+    endpoints_by_service = dict(endpoints_by_module)
+    for module in checkpoint.modules:
+        if module.starts_application:
+            endpoints_by_service.setdefault(module_identity(module), [])
+    inventory = ArchitectureInventory(
+        endpoints_by_service=endpoints_by_service,
+        endpoints_by_module=endpoints_by_module,
+        findings_by_service={},
+        endpoints=checkpoint.endpoints,
+        findings=[],
+        modules=checkpoint.modules,
+        modules_by_service=modules_by_service,
+        module_dependencies=[],
+        relations=checkpoint.relations,
+        diagnostics=[],
+        warnings=[],
+        source_roots=[repo_root],
+        profile=AnalysisProfile(),
+        code_flows=checkpoint.code_flows,
+        integration_methods=checkpoint.integration_methods,
+    )
+    projection = project_architecture_graph(inventory, include_module_details=True)
+    warning = (
+        f"INDEXATION {checkpoint.engine.upper()} EN COURS — "
+        f"{checkpoint.completed_projects}/{checkpoint.total_projects} projet(s) terminé(s) "
+        f"(dernier : {checkpoint.project_name}). Ce graphe est provisoire et incomplet."
+    )
+    html = render_graph_html(
+        projection.services_by_name,
+        projection.edges,
+        projection.collections_by_service,
+        projection.modules_by_service,
+        [warning],
+        checkpoint.modules,
+        source_roots=[repo_root],
+        root_path=repo_root,
+        architecture_relations=checkpoint.relations,
+        integration_methods=checkpoint.integration_methods,
+        code_flows=checkpoint.code_flows,
+        progress_notice=warning,
+    )
+    temporary = destination.with_name(f".{destination.name}.tmp")
+    temporary.write_text(html, encoding="utf-8")
+    temporary.replace(destination)
 
 
 def _require_index(repo_root: Path) -> None:

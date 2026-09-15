@@ -63,6 +63,7 @@ def render_graph_html(
     architecture_relations: list[ArchitectureRelation] | None = None,
     code_flows: list[CodeFlow] | None = None,
     integration_methods: list[IntegrationMethod] | None = None,
+    progress_notice: str | None = None,
 ) -> str:
     """Render a graph view model as one self-contained HTML document."""
     view_model = build_graph_view_model(
@@ -130,6 +131,7 @@ def render_graph_html(
         for flow in (code_flows or [])
     ]
     view_model["code_flows"] = serialized_code_flows
+    view_model["progress_notice"] = progress_notice
     flow_counts = Counter(flow.module for flow in (code_flows or []))
     nodes = cast(list[dict[str, object]], view_model["nodes"])
     for node in nodes:

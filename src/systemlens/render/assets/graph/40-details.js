@@ -44,6 +44,9 @@
       if (showingFlows) flowsPanel.dispatchEvent(new Event("systemlens:flows-open"));
     }
     function renderIndexingIssues() {
+      const progress = graphData.progress_notice;
+      progressNotice.hidden = !progress;
+      progressNotice.textContent = progress || "";
       inventoryStatus.hidden = false;
       inventoryStatus.classList.toggle("is-warning", indexingIssues.length > 0);
       inventoryStatus.textContent = indexingIssues.length

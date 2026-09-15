@@ -6,6 +6,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from systemlens import cli
 from systemlens.cli import app
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
 from systemlens.domain.models import MessageEndpoint
@@ -258,9 +259,17 @@ def test_index_uses_automatic_codeql_database_when_available(
     observed_roots = []
 
     @contextmanager
-    def automatic_database(root: Path, *, timeout_seconds: int = 600):
+    def automatic_database(
+        root: Path,
+        *,
+        timeout_seconds: int = 600,
+        threads: int = 1,
+        ram_mb: int | None = None,
+    ):
         observed_roots.append(root)
         assert timeout_seconds == 600
+        assert threads == 1
+        assert ram_mb is None
         yield tmp_path / "codeql-db"
 
     monkeypatch.setattr(indexing_service, "codeql_executable", lambda: "codeql")
@@ -269,10 +278,22 @@ def test_index_uses_automatic_codeql_database_when_available(
         indexing_service, "extract_codeql_calls", lambda _database, **_kwargs: []
     )
 
+    checkpoints = []
     with Store(repo) as store:
-        index_repo(repo, Config(), store)
+        index_repo(repo, Config(), store, call_graph_progress=checkpoints.append)
 
     assert observed_roots == [repo]
+    assert [(item.engine, item.completed_projects, item.total_projects, item.project_name) for item in checkpoints] == [
+        ("codeql", 1, 1, "orders"),
+    ]
+    assert checkpoints[0].relations
+    progress_html = tmp_path / "codeql-progress.html"
+    cli._write_call_graph_progress_html(repo, progress_html, checkpoints[0])
+    content = progress_html.read_text(encoding="utf-8")
+    assert "INDEXATION CODEQL EN COURS" in content
+    assert "1/1 projet(s) terminé(s)" in content
+    assert 'id="progress-notice"' in content
+    assert '"progress_notice": "INDEXATION CODEQL EN COURS' in content
 
 
 def test_index_uses_joern_when_selected(tmp_path: Path, monkeypatch) -> None:
@@ -353,6 +374,16 @@ def test_cli_no_codeql_keeps_ast_only_flow_indexing(
         assert [step.kind for step in store.all_code_flows()[0].steps] == [
             "message_entry", "http_call",
         ]
+
+
+def test_cli_codeql_progress_html_requires_codeql(tmp_path: Path) -> None:
+    result = RUNNER.invoke(
+        app,
+        ["index", "--no-codeql", "--codeql-progress-html", str(tmp_path / "progress.html")],
+    )
+
+    assert result.exit_code == 2
+    assert "requiert CodeQL" in result.output
 
 
 def test_store_round_trips_code_flow_steps(tmp_path: Path) -> None:
