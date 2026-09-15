@@ -200,6 +200,15 @@ def _code_flow_document() -> str:
                 end_line=68,
                 endpoint_id=payments_publish.id,
             ),
+            CodeFlowStep(
+                order=3,
+                kind="message_entry",
+                name="payments.completed",
+                path="inventory/src/main/java/com/example/inventory/application/InventoryHandler.java",
+                start_line=42,
+                end_line=42,
+                endpoint_id=inventory_consume.id,
+            ),
         ),
     )
     return render_graph_html(
@@ -1015,8 +1024,13 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
             "flow-readable"
         )
         assert float(page.locator("#graph").get_attribute("data-flow-focus-ratio")) > 0
-        assert page.locator(".graph-node-card-label.is-code-flow-node").count() == 3
+        assert page.locator(".graph-node-card-label.is-code-flow-node").count() == 2
         assert page.locator(".graph-local-port-path.is-code-flow-path").count() == 1
+        assert page.locator(".graph-port-path").count() == 1
+        assert page.locator(".graph-call-path").count() == 0
+        assert page.locator(".graph-port-path").evaluate_all(
+            "paths => paths.every(path => /^M(?: [0-9.-]+){2}(?: L(?: [0-9.-]+){2})+$/.test(path.getAttribute('d')))"
+        )
         assert page.locator(
             ".graph-node-card-label:not(.is-code-flow-node)"
         ).count() == 0

@@ -31,8 +31,9 @@ analysis:
   codeql: true
   call_graph_engine: codeql
   codeql_timeout_seconds: 600
-  codeql_threads: 1
+  codeql_threads: 0
   codeql_ram_mb: null
+  codeql_verbosity: progress++
   codeql_max_hops: 12
   codeql_max_paths: 10000
   disabled_extractors: []
@@ -59,7 +60,7 @@ in the architecture snapshot.
 | `systemlens init` | Creates `.systemlens/config.yml`; it never overwrites an existing file. |
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
-| `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--call-graph-engine codeql\|joern\|none] [--codeql-database DIR] [--codeql-progress-html FILE] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. The default `codeql` engine creates one temporary source-only Java database per discovered source-owning project; `joern` creates one temporary Java CPG per project. Both aggregate resolved calls and extend code flows across resolved method calls. `none` keeps AST-only flows. `--codeql-database` reuses an already-built global CodeQL database and requires the `codeql` engine. `--codeql-progress-html` rewrites an explicitly provisional HTML graph after each completed CodeQL project; it requires the `codeql` engine and is not a final export. `--no-codeql` is the legacy AST-only alias. |
+| `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--call-graph-engine codeql\|joern\|none] [--codeql-database DIR] [--codeql-progress] [--codeql-progress-html FILE] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. The default `codeql` engine creates one temporary source-only Java database for the whole repository, then reports extracted calls project by project; this preserves cross-project references. `--codeql-progress` forwards CodeQL's detailed live progress output. `joern` creates one temporary Java CPG per project. Both aggregate resolved calls and extend code flows across resolved method calls. `none` keeps AST-only flows. `--codeql-database` reuses an already-built global CodeQL database and requires the `codeql` engine. `--codeql-progress-html` rewrites an explicitly provisional HTML graph after each reported CodeQL project; it requires the `codeql` engine and is not a final export. `--no-codeql` is the legacy AST-only alias. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts a reviewable fact manifest, including one produced by an agent through the companion skill, into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
 | `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows from an entry point to a source-evidenced external effect, within one method or across calls resolved by the selected call-graph engine. |
@@ -85,11 +86,16 @@ in the architecture snapshot.
 | `systemlens mcp` | Starts the stdio MCP server. |
 
 `systemlens index` reports its file delta, AST analysis stage, persisted endpoint
-count and materialized relations. During AST analysis, it processes changed files
-project by project and reports the actual `Projet <current>/<total>` batch. Each
-completed indexing stage prints its elapsed wall-clock duration with two decimal
-places, followed by the total duration. It then prints a next-step hint towards
-the interactive microservice HTML export. Its result line is:
+count and materialized relations. AST extraction receives all changed files in
+one pass and reports the `AST 1/1` checkpoint. CodeQL creates one global
+database, then reports each source-owning Maven/Gradle module as `module
+<current>/<total>` with its extracted-call count and elapsed duration. The
+indexing output also lists every persisted REST/Kafka port with its `IN` or
+`OUT` direction, module, route or topic, source location, and resolved Java
+implementation when available.
+remaining indexing stages also report their progress and elapsed wall-clock
+duration with two decimal places. The total duration follows, then a next-step
+hint towards the interactive microservice HTML export. Its result line is:
 
 ```text
 scanned=<N> skipped=<N> +integrations=<N> -integrations=<N>
@@ -118,12 +124,18 @@ file in a browser to inspect the current call-graph coverage. It is generated
 from the in-progress indexing facts and must not be treated as an exportable or
 complete architecture snapshot; the normal `export microservices --html`
 command remains the authoritative post-index export.
+`analysis.codeql_verbosity` configures CodeQL's verbosity for database creation
+and call-graph query commands. New configurations use `progress++` and relay
+the messages as they arrive. `--codeql-progress` temporarily forces
+`progress++` for legacy configurations without this setting. CodeQL's messages
+are diagnostic progress only; they do not provide a guaranteed percentage or
+remaining-time estimate.
 `analysis.codeql_timeout_seconds` sets the positive timeout in seconds for each
 CodeQL subprocess (temporary database creation, query execution, and BQRS
 decoding); its default is `600` seconds.
 `analysis.codeql_threads` sets the number of threads passed to CodeQL database
-creation and query execution; its default is `1`, while `0` delegates one
-thread per available core to CodeQL. `analysis.codeql_ram_mb` optionally sets
+creation and query execution; its default is `0`, which delegates one thread
+per available core to CodeQL. `analysis.codeql_ram_mb` optionally sets
 the positive RAM limit in MiB for those operations; it defaults to `null`, so
 CodeQL chooses its own limit.
 `--disable` accepts `properties`,
@@ -274,12 +286,14 @@ Before a call-graph selection it shows only the high-level node cards and
 persisted topology edges: it does not show CodeQL input/output ports,
 port-to-port relations, internal links, or call-graph tooltips. The Flux tab
 presents a compact list of persisted potential call graphs that reconcile to a
-topology path across at least two microservices, grouped by service and
-trigger; it does not show method, confidence, or status details before a
-selection. Local single-microservice flows remain persisted source evidence but
-are not listed in Flux. Selecting a reconciled call graph opens the Explorer tab and
-displays only the nodes, topology edges, and local port
-links reconciled to that path in Explorer. The selected nodes retain a visible
+ topology path across at least two microservices, grouped by service and
+ trigger; it does not show method, confidence, or status details before a
+ selection. Flows confined to one microservice remain persisted source
+ evidence but are not listed in Flux. Selecting a reconciled call graph opens
+ the Explorer tab and displays only the microservices involved in the path,
+ their indexed ports, and the direct dependencies between those ports. Topics
+ and intermediate topology edges are not rendered in this focused view. The
+ selected nodes retain a visible
 halo. Selecting it keeps the Flux tab and
 its card geometry unchanged; the selected card is marked in place instead of
 replacing the left widget with the graph detail view. Its entry microservice is marked `Racine`: in Cards, it appears in the secondary label; in Symbols, it appears as a badge. A second badge makes the persisted entry trigger explicit, with the exact HTTP route or Kafka topic and a protocol-specific color. These markers are presentation state derived from the selected persisted call graph; they do not infer or persist an architecture fact. The camera frames the selected flow inside the visible
@@ -287,6 +301,10 @@ workspace beside the toolbar on wide screens and below it when that is the
 larger available region, while preserving margins for fixed-size cards. This
 fit never zooms in beyond the current readable view, is reapplied after a
 viewport resize, and cannot make the toolbar scroll horizontally.
+The selected call graph's arcs are rendered directly when their route is clear
+and as Bézier detours when a visible node card blocks the direct path. The
+detours use a padding margin and fall back to orthogonal segments when needed;
+general architecture edges remain Sigma-rendered edges.
 Clearing or replacing the selection restores the ordinary filtered graph.
 
 The architecture vocabulary is extensible: `Data` represents a persisted Data

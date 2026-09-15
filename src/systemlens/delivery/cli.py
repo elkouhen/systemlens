@@ -1190,6 +1190,11 @@ def index_cmd(
             "(à actualiser dans le navigateur)."
         ),
     ),
+    codeql_progress: bool = typer.Option(
+        False,
+        "--codeql-progress",
+        help="Affiche en direct les messages de progression détaillés de CodeQL.",
+    ),
     no_codeql: bool = typer.Option(
         False,
         "--no-codeql",
@@ -1282,6 +1287,7 @@ def index_cmd(
             kubernetes_namespace=kubernetes_namespace,
             codeql_database=codeql_database,
             call_graph_progress=write_codeql_progress if codeql_progress_html is not None else None,
+            codeql_progress=codeql_progress,
         )
         store.set_meta("index_engine", "manual")
         _trace_index("store.close.begin")

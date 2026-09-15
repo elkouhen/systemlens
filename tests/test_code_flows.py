@@ -268,7 +268,7 @@ def test_index_uses_automatic_codeql_database_when_available(
     ):
         observed_roots.append(root)
         assert timeout_seconds == 600
-        assert threads == 1
+        assert threads == 0
         assert ram_mb is None
         yield tmp_path / "codeql-db"
 
@@ -350,6 +350,31 @@ def test_codeql_module_roots_assign_each_java_file_to_its_deepest_project(tmp_pa
         ("nested", nested, "first/nested"),
         ("second", second, "second"),
     ]
+
+
+def test_global_codeql_calls_are_partitioned_without_losing_cross_project_edges(
+    tmp_path: Path,
+) -> None:
+    roots = [
+        ("first", tmp_path / "first", "first"),
+        ("second", tmp_path / "second", "second"),
+    ]
+    calls = [
+        CodeQLCall(
+            "first.Controller.handle", "first/src/Controller.java", 10,
+            "second.Client.send", "second/src/Client.java", 20, 11,
+        ),
+        CodeQLCall(
+            "second.Client.send", "second/src/Client.java", 20,
+            "first.Repository.save", "first/src/Repository.java", 30, 21,
+        ),
+    ]
+
+    partitioned = indexing_service._partition_codeql_calls(calls, roots)
+
+    assert [name for name, _calls in partitioned] == ["first", "second"]
+    assert partitioned[0][1] == [calls[0]]
+    assert partitioned[1][1] == [calls[1]]
 
 
 def test_cli_no_codeql_keeps_ast_only_flow_indexing(

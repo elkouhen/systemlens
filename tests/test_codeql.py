@@ -4,6 +4,15 @@ from subprocess import CompletedProcess
 from systemlens.indexing import codeql
 
 
+def test_query_scopes_source_calls_and_folds_dispatch_resolution() -> None:
+    assert "class SourceMethodCall extends MethodCall" in codeql._QUERY
+    assert "this.getEnclosingCallable().fromSource()" in codeql._QUERY
+    assert "predicate exactTarget(MethodCall call, Method target)" in codeql._QUERY
+    assert "predicate resolvedTarget(MethodCall call, Method target, string confidence)" in codeql._QUERY
+    assert codeql._QUERY.count("exactVirtualMethod(call)") == 1
+    assert "not exists(Method exact | exactTarget(call, exact))" in codeql._QUERY
+
+
 def test_automatic_codeql_database_is_source_only_and_temporary(
     tmp_path: Path, monkeypatch
 ) -> None:

@@ -99,29 +99,6 @@ class CallGraphProgress:
 CallGraphProgressCallback = Callable[[CallGraphProgress], None]
 
 
-def _project_file_batches(
-    repo_root: Path, paths: list[str], modules: Sequence[object]
-) -> list[tuple[str, list[str]]]:
-    """Group changed files by their deepest discovered project root.
-
-    The batches are real indexing units, not an estimated progress bar: each
-    extractor receives one project batch before the next progress update.
-    """
-    roots = sorted(
-        ((getattr(module, "path"), getattr(module, "name")) for module in modules),
-        key=lambda item: len(item[0].parts), reverse=True,
-    )
-    grouped: dict[str, list[str]] = {}
-    for path in paths:
-        candidate = repo_root / path
-        owner = next(
-            (name for root, name in roots if root == candidate.parent or root in candidate.parents),
-            "racine du dépôt",
-        )
-        grouped.setdefault(owner, []).append(path)
-    return [(name, sorted(files)) for name, files in sorted(grouped.items())]
-
-
 def _codeql_module_roots(
     repo_root: Path, java_paths: Sequence[str], modules: Sequence[DiscoveredModule]
 ) -> list[tuple[str, Path, str]]:
@@ -154,6 +131,29 @@ def _codeql_module_roots(
         prefix = "" if root == repo_root.resolve() else root.relative_to(repo_root.resolve()).as_posix()
         result.append((name, root, prefix))
     return result
+
+
+def _partition_codeql_calls(
+    calls: Sequence[CodeQLCall],
+    roots: Sequence[tuple[str, Path, str]],
+) -> list[tuple[str, list[CodeQLCall]]]:
+    """Partition global CodeQL results by caller project for progress only."""
+    by_project = {name: [] for name, _root, _prefix in roots}
+    ordered = sorted(roots, key=lambda item: len(item[2]), reverse=True)
+    fallback = roots[0][0] if roots else "racine du dépôt"
+    for call in calls:
+        project = fallback
+        for name, _root, prefix in ordered:
+            if prefix and (
+                call.caller_path == prefix
+                or call.caller_path.startswith(f"{prefix}/")
+            ):
+                project = name
+                break
+            if not prefix:
+                project = name
+        by_project.setdefault(project, []).append(call)
+    return [(name, by_project.get(name, [])) for name, _root, _prefix in roots]
 
 
 def _report_progress(progress: ProgressCallback | None, message: str) -> None:
@@ -206,8 +206,10 @@ def _index_repo(
     kubernetes_namespace: str | None = None,
     codeql_database: Path | None = None,
     call_graph_progress: CallGraphProgressCallback | None = None,
+    codeql_progress: bool = False,
 ) -> IndexReport:
     timer = _IndexStageTimer(progress)
+    codeql_verbosity = "progress++" if codeql_progress else config.codeql_verbosity
     if codeql_database is not None and config.call_graph_engine != "codeql":
         raise ValueError("A CodeQL database requires the codeql call-graph engine.")
     topic_strategy = topic_strategy or config.strategy
@@ -354,27 +356,26 @@ def _index_repo(
     diagnostics: list[ExtractionDiagnostic] = []
     if changed:
         endpoints_removed += store.count_endpoints_for_paths(changed)
-        batches = _project_file_batches(repo_root, changed, discovered_modules)
         timer.begin(
             "ast",
-            f"→ Indexation : analyse AST sur {len(changed)} fichier(s) dans {len(batches)} projet(s)...",
+            f"→ Indexation : analyse AST de {len(changed)} fichier(s) en une passe...",
         )
         _trace("endpoint_inference.begin")
-        for number, (project, project_paths) in enumerate(batches, start=1):
-            _report_progress(
-                progress,
-                f"  • Projet {number}/{len(batches)} : {project} ({len(project_paths)} fichier(s))",
+        _report_progress(
+            progress,
+            f"  • AST 1/1 : base de code ({len(changed)} fichier(s))",
+        )
+        endpoints.extend(
+            infer_framework_endpoints(
+                repo_root,
+                changed,
+                configured_api_client_strategy1=topic_strategy == "strategy1",
             )
-            endpoints.extend(
-                infer_framework_endpoints(
-                    repo_root,
-                    project_paths,
-                    configured_api_client_strategy1=topic_strategy == "strategy1",
-                )
-            )
-            endpoints.extend(infer_kafka_endpoints(repo_root, project_paths))
-            endpoints.extend(infer_markdown_topic_manifest_endpoints(repo_root, project_paths))
-            endpoints.extend(infer_json_kafka_flow_graph_endpoints(repo_root, project_paths))
+        )
+        endpoints.extend(infer_kafka_endpoints(repo_root, changed))
+        endpoints.extend(infer_markdown_topic_manifest_endpoints(repo_root, changed))
+        endpoints.extend(infer_json_kafka_flow_graph_endpoints(repo_root, changed))
+        _report_progress(progress, "  ✓ AST 1/1 : analyse terminée")
         if topic_strategy == "strategy1":
             endpoints = apply_kafka_endpoints(
                 endpoints, infer_strategy1_kafka_endpoints(repo_root, changed)
@@ -511,6 +512,8 @@ def _index_repo(
                     calls = extract_codeql_calls(
                         codeql_database, timeout_seconds=config.codeql_timeout_seconds,
                         threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                        verbosity=codeql_verbosity,
+                        progress=progress if codeql_verbosity is not None else None,
                     )
                     timer.end("codeql-extract", "extraction des appels CodeQL")
                     publish_call_graph_progress(1, 1, "base CodeQL fournie", calls)
@@ -520,26 +523,49 @@ def _index_repo(
                         [path for path in current_hashes if path.endswith(".java")],
                         relation_modules,
                     )
-                    calls = []
                     stage = f"{call_graph_engine}-database"
-                    timer.begin(stage, f"→ {engine_label} : création et extraction par projet...")
-                    for number, (name, root, prefix) in enumerate(roots, start=1):
-                        _report_progress(
-                            progress,
-                            f"  • {engine_label} projet {number}/{len(roots)} : {name}",
-                        )
-                        if call_graph_engine == "codeql":
-                            with automatic_codeql_database(
-                                root, timeout_seconds=config.codeql_timeout_seconds,
+                    timer.begin(stage, f"→ {engine_label} : création et extraction globale...")
+                    if call_graph_engine == "codeql":
+                        with automatic_codeql_database(
+                            repo_root, timeout_seconds=config.codeql_timeout_seconds,
+                            threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                            **(
+                                {"verbosity": codeql_verbosity, "progress": progress}
+                                if codeql_verbosity is not None
+                                else {}
+                            ),
+                        ) as database:
+                            assert database is not None
+                            calls = extract_codeql_calls(
+                                database, timeout_seconds=config.codeql_timeout_seconds,
                                 threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
-                            ) as database:
-                                assert database is not None
-                                project_calls = extract_codeql_calls(
-                                    database, timeout_seconds=config.codeql_timeout_seconds,
-                                    path_prefix=prefix, threads=config.codeql_threads,
-                                    ram_mb=config.codeql_ram_mb,
-                                )
-                        else:
+                                verbosity=codeql_verbosity,
+                                progress=progress if codeql_verbosity is not None else None,
+                            )
+                        partitioned_calls = _partition_codeql_calls(calls, roots)
+                        completed_calls: list[CodeQLCall] = []
+                        for number, (name, project_calls) in enumerate(partitioned_calls, start=1):
+                            module_started_at = time.perf_counter()
+                            _report_progress(
+                                progress,
+                                f"  • {engine_label} module {number}/{len(roots)} : {name}",
+                            )
+                            completed_calls.extend(project_calls)
+                            publish_call_graph_progress(
+                                number, len(roots), name, completed_calls
+                            )
+                            _report_progress(
+                                progress,
+                                f"    ✓ {name} : {len(project_calls)} appel(s) extrait(s) "
+                                f"en {time.perf_counter() - module_started_at:.2f} s.",
+                            )
+                    else:
+                        calls = []
+                        for number, (name, root, prefix) in enumerate(roots, start=1):
+                            _report_progress(
+                                progress,
+                                f"  • {engine_label} projet {number}/{len(roots)} : {name}",
+                            )
                             with automatic_joern_cpg(
                                 root, timeout_seconds=config.codeql_timeout_seconds
                             ) as cpg:
@@ -548,13 +574,13 @@ def _index_repo(
                                     cpg, timeout_seconds=config.codeql_timeout_seconds,
                                     path_prefix=prefix, source_root=root,
                                 )
-                        calls.extend(project_calls)
-                        publish_call_graph_progress(number, len(roots), name, calls)
-                        _report_progress(
-                            progress,
-                            f"    ✓ {name} : {len(project_calls)} appel(s) extrait(s).",
-                        )
-                    timer.end(stage, f"création et extraction {engine_label} par projet")
+                            calls.extend(project_calls)
+                            publish_call_graph_progress(number, len(roots), name, calls)
+                            _report_progress(
+                                progress,
+                                f"    ✓ {name} : {len(project_calls)} appel(s) extrait(s).",
+                            )
+                    timer.end(stage, f"création et extraction globale {engine_label}")
             except (CodeQLError, JoernError, OSError, subprocess.TimeoutExpired) as exc:
                 raise RuntimeError(str(exc)) from exc
             _report_progress(progress, f"→ {engine_label} : {len(calls)} appel(s) extrait(s), jointure des méthodes...")
@@ -596,6 +622,38 @@ def _index_repo(
         )
         timer.end("flows", "matérialisation des flux de code")
 
+    indexed_ports = [
+        endpoint for endpoint in store.all_endpoints()
+        if endpoint.system in {"rest", "kafka"}
+        and endpoint.role in {"serve", "consume", "call", "produce"}
+    ]
+    input_ports = [endpoint for endpoint in indexed_ports if endpoint.role in {"serve", "consume"}]
+    output_ports = [endpoint for endpoint in indexed_ports if endpoint.role in {"call", "produce"}]
+    method_by_endpoint_id = {
+        endpoint_id: method
+        for method in store.all_integration_methods()
+        for endpoint_id in (*method.input_endpoint_ids, *method.output_endpoint_ids)
+    }
+    _report_progress(
+        progress,
+        f"→ Indexation : ports détectés ({len(input_ports)} IN, {len(output_ports)} OUT).",
+    )
+    for endpoint in sorted(
+        indexed_ports,
+        key=lambda item: (item.module or "", item.path, item.start_line, item.id),
+    ):
+        direction = "IN" if endpoint.role in {"serve", "consume"} else "OUT"
+        method = method_by_endpoint_id.get(endpoint.id)
+        implementation = (
+            f" ; Java {method.qualified_method} ({method.path}:{method.start_line})"
+            if method is not None else ""
+        )
+        _report_progress(
+            progress,
+            f"  • {direction} [{endpoint.system}] {endpoint.module or '<racine>'} : "
+            f"{endpoint.topic} ({endpoint.path}:{endpoint.start_line}){implementation}",
+        )
+
     _trace("index_repo.end", scanned=len(changed), skipped=len(unchanged))
     timer.total()
     return IndexReport(
@@ -622,6 +680,7 @@ def index_repo(
     kubernetes_namespace: str | None = None,
     codeql_database: Path | None = None,
     call_graph_progress: CallGraphProgressCallback | None = None,
+    codeql_progress: bool = False,
 ) -> IndexReport:
     """Index one repository and publish its facts as an atomic snapshot."""
     with store.transaction():
@@ -638,4 +697,5 @@ def index_repo(
             kubernetes_namespace=kubernetes_namespace,
             codeql_database=codeql_database,
             call_graph_progress=call_graph_progress,
+            codeql_progress=codeql_progress,
         )

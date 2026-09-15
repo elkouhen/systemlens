@@ -184,8 +184,9 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     }]
     assert data["code_flows"][0]["steps"][0]["port_label"] == "I1"
     assert node["internal_flow_count"] == 1
-    assert 'createDetailsGroup("Ports d\'intégration")' not in document
-    assert 'appendList("Entrées", ports.filter(port => port.direction === "in")' not in document
+    assert 'createDetailsGroup("Ports d\'intégration", false)' in document
+    assert '"Entrées",' in document
+    assert '"Sorties",' in document
     assert 'createDetailsGroup("Flux internes", false)' in document
     assert 'appendPortFlowList("Flux potentiels", uniqueConnections, internalFlowsGroup)' in document
     assert 'createDetailsGroup("Flux associés")' in document
@@ -196,7 +197,7 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     assert 'function openCodeFlowInList(flow)' in document
     assert 'port-flow-arrow' in document
     assert 'item.addEventListener("click", () => showCodeFlow(flow));' in document
-    assert '"Entrées déclenchées"' in document
+    assert '"Entrées",' in document
     assert 'graph-flow-port-label' not in document
     assert 'id="call-graph-view"' not in document
     assert 'flux interne${flowCount > 1 ? "s" : ""}' not in document
@@ -566,7 +567,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "function relationCategory(link" in document
     assert "Commit the view mode only after its layout and camera are ready" in document
     assert "const previousLayout = graphState.activeLayout" in document
-    assert "const visibleLinks = graphData.links.filter(link => (" in document
+    assert "const visibleLinks = callGraphOnly ? [] : graphData.links.filter(link => (" in document
     assert "renderer?.refresh();" in document
     assert 'activeLayout: "forceatlas2-noverlap"' in document
     assert "applyLayout(graphState.activeLayout)" in document
@@ -679,14 +680,15 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'graphFlowStatus.hidden = context.topologyReconciled !== false;' in document
     assert 'Cycles uniquement (${cycleCount})' in document
     assert "graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)" in document
-    assert 'size: 3.5' in document
+    assert 'path.classList.add("graph-call-path")' in document
+    assert 'if (graphState.relatedEdges.has(edge)) return { ...data, hidden: true };' in document
     assert 'is-code-flow-node' in document
     assert 'Selection must not change the card geometry' in document
     assert 'graph-flow-port-tooltip' not in document
-    assert '"Entrées déclenchées"' in document
+    assert '"Entrées",' in document
     assert "graphState.selectedCodeFlowId && !graphState.relatedNodes?.has(node)" in document
     assert "return { ...data, hidden: true };" in document
-    assert "Kafka is represented by two topology arcs" in document
+    assert "const selectedPortLinks =" in document
     assert "selectedEndpointIds.has(link.target_endpoint_id)" in document
     assert "const ratioFactor = Math.max(1, spanX / availableWidth, spanY / availableHeight);" in document
     assert ".toolbar { overflow-x: hidden; }" in document

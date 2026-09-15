@@ -112,13 +112,19 @@
       }));
     }
     function rebuildGraph() {
-      const visibleLinks = graphData.links.filter(link => (
+      const callGraphOnly = Boolean(graphState.selectedCodeFlowId);
+      const visibleLinks = callGraphOnly ? [] : graphData.links.filter(link => (
         isVisibleRelation(link)
         && isVisibleNode(nodeDataById.get(link.source))
         && isVisibleNode(nodeDataById.get(link.target))
       ));
       const visibleNodeIds = new Set(visibleLinks.flatMap(link => [link.source, link.target]));
-      const filteredNodes = graphData.nodes.filter(node => isVisibleNode(node));
+      const filteredNodes = graphData.nodes.filter(node => (
+        isVisibleNode(node)
+        && (!callGraphOnly || (
+          node.kind === "microservice" && graphState.relatedNodes?.has(node.id)
+        ))
+      ));
       const connectedNodes = filteredNodes.filter(node => visibleNodeIds.has(node.id));
       // Keep visible services in the layout even when their only relations
       // point to a service hidden by the selected layer/namespace filter.
@@ -206,6 +212,9 @@
         labelAlignment: "center",
         nodeReducer: (node, data) => {
           if (!isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
+          if (graphState.selectedCodeFlowId && nodeDataById.get(node)?.kind !== "microservice") {
+            return { ...data, hidden: true, label: "" };
+          }
           if (graphState.selectedCodeFlowId && !graphState.relatedNodes?.has(node)) {
             return { ...data, hidden: true, label: "" };
           }
@@ -227,12 +236,9 @@
         edgeReducer: (edge, data) => {
           if (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge))) return { ...data, hidden: true };
           if (graphState.selectedCodeFlowId) {
-            if (graphState.relatedEdges.has(edge)) return {
-              ...data,
-              color: document.documentElement.dataset.theme === "dark" ? "#c4b5fd" : "#6d28d9",
-              size: 3.5,
-              zIndex: 2,
-            };
+            // Selected call-graph edges are redrawn as orthogonal SVG paths
+            // after the HTML cards have been positioned.
+            if (graphState.relatedEdges.has(edge)) return { ...data, hidden: true };
             return { ...data, hidden: true };
           }
           if (graphState.selectedId && graphState.relatedEdges.has(edge)) return { ...data, size: 1.5 };
@@ -555,6 +561,7 @@
           const point = nodePoints.get(id);
           const node = nodeDataById.get(id);
           if (!node || !point) return;
+          if (graphState.selectedCodeFlowId && node.kind !== "microservice") return;
           const label = document.createElement("span");
           const isTopic = node.kind === "message_channel" || node.kind === "kafka_topic";
           const isDatabase = node.kind === "data_schema" || node.kind === "mongodb_collection";
@@ -621,7 +628,10 @@
               const title = document.createElement("strong");
               title.textContent = `${port.label} — ${direction}`;
               const endpoint = document.createElement("span");
-              endpoint.textContent = `${port.type} : ${port.name}`;
+              const isTopicMessage = /kafka|topic|message/i.test(`${port.type} ${port.name}`);
+              endpoint.textContent = isTopicMessage
+                ? `${portDirection === "in" ? "Message reçu du topic" : "Message envoyé vers le topic"} : ${port.name}`
+                : `${port.type} : ${port.name}`;
               const method = document.createElement("code");
               method.textContent = `Méthode Java : ${port.method || "inconnue"}`;
               tooltip.append(title, endpoint, method);
@@ -755,6 +765,249 @@
             .map(anchor => [anchor.dataset.endpointId, anchor])
         );
         const overlayBounds = portPathOverlay.getBoundingClientRect();
+        const obstacleBounds = [...nodeLabelOverlay.querySelectorAll(".graph-node-card-label")]
+          .map(card => {
+            const bounds = card.getBoundingClientRect();
+            return {
+              id: card.dataset.nodeId,
+              left: bounds.left - overlayBounds.left,
+              top: bounds.top - overlayBounds.top,
+              right: bounds.right - overlayBounds.left,
+              bottom: bounds.bottom - overlayBounds.top,
+            };
+          });
+        const segmentIsClear = (start, end, obstacles) => obstacles.every(obstacle => {
+          if (Math.abs(start[1] - end[1]) < .5) {
+            const y = start[1];
+            return y <= obstacle.top || y >= obstacle.bottom
+              || Math.max(start[0], end[0]) <= obstacle.left
+              || Math.min(start[0], end[0]) >= obstacle.right;
+          }
+          if (Math.abs(start[0] - end[0]) < .5) {
+            const x = start[0];
+            return x <= obstacle.left || x >= obstacle.right
+              || Math.max(start[1], end[1]) <= obstacle.top
+              || Math.min(start[1], end[1]) >= obstacle.bottom;
+          }
+          return false;
+        });
+        const orthogonalPath = (start, end, sourceId, targetId) => {
+          const padding = 14;
+          const obstacles = obstacleBounds
+            .filter(obstacle => ![sourceId, targetId].includes(obstacle.id))
+            .map(obstacle => ({
+              left: obstacle.left - padding,
+              top: obstacle.top - padding,
+              right: obstacle.right + padding,
+              bottom: obstacle.bottom + padding,
+            }));
+          const xLanes = [...new Set([
+            start[0], end[0], 8, Math.max(8, overlayBounds.width - 8),
+            ...obstacles.flatMap(obstacle => [obstacle.left, obstacle.right]),
+          ])];
+          const yLanes = [...new Set([
+            start[1], end[1], 8, Math.max(8, overlayBounds.height - 8),
+            ...obstacles.flatMap(obstacle => [obstacle.top, obstacle.bottom]),
+          ])];
+          const candidates = [];
+          const addCandidate = points => {
+            const compact = points.filter((point, index) => (
+              index === 0 || point[0] !== points[index - 1][0] || point[1] !== points[index - 1][1]
+            ));
+            if (compact.every((point, index) => index === 0 || segmentIsClear(compact[index - 1], point, obstacles))) {
+              const length = compact.slice(1).reduce((total, point, index) => (
+                total + Math.abs(point[0] - compact[index][0]) + Math.abs(point[1] - compact[index][1])
+              ), 0);
+              candidates.push({ points: compact, score: length + (compact.length - 2) * 80 });
+            }
+          };
+          xLanes.forEach(x => addCandidate([start, [x, start[1]], [x, end[1]], end]));
+          yLanes.forEach(y => addCandidate([start, [start[0], y], [end[0], y], end]));
+          if (!candidates.length) return `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`;
+          const points = candidates.sort((left, right) => left.score - right.score)[0].points;
+          return points.map((point, index) => `${index ? "L" : "M"} ${point[0]} ${point[1]}`).join(" ");
+        };
+        const pointToSegmentDistance = (point, start, end) => {
+          const dx = end[0] - start[0];
+          const dy = end[1] - start[1];
+          const lengthSquared = dx * dx + dy * dy;
+          const ratio = lengthSquared ? Math.max(0, Math.min(1, (
+            (point[0] - start[0]) * dx + (point[1] - start[1]) * dy
+          ) / lengthSquared)) : 0;
+          return Math.hypot(
+            point[0] - (start[0] + ratio * dx),
+            point[1] - (start[1] + ratio * dy),
+          );
+        };
+        const pathIsClear = (points, obstacles, occupiedSegments = []) => {
+          for (let index = 1; index < points.length; index += 1) {
+            const [start, end] = [points[index - 1], points[index]];
+            for (let step = 0; step <= 24; step += 1) {
+              const ratio = step / 24;
+              const x = start[0] + (end[0] - start[0]) * ratio;
+              const y = start[1] + (end[1] - start[1]) * ratio;
+              if (obstacles.some(obstacle => (
+                x > obstacle.left && x < obstacle.right
+                && y > obstacle.top && y < obstacle.bottom
+              ))) return false;
+            }
+            for (let step = 0; step <= 24; step += 1) {
+              const ratio = step / 24;
+              const point = [
+                start[0] + (end[0] - start[0]) * ratio,
+                start[1] + (end[1] - start[1]) * ratio,
+              ];
+              if (occupiedSegments.some(([occupiedStart, occupiedEnd]) => (
+                pointToSegmentDistance(point, occupiedStart, occupiedEnd) < 9
+              ))) return false;
+            }
+          }
+          return true;
+        };
+        const hybridPath = (start, end, sourceId, targetId, occupiedSegments = []) => {
+          const padding = 14;
+          const obstacles = obstacleBounds
+            .filter(obstacle => ![sourceId, targetId].includes(obstacle.id))
+            .map(obstacle => ({
+              left: obstacle.left - padding,
+              top: obstacle.top - padding,
+              right: obstacle.right + padding,
+              bottom: obstacle.bottom + padding,
+            }));
+          if (pathIsClear([start, end], obstacles, occupiedSegments)) {
+            return { d: `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`, points: [start, end] };
+          }
+          const deltaX = end[0] - start[0];
+          const deltaY = end[1] - start[1];
+          const bend = Math.max(34, Math.max(Math.abs(deltaX), Math.abs(deltaY)) * .34);
+          const lanes = [...new Set([
+            -72, -48, -24, 0, 24, 48, 72,
+            ...obstacles.flatMap(obstacle => [obstacle.top - start[1], obstacle.bottom - start[1]]),
+            ...obstacles.flatMap(obstacle => [obstacle.left - start[0], obstacle.right - start[0]]),
+          ])];
+          const candidates = [];
+          const addCurve = (controlOne, controlTwo, lane) => {
+            const points = [];
+            for (let step = 0; step <= 32; step += 1) {
+              const t = step / 32;
+              const inverse = 1 - t;
+              points.push([
+                inverse ** 3 * start[0] + 3 * inverse ** 2 * t * controlOne[0]
+                  + 3 * inverse * t ** 2 * controlTwo[0] + t ** 3 * end[0],
+                inverse ** 3 * start[1] + 3 * inverse ** 2 * t * controlOne[1]
+                  + 3 * inverse * t ** 2 * controlTwo[1] + t ** 3 * end[1],
+              ]);
+            }
+            if (pathIsClear(points, obstacles, occupiedSegments)) {
+              candidates.push({
+                d: `M ${start[0]} ${start[1]} C ${controlOne[0]} ${controlOne[1]}, ${controlTwo[0]} ${controlTwo[1]}, ${end[0]} ${end[1]}`,
+                points,
+                score: Math.abs(lane) + bend,
+              });
+            }
+          };
+          if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+            lanes.forEach(lane => addCurve(
+              [start[0] + Math.sign(deltaX || 1) * bend, start[1] + lane],
+              [end[0] - Math.sign(deltaX || 1) * bend, end[1] + lane],
+              lane,
+            ));
+          } else {
+            lanes.forEach(lane => addCurve(
+              [start[0] + lane, start[1] + Math.sign(deltaY || 1) * bend],
+              [end[0] + lane, end[1] - Math.sign(deltaY || 1) * bend],
+              lane,
+            ));
+          }
+          return candidates.length
+            ? candidates.sort((left, right) => left.score - right.score)[0]
+            : { d: orthogonalPath(start, end, sourceId, targetId), points: [start, end] };
+        };
+        const occupiedPortSegments = [];
+        const portPath = (source, target) => {
+          const sourceBounds = source.getBoundingClientRect();
+          const targetBounds = target.getBoundingClientRect();
+          // Keep the arrowhead outside the target card. If the path ends
+          // exactly on the card border, the card overlay paints over the
+          // marker and makes the direction appear to be missing.
+          const arrowGap = 6;
+          const start = [sourceBounds.right + arrowGap - overlayBounds.left, sourceBounds.top + sourceBounds.height / 2 - overlayBounds.top];
+          const end = [targetBounds.left - arrowGap - overlayBounds.left, targetBounds.top + targetBounds.height / 2 - overlayBounds.top];
+          const routed = hybridPath(
+            start,
+            end,
+            source.closest(".graph-node-card-label")?.dataset.nodeId,
+            target.closest(".graph-node-card-label")?.dataset.nodeId,
+            occupiedPortSegments,
+          );
+          occupiedPortSegments.push(...routed.points.slice(1).map((point, index) => (
+            [routed.points[index], point]
+          )));
+          return routed.d;
+        };
+        const cardPath = (sourceId, targetId) => {
+          const source = nodeLabelOverlay.querySelector(`[data-node-id="${CSS.escape(sourceId)}"]`);
+          const target = nodeLabelOverlay.querySelector(`[data-node-id="${CSS.escape(targetId)}"]`);
+          if (!source || !target) return null;
+          const sourceBounds = source.getBoundingClientRect();
+          const targetBounds = target.getBoundingClientRect();
+          const sourceCenter = [sourceBounds.left + sourceBounds.width / 2, sourceBounds.top + sourceBounds.height / 2];
+          const targetCenter = [targetBounds.left + targetBounds.width / 2, targetBounds.top + targetBounds.height / 2];
+          const deltaX = targetCenter[0] - sourceCenter[0];
+          const deltaY = targetCenter[1] - sourceCenter[1];
+          let start;
+          let end;
+          if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+            start = [deltaX >= 0 ? sourceBounds.right : sourceBounds.left, sourceCenter[1]];
+            end = [deltaX >= 0 ? targetBounds.left : targetBounds.right, targetCenter[1]];
+          } else {
+            start = [sourceCenter[0], deltaY >= 0 ? sourceBounds.bottom : sourceBounds.top];
+            end = [targetCenter[0], deltaY >= 0 ? targetBounds.top : targetBounds.bottom];
+          }
+          return hybridPath(
+            [start[0] - overlayBounds.left, start[1] - overlayBounds.top],
+            [end[0] - overlayBounds.left, end[1] - overlayBounds.top],
+            sourceId,
+            targetId,
+          ).d;
+        };
+        const selectedEndpointIds = new Set(
+          graphData.links.flatMap((topologyLink, index) => (
+            graphState.relatedEdges?.has(`edge-${index}`)
+              ? (topologyLink.endpoint_ids || [])
+              : []
+          ))
+        );
+        const selectedPortLinks = [...new Map((graphData.port_links || []).filter(link => (
+          !graphState.selectedCodeFlowId
+          || selectedEndpointIds.has(link.source_endpoint_id)
+          || selectedEndpointIds.has(link.target_endpoint_id)
+        )).map(link => [
+          `${link.kind}:${link.source_endpoint_id}:${link.target_endpoint_id}`,
+          link,
+        ]))].map(([, link]) => link);
+        const selectedCallEdges = graphData.links.filter((link, index) => (
+          graphState.relatedEdges?.has(`edge-${index}`)
+          // A direct REST relation is already represented by its
+          // endpoint-to-endpoint port arc below. Drawing the topology edge as
+          // well would produce two visually identical arcs (for example O4 →
+          // I8).
+          && !(link.kind === "rest" && (link.endpoint_ids || []).some(endpointId => (
+            (graphData.port_links || []).some(portLink => (
+              portLink.kind === "rest" && portLink.source_endpoint_id === endpointId
+              ))
+          )))
+        ));
+        selectedCallEdges.forEach(link => {
+          const d = cardPath(link.source, link.target);
+          if (!d) return;
+          const path = document.createElementNS(svgNamespace, "path");
+          path.classList.add("graph-call-path");
+          if (link.kind === "kafka") path.classList.add("is-kafka");
+          path.setAttribute("marker-end", "url(#graph-port-arrow)");
+          path.setAttribute("d", d);
+          portPathOverlay.append(path);
+        });
         (graphData.internal_port_links || []).forEach(link => {
           if (
             graphState.selectedCodeFlowId
@@ -765,68 +1018,24 @@
           const input = anchorsByEndpointId.get(link.input_endpoint_id);
           const output = anchorsByEndpointId.get(link.output_endpoint_id);
           if (!input?.classList.contains("is-in") || !output?.classList.contains("is-out")) return;
-          const inputBounds = input.getBoundingClientRect();
-          const outputBounds = output.getBoundingClientRect();
-          const startX = inputBounds.right - overlayBounds.left;
-          const startY = inputBounds.top + inputBounds.height / 2 - overlayBounds.top;
-          const endX = outputBounds.left - overlayBounds.left;
-          const endY = outputBounds.top + outputBounds.height / 2 - overlayBounds.top;
           const path = document.createElementNS(svgNamespace, "path");
           path.classList.add("graph-local-port-path");
           if (graphState.relatedLocalPortLinks?.has(
             `${link.input_endpoint_id}:${link.output_endpoint_id}`
           )) path.classList.add("is-code-flow-path");
           path.setAttribute("marker-end", "url(#graph-port-arrow)");
-          path.setAttribute(
-            "d",
-            `M ${startX} ${startY} C ${startX + 18} ${startY}, ${endX - 18} ${endY}, ${endX} ${endY}`,
-          );
+          path.setAttribute("d", portPath(input, output));
           portPathOverlay.append(path);
         });
-        const selectedEndpointIds = new Set(
-          graphData.links.flatMap((topologyLink, index) => (
-            graphState.relatedEdges?.has(`edge-${index}`)
-              ? (topologyLink.endpoint_ids || [])
-              : []
-          ))
-        );
-        const selectedPortLinks = (graphData.port_links || []).filter(link => (
-          !graphState.selectedCodeFlowId
-          // Kafka is represented by two topology arcs, producer → topic and
-          // topic → consumer. Each arc carries one endpoint identifier, while
-          // the port link joins those endpoints directly; retain it when
-          // either endpoint belongs to the selected path.
-          || selectedEndpointIds.has(link.source_endpoint_id)
-          || selectedEndpointIds.has(link.target_endpoint_id)
-        ));
-        const directedPairs = new Set(selectedPortLinks.map(link => (
-          `${link.source_endpoint_id}:${link.target_endpoint_id}`
-        )));
         selectedPortLinks.forEach(link => {
           const source = anchorsByEndpointId.get(link.source_endpoint_id);
           const target = anchorsByEndpointId.get(link.target_endpoint_id);
           if (!source?.classList.contains("is-out") || !target?.classList.contains("is-in")) return;
-          const sourceBounds = source.getBoundingClientRect();
-          const targetBounds = target.getBoundingClientRect();
-          const startX = sourceBounds.right - overlayBounds.left;
-          const startY = sourceBounds.top + sourceBounds.height / 2 - overlayBounds.top;
-          const endX = targetBounds.left - overlayBounds.left;
-          const endY = targetBounds.top + targetBounds.height / 2 - overlayBounds.top;
-          const reverseExists = directedPairs.has(`${link.target_endpoint_id}:${link.source_endpoint_id}`);
-          // Opposite calls must not collapse into one indistinguishable
-          // stroke. Stable endpoint IDs choose opposite lanes for a cycle.
-          const lane = reverseExists
-            ? (String(link.source_endpoint_id) < String(link.target_endpoint_id) ? -24 : 24)
-            : 0;
-          const bend = Math.max(34, Math.abs(endX - startX) * .34);
           const path = document.createElementNS(svgNamespace, "path");
           path.classList.add("graph-port-path");
           if (link.kind === "kafka") path.classList.add("is-kafka");
           path.setAttribute("marker-end", "url(#graph-port-arrow)");
-          path.setAttribute(
-            "d",
-            `M ${startX} ${startY} C ${startX + bend} ${startY + lane}, ${endX - bend} ${endY + lane}, ${endX} ${endY}`,
-          );
+          path.setAttribute("d", portPath(source, target));
           portPathOverlay.append(path);
         });
       };

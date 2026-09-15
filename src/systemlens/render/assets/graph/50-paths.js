@@ -271,7 +271,11 @@
       details.append(overview);
     }
     function centerCameraOnPath(path) {
-      const nodeIds = path.nodes.filter(id => network.hasNode(id) && isVisibleNodeId(id));
+      const nodeIds = path.nodes.filter(id => (
+        network.hasNode(id)
+        && isVisibleNodeId(id)
+        && (!graphState.selectedCodeFlowId || nodeDataById.get(id)?.kind === "microservice")
+      ));
       if (!nodeIds.length) return;
       const viewport = graphCanvas.getBoundingClientRect();
       const toolbarRect = document.querySelector(".toolbar").getBoundingClientRect();
@@ -614,13 +618,19 @@
         || (flow.steps || []).some(step => associatedEndpointIds.has(step.endpoint_id))
       ));
       if (ports.length) {
-        const triggeredInputs = ports.filter(port => (
-          port.direction === "in" && String(port.label || "").includes(" ← ")
-        ));
+        const portsGroup = createDetailsGroup("Ports d'intégration", false);
+        const portDescription = port => `${port.label} · ${port.type} · ${port.name}`;
         appendList(
-          "Entrées déclenchées",
-          triggeredInputs.map(port => `${port.label} · ${port.type} · ${port.name}`),
+          "Entrées",
+          ports.filter(port => port.direction === "in").map(portDescription),
+          portsGroup,
         );
+        appendList(
+          "Sorties",
+          ports.filter(port => port.direction === "out").map(portDescription),
+          portsGroup,
+        );
+        discardEmptyDetailsGroup(portsGroup);
         const portsByEndpointId = new Map(ports.map(port => [port.endpoint_id, port]));
           const connections = (graphData.code_flows || []).flatMap(flow => {
             if (flow.module !== node.name) return [];
@@ -704,7 +714,7 @@
         const qualityGroup = createDetailsGroup("Qualité", false);
         appendFindings(node.findings || [], qualityGroup);
         discardEmptyDetailsGroup(qualityGroup);
-        const groupOrder = ["Architecture", "Relations", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Qualité"];
+        const groupOrder = ["Architecture", "Ports d'intégration", "Relations", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Qualité"];
         [...details.querySelectorAll(":scope > .details-group")]
           .sort((left, right) => {
             const leftRank = groupOrder.indexOf(left.querySelector("summary")?.textContent);

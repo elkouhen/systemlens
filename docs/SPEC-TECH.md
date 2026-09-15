@@ -189,8 +189,12 @@ the call-site line. The `analysis.codeql_max_hops` and
 `analysis.codeql_max_paths` configuration values bound depth and explored call
 transitions respectively; reaching the latter is reported in indexing progress
 instead of silently dropping candidates. By default, SystemLens creates one
-temporary CodeQL database for each deepest build-module owner of Java source
-files, with CodeQL's `--build-mode=none` source-only mode, then deletes it.
+temporary CodeQL database for the whole indexed repository, with CodeQL's
+`--build-mode=none` source-only mode, then deletes it. The resulting calls are
+partitioned by caller project only for progress checkpoints; each module
+checkpoint includes the time spent materializing its partial view. The
+complete global call list, including cross-project references, is used for
+method-flow materialization.
 Selecting Joern instead creates and deletes one Java CPG for the same module
 unit and exports every `callee`-resolved call. When the CPG exposes only a
 non-synthetic `methodFullName`, it is retained as a possible signature
@@ -232,9 +236,10 @@ The HTML graph model joins endpoint identifiers and statically inferred message
 types to the persisted
 `integration_methods` projection. Microservice cards remain simple rectangles
 and receive an export-time count of persisted internal flows for that service.
-The selected-service widget renders only resolved input-to-output flow evidence,
-not a standalone input/output port inventory. Rendering does not read source
-files. At export time, every HTTP/Kafka endpoint receives a deterministic
+The selected-service widget renders every indexed HTTP/Kafka endpoint as an
+input/output port inventory, including ports without a resolved target or an
+associated code flow. It also renders resolved input-to-output flow evidence.
+Rendering does not read source files. At export time, every HTTP/Kafka endpoint receives a deterministic
 identity global to the complete export: `I<n>` for an input and `O<n>` for an
 output, ordered by a stable topological service order, then relative evidence
 path, source line, and endpoint ID. A cyclic service component falls back to
@@ -375,7 +380,11 @@ Selecting a reconciled code flow records its persisted ID only in transient
 graph state. Node and edge reducers, HTML-card overlays, and port overlays use
 the exact reconciled path sets to hide every unrelated node and edge; selected
 nodes retain flow-specific highlighting. This presentation state does not infer
-or persist any new architecture relation. The export indexes displayed nodes and visual edges by
+or persist any new architecture relation. A selected call graph projects only
+its microservice nodes and endpoint dependencies; topic nodes and topology
+edges are omitted from that focused view. Endpoint arcs use collision-tested
+Bézier detours around visible card rectangles, with orthogonal routing as a
+fallback; general architecture edges remain Sigma-rendered. The export indexes displayed nodes and visual edges by
 persisted endpoint ID once; reconciliation requires exactly one endpoint-backed
 candidate and never selects a relation from a route label, topic name, or first
 matching graph edge. A selected local input-to-output relation is highlighted
@@ -431,9 +440,10 @@ commit. A concurrent reader sees the last committed snapshot until the writer
 commits the next one.
 
 AST endpoint analysis uses no subprocess. For interprocedural flows, the local
-CodeQL executable is used by default once for each source-owning build module
-to create a temporary source-only Java database, query it, and decode the
-result as CSV; all call facts are aggregated before joining. Selecting Joern
+CodeQL executable is used by default once for the repository to create a
+temporary source-only Java database, query it, and decode the result as CSV;
+progress checkpoints group the global result by source-owning project, while
+all call facts are joined together. Selecting Joern
 invokes `joern-parse --language JAVASRC` for the same module unit and its local
 non-interactive interpreter exports only resolved calls as TSV; its CPG and
 query script are temporary. `--codeql-database` reuses one global database

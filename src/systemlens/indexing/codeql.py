@@ -7,7 +7,7 @@ import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 
 @dataclass(frozen=True)
@@ -37,14 +37,36 @@ _QLPACK = (
 _QUERY = """import java
 import semmle.code.java.dispatch.VirtualDispatch
 
-from MethodCall call, Callable enclosing, Method invoked, string dispatch_confidence
+/**
+ * Keep the call graph scoped to application source.  The source-only
+ * database can still contain calls originating in extracted dependencies;
+ * they cannot join SystemLens' source-backed method inventory and only add
+ * work to the dispatch predicates.
+ */
+class SourceMethodCall extends MethodCall {
+  SourceMethodCall() { this.getEnclosingCallable().fromSource() }
+}
+
+/** Compute the exact-dispatch relation once as a tightly bound predicate. */
+predicate exactTarget(MethodCall call, Method target) {
+  target = exactVirtualMethod(call)
+}
+
+/**
+ * Prefer the unique target.  Only calls with no exact target reach the more
+ * expensive viable-dispatch relation; this also avoids evaluating
+ * exactVirtualMethod twice in the main result predicate.
+ */
+predicate resolvedTarget(MethodCall call, Method target, string confidence) {
+  exactTarget(call, target) and confidence = "exact"
+  or
+  not exists(Method exact | exactTarget(call, exact)) and
+  target = viableCallable(call) and confidence = "possible"
+}
+
+from SourceMethodCall call, Callable enclosing, Method invoked, string dispatch_confidence
 where enclosing = call.getEnclosingCallable() and
-  (
-    invoked = exactVirtualMethod(call) and dispatch_confidence = "exact"
-    or
-    not exists(exactVirtualMethod(call)) and
-    invoked = viableCallable(call) and dispatch_confidence = "possible"
-  )
+  resolvedTarget(call, invoked, dispatch_confidence)
 select enclosing.getQualifiedName() as caller,
   enclosing.getFile().getRelativePath() as caller_path,
   enclosing.getLocation().getStartLine() as caller_line,
@@ -61,9 +83,35 @@ def codeql_executable() -> str | None:
     return shutil.which("codeql")
 
 
+def _run_with_progress(
+    command: list[str],
+    *,
+    timeout: int,
+    progress: Callable[[str], None] | None,
+) -> subprocess.CompletedProcess[str]:
+    """Run CodeQL while optionally forwarding its combined output live."""
+    if progress is None:
+        return subprocess.run(
+            command, capture_output=True, text=True, timeout=timeout, check=False,
+        )
+    process = subprocess.Popen(
+        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, bufsize=1,
+    )
+    output: list[str] = []
+    assert process.stdout is not None
+    for line in process.stdout:
+        output.append(line)
+        progress(line.rstrip())
+    returncode = process.wait(timeout=timeout)
+    return subprocess.CompletedProcess(command, returncode, "".join(output), "")
+
+
 @contextmanager
 def automatic_codeql_database(
-    repo_root: Path, timeout_seconds: int = 600, threads: int = 1, ram_mb: int | None = None,
+    repo_root: Path, timeout_seconds: int = 600, threads: int = 1,
+    ram_mb: int | None = None, verbosity: str | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> Iterator[Path | None]:
     """Create a temporary source-only Java database for one index run.
 
@@ -81,10 +129,12 @@ def automatic_codeql_database(
             executable, "database", "create", str(database), "--language=java",
             f"--source-root={repo_root.resolve()}", "--build-mode=none", f"--threads={threads}",
         ]
+        if verbosity is not None:
+            command.append(f"--verbosity={verbosity}")
         if ram_mb is not None:
             command.append(f"--ram={ram_mb}")
-        completed = subprocess.run(
-            command, capture_output=True, text=True, timeout=timeout_seconds, check=False,
+        completed = _run_with_progress(
+            command, timeout=timeout_seconds, progress=progress,
         )
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip()
@@ -99,6 +149,8 @@ def extract_codeql_calls(
     path_prefix: str = "",
     threads: int = 1,
     ram_mb: int | None = None,
+    verbosity: str | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> list[CodeQLCall]:
     """Return statically resolved Java method calls from one CodeQL database.
 
@@ -122,6 +174,8 @@ def extract_codeql_calls(
             executable, "query", "run", str(query), f"--database={database}",
             f"--output={bqrs}", f"--threads={threads}",
         ]
+        if verbosity is not None:
+            command.append(f"--verbosity={verbosity}")
         if ram_mb is not None:
             command.append(f"--ram={ram_mb}")
         # The ad-hoc query lives in a fresh temporary pack.  Make an already
@@ -131,12 +185,8 @@ def extract_codeql_calls(
         user_packs = Path.home() / ".codeql" / "packages"
         if user_packs.is_dir():
             command.append(f"--additional-packs={user_packs}")
-        completed = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
+        completed = _run_with_progress(
+            command, timeout=timeout_seconds, progress=progress,
         )
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip()

@@ -137,7 +137,8 @@
 
     // The Flux tab is an inter-service navigation surface. Retain only flows
     // whose reconciled topology path crosses a microservice boundary; local
-    // method paths remain persisted evidence and stay available on a service.
+    // method paths and flows confined to one microservice remain persisted
+    // source evidence but stay out of this tab.
     const interServiceCodeFlows = codeFlows.filter(flow => {
       const path = pathForCodeFlow(flow);
       if (!path) return false;

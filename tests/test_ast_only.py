@@ -272,6 +272,42 @@ def test_index_is_incremental_without_embeddings(tmp_path: Path) -> None:
     assert second.scanned == 0
 
 
+def test_index_scans_all_changed_files_in_one_ast_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
+    calls: dict[str, list[list[str]]] = {
+        "framework": [], "kafka": [], "markdown": [], "flow_graph": []
+    }
+
+    def record(name: str):
+        def extractor(_repo: Path, paths: list[str], **_kwargs):
+            calls[name].append(paths)
+            return []
+
+        return extractor
+
+    monkeypatch.setattr(indexer_module, "infer_framework_endpoints", record("framework"))
+    monkeypatch.setattr(indexer_module, "infer_kafka_endpoints", record("kafka"))
+    monkeypatch.setattr(
+        indexer_module, "infer_markdown_topic_manifest_endpoints", record("markdown")
+    )
+    monkeypatch.setattr(
+        indexer_module, "infer_json_kafka_flow_graph_endpoints", record("flow_graph")
+    )
+    progress: list[str] = []
+
+    with Store(repo) as store:
+        report = index_repo(repo, Config(), store, progress=progress.append)
+
+    assert report.scanned == 2
+    assert all(len(extractor_calls) == 1 for extractor_calls in calls.values())
+    assert all(extractor_calls[0] == sorted(extractor_calls[0]) for extractor_calls in calls.values())
+    assert any("AST 1/1" in message for message in progress)
+    assert any("ports détectés" in message for message in progress)
+
+
 def test_incremental_property_change_reindexes_dependent_java_endpoints(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     shutil.copytree(FIXTURES / "kafka_repo", repo)

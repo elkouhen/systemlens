@@ -11,6 +11,7 @@ DEFAULT_MIN_SEVERITY = "INFO"
 VALID_SEVERITIES = ("INFO", "WARNING", "ERROR")
 VALID_TOPIC_STRATEGIES = ("default", "strategy1")
 VALID_CALL_GRAPH_ENGINES = ("codeql", "joern", "none")
+VALID_CODEQL_VERBOSITIES = ("errors", "progress", "progress+", "progress++", "progress+++")
 
 
 class ConfigError(Exception):
@@ -26,8 +27,10 @@ class Config:
     codeql_enabled: bool = True
     call_graph_engine: str = "codeql"
     codeql_timeout_seconds: int = 600
-    codeql_threads: int = 1
+    # CodeQL interprets zero as one thread per available core.
+    codeql_threads: int = 0
     codeql_ram_mb: int | None = None
+    codeql_verbosity: str | None = None
     codeql_max_hops: int = 12
     codeql_max_paths: int = 10_000
     disabled_extractors: list[str] = field(default_factory=list)
@@ -73,8 +76,9 @@ def load_config(repo_root: Path) -> Config:
             f"Valeurs autorisées : {', '.join(VALID_CALL_GRAPH_ENGINES)}."
         )
     codeql_timeout_seconds = analysis.get("codeql_timeout_seconds", 600)
-    codeql_threads = analysis.get("codeql_threads", 1)
+    codeql_threads = analysis.get("codeql_threads", 0)
     codeql_ram_mb = analysis.get("codeql_ram_mb")
+    codeql_verbosity = analysis.get("codeql_verbosity")
     codeql_max_hops = analysis.get("codeql_max_hops", 12)
     codeql_max_paths = analysis.get("codeql_max_paths", 10_000)
     if not isinstance(codeql_max_hops, int) or codeql_max_hops < 1:
@@ -89,6 +93,11 @@ def load_config(repo_root: Path) -> Config:
         isinstance(codeql_ram_mb, bool) or not isinstance(codeql_ram_mb, int) or codeql_ram_mb < 1
     ):
         raise ConfigError("analysis.codeql_ram_mb doit être un entier positif ou null.")
+    if codeql_verbosity is not None and codeql_verbosity not in VALID_CODEQL_VERBOSITIES:
+        raise ConfigError(
+            "analysis.codeql_verbosity invalide : "
+            f"{codeql_verbosity!r}. Valeurs : {', '.join(VALID_CODEQL_VERBOSITIES)}."
+        )
 
     return Config(
         include=list(raw.get("include", DEFAULT_INCLUDE)),
@@ -100,6 +109,7 @@ def load_config(repo_root: Path) -> Config:
         codeql_timeout_seconds=codeql_timeout_seconds,
         codeql_threads=codeql_threads,
         codeql_ram_mb=codeql_ram_mb,
+        codeql_verbosity=codeql_verbosity,
         codeql_max_hops=codeql_max_hops,
         codeql_max_paths=codeql_max_paths,
         disabled_extractors=list(analysis.get("disabled_extractors", [])),
@@ -121,7 +131,8 @@ def init_config(repo_root: Path) -> Path:
         "analysis": {
             "strategy": "default", "codeql": True, "call_graph_engine": "codeql",
             "codeql_timeout_seconds": 600,
-            "codeql_threads": 1, "codeql_ram_mb": None,
+            "codeql_threads": 0, "codeql_ram_mb": None,
+            "codeql_verbosity": "progress++",
             "codeql_max_hops": 12, "codeql_max_paths": 10_000,
             "disabled_extractors": [],
         },
