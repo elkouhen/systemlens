@@ -61,6 +61,26 @@ def _canonical_resource_kind(kind: str | None) -> str:
     }.get(kind or "", kind or "")
 
 
+def _kafka_message_type_status(
+    producer: MessageEndpoint | None, consumer: MessageEndpoint | None,
+) -> tuple[str, str | None]:
+    """Describe type evidence without making the type part of topic identity.
+
+    Kafka topology is keyed by the concrete topic.  Missing or conflicting
+    Java payload declarations therefore annotate a relation but never remove
+    the relation itself.
+    """
+    produced = producer.message_type if producer else None
+    consumed = consumer.message_type if consumer else None
+    if produced and consumed:
+        if produced == consumed:
+            return "consistent", None
+        return "mismatch", "Types Java producteur/consommateur différents ; lien conservé sur le topic."
+    if produced or consumed:
+        return "partial", "Type Java connu d'un seul côté ; lien conservé sur le topic."
+    return "unknown", "Type Java du message non déterminé ; lien conservé sur le topic."
+
+
 def _indexing_issues(
     endpoints_by_service: dict[str, list[MessageEndpoint]],
     edges: list[GraphEdge],
@@ -166,7 +186,19 @@ def build_graph_view_model(
     """
     external_services = external_microservice_names(edges)
     ordered_services = sorted(set(endpoints_by_service) | external_services)
-    kafka_topics = sorted({edge.from_endpoint.topic for edge in edges if edge.kind == "kafka"})
+    kafka_endpoints = [
+        endpoint
+        for endpoints in endpoints_by_service.values()
+        for endpoint in endpoints
+        if endpoint.system == "kafka"
+    ]
+    # Keep concrete topics visible even when no opposite endpoint was found.
+    # This is evidence of an integration, not an inferred producer/consumer
+    # pairing; the unmatched endpoint is rendered as a partial relation below.
+    kafka_topics = sorted({
+        *[edge.from_endpoint.topic for edge in edges if edge.kind == "kafka"],
+        *[endpoint.topic for endpoint in kafka_endpoints if not endpoint.topic_dynamic],
+    })
     topic_message_types: dict[str, dict[str, set[str]]] = {
         topic: {"produce": set(), "consume": set()} for topic in kafka_topics
     }
@@ -188,6 +220,13 @@ def build_graph_view_model(
                     consumed_message_types_by_relation.setdefault((service, endpoint.topic), set()).add(
                         endpoint.message_type
                     )
+    kafka_endpoint_ids_in_edges = {
+        endpoint.id
+        for edge in edges
+        if edge.kind == "kafka"
+        for endpoint in (edge.from_endpoint, edge.to_endpoint)
+        if endpoint is not None
+    }
     module_details = modules_by_service or {}
     all_modules = list({
         module.path.resolve(): module
@@ -463,6 +502,10 @@ def build_graph_view_model(
                 "endpoint_id": endpoint.id,
                 **({"message_type": endpoint.message_type} if endpoint.message_type else {}),
                 **(
+                    {"message_type_status": "unknown", "message_type_warning": "Type Java non déterminé"}
+                    if endpoint.system == "kafka" and not endpoint.message_type else {}
+                ),
+                **(
                     {"local_output_labels": local_output_labels_by_input_id[endpoint.id]}
                     if endpoint.id in local_output_labels_by_input_id else {}
                 ),
@@ -641,11 +684,42 @@ def build_graph_view_model(
             "label": name,
             "published_message_types": sorted(topic_message_types[name]["produce"]),
             "consumed_message_types": sorted(topic_message_types[name]["consume"]),
+            "message_type_status": (
+                "unknown"
+                if not any(endpoint.message_type for endpoint in kafka_endpoints if endpoint.topic == name)
+                else "partial"
+                if any(not endpoint.message_type for endpoint in kafka_endpoints if endpoint.topic == name)
+                else "mixed"
+                if len({endpoint.message_type for endpoint in kafka_endpoints if endpoint.topic == name}) > 1
+                else "known"
+            ),
             "width": 190,
             "height": 42,
         }
         for name in kafka_topics
     ]
+    # A dynamic topic expression cannot safely be shared with another dynamic
+    # expression. Give each one its own evidence node so the graph exposes the
+    # integration without inventing a concrete Kafka dependency.
+    dynamic_kafka_nodes: dict[str, str] = {}
+    for service, endpoint in sorted(
+        ((service, endpoint) for service, endpoints in endpoints_by_service.items() for endpoint in endpoints
+         if endpoint.system == "kafka" and endpoint.topic_dynamic),
+        key=lambda item: (item[0], item[1].path, item[1].start_line, item[1].id),
+    ):
+        node_id = f"kafka_topic_unresolved:{endpoint.id}"
+        dynamic_kafka_nodes[endpoint.id] = node_id
+        nodes.append({
+            "id": node_id,
+            "kind": "kafka_topic",
+            "name": f"Topic dynamique · {service}",
+            "label": f"? {endpoint.topic} · {service}",
+            "topic_expression": endpoint.topic,
+            "unresolved": True,
+            "message_type_status": "unknown" if not endpoint.message_type else "known",
+            "width": 190,
+            "height": 42,
+        })
     nodes += [
         {
             "id": f"mongodb_collection:{identity}",
@@ -867,7 +941,74 @@ def build_graph_view_model(
             link["consumed_message_types"] = sorted(
                 consumed_message_types_by_relation.get((target_name, source_name), set())
             )
+        if kind == "kafka":
+            kafka_candidates = [
+                edge for edge in edges
+                if edge.kind == "kafka"
+                and (
+                    (source_kind == "microservice"
+                     and edge.from_service == source_name
+                     and edge.from_endpoint.topic == target_name)
+                    or (target_kind == "microservice"
+                        and edge.to_service == target_name
+                        and edge.from_endpoint.topic == source_name)
+                )
+            ]
+            statuses = {
+                _kafka_message_type_status(edge.from_endpoint, edge.to_endpoint)[0]
+                for edge in kafka_candidates
+            }
+            status = next(
+                (candidate for candidate in ("mismatch", "partial", "unknown", "consistent")
+                 if candidate in statuses),
+                "unknown",
+            )
+            link["message_type_status"] = status
+            if status != "consistent":
+                link["message_type_warning"] = (
+                    "Type Java absent ou divergent ; relation conservée sur le topic."
+                )
         links.append(link)
+
+    # Preserve unmatched endpoint evidence in the topology. These links stop
+    # at a topic node and deliberately never connect one service to another.
+    for service, endpoint in sorted(
+        ((service, endpoint) for service, endpoints in endpoints_by_service.items() for endpoint in endpoints
+         if endpoint.system == "kafka" and endpoint.id not in kafka_endpoint_ids_in_edges),
+        key=lambda item: (item[0], item[1].path, item[1].start_line, item[1].id),
+    ):
+        topic_node = (
+            dynamic_kafka_nodes.get(endpoint.id)
+            if endpoint.topic_dynamic
+            else f"kafka_topic:{endpoint.topic}"
+        )
+        if topic_node is None:
+            continue
+        produces = endpoint.role == "produce"
+        source = f"microservice:{service}" if produces else topic_node
+        target = topic_node if produces else f"microservice:{service}"
+        orphan_link: dict[str, object] = {
+            "source": source,
+            "target": target,
+            "kind": "kafka",
+            "direction": "outgoing" if produces else "incoming",
+            "label": endpoint.topic,
+            "confidence": "inferred" if endpoint.source == "code" else "proved",
+            "provenance": endpoint.source,
+            "endpoint_ids": [endpoint.id],
+            "unresolved": True,
+            "message_type_status": "known" if endpoint.message_type else "unknown",
+            "message_type_warning": (
+                "Type Java non déterminé ; relation conservée comme preuve partielle."
+                if not endpoint.message_type else
+                "Aucun endpoint opposé rapproché ; relation conservée comme preuve partielle."
+            ),
+        }
+        if produces:
+            orphan_link["published_message_types"] = [endpoint.message_type] if endpoint.message_type else []
+        else:
+            orphan_link["consumed_message_types"] = [endpoint.message_type] if endpoint.message_type else []
+        links.append(orphan_link)
     link_keys = {
         (str(link["source"]), str(link["target"]), str(link["kind"]), str(link["label"]))
         for link in links

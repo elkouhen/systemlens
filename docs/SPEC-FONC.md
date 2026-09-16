@@ -196,6 +196,13 @@ statically resolved producer topic to a persisted concrete consumer entry. It
 does not join dynamic topics and does not compose a producer whose later
 external effect would be hidden by a linear rendering. Continuations are
 bounded to four asynchronous hops and never revisit the same consumer flow.
+The architecture graph remains tolerant when message payload typing is
+missing or contradictory: topic matching uses the concrete topic identity, not
+the inferred Java type. The export keeps unmatched concrete endpoints and
+dynamic topic expressions as partial, explicitly unresolved topic evidence;
+these evidence links never imply a producer/consumer pairing. Missing or
+different producer/consumer types are displayed as warnings on the topic,
+relation, or integration port.
 
 A REST call forms an internal architecture relation only when its target
 service is identified by an exact normalized explicit alias, such as an HTTP
@@ -242,7 +249,9 @@ resources; the port path is a readable projection of the same evidence, not a
 replacement for the topic relation. Several ports on one side are distributed
 deterministically to avoid overlap. Cycles remain visible as directed return
 paths. An unresolved target, dynamic topic, or ambiguous route MUST NOT create
-a port-to-port path. Hovering a port displays its identifier, direction,
+a port-to-port path. The corresponding endpoint evidence remains visible as a
+partial topic relation when it can be represented without pairing it to
+another service. Hovering a port displays its identifier, direction,
 protocol endpoint, statically inferred Java parameter/message type when known,
 associated Java method and, for a resolved REST call, its
 resolved target. An input tooltip also lists every mapped output (`O<n>`) from
@@ -290,9 +299,12 @@ persisted topology edges: it does not show CodeQL input/output ports,
 port-to-port relations, internal links, or call-graph tooltips. The Flux tab
 presents a compact list of persisted potential call graphs that reconcile to a
  topology path across at least two microservices, grouped by service and
- trigger; it does not show method, confidence, or status details before a
- selection. Flows confined to one microservice remain persisted source
- evidence but are not listed in Flux. Selecting a reconciled call graph opens
+trigger; it does not show method, confidence, or status details before a
+selection. Flows confined to one microservice remain persisted source
+evidence but are excluded from the default list. The Flux tab provides a
+`Tous les flux` toggle to include every persisted flow, including
+same-microservice flows and flows whose topology cannot be fully reconciled.
+Selecting a reconciled call graph opens
  the Explorer tab and displays only the microservices involved in the path,
  their indexed ports, and the direct dependencies between those ports. Topics
  and intermediate topology edges are not rendered in this focused view. The

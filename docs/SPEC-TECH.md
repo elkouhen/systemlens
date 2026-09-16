@@ -508,7 +508,14 @@ reported as unresolved rather than creating an internal edge.
 `infer_kafka_endpoints` recognises Spring Kafka listeners and send sites,
 KafkaTemplate/ProducerRecord usage and Spring Cloud Stream StreamBridge calls.
 It preserves dynamic topic expressions and derives a payload type only from an
-explicit listener parameter or client generic signature. For topic-based
+explicit listener parameter or client generic signature. The graph projection
+does not require that type: concrete Kafka endpoints are matched by topic and
+remain linked when one side has no type or the two declarations differ. An
+unmatched concrete endpoint is exported as a partial relation, and a dynamic
+topic receives an endpoint-specific unresolved topic node; neither case
+creates a producer/consumer pairing. The HTML payload includes a warning
+status (`unknown`, `partial`, or `mismatch`) so consumers can distinguish
+evidence from a complete typed match. For topic-based
 `KafkaTemplate.send` overloads, the final argument is the payload: preceding
 arguments are a partition and/or key and are never reported as a message type.
 

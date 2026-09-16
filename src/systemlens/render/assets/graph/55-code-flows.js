@@ -3,8 +3,10 @@
     const codeFlowsList = document.getElementById("code-flows");
     const codeFlowsEmpty = document.getElementById("code-flows-empty");
     const codeFlowFilter = document.getElementById("code-flow-filter");
+    const codeFlowScope = document.getElementById("code-flow-scope");
     const codeFlowCycles = document.getElementById("code-flow-cycles");
     const codeFlowsTitle = document.getElementById("code-flows-title");
+    let showAllCodeFlows = false;
     function codeFlowStepLabel(kind) {
       return ({
         http_entry: "Entrée HTTP",
@@ -135,10 +137,9 @@
       return edges.length || localLinks.length ? { nodes, edges, localLinks } : null;
     }
 
-    // The Flux tab is an inter-service navigation surface. Retain only flows
-    // whose reconciled topology path crosses a microservice boundary; local
-    // method paths and flows confined to one microservice remain persisted
-    // source evidence but stay out of this tab.
+    // The default Flux tab is an inter-service navigation surface. The scope
+    // toggle below can deliberately broaden it to every persisted flow,
+    // including local input/output paths and method-only evidence.
     const interServiceCodeFlows = codeFlows.filter(flow => {
       const path = pathForCodeFlow(flow);
       if (!path) return false;
@@ -250,7 +251,8 @@
     function renderCodeFlows() {
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
       const cyclesOnly = codeFlowCycles.getAttribute("aria-pressed") === "true";
-      const visible = interServiceCodeFlows.filter(flow => {
+      const scopedCodeFlows = showAllCodeFlows ? codeFlows : interServiceCodeFlows;
+      const visible = scopedCodeFlows.filter(flow => {
         const haystack = [
           flow.id,
           flow.module,
@@ -307,10 +309,18 @@
       codeFlowCycles.disabled = cycleCount === 0;
       codeFlowsTitle.textContent = cyclesOnly
         ? `Cycles détectés (${visible.length})`
-        : `Flux inter-services (${visible.length}/${interServiceCodeFlows.length})`;
+        : showAllCodeFlows
+          ? `Tous les flux (${visible.length}/${codeFlows.length})`
+          : `Flux inter-services (${visible.length}/${interServiceCodeFlows.length})`;
+      codeFlowScope.textContent = showAllCodeFlows ? "Flux inter-services" : "Tous les flux";
+      codeFlowScope.setAttribute("aria-pressed", String(showAllCodeFlows));
     }
 
     codeFlowFilter.addEventListener("input", renderCodeFlows);
+    codeFlowScope.addEventListener("click", () => {
+      showAllCodeFlows = !showAllCodeFlows;
+      renderCodeFlows();
+    });
     codeFlowCycles.addEventListener("click", () => {
       codeFlowCycles.setAttribute("aria-pressed", String(codeFlowCycles.getAttribute("aria-pressed") !== "true"));
       renderCodeFlows();

@@ -53,6 +53,7 @@
     function relationText(link) {
       const source = nodeDataById.get(link.source);
       const target = nodeDataById.get(link.target);
+      const warning = link.message_type_warning ? ` · ⚠ ${link.message_type_warning}` : "";
       if (link.kind === "rest") {
         const resource = restResourceLabel(link, target);
         return resource
@@ -63,9 +64,10 @@
       if (link.kind === "request_reply") return `Topic request/reply · ${source.name} → ${target.name}`;
       if (source.kind === "microservice") {
         const types = link.published_message_types || [];
-        return `Topic · ${source.name} publie${types.length ? ` <${types.join(", ")}>` : ""} sur ${target.name}`;
+        return `Topic · ${source.name} publie${types.length ? ` <${types.join(", ")}>` : ""} sur ${target.name}${warning}`;
       }
-      return `Topic · ${target.name} consomme ${source.name}`;
+      const types = link.consumed_message_types || [];
+      return `Topic · ${target.name} consomme ${source.name}${types.length ? ` <${types.join(", ")}>` : ""}${warning}`;
     }
     function shortestPath(sourceId, targetId, matchesLink = () => true) {
       const outgoing = new Map();

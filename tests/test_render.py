@@ -152,6 +152,29 @@ def test_global_input_label_references_its_local_output() -> None:
     }
 
 
+def test_graph_keeps_unmatched_and_dynamic_kafka_evidence() -> None:
+    producer = replace(_kafka_endpoint("produce", "OrderCreated", "Publisher.java"), id="orders-out")
+    dynamic_consumer = replace(
+        _kafka_endpoint("consume", "OrderCreated", "Consumer.java"),
+        id="unknown-in",
+        topic="<dynamic>",
+        topic_dynamic=True,
+        message_type=None,
+    )
+
+    data = _html_graph_data(render_graph_html(
+        {"orders": [producer], "payments": [dynamic_consumer]}, []
+    ))
+
+    assert any(node["id"] == "kafka_topic:orders.created" for node in data["nodes"])
+    dynamic = next(node for node in data["nodes"] if node.get("unresolved"))
+    assert dynamic["kind"] == "kafka_topic"
+    assert len(data["links"]) == 2
+    assert all(link["unresolved"] for link in data["links"])
+    assert any(link["message_type_status"] == "unknown" for link in data["links"])
+    assert any("Aucun endpoint opposé" in link["message_type_warning"] for link in data["links"])
+
+
 def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> None:
     endpoint = _rest_endpoint("serve", "POST /orders", "OrderController.java")
     endpoint = replace(endpoint, id="receive-order", qualified_name="com.example.OrderController")
@@ -407,10 +430,14 @@ def test_graph_html_flux_lists_only_reconciled_inter_service_code_flows() -> Non
     document = render_graph_html({}, [])
 
     assert "const interServiceCodeFlows = codeFlows.filter(flow =>" in document
+    assert 'id="code-flow-scope"' in document
+    assert "showAllCodeFlows ? codeFlows : interServiceCodeFlows" in document
     assert 'nodeDataById.get(nodeId)?.kind === "microservice"' in document
     assert "return services.size >= 2;" in document
-    assert "const visible = interServiceCodeFlows.filter(flow =>" in document
+    assert "const scopedCodeFlows = showAllCodeFlows ? codeFlows : interServiceCodeFlows;" in document
+    assert "const visible = scopedCodeFlows.filter(flow =>" in document
     assert "Flux inter-services (${visible.length}/${interServiceCodeFlows.length})" in document
+    assert "Tous les flux (${visible.length}/${codeFlows.length})" in document
 
 
 def test_graph_html_uses_only_indexed_kafka_dto_facts(tmp_path: Path) -> None:

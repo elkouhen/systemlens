@@ -717,6 +717,10 @@
                 const messageType = document.createElement("code");
                 messageType.textContent = `Type Java : ${port.message_type}`;
                 tooltip.append(messageType);
+              } else if (port.message_type_warning) {
+                const messageType = document.createElement("code");
+                messageType.textContent = `⚠ ${port.message_type_warning}`;
+                tooltip.append(messageType);
               }
               if (port.local_outputs?.length) {
                 const localOutputs = document.createElement("span");
