@@ -399,13 +399,17 @@ def _index_repo(
         for path in changed:
             if not path.endswith(".java"):
                 continue
-            if java_parser.parse_java(str(repo_root), path) is None:
+            parsed_java = java_parser.parse_java(str(repo_root), path)
+            if parsed_java is not None and parsed_java[1].has_error:
                 diagnostics.append(ExtractionDiagnostic(
                     path=path,
                     extractor="tree-sitter-java",
                     category="parse_failed",
                     severity="warning",
-                    detail="Java source could not be parsed; no facts were extracted from this file.",
+                    detail=(
+                        "Java source contains syntax errors; partial facts may have been "
+                        "extracted, but coverage is incomplete."
+                    ),
                 ))
         store.replace_extraction_diagnostics_for_files(changed, diagnostics)
 

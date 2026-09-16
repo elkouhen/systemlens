@@ -431,13 +431,15 @@ def test_graph_html_flux_lists_only_reconciled_inter_service_code_flows() -> Non
 
     assert "const interServiceCodeFlows = codeFlows.filter(flow =>" in document
     assert 'id="code-flow-scope"' in document
-    assert "showAllCodeFlows ? codeFlows : interServiceCodeFlows" in document
+    assert '<option value="local">Flux internes</option>' in document
+    assert "const localCodeFlows = codeFlows.filter(flow =>" in document
     assert 'nodeDataById.get(nodeId)?.kind === "microservice"' in document
     assert "return services.size >= 2;" in document
-    assert "const scopedCodeFlows = showAllCodeFlows ? codeFlows : interServiceCodeFlows;" in document
+    assert "const scopedCodeFlows = scope === \"all\"" in document
     assert "const visible = scopedCodeFlows.filter(flow =>" in document
     assert "Flux inter-services (${visible.length}/${interServiceCodeFlows.length})" in document
     assert "Tous les flux (${visible.length}/${codeFlows.length})" in document
+    assert "Flux internes (${visible.length}/${localCodeFlows.length})" in document
 
 
 def test_graph_html_uses_only_indexed_kafka_dto_facts(tmp_path: Path) -> None:

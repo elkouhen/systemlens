@@ -524,7 +524,31 @@ def test_index_persists_a_safe_java_parse_diagnostic(tmp_path: Path) -> None:
     assert [(item.path, item.extractor, item.category, item.severity) for item in diagnostics] == [
         ("Broken.java", "tree-sitter-java", "parse_failed", "warning")
     ]
-    assert "class Broken" not in diagnostics[0].detail
+    assert diagnostics[0].detail == (
+        "Java source contains syntax errors; partial facts may have been "
+        "extracted, but coverage is incomplete."
+    )
+
+
+def test_index_keeps_valid_facts_from_a_partially_parsed_java_file(tmp_path: Path) -> None:
+    source = tmp_path / "Mixed.java"
+    source.write_text(
+        """import org.springframework.web.bind.annotation.*;
+@RestController class Good {
+  @GetMapping(\"/ok\") String ok() { return \"ok\"; }
+}
+class Broken { void run( {
+""",
+        encoding="utf-8",
+    )
+
+    with Store(tmp_path) as store:
+        index_repo(tmp_path, Config(), store)
+        endpoints = store.all_endpoints()
+        diagnostics = store.all_extraction_diagnostics()
+
+    assert any(endpoint.role == "serve" and endpoint.topic == "GET /ok" for endpoint in endpoints)
+    assert [item.path for item in diagnostics] == ["Mixed.java"]
 
 
 def test_cli_index_does_not_require_an_embedding_model(tmp_path: Path, monkeypatch) -> None:

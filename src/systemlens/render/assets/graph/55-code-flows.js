@@ -6,7 +6,6 @@
     const codeFlowScope = document.getElementById("code-flow-scope");
     const codeFlowCycles = document.getElementById("code-flow-cycles");
     const codeFlowsTitle = document.getElementById("code-flows-title");
-    let showAllCodeFlows = false;
     function codeFlowStepLabel(kind) {
       return ({
         http_entry: "Entrée HTTP",
@@ -138,8 +137,7 @@
     }
 
     // The default Flux tab is an inter-service navigation surface. The scope
-    // toggle below can deliberately broaden it to every persisted flow,
-    // including local input/output paths and method-only evidence.
+    // selector below can broaden or narrow it to persisted local paths.
     const interServiceCodeFlows = codeFlows.filter(flow => {
       const path = pathForCodeFlow(flow);
       if (!path) return false;
@@ -147,6 +145,15 @@
         nodeDataById.get(nodeId)?.kind === "microservice"
       )));
       return services.size >= 2;
+    });
+    const localCodeFlows = codeFlows.filter(flow => {
+      const endpointIds = [...new Set((flow.steps || [])
+        .map(step => step.endpoint_id)
+        .filter(Boolean))];
+      const services = new Set(endpointIds.flatMap(endpointId => (
+        nodeIdsByEndpoint.get(endpointId) || []
+      )).filter(nodeId => nodeDataById.get(nodeId)?.kind === "microservice"));
+      return endpointIds.length >= 2 && services.size === 1;
     });
 
     function showCodeFlow(flow) {
@@ -251,7 +258,12 @@
     function renderCodeFlows() {
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
       const cyclesOnly = codeFlowCycles.getAttribute("aria-pressed") === "true";
-      const scopedCodeFlows = showAllCodeFlows ? codeFlows : interServiceCodeFlows;
+      const scope = codeFlowScope.value;
+      const scopedCodeFlows = scope === "all"
+        ? codeFlows
+        : scope === "local"
+          ? localCodeFlows
+          : interServiceCodeFlows;
       const visible = scopedCodeFlows.filter(flow => {
         const haystack = [
           flow.id,
@@ -304,23 +316,20 @@
       codeFlowsList.replaceChildren(...serviceGroups);
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
-      const cycleCount = interServiceCodeFlows.filter(flow => flow.status === "cycle").length;
+      const cycleCount = scopedCodeFlows.filter(flow => flow.status === "cycle").length;
       codeFlowCycles.textContent = `Cycles uniquement (${cycleCount})`;
       codeFlowCycles.disabled = cycleCount === 0;
       codeFlowsTitle.textContent = cyclesOnly
         ? `Cycles détectés (${visible.length})`
-        : showAllCodeFlows
+        : scope === "all"
           ? `Tous les flux (${visible.length}/${codeFlows.length})`
-          : `Flux inter-services (${visible.length}/${interServiceCodeFlows.length})`;
-      codeFlowScope.textContent = showAllCodeFlows ? "Flux inter-services" : "Tous les flux";
-      codeFlowScope.setAttribute("aria-pressed", String(showAllCodeFlows));
+          : scope === "local"
+            ? `Flux internes (${visible.length}/${localCodeFlows.length})`
+            : `Flux inter-services (${visible.length}/${interServiceCodeFlows.length})`;
     }
 
     codeFlowFilter.addEventListener("input", renderCodeFlows);
-    codeFlowScope.addEventListener("click", () => {
-      showAllCodeFlows = !showAllCodeFlows;
-      renderCodeFlows();
-    });
+    codeFlowScope.addEventListener("change", renderCodeFlows);
     codeFlowCycles.addEventListener("click", () => {
       codeFlowCycles.setAttribute("aria-pressed", String(codeFlowCycles.getAttribute("aria-pressed") !== "true"));
       renderCodeFlows();

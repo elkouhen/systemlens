@@ -75,10 +75,13 @@ def java_parser(owner: str = "") -> Parser:
 def parse_java(repo_root_str: str, rel_path: str) -> tuple[bytes, Node] | None:
     """Parse a `.java` file once and return ``(source_bytes, root_node)``.
 
-    Returns ``None`` when the file cannot be read or fails to parse
-    (``root_node.has_error``).  Cached: the same tree is reused for every
-    extractor that visits the file during one indexation.  Cleared by
-    :func:`clear_caches` (wired into ``scanner.clear_analysis_caches``).
+    Returns ``None`` only when the file cannot be read. Tree-sitter's error
+    nodes are retained: a source file can contain a local syntax error while
+    still providing useful declarations and integrations elsewhere. Callers
+    must inspect ``root_node.has_error`` and surface incomplete coverage when
+    needed. Cached: the same tree is reused for every extractor that visits the
+    file during one indexation. Cleared by :func:`clear_caches` (wired into
+    ``scanner.clear_analysis_caches``).
     """
     path = Path(repo_root_str) / rel_path
     try:
@@ -86,8 +89,6 @@ def parse_java(repo_root_str: str, rel_path: str) -> tuple[bytes, Node] | None:
     except OSError:
         return None
     tree = java_parser("parse_java").parse(source)
-    if tree.root_node.has_error:
-        return None
     return source, tree.root_node
 
 

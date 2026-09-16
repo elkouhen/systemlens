@@ -302,8 +302,10 @@ presents a compact list of persisted potential call graphs that reconcile to a
 trigger; it does not show method, confidence, or status details before a
 selection. Flows confined to one microservice remain persisted source
 evidence but are excluded from the default list. The Flux tab provides a
-`Tous les flux` toggle to include every persisted flow, including
-same-microservice flows and flows whose topology cannot be fully reconciled.
+scope selector with `Inter-services`, `Tous les flux`, and `Flux internes`.
+`Flux internes` isolates persisted flows with distinct input/output endpoints
+belonging to the same microservice; `Tous les flux` additionally includes
+flows whose topology cannot be fully reconciled.
 Selecting a reconciled call graph opens
  the Explorer tab and displays only the microservices involved in the path,
  their indexed ports, and the direct dependencies between those ports. Topics
