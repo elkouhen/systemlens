@@ -285,7 +285,7 @@ def _infer_rest_parameter_type(
             body_types.append(declared_type)
         else:
             other_types.append(declared_type)
-    return (body_types or other_types or [None])[0]
+    return (body_types or other_types)[0] if body_types or other_types else None
 def _module_for_path(repo_root: Path, rel_path: str) -> str | None:
     """Module Maven (`pom.xml`) en priorité (choix explicite, ADR-32) ;
     repli sur la détection de service Gradle (BACKLOG-15 H1, ADR-33) quand

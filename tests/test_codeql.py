@@ -11,6 +11,40 @@ def test_query_scopes_source_calls_and_folds_dispatch_resolution() -> None:
     assert "predicate resolvedTarget(MethodCall call, Method target, string confidence)" in codeql._QUERY
     assert codeql._QUERY.count("exactVirtualMethod(call)") == 1
     assert "not exists(Method exact | exactTarget(call, exact))" in codeql._QUERY
+    assert "target.fromSource()" in codeql._QUERY
+
+
+def test_source_only_root_keeps_generated_sources_but_excludes_build_outputs(tmp_path: Path) -> None:
+    (tmp_path / "pom.xml").write_text("<project />", encoding="utf-8")
+    (tmp_path / "service" / "src" / "Main.java").parent.mkdir(parents=True)
+    (tmp_path / "service" / "src" / "Main.java").write_text("class Main {}", encoding="utf-8")
+    (tmp_path / "service" / "target").mkdir()
+    (tmp_path / "service" / "target" / "Generated.java").write_text("class Generated {}", encoding="utf-8")
+    (tmp_path / "service" / "target" / "generated-sources" / "asyncapi").mkdir(parents=True)
+    (tmp_path / "service" / "target" / "generated-sources" / "asyncapi" / "OrderPlaced.java").write_text(
+        "class OrderPlaced {}", encoding="utf-8"
+    )
+    destination = tmp_path / "source"
+
+    assert codeql._prepare_source_only_root(tmp_path, destination) == 2
+    assert (destination / "service" / "src" / "Main.java").exists()
+    assert not (destination / "pom.xml").exists()
+    assert not (destination / "service" / "target" / "Generated.java").exists()
+    assert (destination / "service" / "target" / "generated-sources" / "asyncapi" / "OrderPlaced.java").exists()
+
+
+def test_generate_sources_runs_only_the_maven_generation_phase(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "pom.xml").write_text("<project />", encoding="utf-8")
+    observed: list[tuple[list[str], Path | None]] = []
+
+    def run(command: list[str], **kwargs: object) -> CompletedProcess[str]:
+        observed.append((command, kwargs.get("cwd")))
+        return CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(codeql, "_run_with_progress", run)
+    codeql._generate_sources(tmp_path, timeout=42, progress=None)
+
+    assert observed == [(["mvn", "-B", "-ntp", "generate-sources"], tmp_path)]
 
 
 def test_automatic_codeql_database_is_source_only_and_temporary(
@@ -36,7 +70,7 @@ def test_automatic_codeql_database_is_source_only_and_temporary(
     assert not database_path.exists()
     assert commands == [([
         "codeql", "database", "create", str(database_path), "--language=java",
-        f"--source-root={tmp_path.resolve()}", "--build-mode=none", "--threads=4", "--ram=4096",
+        f"--source-root={database_path.parent / 'source'}", "--build-mode=none", "--threads=4", "--ram=4096",
     ], 42)]
 
 

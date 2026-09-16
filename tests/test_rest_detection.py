@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from systemlens.modules import discover_rest_controllers, discover_modules
+from systemlens.discovery.build.modules import discover_rest_controllers, discover_modules
 from systemlens.discovery.build.maven import (
     _has_openapi_generator_plugin,
     detect_openapi_generated_clients,

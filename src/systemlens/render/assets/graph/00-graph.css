@@ -35,7 +35,7 @@
     #graph-port-paths { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; }
     .graph-port-path { fill: none; stroke: #7c3aed; stroke-width: 2; stroke-linecap: round; opacity: .9; }
     .graph-port-path.is-kafka { stroke: #009e73; }
-    .graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; opacity: 1; }
+    .graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 1; }
     .graph-call-path.is-kafka { stroke: #008f69; }
     .graph-local-port-path { fill: none; stroke: #d97706; stroke-width: 1.5; stroke-dasharray: 3 2; stroke-linecap: round; opacity: .9; }
     .graph-local-port-path.is-code-flow-path { stroke: #7c3aed; stroke-width: 3; stroke-dasharray: none; opacity: 1; }

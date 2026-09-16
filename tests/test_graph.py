@@ -11,7 +11,7 @@ from systemlens.domain.graph import (
 from dataclasses import replace
 
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
-from systemlens.store import Store
+from systemlens.storage.sqlite import Store
 
 
 def make_endpoint(

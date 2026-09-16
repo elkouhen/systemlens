@@ -7,16 +7,16 @@ from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEnd
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.discovery.kubernetes import KubernetesWorkload
-from systemlens.modules import (
+from systemlens.domain.module_inventory import (
     DiscoveredModule,
     ModuleDependency,
     MongoField,
     MongoPersistenceClass,
     MongoMethod,
-    discover_modules,
 )
+from systemlens.discovery.build.modules import discover_modules
 from systemlens.render import _vscode_file_uri, render_graph_html
-from systemlens.store import Store
+from systemlens.storage.sqlite import Store
 
 
 def _kafka_endpoint(
@@ -467,6 +467,16 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="resources-filter"' in document
     assert 'id="kafka-tab"' in document
     assert 'id="persistence-tab"' in document
+    tab_order = [
+        document.index('id="graph-tab"'),
+        document.index('id="resources-tab"'),
+        document.index('id="flows-tab"'),
+        document.index('id="openapi-tab"'),
+        document.index('id="kafka-tab"'),
+        document.index('id="persistence-tab"'),
+        document.index('id="issues-tab"'),
+    ]
+    assert tab_order == sorted(tab_order)
     assert '>Topics</button>' in document
     assert '>Data</button>' in document
     assert 'Schémas de données d’événements' in document
@@ -680,8 +690,19 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'graphFlowStatus.hidden = context.topologyReconciled !== false;' in document
     assert 'Cycles uniquement (${cycleCount})' in document
     assert "graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)" in document
+    assert 'type: "arrow"' in document
+    assert 'const callGraphPath = (link, edgeKey, index) =>' in document
+    assert 'const sourceAnchor = (link.endpoint_ids || [])' in document
+    assert 'orthogonalPath(' in document
+    assert 'const selectedCallGraphLinks = callGraphOnly' in document
+    assert 'graphState.relatedEdges.has(edge) || callGraphEdgeKeys.has(edge)' in document
     assert 'path.classList.add("graph-call-path")' in document
-    assert 'if (graphState.relatedEdges.has(edge)) return { ...data, hidden: true };' in document
+    assert ".graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2;" in document
+    assert 'obstacleRouted' in document
+    assert 'const occupiedCallGraphSegments = []' in document
+    assert '@mr_mint/elkjs-libavoid' in document
+    assert 'routeEdges(routeGraph' in document
+    assert 'shapeBufferDistance: 14' in document
     assert 'is-code-flow-node' in document
     assert 'Selection must not change the card geometry' in document
     assert 'graph-flow-port-tooltip' not in document
@@ -690,7 +711,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "return { ...data, hidden: true };" in document
     assert "const selectedPortLinks =" in document
     assert "selectedEndpointIds.has(link.target_endpoint_id)" in document
-    assert "const ratioFactor = Math.max(1, spanX / availableWidth, spanY / availableHeight);" in document
+    assert "const ratioFactor = Math.max(.01, spanX / availableWidth, spanY / availableHeight);" in document
+    assert "for (let pass = 0; pass < 4; pass += 1)" in document
+    assert "function scheduleFlowCameraFit(path, attempt = 0)" in document
     assert ".toolbar { overflow-x: hidden; }" in document
     assert 'id="graph-context"' in document
     assert "graphContext.hidden = !showingGraph" in document

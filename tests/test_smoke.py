@@ -1,7 +1,7 @@
 import systemlens
 from typer.testing import CliRunner
 
-from systemlens.cli import app
+from systemlens.delivery.cli import app
 
 
 def test_version() -> None:

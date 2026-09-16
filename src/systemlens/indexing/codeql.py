@@ -49,7 +49,7 @@ class SourceMethodCall extends MethodCall {
 
 /** Compute the exact-dispatch relation once as a tightly bound predicate. */
 predicate exactTarget(MethodCall call, Method target) {
-  target = exactVirtualMethod(call)
+  target = exactVirtualMethod(call) and target.fromSource()
 }
 
 /**
@@ -61,7 +61,14 @@ predicate resolvedTarget(MethodCall call, Method target, string confidence) {
   exactTarget(call, target) and confidence = "exact"
   or
   not exists(Method exact | exactTarget(call, exact)) and
-  target = viableCallable(call) and confidence = "possible"
+  target = viableCallable(call) and target.fromSource() and confidence = "possible"
+  or
+  // In buildless databases a virtual implementation can be unavailable even
+  // though the source-declared interface method is indexed. Keep that
+  // declared source method so the Python join can conservatively bridge it
+  // to a unique source implementation carrying an integration endpoint.
+  not exists(Method exact | exactTarget(call, exact)) and
+  target = call.getMethod() and target.fromSource() and confidence = "possible"
 }
 
 from SourceMethodCall call, Callable enclosing, Method invoked, string dispatch_confidence
@@ -88,15 +95,16 @@ def _run_with_progress(
     *,
     timeout: int,
     progress: Callable[[str], None] | None,
+    cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run CodeQL while optionally forwarding its combined output live."""
     if progress is None:
         return subprocess.run(
-            command, capture_output=True, text=True, timeout=timeout, check=False,
+            command, capture_output=True, text=True, timeout=timeout, check=False, cwd=cwd,
         )
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, bufsize=1,
+        text=True, bufsize=1, cwd=cwd,
     )
     output: list[str] = []
     assert process.stdout is not None
@@ -107,11 +115,67 @@ def _run_with_progress(
     return subprocess.CompletedProcess(command, returncode, "".join(output), "")
 
 
+def _prepare_source_only_root(repo_root: Path, destination: Path) -> int:
+    """Copy application and generated Java sources without build descriptors.
+
+    Maven projects may keep AsyncAPI/OpenAPI Java sources below
+    ``target/generated-sources``. They are needed to resolve calls whose
+    signatures use generated DTOs, while the rest of ``target`` remains an
+    untrusted build artifact and is intentionally excluded.
+    """
+    excluded_directories = {".git", ".systemlens", "target", "build", "out"}
+    copied = 0
+    for source in repo_root.rglob("*.java"):
+        if not source.is_file():
+            continue
+        relative = source.relative_to(repo_root)
+        parts = relative.parts
+        generated_target = any(
+            parts[index:index + 2] == ("target", "generated-sources")
+            for index in range(len(parts) - 1)
+        )
+        if any(part in excluded_directories for part in parts) and not generated_target:
+            continue
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        copied += 1
+    return copied
+
+
+def _prepare_generation_workspace(repo_root: Path, destination: Path) -> None:
+    """Copy the project to a disposable workspace before source generation."""
+    shutil.copytree(
+        repo_root,
+        destination,
+        ignore=shutil.ignore_patterns(
+            ".git", ".systemlens", ".venv", "node_modules", "target", "build", "out"
+        ),
+    )
+
+
+def _generate_sources(
+    workspace: Path, *, timeout: int, progress: Callable[[str], None] | None,
+) -> None:
+    """Run build-tool source generation only, never compilation or tests."""
+    if (workspace / "pom.xml").is_file():
+        command = ["mvn", "-B", "-ntp", "generate-sources"]
+    elif (workspace / "gradlew").is_file():
+        command = ["./gradlew", "--no-daemon", "generateSources"]
+    else:
+        return
+    completed = _run_with_progress(command, timeout=timeout, progress=progress, cwd=workspace)
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout).strip()
+        raise CodeQLError(f"Source generation failed: {detail}")
+
+
 @contextmanager
 def automatic_codeql_database(
     repo_root: Path, timeout_seconds: int = 600, threads: int = 1,
     ram_mb: int | None = None, verbosity: str | None = None,
     progress: Callable[[str], None] | None = None,
+    generate_sources: bool = False,
 ) -> Iterator[Path | None]:
     """Create a temporary source-only Java database for one index run.
 
@@ -125,9 +189,17 @@ def automatic_codeql_database(
         return
     with tempfile.TemporaryDirectory(prefix="systemlens-codeql-db-") as directory:
         database = Path(directory) / "database"
+        source_root = Path(directory) / "source"
+        generation_root = Path(directory) / "generated-project"
+        codeql_input = repo_root
+        if generate_sources:
+            _prepare_generation_workspace(repo_root, generation_root)
+            _generate_sources(generation_root, timeout=timeout_seconds, progress=progress)
+            codeql_input = generation_root
+        _prepare_source_only_root(codeql_input, source_root)
         command = [
             executable, "database", "create", str(database), "--language=java",
-            f"--source-root={repo_root.resolve()}", "--build-mode=none", f"--threads={threads}",
+            f"--source-root={source_root}", "--build-mode=none", f"--threads={threads}",
         ]
         if verbosity is not None:
             command.append(f"--verbosity={verbosity}")

@@ -15,7 +15,7 @@ from playwright.sync_api import Playwright, sync_playwright
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
-from systemlens.modules import DiscoveredModule, MongoField, MongoPersistenceClass
+from systemlens.domain.module_inventory import DiscoveredModule, MongoField, MongoPersistenceClass
 from systemlens.render import render_graph_html
 
 
@@ -1026,9 +1026,9 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert float(page.locator("#graph").get_attribute("data-flow-focus-ratio")) > 0
         assert page.locator(".graph-node-card-label.is-code-flow-node").count() == 2
         assert page.locator(".graph-local-port-path.is-code-flow-path").count() == 1
-        assert page.locator(".graph-port-path").count() == 1
-        assert page.locator(".graph-call-path").count() == 0
-        assert page.locator(".graph-port-path").evaluate_all(
+        assert page.locator(".graph-port-path").count() == 0
+        assert page.locator(".graph-call-path").count() == 1
+        assert page.locator(".graph-call-path").evaluate_all(
             "paths => paths.every(path => /^M(?: [0-9.-]+){2}(?: L(?: [0-9.-]+){2})+$/.test(path.getAttribute('d')))"
         )
         assert page.locator(
@@ -2113,6 +2113,8 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         assert page.locator("#graph-context").is_visible()
         _capture_render_snapshot(page, "constrained-after-explorer-tab")
         search = page.locator("#search")
+        search.fill("orders")
+        assert page.locator("#details").is_hidden()
         search.fill("orders -> orders.created -> payments")
         search.press("Enter")
         orders_stop = page.get_by_role("button", name="1. orders : Microservice")

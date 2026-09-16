@@ -266,6 +266,11 @@
       console.warn("Impossible de charger les dispositions du graphe.", error);
       return null;
     });
+    const libavoidLibrary = import("https://esm.sh/@mr_mint/elkjs-libavoid")
+      .catch(error => {
+        console.warn("Impossible de charger libavoid.", error);
+        return null;
+      });
 
     // Sigma invokes reducers while it is constructed, so these controls must
     // exist before creating the renderer.

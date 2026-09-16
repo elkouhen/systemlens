@@ -8,11 +8,11 @@ from typer.testing import CliRunner
 
 from systemlens import cli
 from systemlens.application.architecture_inventory import is_deployable_service
-from systemlens.cli import app
+from systemlens.delivery.cli import app
 from systemlens.infrastructure.config import Config
 from systemlens.indexing.service import index_repo
 from systemlens.domain.models import MessageEndpoint
-from systemlens.modules import (
+from systemlens.discovery.build.modules import (
     DiscoveredModule,
     ModuleDependency,
     deduplicate_openapi_contract_owners,
@@ -20,7 +20,7 @@ from systemlens.modules import (
     discover_modules,
     module_identity,
 )
-from systemlens.store import Store, StoreError
+from systemlens.storage.sqlite import Store, StoreError
 from systemlens.application.workspace import discover_workspace_services, load_federation
 
 runner = CliRunner()
@@ -439,7 +439,7 @@ class OrdersApplication {
 """
     )
     monkeypatch.setattr(
-        "systemlens.modules._starts_application",
+        "systemlens.discovery.build.modules._starts_application",
         lambda *_args, **_kwargs: pytest.fail("Tree-sitter entrypoint detection must stay disabled"),
     )
 

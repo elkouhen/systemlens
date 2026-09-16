@@ -5,7 +5,7 @@ import pytest
 from typer.testing import CliRunner
 
 from systemlens import cli
-from systemlens.cli import app
+from systemlens.delivery.cli import app
 
 
 runner = CliRunner()

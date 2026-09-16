@@ -150,6 +150,46 @@
       flowTooltipOverlay.replaceChildren();
       renderer?.kill();
       network = new graphology.MultiDirectedGraph();
+      const selectedEndpointIds = new Set(
+        graphData.links.flatMap((topologyLink, index) => (
+          graphState.relatedEdges?.has(`edge-${index}`)
+            ? (topologyLink.endpoint_ids || [])
+            : []
+        ))
+      );
+      const endpointOwners = new Map(
+        graphData.nodes.flatMap(node => (
+          node.kind === "microservice"
+            ? (node.ports || []).map(port => [port.endpoint_id, node.id])
+            : []
+        ))
+      );
+      const selectedCallGraphLinks = callGraphOnly
+        ? [
+          ...graphData.links
+          .map((link, index) => ({ link, index }))
+          .filter(({ link, index }) => (
+            graphState.relatedEdges?.has(`edge-${index}`)
+            && [link.source, link.target].every(nodeId => nodeDataById.get(nodeId)?.kind === "microservice")
+          )),
+          ...(graphData.port_links || [])
+            .filter(link => selectedEndpointIds.has(link.source_endpoint_id)
+              && selectedEndpointIds.has(link.target_endpoint_id))
+            .map((link, index) => ({
+              link: {
+                source: endpointOwners.get(link.source_endpoint_id),
+                target: endpointOwners.get(link.target_endpoint_id),
+                kind: link.kind,
+                label: link.kind === "rest" ? "HTTP" : "Topic",
+                endpoint_ids: [link.source_endpoint_id, link.target_endpoint_id],
+              },
+              index: `port-${index}`,
+              edgeKey: `call-edge-${index}`,
+            }))
+            .filter(({ link }) => link.source && link.target && link.source !== link.target),
+        ]
+        : [];
+      const callGraphEdgeKeys = new Set(selectedCallGraphLinks.map(({ index, edgeKey }) => edgeKey || `edge-${index}`));
       const visualNodeKind = node => {
         if (node.kind === "data_schema") return "mongodb_collection";
         if (node.kind === "message_channel") return "kafka_topic";
@@ -169,6 +209,10 @@
       }));
       visibleLinks.forEach((link, index) => network.addEdgeWithKey(`edge-${index}`, link.source, link.target, {
         label: link.label, size: .85, color: relationColor(link), kind: link.kind, type: "arrow",
+      }));
+      selectedCallGraphLinks.forEach(({ link, index, edgeKey }) => network.addEdgeWithKey(edgeKey || `edge-${index}`, link.source, link.target, {
+        label: link.label, size: 1.8, color: relationColor(link), kind: link.kind,
+        type: "arrow",
       }));
       initialNodePositions = new Map();
       network.forEachNode((node, attributes) => initialNodePositions.set(node, { x: attributes.x, y: attributes.y }));
@@ -236,10 +280,9 @@
         edgeReducer: (edge, data) => {
           if (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge))) return { ...data, hidden: true };
           if (graphState.selectedCodeFlowId) {
-            // Selected call-graph edges are redrawn as orthogonal SVG paths
-            // after the HTML cards have been positioned.
-            if (graphState.relatedEdges.has(edge)) return { ...data, hidden: true };
-            return { ...data, hidden: true };
+            return (graphState.relatedEdges.has(edge) || callGraphEdgeKeys.has(edge)) && !data.obstacleRouted
+              ? { ...data, size: 2.1 }
+              : { ...data, hidden: true };
           }
           if (graphState.selectedId && graphState.relatedEdges.has(edge)) return { ...data, size: 1.5 };
           if (graphState.clusteredView || graphState.layeredClusterView) return { ...data, size: .5 };
@@ -311,6 +354,41 @@
         });
         return placements;
       }
+      let libavoidRoutes = new Map();
+      let libavoidRouteKey = "";
+      let libavoidRequestId = 0;
+      let libavoidUnavailableLogged = false;
+      const routeWithLibavoid = (routeKey, routeGraph) => {
+        if (!routeGraph.edges.length || routeKey === libavoidRouteKey) return;
+        libavoidRouteKey = routeKey;
+        const requestId = ++libavoidRequestId;
+        libavoidLibrary.then(async libavoid => {
+          if (!libavoid?.routeEdges) throw new Error("libavoid indisponible");
+          await libavoid.init(
+            "https://cdn.jsdelivr.net/npm/libavoid-js@0.5.0-beta.5/dist/libavoid.wasm"
+          );
+          return libavoid.routeEdges(routeGraph, {
+            routingType: "orthogonal",
+            shapeBufferDistance: 14,
+            idealNudgingDistance: 18,
+            crossingPenalty: 1000,
+            fixedSharedPathPenalty: 100,
+            nudgeOrthogonalSegmentsConnectedToShapes: true,
+            nudgeOrthogonalTouchingColinearSegments: true,
+            nudgeSharedPathsWithCommonEndPoint: true,
+          });
+        }).then(routes => {
+          if (requestId !== libavoidRequestId) return;
+          libavoidRoutes = routes;
+          renderer.refresh();
+          requestGraphRender();
+        }).catch(error => {
+          if (!libavoidUnavailableLogged) {
+            console.warn("Impossible de charger libavoid ; routage orthogonal de repli utilisé.", error);
+            libavoidUnavailableLogged = true;
+          }
+        });
+      };
       renderOverlays = () => {
         nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         portPathOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
@@ -791,8 +869,9 @@
           }
           return false;
         });
-        const orthogonalPath = (start, end, sourceId, targetId) => {
+        const orthogonalPath = (start, end, sourceId, targetId, occupiedSegments = []) => {
           const padding = 14;
+          const viewportMargin = 42;
           const obstacles = obstacleBounds
             .filter(obstacle => ![sourceId, targetId].includes(obstacle.id))
             .map(obstacle => ({
@@ -802,11 +881,11 @@
               bottom: obstacle.bottom + padding,
             }));
           const xLanes = [...new Set([
-            start[0], end[0], 8, Math.max(8, overlayBounds.width - 8),
+            start[0], end[0], viewportMargin, Math.max(viewportMargin, overlayBounds.width - viewportMargin),
             ...obstacles.flatMap(obstacle => [obstacle.left, obstacle.right]),
           ])];
           const yLanes = [...new Set([
-            start[1], end[1], 8, Math.max(8, overlayBounds.height - 8),
+            start[1], end[1], viewportMargin, Math.max(viewportMargin, overlayBounds.height - viewportMargin),
             ...obstacles.flatMap(obstacle => [obstacle.top, obstacle.bottom]),
           ])];
           const candidates = [];
@@ -814,18 +893,29 @@
             const compact = points.filter((point, index) => (
               index === 0 || point[0] !== points[index - 1][0] || point[1] !== points[index - 1][1]
             ));
-            if (compact.every((point, index) => index === 0 || segmentIsClear(compact[index - 1], point, obstacles))) {
+            if (compact.every((point, index) => index === 0 || segmentIsClear(compact[index - 1], point, obstacles))
+              && pathIsClear(compact, [], occupiedSegments)) {
               const length = compact.slice(1).reduce((total, point, index) => (
                 total + Math.abs(point[0] - compact[index][0]) + Math.abs(point[1] - compact[index][1])
               ), 0);
-              candidates.push({ points: compact, score: length + (compact.length - 2) * 80 });
+              const edgeLanePenalty = compact.slice(1, -1).some(point => (
+                point[0] < 100 || point[0] > overlayBounds.width - 100
+                || point[1] < 100 || point[1] > overlayBounds.height - 100
+              )) ? 500 : 0;
+              candidates.push({
+                points: compact,
+                score: length + (compact.length - 2) * 80 + edgeLanePenalty,
+              });
             }
           };
           xLanes.forEach(x => addCandidate([start, [x, start[1]], [x, end[1]], end]));
           yLanes.forEach(y => addCandidate([start, [start[0], y], [end[0], y], end]));
-          if (!candidates.length) return `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`;
+          if (!candidates.length) return { d: `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`, points: [start, end] };
           const points = candidates.sort((left, right) => left.score - right.score)[0].points;
-          return points.map((point, index) => `${index ? "L" : "M"} ${point[0]} ${point[1]}`).join(" ");
+          return {
+            d: points.map((point, index) => `${index ? "L" : "M"} ${point[0]} ${point[1]}`).join(" "),
+            points,
+          };
         };
         const pointToSegmentDistance = (point, start, end) => {
           const dx = end[0] - start[0];
@@ -864,7 +954,7 @@
           }
           return true;
         };
-        const hybridPath = (start, end, sourceId, targetId, occupiedSegments = []) => {
+        const hybridPath = (start, end, sourceId, targetId, occupiedSegments = [], forceCurve = false) => {
           const padding = 14;
           const obstacles = obstacleBounds
             .filter(obstacle => ![sourceId, targetId].includes(obstacle.id))
@@ -874,55 +964,263 @@
               right: obstacle.right + padding,
               bottom: obstacle.bottom + padding,
             }));
-          if (pathIsClear([start, end], obstacles, occupiedSegments)) {
-            return { d: `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`, points: [start, end] };
+          if (!forceCurve && pathIsClear([start, end], obstacles, occupiedSegments)) {
+            return { d: `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`, points: [start, end], obstacleRouted: false };
           }
           const deltaX = end[0] - start[0];
           const deltaY = end[1] - start[1];
-          const bend = Math.max(34, Math.max(Math.abs(deltaX), Math.abs(deltaY)) * .34);
+          // Keep the handles visibly away from both card borders. A shallow
+          // handle pair makes the detour look almost straight even when it
+          // technically clears the obstacle.
+          const bend = Math.max(72, Math.max(Math.abs(deltaX), Math.abs(deltaY)) * .48);
           const lanes = [...new Set([
             -72, -48, -24, 0, 24, 48, 72,
             ...obstacles.flatMap(obstacle => [obstacle.top - start[1], obstacle.bottom - start[1]]),
             ...obstacles.flatMap(obstacle => [obstacle.left - start[0], obstacle.right - start[0]]),
           ])];
+          // A single lane puts both control points on the same line. Around
+          // an obstacle that produces a shallow curve which can still graze
+          // another card. Keep the endpoint handles long for continuity, but
+          // cap the middle deviation so long service arcs stay readable.
+          const middleDeviation = Math.min(48, Math.max(24, Math.hypot(deltaX, deltaY) * .12));
+          const controlPointSkews = [-.32, -.18, .18, .32].map(factor => factor * middleDeviation);
           const candidates = [];
-          const addCurve = (controlOne, controlTwo, lane) => {
+          const addCurve = (controlPoints, midpoint, lane, skew) => {
             const points = [];
+            const cubicPoint = (p0, p1, p2, p3, t) => {
+              const inverse = 1 - t;
+              return [
+                inverse ** 3 * p0[0] + 3 * inverse ** 2 * t * p1[0]
+                  + 3 * inverse * t ** 2 * p2[0] + t ** 3 * p3[0],
+                inverse ** 3 * p0[1] + 3 * inverse ** 2 * t * p1[1]
+                  + 3 * inverse * t ** 2 * p2[1] + t ** 3 * p3[1],
+              ];
+            };
             for (let step = 0; step <= 32; step += 1) {
               const t = step / 32;
-              const inverse = 1 - t;
-              points.push([
-                inverse ** 3 * start[0] + 3 * inverse ** 2 * t * controlOne[0]
-                  + 3 * inverse * t ** 2 * controlTwo[0] + t ** 3 * end[0],
-                inverse ** 3 * start[1] + 3 * inverse ** 2 * t * controlOne[1]
-                  + 3 * inverse * t ** 2 * controlTwo[1] + t ** 3 * end[1],
-              ]);
+              points.push(cubicPoint(start, controlPoints[0], controlPoints[1], midpoint, t));
+            }
+            for (let step = 1; step <= 32; step += 1) {
+              const t = step / 32;
+              points.push(cubicPoint(midpoint, controlPoints[2], controlPoints[3], end, t));
             }
             if (pathIsClear(points, obstacles, occupiedSegments)) {
               candidates.push({
-                d: `M ${start[0]} ${start[1]} C ${controlOne[0]} ${controlOne[1]}, ${controlTwo[0]} ${controlTwo[1]}, ${end[0]} ${end[1]}`,
+                d: `M ${start[0]} ${start[1]} C ${controlPoints[0][0]} ${controlPoints[0][1]}, ${controlPoints[1][0]} ${controlPoints[1][1]}, ${midpoint[0]} ${midpoint[1]} C ${controlPoints[2][0]} ${controlPoints[2][1]}, ${controlPoints[3][0]} ${controlPoints[3][1]}, ${end[0]} ${end[1]}`,
                 points,
-                score: Math.abs(lane) + bend,
+                obstacleRouted: true,
+                score: Math.abs(lane) + Math.abs(skew) * .35 + bend,
               });
             }
           };
           if (Math.abs(deltaX) >= Math.abs(deltaY)) {
-            lanes.forEach(lane => addCurve(
-              [start[0] + Math.sign(deltaX || 1) * bend, start[1] + lane],
-              [end[0] - Math.sign(deltaX || 1) * bend, end[1] + lane],
+            const direction = Math.sign(deltaX || 1);
+            const midpoint = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
+            lanes.forEach(lane => controlPointSkews.forEach(skew => addCurve(
+              [
+                [start[0] + direction * bend, start[1]],
+                [midpoint[0] - direction * bend * .35, midpoint[1] + lane + skew],
+                [midpoint[0] + direction * bend * .35, midpoint[1] + lane + skew],
+                [end[0] - direction * bend, end[1]],
+              ],
+              [midpoint[0], midpoint[1] + lane + skew],
               lane,
-            ));
+              skew,
+            )));
           } else {
-            lanes.forEach(lane => addCurve(
-              [start[0] + lane, start[1] + Math.sign(deltaY || 1) * bend],
-              [end[0] + lane, end[1] - Math.sign(deltaY || 1) * bend],
+            const direction = Math.sign(deltaY || 1);
+            const midpoint = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
+            lanes.forEach(lane => controlPointSkews.forEach(skew => addCurve(
+              [
+                [start[0], start[1] + direction * bend],
+                [midpoint[0] + lane + skew, midpoint[1] - direction * bend * .35],
+                [midpoint[0] + lane + skew, midpoint[1] + direction * bend * .35],
+                [end[0], end[1] - direction * bend],
+              ],
+              [midpoint[0] + lane + skew, midpoint[1]],
               lane,
-            ));
+              skew,
+            )));
           }
-          return candidates.length
-            ? candidates.sort((left, right) => left.score - right.score)[0]
-            : { d: orthogonalPath(start, end, sourceId, targetId), points: [start, end] };
+          if (candidates.length) return candidates.sort((left, right) => left.score - right.score)[0];
+          const orthogonal = orthogonalPath(start, end, sourceId, targetId, occupiedSegments);
+          return { d: orthogonal.d, points: orthogonal.points, obstacleRouted: true };
         };
+        const occupiedCallGraphSegments = [];
+        const libavoidNodes = new Map();
+        const libavoidEdges = [];
+        const ensureLibavoidNode = (card, bounds, anchor, portId, side) => {
+          const nodeId = card.dataset.nodeId;
+          if (!libavoidNodes.has(nodeId)) {
+            libavoidNodes.set(nodeId, {
+              id: nodeId,
+              x: bounds.left - overlayBounds.left,
+              y: bounds.top - overlayBounds.top,
+              width: bounds.width,
+              height: bounds.height,
+              ports: [],
+            });
+          }
+          const node = libavoidNodes.get(nodeId);
+          if (!node.ports.some(port => port.id === portId)) {
+            const anchorBounds = (anchor || card).getBoundingClientRect();
+            node.ports.push({
+              id: portId,
+              x: anchorBounds.left + anchorBounds.width / 2 - bounds.left,
+              y: anchorBounds.top + anchorBounds.height / 2 - bounds.top,
+              width: 1,
+              height: 1,
+              layoutOptions: { "org.eclipse.elk.port.side": side },
+            });
+          }
+          return nodeId;
+        };
+        const routePointsToPath = (route, start, end, sourceId, targetId) => {
+          if (!route?.sourcePoint || !route?.targetPoint) return null;
+          const points = [route.sourcePoint, ...(route.bendPoints || []), route.targetPoint]
+            .map(point => [point.x, point.y])
+            .filter(point => point.every(Number.isFinite));
+          if (points.length < 2) return null;
+          points[0] = start;
+          points[points.length - 1] = end;
+          if (points.length === 2) {
+            const obstacles = obstacleBounds
+              .filter(obstacle => ![sourceId, targetId].includes(obstacle.id))
+              .map(obstacle => ({
+                left: obstacle.left - 14,
+                top: obstacle.top - 14,
+                right: obstacle.right + 14,
+                bottom: obstacle.bottom + 14,
+              }));
+            const laneCandidates = [
+              Math.max(start[1], end[1]) + 80,
+              Math.min(start[1], end[1]) - 80,
+              (start[1] + end[1]) / 2 + 120,
+              (start[1] + end[1]) / 2 - 120,
+            ].map(lane => Math.max(42, Math.min(overlayBounds.height - 42, lane)));
+            const rectangular = laneCandidates.map(lane => [
+              start,
+              [start[0], lane],
+              [end[0], lane],
+              end,
+            ]).find(candidate => pathIsClear(candidate, obstacles));
+            if (rectangular) points.splice(0, points.length, ...rectangular);
+          }
+          // libavoid has no viewport boundary obstacle and may select y=0 or
+          // y=height for a detour. Keep intermediate horizontal lanes inside
+          // the readable graph area while preserving the port endpoints.
+          const viewportMargin = 28;
+          points.slice(1, -1).forEach(point => {
+            point[0] = Math.max(viewportMargin, Math.min(overlayBounds.width - viewportMargin, point[0]));
+            point[1] = Math.max(viewportMargin, Math.min(overlayBounds.height - viewportMargin, point[1]));
+          });
+          return {
+            d: points.map((point, index) => `${index ? "L" : "M"} ${point[0]} ${point[1]}`).join(" "),
+            points,
+            obstacleRouted: true,
+            router: "libavoid",
+          };
+        };
+        const callGraphPath = (link, edgeKey, index) => {
+          const sourceId = link.source;
+          const targetId = link.target;
+          const source = nodeLabelOverlay.querySelector(`[data-node-id="${CSS.escape(sourceId)}"]`);
+          const target = nodeLabelOverlay.querySelector(`[data-node-id="${CSS.escape(targetId)}"]`);
+          if (!source || !target) return null;
+          const sourceAnchor = (link.endpoint_ids || [])
+            .map(endpointId => anchorsByEndpointId.get(endpointId))
+            .find(anchor => anchor?.classList.contains("is-out"));
+          const targetAnchor = (link.endpoint_ids || [])
+            .map(endpointId => anchorsByEndpointId.get(endpointId))
+            .find(anchor => anchor?.classList.contains("is-in"));
+          const sourceBounds = (sourceAnchor || source).getBoundingClientRect();
+          const targetBounds = (targetAnchor || target).getBoundingClientRect();
+          const sourceCenter = [sourceBounds.left + sourceBounds.width / 2, sourceBounds.top + sourceBounds.height / 2];
+          const targetCenter = [targetBounds.left + targetBounds.width / 2, targetBounds.top + targetBounds.height / 2];
+          const deltaX = targetCenter[0] - sourceCenter[0];
+          const deltaY = targetCenter[1] - sourceCenter[1];
+          const start = Math.abs(deltaX) >= Math.abs(deltaY)
+            ? [sourceBounds.right + 6, sourceCenter[1]]
+            : [sourceCenter[0], sourceBounds.bottom + 6];
+          const end = Math.abs(deltaX) >= Math.abs(deltaY)
+            ? [targetBounds.left - 6, targetCenter[1]]
+            : [targetCenter[0], targetBounds.top - 6];
+          const resolvedEdgeKey = edgeKey || `call-edge-${index}`;
+          const sourcePortId = (link.endpoint_ids || []).find(endpointId => (
+            anchorsByEndpointId.get(endpointId)?.classList.contains("is-out")
+          )) || `${resolvedEdgeKey}-source`;
+          const targetPortId = (link.endpoint_ids || []).find(endpointId => (
+            anchorsByEndpointId.get(endpointId)?.classList.contains("is-in")
+          )) || `${resolvedEdgeKey}-target`;
+          const sourceSide = Math.abs(deltaX) >= Math.abs(deltaY) ? "EAST" : "SOUTH";
+          const targetSide = Math.abs(deltaX) >= Math.abs(deltaY) ? "WEST" : "NORTH";
+          ensureLibavoidNode(source, source.getBoundingClientRect(), sourceAnchor, sourcePortId, sourceSide);
+          ensureLibavoidNode(target, target.getBoundingClientRect(), targetAnchor, targetPortId, targetSide);
+          libavoidEdges.push({
+            id: resolvedEdgeKey,
+            source: sourceId,
+            target: targetId,
+          });
+          const startPoint = [start[0] - overlayBounds.left, start[1] - overlayBounds.top];
+          const endPoint = [end[0] - overlayBounds.left, end[1] - overlayBounds.top];
+          const libavoidRouted = routePointsToPath(
+            libavoidRoutes.get(resolvedEdgeKey),
+            startPoint,
+            endPoint,
+            sourceId,
+            targetId,
+          );
+          if (libavoidRouted) {
+            return libavoidRouted;
+          }
+          const routed = orthogonalPath(
+            [start[0] - overlayBounds.left, start[1] - overlayBounds.top],
+            [end[0] - overlayBounds.left, end[1] - overlayBounds.top],
+            sourceId,
+            targetId,
+            occupiedCallGraphSegments,
+          );
+          routed.obstacleRouted = true;
+          return routed;
+        };
+        selectedCallGraphLinks.forEach(({ link, index, edgeKey }) => {
+          const routed = callGraphPath(link, edgeKey, index);
+          if (!routed) return;
+          const resolvedEdgeKey = edgeKey || `edge-${index}`;
+          const wasRouted = network.getEdgeAttribute(resolvedEdgeKey, "obstacleRouted") === true;
+          if (wasRouted !== routed.obstacleRouted) {
+            network.setEdgeAttribute(resolvedEdgeKey, "obstacleRouted", routed.obstacleRouted);
+            renderer.refresh();
+          }
+          if (!routed.obstacleRouted) return;
+          occupiedCallGraphSegments.push(...routed.points.slice(1).map((point, pointIndex) => (
+            [routed.points[pointIndex], point]
+          )));
+          const path = document.createElementNS(svgNamespace, "path");
+          path.classList.add("graph-call-path");
+          if (link.kind === "kafka") path.classList.add("is-kafka");
+          path.setAttribute("marker-end", "url(#graph-port-arrow)");
+          if (routed.router) path.dataset.router = routed.router;
+          path.setAttribute("d", routed.d);
+          portPathOverlay.append(path);
+        });
+        routeWithLibavoid(
+          [...libavoidEdges].map(edge => `${edge.id}:${edge.source}:${edge.target}`).join("|"),
+          {
+            id: "call-graph-routing",
+            children: [
+              ...libavoidNodes.values(),
+              // libavoid routes around obstacles but has no viewport bounds.
+              // These four virtual shapes keep detours inside the readable
+              // SVG area instead of allowing a horizontal lane at its edge.
+              { id: "__viewport-top", x: -100, y: -100, width: overlayBounds.width + 200, height: 128 },
+              { id: "__viewport-bottom", x: -100, y: overlayBounds.height - 28, width: overlayBounds.width + 200, height: 128 },
+              { id: "__viewport-left", x: -100, y: 0, width: 128, height: overlayBounds.height },
+              { id: "__viewport-right", x: overlayBounds.width - 28, y: 0, width: 128, height: overlayBounds.height },
+            ],
+            edges: libavoidEdges,
+          },
+        );
         const occupiedPortSegments = [];
         const portPath = (source, target) => {
           const sourceBounds = source.getBoundingClientRect();
@@ -933,7 +1231,7 @@
           const arrowGap = 6;
           const start = [sourceBounds.right + arrowGap - overlayBounds.left, sourceBounds.top + sourceBounds.height / 2 - overlayBounds.top];
           const end = [targetBounds.left - arrowGap - overlayBounds.left, targetBounds.top + targetBounds.height / 2 - overlayBounds.top];
-          const routed = hybridPath(
+          const routed = orthogonalPath(
             start,
             end,
             source.closest(".graph-node-card-label")?.dataset.nodeId,
@@ -945,69 +1243,14 @@
           )));
           return routed.d;
         };
-        const cardPath = (sourceId, targetId) => {
-          const source = nodeLabelOverlay.querySelector(`[data-node-id="${CSS.escape(sourceId)}"]`);
-          const target = nodeLabelOverlay.querySelector(`[data-node-id="${CSS.escape(targetId)}"]`);
-          if (!source || !target) return null;
-          const sourceBounds = source.getBoundingClientRect();
-          const targetBounds = target.getBoundingClientRect();
-          const sourceCenter = [sourceBounds.left + sourceBounds.width / 2, sourceBounds.top + sourceBounds.height / 2];
-          const targetCenter = [targetBounds.left + targetBounds.width / 2, targetBounds.top + targetBounds.height / 2];
-          const deltaX = targetCenter[0] - sourceCenter[0];
-          const deltaY = targetCenter[1] - sourceCenter[1];
-          let start;
-          let end;
-          if (Math.abs(deltaX) >= Math.abs(deltaY)) {
-            start = [deltaX >= 0 ? sourceBounds.right : sourceBounds.left, sourceCenter[1]];
-            end = [deltaX >= 0 ? targetBounds.left : targetBounds.right, targetCenter[1]];
-          } else {
-            start = [sourceCenter[0], deltaY >= 0 ? sourceBounds.bottom : sourceBounds.top];
-            end = [targetCenter[0], deltaY >= 0 ? targetBounds.top : targetBounds.bottom];
-          }
-          return hybridPath(
-            [start[0] - overlayBounds.left, start[1] - overlayBounds.top],
-            [end[0] - overlayBounds.left, end[1] - overlayBounds.top],
-            sourceId,
-            targetId,
-          ).d;
-        };
-        const selectedEndpointIds = new Set(
-          graphData.links.flatMap((topologyLink, index) => (
-            graphState.relatedEdges?.has(`edge-${index}`)
-              ? (topologyLink.endpoint_ids || [])
-              : []
-          ))
-        );
         const selectedPortLinks = [...new Map((graphData.port_links || []).filter(link => (
           !graphState.selectedCodeFlowId
-          || selectedEndpointIds.has(link.source_endpoint_id)
-          || selectedEndpointIds.has(link.target_endpoint_id)
+          && (selectedEndpointIds.has(link.source_endpoint_id)
+            || selectedEndpointIds.has(link.target_endpoint_id))
         )).map(link => [
           `${link.kind}:${link.source_endpoint_id}:${link.target_endpoint_id}`,
           link,
         ]))].map(([, link]) => link);
-        const selectedCallEdges = graphData.links.filter((link, index) => (
-          graphState.relatedEdges?.has(`edge-${index}`)
-          // A direct REST relation is already represented by its
-          // endpoint-to-endpoint port arc below. Drawing the topology edge as
-          // well would produce two visually identical arcs (for example O4 →
-          // I8).
-          && !(link.kind === "rest" && (link.endpoint_ids || []).some(endpointId => (
-            (graphData.port_links || []).some(portLink => (
-              portLink.kind === "rest" && portLink.source_endpoint_id === endpointId
-              ))
-          )))
-        ));
-        selectedCallEdges.forEach(link => {
-          const d = cardPath(link.source, link.target);
-          if (!d) return;
-          const path = document.createElementNS(svgNamespace, "path");
-          path.classList.add("graph-call-path");
-          if (link.kind === "kafka") path.classList.add("is-kafka");
-          path.setAttribute("marker-end", "url(#graph-port-arrow)");
-          path.setAttribute("d", d);
-          portPathOverlay.append(path);
-        });
         (graphData.internal_port_links || []).forEach(link => {
           if (
             graphState.selectedCodeFlowId

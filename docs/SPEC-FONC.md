@@ -60,7 +60,7 @@ in the architecture snapshot.
 | `systemlens init` | Creates `.systemlens/config.yml`; it never overwrites an existing file. |
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
-| `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--call-graph-engine codeql\|joern\|none] [--codeql-database DIR] [--codeql-progress] [--codeql-progress-html FILE] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. The default `codeql` engine creates one temporary source-only Java database for the whole repository, then reports extracted calls project by project; this preserves cross-project references. `--codeql-progress` forwards CodeQL's detailed live progress output. `joern` creates one temporary Java CPG per project. Both aggregate resolved calls and extend code flows across resolved method calls. `none` keeps AST-only flows. `--codeql-database` reuses an already-built global CodeQL database and requires the `codeql` engine. `--codeql-progress-html` rewrites an explicitly provisional HTML graph after each reported CodeQL project; it requires the `codeql` engine and is not a final export. `--no-codeql` is the legacy AST-only alias. |
+| `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--call-graph-engine codeql\|joern\|none] [--codeql-database DIR] [--codeql-progress] [--codeql-progress-html FILE] [--generate-sources] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. The default `codeql` engine creates one temporary source-only Java database for the whole repository, then reports extracted calls project by project; this preserves cross-project references. `--codeql-progress` forwards CodeQL's detailed live progress output. `--generate-sources` runs only the Maven/Gradle source-generation phase in a temporary copy; it never compiles or runs tests. `joern` creates one temporary Java CPG per project. Both aggregate resolved calls and extend code flows across resolved method calls. `none` keeps AST-only flows. `--codeql-database` reuses an already-built global CodeQL database and requires the `codeql` engine. `--codeql-progress-html` rewrites an explicitly provisional HTML graph after each reported CodeQL project; it requires the `codeql` engine and is not a final export. `--no-codeql` is the legacy AST-only alias. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts a reviewable fact manifest, including one produced by an agent through the companion skill, into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
 | `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows from an entry point to a source-evidenced external effect, within one method or across calls resolved by the selected call-graph engine. |
@@ -115,6 +115,9 @@ global-database override and is queried once.
 `--strategy strategy1` is opt-in. The selected strategy is persisted with
 the index and reused by incremental MCP reindexing and all derived views.
 `analysis.call_graph_engine` accepts `codeql` (default), `joern`, or `none`.
+The automatic CodeQL projection preserves Java sources below
+`target/generated-sources` so generated AsyncAPI/OpenAPI types remain
+available; other build outputs and build descriptors are excluded.
 `--call-graph-engine` overrides it for one run and does not modify
 `.systemlens/config.yml`. `--no-codeql` remains a legacy AST-only alias.
 `--codeql-progress-html FILE` is an opt-in progress aid: after each completed
@@ -301,10 +304,21 @@ workspace beside the toolbar on wide screens and below it when that is the
 larger available region, while preserving margins for fixed-size cards. This
 fit never zooms in beyond the current readable view, is reapplied after a
 viewport resize, and cannot make the toolbar scroll horizontally.
-The selected call graph's arcs are rendered directly when their route is clear
-and as Bézier detours when a visible node card blocks the direct path. The
-detours use a padding margin and fall back to orthogonal segments when needed;
-general architecture edges remain Sigma-rendered edges.
+When a selected flow occupies less space than the available focus area, its
+specific framing may zoom in (a camera ratio below the overview ratio) so the
+flow remains readable; the ratio is bounded and the cards remain inside the
+visible margins.
+The selected call graph's service-to-service arcs are rendered as orthogonal
+straight segments between the actual output and input ports. ELK.js keeps the
+node placement while `@mr_mint/elkjs-libavoid` computes obstacle-avoiding routes
+around the visible microservice cards, with a padding margin and nudging for
+parallel dependencies. A local orthogonal router is used only as a runtime
+fallback when the external WASM module cannot be loaded.
+Endpoint-to-endpoint dependencies are projected into the selected
+service-to-service arc; the duplicate raw port path is hidden in this focused
+view so the same dependency is not drawn twice.
+Call-graph arcs use the same stroke thickness as ordinary topology paths; their
+selection remains identifiable through the selected-flow styling and colour.
 Clearing or replacing the selection restores the ordinary filtered graph.
 
 The architecture vocabulary is extensible: `Data` represents a persisted Data
@@ -313,8 +327,8 @@ collections, SQL tables, Redis keyspaces, object-store datasets, Kafka,
 RabbitMQ, SQS, and webhook streams are technology-specific evidence, not the
 primary architecture category.
 
-The export uses a responsive workspace layout with seven navigation tabs:
-Explorer, Resources, OpenAPI, Topics, Data, Quality, and Flux.
+The export uses a responsive workspace layout with seven navigation tabs, in
+this order: Explorer, Resources, Flux, OpenAPI, Topics, Data, and Quality.
 `Resources` is a filterable inventory of every persisted graph node; selecting
 an item opens it in Explorer and focuses its graph card. `Topics` and `Data`
 are data-schema reference views: Java classes defining exchanged event data
@@ -366,6 +380,10 @@ categories. This filtering applies equally to native and MCP-enriched graph
 vocabularies. Placement strategies remain available as advanced controls.
 The toolbar does not expose a separate path-history section. Paths remain
 available directly from search and the advanced route tools in `Explore`.
+The Explorer search field does not select a node while text is being composed:
+selection and itinerary evaluation occur when the user presses Enter. This
+allows a query such as `service-a -> service-b` to be entered continuously
+without opening the first microservice as soon as its name is complete.
 
 The graph offers three primary views—graph, layers, and modules—while
 grouped and non-overlapping placement strategies remain secondary options. The layers view

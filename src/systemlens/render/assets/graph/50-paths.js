@@ -276,7 +276,7 @@
         && isVisibleNodeId(id)
         && (!graphState.selectedCodeFlowId || nodeDataById.get(id)?.kind === "microservice")
       ));
-      if (!nodeIds.length) return;
+      if (!nodeIds.length) return false;
       const viewport = graphCanvas.getBoundingClientRect();
       const toolbarRect = document.querySelector(".toolbar").getBoundingClientRect();
       const margin = 24;
@@ -293,23 +293,36 @@
       } else if (roomBelowToolbar >= 180) {
         focusArea.top = toolbarRect.bottom - viewport.top + margin;
       }
-      const projected = nodeIds.map(id => {
-        const attributes = network.getNodeAttributes(id);
-        return renderer.graphToViewport({ x: attributes.x, y: attributes.y });
-      });
-      const spanX = Math.max(...projected.map(point => point.x))
-        - Math.min(...projected.map(point => point.x));
-      const spanY = Math.max(...projected.map(point => point.y))
-        - Math.min(...projected.map(point => point.y));
       const cardWidth = graphState.renderMode === "symbols" ? 34 : GRAPH_CARD_WIDTH;
       const cardHeight = graphState.renderMode === "symbols" ? 34 : GRAPH_CARD_HEIGHT;
       const availableWidth = Math.max(1, focusArea.right - focusArea.left - cardWidth - 2 * margin);
       const availableHeight = Math.max(1, focusArea.bottom - focusArea.top - cardHeight - 2 * margin);
       const camera = renderer.getCamera();
-      const currentState = camera.getState();
-      const ratioFactor = Math.max(1, spanX / availableWidth, spanY / availableHeight);
-      const ratio = Math.max(.01, Math.min(100, currentState.ratio * ratioFactor));
-      camera.setState({ ...currentState, ratio });
+      let ratio = camera.getState().ratio;
+      // Re-project after every ratio change. Sigma's graph-to-viewport
+      // conversion also applies aspect-ratio and normalization corrections,
+      // so a single estimate can leave a multi-service flow outside the
+      // focus area.
+      for (let pass = 0; pass < 4; pass += 1) {
+        const projected = nodeIds.map(id => {
+          const attributes = network.getNodeAttributes(id);
+          return renderer.graphToViewport({ x: attributes.x, y: attributes.y });
+        }).filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+        if (!projected.length) return false;
+        const spanX = Math.max(...projected.map(point => point.x))
+          - Math.min(...projected.map(point => point.x));
+        const spanY = Math.max(...projected.map(point => point.y))
+          - Math.min(...projected.map(point => point.y));
+        // The selected flow can be much smaller than the overview graph. A
+        // factor below 1 is intentional: it zooms in to make a short flow
+        // readable instead of keeping the overview distance.
+        const ratioFactor = Math.max(.01, spanX / availableWidth, spanY / availableHeight);
+        const nextRatio = Math.max(.01, Math.min(100, ratio * ratioFactor));
+        if (Math.abs(nextRatio - ratio) < .005) break;
+        ratio = nextRatio;
+        camera.setState({ ...camera.getState(), ratio });
+        renderer.refresh();
+      }
 
       const targetCenter = {
         x: (focusArea.left + focusArea.right) / 2,
@@ -319,7 +332,8 @@
         const projectedAfterZoom = nodeIds.map(id => {
           const attributes = network.getNodeAttributes(id);
           return renderer.graphToViewport({ x: attributes.x, y: attributes.y });
-        });
+        }).filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+        if (!projectedAfterZoom.length) break;
         const projectedCenter = {
           x: (Math.min(...projectedAfterZoom.map(point => point.x))
             + Math.max(...projectedAfterZoom.map(point => point.x))) / 2,
@@ -332,14 +346,21 @@
         const ratioState = camera.getState();
         camera.setState({
           ...ratioState,
-          x: ratioState.x - deltaX / Math.max(viewport.width, 1),
-          y: ratioState.y + deltaY / Math.max(viewport.height, 1),
+          x: ratioState.x - deltaX * ratioState.ratio / Math.max(viewport.width, 1),
+          y: ratioState.y + deltaY * ratioState.ratio / Math.max(viewport.height, 1),
         });
         renderer.refresh();
       }
       graphCanvas.dataset.flowFocusRatio = String(ratio);
       renderer.refresh();
       requestGraphRender();
+      return true;
+    }
+    function scheduleFlowCameraFit(path, attempt = 0) {
+      requestAnimationFrame(() => {
+        if (centerCameraOnPath(path) || attempt >= 8) return;
+        scheduleFlowCameraFit(path, attempt + 1);
+      });
     }
     function showPath(path, stops = path.nodes, context = {}) {
       pathStops.splice(0, pathStops.length, ...stops);
@@ -360,7 +381,8 @@
       if (graphState.selectedCodeFlowId) graphCanvas.dataset.selectedCodeFlow = graphState.selectedCodeFlowId;
       else delete graphCanvas.dataset.selectedCodeFlow;
       setPathMicroserviceOrder(path);
-      renderer.refresh();
+      if (graphState.selectedCodeFlowId) rebuildGraph();
+      else renderer.refresh();
       // The normal Explorer deliberately has no port overlays. Rebuild them
       // after setting the selected call graph so its ports and local links
       // are projected from the selected nodes only.
@@ -372,7 +394,13 @@
         resetButton.title = "Effacer la sélection";
         resetButton.setAttribute("aria-label", resetButton.title);
       }
-      if (context.codeFlow) centerCameraOnPath(path);
+      if (context.codeFlow) {
+        // Rebuilds replace Sigma's renderer; publish a valid provisional fit
+        // value synchronously, then compute the exact camera fit on the next
+        // frame once Sigma has projected the new node set.
+        graphCanvas.dataset.flowFocusRatio = "1";
+        scheduleFlowCameraFit(path);
+      }
       else {
         delete graphCanvas.dataset.flowFocusRatio;
         renderer.getCamera().animatedReset({ duration: 220 });

@@ -2,7 +2,8 @@
 
 This module deliberately has no dependency on Java parsing or build-system
 discovery.  Consumers that only exchange module inventory facts should import
-from here instead of depending on :mod:`systemlens.modules`.
+from here instead of depending on the former compatibility module
+:mod:`systemlens.modules`.
 """
 
 from dataclasses import dataclass

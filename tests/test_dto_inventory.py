@@ -2,7 +2,7 @@ from pathlib import Path
 
 from systemlens.indexing.dto_inventory import materialize_kafka_dto_definitions
 from systemlens.domain.models import MessageEndpoint
-from systemlens.modules import DiscoveredModule
+from systemlens.domain.module_inventory import DiscoveredModule
 
 
 def _module(path: Path, name: str = "orders") -> DiscoveredModule:

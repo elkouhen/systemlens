@@ -23,11 +23,17 @@ to source locations without a separate analysis runtime.
 REST, Kafka and module facts from AST nodes and deterministic local
 configuration. Use the locally installed CodeQL CLI by default to create a
 temporary source-only Java call graph for bounded interprocedural flow facts.
+For `build-mode=none`, stage only Java source files in a temporary projection;
+do not expose Maven or Gradle descriptors to CodeQL, because its Java no-build
+extractor may otherwise invoke those tools for dependency discovery and access
+remote registries.
 
 **Consequences:** The project has no remote analyzer or source-code search
 dependency. CodeQL is an optional local prerequisite: when absent, the index
 keeps AST-only results and reports the reduced interprocedural coverage. Dynamic
-values are surfaced as unresolved facts instead of being guessed.
+values are surfaced as unresolved facts instead of being guessed. Offline
+CodeQL staging may reduce resolution of external types, which is an explicit
+accuracy trade-off for deterministic, network-independent indexing.
 
 ## ADR-2 — SQLite is the local fact store
 
@@ -314,10 +320,9 @@ This also allowed persistence to depend accidentally on discovery-owned types.
 root. Place implementations in ownership packages: `application/`, `domain/`,
 `discovery/`, `indexing/`, `infrastructure/`, `delivery/`, `render/`,
 `scanner/`, and `storage/`. Console entry points target `delivery/` directly.
-Small root-level compatibility packages retain established imports such as
-`systemlens.cli`, `systemlens.modules`, and `systemlens.store`, but production
-code imports the owning implementation package. Domain modules may not import
-outer layers; an architecture test enforces both dependency direction and the
+Compatibility-only root-level packages are removed; all code imports the owning
+implementation package directly. Domain modules may not import outer layers;
+an architecture test enforces both dependency direction and the
 absence of flat root implementations.
 
 **Consequences:** Directory structure now exposes ownership before a file is
@@ -370,3 +375,26 @@ dispatch, reflection, and runtime-only routing remain explicit blind spots.
 Indexing performs AST traversal and a bounded CodeQL call-graph join when the
 local prerequisite is available, while exports and queries continue to consume
 only persisted snapshots.
+
+## ADR-28 — Render selected call-graph arcs with orthogonal port routes
+
+**Status:** Accepted.
+
+**Context:** The focused call-graph view needs to distinguish several
+service-to-service dependencies that share the same endpoints and must keep
+their lines out of the source and target cards.
+
+**Decision:** Render selected service-to-service call-graph edges in the SVG
+overlay as orthogonal straight segments between their actual output and input
+port anchors. ELK.js keeps node positions fixed while the browser
+`@mr_mint/elkjs-libavoid` WASM module routes around card rectangles, using
+explicit port sides and nudging for parallel edges. Exclude the source and
+target card rectangles with padding. In the focused call-graph view, persisted
+endpoint-to-endpoint dependencies are represented by the projected service
+edge, avoiding a duplicate raw port path.
+
+**Consequences:** Arcs remain attached to their port badges, avoid the two
+endpoint cards, and remain readable when several dependencies share a route.
+The routes are presentation-only and are recomputed after camera or layout
+changes. If the CDN or WASM runtime is unavailable, the existing local
+orthogonal router preserves a usable export.

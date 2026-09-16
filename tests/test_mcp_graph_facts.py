@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from systemlens.cli import app
-from systemlens.mcp_server import (
+from systemlens.delivery.cli import app
+from systemlens.delivery.mcp import (
     add_graph_fact,
     architecture_graph,
     graph_fact_exists,

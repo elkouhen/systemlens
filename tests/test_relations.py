@@ -3,7 +3,7 @@ from pathlib import Path
 
 from systemlens.application.architecture import build_catalog, indexing_issues, request_reply_patterns
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
-from systemlens.modules import DiscoveredModule, ModuleDependency, MongoMethod
+from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, MongoMethod
 from systemlens.indexing.relations import build_architecture_relations
 
 

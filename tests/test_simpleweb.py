@@ -5,7 +5,7 @@ from urllib.request import urlopen
 
 from typer.testing import CliRunner
 
-from systemlens.simpleweb import app, create_simpleweb_server
+from systemlens.delivery.simpleweb import app, create_simpleweb_server
 
 
 def test_simpleweb_rejects_a_missing_directory(tmp_path: Path) -> None:

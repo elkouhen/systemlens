@@ -215,9 +215,9 @@
       const query = search.value.trim();
       searchStatus.textContent = "";
       if (!query) { reset(); return; }
-      if (query.includes("->")) return;
-      const resolved = resolveExactNodeName(query);
-      if (resolved.id) selectNode(resolved.id);
+      // Keep the field usable while composing an itinerary. An exact service
+      // name is selected only after Enter, otherwise typing `service-a ->`
+      // immediately opens the service details and disrupts the next step.
     });
     search.addEventListener("keydown", event => {
       if (event.key === "Enter") { event.preventDefault(); runExploreSearch(); }

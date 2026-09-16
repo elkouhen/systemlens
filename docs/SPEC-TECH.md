@@ -209,6 +209,11 @@ discarding AST-only flows. When CodeQL represents a lambda as a synthetic
 anonymous callable, SystemLens attributes its call site to the narrowest
 persisted Java method enclosing that line in the same file. Dynamic dispatch,
 reflection, and runtime-only routing remain outside this deterministic layer.
+In buildless mode, when a Java port call cannot be dispatch-resolved, the
+materializer may retain the source invocation and bridge it to matching
+endpoint-bearing output methods in the same module, or to one globally unique
+matching implementation across modules. Such edges are marked
+possible/low confidence; no external or arbitrary same-name call is inferred.
 For a virtual call, CodeQL's unique `exactVirtualMethod` target is retained at
 medium confidence. If no unique target can be proven, its `viableCallable`
 candidates are retained individually at low confidence; SystemLens does not
@@ -382,9 +387,15 @@ the exact reconciled path sets to hide every unrelated node and edge; selected
 nodes retain flow-specific highlighting. This presentation state does not infer
 or persist any new architecture relation. A selected call graph projects only
 its microservice nodes and endpoint dependencies; topic nodes and topology
-edges are omitted from that focused view. Endpoint arcs use collision-tested
-Bézier detours around visible card rectangles, with orthogonal routing as a
-fallback; general architecture edges remain Sigma-rendered. The export indexes displayed nodes and visual edges by
+edges are omitted from that focused view. Service-to-service call-graph edges
+use orthogonal straight-segment routes in the SVG overlay between their actual
+output and input port anchors. ELK.js supplies the positioned graph and the
+browser libavoid WASM router receives fixed node rectangles plus explicit port
+sides, then returns absolute source, bend, and target points. The router
+excludes the source and target card rectangles with padding and nudges parallel
+routes. In the focused call-graph view, endpoint arcs are represented by the
+projected service edge and are not drawn a second time in the port overlay.
+The export indexes displayed nodes and visual edges by
 persisted endpoint ID once; reconciliation requires exactly one endpoint-backed
 candidate and never selects a relation from a route label, topic name, or first
 matching graph edge. A selected local input-to-output relation is highlighted
@@ -441,7 +452,10 @@ commits the next one.
 
 AST endpoint analysis uses no subprocess. For interprocedural flows, the local
 CodeQL executable is used by default once for the repository to create a
-temporary source-only Java database, query it, and decode the result as CSV;
+temporary source-only Java projection (Java files only, without Maven/Gradle
+descriptors or build outputs, except Java files below `target/generated-sources`),
+create a database from that projection, query
+it, and decode the result as CSV;
 progress checkpoints group the global result by source-owning project, while
 all call facts are joined together. Selecting Joern
 invokes `joern-parse --language JAVASRC` for the same module unit and its local
@@ -452,7 +466,20 @@ supplied by the caller. The temporary CodeQL query pack pins
 pack cache; indexing never runs `codeql pack install` or downloads analyzer
 dependencies. The configured CodeQL thread count and optional RAM limit are
 passed to database creation and query execution only; they tune performance and
-do not alter or invalidate persisted architecture facts. No database path is persisted.
+do not alter or invalidate persisted architecture facts.
+The source projection prevents `build-mode=none` from invoking Maven or Gradle
+for dependency discovery; unresolved external types are accepted as the
+documented accuracy trade-off for offline indexing.
+With `--generate-sources`, a disposable copy runs only Maven
+`generate-sources` or Gradle `generateSources` before this projection is
+created. The indexed repository is never modified, compiled, or tested; the
+generation command may still require cached or remote plugin dependencies.
+The call query keeps both caller and callee in source code, folds exact
+dispatch before viable-dispatch expansion, and computes that resolution once
+per call. Python-side joins use indexes by normalized method name and relative
+path; bounded path exploration uses a FIFO deque. These bounds and joins avoid
+large unrelated method products while preserving ambiguous dispatch as low
+confidence evidence. No database path is persisted.
 An absent selected engine is reported and keeps AST-only results; a failing
 available executable leaves the whole previous successful snapshot intact.
 

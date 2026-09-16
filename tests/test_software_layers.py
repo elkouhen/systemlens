@@ -2,7 +2,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from systemlens.domain.models import MessageEndpoint
-from systemlens.modules import DiscoveredModule, ModuleDependency
+from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency
 from systemlens.render import (
     project_namespace,
     project_namespace_path,

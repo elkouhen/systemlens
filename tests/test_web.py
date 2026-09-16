@@ -3,7 +3,7 @@ from pathlib import Path
 
 from systemlens.application.architecture_inventory import AnalysisProfile, ArchitectureInventory
 from systemlens.domain.models import ArchitectureRelation, MessageEndpoint
-from systemlens.web import SystemLensWebApplication
+from systemlens.delivery.web import SystemLensWebApplication
 
 
 def _application() -> SystemLensWebApplication:
@@ -70,11 +70,11 @@ def test_web_architecture_excludes_edges_to_test_microservices(
         diagnostics=[], warnings=[], source_roots=[], profile=AnalysisProfile(),
     )
     captured: dict[str, object] = {}
-    monkeypatch.setattr("systemlens.web.db_path", lambda _root: tmp_path / "findings.db")
+    monkeypatch.setattr("systemlens.delivery.web.db_path", lambda _root: tmp_path / "findings.db")
     (tmp_path / "findings.db").touch()
-    monkeypatch.setattr("systemlens.web.load_architecture_inventory", lambda *_args, **_kwargs: inventory)
+    monkeypatch.setattr("systemlens.delivery.web.load_architecture_inventory", lambda *_args, **_kwargs: inventory)
     monkeypatch.setattr(
-        "systemlens.web.render_graph_html",
+        "systemlens.delivery.web.render_graph_html",
         lambda services, edges, *_args, **_kwargs: captured.update(services=services, edges=edges) or "<html>",
     )
 

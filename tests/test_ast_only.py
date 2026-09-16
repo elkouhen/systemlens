@@ -9,20 +9,20 @@ import pytest
 from typer.testing import CliRunner
 
 import systemlens.indexing.service as indexer_module
-from systemlens.cli import app
+from systemlens.delivery.cli import app
 from systemlens.infrastructure.config import Config
 from systemlens.application.flow import group_endpoints_by_module_for_flow, trace_flow
 from systemlens.domain.graph import build_graph
 from systemlens.indexing.service import index_repo
 from systemlens.application.architecture_inventory import load_architecture_inventory
-from systemlens.mcp_server import reindex_architecture
+from systemlens.delivery.mcp import reindex_architecture
 from systemlens.scanner import (
     infer_framework_endpoints,
     infer_kafka_endpoints,
     infer_kafka_topic_strategy1_endpoints,
 )
 from systemlens.scanner._spring_properties import _load_flat_spring_properties
-from systemlens.store import Store
+from systemlens.storage.sqlite import Store
 
 
 FIXTURES = Path(__file__).parent / "fixtures"

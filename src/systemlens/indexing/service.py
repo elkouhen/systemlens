@@ -138,7 +138,9 @@ def _partition_codeql_calls(
     roots: Sequence[tuple[str, Path, str]],
 ) -> list[tuple[str, list[CodeQLCall]]]:
     """Partition global CodeQL results by caller project for progress only."""
-    by_project = {name: [] for name, _root, _prefix in roots}
+    by_project: dict[str, list[CodeQLCall]] = {
+        name: [] for name, _root, _prefix in roots
+    }
     ordered = sorted(roots, key=lambda item: len(item[2]), reverse=True)
     fallback = roots[0][0] if roots else "racine du dépôt"
     for call in calls:
@@ -207,6 +209,7 @@ def _index_repo(
     codeql_database: Path | None = None,
     call_graph_progress: CallGraphProgressCallback | None = None,
     codeql_progress: bool = False,
+    generate_sources: bool = False,
 ) -> IndexReport:
     timer = _IndexStageTimer(progress)
     codeql_verbosity = "progress++" if codeql_progress else config.codeql_verbosity
@@ -490,6 +493,7 @@ def _index_repo(
                         methods,
                         all_endpoints,
                         calls,
+                        repo_root=repo_root,
                         max_hops=config.codeql_max_hops,
                         max_paths=config.codeql_max_paths,
                     ),
@@ -526,15 +530,42 @@ def _index_repo(
                     stage = f"{call_graph_engine}-database"
                     timer.begin(stage, f"→ {engine_label} : création et extraction globale...")
                     if call_graph_engine == "codeql":
-                        with automatic_codeql_database(
-                            repo_root, timeout_seconds=config.codeql_timeout_seconds,
-                            threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
-                            **(
-                                {"verbosity": codeql_verbosity, "progress": progress}
-                                if codeql_verbosity is not None
-                                else {}
-                            ),
-                        ) as database:
+                        if codeql_verbosity is None:
+                            if generate_sources:
+                                database_context = automatic_codeql_database(
+                                    repo_root,
+                                    timeout_seconds=config.codeql_timeout_seconds,
+                                    threads=config.codeql_threads,
+                                    ram_mb=config.codeql_ram_mb,
+                                    generate_sources=True,
+                                )
+                            else:
+                                database_context = automatic_codeql_database(
+                                    repo_root,
+                                    timeout_seconds=config.codeql_timeout_seconds,
+                                    threads=config.codeql_threads,
+                                    ram_mb=config.codeql_ram_mb,
+                                )
+                        elif generate_sources:
+                            database_context = automatic_codeql_database(
+                                repo_root,
+                                timeout_seconds=config.codeql_timeout_seconds,
+                                threads=config.codeql_threads,
+                                ram_mb=config.codeql_ram_mb,
+                                verbosity=codeql_verbosity,
+                                progress=progress,
+                                generate_sources=True,
+                            )
+                        else:
+                            database_context = automatic_codeql_database(
+                                repo_root,
+                                timeout_seconds=config.codeql_timeout_seconds,
+                                threads=config.codeql_threads,
+                                ram_mb=config.codeql_ram_mb,
+                                verbosity=codeql_verbosity,
+                                progress=progress,
+                            )
+                        with database_context as database:
                             assert database is not None
                             calls = extract_codeql_calls(
                                 database, timeout_seconds=config.codeql_timeout_seconds,
@@ -587,7 +618,7 @@ def _index_repo(
             codeql_stats: dict[str, int] = {}
             timer.begin("call-graph-join", f"→ {engine_label} : jointure des méthodes et matérialisation des flux...")
             codeql_flows = materialize_codeql_code_flows(
-                methods, all_endpoints, calls,
+                methods, all_endpoints, calls, repo_root=repo_root,
                 max_hops=config.codeql_max_hops,
                 max_paths=config.codeql_max_paths,
                 stats=codeql_stats,
@@ -681,6 +712,7 @@ def index_repo(
     codeql_database: Path | None = None,
     call_graph_progress: CallGraphProgressCallback | None = None,
     codeql_progress: bool = False,
+    generate_sources: bool = False,
 ) -> IndexReport:
     """Index one repository and publish its facts as an atomic snapshot."""
     with store.transaction():
@@ -698,4 +730,5 @@ def index_repo(
             codeql_database=codeql_database,
             call_graph_progress=call_graph_progress,
             codeql_progress=codeql_progress,
+            generate_sources=generate_sources,
         )

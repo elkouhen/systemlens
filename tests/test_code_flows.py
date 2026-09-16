@@ -7,7 +7,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from systemlens import cli
-from systemlens.cli import app
+from systemlens.delivery.cli import app
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod
@@ -446,7 +446,7 @@ def test_store_additively_migrates_previous_schema_for_code_flows(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'integration_methods'"
         ).fetchone()
         assert methods_table is not None
-        assert store.get_meta("schema_version") == "28"
+        assert store.get_meta("schema_version") == "29"
 
 
 def test_codeql_calls_join_ast_entry_and_output_methods(tmp_path: Path) -> None:
@@ -530,6 +530,39 @@ class OrderPublisher { void send() { kafka.send(); } }
     ]
 
 
+def test_codeql_call_normalizes_method_signature_and_path_spelling(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    target = "orders/src/main/java/com/example/OrderPublisher.java"
+    for path, content in {
+        source: "package com.example; class OrderController { void receive() {} }\n",
+        target: "package com.example; class OrderPublisher { void send() {} }\n",
+    }.items():
+        file = tmp_path / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(content, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        _endpoint("entry", "consume", "kafka", "orders.in", source, 1),
+        replace(_endpoint("output", "produce", "kafka", "orders.out", target, 1),
+                qualified_name="com.example.OrderPublisher"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
+
+    flows = materialize_codeql_code_flows(methods, endpoints, [
+        CodeQLCall(
+            "com.example.OrderController.receive:void()", source, 1,
+            "com.example.OrderPublisher.send(java.lang.String)",
+            target.replace("/", "\\"), 1, 1,
+        ),
+    ])
+
+    assert len(flows) == 1
+    assert flows[0].steps[-1].name == "orders.out"
+
+
 def test_codeql_call_joins_unique_cross_module_signature_with_low_confidence(tmp_path: Path) -> None:
     source = "orders/src/main/java/com/example/OrderController.java"
     target = "publisher/src/main/java/com/example/OrderPublisher.java"
@@ -568,6 +601,41 @@ class OrderPublisher { void send() { kafka.send(); } }
     assert len(flows) == 1
     assert flows[0].confidence == "low"
     assert "unique method signature" in flows[0].reason
+
+
+def test_codeql_call_bridges_unique_cross_module_output_implementation(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    port = "orders/src/main/java/com/example/StockPort.java"
+    target = "inventory/src/main/java/com/example/StockAdapter.java"
+    for path, content in {
+        source: "package com.example; class OrderController { void receive() { port.publish(); } }\n",
+        port: "package com.example; interface StockPort { void publish(); }\n",
+        target: "package com.example; class StockAdapter { void publish() {} }\n",
+    }.items():
+        file = tmp_path / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(content, encoding="utf-8")
+    modules = [
+        DiscoveredModule("orders", tmp_path / "orders", "maven", None, "application", True, ""),
+        DiscoveredModule("inventory", tmp_path / "inventory", "maven", None, "library", False, ""),
+    ]
+    endpoints = [
+        _endpoint("entry", "consume", "kafka", "orders.in", source, 1),
+        replace(_endpoint("output", "produce", "kafka", "inventory.out", target, 1),
+                module="inventory", qualified_name="com.example.StockAdapter"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source, port, target], modules)
+
+    flows = materialize_codeql_code_flows(methods, endpoints, [
+        CodeQLCall(
+            "com.example.OrderController.receive", source, 1,
+            "com.example.StockPort.publish", port, 1, 1,
+        ),
+    ])
+
+    assert len(flows) == 1
+    assert flows[0].confidence == "low"
+    assert flows[0].steps[-1].name == "inventory.out"
 
 
 def test_codeql_calls_from_lambda_join_enclosing_entry_method(tmp_path: Path) -> None:

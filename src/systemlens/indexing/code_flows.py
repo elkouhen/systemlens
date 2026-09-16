@@ -1,6 +1,6 @@
 """Materialize conservative same-method flows during indexing."""
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from pathlib import Path
 
 from systemlens.discovery.java import parser as java_parser
@@ -11,7 +11,7 @@ from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod, mo
 from systemlens.indexing.codeql import CodeQLCall
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v11-call-graph-engine-joern-fallback"
+CODE_FLOW_SIGNATURE = "code-flow-v12-offline-codeql-staging"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -183,7 +183,8 @@ def materialize_code_flows(
 
 def materialize_codeql_code_flows(
     methods: list[IntegrationMethod], endpoints: list[MessageEndpoint], calls: list[CodeQLCall],
-    *, max_hops: int = 12, max_paths: int = 10_000, stats: dict[str, int] | None = None,
+    *, repo_root: Path | None = None, max_hops: int = 12, max_paths: int = 10_000,
+    stats: dict[str, int] | None = None,
 ) -> list[CodeFlow]:
     """Join AST method facts through resolved CodeQL calls.
 
@@ -198,12 +199,35 @@ def materialize_codeql_code_flows(
         # The AST inventory deliberately stores the stable Java declaration name
         # only. Removing the CPG signature is safe because the following lookup
         # still requires an exact source location or one unique declaration.
-        return name.replace("$", ".").split(":", 1)[0]
+        normalized = name.replace("$", ".").split(":", 1)[0]
+        # CodeQL normally omits parameters, while some CodeQL/Joern versions
+        # expose ``Type.method(arg, ...)``.  The AST projection intentionally
+        # keeps only the stable owner-and-method part, so discard a terminal
+        # signature before doing the source-backed join.
+        open_parenthesis = normalized.find("(")
+        if open_parenthesis >= 0:
+            normalized = normalized[:open_parenthesis]
+        return normalized
+
+    def normalized_path(path: str) -> str:
+        """Normalize harmless extractor spelling differences in source paths."""
+        return path.replace("\\", "/").removeprefix("./")
+
+    def simple_method_name(name: str) -> str:
+        return normalized_method_name(name).rsplit(".", 1)[-1]
 
     by_locator = {
-        (normalized_method_name(item.qualified_method), item.path, item.start_line): item
+        (normalized_method_name(item.qualified_method), normalized_path(item.path), item.start_line): item
         for item in methods
     }
+    methods_by_name_path: dict[tuple[str, str], list[IntegrationMethod]] = defaultdict(list)
+    methods_by_name: dict[str, list[IntegrationMethod]] = defaultdict(list)
+    methods_by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
+    for item in methods:
+        normalized_name = normalized_method_name(item.qualified_method)
+        methods_by_name_path[(normalized_name, normalized_path(item.path))].append(item)
+        methods_by_name[normalized_name].append(item)
+        methods_by_path[normalized_path(item.path)].append(item)
     def locate(
         name: str, path: str, line: int, *, allow_signature_fallback: bool = False
     ) -> tuple[IntegrationMethod, bool] | None:
@@ -215,14 +239,11 @@ def materialize_codeql_code_flows(
         resulting flow cannot claim CodeQL proved both source locations.
         """
         normalized_name = normalized_method_name(name)
+        path = normalized_path(path)
         exact = by_locator.get((normalized_name, path, line))
         if exact is not None:
             return exact, False
-        candidates = [
-            item for item in methods
-            if normalized_method_name(item.qualified_method) == normalized_name
-            and item.path == path
-        ]
+        candidates = methods_by_name_path.get((normalized_name, path), [])
         containing = [
             item for item in candidates if item.start_line <= line <= item.end_line
         ]
@@ -232,10 +253,7 @@ def materialize_codeql_code_flows(
             return candidates[0], False
         if not allow_signature_fallback:
             return None
-        named = [
-            item for item in methods
-            if normalized_method_name(item.qualified_method) == normalized_name
-        ]
+        named = methods_by_name.get(normalized_name, [])
         return (named[0], True) if len(named) == 1 else None
 
     def locate_caller(call: CodeQLCall) -> IntegrationMethod | None:
@@ -252,9 +270,8 @@ def materialize_codeql_code_flows(
         if direct is not None:
             return direct
         enclosing = [
-            item for item in methods
-            if item.path == call.caller_path
-            and item.start_line <= call.call_line <= item.end_line
+            item for item in methods_by_path.get(call.caller_path, [])
+            if item.start_line <= call.call_line <= item.end_line
         ]
         return min(enclosing, key=lambda item: item.end_line - item.start_line) if enclosing else None
 
@@ -267,6 +284,85 @@ def materialize_codeql_code_flows(
         if caller is not None and resolved_callee is not None:
             callee, signature_join = resolved_callee
             adjacency[caller.id].append((callee, call, signature_join))
+            # Buildless CodeQL may resolve a call only to its source-declared
+            # port (for example StockDepletedPort.publish), while the
+            # concrete adapter carrying the Kafka/REST endpoint is not a
+            # dispatch target. Bridge that contract to unique indexed output
+            # methods in the same module, or to one globally unique
+            # implementation across modules. This is intentionally limited to
+            # endpoint-bearing methods and retains low confidence.
+            if not callee.output_endpoint_ids:
+                local_output_candidates = [
+                    item for item in methods
+                    if item.module == caller.module
+                    and item.output_endpoint_ids
+                    and simple_method_name(item.qualified_method) == simple_method_name(callee.qualified_method)
+                    and item.id != callee.id
+                ]
+                global_output_candidates = [
+                    item for item in methods
+                    if item.output_endpoint_ids
+                    and simple_method_name(item.qualified_method) == simple_method_name(callee.qualified_method)
+                    and item.id != callee.id
+                ]
+                # An interface call can cross a discovered module boundary.
+                # Allow that bridge only when the output-bearing implementation
+                # is globally unique; otherwise retaining it would invent a
+                # dispatch target among unrelated same-named methods.
+                output_candidates = (
+                    local_output_candidates
+                    if local_output_candidates
+                    else global_output_candidates
+                    if len(global_output_candidates) == 1
+                    else []
+                )
+                if output_candidates:
+                    for candidate in output_candidates:
+                        adjacency[caller.id].append((candidate, call, True))
+
+    if repo_root is not None:
+        # Buildless CodeQL cannot type-resolve every call through an injected
+        # Java port. Recover only source-local invocations whose method name
+        # uniquely identifies an indexed output method in the same service.
+        # This does not infer external calls or arbitrary same-name methods.
+        output_by_module_name: dict[tuple[str, str], list[IntegrationMethod]] = defaultdict(list)
+        for item in methods:
+            if item.output_endpoint_ids:
+                output_by_module_name[(item.module, simple_method_name(item.qualified_method))].append(item)
+        for caller in methods:
+            if not caller.module:
+                continue
+            parsed = java_parser.parse_java(str(repo_root.resolve()), caller.path)
+            if parsed is None:
+                continue
+            source, root = parsed
+            method_nodes = [
+                node for node in java_parser.walk(root)
+                if node.type == "method_declaration"
+                and node.start_point.row + 1 <= caller.start_line <= node.end_point.row + 1
+            ]
+            if not method_nodes:
+                continue
+            node = min(method_nodes, key=lambda candidate: candidate.end_byte - candidate.start_byte)
+            for invocation in java_parser.walk(node):
+                if invocation.type != "method_invocation":
+                    continue
+                _receiver, method_name, _arguments = java_parser.invocation_parts(invocation, source)
+                candidates = output_by_module_name.get((caller.module, method_name), [])
+                if not candidates:
+                    continue
+                synthetic = CodeQLCall(
+                    caller=caller.qualified_method,
+                    caller_path=caller.path,
+                    caller_line=caller.start_line,
+                    callee=candidates[0].qualified_method,
+                    callee_path=candidates[0].path,
+                    callee_line=candidates[0].start_line,
+                    call_line=invocation.start_point.row + 1,
+                    dispatch_confidence="possible",
+                )
+                for candidate in candidates:
+                    adjacency[caller.id].append((candidate, synthetic, True))
 
     flows: list[CodeFlow] = []
     explored = 0
@@ -278,9 +374,9 @@ def materialize_codeql_code_flows(
             trigger = endpoint_by_id.get(trigger_id)
             if trigger is None:
                 continue
-            queue: list[tuple[IntegrationMethod, list[tuple[IntegrationMethod, CodeQLCall, bool]]]] = [(entry, [])]
+            queue = deque[tuple[IntegrationMethod, list[tuple[IntegrationMethod, CodeQLCall, bool]]]]([(entry, [])])
             while queue:
-                current, route = queue.pop(0)
+                current, route = queue.popleft()
                 if len(route) >= max_hops:
                     continue
                 for target, call, signature_join in adjacency.get(current.id, []):

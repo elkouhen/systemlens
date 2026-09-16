@@ -1195,6 +1195,11 @@ def index_cmd(
         "--codeql-progress",
         help="Affiche en direct les messages de progression détaillés de CodeQL.",
     ),
+    generate_sources: bool = typer.Option(
+        False,
+        "--generate-sources",
+        help="Génère les sources dans une copie temporaire, sans compiler ni lancer les tests.",
+    ),
     no_codeql: bool = typer.Option(
         False,
         "--no-codeql",
@@ -1244,8 +1249,14 @@ def index_cmd(
     if no_codeql and codeql_progress_html is not None:
         typer.echo("`--codeql-progress-html` requiert CodeQL.", err=True)
         raise typer.Exit(code=2)
+    if generate_sources and no_codeql:
+        typer.echo("`--generate-sources` requiert CodeQL.", err=True)
+        raise typer.Exit(code=2)
     if codeql_database is not None and call_graph_engine not in (None, "codeql"):
         typer.echo("`--codeql-database` requiert `--call-graph-engine codeql`.", err=True)
+        raise typer.Exit(code=2)
+    if generate_sources and codeql_database is not None:
+        typer.echo("`--generate-sources` ne peut pas être combiné avec `--codeql-database`.", err=True)
         raise typer.Exit(code=2)
     if no_codeql and call_graph_engine not in (None, "none"):
         typer.echo("`--no-codeql` ne peut pas être combiné avec un moteur de graphe d'appel.", err=True)
@@ -1288,6 +1299,7 @@ def index_cmd(
             codeql_database=codeql_database,
             call_graph_progress=write_codeql_progress if codeql_progress_html is not None else None,
             codeql_progress=codeql_progress,
+            generate_sources=generate_sources,
         )
         store.set_meta("index_engine", "manual")
         _trace_index("store.close.begin")
@@ -1600,7 +1612,7 @@ def export_microservices_cmd(
                 diagnostics=graph_data.diagnostics,
                 kafka_dto_definitions=graph_data.kafka_dto_definitions,
                 openapi_contracts=graph_data.openapi_contracts,
-                asyncapi_contracts=graph_data.asyncapi_contracts,
+                    asyncapi_contracts=getattr(graph_data, "asyncapi_contracts", None),
                 graph_facts=getattr(graph_data, "graph_facts", []),
                 architecture_relations=getattr(graph_data, "architecture_relations", []),
                 code_flows=getattr(graph_data, "code_flows", []),
