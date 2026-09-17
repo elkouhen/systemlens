@@ -426,15 +426,18 @@ def test_graph_html_marks_only_the_selected_call_graph_entry_service_as_root() -
     assert ".graph-node-trigger-badge.is-kafka" in document
 
 
-def test_graph_html_flux_lists_only_reconciled_inter_service_code_flows() -> None:
+def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     document = render_graph_html({}, [])
 
     assert "const interServiceCodeFlows = codeFlows.filter(flow =>" in document
+    assert "const serviceIdsForCodeFlow = flow => new Set(" in document
+    assert "return serviceIdsForCodeFlow(flow).size >= 2;" in document
+    assert "Keep a partially reconciled interprocedural flow selectable" in document
     assert 'id="code-flow-scope"' in document
     assert '<option value="local">Flux internes</option>' in document
     assert "const localCodeFlows = codeFlows.filter(flow =>" in document
     assert 'nodeDataById.get(nodeId)?.kind === "microservice"' in document
-    assert "return services.size >= 2;" in document
+    assert "Flux détecté ; le chemin complet ne peut pas être rapproché" in document
     assert "const scopedCodeFlows = scope === \"all\"" in document
     assert "const visible = scopedCodeFlows.filter(flow =>" in document
     assert "Flux inter-services (${visible.length}/${interServiceCodeFlows.length})" in document

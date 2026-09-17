@@ -72,6 +72,13 @@
       ));
       return candidates.length === 1 ? candidates[0] : null;
     };
+    const serviceIdsForCodeFlow = flow => new Set(
+      [...new Set((flow.steps || [])
+        .map(step => step.endpoint_id)
+        .filter(Boolean))]
+        .flatMap(endpointId => nodeIdsByEndpoint.get(endpointId) || [])
+        .filter(nodeId => nodeDataById.get(nodeId)?.kind === "microservice")
+    );
 
     function pathForCodeFlow(flow) {
       const serviceId = nodeIdForCodeFlowResource(flow.module, "microservice");
@@ -140,19 +147,22 @@
     // selector below can broaden or narrow it to persisted local paths.
     const interServiceCodeFlows = codeFlows.filter(flow => {
       const path = pathForCodeFlow(flow);
-      if (!path) return false;
-      const services = new Set(path.nodes.filter(nodeId => (
-        nodeDataById.get(nodeId)?.kind === "microservice"
-      )));
-      return services.size >= 2;
+      if (path) {
+        const services = new Set(path.nodes.filter(nodeId => (
+          nodeDataById.get(nodeId)?.kind === "microservice"
+        )));
+        if (services.size >= 2) return true;
+      }
+      // A persisted interprocedural flow is still useful evidence when one of
+      // its topology edges is unresolved or absent from the export. Do not
+      // hide it merely because the graph cannot prove a complete visual path.
+      return serviceIdsForCodeFlow(flow).size >= 2;
     });
     const localCodeFlows = codeFlows.filter(flow => {
+      const services = serviceIdsForCodeFlow(flow);
       const endpointIds = [...new Set((flow.steps || [])
         .map(step => step.endpoint_id)
         .filter(Boolean))];
-      const services = new Set(endpointIds.flatMap(endpointId => (
-        nodeIdsByEndpoint.get(endpointId) || []
-      )).filter(nodeId => nodeDataById.get(nodeId)?.kind === "microservice"));
       return endpointIds.length >= 2 && services.size === 1;
     });
 
@@ -210,6 +220,15 @@
           add(outgoing?.link.target);
         }
       });
+      if (nodes.length >= 2) return { nodes, edges: [] };
+      // Keep a partially reconciled interprocedural flow selectable from the
+      // persisted endpoint evidence. This focuses the graph on the involved
+      // services without pretending that a missing topology edge was proven.
+      const evidenceNodes = [...new Set(steps.flatMap(step => (
+        step.endpoint_id ? nodeIdsByEndpoint.get(step.endpoint_id) || [] : []
+      )))]
+        .filter(nodeId => nodeDataById.get(nodeId)?.kind === "microservice");
+      if (evidenceNodes.length >= 2) return { nodes: evidenceNodes, edges: [] };
       return nodes.length ? { nodes, edges: [] } : null;
     }
 
@@ -249,7 +268,7 @@
         });
       } else {
         item.classList.add("is-unavailable");
-        item.title = "Ce graphe d’appel ne peut pas être rapproché de la topologie affichée";
+        item.title = "Flux détecté ; le chemin complet ne peut pas être rapproché de la topologie affichée";
       }
       item.append(header, meta);
       return item;

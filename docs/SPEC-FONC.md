@@ -297,11 +297,14 @@ The HTML export opens on the Explorer tab with the global architecture graph.
 Before a call-graph selection it shows only the high-level node cards and
 persisted topology edges: it does not show CodeQL input/output ports,
 port-to-port relations, internal links, or call-graph tooltips. The Flux tab
-presents a compact list of persisted potential call graphs that reconcile to a
- topology path across at least two microservices, grouped by service and
-trigger; it does not show method, confidence, or status details before a
-selection. Flows confined to one microservice remain persisted source
-evidence but are excluded from the default list. The Flux tab provides a
+presents a compact list of persisted potential call graphs whose endpoint
+evidence spans at least two microservices, grouped by service and trigger; it
+does not show method, confidence, or status details before selection. A flow
+remains listed when one of its topology edges is unresolved or absent from
+the export; selecting it marks the graph as partial instead of hiding the
+persisted interprocedural evidence. Flows confined to one microservice remain
+persisted source evidence but are excluded from the default list. The Flux tab
+provides a
 scope selector with `Inter-services`, `Tous les flux`, and `Flux internes`.
 `Flux internes` isolates persisted flows with distinct input/output endpoints
 belonging to the same microservice; `Tous les flux` additionally includes
