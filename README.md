@@ -72,7 +72,9 @@ systemlens import-facts architecture.ai-graph.pass-001.json \
 
 For terminal-oriented exploration, use `systemlens microservices`,
 `systemlens topics`, `systemlens apis`, `systemlens projects`, and
-`systemlens analyze audit`. Use `systemlens flows` to list conservative,
+`systemlens analyze audit`. Use `systemlens analyze flows-diagnostic` to
+compare external integrations with persisted local and cross-service flows.
+Use `systemlens flows` to list conservative,
 source-evidenced paths from an API or topic entry point to its external effects.
 
 ### Choose an interface

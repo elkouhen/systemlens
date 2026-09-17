@@ -37,6 +37,7 @@ from systemlens.application.code_flows import (
     render_code_flows_text,
     show_code_flow,
 )
+from systemlens.application.flow_diagnostic import diagnose_flows, render_flow_diagnostic_text
 from systemlens.application.architecture_projection import project_architecture_graph
 from systemlens.application.audit import assess_architecture, render_audit_json, render_audit_text
 from systemlens.infrastructure.config import ConfigError, init_config, load_config
@@ -988,6 +989,17 @@ def analyze_indexing_issues(
     heuristique de résolution conservatrice.
     """
     _render_indexing_issues(_option_root(root), _option_json(json_output))
+
+
+@analyze_app.command("flows-diagnostic")
+def analyze_flows_diagnostic(
+    root: Path | None = typer.Option(None, "--root", help="Répertoire indexé à analyser."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Comparer les flux internes persistés aux intégrations externes."""
+    inventory = load_architecture_inventory(_option_root(root))
+    result = diagnose_flows(inventory)
+    typer.echo(json.dumps(result) if _option_json(json_output) else render_flow_diagnostic_text(result))
 
 
 @analyze_app.command("request-reply")
