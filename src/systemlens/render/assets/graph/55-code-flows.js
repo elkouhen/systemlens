@@ -271,12 +271,27 @@
       const meta = document.createElement("div");
       meta.className = "reference-meta";
       meta.textContent = flow.module;
-      const services = document.createElement("div");
-      services.className = "code-flow-services";
+      const servicesSection = document.createElement("div");
+      servicesSection.className = "code-flow-services";
+      const servicesLabel = document.createElement("div");
+      servicesLabel.className = "code-flow-services-label";
+      servicesLabel.textContent = "Services traversés";
       const serviceNames = servicesForCodeFlow(flow);
-      services.textContent = serviceNames.length
-        ? `Services : ${serviceNames.join(" → ")}`
-        : "Services : non résolus dans le graphe";
+      if (serviceNames.length) {
+        const serviceList = document.createElement("ol");
+        serviceList.className = "code-flow-service-list";
+        serviceNames.forEach(serviceName => {
+          const serviceItem = document.createElement("li");
+          serviceItem.textContent = serviceName;
+          serviceList.append(serviceItem);
+        });
+        servicesSection.append(servicesLabel, serviceList);
+      } else {
+        const unresolved = document.createElement("div");
+        unresolved.className = "code-flow-services-unresolved";
+        unresolved.textContent = "Non résolus dans le graphe";
+        servicesSection.append(servicesLabel, unresolved);
+      }
       if (path) {
         item.tabIndex = 0;
         item.title = flow.reconciliation === "partial"
@@ -295,7 +310,7 @@
           ? "Flux détecté ; le chemin complet ne peut pas être rapproché de la topologie affichée"
           : "Flux détecté ; le chemin n’est pas disponible dans la topologie affichée";
       }
-      item.append(header, meta, services);
+      item.append(header, meta, servicesSection);
       return item;
     }
 

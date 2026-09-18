@@ -57,6 +57,9 @@
     .code-flow-reason,
     .code-flow-step code { color: var(--ui-muted); }
     .code-flow-services { color: var(--ui-text); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+    .code-flow-services-label { color: var(--ui-muted); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+    .code-flow-service-list { display: grid; gap: 2px; margin: 3px 0 0 17px; padding: 0; }
+    .code-flow-services-unresolved { color: var(--ui-muted); margin-top: 3px; }
     .code-flow-step-kind { color: var(--ui-accent-text); }
     .code-flow-step::before { color: var(--ui-on-accent); background: var(--ui-selected); }
     .toolbar input:not([type="checkbox"])::placeholder { color: var(--ui-muted); }

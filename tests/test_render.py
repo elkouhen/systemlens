@@ -432,8 +432,9 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "const interServiceCodeFlows = codeFlows.filter(flow =>" in document
     assert "const serviceIdsForCodeFlow = flow => new Set(" in document
     assert "function servicesForCodeFlow(flow)" in document
-    assert "services.textContent = serviceNames.length" in document
-    assert "Services : non résolus dans le graphe" in document
+    assert 'servicesLabel.textContent = "Services traversés"' in document
+    assert 'serviceList.className = "code-flow-service-list"' in document
+    assert 'unresolved.textContent = "Non résolus dans le graphe"' in document
     assert "return serviceIdsForCodeFlow(flow).size >= 2;" in document
     assert "Keep a partially reconciled interprocedural flow selectable" in document
     assert 'id="code-flow-scope"' in document

@@ -307,8 +307,9 @@ remains listed when one of its topology edges is unresolved or absent from
 the export; selecting it marks the graph as partial instead of hiding the
 persisted interprocedural evidence. Flows confined to one microservice remain
 persisted source evidence but are excluded from the default list. Each flow
-card also lists the microservice names resolved from its indexed endpoint
-identities, or explicitly says that they could not be resolved in the graph.
+card also displays an ordered sub-list of the microservice names resolved from
+its indexed endpoint identities, or explicitly says that they could not be
+resolved in the graph.
 This diagnostic text belongs to the widget and does not change graph path
 rendering. The Flux tab
 provides a
