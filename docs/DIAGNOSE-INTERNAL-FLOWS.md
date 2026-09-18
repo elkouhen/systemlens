@@ -1,0 +1,180 @@
+# Diagnose missing internal code flows
+
+This guide explains how to determine why SystemLens does not show an
+interesting internal code flow.
+
+## 1. Rebuild the index
+
+Run a full index so that the current extractor and code-flow signatures are
+used:
+
+```bash
+systemlens index --full --codeql-progress 2>&1 | tee indexing.log
+```
+
+If source-generated Java classes are part of the application, use:
+
+```bash
+systemlens index --full --generate-sources --codeql-progress 2>&1 | tee indexing.log
+```
+
+The repository is never compiled or tested by `--generate-sources`; it only
+runs the Maven or Gradle source-generation phase in a temporary copy.
+
+## 2. Check the important index counters
+
+Extract the relevant lines from the log:
+
+```bash
+rg -n -i \
+  'ports détectés|CodeQL|Joern|indisponible|flux interprocéduraux|parcours de code|limite|appel\(s\)|jointure' \
+  indexing.log
+```
+
+The final counters answer most first questions:
+
+| Log message | Interpretation |
+| --- | --- |
+| `ports détectés (X IN, Y OUT)` | The endpoint extractor found the inputs and outputs required for a flow. `OUT=0` means no input-to-output flow can be materialized. |
+| `CodeQL : préparation de l'analyse interprocédurale` or the equivalent Joern message | An interprocedural engine is active. |
+| `indisponible ; flux interprocéduraux ignorés` | Only same-method AST flows are available. |
+| `N appel(s) extrait(s)` | Number of Java calls returned by the call-graph engine. |
+| `N jointure(s)` | Number of calls attached to indexed integration methods. A high call count with zero joins usually indicates a source-location or method-name resolution problem. |
+| `N flux interprocédural(aux)` | Flows that cross method boundaries and reach an indexed output endpoint. |
+| `limite atteinte (N transitions)` | The bounded call-graph exploration stopped before considering every transition. |
+| `N parcours de code potentiel(s) matérialisé(s)` | Total persisted flows after local, interprocedural and Kafka continuation materialization. |
+
+The `max_paths` setting is a global exploration budget, despite its name. The
+default values are:
+
+```yaml
+analysis:
+  codeql_max_hops: 12
+  codeql_max_paths: 10000
+```
+
+`codeql_max_hops` limits the depth of one call path. `codeql_max_paths` limits
+the number of call transitions explored across the index run. For a very
+branching codebase, temporarily increasing them can confirm whether truncation
+is the cause:
+
+```yaml
+analysis:
+  codeql_max_hops: 20
+  codeql_max_paths: 50000
+```
+
+Increase these values carefully: they can substantially increase indexing time
+and the number of low-confidence candidate flows.
+
+## 3. Inspect the persisted flow inventory
+
+List all persisted flows, including local flows:
+
+```bash
+systemlens flows --json > flows.json
+```
+
+The HTML export defaults to the `Inter-services` scope. Select `Internal
+flows` or `All flows` in the Flux tab before concluding that local flows are
+missing.
+
+An internal flow currently means a source-evidenced path from an indexed HTTP
+or Kafka input to a distinct indexed HTTP, Kafka or data output in the same
+service. A business-only chain such as `Controller -> Service -> Repository`,
+without indexed integration endpoints, is not represented as an internal code
+flow.
+
+Useful fields in `flows.json` are:
+
+- `module`: the owning service;
+- `method`: the indexed entry method;
+- `steps`: the endpoint and method-call sequence;
+- `confidence`: `medium` for stronger evidence and `low` for fallback or
+  possible dispatch evidence;
+- `reconciliation`: `complete` or `partial` relative to the persisted
+  topology snapshot.
+
+## 4. Find where entry points disappear
+
+Run the read-only flow diagnostic:
+
+```bash
+systemlens analyze flows-diagnostic --json > flow-diagnostic.json
+```
+
+This distinguishes common cases such as:
+
+- an input endpoint with no indexed output;
+- an output endpoint with no entry flow;
+- a local flow that was found but has no cross-service continuation;
+- a flow whose external relation could not be resolved.
+
+Then inspect unresolved extraction evidence:
+
+```bash
+systemlens analyze indexing-issues --json > indexing-issues.json
+```
+
+Look for dynamic REST targets, ambiguous service aliases, dynamic Kafka
+topics, parser diagnostics, unsupported framework constructs and unresolved
+dispatch evidence.
+
+## 5. Interpret the common failure patterns
+
+### Inputs and outputs are missing
+
+If the `IN` or `OUT` counter is unexpectedly low, the problem is in endpoint
+extraction rather than call-graph traversal. Check custom annotations, source
+generation, non-standard Spring DSLs, malformed YAML and endpoint declarations
+that are built dynamically.
+
+### Calls are extracted but no flows are joined
+
+If CodeQL/Joern reports calls but `joined` is zero, the engine saw Java calls
+that could not be matched to the persisted integration methods. Common causes
+are generated or relocated source paths, unresolved external types, overloaded
+methods without a unique source location, and module boundaries that cannot be
+proven from source-only analysis.
+
+### The call graph engine is unavailable
+
+Without CodeQL or Joern, SystemLens retains same-method flows but cannot
+reliably follow `Controller -> Service -> Adapter` chains. Check the doctor
+output and the engine availability line in `indexing.log`.
+
+### The flow is ambiguous or dynamic
+
+SystemLens intentionally does not invent a target for reflection, runtime bean
+selection, dynamic routing, mutable REST URLs, ambiguous service aliases or
+dynamic Kafka topics. These facts remain unresolved evidence and should appear
+in `indexing-issues.json` where applicable.
+
+### The flow is too deep or too branched
+
+Look for the `limit reached` message. Increase `codeql_max_hops` or
+`codeql_max_paths` temporarily, reindex, and compare the resulting counters.
+
+### The flow exists but is not visible in the UI
+
+First switch the Flux scope from `Inter-services` to `Internal flows` or `All
+flows`. Also check the search filter and remember that a partial flow can be
+listed even when its topology path cannot be rendered completely.
+
+## 6. Minimal report to share for further diagnosis
+
+When asking for help, the following redacted output is sufficient; application
+source code and secrets are not required:
+
+```bash
+rg -n -i \
+  'ports détectés|CodeQL|Joern|indisponible|flux interprocéduraux|parcours de code|limite|appel\(s\)|jointure' \
+  indexing.log
+
+systemlens flows --json
+systemlens analyze flows-diagnostic --json
+systemlens analyze indexing-issues --json
+```
+
+Redact service names, URLs, database names and source paths if they are
+sensitive. Keep the counters, statuses and diagnostic categories intact.
