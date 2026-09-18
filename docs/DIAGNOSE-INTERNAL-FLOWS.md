@@ -79,6 +79,77 @@ The HTML export defaults to the `Inter-services` scope. Select `Internal
 flows` or `All flows` in the Flux tab before concluding that local flows are
 missing.
 
+To verify the HTML itself rather than only checking that the `code_flows` key
+exists, regenerate the export and run this standard-library-only diagnostic:
+
+```bash
+systemlens export microservices --html architecture.html
+python - "architecture.html" <<'PY'
+import json
+import re
+import sys
+from collections import Counter
+from pathlib import Path
+
+html = Path(sys.argv[1]).read_text(encoding="utf-8")
+match = re.search(
+    r'<script id="graph-data" type="application/json">(.*?)</script>',
+    html,
+    re.DOTALL,
+)
+if not match:
+    raise SystemExit("graph-data not found in the HTML export")
+
+data = json.loads(match.group(1))
+flows = data.get("code_flows", [])
+endpoint_services = {}
+for node in data.get("nodes", []):
+    if node.get("kind") != "microservice":
+        continue
+    for port in node.get("ports", []):
+        endpoint_id = port.get("endpoint_id")
+        if endpoint_id:
+            endpoint_services.setdefault(endpoint_id, set()).add(node["id"])
+
+counts = Counter()
+for flow in flows:
+    endpoint_ids = {
+        step.get("endpoint_id")
+        for step in flow.get("steps", [])
+        if step.get("endpoint_id")
+    }
+    services = set().union(
+        *(endpoint_services.get(endpoint_id, set()) for endpoint_id in endpoint_ids)
+    )
+    if len(services) >= 2:
+        category = "inter-services"
+    elif len(endpoint_ids) >= 2 and len(services) == 1:
+        category = "internal"
+    else:
+        category = "unclassified"
+    counts[category] += 1
+
+print(f"Flows embedded in HTML: {len(flows)}")
+print(f"Inter-service flows:     {counts['inter-services']}")
+print(f"Internal flows:          {counts['internal']}")
+print(f"Unclassified flows:      {counts['unclassified']}")
+print("Reconciliation:          ", dict(Counter(
+    flow.get("reconciliation", "unknown") for flow in flows
+)))
+PY
+```
+
+Interpret the result as follows:
+
+- `Flows embedded in HTML: 0` means that the export is stale or was generated
+  from a different indexed root;
+- a non-zero `Internal flows` count means the flows are present and should be
+  visible after selecting `Internal flows` or `All flows`;
+- a non-zero `Unclassified flows` count means that the flow endpoints are not
+  mapped to microservice nodes in the exported graph;
+- zero `Inter-service flows` with many internal flows means the flows cross
+  Java methods but not microservice boundaries.
+
 An internal flow currently means a source-evidenced path from an indexed HTTP
 or Kafka input to a distinct indexed HTTP, Kafka or data output in the same
 service. A business-only chain such as `Controller -> Service -> Repository`,
