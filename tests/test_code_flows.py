@@ -209,6 +209,36 @@ def test_reconcile_code_flows_marks_missing_topology_as_partial() -> None:
     assert reconcile_code_flows([flow], [entry, output], [])[0].reconciliation == "partial"
 
 
+def test_reconcile_code_flows_requires_the_matching_topology_endpoints() -> None:
+    entry = _endpoint("entry", "serve", "rest", "POST /orders", "orders/Orders.java", 1)
+    output = replace(
+        _endpoint("output", "call", "rest", "POST /payments", "orders/Orders.java", 2),
+        module="payments",
+    )
+    unrelated = replace(
+        _endpoint("unrelated", "serve", "rest", "POST /other", "payments/Other.java", 3),
+        module="payments",
+    )
+    downstream = replace(
+        _endpoint("downstream", "consume", "kafka", "orders.created", "inventory/Other.java", 4),
+        module="inventory",
+    )
+    flow = CodeFlow(
+        id="flow", module="orders", method="Orders.place", path="orders/Orders.java",
+        start_line=1, end_line=3, status="potential", confidence="medium", reason="test",
+        steps=(
+            CodeFlowStep(1, "http_entry", entry.topic, entry.path, 1, 1, entry.id),
+            CodeFlowStep(2, "http_call", output.topic, output.path, 2, 2, output.id),
+            CodeFlowStep(3, "message_entry", downstream.topic, downstream.path, 4, 4, downstream.id),
+        ),
+    )
+    wrong_edge = GraphEdge("rest", "orders", "payments", output, unrelated)
+
+    assert reconcile_code_flows(
+        [flow], [entry, output, unrelated, downstream], [wrong_edge]
+    )[0].reconciliation == "partial"
+
+
 def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
@@ -855,6 +885,38 @@ class OrderController {
     assert len(flows) == 1
     assert flows[0].steps[-1].name == "orders.stock"
     assert flows[0].confidence == "low"
+
+
+def test_ast_fallback_keeps_ambiguous_candidates_unresolved(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    text = """package com.example;
+class FirstAdapter { public void publish() { kafka.send(); } }
+class SecondAdapter { public void publish() { kafka.send(); } }
+class OrderController {
+  void receive() { publish(); }
+  void publish() { kafka.send(); }
+}
+"""
+    path = tmp_path / source
+    path.parent.mkdir(parents=True)
+    path.write_text(text, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        replace(_endpoint("entry", "serve", "rest", "POST /orders", source, 5),
+                qualified_name="com.example.OrderController"),
+        replace(_endpoint("first", "produce", "kafka", "orders.first", source, 2),
+                qualified_name="com.example.FirstAdapter"),
+        replace(_endpoint("second", "produce", "kafka", "orders.second", source, 3),
+                qualified_name="com.example.SecondAdapter"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
+
+    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path)
+
+    assert flows == []
 
 
 def test_integration_method_ids_distinguish_java_overloads(tmp_path: Path) -> None:

@@ -221,6 +221,9 @@ Output-bearing methods are terminal sinks for this fallback pass, so their
 external `send`/`call` invocations are not recursively reinterpreted as
 same-named local methods. This prevents overload cross-talk and artificial
 self-loops while leaving the full CodeQL result authoritative when available.
+If arity and the declared receiver hierarchy still leave more than one
+endpoint-bearing candidate, the fallback retains the ambiguity and adds no
+synthetic call edge.
 An AST-only candidate remains possible with low confidence and never changes
 the endpoint or topology facts.
 For a virtual call, CodeQL's unique `exactVirtualMethod` target is retained at

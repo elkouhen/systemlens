@@ -14,7 +14,7 @@ from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod, mo
 from systemlens.indexing.codeql import CodeQLCall
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v12-offline-codeql-staging"
+CODE_FLOW_SIGNATURE = "code-flow-v13-offline-codeql-staging-ast-narrowing"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -552,7 +552,10 @@ def materialize_codeql_code_flows(
                         continue
                     narrowed_candidates.append(candidate)
                 candidates = narrowed_candidates
-                if not candidates:
+                # If source evidence still leaves several output methods
+                # possible, retain the ambiguity instead of selecting the
+                # first result returned by the parser.
+                if len(candidates) != 1:
                     continue
                 synthetic = CodeQLCall(
                     caller=caller.qualified_method,
@@ -564,8 +567,7 @@ def materialize_codeql_code_flows(
                     call_line=invocation.start_point.row + 1,
                     dispatch_confidence="possible",
                 )
-                for candidate in candidates:
-                    adjacency[caller.id].append((candidate, synthetic, True))
+                adjacency[caller.id].append((candidates[0], synthetic, True))
 
     flows: list[CodeFlow] = []
     explored = 0
@@ -697,20 +699,43 @@ def reconcile_code_flows(
         if any(step.endpoint_id not in endpoint_by_id for step in endpoint_steps):
             status = "partial"
         else:
-            for step in endpoint_steps:
+            for index, step in enumerate(endpoint_steps):
                 endpoint_id = step.endpoint_id
                 if endpoint_id is None:
                     status = "partial"
                     break
                 endpoint = endpoint_by_id[endpoint_id]
+                previous_endpoint = None
+                if index > 0:
+                    previous_id = endpoint_steps[index - 1].endpoint_id
+                    if previous_id is not None:
+                        previous_endpoint = endpoint_by_id[previous_id]
                 if endpoint.role in {"call", "produce"}:
                     if endpoint.module == flow.module:
                         continue
-                    if not outgoing.get(endpoint.id):
+                    matching_outgoing = outgoing.get(endpoint.id, [])
+                    next_endpoint = None
+                    if index + 1 < len(endpoint_steps):
+                        next_id = endpoint_steps[index + 1].endpoint_id
+                        if next_id is not None:
+                            next_endpoint = endpoint_by_id[next_id]
+                    if next_endpoint is not None:
+                        matching_outgoing = [
+                            edge for edge in matching_outgoing
+                            if edge.to_endpoint is not None
+                            and edge.to_endpoint.id == next_endpoint.id
+                        ]
+                    if not matching_outgoing:
                         status = "partial"
                         break
                 if endpoint.role in {"serve", "consume"} and step is not endpoint_steps[0]:
-                    if not incoming.get(endpoint.id):
+                    matching_incoming = incoming.get(endpoint.id, [])
+                    if previous_endpoint is not None:
+                        matching_incoming = [
+                            edge for edge in matching_incoming
+                            if edge.from_endpoint.id == previous_endpoint.id
+                        ]
+                    if not matching_incoming:
                         status = "partial"
                         break
         reconciled.append(replace(flow, reconciliation=status))
