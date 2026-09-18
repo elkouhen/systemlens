@@ -37,7 +37,7 @@ public class {class_name} {{
     )
 
 
-def _write_pom_with_openapi_plugin(path: Path, artifact: str = "test-service") -> None:
+def _write_pom_with_openapi_plugin(path: Path, artifact: str = "orders-service") -> None:
     """Crée un pom.xml avec le plugin openapi-generator-maven-plugin."""
     path.write_text(
         f"""
@@ -70,7 +70,7 @@ def _write_pom_with_openapi_plugin(path: Path, artifact: str = "test-service") -
 def _write_pom_with_openapi_spec(
     path: Path,
     *,
-    artifact: str = "test-service",
+    artifact: str = "orders-service",
     input_spec: str = "${project.basedir}/src/main/openapi/orders.yaml",
 ) -> None:
     path.write_text(
@@ -181,7 +181,7 @@ def test_has_openapi_generator_plugin_without_plugin(tmp_path: Path) -> None:
         """
 <project xmlns="http://maven.apache.org/POM/4.0.0">
     <modelVersion>4.0.0</modelVersion>
-    <artifactId>test-service</artifactId>
+    <artifactId>orders-service</artifactId>
     <version>1.0.0</version>
 </project>
 """
@@ -251,7 +251,7 @@ def test_detect_openapi_generated_clients_without_plugin(tmp_path: Path) -> None
         """
 <project xmlns="http://maven.apache.org/POM/4.0.0">
     <modelVersion>4.0.0</modelVersion>
-    <artifactId>test-service</artifactId>
+    <artifactId>orders-service</artifactId>
     <version>1.0.0</version>
 </project>
 """

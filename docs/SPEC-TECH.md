@@ -452,7 +452,8 @@ external-analyzer data on the first AST-only index run.
 1. Clear parser and discovery caches for long-lived MCP processes.
 2. Discover modules unless disabled.
 3. Build the eligible-file hash inventory, respecting include/exclude rules,
-   test-source exclusion and nested-build boundaries.
+   test-source exclusion, Maven test/archetype module exclusion and nested-build
+   boundaries.
 4. Compare hashes with the stored inventory and purge removed files. A changed
    or deleted Spring configuration file or Maven/Gradle descriptor promotes the
    delta to a full endpoint refresh because these files are dependencies of

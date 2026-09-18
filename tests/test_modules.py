@@ -266,14 +266,29 @@ def test_discover_modules_excludes_maven_and_gradle_mock_projects(tmp_path: Path
     assert [module.name for module in discover_modules(tmp_path)] == ["orders-api"]
 
 
-def test_discover_modules_excludes_maven_and_gradle_archteype_projects(tmp_path: Path) -> None:
-    maven_archteype = tmp_path / "maven-template"
-    gradle_archteype = tmp_path / "gradle-template"
+def test_discover_modules_excludes_maven_and_gradle_archetype_projects(tmp_path: Path) -> None:
+    maven_archetype = tmp_path / "maven-template"
+    gradle_archetype = tmp_path / "gradle-template"
     production = tmp_path / "orders"
-    for module in (maven_archteype, gradle_archteype, production):
+    for module in (maven_archetype, gradle_archetype, production):
         module.mkdir()
-    _write_pom(maven_archteype / "pom.xml", "orders-archteype", "1.0.0")
-    (gradle_archteype / "build.gradle").write_text("archivesBaseName = 'payment-ARCHTEYPE'\n")
+    _write_pom(maven_archetype / "pom.xml", "orders-archetype", "1.0.0")
+    (gradle_archetype / "build.gradle").write_text("archivesBaseName = 'payment-archetype'\n")
+    _write_pom(production / "pom.xml", "orders-api", "1.0.0")
+
+    assert [module.name for module in discover_modules(tmp_path)] == ["orders-api"]
+
+
+def test_discover_modules_excludes_maven_artifacts_containing_test_or_archetype(
+    tmp_path: Path,
+) -> None:
+    maven_test = tmp_path / "test-support"
+    maven_archetype = tmp_path / "template"
+    production = tmp_path / "orders"
+    for module in (maven_test, maven_archetype, production):
+        module.mkdir()
+    _write_pom(maven_test / "pom.xml", "orders-test-support", "1.0.0")
+    _write_pom(maven_archetype / "pom.xml", "orders-archetype-template", "1.0.0")
     _write_pom(production / "pom.xml", "orders-api", "1.0.0")
 
     assert [module.name for module in discover_modules(tmp_path)] == ["orders-api"]
