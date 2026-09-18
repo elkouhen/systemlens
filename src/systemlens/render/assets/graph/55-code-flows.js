@@ -239,6 +239,21 @@
       });
     }
 
+    function servicesForCodeFlow(flow) {
+      const services = [];
+      const seen = new Set();
+      (flow.steps || []).forEach(step => {
+        if (!step.endpoint_id) return;
+        (nodeIdsByEndpoint.get(step.endpoint_id) || []).forEach(nodeId => {
+          const node = nodeDataById.get(nodeId);
+          if (node?.kind !== "microservice" || seen.has(node.name)) return;
+          seen.add(node.name);
+          services.push(node.name);
+        });
+      });
+      return services;
+    }
+
     function codeFlowItem(flow) {
       const item = document.createElement("li");
       const selected = graphState.selectedCodeFlowId === flow.id;
@@ -256,6 +271,12 @@
       const meta = document.createElement("div");
       meta.className = "reference-meta";
       meta.textContent = flow.module;
+      const services = document.createElement("div");
+      services.className = "code-flow-services";
+      const serviceNames = servicesForCodeFlow(flow);
+      services.textContent = serviceNames.length
+        ? `Services : ${serviceNames.join(" → ")}`
+        : "Services : non résolus dans le graphe";
       if (path) {
         item.tabIndex = 0;
         item.title = flow.reconciliation === "partial"
@@ -274,7 +295,7 @@
           ? "Flux détecté ; le chemin complet ne peut pas être rapproché de la topologie affichée"
           : "Flux détecté ; le chemin n’est pas disponible dans la topologie affichée";
       }
-      item.append(header, meta);
+      item.append(header, meta, services);
       return item;
     }
 

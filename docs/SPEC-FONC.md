@@ -306,7 +306,11 @@ does not show method, confidence, or status details before selection. A flow
 remains listed when one of its topology edges is unresolved or absent from
 the export; selecting it marks the graph as partial instead of hiding the
 persisted interprocedural evidence. Flows confined to one microservice remain
-persisted source evidence but are excluded from the default list. The Flux tab
+persisted source evidence but are excluded from the default list. Each flow
+card also lists the microservice names resolved from its indexed endpoint
+identities, or explicitly says that they could not be resolved in the graph.
+This diagnostic text belongs to the widget and does not change graph path
+rendering. The Flux tab
 provides a
 scope selector with `Inter-services`, `Tous les flux`, and `Flux internes`.
 `Flux internes` isolates persisted flows with distinct input/output endpoints
