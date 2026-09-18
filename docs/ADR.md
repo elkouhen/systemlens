@@ -376,6 +376,56 @@ Indexing performs AST traversal and a bounded CodeQL call-graph join when the
 local prerequisite is available, while exports and queries continue to consume
 only persisted snapshots.
 
+## ADR-27a — Use AST symbol facts to constrain buildless call-graph fallbacks
+
+**Status:** Accepted.
+
+**Context:** A source-only CodeQL database can lack enough dependency/type
+information to resolve a Java interface or bean call. The existing fallback
+must remain conservative, but matching only a same-module method name can
+confuse overloads or reinterpret an external `send` call as a local method.
+
+**Decision:** During flow materialization, build a transient AST symbol index
+from the already indexed Java sources. For unresolved fallback calls, use the
+invocation arity and the source-declared `implements`/`extends` hierarchy to
+narrow endpoint-bearing output candidates. Do not persist this auxiliary index
+or promote its candidates above `possible`/low confidence. Treat methods that
+already contain an indexed output endpoint as terminal for this AST fallback;
+the full CodeQL graph remains authoritative for additional calls in those
+methods.
+
+**Consequences:** Existing SQLite snapshots remain compatible and endpoint
+semantics are unchanged. Interface adapters and overloaded methods receive
+better candidate selection in buildless analysis, at the cost of retaining
+ambiguity when the receiver type or source hierarchy is unavailable. The
+fallback remains intentionally weaker than CodeQL and does not resolve runtime
+Spring bean selection.
+
+## ADR-27b — Preserve stronger enrichment facts and label topology reconciliation
+
+**Status:** Accepted.
+
+**Context:** Iterative AI graph imports reuse semantic fact identities. A later
+pass may know less than an earlier pass and must not replace a high-confidence
+assertion with an imprecise one. Separately, a persisted code flow can remain
+valid source evidence while one of its endpoint or topology links is absent
+from the current architecture snapshot.
+
+**Decision:** Merge repeated `GraphFact` values monotonically by confidence and
+status. Equal-quality observations refresh the stored value; lower-quality
+observations may fill missing optional fields but cannot replace stronger
+semantic fields or provenance. Persist a `CodeFlow.reconciliation` status
+derived only from endpoint identifiers and the current topology edges:
+`complete` for fully matched evidence and `partial` when code evidence remains
+but an endpoint or cross-service edge is missing, unresolved, dynamic, or
+ambiguous. Same-service input/output evidence does not require an
+inter-service edge.
+
+**Consequences:** Enrichment imports cannot silently degrade a confirmed fact,
+while explicit complete-manifest deletion remains available for stale facts in
+that namespace. Flow consumers can distinguish a valid partial code path from
+a fully reconciled topology path without discarding either one.
+
 ## ADR-28 — Render selected call-graph arcs with orthogonal port routes
 
 **Status:** Accepted.

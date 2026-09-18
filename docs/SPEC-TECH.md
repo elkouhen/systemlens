@@ -214,12 +214,28 @@ materializer may retain the source invocation and bridge it to matching
 endpoint-bearing output methods in the same module, or to one globally unique
 matching implementation across modules. Such edges are marked
 possible/low confidence; no external or arbitrary same-name call is inferred.
+The AST method projection also builds a transient, non-persisted Java symbol
+index for this fallback. It uses invocation arity and the source-declared
+`implements`/`extends` hierarchy to narrow endpoint-bearing output candidates.
+Output-bearing methods are terminal sinks for this fallback pass, so their
+external `send`/`call` invocations are not recursively reinterpreted as
+same-named local methods. This prevents overload cross-talk and artificial
+self-loops while leaving the full CodeQL result authoritative when available.
+An AST-only candidate remains possible with low confidence and never changes
+the endpoint or topology facts.
 For a virtual call, CodeQL's unique `exactVirtualMethod` target is retained at
 medium confidence. If no unique target can be proven, its `viableCallable`
 candidates are retained individually at low confidence; SystemLens does not
 select an implementation on Spring bean metadata alone. The analysis profile,
 including the selected call-graph engine, availability, activation and its bounds, participates in the
 code-flow signature so switching profile recalculates unchanged repositories.
+Each persisted `CodeFlow` also carries a `reconciliation` status. `complete`
+means every endpoint step exists in the same snapshot and every cross-service
+effect/continuation has a matching persisted topology edge; `partial` means
+the code evidence remains valid but at least one endpoint or topology edge is
+missing, unresolved, dynamic, or ambiguous. Same-service input-to-output
+evidence can be complete without an inter-service edge. The status is derived
+during indexing from endpoint identifiers and never from route-label matching.
 
 When explicitly requested through `systemlens index --codeql-progress-html FILE`,
 the indexing service emits one in-memory checkpoint after each completed
@@ -267,7 +283,9 @@ The SQLite store is standard-library-only: it does not load native vector
 extensions or persist/query vector representations. The retained findings
 search compatibility path uses deterministic lexical matching.
 
-Schema version 29 adds the `asyncapi_contracts` table for validated AsyncAPI
+Schema version 30 adds the persisted `code_flows.reconciliation` status and
+migrates older snapshots with `unknown`. Schema version 29 adds the
+`asyncapi_contracts` table for validated AsyncAPI
 documents owned by a module and rendered from the persisted snapshot. When an
 export contains at least one such document, it embeds the Apache-2.0 licensed
 AsyncAPI web component (version 3.1.8) and its distributed stylesheet; exports

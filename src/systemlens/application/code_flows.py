@@ -14,6 +14,7 @@ def code_flow_summary(flow: CodeFlow) -> dict[str, object]:
         "effects": len(flow.steps) - 1,
         "status": flow.status,
         "confidence": flow.confidence,
+        "reconciliation": flow.reconciliation,
     }
 
 
@@ -56,6 +57,7 @@ def render_code_flow_text(item: dict[str, object]) -> str:
         f"Potential code flow {item['id']}",
         f"Method: {item['method']}",
         f"Confidence: {item['confidence']} — {item['reason']}",
+        f"Topology reconciliation: {item['reconciliation']}",
     ]
     for step in steps:
         assert isinstance(step, dict)

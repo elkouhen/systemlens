@@ -111,6 +111,7 @@ def render_graph_html(
             "end_line": flow.end_line,
             "status": flow.status,
             "confidence": flow.confidence,
+            "reconciliation": flow.reconciliation,
             "reason": flow.reason,
             "vscode_uri": flow_vscode_uri(flow),
             "steps": [

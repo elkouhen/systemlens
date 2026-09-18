@@ -75,6 +75,7 @@ def test_import_graph_facts_upserts_generic_nodes_and_edges(tmp_path: Path, monk
     assert first["updated"] == 0
 
     manifest["generated_by"]["pass"] = "002"
+    manifest["edges"][0]["confidence"] = "low"
     manifest["nodes"][2]["metadata"] = {"table": "orders_v2"}
     path.write_text(json.dumps(manifest), encoding="utf-8")
     second = import_graph_facts("facts.json")
@@ -84,6 +85,8 @@ def test_import_graph_facts_upserts_generic_nodes_and_edges(tmp_path: Path, monk
     db_fact = next(fact for fact in facts if fact["name"] == "orders" and fact["kind"] == "data_schema")
     assert db_fact["metadata"] == {"table": "orders_v2"}
     assert db_fact["pass_id"] == "002"
+    publish_fact = next(fact for fact in facts if fact["relation"] == "publishes")
+    assert publish_fact["confidence"] == "high"
 
     graph = architecture_graph()
     assert {item["name"] for item in graph["nodes"]} >= {"orders.created", "orders"}

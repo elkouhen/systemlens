@@ -24,7 +24,7 @@ from systemlens.conventions.strategy1.kafka import (
 from systemlens.indexing.materializers import materialize_asyncapi_contracts, materialize_openapi_contracts
 from systemlens.indexing.code_flows import (
     CODE_FLOW_SIGNATURE, materialize_code_flows, materialize_codeql_code_flows,
-    materialize_kafka_flow_continuations,
+    materialize_kafka_flow_continuations, reconcile_code_flows,
 )
 from systemlens.indexing.integration_methods import materialize_integration_methods
 from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
@@ -43,6 +43,7 @@ from systemlens.indexing.joern import (
 )
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, MessageEndpoint
+from systemlens.domain.graph import build_graph, group_endpoints_by_module
 from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 from systemlens.discovery.build.modules import (
     discover_module_dependencies,
@@ -56,6 +57,7 @@ from systemlens.scanner import (
     infer_kafka_endpoints,
     infer_json_kafka_flow_graph_endpoints,
     infer_markdown_topic_manifest_endpoints,
+    local_spring_application_names,
 )
 from systemlens.storage.sqlite import Store
 from systemlens.discovery.kubernetes import KubernetesDiscoveryError, discover_workloads
@@ -646,6 +648,19 @@ def _index_repo(
                 f"→ Indexation : {call_graph_engine} indisponible ; flux interprocéduraux ignorés.",
             )
         flows = materialize_kafka_flow_continuations(flows, all_endpoints)
+        service_aliases = {
+            module_identity(module): local_spring_application_names(module.path, None)
+            for module in relation_modules
+        }
+        flows = reconcile_code_flows(
+            flows,
+            all_endpoints,
+            build_graph(
+                group_endpoints_by_module(all_endpoints),
+                strategy1=topic_strategy == "strategy1",
+                service_aliases=service_aliases,
+            ),
+        )
         store.replace_code_flows(flows)
         store.set_meta(
             "code_flow_signature",

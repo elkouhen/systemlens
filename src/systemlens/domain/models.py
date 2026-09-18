@@ -1,5 +1,5 @@
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 def compute_finding_id(
@@ -142,6 +142,43 @@ class GraphFact:
     status: str = "confirmed"
     pass_id: str | None = None
     source_revision: str | None = None
+
+
+_FACT_CONFIDENCE_RANK = {"unknown": 0, "low": 1, "medium": 2, "high": 3}
+_FACT_STATUS_RANK = {"ambiguous": 0, "unresolved": 0, "proposed": 1, "confirmed": 2}
+
+
+def merge_graph_facts(existing: GraphFact, incoming: GraphFact) -> GraphFact:
+    """Merge one repeated enrichment fact without degrading its evidence.
+
+    Equal-quality observations are treated as a refresh and the incoming
+    value wins. A lower-quality observation can only fill fields that were
+    absent; it cannot replace the stronger fact's semantic payload, status or
+    provenance.
+    """
+    if existing.id != incoming.id:
+        raise ValueError("Cannot merge graph facts with different identities.")
+    existing_quality = (
+        _FACT_CONFIDENCE_RANK.get(existing.confidence, -1),
+        _FACT_STATUS_RANK.get(existing.status, -1),
+    )
+    incoming_quality = (
+        _FACT_CONFIDENCE_RANK.get(incoming.confidence, -1),
+        _FACT_STATUS_RANK.get(incoming.status, -1),
+    )
+    stronger = incoming if incoming_quality >= existing_quality else existing
+    weaker = existing if stronger is incoming else incoming
+    metadata = {**(weaker.metadata or {}), **(stronger.metadata or {})}
+    return replace(
+        stronger,
+        evidence_path=stronger.evidence_path or weaker.evidence_path,
+        evidence_line=stronger.evidence_line or weaker.evidence_line,
+        note=stronger.note or weaker.note,
+        technology=stronger.technology or weaker.technology,
+        pass_id=stronger.pass_id or weaker.pass_id,
+        source_revision=stronger.source_revision or weaker.source_revision,
+        metadata=metadata,
+    )
 
 
 @dataclass(frozen=True)

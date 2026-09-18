@@ -1,11 +1,14 @@
 """Materialize conservative same-method flows during indexing."""
 
 from collections import defaultdict, deque
+from dataclasses import dataclass, replace
+import re
 from pathlib import Path
 
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, compute_code_flow_id
 from systemlens.domain.code_flows import IntegrationMethod
+from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod, module_identity
 from systemlens.indexing.codeql import CodeQLCall
@@ -18,6 +21,181 @@ _MONGO_WRITE_OPERATIONS = frozenset({
     "bulkOps", "findAndModify", "findAndReplace", "insert", "remove", "save",
     "updateFirst", "updateMulti", "upsert",
 })
+
+
+@dataclass(frozen=True)
+class _AstMethodInfo:
+    """Transient Java symbol facts used when CodeQL lacks type resolution.
+
+    These facts deliberately stay out of the persisted snapshot.  They are a
+    conservative bridge for one indexing run, not a second call-graph store.
+    """
+
+    method: IntegrationMethod
+    name: str
+    owner: str | None
+    arity: int
+    node: object
+
+
+def _simple_java_type(value: str) -> str:
+    value = value.strip().replace("...", "[]")
+    value = value.split("<", 1)[0].replace("[]", "")
+    return value.rsplit(".", 1)[-1]
+
+
+def _java_declaration_arity(node) -> int:
+    parameters = node.child_by_field_name("parameters")
+    if parameters is None:
+        return 0
+    return sum(
+        child.type in {"formal_parameter", "spread_parameter", "receiver_parameter"}
+        for child in parameters.children
+    )
+
+
+def _ast_method_infos(
+    repo_root: Path, methods: list[IntegrationMethod]
+) -> tuple[dict[str, _AstMethodInfo], dict[str, set[str]]]:
+    """Build method arities and the source-declared Java type hierarchy.
+
+    CodeQL's source-only database can omit enough dependency/type information
+    to resolve an interface call.  The AST still gives us a safe narrowing
+    signal: receiver type, method arity, and ``implements``/``extends``.
+    """
+    by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
+    for method in methods:
+        by_path[method.path].append(method)
+
+    infos: dict[str, _AstMethodInfo] = {}
+    type_bases: dict[str, set[str]] = defaultdict(set)
+    for path, path_methods in by_path.items():
+        parsed = java_parser.parse_java(str(repo_root.resolve()), path)
+        if parsed is None:
+            continue
+        source, root = parsed
+        for declaration in java_parser.type_declarations(root):
+            name = java_parser.declaration_name(declaration, source)
+            if not name:
+                continue
+            header = java_parser.node_text(source, declaration).split("{", 1)[0]
+            extends = re.search(r"\bextends\s+([^\s{]+)", header)
+            implements = re.search(r"\bimplements\s+([^\{]+)", header)
+            if extends:
+                type_bases[_simple_java_type(name)].add(_simple_java_type(extends.group(1)))
+            if implements:
+                type_bases[_simple_java_type(name)].update(
+                    _simple_java_type(item)
+                    for item in implements.group(1).split(",")
+                )
+
+        declarations = [
+            node for node in java_parser.walk(root)
+            if node.type == "method_declaration"
+        ]
+        for method in path_methods:
+            name = method.qualified_method.rsplit(".", 1)[-1]
+            candidates = [
+                node for node in declarations
+                if java_parser.declaration_name(node, source) == name
+                and node.start_point.row + 1 <= method.start_line <= node.end_point.row + 1
+            ]
+            if not candidates:
+                continue
+            node = min(candidates, key=lambda item: item.end_byte - item.start_byte)
+            owner = method.qualified_method.rsplit(".", 1)[0] if "." in method.qualified_method else None
+            infos[method.id] = _AstMethodInfo(
+                method=method,
+                name=name,
+                owner=_simple_java_type(owner) if owner else None,
+                arity=_java_declaration_arity(node),
+                node=node,
+            )
+    return infos, type_bases
+
+
+def _receiver_name(source: bytes, object_node) -> str | None:
+    if object_node is None:
+        return None
+    if object_node.type == "identifier":
+        return java_parser.node_text(source, object_node)
+    if object_node.type == "field_access":
+        field = object_node.child_by_field_name("field")
+        return java_parser.node_text(source, field) if field is not None else None
+    return None
+
+
+def _receiver_type(source: bytes, method_node, invocation) -> str | None:
+    """Resolve only a local/field receiver declaration; never guess a type."""
+    receiver, _name, _args = java_parser.invocation_parts(invocation, source)
+    receiver_name = _receiver_name(source, receiver)
+    if receiver_name is None:
+        return None
+
+    parameters = method_node.child_by_field_name("parameters")
+    if parameters is not None:
+        parameter_nodes = parameters.children
+    else:
+        parameter_nodes = ()
+    for parameter in parameter_nodes:
+        if parameter.type != "formal_parameter":
+            continue
+        name = parameter.child_by_field_name("name")
+        type_node = parameter.child_by_field_name("type")
+        if name is not None and type_node is not None and java_parser.node_text(source, name) == receiver_name:
+            return _simple_java_type(java_parser.node_text(source, type_node))
+
+    declarations = [
+        declaration for declaration in java_parser.walk(method_node)
+        if declaration.type == "local_variable_declaration"
+        and declaration.start_byte <= invocation.start_byte
+    ]
+    for declaration in reversed(declarations):
+        type_node = declaration.child_by_field_name("type")
+        if type_node is None:
+            continue
+        for child in declaration.children:
+            if child.type != "variable_declarator":
+                continue
+            name = child.child_by_field_name("name")
+            if name is not None and java_parser.node_text(source, name) == receiver_name:
+                return _simple_java_type(java_parser.node_text(source, type_node))
+
+    owner = java_parser.enclosing(method_node, "class_declaration", "record_declaration")
+    if owner is not None:
+        for declaration in java_parser.walk(owner):
+            if declaration.type != "field_declaration":
+                continue
+            type_node = declaration.child_by_field_name("type")
+            if type_node is None:
+                continue
+            for child in declaration.children:
+                if child.type != "variable_declarator":
+                    continue
+                name = child.child_by_field_name("name")
+                if name is not None and java_parser.node_text(source, name) == receiver_name:
+                    return _simple_java_type(java_parser.node_text(source, type_node))
+    return None
+
+
+def _is_assignable(candidate_owner: str | None, receiver_type: str | None, type_bases: dict[str, set[str]]) -> bool:
+    if candidate_owner is None or receiver_type is None:
+        return True
+    receiver_type = _simple_java_type(receiver_type)
+    candidate_owner = _simple_java_type(candidate_owner)
+    if receiver_type == candidate_owner:
+        return True
+    seen: set[str] = set()
+    pending = [candidate_owner]
+    while pending:
+        current = pending.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        if receiver_type in type_bases.get(current, set()):
+            return True
+        pending.extend(type_bases.get(current, set()))
+    return False
 
 
 def _endpoint_step(endpoint: MessageEndpoint, order: int) -> CodeFlowStep:
@@ -325,12 +503,20 @@ def materialize_codeql_code_flows(
         # Java port. Recover only source-local invocations whose method name
         # uniquely identifies an indexed output method in the same service.
         # This does not infer external calls or arbitrary same-name methods.
+        ast_infos, type_bases = _ast_method_infos(repo_root, methods)
         output_by_module_name: dict[tuple[str, str], list[IntegrationMethod]] = defaultdict(list)
         for item in methods:
             if item.output_endpoint_ids:
                 output_by_module_name[(item.module, simple_method_name(item.qualified_method))].append(item)
         for caller in methods:
             if not caller.module:
+                continue
+            # An output-bearing method is already a terminal AST sink for this
+            # fallback pass.  Reinterpreting its external ``send``/``call``
+            # as another same-named local method would create self-loops and
+            # overload cross-talk (for example ``kafka.send()`` matching a
+            # local ``send()``).  CodeQL remains free to report such calls.
+            if caller.output_endpoint_ids:
                 continue
             parsed = java_parser.parse_java(str(repo_root.resolve()), caller.path)
             if parsed is None:
@@ -347,8 +533,25 @@ def materialize_codeql_code_flows(
             for invocation in java_parser.walk(node):
                 if invocation.type != "method_invocation":
                     continue
-                _receiver, method_name, _arguments = java_parser.invocation_parts(invocation, source)
+                _receiver, method_name, arguments = java_parser.invocation_parts(invocation, source)
                 candidates = output_by_module_name.get((caller.module, method_name), [])
+                if not candidates:
+                    continue
+                receiver_type = _receiver_type(source, node, invocation)
+                arity = len(arguments)
+                narrowed_candidates: list[IntegrationMethod] = []
+                for candidate in candidates:
+                    candidate_info = ast_infos.get(candidate.id)
+                    if candidate_info is not None and candidate_info.arity != arity:
+                        continue
+                    if not _is_assignable(
+                        candidate_info.owner if candidate_info is not None else None,
+                        receiver_type,
+                        type_bases,
+                    ):
+                        continue
+                    narrowed_candidates.append(candidate)
+                candidates = narrowed_candidates
                 if not candidates:
                     continue
                 synthetic = CodeQLCall(
@@ -464,6 +667,54 @@ def materialize_codeql_code_flows(
         })
     unique = {flow.id: flow for flow in flows}
     return sorted(unique.values(), key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
+
+
+def reconcile_code_flows(
+    flows: list[CodeFlow],
+    endpoints: list[MessageEndpoint],
+    topology_edges: list[GraphEdge],
+) -> list[CodeFlow]:
+    """Attach a persisted, endpoint-identity-based topology status to flows.
+
+    A flow is complete when every endpoint step still exists and every
+    cross-service effect/continuation is represented by a topology edge. A
+    same-service input-to-output flow is complete without an inter-service
+    edge. Missing, dynamic, ambiguous, or otherwise unmatched endpoint
+    evidence is retained as a partial flow rather than being discarded.
+    """
+    endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
+    outgoing = defaultdict(list)
+    incoming = defaultdict(list)
+    for edge in topology_edges:
+        outgoing[edge.from_endpoint.id].append(edge)
+        if edge.to_endpoint is not None:
+            incoming[edge.to_endpoint.id].append(edge)
+
+    reconciled: list[CodeFlow] = []
+    for flow in flows:
+        endpoint_steps = [step for step in flow.steps if step.endpoint_id]
+        status = "complete"
+        if any(step.endpoint_id not in endpoint_by_id for step in endpoint_steps):
+            status = "partial"
+        else:
+            for step in endpoint_steps:
+                endpoint_id = step.endpoint_id
+                if endpoint_id is None:
+                    status = "partial"
+                    break
+                endpoint = endpoint_by_id[endpoint_id]
+                if endpoint.role in {"call", "produce"}:
+                    if endpoint.module == flow.module:
+                        continue
+                    if not outgoing.get(endpoint.id):
+                        status = "partial"
+                        break
+                if endpoint.role in {"serve", "consume"} and step is not endpoint_steps[0]:
+                    if not incoming.get(endpoint.id):
+                        status = "partial"
+                        break
+        reconciled.append(replace(flow, reconciliation=status))
+    return reconciled
 
 
 def materialize_kafka_flow_continuations(

@@ -242,7 +242,7 @@
     function codeFlowItem(flow) {
       const item = document.createElement("li");
       const selected = graphState.selectedCodeFlowId === flow.id;
-      item.className = `code-flow-item${flow.status === "cycle" ? " is-cycle" : ""}${selected ? " is-selected" : ""}`;
+      item.className = `code-flow-item${flow.status === "cycle" ? " is-cycle" : ""}${flow.reconciliation === "partial" ? " is-partial" : ""}${selected ? " is-selected" : ""}`;
       item.dataset.flowId = flow.id;
       const header = document.createElement("div");
       header.className = "code-flow-header";
@@ -258,7 +258,9 @@
       meta.textContent = flow.module;
       if (path) {
         item.tabIndex = 0;
-        item.title = "Afficher ce graphe d’appel dans la vue Graphe";
+        item.title = flow.reconciliation === "partial"
+          ? "Afficher le flux ; sa réconciliation avec la topologie est partielle"
+          : "Afficher ce graphe d’appel dans la vue Graphe";
         item.addEventListener("click", () => showCodeFlow(flow));
         item.addEventListener("keydown", event => {
           if (event.key === "Enter" || event.key === " ") {
@@ -268,7 +270,9 @@
         });
       } else {
         item.classList.add("is-unavailable");
-        item.title = "Flux détecté ; le chemin complet ne peut pas être rapproché de la topologie affichée";
+        item.title = flow.reconciliation === "partial"
+          ? "Flux détecté ; le chemin complet ne peut pas être rapproché de la topologie affichée"
+          : "Flux détecté ; le chemin n’est pas disponible dans la topologie affichée";
       }
       item.append(header, meta);
       return item;

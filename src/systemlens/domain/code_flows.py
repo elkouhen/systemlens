@@ -41,6 +41,7 @@ class CodeFlow:
     confidence: str
     reason: str
     steps: tuple[CodeFlowStep, ...]
+    reconciliation: str = "unknown"
 
 
 @dataclass(frozen=True)

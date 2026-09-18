@@ -9,7 +9,14 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any
 
-from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, Finding, GraphFact, MessageEndpoint
+from systemlens.domain.models import (
+    ArchitectureRelation,
+    ExtractionDiagnostic,
+    Finding,
+    GraphFact,
+    MessageEndpoint,
+    merge_graph_facts,
+)
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.domain.module_inventory import (
     BlockingPoint,
@@ -24,7 +31,7 @@ from systemlens.domain.module_inventory import (
 from systemlens.domain.runtime import KubernetesWorkload
 from systemlens.infrastructure.paths import db_path
 
-SCHEMA_VERSION = "29"
+SCHEMA_VERSION = "30"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
@@ -352,7 +359,8 @@ class Store:
                 status TEXT NOT NULL,
                 confidence TEXT NOT NULL,
                 reason TEXT NOT NULL,
-                steps TEXT NOT NULL
+                steps TEXT NOT NULL,
+                reconciliation TEXT NOT NULL DEFAULT 'unknown'
             );
             CREATE INDEX IF NOT EXISTS idx_code_flows_module ON code_flows(module);
             CREATE INDEX IF NOT EXISTS idx_code_flows_path ON code_flows(path);
@@ -375,6 +383,7 @@ class Store:
         self._migrate_module_architecture_columns()
         self._migrate_module_identity()
         self._migrate_graph_fact_columns()
+        self._migrate_code_flow_columns()
         if self.get_meta("schema_version") != SCHEMA_VERSION:
             self.set_meta("schema_version", SCHEMA_VERSION)
         self.conn.commit()
@@ -437,6 +446,14 @@ class Store:
         if "source_revision" not in cols:
             self.conn.execute("ALTER TABLE graph_facts ADD COLUMN source_revision TEXT")
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_facts_namespace ON graph_facts(namespace)")
+
+    def _migrate_code_flow_columns(self) -> None:
+        """Schema v29 -> v30: persisted topology reconciliation status."""
+        cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(code_flows)")}
+        if "reconciliation" not in cols:
+            self.conn.execute(
+                "ALTER TABLE code_flows ADD COLUMN reconciliation TEXT NOT NULL DEFAULT 'unknown'"
+            )
 
     # -- meta --
 
@@ -673,8 +690,8 @@ class Store:
         self.conn.execute("DELETE FROM code_flows")
         self.conn.executemany(
             """INSERT INTO code_flows
-            (id, module, method, path, start_line, end_line, status, confidence, reason, steps)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, module, method, path, start_line, end_line, status, confidence, reason, steps, reconciliation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     flow.id,
@@ -687,6 +704,7 @@ class Store:
                     flow.confidence,
                     flow.reason,
                     json.dumps([step.__dict__ for step in flow.steps]),
+                    flow.reconciliation,
                 )
                 for flow in flows
             ],
@@ -707,6 +725,7 @@ class Store:
                 status=row["status"],
                 confidence=row["confidence"],
                 reason=row["reason"],
+                reconciliation=row["reconciliation"],
                 steps=tuple(
                     CodeFlowStep(**step) for step in json.loads(row["steps"])
                 ),
@@ -717,6 +736,14 @@ class Store:
     # -- AI/user graph facts --
 
     def upsert_graph_fact(self, fact: GraphFact) -> None:
+        existing_row = self.conn.execute(
+            "SELECT * FROM graph_facts WHERE id = ?", (fact.id,)
+        ).fetchone()
+        if existing_row is not None:
+            existing = GraphFact(
+                **{**dict(existing_row), "metadata": json.loads(existing_row["metadata"])}
+            )
+            fact = merge_graph_facts(existing, fact)
         self.conn.execute(
             """INSERT INTO graph_facts
             (id, fact_type, kind, name, source_kind, source_name, target_kind,

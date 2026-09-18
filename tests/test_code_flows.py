@@ -9,9 +9,10 @@ from typer.testing import CliRunner
 from systemlens import cli
 from systemlens.delivery.cli import app
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
+from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod
-from systemlens.indexing.code_flows import materialize_code_flows
+from systemlens.indexing.code_flows import materialize_code_flows, reconcile_code_flows
 from systemlens.indexing.code_flows import materialize_codeql_code_flows
 from systemlens.indexing.code_flows import materialize_kafka_flow_continuations
 from systemlens.indexing.codeql import CodeQLCall
@@ -188,6 +189,26 @@ def test_kafka_continuations_require_concrete_topics_and_preserve_producer_effec
     ) == [consumer, producer_with_later_effect]
 
 
+def test_reconcile_code_flows_marks_missing_topology_as_partial() -> None:
+    entry = _endpoint("entry", "serve", "rest", "POST /orders", "orders/Orders.java", 1)
+    output = replace(
+        _endpoint("output", "call", "rest", "POST /payments", "orders/Orders.java", 2),
+        module="payments",
+    )
+    flow = CodeFlow(
+        id="flow", module="orders", method="Orders.place", path="orders/Orders.java",
+        start_line=1, end_line=2, status="potential", confidence="medium", reason="test",
+        steps=(
+            CodeFlowStep(1, "http_entry", entry.topic, entry.path, 1, 1, entry.id),
+            CodeFlowStep(2, "http_call", output.topic, output.path, 2, 2, output.id),
+        ),
+    )
+    edge = GraphEdge("rest", "orders", "payments", output, None)
+
+    assert reconcile_code_flows([flow], [entry, output], [edge])[0].reconciliation == "complete"
+    assert reconcile_code_flows([flow], [entry, output], [])[0].reconciliation == "partial"
+
+
 def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
@@ -217,9 +238,10 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
             "method": flows[0].method,
             "trigger": {"kind": "message_entry", "name": "orders.created"},
             "effects": 1,
-            "status": "potential",
-            "confidence": "medium",
-        }
+                "status": "potential",
+                "confidence": "medium",
+                "reconciliation": "complete",
+            }
     ]
 
     detail = RUNNER.invoke(
@@ -446,7 +468,7 @@ def test_store_additively_migrates_previous_schema_for_code_flows(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'integration_methods'"
         ).fetchone()
         assert methods_table is not None
-        assert store.get_meta("schema_version") == "29"
+        assert store.get_meta("schema_version") == "30"
 
 
 def test_codeql_calls_join_ast_entry_and_output_methods(tmp_path: Path) -> None:
@@ -764,6 +786,75 @@ def test_codeql_flow_materialization_bounds_exploration(tmp_path: Path) -> None:
 
     assert len(flows) == 1
     assert stats == {"calls": 1, "joined_calls": 1, "explored_paths": 1, "truncated_paths": 0}
+
+
+def test_ast_fallback_uses_call_arity_to_resolve_output_overloads(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    text = """package com.example;
+class OrderController {
+  void receive() { publisher.send(order); }
+  void send() { kafka.send(); }
+  void send(Order order) { kafka.send(); }
+}
+"""
+    path = tmp_path / source
+    path.parent.mkdir(parents=True)
+    path.write_text(text, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        replace(_endpoint("entry", "serve", "rest", "POST /orders", source, 3),
+                qualified_name="com.example.OrderController"),
+        replace(_endpoint("zero", "produce", "kafka", "orders.zero", source, 4),
+                qualified_name="com.example.OrderController"),
+        replace(_endpoint("one", "produce", "kafka", "orders.one", source, 5),
+                qualified_name="com.example.OrderController"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
+
+    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path)
+
+    assert len(flows) == 1
+    assert flows[0].steps[-1].name == "orders.one"
+    assert flows[0].confidence == "low"
+
+
+def test_ast_fallback_uses_declared_receiver_hierarchy(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    text = """package com.example;
+interface StockPort { void publish(); }
+interface OtherPort { void publish(); }
+class StockAdapter implements StockPort { public void publish() { kafka.send(); } }
+class OtherAdapter implements OtherPort { public void publish() { kafka.send(); } }
+class OrderController {
+  StockPort port;
+  void receive() { port.publish(); }
+}
+"""
+    path = tmp_path / source
+    path.parent.mkdir(parents=True)
+    path.write_text(text, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        replace(_endpoint("entry", "serve", "rest", "POST /orders", source, 8),
+                qualified_name="com.example.OrderController"),
+        replace(_endpoint("stock", "produce", "kafka", "orders.stock", source, 4),
+                qualified_name="com.example.StockAdapter"),
+        replace(_endpoint("other", "produce", "kafka", "orders.other", source, 5),
+                qualified_name="com.example.OtherAdapter"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
+
+    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path)
+
+    assert len(flows) == 1
+    assert flows[0].steps[-1].name == "orders.stock"
+    assert flows[0].confidence == "low"
 
 
 def test_integration_method_ids_distinguish_java_overloads(tmp_path: Path) -> None:
