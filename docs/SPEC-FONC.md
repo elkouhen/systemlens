@@ -106,9 +106,9 @@ scanned=<N> skipped=<N> +integrations=<N> -integrations=<N>
 
 The first AST-only run removes stale results from the retired analyzer.
 
-Automatic call-graph analysis creates one temporary artifact for each
-discovered build project that owns Java sources. `codeql` creates a source-only
-Java database; `joern` creates a Java Code Property Graph (CPG). Progress
+Automatic call-graph analysis creates one source-only Java database for the
+whole repository with `codeql`; `joern` creates one Java Code Property Graph
+(CPG) for each discovered build project that owns Java sources. Progress
 reports the completed project over the total and the calls extracted from it.
 SystemLens maps module-relative evidence paths back to the repository root,
 aggregates all calls, and only then joins them to the global method inventory.
@@ -127,7 +127,9 @@ available; other build outputs and build descriptors are excluded.
 CodeQL project it atomically replaces `FILE` with a graph labelled as
 provisional, including the completed-project count. Users may refresh that
 file in a browser to inspect the current call-graph coverage. It is generated
-from the in-progress indexing facts and must not be treated as an exportable or
+by filtering the once-materialized global flows to reported call sites; direct
+answers without intermediate evidence appear at the final checkpoint.
+These in-progress indexing facts must not be treated as an exportable or
 complete architecture snapshot; the normal `export microservices --html`
 command remains the authoritative post-index export.
 `analysis.codeql_verbosity` configures CodeQL's verbosity for database creation
@@ -138,7 +140,10 @@ are diagnostic progress only; they do not provide a guaranteed percentage or
 remaining-time estimate.
 `analysis.codeql_timeout_seconds` sets the positive timeout in seconds for each
 CodeQL subprocess (temporary database creation, query execution, and BQRS
-decoding); its default is `600` seconds.
+decoding); its default is `600` seconds. The deadline includes live progress
+reading, even when the subprocess stops producing output. On POSIX, timeout
+or interrupted progress handling terminates and reaps the subprocess and
+terminates its process group.
 `analysis.codeql_threads` sets the number of threads passed to CodeQL database
 creation and query execution; its default is `0`, which delegates one thread
 per available core to CodeQL. `analysis.codeql_ram_mb` optionally sets
@@ -171,12 +176,18 @@ dynamic, unresolved port rather than a guessed service link.
 Indexing materializes AST method facts that associate each Java method with its
 HTTP/message entry endpoints and HTTP/message output endpoints. It then
 materializes conservative same-method code flows and, when the selected local
-call-graph engine is available, creates temporary source-only Java databases
+call-graph engine is available, creates a global source-only Java database
 (CodeQL) or Java CPGs (Joern) per source-owning project to follow resolved
 static method calls from an indexed entry method to an indexed output method.
-CodeQL additionally answers bounded reachability directly between indexed input
-and output methods; these direct answers are used when the Python-side traversal
-cannot reconstruct the intermediate calls.
+CodeQL additionally answers transitive reachability by starting at indexed
+output methods and walking callers until indexed input methods are reached;
+these direct answers are used when the Python-side traversal cannot reconstruct
+the intermediate calls. The configured timeout remains the operational guard.
+Direct results are unioned with bounded fallback paths, including when CodeQL
+returns only some endpoint pairs. A direct answer replaces fallback evidence
+for the same pair; a representative route never borrows synthetic edges or
+weaker dispatch evidence than that answer. The fallback depth and transition
+limits remain active and truncation is reported even alongside direct answers.
 Calls are aggregated before the global flow join. `--codeql-database DIR`
 reuses an existing global CodeQL database instead.
 The temporary database and the supplied database path are never persisted. If
@@ -189,6 +200,15 @@ does not expose a callee source path, a call to a uniquely matching indexed
 global method signature is retained with low confidence and explicit
 signature-join provenance. Ambiguous signatures remain unresolved. Unresolved
 dispatch, reflection, dynamic routing, and runtime-only routing are not added.
+When source evidence permits it, unresolved abstract/interface calls can be
+bridged across modules to a unique concrete implementation of the declared
+signature. A transient AST index uses qualified types, imports and transitive
+inheritance, including empty intermediate classes. Its low-confidence paths
+may traverse ordinary helper methods before reaching an output. Module-local
+or globally unique method names alone never establish dispatch. Unknown
+receivers, duplicate qualified types, ambiguous overloads/implementations and
+unsupported generic substitutions or varargs remain unresolved by this
+fallback; CodeQL may still resolve them.
 Joern retains every resolved CPG callee. When Java type recovery exposes only a
 non-synthetic `methodFullName`, SystemLens may join it only to one unique
 indexed Java method, records the result as a possible dispatch with low

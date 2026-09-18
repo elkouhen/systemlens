@@ -1,8 +1,7 @@
 """Materialize conservative same-method flows during indexing."""
 
 from collections import defaultdict, deque
-from dataclasses import dataclass, replace
-import re
+from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
 
@@ -13,190 +12,16 @@ from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod, module_identity
 from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
+from systemlens.indexing.java_symbols import JavaSymbols
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v14-codeql-direct-reachability"
+CODE_FLOW_SIGNATURE = "code-flow-v15-qualified-dispatch-union"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
     "bulkOps", "findAndModify", "findAndReplace", "insert", "remove", "save",
     "updateFirst", "updateMulti", "upsert",
 })
-
-
-@dataclass(frozen=True)
-class _AstMethodInfo:
-    """Transient Java symbol facts used when CodeQL lacks type resolution.
-
-    These facts deliberately stay out of the persisted snapshot.  They are a
-    conservative bridge for one indexing run, not a second call-graph store.
-    """
-
-    method: IntegrationMethod
-    name: str
-    owner: str | None
-    arity: int
-    node: object
-
-
-def _simple_java_type(value: str) -> str:
-    value = value.strip().replace("...", "[]")
-    value = value.split("<", 1)[0].replace("[]", "")
-    return value.rsplit(".", 1)[-1]
-
-
-def _java_declaration_arity(node) -> int:
-    parameters = node.child_by_field_name("parameters")
-    if parameters is None:
-        return 0
-    return sum(
-        child.type in {"formal_parameter", "spread_parameter", "receiver_parameter"}
-        for child in parameters.children
-    )
-
-
-def _ast_method_infos(
-    repo_root: Path, methods: list[IntegrationMethod]
-) -> tuple[dict[str, _AstMethodInfo], dict[str, set[str]]]:
-    """Build method arities and the source-declared Java type hierarchy.
-
-    CodeQL's source-only database can omit enough dependency/type information
-    to resolve an interface call.  The AST still gives us a safe narrowing
-    signal: receiver type, method arity, and ``implements``/``extends``.
-    """
-    by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
-    for method in methods:
-        by_path[method.path].append(method)
-
-    infos: dict[str, _AstMethodInfo] = {}
-    type_bases: dict[str, set[str]] = defaultdict(set)
-    for path, path_methods in by_path.items():
-        parsed = java_parser.parse_java(str(repo_root.resolve()), path)
-        if parsed is None:
-            continue
-        source, root = parsed
-        for declaration in java_parser.type_declarations(root):
-            name = java_parser.declaration_name(declaration, source)
-            if not name:
-                continue
-            header = java_parser.node_text(source, declaration).split("{", 1)[0]
-            extends = re.search(r"\bextends\s+([^\s{]+)", header)
-            implements = re.search(r"\bimplements\s+([^\{]+)", header)
-            if extends:
-                type_bases[_simple_java_type(name)].add(_simple_java_type(extends.group(1)))
-            if implements:
-                type_bases[_simple_java_type(name)].update(
-                    _simple_java_type(item)
-                    for item in implements.group(1).split(",")
-                )
-
-        declarations = [
-            node for node in java_parser.walk(root)
-            if node.type == "method_declaration"
-        ]
-        for method in path_methods:
-            name = method.qualified_method.rsplit(".", 1)[-1]
-            candidates = [
-                node for node in declarations
-                if java_parser.declaration_name(node, source) == name
-                and node.start_point.row + 1 <= method.start_line <= node.end_point.row + 1
-            ]
-            if not candidates:
-                continue
-            node = min(candidates, key=lambda item: item.end_byte - item.start_byte)
-            owner = method.qualified_method.rsplit(".", 1)[0] if "." in method.qualified_method else None
-            infos[method.id] = _AstMethodInfo(
-                method=method,
-                name=name,
-                owner=_simple_java_type(owner) if owner else None,
-                arity=_java_declaration_arity(node),
-                node=node,
-            )
-    return infos, type_bases
-
-
-def _receiver_name(source: bytes, object_node) -> str | None:
-    if object_node is None:
-        return None
-    if object_node.type == "identifier":
-        return java_parser.node_text(source, object_node)
-    if object_node.type == "field_access":
-        field = object_node.child_by_field_name("field")
-        return java_parser.node_text(source, field) if field is not None else None
-    return None
-
-
-def _receiver_type(source: bytes, method_node, invocation) -> str | None:
-    """Resolve only a local/field receiver declaration; never guess a type."""
-    receiver, _name, _args = java_parser.invocation_parts(invocation, source)
-    receiver_name = _receiver_name(source, receiver)
-    if receiver_name is None:
-        return None
-
-    parameters = method_node.child_by_field_name("parameters")
-    if parameters is not None:
-        parameter_nodes = parameters.children
-    else:
-        parameter_nodes = ()
-    for parameter in parameter_nodes:
-        if parameter.type != "formal_parameter":
-            continue
-        name = parameter.child_by_field_name("name")
-        type_node = parameter.child_by_field_name("type")
-        if name is not None and type_node is not None and java_parser.node_text(source, name) == receiver_name:
-            return _simple_java_type(java_parser.node_text(source, type_node))
-
-    declarations = [
-        declaration for declaration in java_parser.walk(method_node)
-        if declaration.type == "local_variable_declaration"
-        and declaration.start_byte <= invocation.start_byte
-    ]
-    for declaration in reversed(declarations):
-        type_node = declaration.child_by_field_name("type")
-        if type_node is None:
-            continue
-        for child in declaration.children:
-            if child.type != "variable_declarator":
-                continue
-            name = child.child_by_field_name("name")
-            if name is not None and java_parser.node_text(source, name) == receiver_name:
-                return _simple_java_type(java_parser.node_text(source, type_node))
-
-    owner = java_parser.enclosing(method_node, "class_declaration", "record_declaration")
-    if owner is not None:
-        for declaration in java_parser.walk(owner):
-            if declaration.type != "field_declaration":
-                continue
-            type_node = declaration.child_by_field_name("type")
-            if type_node is None:
-                continue
-            for child in declaration.children:
-                if child.type != "variable_declarator":
-                    continue
-                name = child.child_by_field_name("name")
-                if name is not None and java_parser.node_text(source, name) == receiver_name:
-                    return _simple_java_type(java_parser.node_text(source, type_node))
-    return None
-
-
-def _is_assignable(candidate_owner: str | None, receiver_type: str | None, type_bases: dict[str, set[str]]) -> bool:
-    if candidate_owner is None or receiver_type is None:
-        return True
-    receiver_type = _simple_java_type(receiver_type)
-    candidate_owner = _simple_java_type(candidate_owner)
-    if receiver_type == candidate_owner:
-        return True
-    seen: set[str] = set()
-    pending = [candidate_owner]
-    while pending:
-        current = pending.pop()
-        if current in seen:
-            continue
-        seen.add(current)
-        if receiver_type in type_bases.get(current, set()):
-            return True
-        pending.extend(type_bases.get(current, set()))
-    return False
 
 
 def _endpoint_step(endpoint: MessageEndpoint, order: int) -> CodeFlowStep:
@@ -365,12 +190,13 @@ def materialize_codeql_code_flows(
     *, repo_root: Path | None = None, max_hops: int = 12, max_paths: int = 10_000,
     stats: dict[str, int] | None = None,
     reachability: Sequence[CodeQLReachability] = (),
+    source_paths: Sequence[str] = (),
 ) -> list[CodeFlow]:
     """Join AST method facts through resolved CodeQL calls.
 
-    A flow is emitted only for one unambiguous, bounded call path from an AST
-    input method to an AST output method. This deliberately excludes dispatch
-    targets CodeQL cannot resolve and paths with a cycle.
+    Direct CodeQL pairs and bounded source-backed fallback paths are unioned.
+    Ambiguous CodeQL dispatch stays possible; synthetic dispatch requires a
+    unique implementation of a source-declared signature and hierarchy.
     """
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
     def normalized_method_name(name: str) -> str:
@@ -392,9 +218,6 @@ def materialize_codeql_code_flows(
     def normalized_path(path: str) -> str:
         """Normalize harmless extractor spelling differences in source paths."""
         return path.replace("\\", "/").removeprefix("./")
-
-    def simple_method_name(name: str) -> str:
-        return normalized_method_name(name).rsplit(".", 1)[-1]
 
     by_locator = {
         (normalized_method_name(item.qualified_method), normalized_path(item.path), item.start_line): item
@@ -450,126 +273,55 @@ def materialize_codeql_code_flows(
         if direct is not None:
             return direct
         enclosing = [
-            item for item in methods_by_path.get(call.caller_path, [])
+            item for item in methods_by_path.get(normalized_path(call.caller_path), [])
             if item.start_line <= call.call_line <= item.end_line
         ]
         return min(enclosing, key=lambda item: item.end_line - item.start_line) if enclosing else None
 
     adjacency: dict[str, list[tuple[IntegrationMethod, CodeQLCall, bool]]] = defaultdict(list)
+    symbols = JavaSymbols(repo_root, methods, source_paths) if repo_root is not None else None
+    bridges: dict[str, IntegrationMethod | None] = {}
+    resolved_sites: set[tuple[str, int]] = set()
+    seen_edges: set[tuple[str, str, int, str, bool]] = set()
+    synthetic_calls: set[CodeQLCall] = set()
+
+    def add_edge(caller: IntegrationMethod, callee: IntegrationMethod, call: CodeQLCall, inferred: bool) -> None:
+        key = (caller.id, callee.id, call.call_line, call.dispatch_confidence, inferred)
+        if key not in seen_edges:
+            seen_edges.add(key)
+            adjacency[caller.id].append((callee, call, inferred))
+
     for call in calls:
         caller = locate_caller(call)
         resolved_callee = locate(
             call.callee, call.callee_path, call.callee_line, allow_signature_fallback=True
         )
-        if caller is not None and resolved_callee is not None:
-            callee, signature_join = resolved_callee
-            adjacency[caller.id].append((callee, call, signature_join))
-            # Buildless CodeQL may resolve a call only to its source-declared
-            # port (for example StockDepletedPort.publish), while the
-            # concrete adapter carrying the Kafka/REST endpoint is not a
-            # dispatch target. Bridge that contract to unique indexed output
-            # methods in the same module, or to one globally unique
-            # implementation across modules. This is intentionally limited to
-            # endpoint-bearing methods and retains low confidence.
-            if not callee.output_endpoint_ids:
-                local_output_candidates = [
-                    item for item in methods
-                    if item.module == caller.module
-                    and item.output_endpoint_ids
-                    and simple_method_name(item.qualified_method) == simple_method_name(callee.qualified_method)
-                    and item.id != callee.id
-                ]
-                global_output_candidates = [
-                    item for item in methods
-                    if item.output_endpoint_ids
-                    and simple_method_name(item.qualified_method) == simple_method_name(callee.qualified_method)
-                    and item.id != callee.id
-                ]
-                # An interface call can cross a discovered module boundary.
-                # Allow that bridge only when the output-bearing implementation
-                # is globally unique; otherwise retaining it would invent a
-                # dispatch target among unrelated same-named methods.
-                output_candidates = (
-                    local_output_candidates
-                    if local_output_candidates
-                    else global_output_candidates
-                    if len(global_output_candidates) == 1
-                    else []
+        if caller is None or resolved_callee is None:
+            continue
+        callee, signature_join = resolved_callee
+        add_edge(caller, callee, call, signature_join)
+        if symbols is not None:
+            info = symbols.methods.get(callee.id)
+            if info is not None and info.concrete:
+                resolved_sites.add((caller.id, call.call_line))
+            if callee.id not in bridges:
+                bridges[callee.id] = symbols.bridge(callee)
+            candidate = bridges[callee.id]
+            if candidate is not None:
+                synthetic = replace(
+                    call, callee=candidate.qualified_method, callee_path=candidate.path,
+                    callee_line=candidate.start_line, dispatch_confidence="possible",
                 )
-                if output_candidates:
-                    for candidate in output_candidates:
-                        adjacency[caller.id].append((candidate, call, True))
+                synthetic_calls.add(synthetic)
+                add_edge(caller, candidate, synthetic, True)
 
-    if repo_root is not None:
-        # Buildless CodeQL cannot type-resolve every call through an injected
-        # Java port. Recover only source-local invocations whose method name
-        # uniquely identifies an indexed output method in the same service.
-        # This does not infer external calls or arbitrary same-name methods.
-        ast_infos, type_bases = _ast_method_infos(repo_root, methods)
-        output_by_module_name: dict[tuple[str, str], list[IntegrationMethod]] = defaultdict(list)
-        for item in methods:
-            if item.output_endpoint_ids:
-                output_by_module_name[(item.module, simple_method_name(item.qualified_method))].append(item)
-        for caller in methods:
-            if not caller.module:
-                continue
-            # An output-bearing method is already a terminal AST sink for this
-            # fallback pass.  Reinterpreting its external ``send``/``call``
-            # as another same-named local method would create self-loops and
-            # overload cross-talk (for example ``kafka.send()`` matching a
-            # local ``send()``).  CodeQL remains free to report such calls.
-            if caller.output_endpoint_ids:
-                continue
-            parsed = java_parser.parse_java(str(repo_root.resolve()), caller.path)
-            if parsed is None:
-                continue
-            source, root = parsed
-            method_nodes = [
-                node for node in java_parser.walk(root)
-                if node.type == "method_declaration"
-                and node.start_point.row + 1 <= caller.start_line <= node.end_point.row + 1
-            ]
-            if not method_nodes:
-                continue
-            node = min(method_nodes, key=lambda candidate: candidate.end_byte - candidate.start_byte)
-            for invocation in java_parser.walk(node):
-                if invocation.type != "method_invocation":
-                    continue
-                _receiver, method_name, arguments = java_parser.invocation_parts(invocation, source)
-                candidates = output_by_module_name.get((caller.module, method_name), [])
-                if not candidates:
-                    continue
-                receiver_type = _receiver_type(source, node, invocation)
-                arity = len(arguments)
-                narrowed_candidates: list[IntegrationMethod] = []
-                for candidate in candidates:
-                    candidate_info = ast_infos.get(candidate.id)
-                    if candidate_info is not None and candidate_info.arity != arity:
-                        continue
-                    if not _is_assignable(
-                        candidate_info.owner if candidate_info is not None else None,
-                        receiver_type,
-                        type_bases,
-                    ):
-                        continue
-                    narrowed_candidates.append(candidate)
-                candidates = narrowed_candidates
-                # If source evidence still leaves several output methods
-                # possible, retain the ambiguity instead of selecting the
-                # first result returned by the parser.
-                if len(candidates) != 1:
-                    continue
-                synthetic = CodeQLCall(
-                    caller=caller.qualified_method,
-                    caller_path=caller.path,
-                    caller_line=caller.start_line,
-                    callee=candidates[0].qualified_method,
-                    callee_path=candidates[0].path,
-                    callee_line=candidates[0].start_line,
-                    call_line=invocation.start_point.row + 1,
-                    dispatch_confidence="possible",
-                )
-                adjacency[caller.id].append((candidates[0], synthetic, True))
+    if symbols is not None:
+        for call in symbols.fallback_calls(resolved_sites):
+            synthetic_calls.add(call)
+            caller = locate_caller(call)
+            resolved_target = locate(call.callee, call.callee_path, call.callee_line)
+            if caller is not None and resolved_target is not None:
+                add_edge(caller, resolved_target[0], call, True)
 
     flows: list[CodeFlow] = []
     explored = 0
@@ -582,6 +334,7 @@ def materialize_codeql_code_flows(
             if trigger is None:
                 continue
             queue = deque[tuple[IntegrationMethod, list[tuple[IntegrationMethod, CodeQLCall, bool]]]]([(entry, [])])
+            visited: set[tuple[str, bool]] = {(entry.id, False)}
             while queue:
                 current, route = queue.popleft()
                 if len(route) >= max_hops:
@@ -616,6 +369,9 @@ def materialize_codeql_code_flows(
                                 for _hop, edge, signature in next_route
                             ) else "medium",
                             reason=(
+                                "A source-declared Java dispatch fallback participates in this potential cyclic path."
+                                if any(edge in synthetic_calls for _hop, edge, _signature in next_route)
+                                else
                                 "A module-local CodeQL call path was joined across modules by a unique method signature."
                                 if any(signature for _hop, _edge, signature in next_route)
                                 else "CodeQL found a cyclic call path from this indexed entry method."
@@ -654,6 +410,9 @@ def materialize_codeql_code_flows(
                                 status="potential",
                                 confidence="low" if has_possible_dispatch or has_signature_join else "medium",
                                 reason=(
+                                    "A source-declared Java dispatch fallback connects an indexed entry to an output through qualified types and compatible method signatures."
+                                    if any(edge in synthetic_calls for _hop, edge, _signature in next_route)
+                                    else
                                     "A module-local CodeQL call path was joined across modules by a unique method signature."
                                     if has_signature_join
                                     else
@@ -663,62 +422,113 @@ def materialize_codeql_code_flows(
                                 ),
                                 steps=tuple([*steps, _endpoint_step(output, len(steps) + 1)]),
                             ))
-                    queue.append((target, next_route))
+                    possible = any(edge.dispatch_confidence == "possible" or inferred
+                                   for _method, edge, inferred in next_route)
+                    state = (target.id, possible)
+                    if state not in visited:
+                        visited.add(state)
+                        queue.append((target, next_route))
     if stats is not None:
         stats.update({
             "calls": len(calls), "joined_calls": sum(len(targets) for targets in adjacency.values()),
             "explored_paths": explored, "truncated_paths": truncated,
         })
     if reachability:
-        methods_by_location = {
-            (normalized_path(method.path), method.start_line): method
-            for method in methods
-        }
-        existing_pairs = {
-            (
-                flow.steps[0].endpoint_id,
-                flow.steps[-1].endpoint_id,
-            )
-            for flow in flows
-            if flow.steps and flow.steps[0].endpoint_id and flow.steps[-1].endpoint_id
-        }
-        for relation in reachability:
-            source_method = methods_by_location.get(
-                (normalized_path(relation.source_path), relation.source_line)
-            )
-            target_method = methods_by_location.get(
-                (normalized_path(relation.target_path), relation.target_line)
-            )
-            if source_method is None or target_method is None:
+        # One predecessor tree per source/confidence, not a BFS per pair.
+        tree_cache: dict[
+            tuple[str, str], dict[str, tuple[str, IntegrationMethod, CodeQLCall, bool]]
+        ] = {}
+        direct_flows: dict[tuple[str, str], CodeFlow] = {}
+
+        def representative_route(
+            source: IntegrationMethod, target: IntegrationMethod, confidence: str
+        ) -> list[tuple[IntegrationMethod, CodeQLCall, bool]]:
+            key = (source.id, confidence)
+            if key not in tree_cache:
+                # Relations are grouped below; release the previous tree so
+                # memory does not grow with the number of input methods.
+                tree_cache.clear()
+                predecessors: dict[str, tuple[str, IntegrationMethod, CodeQLCall, bool]] = {}
+                queue = deque([source.id])
+                visited = {source.id}
+                while queue:
+                    current_id = queue.popleft()
+                    for candidate, call, inferred in adjacency.get(current_id, []):
+                        # A direct CodeQL witness must not contain synthetic
+                        # AST edges or a weaker dispatch than the proven pair.
+                        if inferred or (confidence == "medium" and call.dispatch_confidence != "exact"):
+                            continue
+                        if candidate.id in visited:
+                            continue
+                        visited.add(candidate.id)
+                        predecessors[candidate.id] = (current_id, candidate, call, inferred)
+                        queue.append(candidate.id)
+                tree_cache[key] = predecessors
+            predecessors = tree_cache[key]
+            route: list[tuple[IntegrationMethod, CodeQLCall, bool]] = []
+            current_id = target.id
+            while current_id != source.id:
+                previous = predecessors.get(current_id)
+                if previous is None:
+                    return []
+                current_id, candidate, call, inferred = previous
+                route.append((candidate, call, inferred))
+            route.reverse()
+            return route
+
+        for relation in sorted(reachability, key=lambda item: (
+            item.source_path, item.source_line, item.source, item.confidence,
+            item.target_path, item.target_line, item.target,
+        )):
+            source_location = locate(relation.source, relation.source_path, relation.source_line)
+            target_location = locate(relation.target, relation.target_path, relation.target_line)
+            if source_location is None or target_location is None:
                 continue
+            source_method = source_location[0]
+            target_method = target_location[0]
             for input_id in source_method.input_endpoint_ids:
                 trigger = endpoint_by_id.get(input_id)
                 if trigger is None:
                     continue
                 for output_id in target_method.output_endpoint_ids:
                     output = endpoint_by_id.get(output_id)
-                    if output is None or (input_id, output_id) in existing_pairs:
+                    if output is None:
                         continue
+                    previous_flow = direct_flows.get((input_id, output_id))
+                    if previous_flow is not None and previous_flow.confidence == "medium":
+                        continue
+                    route = representative_route(source_method, target_method, relation.confidence)
+                    steps = [_endpoint_step(trigger, 1)]
+                    for order, (hop, edge, _signature_join) in enumerate(route, start=2):
+                        steps.append(CodeFlowStep(
+                            order=order, kind="method_call", name=hop.qualified_method,
+                            path=edge.caller_path, start_line=edge.call_line, end_line=edge.call_line,
+                        ))
                     flow_id = compute_code_flow_id(
                         source_method.module, source_method.path, source_method.qualified_method,
                         _endpoint_step(trigger, 1).kind,
                         f"{trigger.topic}|{output.id}|direct-codeql",
                     )
-                    flows.append(CodeFlow(
+                    direct_flows[(input_id, output_id)] = CodeFlow(
                         id=flow_id, module=source_method.module, method=source_method.qualified_method,
                         path=source_method.path, start_line=source_method.start_line,
                         end_line=source_method.end_line,
                         status="potential", confidence=relation.confidence,
                         reason=(
-                            "CodeQL directly proved reachability from the indexed input "
-                            "method to the indexed output method."
+                            "CodeQL directly proved reverse reachability from the indexed output "
+                            "method to the indexed input method."
+                            if not route else
+                            "CodeQL proved reverse reachability and the indexed call graph "
+                            "provided a representative intermediate route."
                         ),
-                        steps=(
-                            _endpoint_step(trigger, 1),
-                            _endpoint_step(output, 2),
-                        ),
-                    ))
-                    existing_pairs.add((input_id, output_id))
+                        steps=tuple([*steps, _endpoint_step(output, len(steps) + 1)]),
+                    )
+        flows = [
+            flow for flow in flows
+            if flow.status == "cycle" or
+            (flow.steps[0].endpoint_id, flow.steps[-1].endpoint_id) not in direct_flows
+        ]
+        flows.extend(direct_flows.values())
     unique = {flow.id: flow for flow in flows}
     return sorted(unique.values(), key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
 

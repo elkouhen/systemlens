@@ -309,6 +309,14 @@ def test_index_uses_automatic_codeql_database_when_available(
         encoding="utf-8",
     )
     observed_roots = []
+    materializations = []
+    original_materialize = indexing_service.materialize_codeql_code_flows
+
+    def counted_materialize(*args, **kwargs):
+        materializations.append(1)
+        return original_materialize(*args, **kwargs)
+
+    monkeypatch.setattr(indexing_service, "materialize_codeql_code_flows", counted_materialize)
 
     @contextmanager
     def automatic_database(
@@ -339,6 +347,7 @@ def test_index_uses_automatic_codeql_database_when_available(
         index_repo(repo, Config(), store, call_graph_progress=checkpoints.append)
 
     assert observed_roots == [repo]
+    assert len(materializations) == 1  # shared by progress and final persistence
     assert [(item.engine, item.completed_projects, item.total_projects, item.project_name) for item in checkpoints] == [
         ("codeql", 1, 1, "orders"),
     ]
@@ -666,7 +675,7 @@ def test_codeql_call_bridges_unique_cross_module_output_implementation(tmp_path:
     for path, content in {
         source: "package com.example; class OrderController { void receive() { port.publish(); } }\n",
         port: "package com.example; interface StockPort { void publish(); }\n",
-        target: "package com.example; class StockAdapter { void publish() {} }\n",
+        target: "package com.example; class StockAdapter implements StockPort { public void publish() {} }\n",
     }.items():
         file = tmp_path / path
         file.parent.mkdir(parents=True, exist_ok=True)
@@ -687,7 +696,7 @@ def test_codeql_call_bridges_unique_cross_module_output_implementation(tmp_path:
             "com.example.OrderController.receive", source, 1,
             "com.example.StockPort.publish", port, 1, 1,
         ),
-    ])
+    ], repo_root=tmp_path)
 
     assert len(flows) == 1
     assert flows[0].confidence == "low"
@@ -826,9 +835,9 @@ def test_ast_fallback_uses_call_arity_to_resolve_output_overloads(tmp_path: Path
     source = "orders/src/main/java/com/example/OrderController.java"
     text = """package com.example;
 class OrderController {
-  void receive() { publisher.send(order); }
+  void receive(String order) { this.send(order); }
   void send() { kafka.send(); }
-  void send(Order order) { kafka.send(); }
+  void send(String order) { kafka.send(); }
 }
 """
     path = tmp_path / source

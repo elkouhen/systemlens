@@ -487,6 +487,8 @@ def _index_repo(
             engine_label = "CodeQL" if call_graph_engine == "codeql" else "Joern"
             _report_progress(progress, f"→ {engine_label} : préparation de l'analyse interprocédurale...")
             reachability: list[CodeQLReachability] = []
+            prepared_codeql_flows: list[CodeFlow] | None = None
+            codeql_stats: dict[str, int] = {}
 
             def publish_call_graph_progress(
                 completed_projects: int,
@@ -496,16 +498,28 @@ def _index_repo(
             ) -> None:
                 if call_graph_progress is None:
                     return
-                partial_flows = [
-                    *flows,
-                    *materialize_codeql_code_flows(
-                        methods,
-                        all_endpoints,
-                        calls,
-                        repo_root=repo_root,
+                if prepared_codeql_flows is not None:
+                    available_sites = {(call.caller_path, call.call_line) for call in calls}
+                    progress_flows = [
+                        flow for flow in prepared_codeql_flows
+                        if completed_projects == total_projects or (
+                            any(step.kind == "method_call" for step in flow.steps)
+                            and all(
+                                (step.path, step.start_line) in available_sites
+                                for step in flow.steps if step.kind == "method_call"
+                            )
+                        )
+                    ]
+                else:
+                    progress_flows = materialize_codeql_code_flows(
+                        methods, all_endpoints, calls, repo_root=repo_root,
+                        source_paths=list(current_hashes),
                         max_hops=config.codeql_max_hops,
                         max_paths=config.codeql_max_paths,
-                    ),
+                    )
+                partial_flows = [
+                    *flows,
+                    *progress_flows,
                 ]
                 call_graph_progress(CallGraphProgress(
                     engine=call_graph_engine,
@@ -530,10 +544,18 @@ def _index_repo(
                     )
                     timer.end("codeql-extract", "extraction des appels CodeQL")
                     reachability = extract_codeql_reachability(
-                        codeql_database, methods, max_hops=config.codeql_max_hops,
+                        codeql_database, methods,
                         timeout_seconds=config.codeql_timeout_seconds,
                         threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
                     )
+                    if call_graph_progress is not None:
+                        prepared_codeql_flows = materialize_codeql_code_flows(
+                            methods, all_endpoints, calls, repo_root=repo_root,
+                            source_paths=list(current_hashes),
+                            max_hops=config.codeql_max_hops,
+                            max_paths=config.codeql_max_paths,
+                            stats=codeql_stats, reachability=reachability,
+                        )
                     publish_call_graph_progress(1, 1, "base CodeQL fournie", calls)
                 else:
                     roots = _codeql_module_roots(
@@ -588,11 +610,19 @@ def _index_repo(
                                 progress=progress if codeql_verbosity is not None else None,
                             )
                             reachability = extract_codeql_reachability(
-                                database, methods, max_hops=config.codeql_max_hops,
+                                database, methods,
                                 timeout_seconds=config.codeql_timeout_seconds,
                                 threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
                             )
                         partitioned_calls = _partition_codeql_calls(calls, roots)
+                        if call_graph_progress is not None:
+                            prepared_codeql_flows = materialize_codeql_code_flows(
+                                methods, all_endpoints, calls, repo_root=repo_root,
+                                source_paths=list(current_hashes),
+                                max_hops=config.codeql_max_hops,
+                                max_paths=config.codeql_max_paths,
+                                stats=codeql_stats, reachability=reachability,
+                            )
                         completed_calls: list[CodeQLCall] = []
                         for number, (name, project_calls) in enumerate(partitioned_calls, start=1):
                             module_started_at = time.perf_counter()
@@ -634,10 +664,10 @@ def _index_repo(
             except (CodeQLError, JoernError, OSError, subprocess.TimeoutExpired) as exc:
                 raise RuntimeError(str(exc)) from exc
             _report_progress(progress, f"→ {engine_label} : {len(calls)} appel(s) extrait(s), jointure des méthodes...")
-            codeql_stats: dict[str, int] = {}
             timer.begin("call-graph-join", f"→ {engine_label} : jointure des méthodes et matérialisation des flux...")
-            codeql_flows = materialize_codeql_code_flows(
+            codeql_flows = prepared_codeql_flows if prepared_codeql_flows is not None else materialize_codeql_code_flows(
                 methods, all_endpoints, calls, repo_root=repo_root,
+                source_paths=list(current_hashes),
                 max_hops=config.codeql_max_hops,
                 max_paths=config.codeql_max_paths,
                 stats=codeql_stats,

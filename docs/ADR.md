@@ -449,7 +449,7 @@ The routes are presentation-only and are recomputed after camera or layout
 changes. If the CDN or WASM runtime is unavailable, the existing local
 orthogonal router preserves a usable export.
 
-## ADR-29 — Ask CodeQL directly for bounded input-to-output reachability
+## ADR-29 — Ask CodeQL directly for input-to-output reachability
 
 **Status:** Accepted.
 
@@ -458,16 +458,46 @@ orthogonal router preserves a usable export.
  when dispatch resolution or an intermediate join is incomplete, even though
  CodeQL can answer the bounded reachability question directly.
 
-**Decision:** Run a second bounded CodeQL query, scoped to the indexed input
- and output methods by relative path and start line. Persist exact reachability
- with medium confidence and dispatch-expanded reachability with low confidence.
-Keep the existing Python traversal to provide intermediate steps and to retain
- its existing conservative behavior; add a two-endpoint direct flow only when
- that traversal did not already materialize the same input/output pair.
+**Decision:** Run a second CodeQL query, scoped to the indexed input
+ and output methods by relative path and start line. Traverse from outputs to
+ callers until indexed inputs are reached, without a business-level hop or
+ global path limit. Persist exact reachability with medium confidence and
+ dispatch-expanded reachability with low confidence. Keep a finite graph search
+ only to recover one representative intermediate route for each proven pair;
+ add a two-endpoint direct flow when no such route is available.
 
 **Consequences:** CodeQL can recover connections that the Python-side join does
  not reconstruct, while the persisted evidence remains tied to indexed source
- methods and retains confidence. The query cost is bounded by the configured
- hop limit but still grows with the number of indexed input/output anchors and
- the reachable call graph. Reflection, runtime routing, and calls absent from
- the CodeQL database remain explicit blind spots.
+ methods and retains confidence. Runtime cost grows with the number of indexed
+ anchors and the reachable call graph, so the subprocess timeout remains the
+ operational guardrail. Reflection, runtime routing, and calls absent from the
+ CodeQL database remain explicit blind spots.
+
+## ADR-30 — Resolve fallback dispatch by qualified symbols and union partial evidence
+
+**Status:** Accepted. Supersedes the endpoint-only fallback in ADR-27a.
+
+**Context:** Large repositories contain unrelated homonymous methods and
+abstract contracts implemented in other build modules. Name-only bridges can
+invent dependencies, while same-module/output-only restrictions lose helper
+chains. A nonempty CodeQL reachability result is not proof that AST fallback
+coverage is redundant.
+
+**Decision:** Build a transient qualified Java symbol index within the indexed
+source perimeter. Require a known receiver/contract, a compatible parameter
+signature and unique source implementation through transitive inheritance for
+synthetic calls; retain these as low confidence. Include ordinary intermediate
+methods, but preserve ambiguity instead of selecting a bean or homonymous
+method. Union bounded fallback paths with output-anchored direct CodeQL pairs.
+For duplicate pairs, retain the direct proof and only attach a CodeQL witness
+of compatible confidence. Cache predecessor trees by source/confidence and
+materialize global CodeQL flows once for HTML progress and final persistence.
+
+**Consequences:** Source-backed cross-module inheritance works without changing
+SQLite or endpoint contracts. Previously invented name-only flows disappear.
+Unsupported generic substitution, varargs, unknown types and multiple concrete
+implementations remain fallback blind spots. Symbol/hierarchy indexing and
+per-source predecessor trees consume memory proportional to their relations;
+the QL closures remain potentially large but are explicitly output-anchored.
+Subprocess deadlines cover progress reads as well as execution and terminate
+the POSIX process group. The code-flow signature changes to rebuild old flows.

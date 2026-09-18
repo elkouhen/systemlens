@@ -1,6 +1,13 @@
 from pathlib import Path
 from subprocess import CompletedProcess
+import os
+import subprocess
+import sys
+import time
 
+import pytest
+
+from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.indexing import codeql
 
 
@@ -12,6 +19,81 @@ def test_query_scopes_source_calls_and_folds_dispatch_resolution() -> None:
     assert codeql._QUERY.count("exactVirtualMethod(call)") == 1
     assert "not exists(Method exact | exactTarget(call, exact))" in codeql._QUERY
     assert "target.fromSource()" in codeql._QUERY
+
+
+def test_reachability_query_walks_from_outputs_to_input_methods() -> None:
+    methods = [
+        IntegrationMethod(
+            id="input", module="orders", qualified_method="Orders.in", path="Orders.java",
+            start_line=10, end_line=12, input_endpoint_ids=("in",), output_endpoint_ids=(),
+        ),
+        IntegrationMethod(
+            id="output", module="orders", qualified_method="Orders.out", path="Orders.java",
+            start_line=20, end_line=22, input_endpoint_ids=(), output_endpoint_ids=("out",),
+        ),
+    ]
+
+    query = codeql._reachability_query(methods)
+
+    assert "predicate exactCallerReachable(Callable callee, Callable caller)" in query
+    assert "predicate possibleCallerReachable(Callable callee, Callable caller)" in query
+    assert "exactCallerReachable(outputMethod, inputMethod)" in query
+    assert "outputAnchor(callee) and exactEdge(caller, callee)" in query
+    assert "exactCallerReachable(callee, previous) and exactEdge(caller, previous)" in query
+    assert "depth" not in query
+    for column in ("source", "source_path", "source_line", "target", "target_path", "target_line"):
+        assert f" as {column}" in query
+
+
+@pytest.mark.parametrize("script", ["import time; time.sleep(30)",
+                                  "import time; print('working', flush=True); time.sleep(30)"])
+def test_progress_timeout_covers_reading_stdout(script: str) -> None:
+    output: list[str] = []
+    started = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        codeql._run_with_progress([sys.executable, "-c", script], timeout=1, progress=output.append)
+    assert time.monotonic() - started < 5
+    if "print" in script:
+        assert output == ["working"]
+
+
+def test_progress_streams_and_returns_output() -> None:
+    output: list[str] = []
+    result = codeql._run_with_progress(
+        [sys.executable, "-c", "print('first'); print('second')"], timeout=5, progress=output.append,
+    )
+    assert result.returncode == 0
+    assert result.stdout == "first\nsecond\n"
+    assert output == ["first", "second"]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process-group cleanup")
+def test_progress_deadline_kills_descendant_holding_stdout_open() -> None:
+    script = (
+        "import subprocess,sys; "
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])"
+    )
+    started = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        codeql._run_with_progress([sys.executable, "-c", script], timeout=1, progress=lambda _line: None)
+    assert time.monotonic() - started < 5
+
+
+def test_reachability_decodes_named_columns(tmp_path: Path, monkeypatch) -> None:
+    methods = [IntegrationMethod("in", "m", "C.in", "C.java", 1, 1, ("in",), ()),
+               IntegrationMethod("out", "m", "C.out", "C.java", 2, 2, (), ("out",))]
+
+    def run(command, **kwargs):
+        if command[1:3] == ["bqrs", "decode"]:
+            output = Path(next(arg.removeprefix("--output=") for arg in command if arg.startswith("--output=")))
+            output.write_text("source,source_path,source_line,target,target_path,target_line,confidence\n"
+                              "C.in,C.java,1,C.out,C.java,2,medium\n")
+        return CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(codeql.subprocess, "run", run)
+    assert codeql.extract_codeql_reachability(tmp_path, methods, executable="codeql") == [
+        codeql.CodeQLReachability("C.in", "C.java", 1, "C.out", "C.java", 2, "medium")
+    ]
 
 
 def test_source_only_root_keeps_generated_sources_but_excludes_build_outputs(tmp_path: Path) -> None:

@@ -184,15 +184,21 @@ the traversed AST nodes for Java files that contain eligible endpoints. Maven
 copied resources and generated classes cannot duplicate source facts. A
 same-method relation remains `potential` with medium confidence because static
 lexical order does not prove branch execution. Call-graph facts join
-persisted AST method facts to form bounded interprocedural flows; `method_call` steps keep
-the call-site line. The `analysis.codeql_max_hops` and
-`analysis.codeql_max_paths` configuration values bound depth and explored call
-transitions respectively; reaching the latter is reported in indexing progress
-instead of silently dropping candidates. By default, SystemLens creates one
+persisted AST method facts to form interprocedural flows; `method_call` steps keep
+the call-site line. For CodeQL, reachability is computed from indexed output
+methods backwards through their callers until indexed input methods are reached.
+The transitive query has no business-level hop or global path limit; the
+configured subprocess timeout remains the operational safeguard. The legacy
+`analysis.codeql_max_hops` and `analysis.codeql_max_paths` values remain only
+for the fallback forward materializer (including Joern). Its results are
+unioned with direct answers; a nonempty direct result never disables fallback
+coverage for other pairs. By default, SystemLens creates one
 temporary CodeQL database for the whole indexed repository, with CodeQL's
 `--build-mode=none` source-only mode, then deletes it. The resulting calls are
-partitioned by caller project only for progress checkpoints; each module
-checkpoint includes the time spent materializing its partial view. The
+partitioned by caller project only for progress checkpoints. With HTML progress,
+global flows are materialized once, reused for final persistence, and filtered
+by reported call-site evidence for partial views. Direct answers without an
+intermediate witness are withheld until the final checkpoint. The
 complete global call list, including cross-project references, is used for
 method-flow materialization.
 Selecting Joern instead creates and deletes one Java CPG for the same module
@@ -209,21 +215,22 @@ discarding AST-only flows. When CodeQL represents a lambda as a synthetic
 anonymous callable, SystemLens attributes its call site to the narrowest
 persisted Java method enclosing that line in the same file. Dynamic dispatch,
 reflection, and runtime-only routing remain outside this deterministic layer.
-In buildless mode, when a Java port call cannot be dispatch-resolved, the
-materializer may retain the source invocation and bridge it to matching
-endpoint-bearing output methods in the same module, or to one globally unique
-matching implementation across modules. Such edges are marked
-possible/low confidence; no external or arbitrary same-name call is inferred.
-The AST method projection also builds a transient, non-persisted Java symbol
-index for this fallback. It uses invocation arity and the source-declared
-`implements`/`extends` hierarchy to narrow endpoint-bearing output candidates.
+In buildless mode, `indexing/java_symbols.py` builds one transient symbol index
+from the indexed source perimeter, including files with no method facts. It
+parses each file once per join and indexes qualified owners, package/import
+contexts, transitive `implements`/`extends`, and method parameter signatures.
+Duplicate qualified types, unknown receiver types, ambiguous overloads or
+implementations, unsupported generic substitutions and varargs stay unresolved.
+A declared abstract/interface method can bridge only to a unique compatible
+concrete implementation; no module preference or unique simple-name heuristic
+is used. AST calls can traverse ordinary helper methods across module boundaries
+before reaching an output. All synthetic edges retain possible/low confidence.
 Output-bearing methods are terminal sinks for this fallback pass, so their
 external `send`/`call` invocations are not recursively reinterpreted as
 same-named local methods. This prevents overload cross-talk and artificial
 self-loops while leaving the full CodeQL result authoritative when available.
-If arity and the declared receiver hierarchy still leave more than one
-endpoint-bearing candidate, the fallback retains the ambiguity and adds no
-synthetic call edge.
+If arity, signature and the declared receiver hierarchy still leave more than
+one concrete candidate, no synthetic call edge is added.
 An AST-only candidate remains possible with low confidence and never changes
 the endpoint or topology facts.
 For a virtual call, CodeQL's unique `exactVirtualMethod` target is retained at
@@ -498,15 +505,30 @@ created. The indexed repository is never modified, compiled, or tested; the
 generation command may still require cached or remote plugin dependencies.
 The call query keeps both caller and callee in source code, folds exact
 dispatch before viable-dispatch expansion, and computes that resolution once
-per call. CodeQL also runs a bounded reachability query whose source and target
+per call. CodeQL also runs an output-anchored transitive reachability query whose source and target
 predicates are restricted to the already indexed input/output methods by
 relative path and start line. Exact input-to-output reachability is persisted
 with medium confidence and fallback dispatch reachability with low confidence.
-Python-side joins use indexes by normalized method name and relative path;
-bounded path exploration uses a FIFO deque to enrich direct CodeQL answers with
-intermediate steps when possible. These bounds avoid large unrelated method
-products while preserving ambiguous dispatch as low-confidence evidence. No
-database path is persisted.
+Both recursive relations seed only indexed outputs and retain that output as
+their first argument throughout recursion; they do not construct an unrelated
+all-method-pairs closure. Both edges require a source caller and source callee.
+The result explicitly names all seven CSV columns consumed by the decoder.
+Python joins use normalized method/location indexes and cached dispatch bridges,
+not a full method scan per call. The fallback BFS visits each method/confidence
+state at most once per input endpoint, under the configured depth/global
+transition bounds. Cyclic witness paths are retained without expansion.
+Direct pairs take precedence over fallback pairs without suppressing other
+fallback results. Representative direct routes use only located CodeQL edges;
+medium-confidence witnesses exclude possible dispatch. One predecessor tree is
+cached per input method/confidence, costing O(V+E) time and O(V) working memory,
+with pairs grouped so the previous tree can be released,
+plus route reconstruction proportional to emitted steps, instead of a BFS per
+input/output pair. Symbol preprocessing costs source traversal plus the size of
+the indexed transitive hierarchy/dispatch relation (potentially quadratic for
+deep inheritance). HTML checkpoints filter cached flows instead of rebuilding
+symbols and retraversing the call graph for every module. No database path is
+persisted. Live progress uses a wall-clock watchdog covering pipe reads; POSIX
+timeouts terminate the process group, and subprocesses are reaped on errors.
 An absent selected engine is reported and keeps AST-only results; a failing
 available executable leaves the whole previous successful snapshot intact.
 

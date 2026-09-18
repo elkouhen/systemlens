@@ -44,7 +44,12 @@ The final counters answer most first questions:
 | `limite atteinte (N transitions)` | The bounded call-graph exploration stopped before considering every transition. |
 | `N parcours de code potentiel(s) matérialisé(s)` | Total persisted flows after local, interprocedural and Kafka continuation materialization. |
 
-The `max_paths` setting is a global exploration budget, despite its name. The
+The direct CodeQL reachability query is no longer limited by `max_paths` or by
+the configured hop count: it starts at indexed outputs and computes the
+transitive caller relation until indexed inputs are reached. The configuration
+values remain for forward fallback materialization, including Joern. Direct
+CodeQL pairs and fallback pairs are combined; a nonempty direct result does
+not suppress other fallback paths. Their
 default values are:
 
 ```yaml
@@ -53,10 +58,8 @@ analysis:
   codeql_max_paths: 10000
 ```
 
-`codeql_max_hops` limits the depth of one call path. `codeql_max_paths` limits
-the number of call transitions explored across the index run. For a very
-branching codebase, temporarily increasing them can confirm whether truncation
-is the cause:
+These values affect only the fallback path exploration. For a very branching
+codebase, increasing them can confirm whether fallback truncation is the cause:
 
 ```yaml
 analysis:
@@ -66,6 +69,14 @@ analysis:
 
 Increase these values carefully: they can substantially increase indexing time
 and the number of low-confidence candidate flows.
+
+For inheritance across modules, check the fully qualified receiver type,
+imports, transitive base classes and method parameter signatures. The fallback
+requires one compatible concrete implementation and may traverse intermediate
+helper methods. Unknown receivers, ambiguous overloads/implementations,
+duplicate qualified types and unsupported generic substitutions or varargs
+remain unresolved. An unrelated method with the same name must not repair a
+missing flow. CodeQL may resolve cases beyond this conservative fallback.
 
 ## 3. Inspect the persisted flow inventory
 
@@ -223,8 +234,9 @@ in `indexing-issues.json` where applicable.
 
 ### The flow is too deep or too branched
 
-Look for the `limit reached` message. Increase `codeql_max_hops` or
-`codeql_max_paths` temporarily, reindex, and compare the resulting counters.
+For Joern or a fallback materialization, look for the `limit reached` message.
+Increase the fallback values temporarily, reindex, and compare the resulting
+counters.
 
 ### The flow exists but is not visible in the UI
 

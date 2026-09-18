@@ -1,9 +1,12 @@
 """Local CodeQL call-graph adapter for Java integration flows."""
 
 import csv
+import os
+import signal
 import shutil
 import subprocess
 import tempfile
+from threading import Timer
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -124,8 +127,8 @@ def _anchor_predicate(
 }}"""
 
 
-def _reachability_query(methods: Sequence[IntegrationMethod], max_hops: int) -> str:
-    """Build a bounded IN-to-OUT reachability query scoped to indexed methods."""
+def _reachability_query(methods: Sequence[IntegrationMethod]) -> str:
+    """Build a reverse OUT-to-IN reachability query scoped to indexed methods."""
     return f"""import java
 import semmle.code.java.dispatch.VirtualDispatch
 
@@ -148,44 +151,48 @@ predicate possibleTarget(MethodCall call, Method target) {{
 }}
 
 predicate exactEdge(Callable caller, Callable callee) {{
-  exists(MethodCall call |
+  exists(SourceMethodCall call |
     call.getEnclosingCallable() = caller and exactTarget(call, callee)
   )
 }}
 
 predicate possibleEdge(Callable caller, Callable callee) {{
-  exists(MethodCall call |
+  exists(SourceMethodCall call |
     call.getEnclosingCallable() = caller and possibleTarget(call, callee)
   )
 }}
 
-predicate exactReachable(Callable source, Callable target, int depth) {{
-  exists(Callable next |
-    exactEdge(source, next) and
-    (next = target and depth = 1 or
-     depth < {max_hops} and exactReachable(next, target, depth + 1))
+predicate exactCallerReachable(Callable callee, Callable caller) {{
+  outputAnchor(callee) and exactEdge(caller, callee)
+  or
+  exists(Callable previous |
+    exactCallerReachable(callee, previous) and exactEdge(caller, previous)
   )
 }}
 
-predicate possibleReachable(Callable source, Callable target, int depth) {{
-  exists(Callable next |
-    possibleEdge(source, next) and
-    (next = target and depth = 1 or
-     depth < {max_hops} and possibleReachable(next, target, depth + 1))
+predicate possibleCallerReachable(Callable callee, Callable caller) {{
+  outputAnchor(callee) and possibleEdge(caller, callee)
+  or
+  exists(Callable previous |
+    possibleCallerReachable(callee, previous) and possibleEdge(caller, previous)
   )
 }}
 
 {_anchor_predicate("inputAnchor", methods, input_anchor=True)}
 {_anchor_predicate("outputAnchor", methods, input_anchor=False)}
 
-from Method source, Method target, string confidence
-where inputAnchor(source) and outputAnchor(target) and source != target and
-  (exactReachable(source, target, 0) and confidence = "medium" or
-   not exactReachable(source, target, 0) and
-   possibleReachable(source, target, 0) and confidence = "low")
-select source.getQualifiedName(), source.getFile().getRelativePath(),
-  source.getLocation().getStartLine(), target.getQualifiedName(),
-  target.getFile().getRelativePath(), target.getLocation().getStartLine(), confidence
+from Method inputMethod, Method outputMethod, string confidence
+where outputAnchor(outputMethod) and inputAnchor(inputMethod) and
+  inputMethod != outputMethod and
+  (exactCallerReachable(outputMethod, inputMethod) and confidence = "medium" or
+   not exactCallerReachable(outputMethod, inputMethod) and
+   possibleCallerReachable(outputMethod, inputMethod) and confidence = "low")
+select inputMethod.getQualifiedName() as source,
+  inputMethod.getFile().getRelativePath() as source_path,
+  inputMethod.getLocation().getStartLine() as source_line,
+  outputMethod.getQualifiedName() as target,
+  outputMethod.getFile().getRelativePath() as target_path,
+  outputMethod.getLocation().getStartLine() as target_line, confidence
 """
 
 
@@ -208,14 +215,43 @@ def _run_with_progress(
         )
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, bufsize=1, cwd=cwd,
+        text=True, bufsize=1, cwd=cwd, start_new_session=os.name == "posix",
     )
     output: list[str] = []
-    assert process.stdout is not None
-    for line in process.stdout:
-        output.append(line)
-        progress(line.rstrip())
-    returncode = process.wait(timeout=timeout)
+    expired = False
+
+    def stop() -> None:
+        try:
+            if os.name == "posix":
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
+        except ProcessLookupError:
+            pass
+
+    def expire() -> None:
+        nonlocal expired
+        expired = True
+        stop()
+
+    timer = Timer(timeout, expire)
+    timer.daemon = True
+    timer.start()
+    try:
+        assert process.stdout is not None
+        for line in process.stdout:
+            output.append(line)
+            progress(line.rstrip())
+        returncode = process.wait()
+        if expired:
+            raise subprocess.TimeoutExpired(command, timeout, output="".join(output))
+    finally:
+        timer.cancel()
+        timer.join()
+        stop()
+        process.wait()
+        if process.stdout is not None:
+            process.stdout.close()
     return subprocess.CompletedProcess(command, returncode, "".join(output), "")
 
 
@@ -405,13 +441,12 @@ def extract_codeql_reachability(
     database: Path,
     methods: Sequence[IntegrationMethod],
     *,
-    max_hops: int = 12,
     executable: str | None = None,
     timeout_seconds: int = 600,
     threads: int = 1,
     ram_mb: int | None = None,
 ) -> list[CodeQLReachability]:
-    """Return CodeQL-proven reachability between indexed input/output methods."""
+    """Return unbounded CodeQL reachability between indexed input/output methods."""
     if not database.is_dir():
         raise CodeQLError(f"CodeQL database not found: {database}")
     if not any(method.input_endpoint_ids for method in methods):
@@ -424,7 +459,7 @@ def extract_codeql_reachability(
     with tempfile.TemporaryDirectory(prefix="systemlens-codeql-reachability-") as directory:
         work = Path(directory)
         query = work / "reachability.ql"
-        query.write_text(_reachability_query(methods, max_hops), encoding="utf-8")
+        query.write_text(_reachability_query(methods), encoding="utf-8")
         (work / "qlpack.yml").write_text(_QLPACK, encoding="utf-8")
         bqrs = work / "reachability.bqrs"
         output = work / "reachability.csv"
