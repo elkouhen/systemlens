@@ -329,6 +329,10 @@ def test_index_uses_automatic_codeql_database_when_available(
     monkeypatch.setattr(
         indexing_service, "extract_codeql_calls", lambda _database, **_kwargs: []
     )
+    monkeypatch.setattr(
+        indexing_service, "extract_codeql_reachability",
+        lambda _database, _methods, **_kwargs: [],
+    )
 
     checkpoints = []
     with Store(repo) as store:

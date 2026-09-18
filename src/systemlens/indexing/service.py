@@ -30,10 +30,12 @@ from systemlens.indexing.integration_methods import materialize_integration_meth
 from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
 from systemlens.indexing.codeql import (
     CodeQLCall,
+    CodeQLReachability,
     CodeQLError,
     automatic_codeql_database,
     codeql_executable,
     extract_codeql_calls,
+    extract_codeql_reachability,
 )
 from systemlens.indexing.joern import (
     JoernError,
@@ -484,6 +486,7 @@ def _index_repo(
         ):
             engine_label = "CodeQL" if call_graph_engine == "codeql" else "Joern"
             _report_progress(progress, f"→ {engine_label} : préparation de l'analyse interprocédurale...")
+            reachability: list[CodeQLReachability] = []
 
             def publish_call_graph_progress(
                 completed_projects: int,
@@ -526,6 +529,11 @@ def _index_repo(
                         progress=progress if codeql_verbosity is not None else None,
                     )
                     timer.end("codeql-extract", "extraction des appels CodeQL")
+                    reachability = extract_codeql_reachability(
+                        codeql_database, methods, max_hops=config.codeql_max_hops,
+                        timeout_seconds=config.codeql_timeout_seconds,
+                        threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                    )
                     publish_call_graph_progress(1, 1, "base CodeQL fournie", calls)
                 else:
                     roots = _codeql_module_roots(
@@ -579,6 +587,11 @@ def _index_repo(
                                 verbosity=codeql_verbosity,
                                 progress=progress if codeql_verbosity is not None else None,
                             )
+                            reachability = extract_codeql_reachability(
+                                database, methods, max_hops=config.codeql_max_hops,
+                                timeout_seconds=config.codeql_timeout_seconds,
+                                threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                            )
                         partitioned_calls = _partition_codeql_calls(calls, roots)
                         completed_calls: list[CodeQLCall] = []
                         for number, (name, project_calls) in enumerate(partitioned_calls, start=1):
@@ -628,6 +641,7 @@ def _index_repo(
                 max_hops=config.codeql_max_hops,
                 max_paths=config.codeql_max_paths,
                 stats=codeql_stats,
+                reachability=reachability,
             )
             flows.extend(codeql_flows)
             timer.end("call-graph-join", f"jointure {engine_label} et matérialisation des flux")
@@ -640,7 +654,8 @@ def _index_repo(
                 f"→ {engine_label} : "
                 f"{codeql_stats['calls']} appel(s), {codeql_stats['joined_calls']} jointure(s), "
                 f"{codeql_stats['explored_paths']} transition(s), "
-                f"{len(codeql_flows)} flux interprocédural(aux).{limit_note}",
+                f"{len(codeql_flows)} flux interprocédural(aux), "
+                f"{len(reachability)} reachability(s) directe(s).{limit_note}",
             )
         elif methods and call_graph_engine != "none":
             _report_progress(

@@ -448,3 +448,26 @@ endpoint cards, and remain readable when several dependencies share a route.
 The routes are presentation-only and are recomputed after camera or layout
 changes. If the CDN or WASM runtime is unavailable, the existing local
 orthogonal router preserves a usable export.
+
+## ADR-29 — Ask CodeQL directly for bounded input-to-output reachability
+
+**Status:** Accepted.
+
+**Context:** Reconstructing every interprocedural flow by starting at each
+ indexed input method and traversing Python-side call edges can miss a flow
+ when dispatch resolution or an intermediate join is incomplete, even though
+ CodeQL can answer the bounded reachability question directly.
+
+**Decision:** Run a second bounded CodeQL query, scoped to the indexed input
+ and output methods by relative path and start line. Persist exact reachability
+ with medium confidence and dispatch-expanded reachability with low confidence.
+Keep the existing Python traversal to provide intermediate steps and to retain
+ its existing conservative behavior; add a two-endpoint direct flow only when
+ that traversal did not already materialize the same input/output pair.
+
+**Consequences:** CodeQL can recover connections that the Python-side join does
+ not reconstruct, while the persisted evidence remains tied to indexed source
+ methods and retains confidence. The query cost is bounded by the configured
+ hop limit but still grows with the number of indexed input/output anchors and
+ the reachable call graph. Reflection, runtime routing, and calls absent from
+ the CodeQL database remain explicit blind spots.

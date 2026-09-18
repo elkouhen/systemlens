@@ -174,6 +174,9 @@ materializes conservative same-method code flows and, when the selected local
 call-graph engine is available, creates temporary source-only Java databases
 (CodeQL) or Java CPGs (Joern) per source-owning project to follow resolved
 static method calls from an indexed entry method to an indexed output method.
+CodeQL additionally answers bounded reachability directly between indexed input
+and output methods; these direct answers are used when the Python-side traversal
+cannot reconstruct the intermediate calls.
 Calls are aggregated before the global flow join. `--codeql-database DIR`
 reuses an existing global CodeQL database instead.
 The temporary database and the supplied database path are never persisted. If

@@ -4,6 +4,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, replace
 import re
 from pathlib import Path
+from typing import Sequence
 
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, compute_code_flow_id
@@ -11,10 +12,10 @@ from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod, module_identity
-from systemlens.indexing.codeql import CodeQLCall
+from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v13-offline-codeql-staging-ast-narrowing"
+CODE_FLOW_SIGNATURE = "code-flow-v14-codeql-direct-reachability"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -363,6 +364,7 @@ def materialize_codeql_code_flows(
     methods: list[IntegrationMethod], endpoints: list[MessageEndpoint], calls: list[CodeQLCall],
     *, repo_root: Path | None = None, max_hops: int = 12, max_paths: int = 10_000,
     stats: dict[str, int] | None = None,
+    reachability: Sequence[CodeQLReachability] = (),
 ) -> list[CodeFlow]:
     """Join AST method facts through resolved CodeQL calls.
 
@@ -667,6 +669,56 @@ def materialize_codeql_code_flows(
             "calls": len(calls), "joined_calls": sum(len(targets) for targets in adjacency.values()),
             "explored_paths": explored, "truncated_paths": truncated,
         })
+    if reachability:
+        methods_by_location = {
+            (normalized_path(method.path), method.start_line): method
+            for method in methods
+        }
+        existing_pairs = {
+            (
+                flow.steps[0].endpoint_id,
+                flow.steps[-1].endpoint_id,
+            )
+            for flow in flows
+            if flow.steps and flow.steps[0].endpoint_id and flow.steps[-1].endpoint_id
+        }
+        for relation in reachability:
+            source_method = methods_by_location.get(
+                (normalized_path(relation.source_path), relation.source_line)
+            )
+            target_method = methods_by_location.get(
+                (normalized_path(relation.target_path), relation.target_line)
+            )
+            if source_method is None or target_method is None:
+                continue
+            for input_id in source_method.input_endpoint_ids:
+                trigger = endpoint_by_id.get(input_id)
+                if trigger is None:
+                    continue
+                for output_id in target_method.output_endpoint_ids:
+                    output = endpoint_by_id.get(output_id)
+                    if output is None or (input_id, output_id) in existing_pairs:
+                        continue
+                    flow_id = compute_code_flow_id(
+                        source_method.module, source_method.path, source_method.qualified_method,
+                        _endpoint_step(trigger, 1).kind,
+                        f"{trigger.topic}|{output.id}|direct-codeql",
+                    )
+                    flows.append(CodeFlow(
+                        id=flow_id, module=source_method.module, method=source_method.qualified_method,
+                        path=source_method.path, start_line=source_method.start_line,
+                        end_line=source_method.end_line,
+                        status="potential", confidence=relation.confidence,
+                        reason=(
+                            "CodeQL directly proved reachability from the indexed input "
+                            "method to the indexed output method."
+                        ),
+                        steps=(
+                            _endpoint_step(trigger, 1),
+                            _endpoint_step(output, 2),
+                        ),
+                    ))
+                    existing_pairs.add((input_id, output_id))
     unique = {flow.id: flow for flow in flows}
     return sorted(unique.values(), key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
 

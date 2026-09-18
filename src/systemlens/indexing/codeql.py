@@ -7,7 +7,9 @@ import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Callable, Iterator, Sequence
+
+from systemlens.domain.code_flows import IntegrationMethod
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,19 @@ class CodeQLCall:
     callee_line: int
     call_line: int
     dispatch_confidence: str = "exact"
+
+
+@dataclass(frozen=True)
+class CodeQLReachability:
+    """A direct CodeQL answer for one indexed input/output method pair."""
+
+    source: str
+    source_path: str
+    source_line: int
+    target: str
+    target_path: str
+    target_line: int
+    confidence: str
 
 
 class CodeQLError(RuntimeError):
@@ -82,6 +97,95 @@ select enclosing.getQualifiedName() as caller,
   invoked.getLocation().getStartLine() as callee_line,
   call.getLocation().getStartLine() as call_line,
   dispatch_confidence
+"""
+
+
+def _ql_string(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _anchor_predicate(
+    name: str, methods: Sequence[IntegrationMethod], *, input_anchor: bool
+) -> str:
+    selected = [
+        method for method in methods
+        if bool(method.input_endpoint_ids if input_anchor else method.output_endpoint_ids)
+    ]
+    clauses = [
+        "(method.getFile().getRelativePath() = "
+        f"{_ql_string(method.path)} and method.getLocation().getStartLine() = {method.start_line})"
+        for method in selected
+    ]
+    body = "\n    or\n    ".join(clauses) or "false"
+    return f"""predicate {name}(Method method) {{
+  method.fromSource() and (
+    {body}
+  )
+}}"""
+
+
+def _reachability_query(methods: Sequence[IntegrationMethod], max_hops: int) -> str:
+    """Build a bounded IN-to-OUT reachability query scoped to indexed methods."""
+    return f"""import java
+import semmle.code.java.dispatch.VirtualDispatch
+
+class SourceMethodCall extends MethodCall {{
+  SourceMethodCall() {{ this.getEnclosingCallable().fromSource() }}
+}}
+
+predicate exactTarget(MethodCall call, Method target) {{
+  target = exactVirtualMethod(call) and target.fromSource()
+}}
+
+predicate possibleTarget(MethodCall call, Method target) {{
+  target = exactVirtualMethod(call) and target.fromSource()
+  or
+  not exists(Method exact | exactTarget(call, exact)) and
+  target = viableCallable(call) and target.fromSource()
+  or
+  not exists(Method exact | exactTarget(call, exact)) and
+  target = call.getMethod() and target.fromSource()
+}}
+
+predicate exactEdge(Callable caller, Callable callee) {{
+  exists(MethodCall call |
+    call.getEnclosingCallable() = caller and exactTarget(call, callee)
+  )
+}}
+
+predicate possibleEdge(Callable caller, Callable callee) {{
+  exists(MethodCall call |
+    call.getEnclosingCallable() = caller and possibleTarget(call, callee)
+  )
+}}
+
+predicate exactReachable(Callable source, Callable target, int depth) {{
+  exists(Callable next |
+    exactEdge(source, next) and
+    (next = target and depth = 1 or
+     depth < {max_hops} and exactReachable(next, target, depth + 1))
+  )
+}}
+
+predicate possibleReachable(Callable source, Callable target, int depth) {{
+  exists(Callable next |
+    possibleEdge(source, next) and
+    (next = target and depth = 1 or
+     depth < {max_hops} and possibleReachable(next, target, depth + 1))
+  )
+}}
+
+{_anchor_predicate("inputAnchor", methods, input_anchor=True)}
+{_anchor_predicate("outputAnchor", methods, input_anchor=False)}
+
+from Method source, Method target, string confidence
+where inputAnchor(source) and outputAnchor(target) and source != target and
+  (exactReachable(source, target, 0) and confidence = "medium" or
+   not exactReachable(source, target, 0) and
+   possibleReachable(source, target, 0) and confidence = "low")
+select source.getQualifiedName(), source.getFile().getRelativePath(),
+  source.getLocation().getStartLine(), target.getQualifiedName(),
+  target.getFile().getRelativePath(), target.getLocation().getStartLine(), confidence
 """
 
 
@@ -295,3 +399,71 @@ def extract_codeql_calls(
         except (KeyError, TypeError, ValueError) as exc:
             raise CodeQLError("CodeQL returned an unexpected call-graph CSV schema.") from exc
     return calls
+
+
+def extract_codeql_reachability(
+    database: Path,
+    methods: Sequence[IntegrationMethod],
+    *,
+    max_hops: int = 12,
+    executable: str | None = None,
+    timeout_seconds: int = 600,
+    threads: int = 1,
+    ram_mb: int | None = None,
+) -> list[CodeQLReachability]:
+    """Return CodeQL-proven reachability between indexed input/output methods."""
+    if not database.is_dir():
+        raise CodeQLError(f"CodeQL database not found: {database}")
+    if not any(method.input_endpoint_ids for method in methods):
+        return []
+    if not any(method.output_endpoint_ids for method in methods):
+        return []
+    executable = executable or codeql_executable()
+    if executable is None:
+        raise CodeQLError("CodeQL executable not found.")
+    with tempfile.TemporaryDirectory(prefix="systemlens-codeql-reachability-") as directory:
+        work = Path(directory)
+        query = work / "reachability.ql"
+        query.write_text(_reachability_query(methods, max_hops), encoding="utf-8")
+        (work / "qlpack.yml").write_text(_QLPACK, encoding="utf-8")
+        bqrs = work / "reachability.bqrs"
+        output = work / "reachability.csv"
+        command = [
+            executable, "query", "run", str(query), f"--database={database}",
+            f"--output={bqrs}", f"--threads={threads}",
+        ]
+        if ram_mb is not None:
+            command.append(f"--ram={ram_mb}")
+        user_packs = Path.home() / ".codeql" / "packages"
+        if user_packs.is_dir():
+            command.append(f"--additional-packs={user_packs}")
+        completed = _run_with_progress(
+            command, timeout=timeout_seconds, progress=None,
+        )
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout).strip()
+            raise CodeQLError(f"CodeQL reachability query failed: {detail}")
+        decoded = subprocess.run(
+            [executable, "bqrs", "decode", str(bqrs), "--format=csv", f"--output={output}"],
+            capture_output=True, text=True, timeout=timeout_seconds, check=False,
+        )
+        if decoded.returncode != 0:
+            detail = (decoded.stderr or decoded.stdout).strip()
+            raise CodeQLError(f"CodeQL reachability decoding failed: {detail}")
+        try:
+            with output.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+        except OSError as exc:
+            raise CodeQLError("CodeQL did not produce a reachability CSV.") from exc
+    reachability: list[CodeQLReachability] = []
+    for row in rows:
+        try:
+            reachability.append(CodeQLReachability(
+                source=row["source"], source_path=row["source_path"],
+                source_line=int(row["source_line"]), target=row["target"],
+                target_path=row["target_path"], target_line=int(row["target_line"]),
+                confidence=row["confidence"],
+            ))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise CodeQLError("CodeQL returned an unexpected reachability schema.") from exc
+    return reachability

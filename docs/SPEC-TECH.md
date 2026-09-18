@@ -498,10 +498,15 @@ created. The indexed repository is never modified, compiled, or tested; the
 generation command may still require cached or remote plugin dependencies.
 The call query keeps both caller and callee in source code, folds exact
 dispatch before viable-dispatch expansion, and computes that resolution once
-per call. Python-side joins use indexes by normalized method name and relative
-path; bounded path exploration uses a FIFO deque. These bounds and joins avoid
-large unrelated method products while preserving ambiguous dispatch as low
-confidence evidence. No database path is persisted.
+per call. CodeQL also runs a bounded reachability query whose source and target
+predicates are restricted to the already indexed input/output methods by
+relative path and start line. Exact input-to-output reachability is persisted
+with medium confidence and fallback dispatch reachability with low confidence.
+Python-side joins use indexes by normalized method name and relative path;
+bounded path exploration uses a FIFO deque to enrich direct CodeQL answers with
+intermediate steps when possible. These bounds avoid large unrelated method
+products while preserving ambiguous dispatch as low-confidence evidence. No
+database path is persisted.
 An absent selected engine is reported and keeps AST-only results; a failing
 available executable leaves the whole previous successful snapshot intact.
 
