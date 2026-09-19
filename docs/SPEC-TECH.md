@@ -189,10 +189,9 @@ the call-site line. For CodeQL, reachability is computed from indexed output
 methods backwards through their callers until indexed input methods are reached.
 The transitive query has no business-level hop or global path limit; the
 configured subprocess timeout remains the operational safeguard. The legacy
-`analysis.codeql_max_hops` and `analysis.codeql_max_paths` values remain only
-for the fallback forward materializer (including Joern). Its results are
-unioned with direct answers; a nonempty direct result never disables fallback
-coverage for other pairs. By default, SystemLens creates one
+`analysis.codeql_max_hops` and `analysis.codeql_max_paths` values remain for
+bounded route reconstruction only; they do not authorize inferred call edges.
+By default, SystemLens creates one
 temporary CodeQL database for the whole indexed repository, with CodeQL's
 `--build-mode=none` source-only mode, then deletes it. The resulting calls are
 partitioned by caller project only for progress checkpoints. With HTML progress,
@@ -202,37 +201,28 @@ intermediate witness are withheld until the final checkpoint. The
 complete global call list, including cross-project references, is used for
 method-flow materialization.
 Selecting Joern instead creates and deletes one Java CPG for the same module
-unit and exports every `callee`-resolved call. When the CPG exposes only a
-non-synthetic `methodFullName`, it is retained as a possible signature
-candidate and joins only one unique indexed method at low confidence. The call facts are kept in
-memory, their paths are remapped to root-relative evidence,
-and all module results are aggregated before method-flow materialization. A
-callee without a module-local source location can join a unique global method
-signature; this edge lowers confidence to `low` and retains signature-join
-provenance. An explicit CLI database remains a global-database override. When the CodeQL executable is
+unit and exports only source-located `callee`-resolved calls. Recovered
+receiver types and non-synthetic `methodFullName` values without source
+locations are diagnostics, not joins. The call facts are kept in memory, their
+paths are remapped to root-relative evidence, and all module results are
+aggregated before method-flow materialization. A missing or untrusted callee
+path may join one unique qualified indexed method, but is explicitly
+low-confidence and retains signature-join provenance; ambiguous names remain
+unresolved. An
+explicit CLI database remains a global-database override. When the CodeQL executable is
 absent, it records no interprocedural paths and reports that limitation without
 discarding AST-only flows. When CodeQL represents a lambda as a synthetic
 anonymous callable, SystemLens attributes its call site to the narrowest
 persisted Java method enclosing that line in the same file. Dynamic dispatch,
 reflection, and runtime-only routing remain outside this deterministic layer.
-In buildless mode, `indexing/java_symbols.py` builds one transient symbol index
-from the indexed source perimeter, including files with no method facts. It
-parses each file once per join and indexes qualified owners, package/import
-contexts, transitive `implements`/`extends`, and method parameter signatures.
-Duplicate qualified types, unknown receiver types, ambiguous overloads or
-implementations, unsupported generic substitutions and varargs stay unresolved.
-A declared abstract/interface method can bridge only to a unique compatible
-concrete implementation; no module preference or unique simple-name heuristic
-is used. AST calls can traverse ordinary helper methods across module boundaries
-before reaching an output. All synthetic edges retain possible/low confidence.
-Output-bearing methods are terminal sinks for this fallback pass, so their
-external `send`/`call` invocations are not recursively reinterpreted as
-same-named local methods. This prevents overload cross-talk and artificial
-self-loops while leaving the full CodeQL result authoritative when available.
-If arity, signature and the declared receiver hierarchy still leave more than
-one concrete candidate, no synthetic call edge is added.
-An AST-only candidate remains possible with low confidence and never changes
-the endpoint or topology facts.
+In buildless mode, a transient AST symbol index covers source-declared
+qualified types, imports and transitive `extends`/`implements` relations,
+including source files without endpoint facts. It may bridge an
+abstract/interface method to one unique compatible implementation and recover
+receiver-typed helper calls by arity/signature. Duplicate types, ambiguous
+overloads, unknown receivers and unsupported generic/vararg substitutions stay
+unresolved. Synthetic edges are always `possible`/`low` and never replace
+exact CodeQL evidence.
 For a virtual call, CodeQL's unique `exactVirtualMethod` target is retained at
 medium confidence. If no unique target can be proven, its `viableCallable`
 candidates are retained individually at low confidence; SystemLens does not
@@ -488,8 +478,10 @@ it, and decode the result as CSV;
 progress checkpoints group the global result by source-owning project, while
 all call facts are joined together. Selecting Joern
 invokes `joern-parse --language JAVASRC` for the same module unit and its local
-non-interactive interpreter exports only resolved calls as TSV; its CPG and
-query script are temporary. `--codeql-database` reuses one global database
+non-interactive interpreter exports only source-located resolved calls as TSV;
+its CPG and query script are temporary. Recovered receiver types and
+`methodFullName` values without source locations are diagnostics, not joins.
+`--codeql-database` reuses one global database
 supplied by the caller. The temporary CodeQL query pack pins
 `codeql/java-all` and resolves it only from the already installed local CodeQL
 pack cache; indexing never runs `codeql pack install` or downloads analyzer
@@ -508,25 +500,24 @@ dispatch before viable-dispatch expansion, and computes that resolution once
 per call. CodeQL also runs an output-anchored transitive reachability query whose source and target
 predicates are restricted to the already indexed input/output methods by
 relative path and start line. Exact input-to-output reachability is persisted
-with medium confidence and fallback dispatch reachability with low confidence.
+with medium confidence; CodeQL-reported possible dispatch is persisted with
+low confidence.
 Both recursive relations seed only indexed outputs and retain that output as
 their first argument throughout recursion; they do not construct an unrelated
 all-method-pairs closure. Both edges require a source caller and source callee.
 The result explicitly names all seven CSV columns consumed by the decoder.
-Python joins use normalized method/location indexes and cached dispatch bridges,
-not a full method scan per call. The fallback BFS visits each method/confidence
-state at most once per input endpoint, under the configured depth/global
-transition bounds. Cyclic witness paths are retained without expansion.
-Direct pairs take precedence over fallback pairs without suppressing other
-fallback results. Representative direct routes use only located CodeQL edges;
-medium-confidence witnesses exclude possible dispatch. One predecessor tree is
+Python joins require exact source path, method and line evidence except for
+the unique-name fallback above. No AST receiver dispatch, abstract-to-concrete
+bridge, or name/arity guess is materialized. The BFS visits each
+method/confidence state
+at most once per input endpoint, under the configured depth/global transition
+bounds. Cyclic witness paths are retained without expansion. Medium-confidence
+witnesses exclude possible dispatch. One predecessor tree is
 cached per input method/confidence, costing O(V+E) time and O(V) working memory,
 with pairs grouped so the previous tree can be released,
 plus route reconstruction proportional to emitted steps, instead of a BFS per
-input/output pair. Symbol preprocessing costs source traversal plus the size of
-the indexed transitive hierarchy/dispatch relation (potentially quadratic for
-deep inheritance). HTML checkpoints filter cached flows instead of rebuilding
-symbols and retraversing the call graph for every module. No database path is
+input/output pair. HTML checkpoints filter cached flows instead of rebuilding
+and retraversing the call graph for every module. No database path is
 persisted. Live progress uses a wall-clock watchdog covering pipe reads; POSIX
 timeouts terminate the process group, and subprocesses are reaped on errors.
 An absent selected engine is reported and keeps AST-only results; a failing

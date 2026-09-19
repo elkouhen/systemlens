@@ -183,11 +183,9 @@ CodeQL additionally answers transitive reachability by starting at indexed
 output methods and walking callers until indexed input methods are reached;
 these direct answers are used when the Python-side traversal cannot reconstruct
 the intermediate calls. The configured timeout remains the operational guard.
-Direct results are unioned with bounded fallback paths, including when CodeQL
-returns only some endpoint pairs. A direct answer replaces fallback evidence
-for the same pair; a representative route never borrows synthetic edges or
-weaker dispatch evidence than that answer. The fallback depth and transition
-limits remain active and truncation is reported even alongside direct answers.
+Only source-located CodeQL call pairs are materialized. CodeQL's own possible
+virtual-dispatch rows remain visible as low-confidence potential flows; the
+Python materializer does not create additional targets.
 Calls are aggregated before the global flow join. `--codeql-database DIR`
 reuses an existing global CodeQL database instead.
 The temporary database and the supplied database path are never persisted. If
@@ -195,27 +193,17 @@ the selected engine is unavailable, indexing reports that interprocedural flows 
 and retains AST-only flows. A uniquely resolved dispatch yields a `potential`
 flow with medium confidence. When CodeQL identifies several compatible virtual
 method implementations, SystemLens retains each candidate as a `potential`
-flow with low confidence instead of choosing one. When a module-local database
-does not expose a callee source path, a call to a uniquely matching indexed
-global method signature is retained with low confidence and explicit
-signature-join provenance. Ambiguous signatures remain unresolved. Unresolved
-dispatch, reflection, dynamic routing, and runtime-only routing are not added.
-When source evidence permits it, unresolved abstract/interface calls can be
-bridged across modules to a unique concrete implementation of the declared
-signature. A transient AST index uses qualified types, imports and transitive
-inheritance, including empty intermediate classes. Its low-confidence paths
-may traverse ordinary helper methods before reaching an output. Module-local
-or globally unique method names alone never establish dispatch. Unknown
-receivers, duplicate qualified types, ambiguous overloads/implementations and
-unsupported generic substitutions or varargs remain unresolved by this
-fallback; CodeQL may still resolve them.
-Joern retains every resolved CPG callee. When Java type recovery exposes only a
-non-synthetic `methodFullName`, SystemLens may join it only to one unique
-indexed Java method, records the result as a possible dispatch with low
-confidence, and leaves ambiguous names unresolved. For an unresolved call with
-a recovered receiver type, it also enumerates source methods on that declared
-type and its transitive derived types with the same name and arity. Each is a
-separate possible dispatch at low confidence; no implementation is selected.
+flow with low confidence. Calls without an exact caller and callee source
+location remain unresolved unless the extractor cannot prove a usable path and
+exactly one indexed method has the qualified name. That fallback is marked
+`low` with signature-join provenance; it does not apply to ambiguous names.
+Source-declared abstract/interface dispatch may bridge to one unique concrete
+implementation and receiver-based helper calls may be added, always as
+`possible`/`low`; ambiguous candidates remain unresolved.
+Joern contributes only source-located resolved callees; recovered receiver
+types and `methodFullName` values without source evidence are diagnostics, not
+architecture edges. Reflection, dynamic routing, and runtime-only routing are
+not added.
 
 For Kafka, SystemLens can continue a potential flow from a concrete,
 statically resolved producer topic to a persisted concrete consumer entry. It

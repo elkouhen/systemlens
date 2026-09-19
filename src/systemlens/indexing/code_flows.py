@@ -15,7 +15,7 @@ from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 from systemlens.indexing.java_symbols import JavaSymbols
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v15-qualified-dispatch-union"
+CODE_FLOW_SIGNATURE = "code-flow-v16-exact-source-dispatch"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -194,9 +194,9 @@ def materialize_codeql_code_flows(
 ) -> list[CodeFlow]:
     """Join AST method facts through resolved CodeQL calls.
 
-    Direct CodeQL pairs and bounded source-backed fallback paths are unioned.
-    Ambiguous CodeQL dispatch stays possible; synthetic dispatch requires a
-    unique implementation of a source-declared signature and hierarchy.
+    Source-located CodeQL pairs are authoritative. Missing or imperfect
+    virtual-dispatch edges may be completed by the transient source symbol
+    index, but every synthetic edge remains possible/low-confidence.
     """
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
     def normalized_method_name(name: str) -> str:
@@ -223,41 +223,36 @@ def materialize_codeql_code_flows(
         (normalized_method_name(item.qualified_method), normalized_path(item.path), item.start_line): item
         for item in methods
     }
-    methods_by_name_path: dict[tuple[str, str], list[IntegrationMethod]] = defaultdict(list)
-    methods_by_name: dict[str, list[IntegrationMethod]] = defaultdict(list)
     methods_by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
     for item in methods:
-        normalized_name = normalized_method_name(item.qualified_method)
-        methods_by_name_path[(normalized_name, normalized_path(item.path))].append(item)
-        methods_by_name[normalized_name].append(item)
         methods_by_path[normalized_path(item.path)].append(item)
     def locate(
-        name: str, path: str, line: int, *, allow_signature_fallback: bool = False
+        name: str, path: str, line: int, *, allow_signature_fallback: bool = False,
     ) -> tuple[IntegrationMethod, bool] | None:
-        """Resolve an extracted method and state whether its path was proven.
+        """Resolve a method and report whether its source path was joined.
 
-        Module-scoped CodeQL databases cannot always expose the source path of
-        a callee from another module. A unique global qualified-method match
-        remains useful, but is deliberately marked as a signature join so the
-        resulting flow cannot claim CodeQL proved both source locations.
+        A signature fallback is accepted only when the extractor explicitly
+        lacks a source path and exactly one indexed method has that qualified
+        name. It remains low-confidence evidence, never an exact CodeQL fact.
         """
         normalized_name = normalized_method_name(name)
         path = normalized_path(path)
         exact = by_locator.get((normalized_name, path, line))
         if exact is not None:
             return exact, False
-        candidates = methods_by_name_path.get((normalized_name, path), [])
-        containing = [
-            item for item in candidates if item.start_line <= line <= item.end_line
+        same_file = [
+            item for item in methods
+            if normalized_method_name(item.qualified_method) == normalized_name
+            and normalized_path(item.path) == path
+            and item.start_line <= line <= item.end_line
         ]
-        if containing:
-            return min(containing, key=lambda item: item.end_line - item.start_line), False
-        if len(candidates) == 1:
-            return candidates[0], False
-        if not allow_signature_fallback:
-            return None
-        named = methods_by_name.get(normalized_name, [])
-        return (named[0], True) if len(named) == 1 else None
+        if same_file:
+            return min(same_file, key=lambda item: item.end_line - item.start_line), False
+        if allow_signature_fallback:
+            candidates = [item for item in methods if normalized_method_name(item.qualified_method) == normalized_name]
+            if len(candidates) == 1:
+                return candidates[0], True
+        return None
 
     def locate_caller(call: CodeQLCall) -> IntegrationMethod | None:
         """Locate a caller, including a lambda's enclosing Java method.
@@ -272,6 +267,11 @@ def materialize_codeql_code_flows(
         direct = resolved[0] if resolved is not None else None
         if direct is not None:
             return direct
+        # The only name-less caller recovery supported is CodeQL's explicit
+        # synthetic anonymous/lambda callable. Ordinary unknown names must not
+        # be attributed to whichever method happens to contain the line.
+        if not call.caller.startswith("<anonymous"):
+            return None
         enclosing = [
             item for item in methods_by_path.get(normalized_path(call.caller_path), [])
             if item.start_line <= call.call_line <= item.end_line
@@ -285,7 +285,10 @@ def materialize_codeql_code_flows(
     seen_edges: set[tuple[str, str, int, str, bool]] = set()
     synthetic_calls: set[CodeQLCall] = set()
 
-    def add_edge(caller: IntegrationMethod, callee: IntegrationMethod, call: CodeQLCall, inferred: bool) -> None:
+    def add_edge(
+        caller: IntegrationMethod, callee: IntegrationMethod, call: CodeQLCall,
+        inferred: bool = False,
+    ) -> None:
         key = (caller.id, callee.id, call.call_line, call.dispatch_confidence, inferred)
         if key not in seen_edges:
             seen_edges.add(key)
@@ -294,7 +297,8 @@ def materialize_codeql_code_flows(
     for call in calls:
         caller = locate_caller(call)
         resolved_callee = locate(
-            call.callee, call.callee_path, call.callee_line, allow_signature_fallback=True
+            call.callee, call.callee_path, call.callee_line,
+            allow_signature_fallback=True,
         )
         if caller is None or resolved_callee is None:
             continue
@@ -369,12 +373,7 @@ def materialize_codeql_code_flows(
                                 for _hop, edge, signature in next_route
                             ) else "medium",
                             reason=(
-                                "A source-declared Java dispatch fallback participates in this potential cyclic path."
-                                if any(edge in synthetic_calls for _hop, edge, _signature in next_route)
-                                else
-                                "A module-local CodeQL call path was joined across modules by a unique method signature."
-                                if any(signature for _hop, _edge, signature in next_route)
-                                else "CodeQL found a cyclic call path from this indexed entry method."
+                                "CodeQL found a cyclic call path from this indexed entry method."
                             ),
                             steps=tuple(steps),
                         ))
@@ -409,11 +408,11 @@ def materialize_codeql_code_flows(
                                 path=entry.path, start_line=entry.start_line, end_line=entry.end_line,
                                 status="potential",
                                 confidence="low" if has_possible_dispatch or has_signature_join else "medium",
-                                reason=(
+                            reason=(
                                     "A source-declared Java dispatch fallback connects an indexed entry to an output through qualified types and compatible method signatures."
                                     if any(edge in synthetic_calls for _hop, edge, _signature in next_route)
                                     else
-                                    "A module-local CodeQL call path was joined across modules by a unique method signature."
+                                    "A unique indexed method signature joined a module-local CodeQL call."
                                     if has_signature_join
                                     else
                                     "CodeQL found a possible virtual-dispatch path from an indexed entry method to an indexed output method."

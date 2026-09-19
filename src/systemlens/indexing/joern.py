@@ -20,53 +20,20 @@ class JoernError(RuntimeError):
     pass
 
 
-# ``callee`` is Joern's resolved call-graph traversal. For an unresolved call,
-# the CPG query also traverses a recovered receiver type and its derived type
-# declarations. This is the conservative analogue of CodeQL's viable virtual
-# dispatch candidates: every implementation is emitted as a possible target.
-# When Java type recovery retains only ``methodFullName``, emit that target as a
-# possible signature candidate. The materializer accepts it only for one unique
-# indexed method; it never invents a target. Tab-separated output is supported
-# by every Joern shell version; source evidence paths cannot contain tabs.
+# ``callee`` is Joern's resolved call-graph traversal. Unresolved calls are
+# deliberately omitted: receiver-type expansion and ``methodFullName`` joins
+# are useful diagnostics, but are not source-proven call edges. Tab-separated
+# output is supported by every Joern shell version; source evidence paths
+# cannot contain tabs.
 _CALLS_SCRIPT = r'''@main def exec(cpgFile: String, outFile: String) = {
   importCpg(cpgFile)
   val rows = cpg.call.flatMap { call =>
     call.method.headOption.flatMap { caller =>
       val resolved = call.callee.filterNot(_.isExternal).toList
-      val receiverTargets = if (resolved.nonEmpty) Nil else {
-        val arity = call.argument.size
-        call.receiver.typeFullName.toList.flatMap { receiverType =>
-          cpg.typeDecl.filter(_.fullName == receiverType).toList.flatMap { base =>
-            (base :: base.derivedTypeDeclTransitive.toList).flatMap(
-              _.method.filter(method => !method.isExternal && method.name == call.name && method.parameter.size == arity).toList
-            )
-          }
-        }.groupBy(_.fullName).values.map(_.head).toList
-      }
-      val encoded = if (resolved.nonEmpty) resolved.map { callee =>
+      val encoded = resolved.map { callee =>
         List(caller.fullName, caller.filename, caller.lineNumber.getOrElse(0).toString,
           callee.fullName, callee.filename, callee.lineNumber.getOrElse(0).toString,
           call.lineNumber.getOrElse(0).toString, "exact").mkString("\t")
-      } else receiverTargets.map { callee =>
-        List(caller.fullName, caller.filename, caller.lineNumber.getOrElse(0).toString,
-          callee.fullName, callee.filename, callee.lineNumber.getOrElse(0).toString,
-          call.lineNumber.getOrElse(0).toString, "possible").mkString("\t")
-      }
-      if (encoded.nonEmpty) encoded
-      else {
-        val target = call.methodFullName
-        if (target.nonEmpty && !target.startsWith("<")) List(
-          List(
-            caller.fullName,
-            caller.filename,
-            caller.lineNumber.getOrElse(0).toString,
-            target,
-            "",
-            "0",
-            call.lineNumber.getOrElse(0).toString,
-            "possible"
-          ).mkString("\t")
-        ) else Nil
       }
     }
   }.toList.sorted

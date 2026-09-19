@@ -559,7 +559,7 @@ class OrderPublisher {
     ]
 
 
-def test_joern_signature_only_call_joins_a_unique_indexed_method(tmp_path: Path) -> None:
+def test_joern_signature_only_call_uses_explicit_low_confidence_join(tmp_path: Path) -> None:
     source = "orders/src/main/java/com/example/OrderController.java"
     target = "orders/src/main/java/com/example/OrderPublisher.java"
     for path, content in {
@@ -628,7 +628,7 @@ def test_codeql_call_normalizes_method_signature_and_path_spelling(tmp_path: Pat
     assert flows[0].steps[-1].name == "orders.out"
 
 
-def test_codeql_call_joins_unique_cross_module_signature_with_low_confidence(tmp_path: Path) -> None:
+def test_codeql_call_without_callee_source_location_uses_explicit_low_confidence_join(tmp_path: Path) -> None:
     source = "orders/src/main/java/com/example/OrderController.java"
     target = "publisher/src/main/java/com/example/OrderPublisher.java"
     for path, content in {
@@ -665,7 +665,7 @@ class OrderPublisher { void send() { kafka.send(); } }
 
     assert len(flows) == 1
     assert flows[0].confidence == "low"
-    assert "unique method signature" in flows[0].reason
+    assert "unique indexed method signature" in flows[0].reason
 
 
 def test_codeql_call_bridges_unique_cross_module_output_implementation(tmp_path: Path) -> None:

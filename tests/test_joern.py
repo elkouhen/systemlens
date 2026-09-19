@@ -54,6 +54,5 @@ def test_extract_joern_calls_parses_resolved_calls_and_prefixes_paths(
         "com.example.B.send", "module-a/src/main/java/B.java", 2, 3,
     )]
     assert "call.callee.filterNot(_.isExternal).toList" in joern._CALLS_SCRIPT
-    assert '"possible"' in joern._CALLS_SCRIPT
-    assert "derivedTypeDeclTransitive" in joern._CALLS_SCRIPT
-    assert "call.receiver.typeFullName" in joern._CALLS_SCRIPT
+    assert '"possible"' not in joern._CALLS_SCRIPT
+    assert "receiverTargets" not in joern._CALLS_SCRIPT
