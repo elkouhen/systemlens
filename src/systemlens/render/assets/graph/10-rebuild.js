@@ -1028,6 +1028,28 @@
           }
           return true;
         };
+        const portPathIsExternal = (points, sourceSide, targetSide) => {
+          if (points.length < 2) return false;
+          const [start, next] = points;
+          const previous = points[points.length - 2];
+          const end = points[points.length - 1];
+          const epsilon = 1;
+          const leavesSource = sourceSide === "EAST"
+            ? next[0] >= start[0] - epsilon
+            : sourceSide === "WEST"
+              ? next[0] <= start[0] + epsilon
+              : sourceSide === "SOUTH"
+                ? next[1] >= start[1] - epsilon
+                : previous[1] <= start[1] + epsilon;
+          const entersTarget = targetSide === "EAST"
+            ? previous[0] <= end[0] + epsilon
+            : targetSide === "WEST"
+              ? previous[0] >= end[0] - epsilon
+              : targetSide === "SOUTH"
+                ? previous[1] <= end[1] + epsilon
+                : previous[1] >= end[1] - epsilon;
+          return leavesSource && entersTarget;
+        };
         const hybridPath = (start, end, sourceId, targetId, occupiedSegments = [], forceCurve = false) => {
           const padding = 14;
           const obstacles = obstacleBounds
@@ -1038,7 +1060,9 @@
               right: obstacle.right + padding,
               bottom: obstacle.bottom + padding,
             }));
-          if (!forceCurve && pathIsClear([start, end], obstacles, occupiedSegments)) {
+          if (!forceCurve
+            && portPathIsExternal([start, end], "EAST", "WEST")
+            && pathIsClear([start, end], obstacles, occupiedSegments)) {
             return { d: `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`, points: [start, end], obstacleRouted: false };
           }
           const deltaX = end[0] - start[0];
@@ -1078,7 +1102,8 @@
               const t = step / 32;
               points.push(cubicPoint(midpoint, controlPoints[2], controlPoints[3], end, t));
             }
-            if (pathIsClear(points, obstacles, occupiedSegments)) {
+            if (portPathIsExternal(points, "EAST", "WEST")
+              && pathIsClear(points, obstacles, occupiedSegments)) {
               candidates.push({
                 d: `M ${start[0]} ${start[1]} C ${controlPoints[0][0]} ${controlPoints[0][1]}, ${controlPoints[1][0]} ${controlPoints[1][1]}, ${midpoint[0]} ${midpoint[1]} C ${controlPoints[2][0]} ${controlPoints[2][1]}, ${controlPoints[3][0]} ${controlPoints[3][1]}, ${end[0]} ${end[1]}`,
                 points,
@@ -1123,6 +1148,19 @@
         const occupiedCallGraphSegments = [];
         const libavoidNodes = new Map();
         const libavoidEdges = [];
+        const addLibavoidObstacle = card => {
+          const nodeId = card.dataset.nodeId;
+          if (libavoidNodes.has(nodeId)) return;
+          const bounds = card.getBoundingClientRect();
+          libavoidNodes.set(nodeId, {
+            id: nodeId,
+            x: bounds.left - overlayBounds.left,
+            y: bounds.top - overlayBounds.top,
+            width: bounds.width,
+            height: bounds.height,
+            ports: [],
+          });
+        };
         const ensureLibavoidNode = (card, bounds, anchor, portId, side) => {
           const nodeId = card.dataset.nodeId;
           if (!libavoidNodes.has(nodeId)) {
@@ -1138,10 +1176,20 @@
           const node = libavoidNodes.get(nodeId);
           if (!node.ports.some(port => port.id === portId)) {
             const anchorBounds = (anchor || card).getBoundingClientRect();
+            const portX = side === "EAST"
+              ? anchorBounds.right - bounds.left
+              : side === "WEST"
+                ? anchorBounds.left - bounds.left
+                : anchorBounds.left + anchorBounds.width / 2 - bounds.left;
+            const portY = side === "SOUTH"
+              ? anchorBounds.bottom - bounds.top
+              : side === "NORTH"
+                ? anchorBounds.top - bounds.top
+                : anchorBounds.top + anchorBounds.height / 2 - bounds.top;
             node.ports.push({
               id: portId,
-              x: anchorBounds.left + anchorBounds.width / 2 - bounds.left,
-              y: anchorBounds.top + anchorBounds.height / 2 - bounds.top,
+              x: portX,
+              y: portY,
               width: 1,
               height: 1,
               layoutOptions: { "org.eclipse.elk.port.side": side },
@@ -1149,6 +1197,13 @@
           }
           return nodeId;
         };
+        // Libavoid must know every visible microservice, not only the source
+        // and target of the edges currently being routed. Otherwise an
+        // unrelated service is invisible to the obstacle model and an arc can
+        // cross straight through its card.
+        [...nodeLabelOverlay.querySelectorAll(".graph-node-card-label")]
+          .filter(card => nodeDataById.get(card.dataset.nodeId)?.kind === "microservice")
+          .forEach(addLibavoidObstacle);
         const routePointsToPath = (route, start, end, sourceId, targetId) => {
           if (!route?.sourcePoint || !route?.targetPoint) return null;
           const points = [route.sourcePoint, ...(route.bendPoints || []), route.targetPoint]
@@ -1161,33 +1216,49 @@
             const obstacles = obstacleBounds
               .filter(obstacle => ![sourceId, targetId].includes(obstacle.id))
               .map(obstacle => ({
-                left: obstacle.left - 14,
-                top: obstacle.top - 14,
-                right: obstacle.right + 14,
-                bottom: obstacle.bottom + 14,
+                left: obstacle.left - overlayBounds.left - 14,
+                top: obstacle.top - overlayBounds.top - 14,
+                right: obstacle.right - overlayBounds.left + 14,
+                bottom: obstacle.bottom - overlayBounds.top + 14,
               }));
-            const laneCandidates = [
-              Math.max(start[1], end[1]) + 80,
-              Math.min(start[1], end[1]) - 80,
-              (start[1] + end[1]) / 2 + 120,
-              (start[1] + end[1]) / 2 - 120,
-            ].map(lane => Math.max(42, Math.min(overlayBounds.height - 42, lane)));
-            const rectangular = laneCandidates.map(lane => [
-              start,
-              [start[0], lane],
-              [end[0], lane],
-              end,
-            ]).find(candidate => pathIsClear(candidate, obstacles));
-            if (rectangular) points.splice(0, points.length, ...rectangular);
+            if (!pathIsClear([start, end], obstacles)) {
+              const laneCandidates = [
+                Math.max(start[1], end[1]) + 80,
+                Math.min(start[1], end[1]) - 80,
+                (start[1] + end[1]) / 2 + 120,
+                (start[1] + end[1]) / 2 - 120,
+              ].map(lane => Math.max(42, Math.min(overlayBounds.height - 42, lane)));
+              const rectangular = laneCandidates.map(lane => [
+                start,
+                [start[0], lane],
+                [end[0], lane],
+                end,
+              ]).find(candidate => pathIsClear(candidate, obstacles));
+              if (rectangular) points.splice(0, points.length, ...rectangular);
+            }
           }
-          // libavoid has no viewport boundary obstacle and may select y=0 or
-          // y=height for a detour. Keep intermediate horizontal lanes inside
-          // the readable graph area while preserving the port endpoints.
+          // Libavoid receives virtual viewport obstacles below, so modifying
+          // its points after routing would invalidate its obstacle guarantees.
+          // Reject an out-of-bounds route and let the geometry fallback choose
+          // a safe path instead.
           const viewportMargin = 28;
-          points.slice(1, -1).forEach(point => {
-            point[0] = Math.max(viewportMargin, Math.min(overlayBounds.width - viewportMargin, point[0]));
-            point[1] = Math.max(viewportMargin, Math.min(overlayBounds.height - viewportMargin, point[1]));
-          });
+          const routeInsideViewport = points.slice(1, -1).every(([x, y]) => (
+            x >= viewportMargin
+            && x <= overlayBounds.width - viewportMargin
+            && y >= viewportMargin
+            && y <= overlayBounds.height - viewportMargin
+          ));
+          if (!routeInsideViewport) return null;
+          const routeObstacles = obstacleBounds
+            .filter(obstacle => ![sourceId, targetId].includes(obstacle.id))
+            .map(obstacle => ({
+              left: obstacle.left - overlayBounds.left - 14,
+              top: obstacle.top - overlayBounds.top - 14,
+              right: obstacle.right - overlayBounds.left + 14,
+              bottom: obstacle.bottom - overlayBounds.top + 14,
+            }));
+          if (!portPathIsExternal(points, "EAST", "WEST")) return null;
+          if (!pathIsClear(points, routeObstacles)) return null;
           const roundedPath = points.length < 3
             ? `M ${points[0][0]} ${points[0][1]} L ${points[points.length - 1][0]} ${points[points.length - 1][1]}`
             : points.slice(1, -1).reduce((path, point, index) => {
@@ -1239,15 +1310,11 @@
           const targetCardBounds = target.getBoundingClientRect();
           const sourceBounds = sourceAnchor.getBoundingClientRect();
           const targetBounds = targetAnchor.getBoundingClientRect();
-          const sourceCenter = [sourceBounds.left + sourceBounds.width / 2, sourceBounds.top + sourceBounds.height / 2];
-          const targetCenter = [targetBounds.left + targetBounds.width / 2, targetBounds.top + targetBounds.height / 2];
-          const deltaX = targetCenter[0] - sourceCenter[0];
-          const deltaY = targetCenter[1] - sourceCenter[1];
-          // LibAvoid receives the actual port centers. The route therefore
-          // starts at OUT and terminates at IN, rather than stopping at a
-          // card edge and only looking visually connected to a port.
-          const start = sourceCenter;
-          const end = targetCenter;
+          // OUT arcs leave through the right edge of their badge and IN arcs
+          // arrive at its left edge. Connecting to the badge centers makes
+          // arrowheads look detached and hides the direction of the arc.
+          const start = [sourceBounds.right, sourceBounds.top + sourceBounds.height / 2];
+          const end = [targetBounds.left, targetBounds.top + targetBounds.height / 2];
           const startPoint = [start[0] - overlayBounds.left, start[1] - overlayBounds.top];
           const endPoint = [end[0] - overlayBounds.left, end[1] - overlayBounds.top];
           const resolvedEdgeKey = edgeKey || `call-edge-${index}`;
@@ -1257,8 +1324,8 @@
           const targetPortId = (link.endpoint_ids || []).find(endpointId => (
             anchorsByEndpointId.get(endpointId)?.classList.contains("is-in")
           )) || `${resolvedEdgeKey}-target`;
-          const sourceSide = Math.abs(deltaX) >= Math.abs(deltaY) ? "EAST" : "SOUTH";
-          const targetSide = Math.abs(deltaX) >= Math.abs(deltaY) ? "WEST" : "NORTH";
+          const sourceSide = "EAST";
+          const targetSide = "WEST";
           ensureLibavoidNode(source, sourceCardBounds, sourceAnchor, sourcePortId, sourceSide);
           ensureLibavoidNode(target, targetCardBounds, targetAnchor, targetPortId, targetSide);
           libavoidEdges.push({
@@ -1334,6 +1401,13 @@
           });
           path.addEventListener("pointerleave", () => flowTooltipOverlay.replaceChildren());
         };
+        const addArcHitArea = path => {
+          const hitArea = path.cloneNode();
+          hitArea.classList.add("graph-arc-hit-area");
+          hitArea.removeAttribute("marker-end");
+          portPathOverlay.append(hitArea);
+          return hitArea;
+        };
         selectedCallGraphLinks.forEach(({ link, index, edgeKey }) => {
           const routed = callGraphPath(link, edgeKey, index);
           if (!routed) return;
@@ -1388,10 +1462,11 @@
           arcLabel.setAttribute("x", String(labelPoint[0]));
           arcLabel.setAttribute("y", String(labelPoint[1] - 8));
           portPathOverlay.append(arcLabel);
-          path.addEventListener("click", event => {
+          const hitArea = addArcHitArea(path);
+          hitArea.addEventListener("click", event => {
             toggleAnalysisEndpoint(sourcePort?.endpoint_id || targetPort?.endpoint_id, event);
           });
-          bindArcTooltip(path, link, sourcePort, targetPort);
+          bindArcTooltip(hitArea, link, sourcePort, targetPort);
         });
         const libavoidRouteKeyForGeometry = [
           ...[...libavoidNodes.values()].map(node => (
@@ -1468,11 +1543,12 @@
           path.setAttribute("marker-end", "url(#graph-port-arrow)");
           path.setAttribute("d", portPath(input, output));
           portPathOverlay.append(path);
-          path.addEventListener("click", event => {
+          const hitArea = addArcHitArea(path);
+          hitArea.addEventListener("click", event => {
             toggleAnalysisEndpoint(link.output_endpoint_id || link.input_endpoint_id, event);
           });
           bindArcTooltip(
-            path,
+            hitArea,
             {
               kind: "internal",
               label: "Flux interne",
@@ -1496,11 +1572,12 @@
           path.setAttribute("marker-end", "url(#graph-port-arrow)");
           path.setAttribute("d", portPath(source, target));
           portPathOverlay.append(path);
-          path.addEventListener("click", event => {
+          const hitArea = addArcHitArea(path);
+          hitArea.addEventListener("click", event => {
             toggleAnalysisEndpoint(link.source_endpoint_id || link.target_endpoint_id, event);
           });
           bindArcTooltip(
-            path,
+            hitArea,
             {
               kind: link.kind,
               label: link.kind === "kafka" ? source.dataset.endpointId : "HTTP",

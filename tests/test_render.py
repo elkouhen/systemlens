@@ -755,6 +755,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'if (link.kind === "kafka") arcLabel.classList.add("is-kafka");' in document
     assert 'title.textContent = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;' in document
     assert 'arcLabel.textContent = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;' in document
+    assert 'const addArcHitArea = path => {' in document
+    assert 'hitArea.classList.add("graph-arc-hit-area");' in document
+    assert ".graph-arc-hit-area { fill: none; stroke: transparent !important; stroke-width: 14px !important;" in document
     assert ".graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2;" in document
     assert ".graph-call-label { fill: #6d28d9;" in document
     assert ".graph-call-label.is-kafka { fill: #008f69; }" in document
@@ -776,7 +779,19 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "graphState.analysisPortEndpointId = graphState.analysisPortEndpointId === endpointId" in document
     assert 'event.target.closest?.(".graph-node-port-reference")' in document
     assert "const toggleAnalysisEndpoint = (endpointId, event) =>" in document
-    assert 'path.addEventListener("click", event =>' in document
+    assert 'hitArea.addEventListener("click", event =>' in document
+    assert "if (!routeInsideViewport) return null;" in document
+    assert "if (!pathIsClear(points, routeObstacles)) return null;" in document
+    assert 'if (!portPathIsExternal(points, "EAST", "WEST")) return null;' in document
+    assert 'portPathIsExternal([start, end], "EAST", "WEST")' in document
+    assert "if (!pathIsClear([start, end], obstacles))" in document
+    assert "obstacle.left - overlayBounds.left - 14" in document
+    assert 'const sourceSide = "EAST";' in document
+    assert 'const targetSide = "WEST";' in document
+    assert 'const start = [sourceBounds.right, sourceBounds.top + sourceBounds.height / 2];' in document
+    assert 'const end = [targetBounds.left, targetBounds.top + targetBounds.height / 2];' in document
+    assert 'const addLibavoidObstacle = card =>' in document
+    assert 'nodeDataById.get(card.dataset.nodeId)?.kind === "microservice"' in document
     assert ".graph-call-path.is-analysis-selected { stroke-width: 4;" in document
     assert ".graph-call-label.is-analysis-selected { font-size: 13px;" in document
     assert "selectedEndpointIds.has(link.target_endpoint_id)" in document

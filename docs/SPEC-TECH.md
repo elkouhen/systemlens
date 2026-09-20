@@ -426,9 +426,21 @@ use orthogonal straight-segment routes in the SVG overlay between their actual
 output and input port anchors. ELK.js supplies the positioned graph and the
 browser libavoid WASM router receives fixed node rectangles plus explicit port
 sides, then returns absolute source, bend, and target points. The router
-excludes the source and target card rectangles with padding and nudges parallel
-routes. Arc labels use the same protocol-specific color as their associated
-paths, including the theme-specific dark-mode colors. In the focused
+includes every visible microservice card as an obstacle, not only the source
+and target cards of the routed edges; route validation excludes the source and
+target cards themselves. It nudges parallel routes. OUT arcs always leave
+through the right edge of their port anchor and
+IN arcs always arrive at the left edge of their port anchor, regardless of the
+relative position of the endpoint cards. Route validation also requires the
+first segment to leave the OUT side and the final segment to approach the IN
+side; a route that immediately turns through its source or target card is
+rejected. Returned
+Libavoid points are never clamped after routing: routes that leave the safe
+viewport or intersect an expanded obstacle are rejected and use the existing
+geometry fallback. Arc labels use the same protocol-specific color as their
+associated paths, including the theme-specific dark-mode colors. A two-point
+route remains direct when the segment is clear; a rectangular detour is created
+only when an obstacle blocks that direct segment. In the focused
 call-graph view, endpoint arcs are represented by the
 projected service edge and are not drawn a second time in the port overlay.
 While a code flow is selected, port anchors are interactive analysis controls:
@@ -438,6 +450,9 @@ port relation, and arc label; clicking the same port or arc clears the focus,
 while selecting another port or arc moves it.
 The port gesture is isolated from the card drag and node-selection handlers, so
 analysis never changes the graph view or camera and does not persist data.
+Every visible SVG arc has a transparent, wider hit-area path layered above it;
+the hit area receives selection and tooltip events without changing the visual
+stroke width or routing geometry.
 The export indexes displayed nodes and visual edges by
 persisted endpoint ID once; reconciliation requires exactly one endpoint-backed
 candidate and never selects a relation from a route label, topic name, or first

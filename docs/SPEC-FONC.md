@@ -300,6 +300,8 @@ analysis mode. The selected arc, its label, and its endpoint ports are
 highlighted; clicking the same port or arc clears the focus, and clicking
 another port or arc moves it. This interaction does not change the view,
 selected flow, camera, or persisted facts.
+The visible arc remains visually thin, but its interactive hit area is wider so
+that selecting an arc remains usable in a dense graph.
 Its primary card title is the input trigger, while the Java method remains
 visible as source evidence. Flow selection reconciles every integration step
 only through its persisted endpoint identifier: route labels and resource names
