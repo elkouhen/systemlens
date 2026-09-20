@@ -107,22 +107,76 @@ def _networkx_call_graph(
 
     for source_id, target_id in zip(endpoint_steps, endpoint_steps[1:]):
         add_relation(source_id, target_id)
+    # A producer can have several proven consumers. Keep all of those
+    # branches in the exported call graph even though the persisted CodeFlow
+    # remains one representative endpoint path for compatibility.
+    for source_id in endpoint_steps:
+        source_endpoint = endpoint_by_id.get(source_id)
+        if source_endpoint is None or (source_endpoint.system, source_endpoint.role) != ("kafka", "produce"):
+            continue
+        for edge in edges:
+            if edge.from_endpoint.id == source_id and edge.to_endpoint is not None:
+                add_relation(source_id, edge.to_endpoint.id)
     if endpoint_steps:
         first_id = endpoint_steps[0]
-        for edge in edges:
-            if edge.to_endpoint is not None and edge.to_endpoint.id == first_id:
-                add_relation(edge.from_endpoint.id, first_id)
+        first_endpoint = endpoint_by_id[first_id]
+        incoming_by_source = {
+            edge.from_endpoint.id: edge
+            for edge in edges
+            if edge.to_endpoint is not None and edge.to_endpoint.id == first_id
+        }
+        incoming = list(incoming_by_source.values())
+        # An upstream service is part of the rooted call flow only for a
+        # message entry with one proven producer. HTTP entries are already
+        # roots, and a Kafka fan-in must not manufacture a root by selecting
+        # one of several producers.
+        if (
+            (first_endpoint.system, first_endpoint.role) == ("kafka", "consume")
+            and len(incoming) == 1
+        ):
+            add_relation(incoming[0].from_endpoint.id, first_id)
         last_id = endpoint_steps[-1]
         for edge in edges:
             if edge.from_endpoint.id == last_id and edge.to_endpoint is not None:
                 add_relation(last_id, edge.to_endpoint.id)
 
-    condensation = nx.condensation(graph)
-    component_order: list[str] = []
-    for component_id in nx.topological_sort(condensation):
-        component_order.extend(sorted(condensation.nodes[component_id]["members"]))
+    # The call-flow view is intentionally an arborescence, even when the
+    # persisted architecture contains fan-in or cycles.  Pick one stable root
+    # and keep the first reachable parent for every service.  This preserves
+    # all proven branches from that root, while preventing a second root or a
+    # back-edge from turning the exported view into a disconnected graph/DAG.
+    first_service = service_by_endpoint.get(endpoint_steps[0]) if endpoint_steps else None
+    roots = sorted(node for node in graph if graph.in_degree(node) == 0)
+    upstream_roots = [
+        candidate for candidate in roots
+        if first_service is not None and nx.has_path(graph, candidate, first_service)
+    ]
+    if len(upstream_roots) == 1:
+        root = upstream_roots[0]
+    elif first_service is not None:
+        root = first_service
+    else:
+        root = sorted(graph.nodes)[0] if graph.nodes else None
+
+    tree = nx.MultiDiGraph()
+    if root is not None:
+        tree.add_node(root)
+        visited = {root}
+        pending = [root]
+        while pending:
+            source = pending.pop(0)
+            for target in sorted(graph.successors(source)):
+                if target in visited:
+                    continue
+                visited.add(target)
+                pending.append(target)
+                tree.add_node(target)
+                for key, data in sorted(graph[source][target].items(), key=lambda item: str(item[0])):
+                    tree.add_edge(source, target, key=key, **data)
+
+    component_order = list(nx.topological_sort(tree))
     return {
-        "nodes": sorted(graph.nodes),
+        "nodes": sorted(tree.nodes),
         "node_order": component_order,
         "edges": [
             {
@@ -133,11 +187,62 @@ def _networkx_call_graph(
                 "endpoint_ids": list(data.get("endpoint_ids", [])),
             }
             for source, target, _key, data in sorted(
-                graph.edges(keys=True, data=True),
+                tree.edges(keys=True, data=True),
                 key=lambda item: (item[0], item[1], str(item[2])),
             )
         ],
     }
+
+
+def _distinct_export_flows(
+    flows: list[CodeFlow],
+    endpoints_by_service: dict[str, list[MessageEndpoint]],
+    edges: list[GraphEdge],
+) -> list[tuple[CodeFlow, dict[str, object], int]]:
+    """Collapse flows that render to the same service call graph.
+
+    Indexing keeps distinct evidence and diagnostics. The HTML flow picker,
+    however, should not present the same graph repeatedly just because CodeQL
+    found several equivalent dispatch routes.
+    """
+    confidence_rank = {"high": 0, "medium": 1, "low": 2}
+    status_rank = {"complete": 0, "potential": 1, "cycle": 2}
+    grouped: dict[
+        tuple[tuple[str, ...], tuple[tuple[str, str, str, str], ...]],
+        list[tuple[CodeFlow, dict[str, object]]],
+    ] = {}
+    for flow in flows:
+        call_graph = _networkx_call_graph(flow, endpoints_by_service, edges)
+        signature = (
+            tuple(call_graph["nodes"]),
+            tuple(
+                (
+                    edge["source"], edge["target"], edge["kind"], edge["label"]
+                )
+                for edge in call_graph["edges"]
+            ),
+        )
+        grouped.setdefault(signature, []).append((flow, call_graph))
+
+    distinct: list[tuple[CodeFlow, dict[str, object], int]] = []
+    for parallel in grouped.values():
+        flow, call_graph = min(
+            parallel,
+            key=lambda item: (
+                status_rank.get(item[0].status, 99),
+                confidence_rank.get(item[0].confidence, 99),
+                len(item[0].steps),
+                item[0].module,
+                item[0].path,
+                item[0].start_line,
+                item[0].id,
+            ),
+        )
+        distinct.append((flow, call_graph, len(parallel)))
+    return sorted(
+        distinct,
+        key=lambda item: (item[0].module, item[0].path, item[0].start_line, item[0].id),
+    )
 
 def render_graph_html(
     endpoints_by_service: dict[str, list[MessageEndpoint]],
@@ -210,9 +315,10 @@ def render_graph_html(
             "confidence": flow.confidence,
             "reconciliation": flow.reconciliation,
             "alternative_count": flow.alternative_count,
+            "equivalent_count": equivalent_count,
             "reason": flow.reason,
             "vscode_uri": flow_vscode_uri(flow),
-            "call_graph": _networkx_call_graph(flow, endpoints_by_service, edges),
+            "call_graph": call_graph,
             "steps": [
                 {
                     "order": step.order,
@@ -228,11 +334,13 @@ def render_graph_html(
                 for step in flow.steps
             ],
         }
-        for flow in (code_flows or [])
+        for flow, call_graph, equivalent_count in _distinct_export_flows(
+            list(code_flows or []), endpoints_by_service, edges
+        )
     ]
     view_model["code_flows"] = serialized_code_flows
     view_model["progress_notice"] = progress_notice
-    flow_counts = Counter(flow.module for flow in (code_flows or []))
+    flow_counts = Counter(flow["module"] for flow in serialized_code_flows)
     nodes = cast(list[dict[str, object]], view_model["nodes"])
     for node in nodes:
         name = node.get("name")

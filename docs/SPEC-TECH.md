@@ -172,8 +172,9 @@ never presented as a complete parse.
 
 `CodeFlow` is a persisted, ordered potential path through one Java method or a
 chain of Java methods resolved by the selected call-graph engine. Its
-first `CodeFlowStep` is an indexed HTTP or Kafka entry point; later steps are
-HTTP calls, Kafka publications, or MongoDB reads/writes located within the
+first `CodeFlowStep` is an indexed HTTP/Kafka entry point or a source-evidenced
+`@Scheduled(cron = "...")` trigger; later steps are HTTP calls, Kafka
+publications, or MongoDB reads/writes located within the
 same Tree-sitter `method_declaration`. Steps retain relative evidence paths and
 line ranges. Flow identity uses the module, relative path, qualified method,
 and trigger semantics rather than line numbers, so ordinary line movement does
@@ -236,12 +237,31 @@ layout remains a rendering concern handled by the browser graph stack. Each expo
 also carries a NetworkX-derived service subgraph and deterministic component
 order; the Flux view uses that snapshot instead of reconstructing the call
 sequence from display labels.
+Typed Kafka publications are expanded as fan-out branches only within an
+existing input-triggered flow. A publication without an input trigger does not
+become a flow root. The exception is a publisher explicitly annotated with a
+cron expression: it creates one `CodeFlow` per matching consumer whose first
+step is `cron_entry`, followed by the publication and consumer entry. A
+missing or conflicting message type prevents this fan-out join rather than
+guessing a branch.
+The exported call-graph projection is always a rooted arborescence: its root is
+the first persisted endpoint, or the unique proven producer immediately before
+a Kafka entry. For Kafka fan-in, no producer is selected arbitrarily. A
+breadth-first traversal keeps each reachable service under its first parent,
+omitting only disconnected alternatives and back-edges. This is a presentation
+projection of the persisted evidence; cycle `CodeFlow` records remain intact.
 Within that subgraph, parallel evidence rows are keyed by directed service
 pair, protocol and resource label. Duplicate rows select one deterministic
 endpoint pair, preferring a pair that is consecutive in the persisted flow and
 then the lexicographically smallest pair. The browser receives only these
 canonical service arcs; it does not append a second set reconstructed from
 port links.
+Before serialization, HTML export groups flows by their complete rendered
+call-graph signature (nodes, directed arcs, protocol and resource labels).
+Equivalent CodeQL or continuation routes produce one visible representative,
+chosen by status, confidence, route length and stable source ordering;
+`equivalent_count` retains the number of persisted variants. Index storage is
+not modified by this presentation deduplication.
 
 Each persisted `CodeFlow` also carries a `reconciliation` status. `complete`
 means every endpoint step exists in the same snapshot and every cross-service

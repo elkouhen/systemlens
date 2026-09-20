@@ -165,6 +165,95 @@ def test_global_input_label_references_its_local_output() -> None:
     }
 
 
+def test_call_graph_retains_all_typed_kafka_fanout_branches() -> None:
+    producer = replace(_kafka_endpoint("produce", "OrderCreated", "Publisher.java"), id="orders-out")
+    inventory = replace(_kafka_endpoint("consume", "OrderCreated", "Inventory.java"), id="inventory-in")
+    restock = replace(_kafka_endpoint("consume", "OrderCreated", "Restock.java"), id="restock-in")
+    data = _html_graph_data(render_graph_html(
+        {"orders": [producer], "inventory": [inventory], "restock": [restock]},
+        [
+            GraphEdge("kafka", "orders", "inventory", producer, inventory),
+            GraphEdge("kafka", "orders", "restock", producer, restock),
+        ],
+        code_flows=[CodeFlow(
+            id="fanout-flow", module="orders", method="ScheduledPublisher.publish",
+            path="Publisher.java", start_line=1, end_line=2,
+            status="potential", confidence="medium", reason="fanout",
+            steps=(
+                CodeFlowStep(1, "message_publish", "orders.created", "Publisher.java", 1, 1, producer.id),
+                CodeFlowStep(2, "message_entry", "orders.created", "Inventory.java", 1, 1, inventory.id),
+            ),
+        )],
+    ))
+    flow_graph = data["code_flows"][0]["call_graph"]
+    assert {
+        (edge["source"], edge["target"])
+        for edge in flow_graph["edges"]
+    } == {("orders", "inventory"), ("orders", "restock")}
+
+
+def test_export_collapses_equivalent_call_graphs() -> None:
+    producer = replace(_kafka_endpoint("produce", "OrderCreated", "Publisher.java"), id="orders-out")
+    consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Inventory.java"), id="inventory-in")
+    steps = (
+        CodeFlowStep(1, "message_publish", "orders.created", "Publisher.java", 1, 1, producer.id),
+        CodeFlowStep(2, "message_entry", "orders.created", "Inventory.java", 1, 1, consumer.id),
+    )
+    first = CodeFlow(
+        id="first-flow", module="orders", method="Publisher.publish",
+        path="Publisher.java", start_line=1, end_line=2,
+        status="potential", confidence="medium", reason="first", steps=steps,
+    )
+    duplicate = replace(first, id="duplicate-flow", reason="equivalent route")
+    data = _html_graph_data(render_graph_html(
+        {"orders": [producer], "inventory": [consumer]},
+        [GraphEdge("kafka", "orders", "inventory", producer, consumer)],
+        code_flows=[first, duplicate],
+    ))
+    assert len(data["code_flows"]) == 1
+    assert data["code_flows"][0]["equivalent_count"] == 2
+
+
+def test_call_graph_is_rooted_when_architecture_has_fan_in_or_cycles() -> None:
+    first_producer = replace(_kafka_endpoint("produce", "OrderCreated", "Orders.java"), id="orders-out")
+    second_producer = replace(_kafka_endpoint("produce", "OrderCreated", "LegacyOrders.java"), id="legacy-orders-out")
+    consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Payments.java"), id="payments-in")
+    data = _html_graph_data(render_graph_html(
+        {"orders": [first_producer], "legacy": [second_producer], "payments": [consumer]},
+        [
+            GraphEdge("kafka", "orders", "payments", first_producer, consumer),
+            GraphEdge("kafka", "legacy", "payments", second_producer, consumer),
+        ],
+        code_flows=[CodeFlow(
+            id="fan-in-flow", module="payments", method="PaymentHandler.handle",
+            path="Payments.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_entry", "orders.created", "Payments.java", 1, 1, consumer.id),),
+        )],
+    ))
+    flow_graph = data["code_flows"][0]["call_graph"]
+    incoming = {edge["target"] for edge in flow_graph["edges"]}
+    assert len(set(flow_graph["nodes"]) - incoming) == 1
+    assert set(flow_graph["nodes"]) - incoming == {"payments"}
+
+    cycle_a = replace(_kafka_endpoint("produce", "OrderCreated", "A.java"), id="a-out")
+    cycle_b = replace(_kafka_endpoint("consume", "OrderCreated", "B.java"), id="b-in")
+    cycle_data = _html_graph_data(render_graph_html(
+        {"a": [cycle_a], "b": [cycle_b]},
+        [
+            GraphEdge("kafka", "a", "b", cycle_a, cycle_b),
+            GraphEdge("kafka", "b", "a", cycle_b, cycle_a),
+        ],
+        code_flows=[CodeFlow(
+            id="cycle-flow", module="a", method="A.publish",
+            path="A.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_publish", "orders.created", "A.java", 1, 1, cycle_a.id),),
+        )],
+    ))
+    cycle_graph = cycle_data["code_flows"][0]["call_graph"]
+    cycle_incoming = {edge["target"] for edge in cycle_graph["edges"]}
+    assert len(set(cycle_graph["nodes"]) - cycle_incoming) == 1
 def test_graph_keeps_unmatched_and_dynamic_kafka_evidence() -> None:
     producer = replace(_kafka_endpoint("produce", "OrderCreated", "Publisher.java"), id="orders-out")
     dynamic_consumer = replace(
@@ -432,10 +521,11 @@ def test_graph_html_marks_only_the_selected_call_graph_entry_service_as_root() -
     assert not any("is_graph_root" in node for node in graph_data["nodes"])
     assert 'graphState.codeFlowRootNodeId === id' in document
     assert 'codeFlowRootNodeId: rootNodeId' in document
+    assert 'const rootNodeId = path.nodes[0];' in document
     assert 'codeFlowTrigger: flow.steps?.[0] || null' in document
     assert 'isCodeFlowRoot ? `${kindLabel} · Racine` : kindLabel' in document
     assert 'rootBadge.textContent = "Racine";' in document
-    assert 'triggerBadge.textContent = `${isHttpTrigger ? "HTTP" : "Kafka"} · ${trigger.name}`;' in document
+    assert 'const triggerLabel = isCronTrigger ? "Cron" : isHttpTrigger ? "HTTP" : "Kafka";' in document
     assert ".graph-node-trigger-badge.is-http" in document
     assert ".graph-node-trigger-badge.is-kafka" in document
 
@@ -743,6 +833,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'item.append(header, meta, summary, badges);' in document
     assert 'id="code-flow-confidence"' in document
     assert 'id="code-flow-kind"' in document
+    assert 'id="code-flow-message-type"' in document
+    assert 'id="code-flow-message-types"' in document
+    assert 'messageTypesForCodeFlow' in document
     assert 'graphFlowStatus.hidden = context.topologyReconciled !== false;' in document
     assert 'Cycles uniquement (${cycleCount})' in document
     assert "graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)" in document

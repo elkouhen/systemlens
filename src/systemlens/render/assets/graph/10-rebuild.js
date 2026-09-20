@@ -846,8 +846,10 @@
           if (trigger?.name) {
             const triggerBadge = document.createElement("span");
             const isHttpTrigger = trigger.kind === "http_entry";
-            triggerBadge.className = `graph-node-trigger-badge ${isHttpTrigger ? "is-http" : "is-kafka"}`;
-            triggerBadge.textContent = `${isHttpTrigger ? "HTTP" : "Kafka"} · ${trigger.name}`;
+            const isCronTrigger = trigger.kind === "cron_entry";
+            const triggerLabel = isCronTrigger ? "Cron" : isHttpTrigger ? "HTTP" : "Kafka";
+            triggerBadge.className = `graph-node-trigger-badge ${isCronTrigger ? "is-cron" : isHttpTrigger ? "is-http" : "is-kafka"}`;
+            triggerBadge.textContent = `${triggerLabel} · ${trigger.name}`;
             triggerBadge.title = "Déclencheur du graphe d’appel sélectionné";
             label.append(triggerBadge);
           }

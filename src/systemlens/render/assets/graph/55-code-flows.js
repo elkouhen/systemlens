@@ -6,6 +6,8 @@
     const codeFlowScope = document.getElementById("code-flow-scope");
     const codeFlowConfidence = document.getElementById("code-flow-confidence");
     const codeFlowKind = document.getElementById("code-flow-kind");
+    const codeFlowMessageType = document.getElementById("code-flow-message-type");
+    const codeFlowMessageTypes = document.getElementById("code-flow-message-types");
     const codeFlowCycles = document.getElementById("code-flow-cycles");
     const codeFlowsSummary = document.getElementById("code-flows-summary");
     const codeFlowsTitle = document.getElementById("code-flows-title");
@@ -13,6 +15,7 @@
       return ({
         http_entry: "Entrée HTTP",
         message_entry: "Entrée message",
+        cron_entry: "Déclencheur Cron",
         http_call: "Appel HTTP",
         method_call: "Appel de méthode",
         message_publish: "Publication message",
@@ -70,6 +73,23 @@
         nodeIdsByEndpoint.set(port.endpoint_id, [...(nodeIdsByEndpoint.get(port.endpoint_id) || []), node.id]);
       });
     });
+    const messageTypes = [...new Set(graphData.nodes.flatMap(node => (
+      (node.ports || []).map(port => port.message_type).filter(Boolean)
+    )))].sort((left, right) => left.localeCompare(right));
+    codeFlowMessageTypes.replaceChildren(...messageTypes.map(messageType => {
+      const option = document.createElement("option");
+      option.value = messageType;
+      return option;
+    }));
+    const portsByEndpointId = new Map(graphData.nodes.flatMap(node => (
+      (node.ports || []).map(port => [port.endpoint_id, port])
+    )));
+    const messageTypesForCodeFlow = flow => new Set(
+      (flow.steps || []).flatMap(step => {
+        const port = portsByEndpointId.get(step.endpoint_id);
+        return port?.message_type ? [port.message_type] : [];
+      })
+    );
     const graphLinksByEndpoint = new Map();
     graphData.links.forEach((link, index) => {
       (link.endpoint_ids || []).forEach(endpointId => {
@@ -244,7 +264,11 @@
       const exactPath = callGraphPathForCodeFlow(flow) || pathForCodeFlow(flow);
       const path = exactPath || nodePathForCodeFlow(flow);
       if (!path) return;
-      const rootNodeId = nodeIdForCodeFlowResource(flow.module, "microservice");
+      // The owning module is the consumer for an input-triggered flow. The
+      // visual root must follow the exported call-graph path instead: it is
+      // the upstream producer when a single Kafka source is proven, and the
+      // entry service for HTTP, fan-in, or Cron flows.
+      const rootNodeId = path.nodes[0];
       if (!rootNodeId) return;
       setToolbarTab("graph");
       showPath(path, path.nodes, {
@@ -418,6 +442,7 @@
       const scope = codeFlowScope.value;
       const confidence = codeFlowConfidence.value;
       const kind = codeFlowKind.value;
+      const messageTypeQuery = codeFlowMessageType.value.trim().toLocaleLowerCase();
       const scopedCodeFlows = scope === "all"
         ? codeFlows
         : scope === "local"
@@ -435,51 +460,45 @@
         const kindMatches = kind === "all"
           || (kind === "mixed" && protocols.size > 1)
           || protocols.has(kind);
+        const messageTypeMatches = !messageTypeQuery
+          || [...messageTypesForCodeFlow(flow)].some(messageType => (
+            messageType.toLocaleLowerCase().includes(messageTypeQuery)
+          ));
         return (!query || haystack.includes(query))
           && (!cyclesOnly || flow.status === "cycle")
           && (confidence === "all" || flow.confidence === confidence)
-          && kindMatches;
+          && kindMatches
+          && messageTypeMatches;
       });
-      const byService = new Map();
+      const byTriggerType = new Map();
       visible.forEach(flow => {
         const trigger = flow.steps?.[0];
-        const triggerKey = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`;
-        const service = byService.get(flow.module) || new Map();
-        const group = service.get(triggerKey) || [];
+        const triggerKey = codeFlowStepLabel(trigger?.kind || "unknown");
+        const group = byTriggerType.get(triggerKey) || [];
         group.push(flow);
-        service.set(triggerKey, group);
-        byService.set(flow.module, service);
+        byTriggerType.set(triggerKey, group);
       });
-      const serviceGroups = [...byService.entries()]
-        .sort(([leftName, leftTriggers], [rightName, rightTriggers]) => (
-          Math.max(...[...rightTriggers.values()].flat().map(codeFlowPriority))
-          - Math.max(...[...leftTriggers.values()].flat().map(codeFlowPriority))
+      const triggerGroups = [...byTriggerType.entries()]
+        .sort(([leftName, leftFlows], [rightName, rightFlows]) => (
+          Math.max(...rightFlows.map(codeFlowPriority))
+          - Math.max(...leftFlows.map(codeFlowPriority))
           || leftName.localeCompare(rightName)
         ))
-        .map(([service, triggers], serviceIndex) => {
+        .map(([triggerType, flows]) => {
           const group = document.createElement("li");
-          group.className = "code-flow-service-group";
-          const serviceDetails = document.createElement("details");
-          serviceDetails.open = true;
+          group.className = "code-flow-trigger-group";
+          const triggerDetails = document.createElement("details");
+          triggerDetails.open = true;
           const summary = document.createElement("summary");
-          const count = [...triggers.values()].reduce((total, flows) => total + flows.length, 0);
-          summary.textContent = `${service} · ${count} flux · cliquer pour afficher`;
-          serviceDetails.append(summary);
-          [...triggers.entries()].sort(([left], [right]) => left.localeCompare(right)).forEach(([trigger, flows]) => {
-            const triggerDetails = document.createElement("details");
-            triggerDetails.open = true;
-            const triggerSummary = document.createElement("summary");
-            triggerSummary.textContent = `${trigger} · ${flows.length} flux · cliquer pour afficher`;
-            const list = document.createElement("ul");
-            list.className = "references-list code-flow-group-list";
-            list.append(...flows.sort(compareCodeFlows).map(codeFlowItem));
-            triggerDetails.append(triggerSummary, list);
-            serviceDetails.append(triggerDetails);
-          });
-          group.append(serviceDetails);
+          summary.textContent = `${triggerType} · ${flows.length} flux · cliquer pour afficher`;
+          const list = document.createElement("ul");
+          list.className = "references-list code-flow-group-list";
+          list.append(...flows.sort(compareCodeFlows).map(codeFlowItem));
+          triggerDetails.append(summary, list);
+          group.append(triggerDetails);
           return group;
         });
-      codeFlowsList.replaceChildren(...serviceGroups);
+      codeFlowsList.replaceChildren(...triggerGroups);
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
       codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} · ${scopedCodeFlows.length} dans cette portée · sélectionnez un flux pour ouvrir son graphe d’appel.`;
@@ -499,6 +518,7 @@
     codeFlowScope.addEventListener("change", renderCodeFlows);
     codeFlowConfidence.addEventListener("change", renderCodeFlows);
     codeFlowKind.addEventListener("change", renderCodeFlows);
+    codeFlowMessageType.addEventListener("input", renderCodeFlows);
     codeFlowCycles.addEventListener("click", () => {
       codeFlowCycles.setAttribute("aria-pressed", String(codeFlowCycles.getAttribute("aria-pressed") !== "true"));
       renderCodeFlows();

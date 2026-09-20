@@ -5,6 +5,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
 
+from tree_sitter import Node
+
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, compute_code_flow_id
 from systemlens.domain.code_flows import IntegrationMethod
@@ -15,7 +17,7 @@ from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 from systemlens.indexing.java_symbols import JavaSymbols
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v17-deduplicated-endpoints"
+CODE_FLOW_SIGNATURE = "code-flow-v19-trigger-rooted-fanout"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -98,6 +100,54 @@ def _mongo_step(method: MongoMethod, path: str, order: int) -> CodeFlowStep:
     )
 
 
+def _scheduled_trigger_step(
+    method_node: Node, source: bytes, path: str
+) -> CodeFlowStep | None:
+    """Return a source-evidenced cron trigger for a scheduled Java method."""
+    for annotation in java_parser.annotations_of(method_node):
+        if java_parser.annotation_name(annotation, source) != "Scheduled":
+            continue
+        cron = java_parser.string_value(
+            java_parser.annotation_argument(annotation, source, "cron"), source
+        )
+        return CodeFlowStep(
+            order=1,
+            kind="cron_entry",
+            name=cron or "@Scheduled",
+            path=path,
+            start_line=method_node.start_point.row + 1,
+            end_line=method_node.start_point.row + 1,
+        )
+    return None
+
+
+def _matching_fanout_consumers(
+    producer: MessageEndpoint,
+    endpoints: list[MessageEndpoint],
+) -> list[MessageEndpoint]:
+    """Return consumers proven compatible with one Kafka publication.
+
+    A publication without a message type is not joined to several consumers
+    by topic alone: that would turn an ambiguous dynamic fact into a guessed
+    branch. A typed publication may fan out to every typed consumer of the
+    same topic and message type.
+    """
+    if producer.system != "kafka" or producer.role != "produce" or producer.topic_dynamic:
+        return []
+    candidates = [
+        endpoint for endpoint in endpoints
+        if endpoint.system == "kafka"
+        and endpoint.role == "consume"
+        and endpoint.topic == producer.topic
+        and endpoint.id != producer.id
+        and (
+            producer.message_type is not None
+            and endpoint.message_type == producer.message_type
+        )
+    ]
+    return sorted(candidates, key=lambda endpoint: (endpoint.module or "", endpoint.id))
+
+
 def _repository_path(repo_root: Path, module: DiscoveredModule, path: str) -> str:
     module_root = module.path.resolve().relative_to(repo_root.resolve())
     return (module_root / path).as_posix()
@@ -175,6 +225,7 @@ def materialize_code_flows(
                 for endpoint in local_endpoints
                 if (endpoint.system, endpoint.role) in _EFFECT_ROLES
             ]
+            scheduled_trigger = _scheduled_trigger_step(method_node, source, path)
             for trigger in triggers:
                 assert trigger.module is not None
                 effects: list[tuple[int, str, MessageEndpoint | MongoMethod]] = [
@@ -225,6 +276,98 @@ def materialize_code_flows(
                     ),
                     steps=tuple(steps),
                 ))
+            if scheduled_trigger is not None and endpoint_effects:
+                producer = endpoint_effects[0]
+                assert producer.module is not None
+                qualified_method = (
+                    f"{producer.qualified_name}.{method_name}"
+                    if producer.qualified_name
+                    else method_name
+                )
+                ordered_effects = sorted(
+                    (
+                        (endpoint.start_line, endpoint.id, endpoint)
+                        for endpoint in endpoint_effects
+                    ),
+                    key=lambda item: (item[0], item[1]),
+                )
+                steps = [scheduled_trigger]
+                for order, (_line, _key, effect) in enumerate(ordered_effects, start=2):
+                    steps.append(_endpoint_step(effect, order))
+                flows.append(CodeFlow(
+                    id=compute_code_flow_id(
+                        producer.module, path, qualified_method,
+                        "cron_entry", scheduled_trigger.name,
+                    ),
+                    module=producer.module,
+                    method=qualified_method,
+                    path=path,
+                    start_line=start_line,
+                    end_line=end_line,
+                    status="potential",
+                    confidence="medium",
+                    reason=(
+                        "A scheduled Java method publishes an external effect; "
+                        "the scheduler is the flow trigger."
+                    ),
+                    steps=tuple(steps),
+                ))
+            for producer in endpoint_effects:
+                # A publication is an effect of an input-triggered flow, not
+                # an independent trigger. Only a method explicitly scheduled
+                # by a cron expression can create a source flow here.
+                if scheduled_trigger is None:
+                    continue
+                consumers = _matching_fanout_consumers(producer, endpoints)
+                if not consumers:
+                    continue
+                assert producer.module is not None
+                qualified_method = (
+                    f"{producer.qualified_name}.{method_name}"
+                    if producer.qualified_name
+                    else method_name
+                )
+                # A CodeFlow remains one auditable endpoint path for
+                # compatibility. The exported call graph expands this
+                # representative path with every matching consumer branch.
+                for consumer in consumers:
+                    trigger_kind = (
+                        "cron_entry"
+                        if scheduled_trigger is not None
+                        else "message_publish"
+                    )
+                    trigger_name = (
+                        scheduled_trigger.name
+                        if scheduled_trigger is not None
+                        else producer.topic
+                    )
+                    prefix = [scheduled_trigger] if scheduled_trigger is not None else []
+                    steps = [
+                        *prefix,
+                        _endpoint_step(producer, len(prefix) + 1),
+                        _endpoint_step(consumer, len(prefix) + 2),
+                    ]
+                    flows.append(CodeFlow(
+                        id=compute_code_flow_id(
+                            producer.module,
+                            path,
+                            qualified_method,
+                            trigger_kind,
+                            f"{trigger_name}|fanout|{consumer.id}",
+                        ),
+                        module=producer.module,
+                        method=qualified_method,
+                        path=path,
+                        start_line=start_line,
+                        end_line=end_line,
+                        status="potential",
+                        confidence="medium",
+                        reason=(
+                            "A typed Kafka publication fans out to a matching "
+                            "consumer; the call graph retains every proven branch."
+                        ),
+                        steps=tuple(steps),
+                    ))
     return sorted(flows, key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
 
 
@@ -371,7 +514,61 @@ def materialize_codeql_code_flows(
                 add_edge(caller, resolved_target[0], call, True)
 
     flows: list[CodeFlow] = []
+    # Contract-only HTTP inputs (for example generated OpenAPI interfaces)
+    # have no source endpoint path for the AST materializer. If the same
+    # indexed method also owns an output endpoint, the method itself is still
+    # sufficient evidence for a direct input-to-output flow.
+    for entry in methods:
+        for trigger_id in entry.input_endpoint_ids:
+            trigger = endpoint_by_id.get(trigger_id)
+            if trigger is None:
+                continue
+            for output_id in entry.output_endpoint_ids:
+                output = endpoint_by_id.get(output_id)
+                if output is None:
+                    continue
+                flows.append(CodeFlow(
+                    id=compute_code_flow_id(
+                        entry.module, entry.path, entry.qualified_method,
+                        _endpoint_step(trigger, 1).kind,
+                        f"{trigger.topic}|{output.id}",
+                    ),
+                    module=entry.module,
+                    method=entry.qualified_method,
+                    path=entry.path,
+                    start_line=entry.start_line,
+                    end_line=entry.end_line,
+                    status="potential",
+                    confidence="medium",
+                    reason=(
+                        "The indexed entry and external effect belong to the same "
+                        "Java method."
+                    ),
+                    steps=(_endpoint_step(trigger, 1), _endpoint_step(output, 2)),
+                ))
     explored = 0
+
+    def dispatch_matches_entry(
+        entry: IntegrationMethod,
+        current: IntegrationMethod,
+        target: IntegrationMethod,
+    ) -> bool:
+        """Keep generic Kafka template dispatch on the receiving consumer.
+
+        CodeQL can report every concrete override of the generic
+        ``AbstractKafkaMessageProcessor.processMessage`` call. The runtime
+        receiver is the concrete consumer that owns the indexed entry method;
+        crossing to another consumer creates impossible POC flows and false
+        cycles.
+        """
+        if not current.qualified_method.endswith(
+            "AbstractKafkaMessageProcessor.consumeMessage"
+        ) or not target.qualified_method.endswith(".processMessage"):
+            return True
+        entry_owner = entry.qualified_method.rsplit(".", 1)[0]
+        target_owner = target.qualified_method.rsplit(".", 1)[0]
+        return entry_owner == target_owner
+
     for entry in methods:
         if not entry.input_endpoint_ids:
             continue
@@ -386,6 +583,8 @@ def materialize_codeql_code_flows(
                 if len(route) >= max_hops:
                     continue
                 for target, call, signature_join in adjacency.get(current.id, []):
+                    if not dispatch_matches_entry(entry, current, target):
+                        continue
                     explored += 1
                     next_route = [*route, (target, call, signature_join)]
                     if target.id == entry.id or any(previous.id == target.id for previous, _edge, _signature in route):

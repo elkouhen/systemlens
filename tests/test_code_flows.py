@@ -123,6 +123,64 @@ def test_materialize_code_flows_orders_same_method_effects(tmp_path: Path) -> No
     assert shifted_flows[0].id == flows[0].id
 
 
+def test_materialize_code_flows_indexes_typed_kafka_fanout(tmp_path: Path) -> None:
+    module_root = tmp_path / "orders"
+    relative_source = "orders/src/main/java/com/example/ScheduledPublisher.java"
+    source = tmp_path / relative_source
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """import org.springframework.scheduling.annotation.Scheduled;
+
+class ScheduledPublisher {
+  @Scheduled(cron = "0 * * * * *")
+  void publish() { kafka.send(); }
+}
+""",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="orders", path=module_root, build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    producer = _endpoint(
+        "publish", "produce", "kafka", "orders.created", relative_source, 5,
+        message_type="OrderCreated",
+    )
+    consumers = [
+        replace(_endpoint("inventory", "consume", "kafka", "orders.created", "inventory/Consumer.java", 4, message_type="OrderCreated"), module="inventory"),
+        replace(_endpoint("restock", "consume", "kafka", "orders.created", "restock/Consumer.java", 5, message_type="OrderCreated"), module="restock"),
+    ]
+
+    flows = materialize_code_flows(tmp_path, [producer, *consumers], [module])
+
+    assert {(flow.module, flow.steps[-1].endpoint_id) for flow in flows} == {
+        ("orders", "publish"), ("orders", "inventory"), ("orders", "restock"),
+    }
+    assert all(flow.steps[0].kind == "cron_entry" for flow in flows)
+    assert {flow.steps[0].name for flow in flows} == {"0 * * * * *"}
+
+
+def test_materialize_code_flows_does_not_root_on_untriggered_publication(tmp_path: Path) -> None:
+    module_root = tmp_path / "orders"
+    relative_source = "orders/src/main/java/com/example/Publisher.java"
+    source = tmp_path / relative_source
+    source.parent.mkdir(parents=True)
+    source.write_text("class Publisher { void publish() { kafka.send(); } }\n", encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=module_root, build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    producer = _endpoint(
+        "publish", "produce", "kafka", "orders.created", relative_source, 1,
+        message_type="OrderCreated",
+    )
+    consumer = replace(
+        _endpoint("inventory", "consume", "kafka", "orders.created", "inventory/Consumer.java", 1, message_type="OrderCreated"),
+        module="inventory",
+    )
+
+    assert materialize_code_flows(tmp_path, [producer, consumer], [module]) == []
+
 def test_kafka_continuations_require_concrete_topics_and_preserve_producer_effects() -> None:
     producer = CodeFlow(
         id="producer", module="orders", method="OrderController.place", path="OrderController.java",
@@ -664,6 +722,25 @@ class OrderPublisher {
     assert [step.kind for step in flows[0].steps] == [
         "message_entry", "method_call", "method_call", "message_publish",
     ]
+
+
+def test_codeql_materializes_same_method_contract_input_and_output(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    file = tmp_path / source
+    file.parent.mkdir(parents=True)
+    file.write_text("package com.example; class OrderController { void place() {} }\n", encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    entry = _endpoint("entry", "serve", "rest", "POST /orders", source, 1)
+    output = replace(_endpoint("output", "call", "rest", "POST /inventory", source, 1), module="orders")
+    methods = materialize_integration_methods(tmp_path, [entry, output], [source], [module])
+
+    flows = materialize_codeql_code_flows(methods, [entry, output], [])
+
+    assert len(flows) == 1
+    assert [step.kind for step in flows[0].steps] == ["http_entry", "http_call"]
 
 
 def test_possible_signature_only_call_uses_explicit_low_confidence_join(tmp_path: Path) -> None:

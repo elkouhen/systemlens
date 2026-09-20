@@ -221,10 +221,20 @@ describe it.
 
 For Kafka, SystemLens can continue a potential flow from a concrete,
 statically resolved producer topic and known message type to a persisted
-consumer entry with the same topic and message type. It
-does not join dynamic topics and does not compose a producer whose later
-external effect would be hidden by a linear rendering. Continuations are
-bounded to four asynchronous hops and never revisit the same consumer flow.
+consumer entry with the same topic and message type. A publication remains an
+effect of its input-triggered flow and does not create an independent flow
+root. Only a publisher explicitly triggered by a cron expression creates a
+source flow, with the Cron event as its first step. The persisted flow is one
+representative producer-to-consumer path, while its exported call graph
+retains every proven consumer branch. It does not join dynamic topics and does
+not compose a producer whose later external effect would be hidden by a linear
+rendering. Continuations are bounded to four asynchronous hops and never
+revisit the same consumer flow.
+When the publishing method is annotated with `@Scheduled(cron = "...")`, the
+flow starts with an explicit `Déclencheur Cron` step, followed by the Kafka
+publication and its proven consumers. The cron expression is retained as
+source evidence; methods scheduled by a fixed delay/rate without a cron
+expression remain outside this trigger classification.
 The architecture graph remains conservative when message payload typing is
 missing or contradictory: a producer/consumer service arc requires the same
 concrete topic and the same known Java message type on both endpoints. The
@@ -344,7 +354,7 @@ persisted topology edges: it does not show CodeQL input/output ports,
 port-to-port relations, or internal links. Hovering a microservice, topic,
 collection, or topology arc shows a concise contextual tooltip; the Flux tab
 presents a compact list of persisted potential call graphs whose endpoint
-evidence spans at least two microservices, grouped by service and trigger; it
+evidence spans at least two microservices, grouped by trigger type; it
 does not show method, confidence, or status details before selection. A flow
 remains listed when one of its topology edges is unresolved or absent from
 the export; selecting it marks the graph as partial instead of hiding the
@@ -361,10 +371,15 @@ scope selector with `Inter-services`, `Tous les flux`, and `Flux internes`.
 belonging to the same microservice; `Tous les flux` additionally includes
 flows whose topology cannot be fully reconciled.
 The Flux tab also provides independent filters for confidence (`élevée`,
-`moyenne`, `faible`) and protocol (`HTTP`, `Kafka`, `Mixte`). A compact
+`moyenne`, `faible`), protocol (`HTTP`, `Kafka`, `Mixte`), and Kafka message
+type. The message-type field offers native autocomplete values from the
+indexed Kafka ports and accepts partial text matching. A compact
 summary reports the number of visible flows and each card summarizes its
 service sequence, effects, confidence, reconciliation status, and alternative
 route count. A selected flow can be recentered from the analysis banner.
+Equivalent persisted routes that render the same call graph are grouped into
+one visible flow, preventing duplicate graph cards while retaining their count
+in the export model.
 Selecting a reconciled call graph opens
  the Explorer tab and displays only the microservices involved in the path,
  their indexed ports, and the direct dependencies between those ports. Topics
@@ -372,6 +387,11 @@ Selecting a reconciled call graph opens
 rendered as nodes in this focused view. The focused view uses graph levels and
 vertical offsets for sibling branches, so a branched call graph is presented
 as a tree/DAG rather than as a misleading single lane. The
+exported call graph always has one visible root. When the indexed evidence has
+several incoming producers, the entry service remains the root; when it
+contains a cycle, the return arc is omitted from this visual projection so the
+graph remains navigable as an arborescence. The persisted flow and its cycle
+status are not altered. The
 selected nodes retain a visible
 halo. Selecting it keeps the Flux tab and
 its card geometry unchanged; the selected card is marked in place instead of
