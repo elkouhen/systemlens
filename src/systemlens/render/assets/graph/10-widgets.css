@@ -27,6 +27,7 @@
     .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 370px; display: flex; align-items: center; gap: 8px; width: min(460px, calc(100vw - 390px)); box-sizing: border-box; padding: 8px 9px; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 8px; color: #283b73; background: rgba(238, 242, 255, .96); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; }
     .graph-mode-context[hidden] { display: none; }
     .graph-mode-context-copy { display: grid; gap: 2px; min-width: 0; flex: 1 1 auto; }
+    .graph-mode-context-path { color: #334155; font-size: 10px; font-weight: 750; overflow-wrap: anywhere; }
     .graph-mode-context-copy strong { color: #293c82; font-size: 11px; overflow-wrap: anywhere; }
     .graph-mode-context-copy span { color: #52658f; }
     .graph-mode-context .graph-secondary-action { flex: 0 0 auto; height: 28px; padding: 0 7px; border: 1px solid #a5b4fc; border-radius: 6px; color: #3348b8; background: #fff; font-size: 10px; }
@@ -109,11 +110,16 @@
     .references-section h3 { margin: 0; color: #59708d; font-size: var(--type-kicker); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .references-list { display: grid; gap: 7px; max-height: min(50vh, 460px); margin: 0; padding: 0 3px 8px 0; overflow: auto; scroll-padding-bottom: 8px; list-style: none; }
     .reference-filter-input { width: 100%; }
-    .code-flow-filter-controls { display: flex; gap: 6px; align-items: center; }
+    .code-flow-filter-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .code-flow-filter-controls .reference-filter-input { min-width: 0; flex: 1 1 auto; }
     .code-flow-scope-filter { width: auto !important; height: 30px !important; padding: 0 8px !important; border: 1px solid #c4b5fd !important; border-radius: var(--control-radius); color: #5b21b6 !important; background: #faf5ff; font-size: 10px !important; font-weight: 800; white-space: nowrap; }
     .code-flow-cycle-filter { width: auto !important; height: 30px !important; padding: 0 8px !important; border-color: #fecaca !important; color: #991b1b !important; background: #fff7f7 !important; font-size: 10px !important; font-weight: 800; white-space: nowrap; }
     .code-flow-cycle-filter[aria-pressed="true"] { border-color: #dc2626 !important; color: #fff !important; background: #dc2626 !important; }
+    .code-flows-summary { margin: 0; color: var(--ui-muted); font-size: 11px; line-height: 1.35; }
+    .code-flow-summary { margin: 0; color: var(--ui-muted); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
+    .code-flow-badges .is-warning { color: #9a3412; border-color: #fdba74; background: #fff7ed; }
+    .code-flow-badges .is-complete { color: #166534; border-color: #86efac; background: #f0fdf4; }
+    .code-flow-badges .is-protocol { color: #4338ca; border-color: #c4b5fd; background: #eef2ff; }
     .resource-analyses { border-top: 1px solid #e2e8f0; padding-top: 10px; }
     .resource-analyses summary { color: #315f9b; font-size: 12px; font-weight: 700; cursor: pointer; }
     .resource-analysis-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }

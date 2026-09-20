@@ -442,9 +442,13 @@ side; a route that immediately turns through its source or target card is
 rejected. Returned
 Libavoid points are never clamped after routing: routes that leave the safe
 viewport or intersect an expanded obstacle are rejected and use the existing
-geometry fallback. Arc labels use the same protocol-specific color as their
-associated paths, including the theme-specific dark-mode colors. A two-point
-route remains direct when the segment is clear; a rectangular detour is created
+geometry fallback. A returned Libavoid route whose Manhattan length is
+disproportionate to the direct distance is also rejected, preventing
+full-viewport U-shaped detours; the bounded orthogonal fallback is preferred
+when it is short and obstacle-free. Arc labels use the same protocol-specific
+color as their associated paths, including the theme-specific dark-mode colors,
+and are subdued until hover or analysis selection. A two-point route remains
+direct when the segment is clear; a rectangular detour is created
 only when an obstacle blocks that direct segment. In the focused
 call-graph view, endpoint arcs are represented by the
 projected service edge and are not drawn a second time in the port overlay.

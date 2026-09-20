@@ -740,7 +740,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`' in document
     assert 'meta.textContent = flow.module;' in document
     assert 'javaMethod.textContent = `Méthode Java : ${flow.method}`' not in document
-    assert 'item.append(header, meta);' in document
+    assert 'item.append(header, meta, summary, badges);' in document
+    assert 'id="code-flow-confidence"' in document
+    assert 'id="code-flow-kind"' in document
     assert 'graphFlowStatus.hidden = context.topologyReconciled !== false;' in document
     assert 'Cycles uniquement (${cycleCount})' in document
     assert "graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)" in document
@@ -793,7 +795,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'const addLibavoidObstacle = card =>' in document
     assert 'nodeDataById.get(card.dataset.nodeId)?.kind === "microservice"' in document
     assert ".graph-call-path.is-analysis-selected { stroke-width: 4;" in document
-    assert ".graph-call-label.is-analysis-selected { font-size: 13px;" in document
+    assert ".graph-call-label.is-analysis-selected, .graph-call-label.is-analysis-hovered { font-size: 13px;" in document
     assert "selectedEndpointIds.has(link.target_endpoint_id)" in document
     assert "const ratioFactor = Math.max(.01, spanX / availableWidth, spanY / availableHeight);" in document
     assert "for (let pass = 0; pass < 4; pass += 1)" in document

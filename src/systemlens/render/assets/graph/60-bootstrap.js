@@ -28,10 +28,17 @@
     const renderCardsButton = document.getElementById("render-cards");
     const renderSymbolsButton = document.getElementById("render-symbols");
     const analysisModeClear = document.getElementById("analysis-mode-clear");
+    const analysisModeCenter = document.getElementById("analysis-mode-center");
     graphCanvas.dataset.renderMode = graphState.renderMode;
     analysisModeClear?.addEventListener("click", () => {
       graphState.analysisPortEndpointId = null;
       requestGraphRender();
+    });
+    analysisModeCenter?.addEventListener("click", () => {
+      if (!graphState.selectedCodeFlowId || !graphState.relatedNodes?.size) return;
+      const orderedNodes = [...(graphState.pathMicroserviceOrder?.keys() || [])];
+      const remainingNodes = [...graphState.relatedNodes].filter(id => !orderedNodes.includes(id));
+      scheduleFlowCameraFit({ nodes: [...orderedNodes, ...remainingNodes] });
     });
     function updateFitModeControls(mode) {
       [

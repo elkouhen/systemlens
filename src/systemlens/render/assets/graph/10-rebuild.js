@@ -443,6 +443,7 @@
         const updateAnalysisModeIndicator = () => {
           const context = document.getElementById("graph-mode-context");
           const title = document.getElementById("graph-mode-context-title");
+          const pathLabel = document.getElementById("graph-mode-context-path");
           const help = document.getElementById("graph-mode-context-help");
           const clear = document.getElementById("analysis-mode-clear");
           if (!context || !title || !help || !clear) return;
@@ -457,6 +458,12 @@
           title.textContent = flowPath
             ? `Analyse du flux · ${flowPath}`
             : trigger ? `Analyse du flux · ${trigger}` : "Analyse du flux";
+          if (pathLabel) {
+            const steps = (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)?.steps || [];
+            pathLabel.textContent = steps.length
+              ? steps.map(step => codeFlowStepLabel(step.kind)).join(" → ")
+              : "Parcours de code sélectionné";
+          }
           help.textContent = graphState.analysisPortEndpointId
             ? "Arc associé sélectionné · cliquez sur un autre arc ou port pour changer"
             : "Cliquez sur un port ou un arc pour afficher sa relation";
@@ -1089,6 +1096,20 @@
             && pathIsClear([start, end], obstacles, occupiedSegments)) {
             return { d: `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`, points: [start, end], obstacleRouted: false };
           }
+          // Prefer a short orthogonal detour when a card blocks the direct
+          // lane. The previous curve-first strategy could choose a very long
+          // bottom/top U because its smoothness score did not account for the
+          // actual detour length. Orthogonal routes remain explicit and are
+          // easier to scan in a call graph.
+          const orthogonal = orthogonalPath(start, end, sourceId, targetId, occupiedSegments);
+          const directLength = Math.hypot(end[0] - start[0], end[1] - start[1]);
+          const orthogonalLength = orthogonal.points.slice(1).reduce((total, point, index) => (
+            total + Math.abs(point[0] - orthogonal.points[index][0])
+              + Math.abs(point[1] - orthogonal.points[index][1])
+          ), 0);
+          if (orthogonal.points.length <= 5 && orthogonalLength <= Math.max(220, directLength * 2.2)) {
+            return { d: orthogonal.d, points: orthogonal.points, obstacleRouted: true, router: "orthogonal-fallback" };
+          }
           const deltaX = end[0] - start[0];
           const deltaY = end[1] - start[1];
           // Keep the handles visibly away from both card borders. A shallow
@@ -1166,7 +1187,6 @@
             )));
           }
           if (candidates.length) return candidates.sort((left, right) => left.score - right.score)[0];
-          const orthogonal = orthogonalPath(start, end, sourceId, targetId, occupiedSegments);
           return { d: orthogonal.d, points: orthogonal.points, obstacleRouted: true };
         };
         const occupiedCallGraphSegments = [];
@@ -1234,6 +1254,15 @@
             .map(point => [point.x, point.y])
             .filter(point => point.every(Number.isFinite));
           if (points.length < 2) return null;
+          const directLength = Math.hypot(end[0] - start[0], end[1] - start[1]);
+          const routeLength = points.slice(1).reduce((total, point, index) => (
+            total + Math.abs(point[0] - points[index][0]) + Math.abs(point[1] - points[index][1])
+          ), 0);
+          // Libavoid is obstacle-aware but does not optimize for the visible
+          // viewport. Reject pathological routes that travel around the
+          // entire canvas; the bounded local fallback can then choose a
+          // shorter corridor.
+          if (routeLength > Math.max(280, directLength * 2.6)) return null;
           points[0] = start;
           points[points.length - 1] = end;
           if (points.length === 2) {
@@ -1451,6 +1480,7 @@
           // the port overlay. Otherwise direct arcs silently disappear.
           const path = document.createElementNS(svgNamespace, "path");
           path.classList.add("graph-call-path");
+          path.dataset.arcKey = resolvedEdgeKey;
           if (link.kind === "kafka") path.classList.add("is-kafka");
           if ((link.endpoint_ids || []).includes(graphState.analysisPortEndpointId)) {
             path.classList.add("is-analysis-selected");
@@ -1461,6 +1491,7 @@
           portPathOverlay.append(path);
           const arcLabel = document.createElementNS(svgNamespace, "text");
           arcLabel.classList.add("graph-call-label");
+          arcLabel.dataset.arcKey = resolvedEdgeKey;
           if (link.kind === "kafka") arcLabel.classList.add("is-kafka");
           if ((link.endpoint_ids || []).includes(graphState.analysisPortEndpointId)) {
             arcLabel.classList.add("is-analysis-selected");
@@ -1487,6 +1518,14 @@
           arcLabel.setAttribute("y", String(labelPoint[1] - 8));
           portPathOverlay.append(arcLabel);
           const hitArea = addArcHitArea(path);
+          hitArea.addEventListener("pointerenter", () => {
+            path.classList.add("is-analysis-hovered");
+            arcLabel.classList.add("is-analysis-hovered");
+          });
+          hitArea.addEventListener("pointerleave", () => {
+            path.classList.remove("is-analysis-hovered");
+            arcLabel.classList.remove("is-analysis-hovered");
+          });
           hitArea.addEventListener("click", event => {
             toggleAnalysisEndpoint(sourcePort?.endpoint_id || targetPort?.endpoint_id, event);
           });

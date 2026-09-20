@@ -342,6 +342,7 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
                 "status": "potential",
                 "confidence": "medium",
                 "reconciliation": "complete",
+                "alternative_count": 1,
             }
     ]
 

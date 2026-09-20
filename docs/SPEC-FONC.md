@@ -360,6 +360,11 @@ scope selector with `Inter-services`, `Tous les flux`, and `Flux internes`.
 `Flux internes` isolates persisted flows with distinct input/output endpoints
 belonging to the same microservice; `Tous les flux` additionally includes
 flows whose topology cannot be fully reconciled.
+The Flux tab also provides independent filters for confidence (`élevée`,
+`moyenne`, `faible`) and protocol (`HTTP`, `Kafka`, `Mixte`). A compact
+summary reports the number of visible flows and each card summarizes its
+service sequence, effects, confidence, reconciliation status, and alternative
+route count. A selected flow can be recentered from the analysis banner.
 Selecting a reconciled call graph opens
  the Explorer tab and displays only the microservices involved in the path,
  their indexed ports, and the direct dependencies between those ports. Topics
@@ -403,6 +408,8 @@ Clearing or replacing the selection restores the ordinary filtered graph.
 The focused graph displays a persistent context banner naming the selected
 flow and explaining that ports and arcs are analysis controls. When an arc is
 focused, the banner offers an explicit action to clear the analysis focus.
+Arc labels are intentionally subdued until their arc is hovered or selected;
+this keeps the route geometry readable without removing the port mapping.
 
 The export uses grouped navigation: the Graph group contains Graph, Flux de
 code, and Diagnostics; the Resources group contains Ressources, OpenAPI,

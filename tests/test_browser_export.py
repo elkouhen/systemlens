@@ -955,7 +955,7 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
 
         assert page.locator(".code-flow-step").count() == 0
         assert page.locator(".code-flow-reason").count() == 0
-        assert page.locator(".code-flow-badges").count() == 0
+        assert page.locator(".code-flow-badges").count() == 1
         assert page.locator("#flows-panel .reference-meta").inner_text() == "payments"
         metrics = page.evaluate(
             """() => {
@@ -1024,7 +1024,7 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
             "flow-readable"
         )
         assert float(page.locator("#graph").get_attribute("data-flow-focus-ratio")) > 0
-        assert page.locator(".graph-node-card-label.is-code-flow-node").count() == 2
+        assert page.locator(".graph-node-card-label.is-code-flow-node").count() == 3
         assert page.locator(".graph-local-port-path.is-code-flow-path").count() == 1
         assert page.locator(".graph-port-path").count() == 0
         assert page.locator(".graph-call-path").count() == 1

@@ -130,9 +130,10 @@
     .graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 1; pointer-events: stroke; }
     .graph-call-path.is-kafka { stroke: #008f69; }
     .graph-call-path.is-analysis-selected { stroke-width: 4; filter: drop-shadow(0 0 4px currentColor); }
-    .graph-call-label { fill: #6d28d9; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; }
+    .graph-call-label { fill: #6d28d9; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; opacity: .42; transition: opacity .12s ease, font-size .12s ease; }
     .graph-call-label.is-kafka { fill: #008f69; }
-    .graph-call-label.is-analysis-selected { font-size: 13px; font-weight: 850; }
+    .graph-call-label.is-analysis-selected, .graph-call-label.is-analysis-hovered { font-size: 13px; font-weight: 850; opacity: 1; }
+    .graph-call-path.is-analysis-hovered { stroke-width: 3; filter: drop-shadow(0 0 3px currentColor); }
     :root[data-theme="dark"] .graph-call-label { fill: #c4b5fd; stroke: #111827; }
     :root[data-theme="dark"] .graph-call-label.is-kafka { fill: #5eead4; }
     .graph-local-port-path { fill: none; stroke: #d97706; stroke-width: 1.5; stroke-dasharray: 3 2; stroke-linecap: round; opacity: .9; pointer-events: stroke; }
@@ -306,6 +307,7 @@
     .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 370px; display: flex; align-items: center; gap: 8px; width: min(460px, calc(100vw - 390px)); box-sizing: border-box; padding: 8px 9px; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 8px; color: #283b73; background: rgba(238, 242, 255, .96); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; }
     .graph-mode-context[hidden] { display: none; }
     .graph-mode-context-copy { display: grid; gap: 2px; min-width: 0; flex: 1 1 auto; }
+    .graph-mode-context-path { color: #334155; font-size: 10px; font-weight: 750; overflow-wrap: anywhere; }
     .graph-mode-context-copy strong { color: #293c82; font-size: 11px; overflow-wrap: anywhere; }
     .graph-mode-context-copy span { color: #52658f; }
     .graph-mode-context .graph-secondary-action { flex: 0 0 auto; height: 28px; padding: 0 7px; border: 1px solid #a5b4fc; border-radius: 6px; color: #3348b8; background: #fff; font-size: 10px; }
@@ -388,11 +390,16 @@
     .references-section h3 { margin: 0; color: #59708d; font-size: var(--type-kicker); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .references-list { display: grid; gap: 7px; max-height: min(50vh, 460px); margin: 0; padding: 0 3px 8px 0; overflow: auto; scroll-padding-bottom: 8px; list-style: none; }
     .reference-filter-input { width: 100%; }
-    .code-flow-filter-controls { display: flex; gap: 6px; align-items: center; }
+    .code-flow-filter-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .code-flow-filter-controls .reference-filter-input { min-width: 0; flex: 1 1 auto; }
     .code-flow-scope-filter { width: auto !important; height: 30px !important; padding: 0 8px !important; border: 1px solid #c4b5fd !important; border-radius: var(--control-radius); color: #5b21b6 !important; background: #faf5ff; font-size: 10px !important; font-weight: 800; white-space: nowrap; }
     .code-flow-cycle-filter { width: auto !important; height: 30px !important; padding: 0 8px !important; border-color: #fecaca !important; color: #991b1b !important; background: #fff7f7 !important; font-size: 10px !important; font-weight: 800; white-space: nowrap; }
     .code-flow-cycle-filter[aria-pressed="true"] { border-color: #dc2626 !important; color: #fff !important; background: #dc2626 !important; }
+    .code-flows-summary { margin: 0; color: var(--ui-muted); font-size: 11px; line-height: 1.35; }
+    .code-flow-summary { margin: 0; color: var(--ui-muted); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
+    .code-flow-badges .is-warning { color: #9a3412; border-color: #fdba74; background: #fff7ed; }
+    .code-flow-badges .is-complete { color: #166534; border-color: #86efac; background: #f0fdf4; }
+    .code-flow-badges .is-protocol { color: #4338ca; border-color: #c4b5fd; background: #eef2ff; }
     .resource-analyses { border-top: 1px solid #e2e8f0; padding-top: 10px; }
     .resource-analyses summary { color: #315f9b; font-size: 12px; font-weight: 700; cursor: pointer; }
     .resource-analysis-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
@@ -1115,7 +1122,7 @@
         <h2 id="code-flows-title" class="references-title">Flux de code</h2>
         <p class="references-description">Parcours ordonnés issus du code source. Ils décrivent un comportement potentiel, pas une trace runtime.</p>
       </div>
-    <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Filtrer par service, méthode ou déclencheur" autocomplete="off" aria-label="Filtrer les flux de code"><select id="code-flow-scope" class="code-flow-scope-filter" aria-label="Portée des flux"><option value="inter">Inter-services</option><option value="all">Tous les flux</option><option value="local">Flux internes</option></select><button id="code-flow-cycles" class="code-flow-cycle-filter" type="button" aria-pressed="false">Cycles uniquement</button></div><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux de code indexé.</p></section>
+    <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Filtrer par service, méthode ou déclencheur" autocomplete="off" aria-label="Filtrer les flux de code"><select id="code-flow-scope" class="code-flow-scope-filter" aria-label="Portée des flux"><option value="inter">Inter-services</option><option value="all">Tous les flux</option><option value="local">Flux internes</option></select><select id="code-flow-confidence" class="code-flow-scope-filter" aria-label="Niveau de confiance"><option value="all">Toutes confiances</option><option value="high">Confiance élevée</option><option value="medium">Confiance moyenne</option><option value="low">Confiance faible</option></select><select id="code-flow-kind" class="code-flow-scope-filter" aria-label="Type de flux"><option value="all">Tous protocoles</option><option value="http">HTTP</option><option value="kafka">Kafka</option><option value="mixed">Mixte</option></select><button id="code-flow-cycles" class="code-flow-cycle-filter" type="button" aria-pressed="false">Cycles uniquement</button></div><p id="code-flows-summary" class="code-flows-summary"></p><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux de code indexé.</p></section>
     </div>
     <div id="openapi-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="openapi-tab" hidden>
       <div class="references-header">
@@ -1147,8 +1154,10 @@
   <div id="graph-mode-context" class="graph-mode-context" hidden>
     <div class="graph-mode-context-copy">
       <strong id="graph-mode-context-title"></strong>
+      <span id="graph-mode-context-path" class="graph-mode-context-path"></span>
       <span id="graph-mode-context-help"></span>
     </div>
+    <button id="analysis-mode-center" class="graph-action-label graph-secondary-action" type="button">Centrer</button>
     <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" hidden>Réinitialiser l’analyse</button>
   </div>
   <details id="graph-legend" class="legend" aria-label="Legende du graphe">
@@ -2115,6 +2124,7 @@
         const updateAnalysisModeIndicator = () => {
           const context = document.getElementById("graph-mode-context");
           const title = document.getElementById("graph-mode-context-title");
+          const pathLabel = document.getElementById("graph-mode-context-path");
           const help = document.getElementById("graph-mode-context-help");
           const clear = document.getElementById("analysis-mode-clear");
           if (!context || !title || !help || !clear) return;
@@ -2129,6 +2139,12 @@
           title.textContent = flowPath
             ? `Analyse du flux · ${flowPath}`
             : trigger ? `Analyse du flux · ${trigger}` : "Analyse du flux";
+          if (pathLabel) {
+            const steps = (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)?.steps || [];
+            pathLabel.textContent = steps.length
+              ? steps.map(step => codeFlowStepLabel(step.kind)).join(" → ")
+              : "Parcours de code sélectionné";
+          }
           help.textContent = graphState.analysisPortEndpointId
             ? "Arc associé sélectionné · cliquez sur un autre arc ou port pour changer"
             : "Cliquez sur un port ou un arc pour afficher sa relation";
@@ -2761,6 +2777,20 @@
             && pathIsClear([start, end], obstacles, occupiedSegments)) {
             return { d: `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`, points: [start, end], obstacleRouted: false };
           }
+          // Prefer a short orthogonal detour when a card blocks the direct
+          // lane. The previous curve-first strategy could choose a very long
+          // bottom/top U because its smoothness score did not account for the
+          // actual detour length. Orthogonal routes remain explicit and are
+          // easier to scan in a call graph.
+          const orthogonal = orthogonalPath(start, end, sourceId, targetId, occupiedSegments);
+          const directLength = Math.hypot(end[0] - start[0], end[1] - start[1]);
+          const orthogonalLength = orthogonal.points.slice(1).reduce((total, point, index) => (
+            total + Math.abs(point[0] - orthogonal.points[index][0])
+              + Math.abs(point[1] - orthogonal.points[index][1])
+          ), 0);
+          if (orthogonal.points.length <= 5 && orthogonalLength <= Math.max(220, directLength * 2.2)) {
+            return { d: orthogonal.d, points: orthogonal.points, obstacleRouted: true, router: "orthogonal-fallback" };
+          }
           const deltaX = end[0] - start[0];
           const deltaY = end[1] - start[1];
           // Keep the handles visibly away from both card borders. A shallow
@@ -2838,7 +2868,6 @@
             )));
           }
           if (candidates.length) return candidates.sort((left, right) => left.score - right.score)[0];
-          const orthogonal = orthogonalPath(start, end, sourceId, targetId, occupiedSegments);
           return { d: orthogonal.d, points: orthogonal.points, obstacleRouted: true };
         };
         const occupiedCallGraphSegments = [];
@@ -2906,6 +2935,15 @@
             .map(point => [point.x, point.y])
             .filter(point => point.every(Number.isFinite));
           if (points.length < 2) return null;
+          const directLength = Math.hypot(end[0] - start[0], end[1] - start[1]);
+          const routeLength = points.slice(1).reduce((total, point, index) => (
+            total + Math.abs(point[0] - points[index][0]) + Math.abs(point[1] - points[index][1])
+          ), 0);
+          // Libavoid is obstacle-aware but does not optimize for the visible
+          // viewport. Reject pathological routes that travel around the
+          // entire canvas; the bounded local fallback can then choose a
+          // shorter corridor.
+          if (routeLength > Math.max(280, directLength * 2.6)) return null;
           points[0] = start;
           points[points.length - 1] = end;
           if (points.length === 2) {
@@ -3123,6 +3161,7 @@
           // the port overlay. Otherwise direct arcs silently disappear.
           const path = document.createElementNS(svgNamespace, "path");
           path.classList.add("graph-call-path");
+          path.dataset.arcKey = resolvedEdgeKey;
           if (link.kind === "kafka") path.classList.add("is-kafka");
           if ((link.endpoint_ids || []).includes(graphState.analysisPortEndpointId)) {
             path.classList.add("is-analysis-selected");
@@ -3133,6 +3172,7 @@
           portPathOverlay.append(path);
           const arcLabel = document.createElementNS(svgNamespace, "text");
           arcLabel.classList.add("graph-call-label");
+          arcLabel.dataset.arcKey = resolvedEdgeKey;
           if (link.kind === "kafka") arcLabel.classList.add("is-kafka");
           if ((link.endpoint_ids || []).includes(graphState.analysisPortEndpointId)) {
             arcLabel.classList.add("is-analysis-selected");
@@ -3159,6 +3199,14 @@
           arcLabel.setAttribute("y", String(labelPoint[1] - 8));
           portPathOverlay.append(arcLabel);
           const hitArea = addArcHitArea(path);
+          hitArea.addEventListener("pointerenter", () => {
+            path.classList.add("is-analysis-hovered");
+            arcLabel.classList.add("is-analysis-hovered");
+          });
+          hitArea.addEventListener("pointerleave", () => {
+            path.classList.remove("is-analysis-hovered");
+            arcLabel.classList.remove("is-analysis-hovered");
+          });
           hitArea.addEventListener("click", event => {
             toggleAnalysisEndpoint(sourcePort?.endpoint_id || targetPort?.endpoint_id, event);
           });
@@ -5838,7 +5886,10 @@
     const codeFlowsEmpty = document.getElementById("code-flows-empty");
     const codeFlowFilter = document.getElementById("code-flow-filter");
     const codeFlowScope = document.getElementById("code-flow-scope");
+    const codeFlowConfidence = document.getElementById("code-flow-confidence");
+    const codeFlowKind = document.getElementById("code-flow-kind");
     const codeFlowCycles = document.getElementById("code-flow-cycles");
+    const codeFlowsSummary = document.getElementById("code-flows-summary");
     const codeFlowsTitle = document.getElementById("code-flows-title");
     function codeFlowStepLabel(kind) {
       return ({
@@ -5860,6 +5911,26 @@
 
     function codeFlowPriority(flow) {
       return flow.status === "cycle" ? 1 : 0;
+    }
+
+    function codeFlowProtocols(flow) {
+      const protocols = new Set();
+      (flow.steps || []).forEach(step => {
+        if (/message|kafka|topic/i.test(`${step.kind} ${step.name} ${step.path}`)) protocols.add("kafka");
+        if (/http|rest|api/i.test(`${step.kind} ${step.name} ${step.path}`)) protocols.add("http");
+      });
+      return protocols;
+    }
+
+    function codeFlowSummary(flow) {
+      const services = servicesForCodeFlow(flow);
+      const serviceText = services.length
+        ? `${services[0]}${services.length > 1 ? ` → ${services.slice(1).join(" → ")}` : ""}`
+        : flow.module;
+      const effects = (flow.steps || []).filter(step => ["message_publish", "http_call", "data_write"].includes(step.kind)).length;
+      const confidence = codeFlowConfidenceLabel(flow.confidence);
+      const alternatives = Math.max(1, Number(flow.alternative_count || 1));
+      return `${serviceText} · ${services.length} service${services.length > 1 ? "s" : ""} · ${effects} effet${effects > 1 ? "s" : ""} · confiance ${confidence}${alternatives > 1 ? ` · ${alternatives} routes alternatives` : ""}`;
     }
 
     function compareCodeFlows(left, right) {
@@ -6165,6 +6236,20 @@
       const meta = document.createElement("div");
       meta.className = "reference-meta";
       meta.textContent = flow.module;
+      const summary = document.createElement("p");
+      summary.className = "code-flow-summary";
+      summary.textContent = codeFlowSummary(flow);
+      const badges = document.createElement("div");
+      badges.className = "code-flow-badges";
+      [[`Confiance ${codeFlowConfidenceLabel(flow.confidence)}`, `is-confidence-${flow.confidence || "unknown"}`],
+        [flow.reconciliation === "partial" ? "Réconciliation partielle" : "Topologie réconciliée", flow.reconciliation === "partial" ? "is-warning" : "is-complete"],
+        [codeFlowProtocols(flow).size ? [...codeFlowProtocols(flow)].map(value => value.toUpperCase()).join(" + ") : "Protocole inconnu", "is-protocol"],
+        [Math.max(1, Number(flow.alternative_count || 1)) > 1 ? `${flow.alternative_count} alternatives` : "Une route", "is-alternatives"]].forEach(([text, className]) => {
+        const badge = document.createElement("span");
+        badge.className = `detail-badge ${className}`;
+        badge.textContent = text;
+        badges.append(badge);
+      });
       const servicesSection = document.createElement("div");
       servicesSection.className = "code-flow-services";
       const servicesLabel = document.createElement("div");
@@ -6204,7 +6289,7 @@
           ? "Flux détecté ; le chemin complet ne peut pas être rapproché de la topologie affichée"
           : "Flux détecté ; le chemin n’est pas disponible dans la topologie affichée";
       }
-      item.append(header, meta);
+      item.append(header, meta, summary, badges);
       item.append(servicesSection);
       return item;
     }
@@ -6213,6 +6298,8 @@
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
       const cyclesOnly = codeFlowCycles.getAttribute("aria-pressed") === "true";
       const scope = codeFlowScope.value;
+      const confidence = codeFlowConfidence.value;
+      const kind = codeFlowKind.value;
       const scopedCodeFlows = scope === "all"
         ? codeFlows
         : scope === "local"
@@ -6226,7 +6313,14 @@
           flow.reason,
           ...(flow.steps || []).flatMap(step => [step.kind, step.name, step.path]),
         ].join(" ").toLocaleLowerCase();
-        return (!query || haystack.includes(query)) && (!cyclesOnly || flow.status === "cycle");
+        const protocols = codeFlowProtocols(flow);
+        const kindMatches = kind === "all"
+          || (kind === "mixed" && protocols.size > 1)
+          || protocols.has(kind);
+        return (!query || haystack.includes(query))
+          && (!cyclesOnly || flow.status === "cycle")
+          && (confidence === "all" || flow.confidence === confidence)
+          && kindMatches;
       });
       const byService = new Map();
       visible.forEach(flow => {
@@ -6270,6 +6364,7 @@
       codeFlowsList.replaceChildren(...serviceGroups);
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
+      codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} · ${scopedCodeFlows.length} dans cette portée · sélectionnez un flux pour ouvrir son graphe d’appel.`;
       const cycleCount = scopedCodeFlows.filter(flow => flow.status === "cycle").length;
       codeFlowCycles.textContent = `Cycles uniquement (${cycleCount})`;
       codeFlowCycles.disabled = cycleCount === 0;
@@ -6284,6 +6379,8 @@
 
     codeFlowFilter.addEventListener("input", renderCodeFlows);
     codeFlowScope.addEventListener("change", renderCodeFlows);
+    codeFlowConfidence.addEventListener("change", renderCodeFlows);
+    codeFlowKind.addEventListener("change", renderCodeFlows);
     codeFlowCycles.addEventListener("click", () => {
       codeFlowCycles.setAttribute("aria-pressed", String(codeFlowCycles.getAttribute("aria-pressed") !== "true"));
       renderCodeFlows();
@@ -6321,10 +6418,17 @@
     const renderCardsButton = document.getElementById("render-cards");
     const renderSymbolsButton = document.getElementById("render-symbols");
     const analysisModeClear = document.getElementById("analysis-mode-clear");
+    const analysisModeCenter = document.getElementById("analysis-mode-center");
     graphCanvas.dataset.renderMode = graphState.renderMode;
     analysisModeClear?.addEventListener("click", () => {
       graphState.analysisPortEndpointId = null;
       requestGraphRender();
+    });
+    analysisModeCenter?.addEventListener("click", () => {
+      if (!graphState.selectedCodeFlowId || !graphState.relatedNodes?.size) return;
+      const orderedNodes = [...(graphState.pathMicroserviceOrder?.keys() || [])];
+      const remainingNodes = [...graphState.relatedNodes].filter(id => !orderedNodes.includes(id));
+      scheduleFlowCameraFit({ nodes: [...orderedNodes, ...remainingNodes] });
     });
     function updateFitModeControls(mode) {
       [

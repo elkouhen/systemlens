@@ -4,7 +4,10 @@
     const codeFlowsEmpty = document.getElementById("code-flows-empty");
     const codeFlowFilter = document.getElementById("code-flow-filter");
     const codeFlowScope = document.getElementById("code-flow-scope");
+    const codeFlowConfidence = document.getElementById("code-flow-confidence");
+    const codeFlowKind = document.getElementById("code-flow-kind");
     const codeFlowCycles = document.getElementById("code-flow-cycles");
+    const codeFlowsSummary = document.getElementById("code-flows-summary");
     const codeFlowsTitle = document.getElementById("code-flows-title");
     function codeFlowStepLabel(kind) {
       return ({
@@ -26,6 +29,26 @@
 
     function codeFlowPriority(flow) {
       return flow.status === "cycle" ? 1 : 0;
+    }
+
+    function codeFlowProtocols(flow) {
+      const protocols = new Set();
+      (flow.steps || []).forEach(step => {
+        if (/message|kafka|topic/i.test(`${step.kind} ${step.name} ${step.path}`)) protocols.add("kafka");
+        if (/http|rest|api/i.test(`${step.kind} ${step.name} ${step.path}`)) protocols.add("http");
+      });
+      return protocols;
+    }
+
+    function codeFlowSummary(flow) {
+      const services = servicesForCodeFlow(flow);
+      const serviceText = services.length
+        ? `${services[0]}${services.length > 1 ? ` → ${services.slice(1).join(" → ")}` : ""}`
+        : flow.module;
+      const effects = (flow.steps || []).filter(step => ["message_publish", "http_call", "data_write"].includes(step.kind)).length;
+      const confidence = codeFlowConfidenceLabel(flow.confidence);
+      const alternatives = Math.max(1, Number(flow.alternative_count || 1));
+      return `${serviceText} · ${services.length} service${services.length > 1 ? "s" : ""} · ${effects} effet${effects > 1 ? "s" : ""} · confiance ${confidence}${alternatives > 1 ? ` · ${alternatives} routes alternatives` : ""}`;
     }
 
     function compareCodeFlows(left, right) {
@@ -331,6 +354,20 @@
       const meta = document.createElement("div");
       meta.className = "reference-meta";
       meta.textContent = flow.module;
+      const summary = document.createElement("p");
+      summary.className = "code-flow-summary";
+      summary.textContent = codeFlowSummary(flow);
+      const badges = document.createElement("div");
+      badges.className = "code-flow-badges";
+      [[`Confiance ${codeFlowConfidenceLabel(flow.confidence)}`, `is-confidence-${flow.confidence || "unknown"}`],
+        [flow.reconciliation === "partial" ? "Réconciliation partielle" : "Topologie réconciliée", flow.reconciliation === "partial" ? "is-warning" : "is-complete"],
+        [codeFlowProtocols(flow).size ? [...codeFlowProtocols(flow)].map(value => value.toUpperCase()).join(" + ") : "Protocole inconnu", "is-protocol"],
+        [Math.max(1, Number(flow.alternative_count || 1)) > 1 ? `${flow.alternative_count} alternatives` : "Une route", "is-alternatives"]].forEach(([text, className]) => {
+        const badge = document.createElement("span");
+        badge.className = `detail-badge ${className}`;
+        badge.textContent = text;
+        badges.append(badge);
+      });
       const servicesSection = document.createElement("div");
       servicesSection.className = "code-flow-services";
       const servicesLabel = document.createElement("div");
@@ -370,7 +407,7 @@
           ? "Flux détecté ; le chemin complet ne peut pas être rapproché de la topologie affichée"
           : "Flux détecté ; le chemin n’est pas disponible dans la topologie affichée";
       }
-      item.append(header, meta);
+      item.append(header, meta, summary, badges);
       item.append(servicesSection);
       return item;
     }
@@ -379,6 +416,8 @@
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
       const cyclesOnly = codeFlowCycles.getAttribute("aria-pressed") === "true";
       const scope = codeFlowScope.value;
+      const confidence = codeFlowConfidence.value;
+      const kind = codeFlowKind.value;
       const scopedCodeFlows = scope === "all"
         ? codeFlows
         : scope === "local"
@@ -392,7 +431,14 @@
           flow.reason,
           ...(flow.steps || []).flatMap(step => [step.kind, step.name, step.path]),
         ].join(" ").toLocaleLowerCase();
-        return (!query || haystack.includes(query)) && (!cyclesOnly || flow.status === "cycle");
+        const protocols = codeFlowProtocols(flow);
+        const kindMatches = kind === "all"
+          || (kind === "mixed" && protocols.size > 1)
+          || protocols.has(kind);
+        return (!query || haystack.includes(query))
+          && (!cyclesOnly || flow.status === "cycle")
+          && (confidence === "all" || flow.confidence === confidence)
+          && kindMatches;
       });
       const byService = new Map();
       visible.forEach(flow => {
@@ -436,6 +482,7 @@
       codeFlowsList.replaceChildren(...serviceGroups);
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
+      codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} · ${scopedCodeFlows.length} dans cette portée · sélectionnez un flux pour ouvrir son graphe d’appel.`;
       const cycleCount = scopedCodeFlows.filter(flow => flow.status === "cycle").length;
       codeFlowCycles.textContent = `Cycles uniquement (${cycleCount})`;
       codeFlowCycles.disabled = cycleCount === 0;
@@ -450,6 +497,8 @@
 
     codeFlowFilter.addEventListener("input", renderCodeFlows);
     codeFlowScope.addEventListener("change", renderCodeFlows);
+    codeFlowConfidence.addEventListener("change", renderCodeFlows);
+    codeFlowKind.addEventListener("change", renderCodeFlows);
     codeFlowCycles.addEventListener("click", () => {
       codeFlowCycles.setAttribute("aria-pressed", String(codeFlowCycles.getAttribute("aria-pressed") !== "true"));
       renderCodeFlows();
