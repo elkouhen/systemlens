@@ -248,12 +248,14 @@ def test_many_direct_outputs_share_one_predecessor_search(tmp_path: Path, monkey
 
     monkeypatch.setattr("systemlens.indexing.code_flows.deque", CountedDeque)
     stats = {}
-    flows = materialize_codeql_code_flows([entry, *targets], [*endpoints, *target_endpoints], calls,
-                                        reachability=relations, max_paths=1, stats=stats)
+    flows = materialize_codeql_code_flows(
+        [entry, *targets], [*endpoints, *target_endpoints], calls,
+        reachability=relations, stats=stats,
+    )
     assert len(flows) == 100
     assert all(len(flow.steps) == 3 for flow in flows)
-    assert popped <= 104  # one direct BFS, not 100 independent searches
-    assert stats["truncated_paths"] > 0
+    assert popped <= 2 * len(targets) + 4
+    assert stats["explored_paths"] >= 100
 
 
 def test_medium_proof_never_uses_shorter_possible_dispatch_route(tmp_path: Path):

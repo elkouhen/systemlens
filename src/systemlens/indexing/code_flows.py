@@ -229,7 +229,7 @@ def materialize_code_flows(
 
 def materialize_codeql_code_flows(
     methods: list[IntegrationMethod], endpoints: list[MessageEndpoint], calls: list[CodeQLCall],
-    *, repo_root: Path | None = None, max_hops: int = 12, max_paths: int = 10_000,
+    *, repo_root: Path | None = None, max_hops: int = 12,
     stats: dict[str, int] | None = None,
     reachability: Sequence[CodeQLReachability] = (),
     source_paths: Sequence[str] = (),
@@ -371,7 +371,6 @@ def materialize_codeql_code_flows(
 
     flows: list[CodeFlow] = []
     explored = 0
-    truncated = 0
     for entry in methods:
         if not entry.input_endpoint_ids:
             continue
@@ -386,10 +385,6 @@ def materialize_codeql_code_flows(
                 if len(route) >= max_hops:
                     continue
                 for target, call, signature_join in adjacency.get(current.id, []):
-                    if explored >= max_paths:
-                        truncated += 1
-                        queue.clear()
-                        break
                     explored += 1
                     next_route = [*route, (target, call, signature_join)]
                     if target.id == entry.id or any(previous.id == target.id for previous, _edge, _signature in route):
@@ -472,7 +467,7 @@ def materialize_codeql_code_flows(
     if stats is not None:
         stats.update({
             "calls": len(calls), "joined_calls": sum(len(targets) for targets in adjacency.values()),
-            "explored_paths": explored, "truncated_paths": truncated,
+            "explored_paths": explored,
         })
     if reachability:
         # One predecessor tree per source/confidence, not a BFS per pair.

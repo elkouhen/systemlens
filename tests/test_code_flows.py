@@ -841,12 +841,11 @@ def test_codeql_flow_materialization_bounds_exploration(tmp_path: Path) -> None:
         endpoints,
         [CodeQLCall("com.example.OrderController.receive", source, 1,
                     "com.example.OrderPublisher.send", target, 1, 1)],
-        max_paths=1,
         stats=stats,
     )
 
     assert len(flows) == 1
-    assert stats == {"calls": 1, "joined_calls": 1, "explored_paths": 1, "truncated_paths": 0}
+    assert stats == {"calls": 1, "joined_calls": 1, "explored_paths": 1}
 
 
 def test_ast_fallback_uses_call_arity_to_resolve_output_overloads(tmp_path: Path) -> None:

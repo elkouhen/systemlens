@@ -35,7 +35,6 @@ analysis:
   codeql_ram_mb: null
   codeql_verbosity: progress++
   codeql_max_hops: 12
-  codeql_max_paths: 10000
   disabled_extractors: []
 ```
 

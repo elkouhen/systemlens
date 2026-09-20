@@ -32,7 +32,6 @@ class Config:
     codeql_ram_mb: int | None = None
     codeql_verbosity: str | None = None
     codeql_max_hops: int = 12
-    codeql_max_paths: int = 10_000
     disabled_extractors: list[str] = field(default_factory=list)
     root_path: str | None = None
 
@@ -80,11 +79,8 @@ def load_config(repo_root: Path) -> Config:
     codeql_ram_mb = analysis.get("codeql_ram_mb")
     codeql_verbosity = analysis.get("codeql_verbosity")
     codeql_max_hops = analysis.get("codeql_max_hops", 12)
-    codeql_max_paths = analysis.get("codeql_max_paths", 10_000)
     if not isinstance(codeql_max_hops, int) or codeql_max_hops < 1:
         raise ConfigError("analysis.codeql_max_hops doit être un entier positif.")
-    if not isinstance(codeql_max_paths, int) or codeql_max_paths < 1:
-        raise ConfigError("analysis.codeql_max_paths doit être un entier positif.")
     if not isinstance(codeql_timeout_seconds, int) or codeql_timeout_seconds < 1:
         raise ConfigError("analysis.codeql_timeout_seconds doit être un entier positif.")
     if isinstance(codeql_threads, bool) or not isinstance(codeql_threads, int) or codeql_threads < 0:
@@ -111,7 +107,6 @@ def load_config(repo_root: Path) -> Config:
         codeql_ram_mb=codeql_ram_mb,
         codeql_verbosity=codeql_verbosity,
         codeql_max_hops=codeql_max_hops,
-        codeql_max_paths=codeql_max_paths,
         disabled_extractors=list(analysis.get("disabled_extractors", [])),
         root_path=raw.get("root_path"),
     )
@@ -133,7 +128,7 @@ def init_config(repo_root: Path) -> Path:
             "codeql_timeout_seconds": 600,
             "codeql_threads": 0, "codeql_ram_mb": None,
             "codeql_verbosity": "progress++",
-            "codeql_max_hops": 12, "codeql_max_paths": 10_000,
+            "codeql_max_hops": 12,
             "disabled_extractors": [],
         },
     }

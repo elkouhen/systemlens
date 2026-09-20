@@ -44,8 +44,8 @@ The final counters answer most first questions:
 | `limite atteinte (N transitions)` | The bounded call-graph exploration stopped before considering every transition. |
 | `N parcours de code potentiel(s) matérialisé(s)` | Total persisted flows after local, interprocedural and Kafka continuation materialization. |
 
-The direct CodeQL reachability query is no longer limited by `max_paths` or by
-the configured hop count: it starts at indexed outputs and computes the
+The direct CodeQL reachability query is not limited by the configured hop
+count: it starts at indexed outputs and computes the
 transitive caller relation until indexed inputs are reached. The configuration
 values remain for forward fallback materialization, including CodeQL. Direct
 CodeQL pairs and fallback pairs are combined; a nonempty direct result does
@@ -55,20 +55,18 @@ default values are:
 ```yaml
 analysis:
   codeql_max_hops: 12
-  codeql_max_paths: 10000
 ```
 
-These values affect only the fallback path exploration. For a very branching
-codebase, increasing them can confirm whether fallback truncation is the cause:
+This value affects only the fallback path exploration. For a very branching
+codebase, increasing it can confirm whether depth truncation is the cause:
 
 ```yaml
 analysis:
   codeql_max_hops: 20
-  codeql_max_paths: 50000
 ```
 
-Increase these values carefully: they can substantially increase indexing time
-and the number of low-confidence candidate flows.
+Increase this value carefully: it can substantially increase indexing time and
+the number of low-confidence candidate flows.
 
 For inheritance across modules, check the fully qualified receiver type,
 imports, transitive base classes and method parameter signatures. The fallback

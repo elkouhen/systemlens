@@ -315,8 +315,7 @@ def _index_repo(
     engine_available = call_graph_engine == "codeql" and codeql_executable() is not None
     flow_signature = (
         f"{CODE_FLOW_SIGNATURE}|engine={call_graph_engine}|"
-        f"available={engine_available}|hops={config.codeql_max_hops}|"
-        f"paths={config.codeql_max_paths}"
+        f"available={engine_available}|hops={config.codeql_max_hops}"
     )
     if (
         topic_strategy == "strategy1"
@@ -507,7 +506,6 @@ def _index_repo(
                         methods, all_endpoints, calls, repo_root=repo_root,
                         source_paths=list(current_hashes),
                         max_hops=config.codeql_max_hops,
-                        max_paths=config.codeql_max_paths,
                     )
                 partial_flows = [
                     *flows,
@@ -545,7 +543,6 @@ def _index_repo(
                             methods, all_endpoints, calls, repo_root=repo_root,
                             source_paths=list(current_hashes),
                             max_hops=config.codeql_max_hops,
-                            max_paths=config.codeql_max_paths,
                             stats=codeql_stats, reachability=reachability,
                         )
                     publish_call_graph_progress(1, 1, "base CodeQL fournie", calls)
@@ -612,7 +609,6 @@ def _index_repo(
                                 methods, all_endpoints, calls, repo_root=repo_root,
                                 source_paths=list(current_hashes),
                                 max_hops=config.codeql_max_hops,
-                                max_paths=config.codeql_max_paths,
                                 stats=codeql_stats, reachability=reachability,
                             )
                         completed_calls: list[CodeQLCall] = []
@@ -640,7 +636,6 @@ def _index_repo(
                 methods, all_endpoints, calls, repo_root=repo_root,
                 source_paths=list(current_hashes),
                 max_hops=config.codeql_max_hops,
-                max_paths=config.codeql_max_paths,
                 stats=codeql_stats,
                 reachability=reachability,
             )
@@ -650,17 +645,13 @@ def _index_repo(
             # rendered more than once in the Flux view.
             flows = _deduplicate_code_flows([*flows, *codeql_flows])
             timer.end("call-graph-join", f"jointure {engine_label} et matérialisation des flux")
-            limit_note = (
-                f" limite atteinte ({config.codeql_max_paths} transitions)."
-                if codeql_stats["truncated_paths"] else ""
-            )
             _report_progress(
                 progress,
                 f"→ {engine_label} : "
                 f"{codeql_stats['calls']} appel(s), {codeql_stats['joined_calls']} jointure(s), "
                 f"{codeql_stats['explored_paths']} transition(s), "
                 f"{len(codeql_flows)} flux interprocédural(aux), "
-                f"{len(reachability)} reachability(s) directe(s).{limit_note}",
+                f"{len(reachability)} reachability(s) directe(s).",
             )
         elif methods and call_graph_engine != "none":
             _report_progress(

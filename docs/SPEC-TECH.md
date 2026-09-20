@@ -189,8 +189,8 @@ the call-site line. For CodeQL, reachability is computed from indexed output
 methods backwards through their callers until indexed input methods are reached.
 The transitive query has no business-level hop or global path limit; the
 configured subprocess timeout remains the operational safeguard. The legacy
-`analysis.codeql_max_hops` and `analysis.codeql_max_paths` values remain for
-bounded route reconstruction only; they do not authorize inferred call edges.
+`analysis.codeql_max_hops` remains for bounded route reconstruction; it does
+not authorize inferred call edges.
 By default, SystemLens creates one
 temporary CodeQL database for the whole indexed repository, with CodeQL's
 `--build-mode=none` source-only mode, then deletes it. The resulting calls are
