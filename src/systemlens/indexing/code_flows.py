@@ -5,8 +5,6 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
 
-import networkx as nx
-
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, compute_code_flow_id
 from systemlens.domain.code_flows import IntegrationMethod
@@ -35,7 +33,7 @@ def _deduplicate_code_flows(flows: list[CodeFlow]) -> list[CodeFlow]:
     higher-confidence, shorter route and retain deterministic ordering.
     """
     confidence_rank = {"high": 0, "medium": 1, "low": 2}
-    candidates = nx.MultiDiGraph()
+    grouped: dict[tuple[str, str, str], list[CodeFlow]] = {}
     for flow in flows:
         endpoint_steps = [step for step in flow.steps if step.endpoint_id]
         if not endpoint_steps:
@@ -48,10 +46,7 @@ def _deduplicate_code_flows(flows: list[CodeFlow]) -> list[CodeFlow]:
                 endpoint_steps[-1].endpoint_id or flow.id,
                 flow.status,
             )
-        candidates.add_edge(key[0], key[1], key=(key[2], flow.id), flow=flow)
-    grouped: dict[tuple[str, str, str], list[CodeFlow]] = {}
-    for source, target, edge_key, data in candidates.edges(keys=True, data=True):
-        grouped.setdefault((source, target, edge_key[0]), []).append(data["flow"])
+        grouped.setdefault(key, []).append(flow)
     selected = []
     for _, parallel in sorted(grouped.items()):
         representative = min(

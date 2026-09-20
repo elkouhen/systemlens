@@ -4,8 +4,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-import networkx as nx
-
 from systemlens.domain.graph import (
     GraphEdge,
     external_microservice_names,
@@ -48,11 +46,11 @@ def _deduplicated_call_port_links(edges: list[GraphEdge]) -> list[dict[str, str]
     """Return one browser call-graph edge per endpoint pair and protocol.
 
     The architecture snapshot can contain several equivalent evidence rows
-    for one call. A NetworkX multigraph gives those rows a canonical directed
-    identity before the HTML model is built, preventing duplicate arcs in the
-    Flux view while leaving the aggregated evidence on the architecture links.
+    for one call. A set gives those rows a canonical directed identity before
+    the HTML model is built, preventing duplicate arcs in the Flux view while
+    leaving the aggregated evidence on the architecture links.
     """
-    graph = nx.MultiDiGraph()
+    links: set[tuple[str, str, str]] = set()
     for edge in edges:
         if (
             edge.to_endpoint is None
@@ -64,14 +62,14 @@ def _deduplicated_call_port_links(edges: list[GraphEdge]) -> list[dict[str, str]
             continue
         source = edge.from_endpoint.id
         target = edge.to_endpoint.id
-        graph.add_edge(source, target, key=edge.kind, kind=edge.kind)
+        links.add((source, target, edge.kind))
     return [
         {
             "source_endpoint_id": source,
             "target_endpoint_id": target,
             "kind": str(kind),
         }
-        for source, target, kind in sorted(graph.edges(keys=True))
+        for source, target, kind in sorted(links)
     ]
 
 

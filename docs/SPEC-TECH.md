@@ -227,12 +227,12 @@ select an implementation on Spring bean metadata alone. The analysis profile,
 including the selected call-graph engine, availability, activation and its bounds, participates in the
 code-flow signature so switching profile recalculates unchanged repositories.
 
-The flow join uses NetworkX's directed multigraph representation to merge AST
-and interprocedural candidates before Kafka continuations are expanded. Parallel
-candidate routes are grouped by source endpoint, target endpoint, and status;
+The flow join groups AST and interprocedural candidates with deterministic
+in-memory keys before Kafka continuations are expanded. Parallel candidate
+routes are grouped by source endpoint, target endpoint, and status;
 the representative with the strongest confidence, then the shortest route, is
-persisted. The graph is used for analysis and deduplication; HTML layout remains
-a rendering concern handled by the browser graph stack. Each exported code flow
+persisted. The indexing deduplication uses plain deterministic collections; HTML
+layout remains a rendering concern handled by the browser graph stack. Each exported code flow
 also carries a NetworkX-derived service subgraph and deterministic component
 order; the Flux view uses that snapshot instead of reconstructing the call
 sequence from display labels.
