@@ -5,6 +5,10 @@
     .toolbar input:not([type="checkbox"]) { height: 34px; padding: 0 10px; border: 1px solid #b9c5d6; border-radius: 6px; color: #172033; background: #fff; font: inherit; font-size: 13px; }
     .toolbar-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border-radius: 8px; background: #edf2f7; }
     .toolbar > .toolbar-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .toolbar-tab-groups { display: grid; gap: 6px; }
+    .toolbar-tab-group { display: grid; gap: 3px; }
+    .toolbar-tab-group[hidden] { display: none; }
+    .toolbar-tab-group-title { padding: 0 3px; color: #64748b; font-size: 9px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
     .toolbar-tab { min-width: 0; height: 30px !important; width: auto !important; padding: 0 7px; overflow: hidden; border: 0 !important; border-radius: 6px !important; color: #52616b !important; background: transparent !important; font-size: 11px !important; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
     .toolbar-tab:hover { background: rgba(255, 255, 255, .65) !important; }
     .toolbar-tab.is-active { color: #1d4f91 !important; background: #fff !important; box-shadow: 0 1px 3px rgba(15, 23, 42, .12); }
@@ -20,6 +24,12 @@
     #search, #path-query { width: 100%; }
     .graph-context { display: grid; gap: 8px; }
     .graph-context[hidden] { display: none; }
+    .graph-mode-context { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 8px; color: #283b73; background: #eef2ff; font-size: 11px; line-height: 1.35; }
+    .graph-mode-context[hidden] { display: none; }
+    .graph-mode-context-copy { display: grid; gap: 2px; min-width: 0; flex: 1 1 auto; }
+    .graph-mode-context-copy strong { color: #293c82; font-size: 11px; overflow-wrap: anywhere; }
+    .graph-mode-context-copy span { color: #52658f; }
+    .graph-mode-context .graph-secondary-action { flex: 0 0 auto; height: 28px; padding: 0 7px; border: 1px solid #a5b4fc; border-radius: 6px; color: #3348b8; background: #fff; font-size: 10px; }
     .graph-actions { display: grid; gap: 6px; }
     .graph-action-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
     .toolbar button { width: 34px; height: 34px; border: 1px solid #b9c5d6; border-radius: 6px; color: #315f9b; background: #fff; font-size: 19px; line-height: 1; cursor: pointer; }

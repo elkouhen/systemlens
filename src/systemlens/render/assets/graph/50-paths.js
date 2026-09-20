@@ -13,8 +13,8 @@
       details.classList.add("is-empty");
       document.querySelector(".toolbar")?.classList.remove("has-details");
       resetButton.disabled = true;
-      resetButton.textContent = "Effacer";
-      resetButton.title = "Effacer la sélection";
+      resetButton.textContent = "Réinitialiser";
+      resetButton.title = "Réinitialiser la sélection";
       resetButton.setAttribute("aria-label", resetButton.title);
       details.replaceChildren();
       const empty = document.createElement("div");
@@ -60,7 +60,7 @@
           ? `API · ${source.name} appelle ${target.name} (${resource})`
           : `API · ${source.name} appelle ${target.name} (contrat non indexe)`;
       }
-      if (link.kind === "mongodb") return `Data · ${source.name} stocke dans ${target.name}`;
+      if (link.kind === "mongodb") return `Données · ${source.name} stocke dans ${target.name}`;
       if (source.kind === "microservice") {
         const types = link.published_message_types || [];
         return `Topic · ${source.name} publie${types.length ? ` <${types.join(", ")}>` : ""} sur ${target.name}${warning}`;
@@ -236,7 +236,7 @@
       header.className = "path-details-header";
       const kicker = document.createElement("p");
       kicker.className = "path-details-kicker";
-      kicker.textContent = context.codeFlow ? "Flux de code sélectionné" : "Analyse de flux";
+      kicker.textContent = context.codeFlow ? "Flux de code sélectionné" : "Analyse du flux";
       const title = document.createElement("h1");
       title.className = "path-details-title";
       title.textContent = context.codeFlow?.method
@@ -391,8 +391,8 @@
       if (context.showDetails !== false) renderPathDetails(path, context);
       else {
         resetButton.disabled = false;
-        resetButton.textContent = "Effacer";
-        resetButton.title = "Effacer la sélection";
+        resetButton.textContent = "Réinitialiser";
+        resetButton.title = "Réinitialiser la sélection";
         resetButton.setAttribute("aria-label", resetButton.title);
       }
       if (context.codeFlow) {
@@ -579,7 +579,7 @@
         [
           `${publishedApiCount} API${publishedApiCount > 1 ? "s" : ""} exposee${publishedApiCount > 1 ? "s" : ""}`,
           `${publishedTopicCount} topic${publishedTopicCount > 1 ? "s" : ""} publie${publishedTopicCount > 1 ? "s" : ""}`,
-          `${collectionCount} Data utilisée${collectionCount > 1 ? "s" : ""}`,
+          `${collectionCount} donnée${collectionCount > 1 ? "s" : ""} utilisée${collectionCount > 1 ? "s" : ""}`,
         ].forEach(label => { const badge = document.createElement("span"); badge.className = "detail-badge"; badge.textContent = label; meta.append(badge); });
       }
       const confidenceLabels = { proved: "prouvee", inferred: "inferee", conventional: "conventionnelle" };
@@ -598,7 +598,7 @@
         const connectivityLabels = { low: "basse", medium: "médiane", high: "élevée" };
         scoreBadge.textContent = `Connectivité relative : ${connectivityLabels[complexity.level]} (${complexity.score})`;
         const breakdown = complexity.breakdown || {};
-        scoreBadge.title = `APIs : ${breakdown.http || 0} · Topics : ${breakdown.kafka || 0} · Data : ${breakdown.mongodb || 0} · Rang relatif ${complexity.rank}/${complexity.population} · Tiers : ${complexity.tier_start}-${complexity.tier_end}`;
+        scoreBadge.title = `APIs : ${breakdown.http || 0} · Messages : ${breakdown.kafka || 0} · Données : ${breakdown.mongodb || 0} · Rang relatif ${complexity.rank}/${complexity.population} · Tiers : ${complexity.tier_start}-${complexity.tier_end}`;
         meta.append(scoreBadge);
       }
       header.append(kicker, title, meta);
@@ -716,9 +716,9 @@
           title: `Inspecter le contrat AsyncAPI ${contract.path}`,
           action: () => openAsyncApiContract(contract),
         })), relationsGroup);
-        appendServiceKafkaActivities(node, "consume", "Topics consommes", kafkaConsumptions, relationsGroup);
-        appendServiceKafkaActivities(node, "produce", "Topics publies", kafkaPublications, relationsGroup);
-        appendRelationList("Data", mongoCollections, id, link => (
+        appendServiceKafkaActivities(node, "consume", "Messages consommés", kafkaConsumptions, relationsGroup);
+        appendServiceKafkaActivities(node, "produce", "Messages publiés", kafkaPublications, relationsGroup);
+        appendRelationList("Données", mongoCollections, id, link => (
           nodeDataById.get(link.target).name
         ), relationsGroup);
         discardEmptyDetailsGroup(relationsGroup);
@@ -740,10 +740,10 @@
         const sourcesGroup = createDetailsGroup("Sources", false);
         appendActionList("Fichiers de preuve", sourceEntries, sourcesGroup);
         discardEmptyDetailsGroup(sourcesGroup);
-        const qualityGroup = createDetailsGroup("Qualité", false);
+        const qualityGroup = createDetailsGroup("Diagnostics", false);
         appendFindings(node.findings || [], qualityGroup);
         discardEmptyDetailsGroup(qualityGroup);
-        const groupOrder = ["Architecture", "Ports d'intégration", "Relations", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Qualité"];
+        const groupOrder = ["Architecture", "Ports d'intégration", "Relations", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Diagnostics"];
         [...details.querySelectorAll(":scope > .details-group")]
           .sort((left, right) => {
             const leftRank = groupOrder.indexOf(left.querySelector("summary")?.textContent);

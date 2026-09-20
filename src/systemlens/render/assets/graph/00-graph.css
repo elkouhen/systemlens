@@ -91,7 +91,7 @@
     .graph-node-trigger-badge { position: absolute; top: -27px; left: -7px; z-index: 3; max-width: 180px; padding: 3px 5px; border: 1px solid; border-radius: 8px; box-shadow: 0 2px 5px rgba(15, 23, 42, .2); font-size: 8px; font-weight: 800; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .graph-node-trigger-badge.is-http { border-color: #2563eb; color: #1e3a8a; background: #eff6ff; }
     .graph-node-trigger-badge.is-kafka { border-color: #059669; color: #065f46; background: #ecfdf5; }
-    .graph-node-port-reference { position: absolute; top: var(--port-offset); z-index: 1; display: grid; place-items: center; min-width: 24px; height: 16px; padding: 0 3px; box-sizing: border-box; transform: translateY(-50%); border: 1px solid #8b5cf6; border-radius: 8px; color: #4c1d95; background: #faf5ff; box-shadow: 0 2px 5px rgba(76,29,149,.14); font-size: 9px; font-weight: 800; line-height: 1; white-space: nowrap; }
+    .graph-node-port-reference { position: absolute; top: var(--port-offset); z-index: 1; display: grid; place-items: center; min-width: 28px; height: 18px; padding: 0 4px; box-sizing: border-box; transform: translateY(-50%); border: 1px solid #8b5cf6; border-radius: 9px; color: #4c1d95; background: #faf5ff; box-shadow: 0 2px 5px rgba(76,29,149,.14); font-size: 10px; font-weight: 800; line-height: 1; white-space: nowrap; }
     /* Port badges reuse the protocol colours of their associated arcs. */
     .graph-node-port-reference.is-http { border-color: #6d28d9; color: #4c1d95; background: #faf5ff; }
     .graph-node-port-reference.is-kafka { border-color: #008f69; color: #047857; background: #ecfdf5; box-shadow: 0 2px 5px rgba(0, 143, 105, .18); }

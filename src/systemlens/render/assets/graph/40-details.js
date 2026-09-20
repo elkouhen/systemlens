@@ -17,6 +17,8 @@
       const showingKafka = tab === "kafka";
       const showingPersistence = tab === "persistence";
       const showingFlows = tab === "flows";
+      const resourceTabGroup = document.getElementById("resource-tab-group");
+      if (resourceTabGroup) resourceTabGroup.hidden = showingFlows || showingIssues;
       graphTab.classList.toggle("is-active", showingGraph);
       graphTab.setAttribute("aria-selected", String(showingGraph));
       resourcesTab.classList.toggle("is-active", showingResources);
@@ -51,7 +53,7 @@
       inventoryStatus.classList.toggle("is-warning", indexingIssues.length > 0);
       inventoryStatus.textContent = indexingIssues.length
         ? `${indexingIssues.length} fait${indexingIssues.length > 1 ? "s" : ""} à vérifier`
-        : "Inventaire complet";
+        : "Index complet";
       inventoryStatus.title = indexingIssues.length
         ? "Ouvrir les problèmes d'indexation"
         : "Aucun fait non résolu dans cet inventaire";
@@ -142,7 +144,7 @@
       dtoReferencesEmpty.hidden = visibleDtos.length > 0;
       dtoReferencesEmpty.textContent = query && !visibleDtos.length
         ? "Aucun DTO ne correspond à ce filtre."
-        : "Aucun DTO de Topics détecté.";
+        : "Aucun DTO de messages détecté.";
       visibleDtos.forEach(dto => {
         const exchangeCount = (dto.producers?.length || 0) + (dto.consumers?.length || 0);
         dtoReferencesList.append(referenceItem(
@@ -153,7 +155,7 @@
         ));
       });
       openapiReferencesTitle.textContent = `Contrats OpenAPI (${visibleContracts.length}/${contracts.length})`;
-      dtoReferencesTitle.textContent = `DTO de Topics (${visibleDtos.length}/${dtos.length})`;
+      dtoReferencesTitle.textContent = `DTO de messages (${visibleDtos.length}/${dtos.length})`;
       const asyncContracts = graphData.nodes.flatMap(node => (
         node.kind === "microservice"
           ? (node.asyncapi_contracts || []).map(contract => ({ ...contract, module: node.name }))
@@ -179,7 +181,7 @@
       mongoClassReferencesEmpty.hidden = visiblePersistenceClasses.length > 0;
       mongoClassReferencesEmpty.textContent = mongoQuery && !visiblePersistenceClasses.length
         ? "Aucune classe de persistance ne correspond à ce filtre."
-        : "Aucune classe de persistance Data détectée.";
+        : "Aucune classe de données persistées détectée.";
       visiblePersistenceClasses.forEach(item => mongoClassReferencesList.append(referenceItem(
         item.qualified_name,
         `${item.collection} · ${item.service} / ${item.module} · ${item.fields?.length || 0} champ(s)`,
@@ -351,7 +353,7 @@
         button.className = "relation-link";
         button.type = "button";
         button.textContent = label;
-        button.title = actionTitle || "Explorer cet element dans le graphe";
+        button.title = actionTitle || "Afficher cet élément dans le graphe";
         button.addEventListener("click", action);
         item.append(button);
         list.append(item);
@@ -557,7 +559,7 @@
     function renderMongoPersistenceInspector(classId) {
       const item = (graphData.mongo_persistence_classes || []).find(candidate => candidate.id === classId);
       if (!item) return;
-      openInspector(`Persistance Data · ${item.name}`);
+      openInspector(`Données persistées · ${item.name}`);
       inspectorBody.classList.add("dto-inspector");
       if (mongoNavigation.length) {
         const navigation = document.createElement("div");
@@ -645,7 +647,7 @@
       summary.className = "dto-summary";
       summary.textContent = dto.source
         ? `Classe source : ${dto.source}`
-        : "Classe Java non retrouvee dans les sources indexees ; les relations de Topics restent disponibles.";
+        : "Classe Java non retrouvée dans les sources indexées ; les relations de messages restent disponibles.";
       inspectorBody.append(summary);
       if (dto.vscode_uri) {
         const sourceLink = document.createElement("a");
@@ -684,7 +686,7 @@
         section.append(heading, list);
         inspectorBody.append(section);
       }
-      appendDtoInspectorSection("Topics", dto.topics || []);
+      appendDtoInspectorSection("Messages", dto.topics || []);
       appendDtoInspectorSection("Valeurs enum", dto.enum_values || []);
       appendDtoInspectorSection("Producteurs", dto.producers || []);
       appendDtoInspectorSection("Consommateurs", dto.consumers || []);

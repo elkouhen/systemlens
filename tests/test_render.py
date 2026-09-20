@@ -266,8 +266,8 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     assert 'class="graph-control-group view-controls"' in document
     assert 'aria-label="Vue principale"' in document
     assert '>Graphe</button>' in document
-    assert '>Couches</button>' in document
-    assert '>Modules</button>' in document
+    assert '>Vue par couches</button>' in document
+    assert '>Vue par modules</button>' in document
     assert 'id="layer-view-toggle"' not in document
     assert "#graph {\n      position: fixed;" in document
     assert "#graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }" in document
@@ -519,16 +519,16 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="persistence-tab"' in document
     tab_order = [
         document.index('id="graph-tab"'),
-        document.index('id="resources-tab"'),
         document.index('id="flows-tab"'),
+        document.index('id="issues-tab"'),
+        document.index('id="resources-tab"'),
         document.index('id="openapi-tab"'),
         document.index('id="kafka-tab"'),
         document.index('id="persistence-tab"'),
-        document.index('id="issues-tab"'),
     ]
     assert tab_order == sorted(tab_order)
-    assert '>Topics</button>' in document
-    assert '>Data</button>' in document
+    assert '>Messages</button>' in document
+    assert '>Données</button>' in document
     assert 'Schémas de données d’événements' in document
     assert 'Schémas de données persistées' in document
     assert 'id="request-reply-tab"' not in document
@@ -536,8 +536,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'class="graph-control-group zoom-controls"' in document
     assert 'class="graph-control-group fit-controls"' in document
     assert 'class="graph-control-group render-controls"' in document
-    assert '>Tout</button>' in document
-    assert '>Lisible</button>' in document
+    assert '>Tout le graphe</button>' in document
+    assert '>Vue lisible</button>' in document
     assert '>Cartes</button>' in document
     assert '>Symboles</button>' in document
     assert 'renderMode: "cards"' in document
@@ -580,7 +580,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))" not in document
     assert "if (renderFrameScheduled) return renderFramePromise" in document
     assert "await requestGraphRender()" in document
-    assert '>Effacer</button>' in document
+    assert '>Réinitialiser</button>' in document
     assert 'id="dto-reference-filter"' in document
     assert 'id="openapi-reference-filter"' in document
     assert 'id="openapi-panel"' in document
@@ -613,7 +613,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "function appendServiceKafkaActivities" in document
     assert document.count('createDetailsGroup("Relations")') == 3
     assert 'appendRelationList("APIs consommees"' in document
-    assert 'appendServiceKafkaActivities(node, "produce", "Topics publies"' in document
+    assert 'appendServiceKafkaActivities(node, "produce", "Messages publiés"' in document
     assert 'appendRelationList("Services utilisant cette donnée"' in document
     assert 'appendList("Stockee par", [node.owner], relationsGroup)' not in document
     assert "function rebuildGraph()" in document
@@ -800,6 +800,12 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "function scheduleFlowCameraFit(path, attempt = 0)" in document
     assert ".toolbar { overflow-x: hidden; }" in document
     assert 'id="graph-context"' in document
+    assert 'id="graph-mode-context"' in document
+    assert 'id="analysis-mode-clear"' in document
+    assert 'const updateAnalysisModeIndicator = () =>' in document
+    assert 'toolbar-tab-group-title' in document
+    assert 'id="resource-tab-group"' in document
+    assert 'resourceTabGroup.hidden = showingFlows || showingIssues' in document
     assert "graphContext.hidden = !showingGraph" in document
     assert 'id="graph-tab" class="toolbar-tab is-active"' in document
     assert 'id="flows-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="flows-tab" hidden' in document

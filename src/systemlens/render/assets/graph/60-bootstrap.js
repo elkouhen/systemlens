@@ -27,7 +27,12 @@
     const fitReadableButton = document.getElementById("fit-readable");
     const renderCardsButton = document.getElementById("render-cards");
     const renderSymbolsButton = document.getElementById("render-symbols");
+    const analysisModeClear = document.getElementById("analysis-mode-clear");
     graphCanvas.dataset.renderMode = graphState.renderMode;
+    analysisModeClear?.addEventListener("click", () => {
+      graphState.analysisPortEndpointId = null;
+      requestGraphRender();
+    });
     function updateFitModeControls(mode) {
       [
         [fitOverviewButton, "overview"],

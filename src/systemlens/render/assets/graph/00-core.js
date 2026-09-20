@@ -49,9 +49,9 @@
     const showProjectGroups = document.getElementById("show-project-groups");
     const nodeKindLabel = node => {
       if (node.kind === "kafka_topic") return "Topic";
-      if (node.kind === "mongodb_collection") return "Data";
-      if (node.kind === "data_schema") return "Data";
-      if (node.kind === "message_channel") return "Topic";
+      if (node.kind === "mongodb_collection") return "Donnée";
+      if (node.kind === "data_schema") return "Donnée";
+      if (node.kind === "message_channel") return "Message";
       return node.external ? "Service externe" : "Microservice";
     };
     const nodeKindSuggestion = node => (
@@ -74,8 +74,8 @@
     };
     const summaryItems = [
       `${summaryCounts.microservices} service${summaryCounts.microservices > 1 ? "s" : ""}`,
-      `${summaryCounts.channels} Topic${summaryCounts.channels > 1 ? "s" : ""}`,
-      `${summaryCounts.dataResources} Data`,
+      `${summaryCounts.channels} message${summaryCounts.channels > 1 ? "s" : ""}`,
+      `${summaryCounts.dataResources} donnée${summaryCounts.dataResources > 1 ? "s" : ""}`,
       `${graphData.links.length} relation${graphData.links.length > 1 ? "s" : ""}`,
       ...(isolatedNodeIds.size
         ? [`${isolatedNodeIds.size} ressource${isolatedNodeIds.size > 1 ? "s" : ""} isolée${isolatedNodeIds.size > 1 ? "s" : ""}`]

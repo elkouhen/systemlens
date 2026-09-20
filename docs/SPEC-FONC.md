@@ -399,15 +399,31 @@ camera position, or persisted architecture facts.
 Call-graph arcs use the same stroke thickness as ordinary topology paths; their
 selection remains identifiable through the selected-flow styling and colour.
 Clearing or replacing the selection restores the ordinary filtered graph.
+The focused graph displays a persistent context banner naming the selected
+flow and explaining that ports and arcs are analysis controls. When an arc is
+focused, the banner offers an explicit action to clear the analysis focus.
 
-The architecture vocabulary is extensible: `Data` represents a persisted Data
-resource or contract, while `Topic` represents a messaging channel. MongoDB
+The export uses grouped navigation: the Graph group contains Graph, Flux de
+code, and Diagnostics; the Resources group contains Ressources, OpenAPI,
+Messages, and Données. Fit controls are labelled `Tout le graphe` and `Vue lisible`.
+The legend remains collapsed by default to preserve graph space and can be
+opened on demand.
+When the Flux or Quality view is active, the Resources group is temporarily
+hidden to keep the analysis context focused; it reappears when another view
+is selected.
+
+The architecture vocabulary is extensible: `Donnée` represents a persisted
+data resource or contract, while `Message` represents a messaging channel.
+The persisted model keeps the technical kinds `data_schema` and `message_channel`.
+MongoDB
 collections, SQL tables, Redis keyspaces, object-store datasets, Kafka,
 RabbitMQ, SQS, and webhook streams are technology-specific evidence, not the
 primary architecture category.
 
-The export uses a responsive workspace layout with seven navigation tabs, in
-this order: Explorer, Resources, Flux, OpenAPI, Topics, Data, and Quality.
+The export uses a responsive workspace layout with grouped navigation rather
+than one flat list: Graphe, Flux de code, and Diagnostics belong to the graph
+group; Ressources, OpenAPI, Messages, and Données belong to the resources
+group.
 `Resources` is a filterable inventory of every persisted graph node; selecting
 an item opens it in Explorer and focuses its graph card. `Topics` and `Data`
 are data-schema reference views: Java classes defining exchanged event data

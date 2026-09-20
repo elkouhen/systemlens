@@ -223,7 +223,7 @@
           const outputs = (node.ports || []).filter(port => port.direction === "out");
           addTooltipLine(tooltip, `${inputs.length} entrée${inputs.length === 1 ? "" : "s"} · ${outputs.length} sortie${outputs.length === 1 ? "" : "s"}`);
           const topics = [...new Set((node.ports || []).filter(port => /kafka|topic|message/i.test(port.type || "")).map(port => port.name))];
-          if (topics.length) addTooltipLine(tooltip, `Topics : ${topics.slice(0, 4).join(", ")}${topics.length > 4 ? "…" : ""}`, "graph-entity-tooltip-detail");
+          if (topics.length) addTooltipLine(tooltip, `Messages : ${topics.slice(0, 4).join(", ")}${topics.length > 4 ? "…" : ""}`, "graph-entity-tooltip-detail");
           if (node.technology || node.build_system) addTooltipLine(tooltip, [node.technology, node.build_system].filter(Boolean).join(" · "), "graph-entity-tooltip-detail");
         } else if (node.kind === "kafka_topic") {
           addTooltipLine(tooltip, `Producteurs : ${(node.published_message_types || []).length || 0} type(s)`);
@@ -440,6 +440,28 @@
         const graphPointToViewport = graphPoint => {
           return renderer.graphToViewport(graphPoint);
         };
+        const updateAnalysisModeIndicator = () => {
+          const context = document.getElementById("graph-mode-context");
+          const title = document.getElementById("graph-mode-context-title");
+          const help = document.getElementById("graph-mode-context-help");
+          const clear = document.getElementById("analysis-mode-clear");
+          if (!context || !title || !help || !clear) return;
+          const active = Boolean(graphState.selectedCodeFlowId);
+          context.hidden = !active;
+          if (!active) return;
+          const flowPath = [...(graphState.pathMicroserviceOrder?.keys() || [])]
+            .map(id => nodeDataById.get(id)?.name)
+            .filter(Boolean)
+            .join(" → ");
+          const trigger = graphState.codeFlowTrigger?.name;
+          title.textContent = flowPath
+            ? `Analyse du flux · ${flowPath}`
+            : trigger ? `Analyse du flux · ${trigger}` : "Analyse du flux";
+          help.textContent = graphState.analysisPortEndpointId
+            ? "Arc associé sélectionné · cliquez sur un autre arc ou port pour changer"
+            : "Cliquez sur un port ou un arc pour afficher sa relation";
+          clear.hidden = !graphState.analysisPortEndpointId;
+        };
         const toggleAnalysisEndpoint = (endpointId, event) => {
           if (!endpointId) return;
           event?.preventDefault();
@@ -447,8 +469,10 @@
           graphState.analysisPortEndpointId = graphState.analysisPortEndpointId === endpointId
             ? null
             : endpointId;
+          updateAnalysisModeIndicator();
           requestGraphRender();
         };
+        updateAnalysisModeIndicator();
         network.forEachNode((id, attributes) => {
           if (
             !isVisibleNodeId(id)

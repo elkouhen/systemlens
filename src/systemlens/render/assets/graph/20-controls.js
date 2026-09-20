@@ -57,11 +57,11 @@
       ["cluster", document.getElementById("layout-cluster")],
     ]);
     const layoutLabels = new Map([
-      ["forceatlas2", "placement liens groupés"],
-      ["noverlap", "placement sans chevauchement"],
-      ["forceatlas2-noverlap", "vue graphe"],
-      ["elk", "vue couches"],
-      ["cluster", "vue modules"],
+      ["forceatlas2", "regroupement des liens"],
+      ["noverlap", "éviter les chevauchements"],
+      ["forceatlas2-noverlap", "vue par graphe"],
+      ["elk", "vue par couches"],
+      ["cluster", "vue par modules"],
     ]);
     const pathStops = [];
     const MAX_SIMPLE_PATH_DEPTH = 8;

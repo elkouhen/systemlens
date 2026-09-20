@@ -23,14 +23,24 @@
       <div class="brand"><span class="brand-mark">SL</span><strong>SystemLens</strong><span class="brand-subtitle">Espace d’architecture</span></div>
       <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
     </div>
-    <div class="toolbar-tabs" role="tablist" aria-label="Vues de l'architecture">
-      <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel">Explorer</button>
-      <button id="resources-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="resources-panel">Ressources</button>
-      <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux</button>
-      <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
-      <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Topics</button>
-      <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Data</button>
-      <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problemes d'indexation">Qualité</button>
+    <div class="toolbar-tab-groups" aria-label="Navigation de l'architecture">
+      <section class="toolbar-tab-group" aria-labelledby="explore-tabs-title">
+        <span id="explore-tabs-title" class="toolbar-tab-group-title">Graphe</span>
+        <div class="toolbar-tabs" role="tablist" aria-label="Vues d'exploration">
+          <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel">Graphe</button>
+          <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux de code</button>
+          <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problemes d'indexation">Diagnostics</button>
+        </div>
+      </section>
+      <section id="resource-tab-group" class="toolbar-tab-group" aria-labelledby="resources-tabs-title">
+        <span id="resources-tabs-title" class="toolbar-tab-group-title">Ressources</span>
+        <div class="toolbar-tabs" role="tablist" aria-label="Ressources et contrats">
+          <button id="resources-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="resources-panel">Ressources</button>
+          <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
+          <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Messages</button>
+          <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Données</button>
+        </div>
+      </section>
     </div>
     <p id="progress-notice" class="progress-notice" hidden></p>
     <div id="graph-panel" class="toolbar-panel" role="tabpanel" aria-labelledby="graph-tab">
@@ -49,17 +59,17 @@
               <button id="zoom-in" type="button" aria-label="Zoomer" title="Zoomer">+</button>
             </div>
             <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
-              <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tous les nœuds" title="Afficher tous les nœuds" aria-pressed="false">Tout</button>
-              <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher le graphe à une distance lisible" title="Afficher le graphe à une distance lisible" aria-pressed="true">Lisible</button>
+              <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tout le graphe" title="Afficher tout le graphe" aria-pressed="false">Tout le graphe</button>
+              <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher une vue lisible" title="Afficher une vue lisible" aria-pressed="true">Vue lisible</button>
             </div>
             <span class="graph-actions-spacer" aria-hidden="true"></span>
-            <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Effacer la sélection" title="Effacer la sélection" disabled>Effacer</button>
+            <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled>Réinitialiser</button>
           </div>
           <div class="graph-action-row display-actions">
             <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
-              <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Explorer les relations avec des nœuds espacés">Graphe</button>
-              <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
-              <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
+              <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe</button>
+              <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Vue par couches</button>
+              <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Vue par modules</button>
             </div>
             <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
               <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
@@ -69,34 +79,41 @@
         </div>
         <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
         <button id="inventory-status" class="inventory-status" type="button" hidden></button>
+        <div id="graph-mode-context" class="graph-mode-context" hidden>
+          <div class="graph-mode-context-copy">
+            <strong id="graph-mode-context-title"></strong>
+            <span id="graph-mode-context-help"></span>
+          </div>
+          <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" hidden>Réinitialiser l’analyse</button>
+        </div>
       </section>
       <details id="display-controls" class="display-controls">
-        <summary>Nœuds et arêtes affichés</summary>
+        <summary>Filtres du graphe</summary>
         <div class="display-filter-groups">
           <fieldset class="relation-filters">
             <legend>Types d’arêtes</legend>
             <label class="relation-filter" title="Afficher les appels d’API"><input id="relation-http" type="checkbox" checked aria-label="Afficher les arêtes d’API">APIs</label>
-            <label class="relation-filter" title="Afficher les publications, consommations et échanges request/reply"><input id="relation-kafka" type="checkbox" checked aria-label="Afficher les arêtes de Topics">Topics</label>
-            <label class="relation-filter" title="Afficher les lectures et écritures de Data"><input id="relation-mongodb" type="checkbox" checked aria-label="Afficher les arêtes d’accès à la Data">Data</label>
+            <label class="relation-filter" title="Afficher les publications, consommations et échanges request/reply"><input id="relation-kafka" type="checkbox" checked aria-label="Afficher les arêtes de messages">Messages</label>
+            <label class="relation-filter" title="Afficher les lectures et écritures de données"><input id="relation-mongodb" type="checkbox" checked aria-label="Afficher les arêtes d’accès aux données">Données</label>
             <label class="relation-filter" title="Afficher les autres types de relations"><input id="relation-other" type="checkbox" checked aria-label="Afficher les autres types d’arêtes">Autres</label>
           </fieldset>
           <fieldset class="relation-filters">
             <legend>Types de nœuds</legend>
             <label class="relation-filter" title="Afficher les microservices indexés"><input id="node-microservice" type="checkbox" checked aria-label="Afficher les microservices">Microservices</label>
             <label class="relation-filter" title="Afficher les microservices externes"><input id="node-external-microservice" type="checkbox" checked aria-label="Afficher les microservices externes">Externes</label>
-            <label class="relation-filter" title="Afficher les Topics"><input id="node-kafka-topic" type="checkbox" checked aria-label="Afficher les Topics">Topics</label>
-            <label class="relation-filter" title="Afficher les Data"><input id="node-mongodb-collection" type="checkbox" checked aria-label="Afficher les Data">Data</label>
+            <label class="relation-filter" title="Afficher les messages"><input id="node-kafka-topic" type="checkbox" checked aria-label="Afficher les messages">Messages</label>
+            <label class="relation-filter" title="Afficher les données"><input id="node-mongodb-collection" type="checkbox" checked aria-label="Afficher les données">Données</label>
             <label class="relation-filter" title="Afficher les autres types de ressources"><input id="node-other" type="checkbox" checked aria-label="Afficher les autres types de nœuds">Autres</label>
           </fieldset>
         </div>
       </details>
       <details id="advanced-controls" class="advanced-controls">
-        <summary>Filtres et disposition avancés</summary>
+        <summary>Options avancées</summary>
       <fieldset class="layout-controls">
         <legend>Placement des nœuds</legend>
         <div class="layout-options layout-strategy-options" role="group" aria-label="Choix du placement des nœuds">
-          <button id="layout-forceatlas2" class="layout-option" type="button" aria-pressed="false" title="Regrouper les nœuds liés">Liens groupés</button>
-          <button id="layout-noverlap" class="layout-option" type="button" aria-pressed="false" title="Écarter les nœuds qui se chevauchent">Sans chevauchement</button>
+          <button id="layout-forceatlas2" class="layout-option" type="button" aria-pressed="false" title="Regrouper les nœuds liés">Regrouper les liens</button>
+          <button id="layout-noverlap" class="layout-option" type="button" aria-pressed="false" title="Écarter les nœuds qui se chevauchent">Éviter les chevauchements</button>
         </div>
       </fieldset>
       <fieldset class="layout-controls">
@@ -119,9 +136,9 @@
     </div>
     <div id="resources-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="resources-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker">Inventaire indexé</p>
+        <p class="references-kicker">Ressources indexées</p>
         <h2 id="resources-title" class="references-title">Ressources</h2>
-        <p class="references-description">Recherchez un microservice, un topic, une Data ou toute autre ressource par son nom.</p>
+        <p class="references-description">Recherchez un microservice, un message, une donnée ou toute autre ressource par son nom.</p>
       </div>
       <section class="references-section"><input id="resources-filter" class="reference-filter-input" type="search" placeholder="Rechercher une ressource par nom" autocomplete="off" aria-label="Rechercher une ressource par nom"><ul id="resources-list" class="references-list"></ul><p id="resources-empty" class="references-empty">Aucune ressource ne correspond à ce filtre.</p></section>
     </div>
@@ -153,19 +170,19 @@
     <div id="kafka-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="kafka-tab" hidden>
       <div class="references-header">
         <p class="references-kicker">Schémas de données d’événements</p>
-        <h2 id="dto-references-title" class="references-title">Schémas de données Topics</h2>
-        <p class="references-description">Inspectez les classes Java qui définissent les données échangées via les Topics.</p>
+        <h2 id="dto-references-title" class="references-title">Schémas de données Messages</h2>
+        <p class="references-description">Inspectez les classes Java qui définissent les données échangées par messages.</p>
       </div>
-      <section class="references-section"><input id="dto-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTO par nom ou package" autocomplete="off" aria-label="Filtrer les DTO de Topics"><ul id="dto-references" class="references-list"></ul><p id="dto-references-empty" class="references-empty">Aucun DTO de Topics détecté.</p></section>
+      <section class="references-section"><input id="dto-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTO par nom ou package" autocomplete="off" aria-label="Filtrer les DTO de messages"><ul id="dto-references" class="references-list"></ul><p id="dto-references-empty" class="references-empty">Aucun DTO de messages détecté.</p></section>
       <section class="references-section"><h3 id="asyncapi-references-title">Contrats AsyncAPI</h3><ul id="asyncapi-references" class="references-list"></ul><p id="asyncapi-references-empty" class="references-empty">Aucun contrat AsyncAPI détecté.</p></section>
     </div>
     <div id="persistence-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="persistence-tab" hidden>
       <div class="references-header">
         <p class="references-kicker">Schémas de données persistées</p>
-        <h2 id="mongo-class-references-title" class="references-title">Schémas de données Data</h2>
+        <h2 id="mongo-class-references-title" class="references-title">Schémas de données persistées</h2>
         <p class="references-description">Inspectez les classes Java qui définissent les données persistées.</p>
       </div>
-      <section class="references-section"><input id="mongo-class-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou Data" autocomplete="off" aria-label="Filtrer les classes de persistance Data"><ul id="mongo-class-references" class="references-list"></ul><p id="mongo-class-references-empty" class="references-empty">Aucune classe de persistance Data détectée.</p></section>
+      <section class="references-section"><input id="mongo-class-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou donnée" autocomplete="off" aria-label="Filtrer les classes de données persistées"><ul id="mongo-class-references" class="references-list"></ul><p id="mongo-class-references-empty" class="references-empty">Aucune classe de données persistées détectée.</p></section>
     </div>
     <div id="details" class="is-empty"><div class="details-empty">Selectionnez un noeud pour isoler ses relations et afficher ses APIs.</div></div>
   </div>
@@ -178,15 +195,15 @@
       <div class="legend-row">La connectivité est relative à chaque type de ressource, pas un niveau de risque.</div>
       <div class="legend-row"><span class="legend-mark legend-resource-mark microservice"></span>Microservice</div>
       <div class="legend-row"><span class="legend-mark legend-resource-mark topic"></span>Topic</div>
-      <div class="legend-row"><span class="legend-mark legend-resource-mark collection"></span>Data</div>
+      <div class="legend-row"><span class="legend-mark legend-resource-mark collection"></span>Donnée</div>
       <div class="legend-row"><span class="legend-line" style="background:#D55E00"></span>Appel d’API</div>
       <div class="legend-row"><span class="legend-line" style="background:#009E73"></span>Publication de Topic</div>
       <div class="legend-row"><span class="legend-line" style="background:#0072B2"></span>Consommation de Topic</div>
       <div class="legend-row"><span class="legend-line" style="background:#7C3AED"></span>Pattern request/reply de Topic</div>
-      <div class="legend-row"><span class="legend-line" style="background:#CC79A7"></span>Accès Data</div>
-      <div class="legend-row"><span class="legend-mark" style="background:#16a34a"></span>Relation prouvee : code ou manifeste</div>
-      <div class="legend-row"><span class="legend-mark" style="background:#d97706"></span>Relation inferee : OpenAPI ou inventaire</div>
-      <div class="legend-row"><span class="legend-mark" style="background:#7c3aed"></span>Relation conventionnelle : Strategy1</div>
+      <div class="legend-row"><span class="legend-line" style="background:#CC79A7"></span>Accès aux données</div>
+      <div class="legend-row"><span class="legend-mark" style="background:#16a34a"></span>Preuve source : code ou manifeste</div>
+      <div class="legend-row"><span class="legend-mark" style="background:#d97706"></span>Déduction contractuelle : OpenAPI ou inventaire</div>
+      <div class="legend-row"><span class="legend-mark" style="background:#7c3aed"></span>Convention d’architecture : Strategy1</div>
     </div>
   </details>
   <div id="graph" aria-label="Graphe des interactions"></div>
