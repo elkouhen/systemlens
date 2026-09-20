@@ -10,7 +10,7 @@ DEFAULT_EXCLUDE = [".git/**", ".venv/**", "node_modules/**", ".systemlens/**"]
 DEFAULT_MIN_SEVERITY = "INFO"
 VALID_SEVERITIES = ("INFO", "WARNING", "ERROR")
 VALID_TOPIC_STRATEGIES = ("default", "strategy1")
-VALID_CALL_GRAPH_ENGINES = ("codeql", "joern", "none")
+VALID_CALL_GRAPH_ENGINES = ("codeql", "none")
 VALID_CODEQL_VERBOSITIES = ("errors", "progress", "progress+", "progress++", "progress+++")
 
 

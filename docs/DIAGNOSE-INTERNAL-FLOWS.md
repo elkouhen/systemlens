@@ -27,7 +27,7 @@ Extract the relevant lines from the log:
 
 ```bash
 rg -n -i \
-  'ports détectés|CodeQL|Joern|indisponible|flux interprocéduraux|parcours de code|limite|appel\(s\)|jointure' \
+  'ports détectés|CodeQL|indisponible|flux interprocéduraux|parcours de code|limite|appel\(s\)|jointure' \
   indexing.log
 ```
 
@@ -36,7 +36,7 @@ The final counters answer most first questions:
 | Log message | Interpretation |
 | --- | --- |
 | `ports détectés (X IN, Y OUT)` | The endpoint extractor found the inputs and outputs required for a flow. `OUT=0` means no input-to-output flow can be materialized. |
-| `CodeQL : préparation de l'analyse interprocédurale` or the equivalent Joern message | An interprocedural engine is active. |
+| `CodeQL : préparation de l'analyse interprocédurale`  | An interprocedural engine is active. |
 | `indisponible ; flux interprocéduraux ignorés` | Only same-method AST flows are available. |
 | `N appel(s) extrait(s)` | Number of Java calls returned by the call-graph engine. |
 | `N jointure(s)` | Number of calls attached to indexed integration methods. A high call count with zero joins usually indicates a source-location or method-name resolution problem. |
@@ -47,7 +47,7 @@ The final counters answer most first questions:
 The direct CodeQL reachability query is no longer limited by `max_paths` or by
 the configured hop count: it starts at indexed outputs and computes the
 transitive caller relation until indexed inputs are reached. The configuration
-values remain for forward fallback materialization, including Joern. Direct
+values remain for forward fallback materialization, including CodeQL. Direct
 CodeQL pairs and fallback pairs are combined; a nonempty direct result does
 not suppress other fallback paths. Their
 default values are:
@@ -213,7 +213,7 @@ that are built dynamically.
 
 ### Calls are extracted but no flows are joined
 
-If CodeQL/Joern reports calls but `joined` is zero, the engine saw Java calls
+If CodeQL reports calls but `joined` is zero, the engine saw Java calls
 that could not be matched to the persisted integration methods. Common causes
 are generated or relocated source paths, unresolved external types, overloaded
 methods without a unique source location, and module boundaries that cannot be
@@ -221,7 +221,7 @@ proven from source-only analysis.
 
 ### The call graph engine is unavailable
 
-Without CodeQL or Joern, SystemLens retains same-method flows but cannot
+Without CodeQL, SystemLens retains same-method flows but cannot
 reliably follow `Controller -> Service -> Adapter` chains. Check the doctor
 output and the engine availability line in `indexing.log`.
 
@@ -234,7 +234,7 @@ in `indexing-issues.json` where applicable.
 
 ### The flow is too deep or too branched
 
-For Joern or a fallback materialization, look for the `limit reached` message.
+For CodeQL or a fallback materialization, look for the `limit reached` message.
 Increase the fallback values temporarily, reindex, and compare the resulting
 counters.
 
@@ -251,7 +251,7 @@ source code and secrets are not required:
 
 ```bash
 rg -n -i \
-  'ports détectés|CodeQL|Joern|indisponible|flux interprocéduraux|parcours de code|limite|appel\(s\)|jointure' \
+  'ports détectés|CodeQL|indisponible|flux interprocéduraux|parcours de code|limite|appel\(s\)|jointure' \
   indexing.log
 
 systemlens flows --json

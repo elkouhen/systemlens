@@ -62,7 +62,7 @@ in the architecture snapshot.
 | `systemlens init` | Creates `.systemlens/config.yml`; it never overwrites an existing file. |
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
-| `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--call-graph-engine codeql\|joern\|none] [--codeql-database DIR] [--codeql-progress] [--codeql-progress-html FILE] [--generate-sources] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. The default `codeql` engine creates one temporary source-only Java database for the whole repository, then reports extracted calls project by project; this preserves cross-project references. `--codeql-progress` forwards CodeQL's detailed live progress output. `--generate-sources` runs only the Maven/Gradle source-generation phase in a temporary copy; it never compiles or runs tests. `joern` creates one temporary Java CPG per project. Both aggregate resolved calls and extend code flows across resolved method calls. `none` keeps AST-only flows. `--codeql-database` reuses an already-built global CodeQL database and requires the `codeql` engine. `--codeql-progress-html` rewrites an explicitly provisional HTML graph after each reported CodeQL project; it requires the `codeql` engine and is not a final export. `--no-codeql` is the legacy AST-only alias. |
+| `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--call-graph-engine codeql\|none] [--codeql-database DIR] [--codeql-progress] [--codeql-progress-html FILE] [--generate-sources] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. The default `codeql` engine creates one temporary source-only Java database for the whole repository, then reports extracted calls project by project; this preserves cross-project references. `--codeql-progress` forwards CodeQL's detailed live progress output. `--generate-sources` runs only the Maven/Gradle source-generation phase in a temporary copy; it never compiles or runs tests. `none` keeps AST-only flows. `--codeql-database` reuses an already-built global CodeQL database and requires the `codeql` engine. `--codeql-progress-html` rewrites an explicitly provisional HTML graph after each reported CodeQL project; it requires the `codeql` engine and is not a final export. `--no-codeql` is the legacy AST-only alias. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts a reviewable fact manifest, including one produced by an agent through the companion skill, into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
 | `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows from an entry point to a source-evidenced external effect, within one method or across calls resolved by the selected call-graph engine. Each flow reports whether its endpoint evidence is `complete` or `partial` relative to the persisted topology snapshot. |
@@ -107,8 +107,7 @@ scanned=<N> skipped=<N> +integrations=<N> -integrations=<N>
 The first AST-only run removes stale results from the retired analyzer.
 
 Automatic call-graph analysis creates one source-only Java database for the
-whole repository with `codeql`; `joern` creates one Java Code Property Graph
-(CPG) for each discovered build project that owns Java sources. Progress
+whole repository with `codeql`. Progress
 reports the completed project over the total and the calls extracted from it.
 SystemLens maps module-relative evidence paths back to the repository root,
 aggregates all calls, and only then joins them to the global method inventory.
@@ -117,7 +116,7 @@ global-database override and is queried once.
 
 `--strategy strategy1` is opt-in. The selected strategy is persisted with
 the index and reused by incremental MCP reindexing and all derived views.
-`analysis.call_graph_engine` accepts `codeql` (default), `joern`, or `none`.
+`analysis.call_graph_engine` accepts `codeql` (default) or `none`.
 The automatic CodeQL projection preserves Java sources below
 `target/generated-sources` so generated AsyncAPI/OpenAPI types remain
 available; other build outputs and build descriptors are excluded.
@@ -179,9 +178,8 @@ dynamic, unresolved port rather than a guessed service link.
 
 Indexing materializes AST method facts that associate each Java method with its
 HTTP/message entry endpoints and HTTP/message output endpoints. It then
-materializes conservative same-method code flows and, when the selected local
-call-graph engine is available, creates a global source-only Java database
-(CodeQL) or Java CPGs (Joern) per source-owning project to follow resolved
+materializes conservative same-method code flows and, when CodeQL is
+available, creates a global source-only Java database to follow resolved
 static method calls from an indexed entry method to an indexed output method.
 CodeQL additionally answers transitive reachability by starting at indexed
 output methods and walking callers until indexed input methods are reached;
@@ -204,7 +202,7 @@ exactly one indexed method has the qualified name. That fallback is marked
 Source-declared abstract/interface dispatch may bridge to one unique concrete
 implementation and receiver-based helper calls may be added, always as
 `possible`/`low`; ambiguous candidates remain unresolved.
-Joern contributes only source-located resolved callees; recovered receiver
+CodeQL contributes only source-located resolved callees; recovered receiver
 types and `methodFullName` values without source evidence are diagnostics, not
 architecture edges. Reflection, dynamic routing, and runtime-only routing are
 not added.
@@ -212,8 +210,8 @@ not added.
 Before Kafka continuations are composed, AST-only and interprocedural candidates
 are merged into a directed multigraph with NetworkX and reduced to one
 representative per source endpoint, target endpoint, and status. This prevents
-the same source-evidenced call flow from being listed twice when both analysis
-engines describe it.
+the same source-evidenced call flow from being listed twice when AST and CodeQL
+describe it.
 
 For Kafka, SystemLens can continue a potential flow from a concrete,
 statically resolved producer topic and known message type to a persisted

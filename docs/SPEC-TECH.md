@@ -200,12 +200,9 @@ by reported call-site evidence for partial views. Direct answers without an
 intermediate witness are withheld until the final checkpoint. The
 complete global call list, including cross-project references, is used for
 method-flow materialization.
-Selecting Joern instead creates and deletes one Java CPG for the same module
-unit and exports only source-located `callee`-resolved calls. Recovered
-receiver types and non-synthetic `methodFullName` values without source
-locations are diagnostics, not joins. The call facts are kept in memory, their
-paths are remapped to root-relative evidence, and all module results are
-aggregated before method-flow materialization. A missing or untrusted callee
+The call facts are kept in memory, their paths are remapped to root-relative
+evidence, and all repository results are aggregated before method-flow
+materialization. A missing or untrusted callee
 path may join one unique qualified indexed method, but is explicitly
 low-confidence and retains signature-join provenance; ambiguous names remain
 unresolved. An
@@ -495,12 +492,8 @@ descriptors or build outputs, except Java files below `target/generated-sources`
 create a database from that projection, query
 it, and decode the result as CSV;
 progress checkpoints group the global result by source-owning project, while
-all call facts are joined together. Selecting Joern
-invokes `joern-parse --language JAVASRC` for the same module unit and its local
-non-interactive interpreter exports only source-located resolved calls as TSV;
-its CPG and query script are temporary. Recovered receiver types and
-`methodFullName` values without source locations are diagnostics, not joins.
-`--codeql-database` reuses one global database
+all call facts are joined together. CodeQL's temporary query pack exports only
+source-located resolved calls. `--codeql-database` reuses one global database
 supplied by the caller. The temporary CodeQL query pack pins
 `codeql/java-all` and resolves it only from the already installed local CodeQL
 pack cache; indexing never runs `codeql pack install` or downloads analyzer

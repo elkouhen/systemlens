@@ -408,35 +408,6 @@ def test_index_uses_automatic_codeql_database_when_available(
     assert '"progress_notice": "INDEXATION CODEQL EN COURS' in content
 
 
-def test_index_uses_joern_when_selected(tmp_path: Path, monkeypatch) -> None:
-    repo = tmp_path / "repo"
-    shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
-    (repo / "pom.xml").write_text(
-        "<project><modelVersion>4.0.0</modelVersion>"
-        "<groupId>com.example</groupId><artifactId>orders</artifactId>"
-        "<version>1.0.0</version></project>",
-        encoding="utf-8",
-    )
-    observed_roots = []
-
-    @contextmanager
-    def automatic_cpg(root: Path, *, timeout_seconds: int = 600):
-        observed_roots.append(root)
-        assert timeout_seconds == 600
-        cpg = tmp_path / "java.cpg.bin"
-        cpg.touch()
-        yield cpg
-
-    monkeypatch.setattr(indexing_service, "joern_executable", lambda: "joern")
-    monkeypatch.setattr(indexing_service, "automatic_joern_cpg", automatic_cpg)
-    monkeypatch.setattr(indexing_service, "extract_joern_calls", lambda _cpg, **_kwargs: [])
-
-    with Store(repo) as store:
-        index_repo(repo, Config(call_graph_engine="joern"), store)
-
-    assert observed_roots == [repo]
-
-
 def test_codeql_module_roots_assign_each_java_file_to_its_deepest_project(tmp_path: Path) -> None:
     first = tmp_path / "first"
     second = tmp_path / "second"
@@ -606,7 +577,7 @@ class OrderPublisher {
     ]
 
 
-def test_joern_signature_only_call_uses_explicit_low_confidence_join(tmp_path: Path) -> None:
+def test_possible_signature_only_call_uses_explicit_low_confidence_join(tmp_path: Path) -> None:
     source = "orders/src/main/java/com/example/OrderController.java"
     target = "orders/src/main/java/com/example/OrderPublisher.java"
     for path, content in {

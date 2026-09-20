@@ -51,14 +51,6 @@ def test_load_config_reads_codeql_verbosity(tmp_path: Path) -> None:
     assert load_config(tmp_path).codeql_verbosity == "progress+++"
 
 
-def test_load_config_reads_joern_call_graph_engine(tmp_path: Path) -> None:
-    state = tmp_path / ".systemlens"
-    state.mkdir()
-    (state / "config.yml").write_text("analysis:\n  call_graph_engine: joern\n")
-
-    assert load_config(tmp_path).call_graph_engine == "joern"
-
-
 def test_load_config_rejects_ambiguous_strategy_keys(tmp_path: Path) -> None:
     state = tmp_path / ".systemlens"
     state.mkdir()

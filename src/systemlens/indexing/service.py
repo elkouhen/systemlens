@@ -39,12 +39,6 @@ from systemlens.indexing.codeql import (
     extract_codeql_calls,
     extract_codeql_reachability,
 )
-from systemlens.indexing.joern import (
-    JoernError,
-    automatic_joern_cpg,
-    extract_joern_calls,
-    joern_executable,
-)
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, MessageEndpoint
 from systemlens.domain.graph import build_graph, group_endpoints_by_module
@@ -318,11 +312,7 @@ def _index_repo(
     # modules. Only a change to that cross-module join requires a full pass;
     # ordinary Java/configuration changes keep the incremental fast path.
     call_graph_engine = config.call_graph_engine
-    engine_available = (
-        codeql_executable() is not None if call_graph_engine == "codeql"
-        else joern_executable() is not None if call_graph_engine == "joern"
-        else False
-    )
+    engine_available = call_graph_engine == "codeql" and codeql_executable() is not None
     flow_signature = (
         f"{CODE_FLOW_SIGNATURE}|engine={call_graph_engine}|"
         f"available={engine_available}|hops={config.codeql_max_hops}|"
@@ -486,7 +476,7 @@ def _index_repo(
         if methods and call_graph_engine != "none" and (
             (call_graph_engine == "codeql" and codeql_database is not None) or engine_available
         ):
-            engine_label = "CodeQL" if call_graph_engine == "codeql" else "Joern"
+            engine_label = "CodeQL"
             _report_progress(progress, f"→ {engine_label} : préparation de l'analyse interprocédurale...")
             reachability: list[CodeQLReachability] = []
             prepared_codeql_flows: list[CodeFlow] | None = None
@@ -641,29 +631,8 @@ def _index_repo(
                                 f"    ✓ {name} : {len(project_calls)} appel(s) extrait(s) "
                                 f"en {time.perf_counter() - module_started_at:.2f} s.",
                             )
-                    else:
-                        calls = []
-                        for number, (name, root, prefix) in enumerate(roots, start=1):
-                            _report_progress(
-                                progress,
-                                f"  • {engine_label} projet {number}/{len(roots)} : {name}",
-                            )
-                            with automatic_joern_cpg(
-                                root, timeout_seconds=config.codeql_timeout_seconds
-                            ) as cpg:
-                                assert cpg is not None
-                                project_calls = extract_joern_calls(
-                                    cpg, timeout_seconds=config.codeql_timeout_seconds,
-                                    path_prefix=prefix, source_root=root,
-                                )
-                            calls.extend(project_calls)
-                            publish_call_graph_progress(number, len(roots), name, calls)
-                            _report_progress(
-                                progress,
-                                f"    ✓ {name} : {len(project_calls)} appel(s) extrait(s).",
-                            )
                     timer.end(stage, f"création et extraction globale {engine_label}")
-            except (CodeQLError, JoernError, OSError, subprocess.TimeoutExpired) as exc:
+            except (CodeQLError, OSError, subprocess.TimeoutExpired) as exc:
                 raise RuntimeError(str(exc)) from exc
             _report_progress(progress, f"→ {engine_label} : {len(calls)} appel(s) extrait(s), jointure des méthodes...")
             timer.begin("call-graph-join", f"→ {engine_label} : jointure des méthodes et matérialisation des flux...")

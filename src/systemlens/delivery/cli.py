@@ -1200,10 +1200,10 @@ def index_cmd(
         "--no-codeql",
         help="Désactive CodeQL pour cette indexation ; conserve les flux AST locaux.",
     ),
-    call_graph_engine: Optional[Literal["codeql", "joern", "none"]] = typer.Option(
+    call_graph_engine: Optional[Literal["codeql", "none"]] = typer.Option(
         None,
         "--call-graph-engine",
-        help="Moteur des flux interprocéduraux : codeql, joern ou none.",
+        help="Moteur des flux interprocéduraux : codeql ou none.",
     ),
     disable: list[str] = typer.Option(
         None,

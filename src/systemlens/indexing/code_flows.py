@@ -242,13 +242,13 @@ def materialize_codeql_code_flows(
     """
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
     def normalized_method_name(name: str) -> str:
-        """Align CodeQL/Joern method names with Java source declarations."""
-        # Joern CPG full names are commonly ``package.Type.method:return(args)``.
+        """Align analyzer method names with Java source declarations."""
+        # Analyzer names may include ``package.Type.method:return(args)``.
         # The AST inventory deliberately stores the stable Java declaration name
         # only. Removing the CPG signature is safe because the following lookup
         # still requires an exact source location or one unique declaration.
         normalized = name.replace("$", ".").split(":", 1)[0]
-        # CodeQL normally omits parameters, while some CodeQL/Joern versions
+        # CodeQL normally omits parameters, while some versions
         # expose ``Type.method(arg, ...)``.  The AST projection intentionally
         # keeps only the stable owner-and-method part, so discard a terminal
         # signature before doing the source-backed join.
