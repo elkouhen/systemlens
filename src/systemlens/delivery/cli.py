@@ -1302,6 +1302,11 @@ def index_cmd(
         f"scanned={report.scanned} skipped={report.skipped} "
         f"+integrations={report.endpoints_added} -integrations={report.endpoints_removed}"
     )
+    if report.codeql_timed_out:
+        typer.echo(
+            "CodeQL a atteint son délai : le graphe publié est partiel et "
+            "sera complété lors de la prochaine indexation."
+        )
     typer.echo(
         "Prochaine étape : systemlens export microservices --html architecture.html "
         "pour explorer le graphe."

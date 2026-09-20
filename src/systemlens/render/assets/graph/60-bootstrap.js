@@ -5,6 +5,7 @@
         selectedClusterKey: null,
         relatedNodes: null,
         relatedEdges: null,
+        analysisPortEndpointId: null,
         selectedCodeFlowId: null,
         pathMicroserviceOrder: new Map(),
       });

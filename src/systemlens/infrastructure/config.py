@@ -127,7 +127,7 @@ def init_config(repo_root: Path) -> Path:
             "strategy": "default", "codeql": True, "call_graph_engine": "codeql",
             "codeql_timeout_seconds": 600,
             "codeql_threads": 0, "codeql_ram_mb": None,
-            "codeql_verbosity": "progress++",
+            "codeql_verbosity": None,
             "codeql_max_hops": 12,
             "disabled_extractors": [],
         },

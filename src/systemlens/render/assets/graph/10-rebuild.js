@@ -440,6 +440,15 @@
         const graphPointToViewport = graphPoint => {
           return renderer.graphToViewport(graphPoint);
         };
+        const toggleAnalysisEndpoint = (endpointId, event) => {
+          if (!endpointId) return;
+          event?.preventDefault();
+          event?.stopPropagation();
+          graphState.analysisPortEndpointId = graphState.analysisPortEndpointId === endpointId
+            ? null
+            : endpointId;
+          requestGraphRender();
+        };
         network.forEachNode((id, attributes) => {
           if (
             !isVisibleNodeId(id)
@@ -740,6 +749,11 @@
             const portProtocol = port.system === "kafka" ? "kafka" : port.system === "rest" ? "http" : "unknown";
             anchor.className = `graph-node-port-reference is-${portDirection} is-${portProtocol}`;
             anchor.dataset.endpointId = port.endpoint_id;
+            anchor.classList.toggle(
+              "is-analysis-selected",
+              graphState.analysisPortEndpointId === port.endpoint_id,
+            );
+            anchor.title = "Analyser l’arc associé à ce port";
             // Keep the graph anchor compact. The full endpoint presentation
             // remains in the tooltip and the inspector.
             anchor.style.setProperty("--port-offset", `${(index + 1) / (ports.length + 1) * 100}%`);
@@ -792,6 +806,9 @@
             };
             anchor.addEventListener("pointerenter", showPortTooltip);
             anchor.addEventListener("pointerleave", () => flowTooltipOverlay.replaceChildren());
+            anchor.addEventListener("click", event => {
+              toggleAnalysisEndpoint(port.endpoint_id, event);
+            });
             label.append(anchor);
           }));
           }
@@ -840,7 +857,7 @@
             });
           };
           label.addEventListener("pointerdown", event => {
-            if (event.button !== 0 || forwardedPointer) return;
+            if (event.button !== 0 || forwardedPointer || event.target.closest?.(".graph-node-port-reference")) return;
             forwardedPointer = {
               pointerId: event.pointerId,
               startX: event.clientX,
@@ -860,7 +877,7 @@
           // it, a card drag would be handled once by our direct pan and once
           // by Sigma's native mouse pan, producing an amplified movement.
           label.addEventListener("mousedown", event => {
-            if (event.button !== 0) return;
+            if (event.button !== 0 || event.target.closest?.(".graph-node-port-reference")) return;
             event.preventDefault();
             event.stopImmediatePropagation();
           });
@@ -1279,7 +1296,7 @@
             const tooltip = document.createElement("span");
             tooltip.className = "graph-arc-tooltip";
             const title = document.createElement("strong");
-            title.textContent = `${shortPortLabel(sourcePort, "out")} => ${shortPortLabel(targetPort, "in")}`;
+            title.textContent = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;
             const relation = document.createElement("span");
             relation.className = "graph-arc-tooltip-relation";
             relation.textContent = `${link.kind === "kafka" ? "Kafka" : link.kind === "rest" ? "HTTP" : link.kind || "Relation"} · ${link.label || sourcePort?.name || targetPort?.name || "Endpoint"}`;
@@ -1337,12 +1354,19 @@
           const path = document.createElementNS(svgNamespace, "path");
           path.classList.add("graph-call-path");
           if (link.kind === "kafka") path.classList.add("is-kafka");
+          if ((link.endpoint_ids || []).includes(graphState.analysisPortEndpointId)) {
+            path.classList.add("is-analysis-selected");
+          }
           path.setAttribute("marker-end", "url(#graph-port-arrow)");
           if (routed.router) path.dataset.router = routed.router;
           path.setAttribute("d", routed.d);
           portPathOverlay.append(path);
           const arcLabel = document.createElementNS(svgNamespace, "text");
           arcLabel.classList.add("graph-call-label");
+          if (link.kind === "kafka") arcLabel.classList.add("is-kafka");
+          if ((link.endpoint_ids || []).includes(graphState.analysisPortEndpointId)) {
+            arcLabel.classList.add("is-analysis-selected");
+          }
           const sourcePort = (link.endpoint_ids || [])
             .map(endpointId => portsByEndpointId.get(endpointId))
             .find(port => port?.direction === "out")
@@ -1359,11 +1383,14 @@
             const match = String(port?.label || "").match(direction === "out" ? /O\d+/ : /I\d+/);
             return match?.[0] || (direction === "out" ? "O?" : "I?");
           };
-          arcLabel.textContent = `${shortPortLabel(sourcePort, "out")} => ${shortPortLabel(targetPort, "in")}`;
+          arcLabel.textContent = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;
           const labelPoint = routed.points[Math.floor(routed.points.length / 2)] || routed.points[0];
           arcLabel.setAttribute("x", String(labelPoint[0]));
           arcLabel.setAttribute("y", String(labelPoint[1] - 8));
           portPathOverlay.append(arcLabel);
+          path.addEventListener("click", event => {
+            toggleAnalysisEndpoint(sourcePort?.endpoint_id || targetPort?.endpoint_id, event);
+          });
           bindArcTooltip(path, link, sourcePort, targetPort);
         });
         const libavoidRouteKeyForGeometry = [
@@ -1432,12 +1459,18 @@
           if (!input?.classList.contains("is-in") || !output?.classList.contains("is-out")) return;
           const path = document.createElementNS(svgNamespace, "path");
           path.classList.add("graph-local-port-path");
+          if ([link.input_endpoint_id, link.output_endpoint_id].includes(graphState.analysisPortEndpointId)) {
+            path.classList.add("is-analysis-selected");
+          }
           if (graphState.relatedLocalPortLinks?.has(
             `${link.input_endpoint_id}:${link.output_endpoint_id}`
           )) path.classList.add("is-code-flow-path");
           path.setAttribute("marker-end", "url(#graph-port-arrow)");
           path.setAttribute("d", portPath(input, output));
           portPathOverlay.append(path);
+          path.addEventListener("click", event => {
+            toggleAnalysisEndpoint(link.output_endpoint_id || link.input_endpoint_id, event);
+          });
           bindArcTooltip(
             path,
             {
@@ -1457,9 +1490,15 @@
           const path = document.createElementNS(svgNamespace, "path");
           path.classList.add("graph-port-path");
           if (link.kind === "kafka") path.classList.add("is-kafka");
+          if ([link.source_endpoint_id, link.target_endpoint_id].includes(graphState.analysisPortEndpointId)) {
+            path.classList.add("is-analysis-selected");
+          }
           path.setAttribute("marker-end", "url(#graph-port-arrow)");
           path.setAttribute("d", portPath(source, target));
           portPathOverlay.append(path);
+          path.addEventListener("click", event => {
+            toggleAnalysisEndpoint(link.source_endpoint_id || link.target_endpoint_id, event);
+          });
           bindArcTooltip(
             path,
             {

@@ -427,8 +427,17 @@ output and input port anchors. ELK.js supplies the positioned graph and the
 browser libavoid WASM router receives fixed node rectangles plus explicit port
 sides, then returns absolute source, bend, and target points. The router
 excludes the source and target card rectangles with padding and nudges parallel
-routes. In the focused call-graph view, endpoint arcs are represented by the
+routes. Arc labels use the same protocol-specific color as their associated
+paths, including the theme-specific dark-mode colors. In the focused
+call-graph view, endpoint arcs are represented by the
 projected service edge and are not drawn a second time in the port overlay.
+While a code flow is selected, port anchors are interactive analysis controls:
+clicking an input or output endpoint, or directly on an arc, records a
+transient endpoint focus and highlights every associated service arc, local
+port relation, and arc label; clicking the same port or arc clears the focus,
+while selecting another port or arc moves it.
+The port gesture is isolated from the card drag and node-selection handlers, so
+analysis never changes the graph view or camera and does not persist data.
 The export indexes displayed nodes and visual edges by
 persisted endpoint ID once; reconciliation requires exactly one endpoint-backed
 candidate and never selects a relation from a route label, topic name, or first
@@ -519,8 +528,10 @@ their first argument throughout recursion; they do not construct an unrelated
 all-method-pairs closure. Both edges require a source caller and source callee.
 The result explicitly names all seven CSV columns consumed by the decoder.
 Python joins require exact source path, method and line evidence except for
-the unique-name fallback above. No AST receiver dispatch, abstract-to-concrete
-bridge, or name/arity guess is materialized. The BFS visits each
+the unique-name fallback above. Buildless AST fallbacks may add only a
+source-declared, uniquely compatible abstract-to-concrete bridge or
+receiver-typed helper call; these synthetic edges remain `possible`/`low` and
+are never name-only guesses. The BFS visits each
 method/confidence state
 at most once per input endpoint, under the configured depth/global transition
 bounds. Cyclic witness paths are retained without expansion. Medium-confidence
@@ -532,8 +543,12 @@ input/output pair. HTML checkpoints filter cached flows instead of rebuilding
 and retraversing the call graph for every module. No database path is
 persisted. Live progress uses a wall-clock watchdog covering pipe reads; POSIX
 timeouts terminate the process group, and subprocesses are reaped on errors.
-An absent selected engine is reported and keeps AST-only results; a failing
-available executable leaves the whole previous successful snapshot intact.
+An absent selected engine is reported and keeps AST-only results. A CodeQL
+timeout is handled as a partial pass: the index keeps AST facts and calls
+already decoded, runs all remaining materializers and commits the partial
+snapshot; the code-flow signature stays invalid so a later index retries
+CodeQL. Non-timeout failures from an available executable remain fatal and
+leave the previous successful snapshot intact.
 
 ## Extractors
 

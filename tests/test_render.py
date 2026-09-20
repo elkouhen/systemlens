@@ -752,7 +752,12 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'const directKafkaLink = (topic, source, target)' in document
     assert "Keeping Sigma's straight edge underneath would draw" in document
     assert 'path.classList.add("graph-call-path")' in document
+    assert 'if (link.kind === "kafka") arcLabel.classList.add("is-kafka");' in document
+    assert 'title.textContent = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;' in document
+    assert 'arcLabel.textContent = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;' in document
     assert ".graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2;" in document
+    assert ".graph-call-label { fill: #6d28d9;" in document
+    assert ".graph-call-label.is-kafka { fill: #008f69; }" in document
     assert 'obstacleRouted' in document
     assert 'const occupiedCallGraphSegments = []' in document
     assert '@mr_mint/elkjs-libavoid' in document
@@ -765,6 +770,15 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "graphState.selectedCodeFlowId && !graphState.relatedNodes?.has(node)" in document
     assert "return { ...data, hidden: true };" in document
     assert "const selectedPortLinks =" in document
+    assert "analysisPortEndpointId: null" in document
+    assert 'anchor.title = "Analyser l’arc associé à ce port";' in document
+    assert "graphState.analysisPortEndpointId === port.endpoint_id" in document
+    assert "graphState.analysisPortEndpointId = graphState.analysisPortEndpointId === endpointId" in document
+    assert 'event.target.closest?.(".graph-node-port-reference")' in document
+    assert "const toggleAnalysisEndpoint = (endpointId, event) =>" in document
+    assert 'path.addEventListener("click", event =>' in document
+    assert ".graph-call-path.is-analysis-selected { stroke-width: 4;" in document
+    assert ".graph-call-label.is-analysis-selected { font-size: 13px;" in document
     assert "selectedEndpointIds.has(link.target_endpoint_id)" in document
     assert "const ratioFactor = Math.max(.01, spanX / availableWidth, spanY / availableHeight);" in document
     assert "for (let pass = 0; pass < 4; pass += 1)" in document

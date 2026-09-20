@@ -74,6 +74,7 @@ class IndexReport:
     deleted_files: int
     endpoints_added: int = 0
     endpoints_removed: int = 0
+    codeql_timed_out: bool = False
 
 
 @dataclass(frozen=True)
@@ -212,7 +213,10 @@ def _index_repo(
     generate_sources: bool = False,
 ) -> IndexReport:
     timer = _IndexStageTimer(progress)
-    codeql_verbosity = "progress++" if codeql_progress else config.codeql_verbosity
+    # CodeQL diagnostics are opt-in.  Do not inherit the verbosity from older
+    # configs, otherwise a repository initialized before the quiet default
+    # would still flood the index command's output.
+    codeql_verbosity = "progress++" if codeql_progress else None
     if codeql_database is not None and config.call_graph_engine != "codeql":
         raise ValueError("A CodeQL database requires the codeql call-graph engine.")
     topic_strategy = topic_strategy or config.strategy
@@ -317,6 +321,7 @@ def _index_repo(
         f"{CODE_FLOW_SIGNATURE}|engine={call_graph_engine}|"
         f"available={engine_available}|hops={config.codeql_max_hops}"
     )
+    codeql_timed_out = False
     if (
         topic_strategy == "strategy1"
         and not full
@@ -480,6 +485,7 @@ def _index_repo(
             reachability: list[CodeQLReachability] = []
             prepared_codeql_flows: list[CodeFlow] | None = None
             codeql_stats: dict[str, int] = {}
+            calls: list[CodeQLCall] = []
 
             def publish_call_graph_progress(
                 completed_projects: int,
@@ -628,7 +634,19 @@ def _index_repo(
                                 f"en {time.perf_counter() - module_started_at:.2f} s.",
                             )
                     timer.end(stage, f"création et extraction globale {engine_label}")
-            except (CodeQLError, OSError, subprocess.TimeoutExpired) as exc:
+            except subprocess.TimeoutExpired:
+                # A CodeQL deadline is a soft indexing boundary. AST facts,
+                # relations and any calls obtained before the deadline remain
+                # useful; continue with the post-processing pipeline so the
+                # committed snapshot can still be exported as a partial graph.
+                codeql_timed_out = True
+                reachability = []
+                _report_progress(
+                    progress,
+                    "→ CodeQL : délai dépassé ; poursuite avec les faits déjà indexés "
+                    "et exécution des post-traitements.",
+                )
+            except (CodeQLError, OSError) as exc:
                 raise RuntimeError(str(exc)) from exc
             _report_progress(progress, f"→ {engine_label} : {len(calls)} appel(s) extrait(s), jointure des méthodes...")
             timer.begin("call-graph-join", f"→ {engine_label} : jointure des méthodes et matérialisation des flux...")
@@ -673,10 +691,13 @@ def _index_repo(
             ),
         )
         store.replace_code_flows(flows)
-        store.set_meta(
-            "code_flow_signature",
-            flow_signature,
-        )
+        if codeql_timed_out:
+            # Do not mark an incomplete interprocedural pass as current. The
+            # next incremental index must retry CodeQL even when source files
+            # are unchanged.
+            store.delete_meta("code_flow_signature")
+        else:
+            store.set_meta("code_flow_signature", flow_signature)
         _report_progress(
             progress,
             f"→ Indexation : {len(flows)} parcours de code potentiel(s) matérialisé(s).",
@@ -742,6 +763,7 @@ def _index_repo(
         deleted_files=len(deleted),
         endpoints_added=endpoints_added,
         endpoints_removed=endpoints_removed,
+        codeql_timed_out=codeql_timed_out,
     )
 
 

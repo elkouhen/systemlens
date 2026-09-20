@@ -1,5 +1,6 @@
 import json
 import shutil
+import subprocess
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -16,6 +17,7 @@ from systemlens.indexing.code_flows import _deduplicate_code_flows
 from systemlens.indexing.code_flows import materialize_code_flows, reconcile_code_flows
 from systemlens.indexing.code_flows import materialize_codeql_code_flows
 from systemlens.indexing.code_flows import materialize_kafka_flow_continuations
+from systemlens.indexing import codeql
 from systemlens.indexing.codeql import CodeQLCall
 from systemlens.indexing.integration_methods import materialize_integration_methods
 from systemlens.indexing import service as indexing_service
@@ -406,6 +408,69 @@ def test_index_uses_automatic_codeql_database_when_available(
     assert "1/1 projet(s) terminé(s)" in content
     assert 'id="progress-notice"' in content
     assert '"progress_notice": "INDEXATION CODEQL EN COURS' in content
+
+
+def test_codeql_timeout_commits_partial_snapshot_and_runs_post_processing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
+    (repo / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion>"
+        "<groupId>com.example</groupId><artifactId>orders</artifactId>"
+        "<version>1.0.0</version></project>",
+        encoding="utf-8",
+    )
+
+    @contextmanager
+    def timed_out_database(*_args, **kwargs):
+        raise subprocess.TimeoutExpired(["codeql"], kwargs.get("timeout_seconds", 600))
+        yield  # pragma: no cover - keeps this a contextmanager for the patch
+
+    monkeypatch.setattr(indexing_service, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(indexing_service, "automatic_codeql_database", timed_out_database)
+    progress: list[str] = []
+
+    with Store(repo) as store:
+        report = index_repo(repo, Config(), store, progress=progress.append)
+        assert report.codeql_timed_out is True
+        assert store.all_endpoints()
+        assert store.all_architecture_relations()
+        assert store.all_code_flows()
+        assert store.get_meta("code_flow_signature") is None
+
+    assert any("délai dépassé" in message for message in progress)
+
+
+def test_real_codeql_database_creation_timeout_is_soft_boundary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
+    (repo / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion>"
+        "<groupId>com.example</groupId><artifactId>orders</artifactId>"
+        "<version>1.0.0</version></project>",
+        encoding="utf-8",
+    )
+
+    def timeout(*_args, **kwargs):
+        raise subprocess.TimeoutExpired(["codeql", "database", "create"], kwargs["timeout"])
+
+    monkeypatch.setattr(indexing_service, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql, "_run_with_progress", timeout)
+    progress: list[str] = []
+
+    with Store(repo) as store:
+        report = index_repo(repo, Config(), store, progress=progress.append)
+        assert report.codeql_timed_out is True
+        assert store.all_architecture_relations()
+        assert store.all_code_flows()
+
+    assert any("post-traitements" in message for message in progress)
+    assert any("matérialisation des flux" in message for message in progress)
+    assert any("statistiques par module" in message for message in progress)
 
 
 def test_codeql_module_roots_assign_each_java_file_to_its_deepest_project(tmp_path: Path) -> None:

@@ -11,6 +11,11 @@ functional or technical contract.
 | Snapshot storage and compatibility | [ADR-2](#adr-2--sqlite-is-the-local-fact-store), [ADR-7](#adr-7--publish-each-index-as-an-atomic-sqlite-snapshot), [ADR-11](#adr-11--separate-module-identity-from-its-display-alias) |
 | Delivery and graph projection | [ADR-8](#adr-8--persisted-relations-are-the-canonical-architecture-projection), [ADR-9](#adr-9--exports-never-enrich-a-snapshot-from-live-source-files), [ADR-23](#adr-23--mcp-control-in-two-phases-with-a-graph-enrichment-layer) |
 | Optional or repository-specific behaviour | [ADR-5](#adr-5--strategy1-conventions-are-opt-in), [ADR-12](#adr-12--kubernetes-discovery-is-explicit-and-snapshot-based) |
+| Product namespace and module vocabulary | [ADR-6](#adr-6--systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24--use-module-terminology-for-structural-project-grouping) |
+| Indexed contracts and implementation boundaries | [ADR-25](#adr-25--separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26--organize-implementation-modules-by-architectural-ownership) |
+| Potential code flows and call-graph resolution | [ADR-27](#adr-27--persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b--preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29--ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30--resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence) |
+| Graph rendering and integration evidence | [ADR-28](#adr-28--render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31--resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32--require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33--keep-topics-in-selected-call-graph-views) |
+| Index timeout and partial snapshots | [ADR-34](#adr-34--commit-a-partial-snapshot-after-a-codeql-timeout) |
 
 ## ADR-1 — Local static architecture analysis
 
@@ -379,7 +384,7 @@ only persisted snapshots.
 
 ## ADR-27a — Use AST symbol facts to constrain buildless call-graph fallbacks
 
-**Status:** Accepted.
+**Status:** Superseded by [ADR-30](#adr-30--resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence).
 
 **Context:** A source-only CodeQL database can lack enough dependency/type
 information to resolve a Java interface or bean call. The existing fallback
@@ -457,7 +462,7 @@ orthogonal router preserves a usable export.
 **Context:** Reconstructing every interprocedural flow by starting at each
  indexed input method and traversing Python-side call edges can miss a flow
  when dispatch resolution or an intermediate join is incomplete, even though
- CodeQL can answer the bounded reachability question directly.
+ CodeQL can answer the input-to-output reachability question directly.
 
 **Decision:** Run a second CodeQL query, scoped to the indexed input
  and output methods by relative path and start line. Traverse from outputs to
@@ -563,3 +568,26 @@ producers.
 nodes while retaining the asserted direct service arc and its topic evidence in
 badges and tooltips. Ambiguous topic ownership remains unresolved and is not
 turned into a guessed path.
+
+## ADR-34 — Commit a partial snapshot after a CodeQL timeout
+
+**Status:** Accepted.
+
+**Context:** CodeQL is an optional, potentially long-running enrichment stage
+of indexing. Treating its timeout as a fatal index error rolls back facts that
+were already extracted by the AST and prevents users from inspecting the
+available architecture in the HTML graph.
+
+**Decision:** Treat `analysis.codeql_timeout_seconds` expiration as a soft
+boundary. Terminate and reap the timed-out CodeQL subprocess, retain AST facts
+and any CodeQL calls decoded before the deadline, run relation and flow
+post-processing, reconcile the resulting facts, and commit the partial
+snapshot. Do not mark the code-flow signature current after a timeout, so the
+next index retries CodeQL. Other CodeQL errors remain fatal and preserve the
+previous committed snapshot through the transaction boundary.
+
+**Consequences:** A completed index may expose a graph with reduced
+interprocedural coverage, and the CLI explicitly reports that the graph is
+partial. HTML export remains available and deterministic from the committed
+snapshot. Repeated indexes may retry CodeQL until it completes successfully;
+the timeout does not weaken extraction confidence or invent missing calls.

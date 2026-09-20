@@ -35,12 +35,19 @@
     #graph-port-paths { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; }
     .graph-port-path { fill: none; stroke: #7c3aed; stroke-width: 2; stroke-linecap: round; opacity: .9; pointer-events: stroke; }
     .graph-port-path.is-kafka { stroke: #009e73; }
+    .graph-port-path.is-analysis-selected { stroke-width: 4; opacity: 1; filter: drop-shadow(0 0 3px currentColor); }
     .graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 1; pointer-events: stroke; }
     .graph-call-path.is-kafka { stroke: #008f69; }
-    .graph-call-label { fill: #4c1d95; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; }
-    :root[data-theme="dark"] .graph-call-label { fill: #ddd6fe; stroke: #111827; }
+    .graph-call-path.is-analysis-selected { stroke-width: 4; filter: drop-shadow(0 0 4px currentColor); }
+    .graph-call-label { fill: #6d28d9; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; }
+    .graph-call-label.is-kafka { fill: #008f69; }
+    .graph-call-label.is-analysis-selected { font-size: 13px; font-weight: 850; }
+    :root[data-theme="dark"] .graph-call-label { fill: #c4b5fd; stroke: #111827; }
+    :root[data-theme="dark"] .graph-call-label.is-kafka { fill: #5eead4; }
     .graph-local-port-path { fill: none; stroke: #d97706; stroke-width: 1.5; stroke-dasharray: 3 2; stroke-linecap: round; opacity: .9; pointer-events: stroke; }
     .graph-local-port-path.is-code-flow-path { stroke: #7c3aed; stroke-width: 3; stroke-dasharray: none; opacity: 1; }
+    .graph-local-port-path.is-analysis-selected { stroke-width: 4; opacity: 1; filter: drop-shadow(0 0 3px currentColor); }
+    .graph-node-port-reference.is-analysis-selected { outline: 2px solid currentColor; outline-offset: 2px; transform: translateY(-50%) scale(1.08); }
     :root[data-theme="dark"] .graph-port-path { stroke: #c4b5fd; }
     :root[data-theme="dark"] .graph-port-path.is-kafka { stroke: #5eead4; }
     :root[data-theme="dark"] .graph-call-path { stroke: #c4b5fd; }

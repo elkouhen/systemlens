@@ -371,6 +371,7 @@
       graphState.relatedLocalPortLinks = new Set((path.localLinks || []).map(link => (
         `${link.input_endpoint_id}:${link.output_endpoint_id}`
       )));
+      graphState.analysisPortEndpointId = null;
       graphState.selectedCodeFlowId = context.codeFlow?.id || null;
       graphState.codeFlowRootNodeId = context.codeFlowRootNodeId || null;
       graphState.codeFlowTrigger = context.codeFlowTrigger || null;

@@ -33,7 +33,7 @@ analysis:
   codeql_timeout_seconds: 600
   codeql_threads: 0
   codeql_ram_mb: null
-  codeql_verbosity: progress++
+  codeql_verbosity: null
   codeql_max_hops: 12
   disabled_extractors: []
 ```
@@ -130,18 +130,24 @@ answers without intermediate evidence appear at the final checkpoint.
 These in-progress indexing facts must not be treated as an exportable or
 complete architecture snapshot; the normal `export microservices --html`
 command remains the authoritative post-index export.
-`analysis.codeql_verbosity` configures CodeQL's verbosity for database creation
-and call-graph query commands. New configurations use `progress++` and relay
-the messages as they arrive. `--codeql-progress` temporarily forces
-`progress++` for legacy configurations without this setting. CodeQL's messages
-are diagnostic progress only; they do not provide a guaranteed percentage or
-remaining-time estimate.
+CodeQL diagnostics are silent by default, including for repositories whose
+older configuration still contains `analysis.codeql_verbosity`. The explicit
+`--codeql-progress` option temporarily enables `progress++` for one command.
+CodeQL's messages are diagnostic progress only; they do not provide a
+guaranteed percentage or remaining-time estimate.
 `analysis.codeql_timeout_seconds` sets the positive timeout in seconds for each
 CodeQL subprocess (temporary database creation, query execution, and BQRS
 decoding); its default is `600` seconds. The deadline includes live progress
 reading, even when the subprocess stops producing output. On POSIX, timeout
 or interrupted progress handling terminates and reaps the subprocess and
-terminates its process group.
+terminates its process group. A timeout is a soft boundary for the index:
+SystemLens keeps AST facts and any CodeQL calls obtained before expiration,
+executes the remaining relation, flow, continuation, reconciliation and
+statistics post-processing, then commits the resulting partial snapshot so it
+can be exported to HTML. The CLI reports that the graph is partial. A timed-out
+CodeQL pass does not update the code-flow signature, so the next index retries
+the interprocedural analysis even when source files are unchanged. Other
+CodeQL failures remain fatal and preserve the previous committed snapshot.
 `analysis.codeql_threads` sets the number of threads passed to CodeQL database
 creation and query execution; its default is `0`, which delegates one thread
 per available core to CodeQL. `analysis.codeql_ram_mb` optionally sets
@@ -289,6 +295,11 @@ services; their `Port IN` and `Port OUT` headings identify the direction, so
 the topic or route is shown only once. Port tooltips remain limited to the
 endpoint itself. The
 tooltip does not add or infer any architecture fact.
+In a selected call-graph view, clicking a port or an arc enters transient
+analysis mode. The selected arc, its label, and its endpoint ports are
+highlighted; clicking the same port or arc clears the focus, and clicking
+another port or arc moves it. This interaction does not change the view,
+selected flow, camera, or persisted facts.
 Its primary card title is the input trigger, while the Java method remains
 visible as source evidence. Flow selection reconciles every integration step
 only through its persisted endpoint identifier: route labels and resource names
@@ -374,8 +385,15 @@ Endpoint-to-endpoint dependencies are projected into the selected
 service-to-service arc. The selected flow's canonical NetworkX arcs are the
 sole source for the focused overlay, so topology links and port links cannot
 create a second copy of the same dependency.
-Each selected arc displays its port mapping in the form `Ox => Iy`, using the
+Each selected arc displays its port mapping in the form `Ox → Iy`, using the
 actual indexed output and input labels.
+The arc label uses the same protocol-specific color as its associated arc in
+both light and dark themes.
+In a selected call graph, clicking an input or output port enters a transient
+analysis mode: the associated topology or local flow arc and its label are
+highlighted. Clicking the same port clears the analysis highlight; selecting a
+different flow resets it. Port analysis does not change the selected flow,
+camera position, or persisted architecture facts.
 Call-graph arcs use the same stroke thickness as ordinary topology paths; their
 selection remains identifiable through the selected-flow styling and colour.
 Clearing or replacing the selection restores the ordinary filtered graph.

@@ -11,7 +11,7 @@ def test_init_config_uses_generic_strategy_key(tmp_path: Path) -> None:
     assert "strategy: default" in path.read_text()
     assert "topic_strategy" not in path.read_text()
     assert "codeql_threads: 0" in path.read_text()
-    assert "codeql_verbosity: progress++" in path.read_text()
+    assert "codeql_verbosity: null" in path.read_text()
 
 
 def test_load_config_accepts_legacy_topic_strategy_key(tmp_path: Path) -> None:

@@ -113,6 +113,7 @@
       relatedNodes: null,
       relatedEdges: null,
       relatedLocalPortLinks: new Set(),
+      analysisPortEndpointId: null,
       selectedCodeFlowId: null,
       codeFlowRootNodeId: null,
       codeFlowTrigger: null,
