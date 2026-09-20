@@ -90,6 +90,12 @@
     }
     function rebuildGraph() {
       const callGraphOnly = Boolean(graphState.selectedCodeFlowId);
+      const selectedFlow = callGraphOnly
+        ? (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)
+        : null;
+      const selectedCallGraphPairs = new Set(
+        (selectedFlow?.call_graph?.edges || []).map(edge => `${edge.source}->${edge.target}`)
+      );
       const visibleLinks = callGraphOnly
         ? graphData.links.filter((link, index) => (
           link.kind !== "contains"
@@ -97,12 +103,32 @@
           && graphState.relatedNodes?.has(link.target)
           && nodeDataById.get(link.source)?.kind === "microservice"
           && nodeDataById.get(link.target)?.kind === "microservice"
+          && selectedCallGraphPairs.has(
+            `${nodeDataById.get(link.source)?.name}->${nodeDataById.get(link.target)?.name}`
+          )
         ))
         : graphData.links.filter(link => (
           isVisibleRelation(link)
           && isVisibleNode(nodeDataById.get(link.source))
           && isVisibleNode(nodeDataById.get(link.target))
         ));
+      // Topology service links predate the NetworkX call-graph projection and
+      // may not carry the concrete ports used by the selected flow. Restore
+      // those endpoint ids from the projected edge so the overlay can route
+      // each connector from the exact OUT port to the exact IN port.
+      if (callGraphOnly && selectedFlow?.call_graph?.edges?.length) {
+        const callGraphEndpointsByPair = new Map(
+          selectedFlow.call_graph.edges.map(edge => [
+            `${edge.source}->${edge.target}`,
+            edge.endpoint_ids || [],
+          ])
+        );
+        visibleLinks.forEach(link => {
+          const pair = `${nodeDataById.get(link.source)?.name}->${nodeDataById.get(link.target)?.name}`;
+          const endpointIds = callGraphEndpointsByPair.get(pair);
+          if (endpointIds?.length) link.endpoint_ids = endpointIds;
+        });
+      }
       const visibleNodeIds = new Set(visibleLinks.flatMap(link => [link.source, link.target]));
       const filteredNodes = graphData.nodes.filter(node => (
         isVisibleNode(node)
@@ -142,31 +168,25 @@
             : []
         ))
       );
-      const endpointOwners = new Map(
-        graphData.nodes.flatMap(node => (
-          node.kind === "microservice"
-            ? (node.ports || []).map(port => [port.endpoint_id, node.id])
-            : []
-        ))
-      );
       const selectedCallGraphLinks = callGraphOnly
         ? [
-          ...visibleLinks.map((link, index) => ({ link, index, edgeKey: `call-edge-topology-${index}` })),
-          ...(graphData.port_links || [])
-            .filter(link => selectedEndpointIds.has(link.source_endpoint_id)
-              && selectedEndpointIds.has(link.target_endpoint_id))
-            .map((link, index) => ({
+          ...(selectedFlow?.call_graph?.edges || [])
+            .map((edge, index) => ({
               link: {
-                source: endpointOwners.get(link.source_endpoint_id),
-                target: endpointOwners.get(link.target_endpoint_id),
-                kind: link.kind,
-                label: link.kind === "rest" ? "HTTP" : "Topic",
-                endpoint_ids: [link.source_endpoint_id, link.target_endpoint_id],
+                source: `microservice:${edge.source}`,
+                target: `microservice:${edge.target}`,
+                kind: edge.kind,
+                label: edge.label,
+                endpoint_ids: edge.endpoint_ids || [],
               },
-              index: `port-${index}`,
+              index,
               edgeKey: `call-edge-${index}`,
             }))
-            .filter(({ link }) => link.source && link.target && link.source !== link.target),
+            .filter(({ link }) => (
+              nodeDataById.has(link.source)
+              && nodeDataById.has(link.target)
+              && link.source !== link.target
+            )),
         ]
         : [];
       const callGraphEdgeKeys = new Set(selectedCallGraphLinks.map(({ index, edgeKey }) => edgeKey || `edge-${index}`));
@@ -174,6 +194,48 @@
         if (node.kind === "data_schema") return "mongodb_collection";
         if (node.kind === "message_channel") return "kafka_topic";
         return node.kind;
+      };
+      const placeGraphTooltip = (tooltip, bounds, clientX = bounds.left + bounds.width / 2) => {
+        flowTooltipOverlay.replaceChildren(tooltip);
+        const tooltipBounds = tooltip.getBoundingClientRect();
+        const left = Math.max(8, Math.min(window.innerWidth - tooltipBounds.width - 8, clientX - tooltipBounds.width / 2));
+        const below = bounds.bottom + tooltipBounds.height + 10 <= window.innerHeight;
+        tooltip.dataset.placement = below ? "bottom" : "top";
+        tooltip.style.setProperty("--tooltip-arrow-left", `${Math.max(10, Math.min(tooltipBounds.width - 10, clientX - left))}px`);
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${below ? bounds.bottom + 10 : Math.max(8, bounds.top - tooltipBounds.height - 10)}px`;
+      };
+      const addTooltipLine = (tooltip, text, className = "") => {
+        const line = document.createElement("span");
+        if (className) line.className = className;
+        line.textContent = text;
+        tooltip.append(line);
+      };
+      const showNodeTooltip = (node, element, event) => {
+        const tooltip = document.createElement("span");
+        tooltip.className = "graph-entity-tooltip";
+        const title = document.createElement("strong");
+        title.textContent = node.name;
+        tooltip.append(title);
+        addTooltipLine(tooltip, nodeKindLabel(node), "graph-entity-tooltip-kind");
+        if (node.kind === "microservice") {
+          const inputs = (node.ports || []).filter(port => port.direction === "in");
+          const outputs = (node.ports || []).filter(port => port.direction === "out");
+          addTooltipLine(tooltip, `${inputs.length} entrée${inputs.length === 1 ? "" : "s"} · ${outputs.length} sortie${outputs.length === 1 ? "" : "s"}`);
+          const topics = [...new Set((node.ports || []).filter(port => /kafka|topic|message/i.test(port.type || "")).map(port => port.name))];
+          if (topics.length) addTooltipLine(tooltip, `Topics : ${topics.slice(0, 4).join(", ")}${topics.length > 4 ? "…" : ""}`, "graph-entity-tooltip-detail");
+          if (node.technology || node.build_system) addTooltipLine(tooltip, [node.technology, node.build_system].filter(Boolean).join(" · "), "graph-entity-tooltip-detail");
+        } else if (node.kind === "kafka_topic") {
+          addTooltipLine(tooltip, `Producteurs : ${(node.published_message_types || []).length || 0} type(s)`);
+          addTooltipLine(tooltip, `Consommateurs : ${(node.consumed_message_types || []).length || 0} type(s)`);
+          const types = [...new Set([...(node.published_message_types || []), ...(node.consumed_message_types || [])])];
+          if (types.length) addTooltipLine(tooltip, `Types : ${types.slice(0, 3).join(", ")}${types.length > 3 ? "…" : ""}`, "graph-entity-tooltip-detail");
+        } else if (node.kind === "mongodb_collection") {
+          addTooltipLine(tooltip, `Propriétaire : ${node.owner || "inconnu"}`);
+          const classes = (node.persistence_classes || []).map(item => item.name).filter(Boolean);
+          if (classes.length) addTooltipLine(tooltip, `Accès : ${classes.slice(0, 3).join(", ")}${classes.length > 3 ? "…" : ""}`, "graph-entity-tooltip-detail");
+        }
+        placeGraphTooltip(tooltip, element.getBoundingClientRect(), event.clientX);
       };
       layoutNodes.forEach(node => network.addNode(node.id, {
         // The readable geometry is rendered by the HTML card overlay; Sigma
@@ -260,9 +322,10 @@
         edgeReducer: (edge, data) => {
           if (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge))) return { ...data, hidden: true };
           if (graphState.selectedCodeFlowId) {
-            return !data.obstacleRouted
-              ? { ...data, size: 2.8, color: "#6d28d9" }
-              : { ...data, hidden: true };
+            // The selected call graph is rendered once by the LibAvoid SVG
+            // overlay. Keeping Sigma's straight edge underneath would draw
+            // every connector twice and make routes appear broken.
+            return { ...data, hidden: true };
           }
           if (graphState.selectedId && graphState.relatedEdges.has(edge)) return { ...data, size: 1.5 };
           if (graphState.clusteredView || graphState.layeredClusterView) return { ...data, size: .5 };
@@ -341,6 +404,7 @@
       const routeWithLibavoid = (routeKey, routeGraph) => {
         if (!routeGraph.edges.length || routeKey === libavoidRouteKey) return;
         libavoidRouteKey = routeKey;
+        libavoidRoutes = new Map();
         const requestId = ++libavoidRequestId;
         libavoidLibrary.then(async libavoid => {
           if (!libavoid?.routeEdges) throw new Error("libavoid indisponible");
@@ -673,11 +737,11 @@
           });
           Object.entries(portsByDirection).forEach(([portDirection, ports]) => ports.forEach((port, index) => {
             const anchor = document.createElement("span");
-            anchor.className = `graph-node-port-reference is-${portDirection}`;
+            const portProtocol = port.system === "kafka" ? "kafka" : port.system === "rest" ? "http" : "unknown";
+            anchor.className = `graph-node-port-reference is-${portDirection} is-${portProtocol}`;
             anchor.dataset.endpointId = port.endpoint_id;
-            // Keep the graph anchor compact. The full persisted presentation
-            // label (including local outputs on an input) remains in the
-            // tooltip and the inspector.
+            // Keep the graph anchor compact. The full endpoint presentation
+            // remains in the tooltip and the inspector.
             anchor.style.setProperty("--port-offset", `${(index + 1) / (ports.length + 1) * 100}%`);
             anchor.textContent = String(port.label).split(" ← ", 1)[0];
             const direction = portDirection === "in" ? "Entrée" : "Sortie";
@@ -685,58 +749,59 @@
               const tooltip = document.createElement("span");
               tooltip.className = "graph-port-tooltip";
               const title = document.createElement("strong");
-              title.textContent = `${port.label} — ${direction}`;
+              title.textContent = `${port.label} · ${direction}`;
+              const protocol = document.createElement("span");
+              protocol.className = "graph-port-tooltip-meta";
+              protocol.textContent = `${port.type || "Endpoint"} · ${port.method || "Méthode inconnue"}`;
               const endpoint = document.createElement("span");
+              endpoint.className = "graph-port-tooltip-topic";
               const isTopicMessage = /kafka|topic|message/i.test(`${port.type} ${port.name}`);
               endpoint.textContent = isTopicMessage
-                ? `${portDirection === "in" ? "Message reçu du topic" : "Message envoyé vers le topic"} : ${port.name}`
-                : `${port.type} : ${port.name}`;
-              const method = document.createElement("code");
-              method.textContent = `Méthode Java : ${port.method || "inconnue"}`;
-              tooltip.append(title, endpoint, method);
-              if (isTopicMessage) {
-                const topic = document.createElement("code");
-                topic.textContent = `${portDirection === "in" ? "Topic en entrée" : "Topic en sortie"} : ${port.name}`;
-                tooltip.append(topic);
-              }
+                ? `${portDirection === "in" ? "Topic en entrée (consommé)" : "Topic en sortie (publié)"} : ${port.name}`
+                : `${port.system === "rest" ? "Ressource HTTP" : "Ressource"} : ${port.name}`;
+              const evidence = document.createElement("code");
+              evidence.textContent = `${port.path || "Source inconnue"}${port.line ? `:${port.line}` : ""}`;
+              tooltip.append(title, protocol, endpoint, evidence);
               if (port.message_type) {
-                const messageType = document.createElement("code");
-                messageType.textContent = `Type Java : ${port.message_type}`;
+                const messageType = document.createElement("span");
+                messageType.className = "graph-port-tooltip-type";
+                messageType.textContent = `Type de message : ${port.message_type}`;
                 tooltip.append(messageType);
               } else if (port.message_type_warning) {
-                const messageType = document.createElement("code");
+                const messageType = document.createElement("span");
+                messageType.className = "graph-port-tooltip-warning";
                 messageType.textContent = `⚠ ${port.message_type_warning}`;
                 tooltip.append(messageType);
               }
-              if (port.local_outputs?.length) {
-                const localOutputs = document.createElement("span");
-                localOutputs.textContent = "Sorties internes mappées :";
-                const outputList = document.createElement("ul");
-                port.local_outputs.forEach(output => {
-                  const item = document.createElement("li");
-                  const outputTopic = /kafka|topic|message/i.test(`${output.type} ${output.name}`)
-                    ? ` · Topic en sortie : ${output.name}` : "";
-                  item.textContent = `${output.label} · ${output.type} : ${output.name} · ${output.method}${outputTopic}${output.message_type ? ` · Type Java : ${output.message_type}` : ""}`;
-                  outputList.append(item);
-                });
-                tooltip.append(localOutputs, outputList);
-              }
               if (port.target) {
                 const target = document.createElement("span");
+                target.className = "graph-port-tooltip-section";
                 target.textContent = `Cible résolue : ${port.target.service} · ${port.target.label} · ${port.target.name}`;
                 tooltip.append(target);
               }
               flowTooltipOverlay.replaceChildren(tooltip);
               const bounds = anchor.getBoundingClientRect();
               const tooltipBounds = tooltip.getBoundingClientRect();
-              tooltip.style.left = `${Math.max(8, Math.min(window.innerWidth - tooltipBounds.width - 8, bounds.left))}px`;
-              tooltip.style.top = `${bounds.bottom + tooltipBounds.height + 8 <= window.innerHeight ? bounds.bottom + 8 : Math.max(8, bounds.top - tooltipBounds.height - 8)}px`;
+              const preferredLeft = bounds.left + bounds.width / 2 - tooltipBounds.width / 2;
+              const left = Math.max(8, Math.min(window.innerWidth - tooltipBounds.width - 8, preferredLeft));
+              const below = bounds.bottom + tooltipBounds.height + 10 <= window.innerHeight;
+              tooltip.dataset.placement = below ? "bottom" : "top";
+              tooltip.style.setProperty("--tooltip-arrow-left", `${Math.max(10, Math.min(tooltipBounds.width - 10, bounds.left + bounds.width / 2 - left))}px`);
+              tooltip.style.left = `${left}px`;
+              tooltip.style.top = `${below ? bounds.bottom + 10 : Math.max(8, bounds.top - tooltipBounds.height - 10)}px`;
             };
             anchor.addEventListener("pointerenter", showPortTooltip);
             anchor.addEventListener("pointerleave", () => flowTooltipOverlay.replaceChildren());
             label.append(anchor);
           }));
           }
+          label.addEventListener("pointerenter", event => {
+            if (event.target.closest?.(".graph-node-port-reference")) return;
+            showNodeTooltip(node, label, event);
+          });
+          label.addEventListener("pointerleave", event => {
+            if (!label.contains(event.relatedTarget)) flowTooltipOverlay.replaceChildren();
+          });
           // Cards sit above Sigma's canvas and therefore normally consume the
           // pointer stream. Pan the camera directly when a drag starts on a
           // card, while preserving a plain click for node selection. Keeping
@@ -1106,8 +1171,27 @@
             point[0] = Math.max(viewportMargin, Math.min(overlayBounds.width - viewportMargin, point[0]));
             point[1] = Math.max(viewportMargin, Math.min(overlayBounds.height - viewportMargin, point[1]));
           });
+          const roundedPath = points.length < 3
+            ? `M ${points[0][0]} ${points[0][1]} L ${points[points.length - 1][0]} ${points[points.length - 1][1]}`
+            : points.slice(1, -1).reduce((path, point, index) => {
+              const previous = points[index];
+              const next = points[index + 2];
+              const previousDistance = Math.hypot(point[0] - previous[0], point[1] - previous[1]);
+              const nextDistance = Math.hypot(next[0] - point[0], next[1] - point[1]);
+              const radius = Math.min(12, previousDistance / 2, nextDistance / 2);
+              const entry = [
+                point[0] + ((previous[0] - point[0]) * radius / previousDistance),
+                point[1] + ((previous[1] - point[1]) * radius / previousDistance),
+              ];
+              const exit = [
+                point[0] + ((next[0] - point[0]) * radius / nextDistance),
+                point[1] + ((next[1] - point[1]) * radius / nextDistance),
+              ];
+              return `${path} L ${entry[0]} ${entry[1]} Q ${point[0]} ${point[1]} ${exit[0]} ${exit[1]}`;
+            }, `M ${points[0][0]} ${points[0][1]}`)
+              + ` L ${points[points.length - 1][0]} ${points[points.length - 1][1]}`;
           return {
-            d: points.map((point, index) => `${index ? "L" : "M"} ${point[0]} ${point[1]}`).join(" "),
+            d: roundedPath,
             points,
             obstacleRouted: true,
             router: "libavoid",
@@ -1133,18 +1217,22 @@
             .map(endpointId => anchorsByEndpointId.get(endpointId))
             .find(anchor => anchor?.classList.contains("is-in"))
             || [...(targetPort ? [anchorsByEndpointId.get(targetPort.endpoint_id)] : [])][0];
-          const sourceBounds = (sourceAnchor || source).getBoundingClientRect();
-          const targetBounds = (targetAnchor || target).getBoundingClientRect();
+          if (!sourceAnchor || !targetAnchor) return null;
+          const sourceCardBounds = source.getBoundingClientRect();
+          const targetCardBounds = target.getBoundingClientRect();
+          const sourceBounds = sourceAnchor.getBoundingClientRect();
+          const targetBounds = targetAnchor.getBoundingClientRect();
           const sourceCenter = [sourceBounds.left + sourceBounds.width / 2, sourceBounds.top + sourceBounds.height / 2];
           const targetCenter = [targetBounds.left + targetBounds.width / 2, targetBounds.top + targetBounds.height / 2];
           const deltaX = targetCenter[0] - sourceCenter[0];
           const deltaY = targetCenter[1] - sourceCenter[1];
-          const start = Math.abs(deltaX) >= Math.abs(deltaY)
-            ? [sourceBounds.right + 6, sourceCenter[1]]
-            : [sourceCenter[0], sourceBounds.bottom + 6];
-          const end = Math.abs(deltaX) >= Math.abs(deltaY)
-            ? [targetBounds.left - 6, targetCenter[1]]
-            : [targetCenter[0], targetBounds.top - 6];
+          // LibAvoid receives the actual port centers. The route therefore
+          // starts at OUT and terminates at IN, rather than stopping at a
+          // card edge and only looking visually connected to a port.
+          const start = sourceCenter;
+          const end = targetCenter;
+          const startPoint = [start[0] - overlayBounds.left, start[1] - overlayBounds.top];
+          const endPoint = [end[0] - overlayBounds.left, end[1] - overlayBounds.top];
           const resolvedEdgeKey = edgeKey || `call-edge-${index}`;
           const sourcePortId = (link.endpoint_ids || []).find(endpointId => (
             anchorsByEndpointId.get(endpointId)?.classList.contains("is-out")
@@ -1154,15 +1242,13 @@
           )) || `${resolvedEdgeKey}-target`;
           const sourceSide = Math.abs(deltaX) >= Math.abs(deltaY) ? "EAST" : "SOUTH";
           const targetSide = Math.abs(deltaX) >= Math.abs(deltaY) ? "WEST" : "NORTH";
-          ensureLibavoidNode(source, source.getBoundingClientRect(), sourceAnchor, sourcePortId, sourceSide);
-          ensureLibavoidNode(target, target.getBoundingClientRect(), targetAnchor, targetPortId, targetSide);
+          ensureLibavoidNode(source, sourceCardBounds, sourceAnchor, sourcePortId, sourceSide);
+          ensureLibavoidNode(target, targetCardBounds, targetAnchor, targetPortId, targetSide);
           libavoidEdges.push({
             id: resolvedEdgeKey,
             source: sourceId,
             target: targetId,
           });
-          const startPoint = [start[0] - overlayBounds.left, start[1] - overlayBounds.top];
-          const endPoint = [end[0] - overlayBounds.left, end[1] - overlayBounds.top];
           const libavoidRouted = routePointsToPath(
             libavoidRoutes.get(resolvedEdgeKey),
             startPoint,
@@ -1170,18 +1256,66 @@
             sourceId,
             targetId,
           );
-          if (libavoidRouted) {
-            return libavoidRouted;
-          }
-          const routed = orthogonalPath(
-            [start[0] - overlayBounds.left, start[1] - overlayBounds.top],
-            [end[0] - overlayBounds.left, end[1] - overlayBounds.top],
+          if (libavoidRouted) return libavoidRouted;
+          const fallback = hybridPath(
+            startPoint,
+            endPoint,
             sourceId,
             targetId,
             occupiedCallGraphSegments,
           );
-          routed.obstacleRouted = true;
-          return routed;
+          fallback.router = "libavoid-fallback";
+          return fallback;
+        };
+        const portsByEndpointId = new Map(
+          [...nodeDataById.values()].flatMap(node => (node.ports || []).map(port => [port.endpoint_id, port]))
+        );
+        const shortPortLabel = (port, direction) => {
+          const match = String(port?.label || "").match(direction === "out" ? /O\d+/ : /I\d+/);
+          return match?.[0] || (direction === "out" ? "O?" : "I?");
+        };
+        const bindArcTooltip = (path, link, sourcePort, targetPort) => {
+          path.addEventListener("pointerenter", event => {
+            const tooltip = document.createElement("span");
+            tooltip.className = "graph-arc-tooltip";
+            const title = document.createElement("strong");
+            title.textContent = `${shortPortLabel(sourcePort, "out")} => ${shortPortLabel(targetPort, "in")}`;
+            const relation = document.createElement("span");
+            relation.className = "graph-arc-tooltip-relation";
+            relation.textContent = `${link.kind === "kafka" ? "Kafka" : link.kind === "rest" ? "HTTP" : link.kind || "Relation"} · ${link.label || sourcePort?.name || targetPort?.name || "Endpoint"}`;
+            tooltip.append(title, relation);
+            const portBlock = (port, direction, serviceId) => {
+              const block = document.createElement("span");
+              block.className = "graph-arc-tooltip-port";
+              const heading = document.createElement("strong");
+              heading.textContent = `Port ${direction} · ${shortPortLabel(port, direction === "OUT" ? "out" : "in")}`;
+              const service = document.createElement("span");
+              service.textContent = `Microservice : ${serviceId?.replace(/^microservice:/, "") || "inconnu"}`;
+              block.append(heading, service);
+              return block;
+            };
+            tooltip.append(
+              portBlock(sourcePort, "OUT", link.source),
+              portBlock(targetPort, "IN", link.target),
+            );
+            if (sourcePort?.message_type || targetPort?.message_type) {
+              const type = document.createElement("span");
+              type.className = "graph-arc-tooltip-type";
+              type.textContent = `Type : ${sourcePort?.message_type || targetPort?.message_type}`;
+              tooltip.append(type);
+            }
+            flowTooltipOverlay.replaceChildren(tooltip);
+            const bounds = path.getBoundingClientRect();
+            const tooltipBounds = tooltip.getBoundingClientRect();
+            const anchorX = event.clientX || bounds.left + bounds.width / 2;
+            const left = Math.max(8, Math.min(window.innerWidth - tooltipBounds.width - 8, anchorX - tooltipBounds.width / 2));
+            const below = bounds.bottom + tooltipBounds.height + 10 <= window.innerHeight;
+            tooltip.dataset.placement = below ? "bottom" : "top";
+            tooltip.style.setProperty("--tooltip-arrow-left", `${Math.max(10, Math.min(tooltipBounds.width - 10, anchorX - left))}px`);
+            tooltip.style.left = `${left}px`;
+            tooltip.style.top = `${below ? bounds.bottom + 10 : Math.max(8, bounds.top - tooltipBounds.height - 10)}px`;
+          });
+          path.addEventListener("pointerleave", () => flowTooltipOverlay.replaceChildren());
         };
         selectedCallGraphLinks.forEach(({ link, index, edgeKey }) => {
           const routed = callGraphPath(link, edgeKey, index);
@@ -1192,10 +1326,14 @@
             network.setEdgeAttribute(resolvedEdgeKey, "obstacleRouted", routed.obstacleRouted);
             renderer.refresh();
           }
-          if (!routed.obstacleRouted) return;
-          occupiedCallGraphSegments.push(...routed.points.slice(1).map((point, pointIndex) => (
-            [routed.points[pointIndex], point]
-          )));
+          if (routed.obstacleRouted) {
+            occupiedCallGraphSegments.push(...routed.points.slice(1).map((point, pointIndex) => (
+              [routed.points[pointIndex], point]
+            )));
+          }
+          // Sigma's call-graph edges are hidden while a flow is selected, so
+          // every route (including a clear direct segment) must be drawn in
+          // the port overlay. Otherwise direct arcs silently disappear.
           const path = document.createElementNS(svgNamespace, "path");
           path.classList.add("graph-call-path");
           if (link.kind === "kafka") path.classList.add("is-kafka");
@@ -1205,12 +1343,18 @@
           portPathOverlay.append(path);
           const arcLabel = document.createElementNS(svgNamespace, "text");
           arcLabel.classList.add("graph-call-label");
-          const sourcePort = (nodeDataById.get(link.source)?.ports || []).find(port => (
-            port.direction === "out" && (!link.label || port.name === link.label)
-          ));
-          const targetPort = (nodeDataById.get(link.target)?.ports || []).find(port => (
-            port.direction === "in" && (!link.label || port.name === link.label)
-          ));
+          const sourcePort = (link.endpoint_ids || [])
+            .map(endpointId => portsByEndpointId.get(endpointId))
+            .find(port => port?.direction === "out")
+            || (nodeDataById.get(link.source)?.ports || []).find(port => (
+              port.direction === "out" && (!link.label || port.name === link.label)
+            ));
+          const targetPort = (link.endpoint_ids || [])
+            .map(endpointId => portsByEndpointId.get(endpointId))
+            .find(port => port?.direction === "in")
+            || (nodeDataById.get(link.target)?.ports || []).find(port => (
+              port.direction === "in" && (!link.label || port.name === link.label)
+            ));
           const shortPortLabel = (port, direction) => {
             const match = String(port?.label || "").match(direction === "out" ? /O\d+/ : /I\d+/);
             return match?.[0] || (direction === "out" ? "O?" : "I?");
@@ -1220,9 +1364,17 @@
           arcLabel.setAttribute("x", String(labelPoint[0]));
           arcLabel.setAttribute("y", String(labelPoint[1] - 8));
           portPathOverlay.append(arcLabel);
+          bindArcTooltip(path, link, sourcePort, targetPort);
         });
+        const libavoidRouteKeyForGeometry = [
+          ...[...libavoidNodes.values()].map(node => (
+            `${node.id}:${node.x}:${node.y}:${node.width}:${node.height}:`
+            + (node.ports || []).map(port => `${port.id}:${port.x}:${port.y}`).join(",")
+          )),
+          ...libavoidEdges.map(edge => `${edge.id}:${edge.source}:${edge.target}`),
+        ].join("|");
         routeWithLibavoid(
-          [...libavoidEdges].map(edge => `${edge.id}:${edge.source}:${edge.target}`).join("|"),
+          libavoidRouteKeyForGeometry,
           {
             id: "call-graph-routing",
             children: [
@@ -1286,6 +1438,17 @@
           path.setAttribute("marker-end", "url(#graph-port-arrow)");
           path.setAttribute("d", portPath(input, output));
           portPathOverlay.append(path);
+          bindArcTooltip(
+            path,
+            {
+              kind: "internal",
+              label: "Flux interne",
+              source: `microservice:${output.closest(".graph-node-card-label")?.dataset.nodeId || "?"}`,
+              target: `microservice:${input.closest(".graph-node-card-label")?.dataset.nodeId || "?"}`,
+            },
+            portsByEndpointId.get(link.output_endpoint_id),
+            portsByEndpointId.get(link.input_endpoint_id),
+          );
         });
         selectedPortLinks.forEach(link => {
           const source = anchorsByEndpointId.get(link.source_endpoint_id);
@@ -1297,6 +1460,17 @@
           path.setAttribute("marker-end", "url(#graph-port-arrow)");
           path.setAttribute("d", portPath(source, target));
           portPathOverlay.append(path);
+          bindArcTooltip(
+            path,
+            {
+              kind: link.kind,
+              label: link.kind === "kafka" ? source.dataset.endpointId : "HTTP",
+              source: `microservice:${source.closest(".graph-node-card-label")?.dataset.nodeId || "?"}`,
+              target: `microservice:${target.closest(".graph-node-card-label")?.dataset.nodeId || "?"}`,
+            },
+            portsByEndpointId.get(link.source_endpoint_id),
+            portsByEndpointId.get(link.target_endpoint_id),
+          );
         });
       };
       // Camera updates can fire several times during one drag. Coalesce them
@@ -1317,6 +1491,24 @@
       requestGraphRender();
       renderer.on("enterNode", ({ node }) => { graphState.hoveredId = node; requestGraphRender(); });
       renderer.on("leaveNode", () => { graphState.hoveredId = null; requestGraphRender(); });
+      renderer.on("enterEdge", ({ edge }) => {
+        if (String(edge).startsWith("call-edge-")) return;
+        const match = String(edge).match(/^edge-(\d+)$/);
+        const link = match ? visibleLinks[Number(match[1])] : null;
+        if (!link) return;
+        const source = nodeDataById.get(link.source);
+        const target = nodeDataById.get(link.target);
+        const tooltip = document.createElement("span");
+        tooltip.className = "graph-edge-tooltip";
+        const title = document.createElement("strong");
+        title.textContent = `${source?.name || link.source} → ${target?.name || link.target}`;
+        tooltip.append(title);
+        addTooltipLine(tooltip, `${link.kind || "Relation"}${link.label ? ` · ${link.label}` : ""}`, "graph-edge-tooltip-kind");
+        if (link.message_type) addTooltipLine(tooltip, `Type : ${link.message_type}`);
+        if (link.provenance) addTooltipLine(tooltip, `Preuve : ${link.provenance}`, "graph-edge-tooltip-detail");
+        placeGraphTooltip(tooltip, document.getElementById("graph").getBoundingClientRect());
+      });
+      renderer.on("leaveEdge", () => flowTooltipOverlay.replaceChildren());
       renderer.on("clickNode", ({ node }) => selectNode(node));
       renderer.on("clickStage", reset);
       renderer.on("doubleClickStage", event => event.preventSigmaDefault?.());

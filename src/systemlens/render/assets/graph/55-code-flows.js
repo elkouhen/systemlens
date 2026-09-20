@@ -218,7 +218,7 @@
     });
 
     function showCodeFlow(flow) {
-      const exactPath = pathForCodeFlow(flow);
+      const exactPath = callGraphPathForCodeFlow(flow) || pathForCodeFlow(flow);
       const path = exactPath || nodePathForCodeFlow(flow);
       if (!path) return;
       const rootNodeId = nodeIdForCodeFlowResource(flow.module, "microservice");
@@ -232,6 +232,15 @@
         topologyReconciled: Boolean(exactPath),
       });
       syncCodeFlowSelection();
+    }
+
+    function callGraphPathForCodeFlow(flow) {
+      const graph = flow.call_graph;
+      if (!graph || !Array.isArray(graph.node_order) || graph.node_order.length < 2) return null;
+      const nodes = graph.node_order
+        .map(service => nodeIdForCodeFlowResource(service, "microservice"))
+        .filter(Boolean);
+      return nodes.length >= 2 ? { nodes, edges: [] } : null;
     }
 
     function openCodeFlowInList(flow) {

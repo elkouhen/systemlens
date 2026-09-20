@@ -73,6 +73,9 @@ def test_global_input_label_references_its_local_output() -> None:
         {"orders": [producer], "payments": [consumer, next_producer], "inventory": [next_consumer]},
         [
             GraphEdge("kafka", "orders", "payments", producer, consumer),
+            # Repeated evidence for the same endpoint pair must produce one
+            # call-graph arc in the exported model.
+            GraphEdge("kafka", "orders", "payments", producer, consumer),
             GraphEdge("kafka", "payments", "inventory", next_producer, next_consumer),
         ],
         code_flows=[CodeFlow(
@@ -85,6 +88,15 @@ def test_global_input_label_references_its_local_output() -> None:
             ),
         )],
     ))
+    flow_graph = data["code_flows"][0]["call_graph"]
+    assert flow_graph["node_order"] == ["orders", "payments", "inventory"]
+    assert [
+        (edge["source"], edge["target"], edge["kind"])
+        for edge in flow_graph["edges"]
+    ] == [
+        ("orders", "payments", "kafka"),
+        ("payments", "inventory", "kafka"),
+    ]
 
     ports_by_id = {
         port["endpoint_id"]
@@ -203,6 +215,7 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     node = next(item for item in data["nodes"] if item["id"] == "microservice:orders")
     assert node["ports"] == [{
         "label": "I1", "direction": "in", "type": "HTTP receive",
+        "system": "rest", "role": "serve", "path": "OrderController.java", "line": 1,
         "method": "com.example.OrderController::placeOrder", "name": "POST /orders",
         "endpoint_id": "receive-order",
     }]
@@ -737,7 +750,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'orthogonalPath(' in document
     assert 'const selectedCallGraphLinks = callGraphOnly' in document
     assert 'const directKafkaLink = (topic, source, target)' in document
-    assert 'return !data.obstacleRouted' in document
+    assert "Keeping Sigma's straight edge underneath would draw" in document
     assert 'path.classList.add("graph-call-path")' in document
     assert ".graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2;" in document
     assert 'obstacleRouted' in document

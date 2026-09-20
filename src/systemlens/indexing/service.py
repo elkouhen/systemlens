@@ -24,7 +24,8 @@ from systemlens.conventions.strategy1.kafka import (
 )
 from systemlens.indexing.materializers import materialize_asyncapi_contracts, materialize_openapi_contracts
 from systemlens.indexing.code_flows import (
-    CODE_FLOW_SIGNATURE, materialize_code_flows, materialize_codeql_code_flows,
+    CODE_FLOW_SIGNATURE, _deduplicate_code_flows, materialize_code_flows,
+    materialize_codeql_code_flows,
     materialize_kafka_flow_continuations, reconcile_code_flows,
 )
 from systemlens.indexing.integration_methods import materialize_integration_methods
@@ -674,7 +675,11 @@ def _index_repo(
                 stats=codeql_stats,
                 reachability=reachability,
             )
-            flows.extend(codeql_flows)
+            # AST and the interprocedural engine can describe the same
+            # endpoint-to-endpoint flow. Keep one representative before
+            # composing Kafka continuations, otherwise the same flow is
+            # rendered more than once in the Flux view.
+            flows = _deduplicate_code_flows([*flows, *codeql_flows])
             timer.end("call-graph-join", f"jointure {engine_label} et matérialisation des flux")
             limit_note = (
                 f" limite atteinte ({config.codeql_max_paths} transitions)."

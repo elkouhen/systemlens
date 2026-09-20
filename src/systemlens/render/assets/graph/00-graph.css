@@ -33,13 +33,13 @@
     #graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
     #graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
     #graph-port-paths { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; }
-    .graph-port-path { fill: none; stroke: #7c3aed; stroke-width: 2; stroke-linecap: round; opacity: .9; }
+    .graph-port-path { fill: none; stroke: #7c3aed; stroke-width: 2; stroke-linecap: round; opacity: .9; pointer-events: stroke; }
     .graph-port-path.is-kafka { stroke: #009e73; }
-    .graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 1; }
+    .graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 1; pointer-events: stroke; }
     .graph-call-path.is-kafka { stroke: #008f69; }
     .graph-call-label { fill: #4c1d95; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; }
     :root[data-theme="dark"] .graph-call-label { fill: #ddd6fe; stroke: #111827; }
-    .graph-local-port-path { fill: none; stroke: #d97706; stroke-width: 1.5; stroke-dasharray: 3 2; stroke-linecap: round; opacity: .9; }
+    .graph-local-port-path { fill: none; stroke: #d97706; stroke-width: 1.5; stroke-dasharray: 3 2; stroke-linecap: round; opacity: .9; pointer-events: stroke; }
     .graph-local-port-path.is-code-flow-path { stroke: #7c3aed; stroke-width: 3; stroke-dasharray: none; opacity: 1; }
     :root[data-theme="dark"] .graph-port-path { stroke: #c4b5fd; }
     :root[data-theme="dark"] .graph-port-path.is-kafka { stroke: #5eead4; }
@@ -84,11 +84,43 @@
     .graph-node-trigger-badge.is-http { border-color: #2563eb; color: #1e3a8a; background: #eff6ff; }
     .graph-node-trigger-badge.is-kafka { border-color: #059669; color: #065f46; background: #ecfdf5; }
     .graph-node-port-reference { position: absolute; top: var(--port-offset); z-index: 1; display: grid; place-items: center; min-width: 24px; height: 16px; padding: 0 3px; box-sizing: border-box; transform: translateY(-50%); border: 1px solid #8b5cf6; border-radius: 8px; color: #4c1d95; background: #faf5ff; box-shadow: 0 2px 5px rgba(76,29,149,.14); font-size: 9px; font-weight: 800; line-height: 1; white-space: nowrap; }
+    /* Port badges reuse the protocol colours of their associated arcs. */
+    .graph-node-port-reference.is-http { border-color: #6d28d9; color: #4c1d95; background: #faf5ff; }
+    .graph-node-port-reference.is-kafka { border-color: #008f69; color: #047857; background: #ecfdf5; box-shadow: 0 2px 5px rgba(0, 143, 105, .18); }
     .graph-node-port-reference.is-in { right: calc(100% - 7px); }
     .graph-node-port-reference.is-out { left: calc(100% - 7px); }
-    .graph-port-tooltip { position: fixed; z-index: 1; display: grid; gap: 3px; width: max-content; max-width: min(340px, calc(100vw - 24px)); padding: 8px 10px; pointer-events: none; border: 1px solid #6d28d9; border-radius: 8px; color: #f8fafc; background: #24103f; box-shadow: 0 8px 22px rgba(15, 23, 42, .35); font-size: 11px; font-weight: 500; line-height: 1.35; text-align: left; white-space: normal; }
-    .graph-port-tooltip strong { color: #ddd6fe; font-size: 11px; font-weight: 850; }
-    .graph-port-tooltip code { color: #f5f3ff; font: 600 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .graph-port-tooltip { position: fixed; z-index: 1; display: grid; gap: 5px; width: max-content; max-width: min(380px, calc(100vw - 24px)); padding: 10px 12px; pointer-events: none; border: 1px solid #8b5cf6; border-radius: 10px; color: #f8fafc; background: linear-gradient(145deg, #2e1550, #1e293b); box-shadow: 0 10px 28px rgba(15, 23, 42, .38), 0 0 0 1px rgba(255, 255, 255, .08) inset; font-size: 11px; font-weight: 500; line-height: 1.4; text-align: left; white-space: normal; }
+    .graph-port-tooltip::after { content: ""; position: absolute; left: var(--tooltip-arrow-left, 50%); width: 9px; height: 9px; border: 1px solid #8b5cf6; background: #2e1550; transform: translateX(-50%) rotate(45deg); }
+    .graph-port-tooltip[data-placement="bottom"]::after { top: -5px; border-right: 0; border-bottom: 0; }
+    .graph-port-tooltip[data-placement="top"]::after { bottom: -5px; border-left: 0; border-top: 0; }
+    .graph-port-tooltip strong { color: #ede9fe; font-size: 12px; font-weight: 850; letter-spacing: .01em; }
+    .graph-port-tooltip-meta { color: #c4b5fd; font-size: 10px; font-weight: 700; }
+    .graph-port-tooltip-topic { color: #f8fafc; font-weight: 700; overflow-wrap: anywhere; }
+    .graph-port-tooltip-action { color: #fef3c7; font-size: 10px; font-weight: 750; overflow-wrap: anywhere; }
+    .graph-port-tooltip code { color: #ddd6fe; font: 600 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .graph-port-tooltip-type { color: #bbf7d0; font-size: 10px; font-weight: 700; overflow-wrap: anywhere; }
+    .graph-port-tooltip-warning { color: #fde68a; font-size: 10px; font-weight: 700; overflow-wrap: anywhere; }
+    .graph-port-tooltip-section { margin-top: 2px; padding-top: 4px; border-top: 1px solid rgba(221, 214, 254, .2); color: #ddd6fe; font-size: 10px; font-weight: 700; }
+    .graph-arc-tooltip { position: fixed; z-index: 2; display: grid; gap: 5px; width: max-content; max-width: min(390px, calc(100vw - 24px)); padding: 10px 12px; pointer-events: none; border: 1px solid #0d9488; border-radius: 10px; color: #f8fafc; background: linear-gradient(145deg, #123b46, #172554); box-shadow: 0 10px 28px rgba(15, 23, 42, .4), 0 0 0 1px rgba(255, 255, 255, .08) inset; font-size: 11px; font-weight: 500; line-height: 1.4; text-align: left; white-space: normal; }
+    .graph-arc-tooltip::after { content: ""; position: absolute; left: var(--tooltip-arrow-left, 50%); width: 9px; height: 9px; border: 1px solid #0d9488; background: #123b46; transform: translateX(-50%) rotate(45deg); }
+    .graph-arc-tooltip[data-placement="bottom"]::after { top: -5px; border-right: 0; border-bottom: 0; }
+    .graph-arc-tooltip[data-placement="top"]::after { bottom: -5px; border-left: 0; border-top: 0; }
+    .graph-arc-tooltip strong { color: #ccfbf1; font-size: 12px; font-weight: 850; }
+    .graph-arc-tooltip-port { display: grid; gap: 2px; margin-top: 2px; padding: 5px 7px; border-left: 2px solid #5eead4; border-radius: 4px; background: rgba(15, 118, 110, .22); }
+    .graph-arc-tooltip-port strong { color: #ccfbf1; font-size: 10px; }
+    .graph-arc-tooltip-port span { color: #e0f2fe; font-size: 10px; overflow-wrap: anywhere; }
+    .graph-arc-tooltip-port code { color: #bae6fd; font-size: 9px; }
+    .graph-arc-tooltip-relation { color: #99f6e4; font-weight: 750; overflow-wrap: anywhere; }
+    .graph-arc-tooltip-endpoints, .graph-arc-tooltip-methods { color: #e0f2fe; overflow-wrap: anywhere; }
+    .graph-arc-tooltip-type { color: #bbf7d0; font-weight: 700; }
+    .graph-arc-tooltip code { color: #bae6fd; font: 600 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+    .graph-entity-tooltip, .graph-edge-tooltip { position: fixed; z-index: 2; display: grid; gap: 4px; width: max-content; max-width: min(330px, calc(100vw - 24px)); padding: 9px 11px; pointer-events: none; border: 1px solid #64748b; border-radius: 9px; color: #f8fafc; background: #1e293b; box-shadow: 0 9px 24px rgba(15, 23, 42, .35); font-size: 10px; line-height: 1.35; text-align: left; white-space: normal; }
+    .graph-entity-tooltip::after, .graph-edge-tooltip::after { content: ""; position: absolute; left: var(--tooltip-arrow-left, 50%); width: 8px; height: 8px; border: 1px solid #64748b; background: #1e293b; transform: translateX(-50%) rotate(45deg); }
+    .graph-entity-tooltip[data-placement="bottom"]::after, .graph-edge-tooltip[data-placement="bottom"]::after { top: -5px; border-right: 0; border-bottom: 0; }
+    .graph-entity-tooltip[data-placement="top"]::after, .graph-edge-tooltip[data-placement="top"]::after { bottom: -5px; border-left: 0; border-top: 0; }
+    .graph-entity-tooltip strong, .graph-edge-tooltip strong { color: #f8fafc; font-size: 11px; font-weight: 850; }
+    .graph-entity-tooltip-kind, .graph-edge-tooltip-kind { color: #bfdbfe; font-weight: 750; }
+    .graph-entity-tooltip-detail, .graph-edge-tooltip-detail { color: #cbd5e1; overflow-wrap: anywhere; }
     .graph-port-tooltip ul { display: grid; gap: 2px; margin: 0; padding-left: 16px; }
     .graph-flow-step { position: absolute; top: -8px; left: -8px; display: grid; place-items: center; width: 19px; height: 19px; border-radius: 50%; color: #fff; background: #7c3aed; box-shadow: 0 2px 6px rgba(76, 29, 149, .35); font-size: 10px; font-weight: 850; }
     #graph-node-labels.is-symbol-mode { overflow: visible; }
@@ -137,6 +169,8 @@
     :root[data-theme="dark"] .graph-node-trigger-badge.is-http { border-color: #60a5fa; color: #dbeafe; background: #1e3a8a; }
     :root[data-theme="dark"] .graph-node-trigger-badge.is-kafka { border-color: #34d399; color: #d1fae5; background: #065f46; }
     :root[data-theme="dark"] .graph-node-port-reference { color: #ddd6fe; border-color: #8b5cf6; background: #2e1a47; }
+    :root[data-theme="dark"] .graph-node-port-reference.is-http { color: #ddd6fe; border-color: #c4b5fd; background: #2e1a47; }
+    :root[data-theme="dark"] .graph-node-port-reference.is-kafka { color: #d1fae5; border-color: #5eead4; background: #064e3b; }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon { color: #e5edf8; background: linear-gradient(145deg, color-mix(in srgb, #243650 82%, var(--card-accent, #64748b)), color-mix(in srgb, #101b2d 72%, var(--card-accent, #64748b))); border-color: color-mix(in srgb, var(--card-accent, #64748b) 78%, #dce8f7); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 4px 11px rgba(0, 0, 0, .34); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service { background: transparent; box-shadow: none; }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-icon.is-service::before { background: color-mix(in srgb, var(--card-accent, #64748b) 78%, #dce8f7); }

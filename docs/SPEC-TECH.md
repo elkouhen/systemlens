@@ -229,6 +229,23 @@ candidates are retained individually at low confidence; SystemLens does not
 select an implementation on Spring bean metadata alone. The analysis profile,
 including the selected call-graph engine, availability, activation and its bounds, participates in the
 code-flow signature so switching profile recalculates unchanged repositories.
+
+The flow join uses NetworkX's directed multigraph representation to merge AST
+and interprocedural candidates before Kafka continuations are expanded. Parallel
+candidate routes are grouped by source endpoint, target endpoint, and status;
+the representative with the strongest confidence, then the shortest route, is
+persisted. The graph is used for analysis and deduplication; HTML layout remains
+a rendering concern handled by the browser graph stack. Each exported code flow
+also carries a NetworkX-derived service subgraph and deterministic component
+order; the Flux view uses that snapshot instead of reconstructing the call
+sequence from display labels.
+Within that subgraph, parallel evidence rows are keyed by directed service
+pair, protocol and resource label. Duplicate rows select one deterministic
+endpoint pair, preferring a pair that is consecutive in the persisted flow and
+then the lexicographically smallest pair. The browser receives only these
+canonical service arcs; it does not append a second set reconstructed from
+port links.
+
 Each persisted `CodeFlow` also carries a `reconciliation` status. `complete`
 means every endpoint step exists in the same snapshot and every cross-service
 effect/continuation has a matching persisted topology edge; `partial` means

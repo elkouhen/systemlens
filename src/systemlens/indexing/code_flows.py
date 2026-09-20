@@ -5,6 +5,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
 
+import networkx as nx
+
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, compute_code_flow_id
 from systemlens.domain.code_flows import IntegrationMethod
@@ -33,7 +35,7 @@ def _deduplicate_code_flows(flows: list[CodeFlow]) -> list[CodeFlow]:
     higher-confidence, shorter route and retain deterministic ordering.
     """
     confidence_rank = {"high": 0, "medium": 1, "low": 2}
-    selected: dict[tuple[str, str, str], CodeFlow] = {}
+    candidates = nx.MultiDiGraph()
     for flow in flows:
         endpoint_steps = [step for step in flow.steps if step.endpoint_id]
         if not endpoint_steps:
@@ -46,24 +48,20 @@ def _deduplicate_code_flows(flows: list[CodeFlow]) -> list[CodeFlow]:
                 endpoint_steps[-1].endpoint_id or flow.id,
                 flow.status,
             )
-        current = selected.get(key)
-        if current is None:
-            selected[key] = flow
-            continue
-        current_score = (
-            confidence_rank.get(current.confidence, 99),
-            len(current.steps),
-            current.id,
-        )
-        candidate_score = (
+        candidates.add_edge(key[0], key[1], key=(key[2], flow.id), flow=flow)
+    grouped: dict[tuple[str, str, str], list[CodeFlow]] = {}
+    for source, target, edge_key, data in candidates.edges(keys=True, data=True):
+        grouped.setdefault((source, target, edge_key[0]), []).append(data["flow"])
+    selected = [min(
+        parallel,
+        key=lambda flow: (
             confidence_rank.get(flow.confidence, 99),
             len(flow.steps),
             flow.id,
-        )
-        if candidate_score < current_score:
-            selected[key] = flow
+        ),
+    ) for _, parallel in sorted(grouped.items())]
     return sorted(
-        selected.values(),
+        selected,
         key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id),
     )
 
@@ -665,7 +663,11 @@ def materialize_kafka_flow_continuations(
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
     consumers: dict[tuple[str, str], list[CodeFlow]] = defaultdict(list)
     for flow in flows:
-        entry = endpoint_by_id.get(flow.steps[0].endpoint_id) if flow.steps else None
+        entry = (
+            endpoint_by_id.get(flow.steps[0].endpoint_id)
+            if flow.steps and flow.steps[0].endpoint_id
+            else None
+        )
         if (
             flow.steps
             and flow.steps[0].kind == "message_entry"

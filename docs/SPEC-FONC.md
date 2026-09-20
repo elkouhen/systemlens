@@ -209,6 +209,12 @@ types and `methodFullName` values without source evidence are diagnostics, not
 architecture edges. Reflection, dynamic routing, and runtime-only routing are
 not added.
 
+Before Kafka continuations are composed, AST-only and interprocedural candidates
+are merged into a directed multigraph with NetworkX and reduced to one
+representative per source endpoint, target endpoint, and status. This prevents
+the same source-evidenced call flow from being listed twice when both analysis
+engines describe it.
+
 For Kafka, SystemLens can continue a potential flow from a concrete,
 statically resolved producer topic and known message type to a persisted
 consumer entry with the same topic and message type. It
@@ -279,11 +285,13 @@ a port-to-port path. The corresponding endpoint evidence remains visible as a
 partial topic relation when it can be represented without pairing it to
 another service. Hovering a port displays its identifier, direction,
 protocol endpoint, statically inferred Java parameter/message type when known,
-associated Java method and, for a resolved REST call, its
-resolved target. An input tooltip also lists every mapped output (`O<n>`) from
-a persisted local code flow in that same service, including its protocol,
-endpoint and Java method; an external caller is never presented as the input's
-output. The tooltip does not add or infer any architecture fact.
+source-relative evidence path and line, associated Java method and, for a resolved REST call, its
+resolved target; an external caller is never presented as an input's output.
+Arc tooltips carry every mapped local output (`O<n>`) and the source/target
+services; their `Port IN` and `Port OUT` headings identify the direction, so
+the topic or route is shown only once. Port tooltips remain limited to the
+endpoint itself. The
+tooltip does not add or infer any architecture fact.
 Its primary card title is the input trigger, while the Java method remains
 visible as source evidence. Flow selection reconciles every integration step
 only through its persisted endpoint identifier: route labels and resource names
@@ -322,7 +330,8 @@ recursive project-type navigation.
 The HTML export opens on the Explorer tab with the global architecture graph.
 Before a call-graph selection it shows only the high-level node cards and
 persisted topology edges: it does not show CodeQL input/output ports,
-port-to-port relations, internal links, or call-graph tooltips. The Flux tab
+port-to-port relations, or internal links. Hovering a microservice, topic,
+collection, or topology arc shows a concise contextual tooltip; the Flux tab
 presents a compact list of persisted potential call graphs whose endpoint
 evidence spans at least two microservices, grouped by service and trigger; it
 does not show method, confidence, or status details before selection. A flow
@@ -365,8 +374,9 @@ around the visible microservice cards, with a padding margin and nudging for
 parallel dependencies. A local orthogonal router is used only as a runtime
 fallback when the external WASM module cannot be loaded.
 Endpoint-to-endpoint dependencies are projected into the selected
-service-to-service arc; the duplicate raw port path is hidden in this focused
-view so the same dependency is not drawn twice.
+service-to-service arc. The selected flow's canonical NetworkX arcs are the
+sole source for the focused overlay, so topology links and port links cannot
+create a second copy of the same dependency.
 Each selected arc displays its port mapping in the form `Ox => Iy`, using the
 actual indexed output and input labels.
 Call-graph arcs use the same stroke thickness as ordinary topology paths; their

@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import networkx as nx
+
 from systemlens.domain.graph import (
     GraphEdge,
     external_microservice_names,
@@ -40,6 +42,37 @@ from systemlens.render._graph_view_helpers import (
 )
 from systemlens.render.likec4_export import _complexity_ranking
 from systemlens.render.snapshot import kafka_dto_views
+
+
+def _deduplicated_call_port_links(edges: list[GraphEdge]) -> list[dict[str, str]]:
+    """Return one browser call-graph edge per endpoint pair and protocol.
+
+    The architecture snapshot can contain several equivalent evidence rows
+    for one call. A NetworkX multigraph gives those rows a canonical directed
+    identity before the HTML model is built, preventing duplicate arcs in the
+    Flux view while leaving the aggregated evidence on the architecture links.
+    """
+    graph = nx.MultiDiGraph()
+    for edge in edges:
+        if (
+            edge.to_endpoint is None
+            or edge.from_endpoint.system not in {"rest", "kafka"}
+            or edge.to_endpoint.system not in {"rest", "kafka"}
+            or edge.from_endpoint.role not in {"call", "produce"}
+            or edge.to_endpoint.role not in {"serve", "consume"}
+        ):
+            continue
+        source = edge.from_endpoint.id
+        target = edge.to_endpoint.id
+        graph.add_edge(source, target, key=edge.kind, kind=edge.kind)
+    return [
+        {
+            "source_endpoint_id": source,
+            "target_endpoint_id": target,
+            "kind": str(kind),
+        }
+        for source, target, kind in sorted(graph.edges(keys=True))
+    ]
 
 
 def _fact_runtime_namespaces(fact: GraphFact) -> list[str]:
@@ -496,8 +529,12 @@ def build_graph_view_model(
                 "label": port_label_by_endpoint_id[endpoint.id],
                 "direction": direction,
                 "type": port_type_label(endpoint),
+                "system": endpoint.system,
+                "role": endpoint.role,
                 "method": port_method_label(endpoint),
                 "name": endpoint.topic,
+                "path": endpoint.path,
+                "line": endpoint.start_line,
                 "endpoint_id": endpoint.id,
                 **({"message_type": endpoint.message_type} if endpoint.message_type else {}),
                 **(
@@ -1215,21 +1252,7 @@ def build_graph_view_model(
     return {
             "nodes": nodes,
             "links": links,
-            "port_links": [
-                {
-                    "source_endpoint_id": edge.from_endpoint.id,
-                    "target_endpoint_id": edge.to_endpoint.id,
-                    "kind": edge.kind,
-                }
-                for edge in edges
-                if (
-                    edge.to_endpoint is not None
-                    and edge.from_endpoint.system in {"rest", "kafka"}
-                    and edge.to_endpoint.system in {"rest", "kafka"}
-                    and edge.from_endpoint.role in {"call", "produce"}
-                    and edge.to_endpoint.role in {"serve", "consume"}
-                )
-            ],
+            "port_links": _deduplicated_call_port_links(edges),
             "internal_port_links": [
                 {
                     "input_endpoint_id": input_id,

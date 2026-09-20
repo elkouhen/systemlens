@@ -8,6 +8,8 @@ from collections import Counter
 from pathlib import Path
 from typing import cast
 
+import networkx as nx
+
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
 from systemlens.domain.models import (
@@ -41,6 +43,101 @@ _ASYNCAPI_WEB_COMPONENT_CSS_IMPORT_PATH = (
     "data:text/css;base64,"
     + b64encode(_ASYNCAPI_WEB_COMPONENT_CSS.encode("utf-8")).decode("ascii")
 )
+
+
+def _networkx_call_graph(
+    flow: CodeFlow,
+    endpoints_by_service: dict[str, list[MessageEndpoint]],
+    edges: list[GraphEdge],
+) -> dict[str, object]:
+    """Build the proven service call graph for one persisted code flow."""
+    endpoint_by_id = {
+        endpoint.id: endpoint
+        for service_endpoints in endpoints_by_service.values()
+        for endpoint in service_endpoints
+    }
+    service_by_endpoint = {
+        endpoint.id: service
+        for service, service_endpoints in endpoints_by_service.items()
+        for endpoint in service_endpoints
+    }
+    graph = nx.MultiDiGraph()
+    endpoint_steps = [
+        step.endpoint_id for step in flow.steps
+        if step.endpoint_id in endpoint_by_id
+    ]
+    flow_endpoint_pairs = set(zip(endpoint_steps, endpoint_steps[1:]))
+    for endpoint_id in endpoint_steps:
+        graph.add_node(service_by_endpoint[endpoint_id])
+
+    def add_relation(source_id: str, target_id: str) -> None:
+        source_service = service_by_endpoint.get(source_id)
+        target_service = service_by_endpoint.get(target_id)
+        if not source_service or not target_service or source_service == target_service:
+            return
+        candidates = [
+            edge for edge in edges
+            if edge.from_endpoint.id == source_id
+            and edge.to_endpoint is not None
+            and edge.to_endpoint.id == target_id
+        ]
+        for edge in candidates:
+            label = edge.from_endpoint.topic
+            key = (edge.kind, label)
+            candidate = {
+                "kind": edge.kind,
+                "label": label,
+                "endpoint_ids": [source_id, target_id],
+            }
+            if graph.has_edge(source_service, target_service, key=key):
+                current = graph[source_service][target_service][key]
+                current_pair = tuple(current.get("endpoint_ids", []))
+                candidate_rank = (
+                    (source_id, target_id) not in flow_endpoint_pairs,
+                    (source_id, target_id),
+                )
+                current_rank = (
+                    current_pair not in flow_endpoint_pairs,
+                    current_pair,
+                )
+                if candidate_rank < current_rank:
+                    graph[source_service][target_service][key].update(candidate)
+            else:
+                graph.add_edge(source_service, target_service, key=key, **candidate)
+
+    for source_id, target_id in zip(endpoint_steps, endpoint_steps[1:]):
+        add_relation(source_id, target_id)
+    if endpoint_steps:
+        first_id = endpoint_steps[0]
+        for edge in edges:
+            if edge.to_endpoint is not None and edge.to_endpoint.id == first_id:
+                add_relation(edge.from_endpoint.id, first_id)
+        last_id = endpoint_steps[-1]
+        for edge in edges:
+            if edge.from_endpoint.id == last_id and edge.to_endpoint is not None:
+                add_relation(last_id, edge.to_endpoint.id)
+
+    condensation = nx.condensation(graph)
+    component_order: list[str] = []
+    for component_id in nx.topological_sort(condensation):
+        component_order.extend(sorted(condensation.nodes[component_id]["members"]))
+    return {
+        "nodes": sorted(graph.nodes),
+        "node_order": component_order,
+        "edges": [
+            {
+                "source": source,
+                "target": target,
+                "kind": str(data.get("kind", "")),
+                "label": str(data.get("label", "")),
+                "endpoint_ids": list(data.get("endpoint_ids", [])),
+            }
+            for source, target, _key, data in sorted(
+                graph.edges(keys=True, data=True),
+                key=lambda item: (item[0], item[1], str(item[2])),
+            )
+        ],
+    }
 
 def render_graph_html(
     endpoints_by_service: dict[str, list[MessageEndpoint]],
@@ -114,6 +211,7 @@ def render_graph_html(
             "reconciliation": flow.reconciliation,
             "reason": flow.reason,
             "vscode_uri": flow_vscode_uri(flow),
+            "call_graph": _networkx_call_graph(flow, endpoints_by_service, edges),
             "steps": [
                 {
                     "order": step.order,
