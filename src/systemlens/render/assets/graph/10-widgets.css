@@ -24,10 +24,23 @@
     #search, #path-query { width: 100%; }
     .graph-context { display: grid; gap: 8px; }
     .graph-context[hidden] { display: none; }
-    .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 370px; display: flex; align-items: center; gap: 8px; width: min(460px, calc(100vw - 390px)); box-sizing: border-box; padding: 8px 9px; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 8px; color: #283b73; background: rgba(238, 242, 255, .96); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; }
+    .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 370px; display: flex; align-items: center; gap: 8px; width: min(760px, calc(100vw - 390px)); max-height: min(30vh, 210px); box-sizing: border-box; padding: 8px 9px; overflow: hidden; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 8px; color: #283b73; background: rgba(238, 242, 255, .96); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; }
     .graph-mode-context[hidden] { display: none; }
-    .graph-mode-context-copy { display: grid; gap: 2px; min-width: 0; flex: 1 1 auto; }
-    .graph-mode-context-path { color: #334155; font-size: 10px; font-weight: 750; overflow-wrap: anywhere; }
+    .graph-mode-context-copy { display: grid; gap: 2px; min-width: 0; min-height: 0; flex: 1 1 auto; overflow-y: auto; }
+    .graph-mode-context-path { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; max-width: 100%; max-height: min(14vh, 96px); padding: 1px 4px 2px 0; overflow-y: auto; color: #334155; font-size: 10px; font-weight: 750; scrollbar-width: thin; }
+    .graph-mode-context-path.graph-mode-tree { display: block; }
+    .graph-mode-tree-list, .graph-mode-tree-children { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+    .graph-mode-tree-children { margin: 2px 0 0 10px; padding-left: 8px; border-left: 1px solid #a5b4fc; }
+    .graph-mode-tree-node { min-width: 0; color: #293c82; font-size: 9px; line-height: 1.15; }
+    .graph-mode-tree-node > strong { display: inline-block; padding: 2px 5px; border: 1px solid #c7d2fe; border-radius: 4px; background: #fff; overflow-wrap: anywhere; }
+    .graph-mode-tree-branch { display: grid; gap: 2px; min-width: 0; }
+    .graph-mode-tree-edge { display: inline-block; width: fit-content; max-width: 100%; padding: 1px 4px; border-radius: 3px; color: #4338ca; background: #eef2ff; font-size: 8px; overflow-wrap: anywhere; }
+    .graph-mode-tree-node.is-cycle > strong { color: #9a3412; border-color: #fdba74; background: #fff7ed; }
+    .graph-mode-flow-step { display: flex; flex: 0 1 auto; align-items: baseline; gap: 3px; min-width: 0; max-width: 230px; padding: 2px 4px; border: 1px solid #c7d2fe; border-radius: 4px; background: #fff; }
+    .graph-mode-flow-step b { flex: 0 0 auto; color: #4338ca; font-size: 9px; }
+    .graph-mode-flow-step strong { min-width: 0; color: #293c82; font-size: 9px; line-height: 1.15; overflow-wrap: anywhere; }
+    .graph-mode-flow-step small { flex: 0 0 auto; color: #64748b; font-size: 8px; line-height: 1.15; white-space: nowrap; }
+    .graph-mode-flow-arrow { display: grid; flex: 0 0 auto; place-items: center; color: #64748b; font-size: 10px; }
     .graph-mode-context-copy strong { color: #293c82; font-size: 11px; overflow-wrap: anywhere; }
     .graph-mode-context-copy span { color: #52658f; }
     .graph-mode-context .graph-secondary-action { flex: 0 0 auto; height: 28px; padding: 0 7px; border: 1px solid #a5b4fc; border-radius: 6px; color: #3348b8; background: #fff; font-size: 10px; }

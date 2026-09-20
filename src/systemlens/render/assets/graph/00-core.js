@@ -118,6 +118,7 @@
       codeFlowRootNodeId: null,
       codeFlowTrigger: null,
       pathMicroserviceOrder: new Map(),
+      codeFlowTreeCoordinates: new Map(),
       layeredView: false,
       clusteredView: false,
       layeredClusterView: false,

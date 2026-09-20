@@ -31,6 +31,7 @@
       graphState.selectedCodeFlowId = null;
       graphState.codeFlowRootNodeId = null;
       graphState.codeFlowTrigger = null;
+      graphState.codeFlowTreeCoordinates = new Map();
       graphState.relatedLocalPortLinks = new Set();
       graphFlowStatus.hidden = true;
       delete graphCanvas.dataset.selectedCodeFlow;
@@ -210,13 +211,60 @@
       search.value = query;
       searchStatus.textContent = "";
     }
-    function setPathMicroserviceOrder(path) {
+    function setPathMicroserviceOrder(path, codeFlow = null) {
       graphState.pathMicroserviceOrder = new Map();
+      graphState.codeFlowTreeCoordinates = new Map();
       let order = 1;
       path.nodes.forEach(id => {
         if (nodeDataById.get(id).kind !== "microservice") return;
         graphState.pathMicroserviceOrder.set(id, order);
         order += 1;
+      });
+      const callGraphEdges = codeFlow?.call_graph?.edges || [];
+      if (!callGraphEdges.length) return;
+      const serviceIdsByName = new Map(
+        [...graphState.pathMicroserviceOrder.keys()].map(id => [nodeDataById.get(id).name, id])
+      );
+      const children = new Map();
+      const incoming = new Set();
+      callGraphEdges.forEach(edge => {
+        const source = serviceIdsByName.get(edge.source);
+        const target = serviceIdsByName.get(edge.target);
+        if (!source || !target || source === target) return;
+        children.set(source, [...(children.get(source) || []), target]);
+        incoming.add(target);
+      });
+      const roots = [...graphState.pathMicroserviceOrder.keys()]
+        .filter(id => !incoming.has(id));
+      if (!roots.length) roots.push(...graphState.pathMicroserviceOrder.keys());
+      const levels = new Map(roots.map(id => [id, 0]));
+      const queue = [...roots];
+      for (let index = 0; index < queue.length; index += 1) {
+        const source = queue[index];
+        (children.get(source) || []).forEach(target => {
+          const nextLevel = (levels.get(source) || 0) + 1;
+          if (!levels.has(target)) {
+            levels.set(target, nextLevel);
+            queue.push(target);
+          }
+        });
+      }
+      const byLevel = new Map();
+      [...graphState.pathMicroserviceOrder.keys()].forEach(id => {
+        const level = levels.get(id) ?? 0;
+        byLevel.set(level, [...(byLevel.get(level) || []), id]);
+      });
+      byLevel.forEach((ids, level) => {
+        ids.sort((left, right) => (
+          nodeDataById.get(left).name.localeCompare(nodeDataById.get(right).name)
+        ));
+        const offset = (ids.length - 1) / 2;
+        ids.forEach((id, index) => {
+          graphState.codeFlowTreeCoordinates.set(id, {
+            x: level * 4.8,
+            y: (index - offset) * 3.2,
+          });
+        });
       });
     }
     function renderPathDetails(path, context = {}) {
@@ -381,7 +429,7 @@
       }
       if (graphState.selectedCodeFlowId) graphCanvas.dataset.selectedCodeFlow = graphState.selectedCodeFlowId;
       else delete graphCanvas.dataset.selectedCodeFlow;
-      setPathMicroserviceOrder(path);
+      setPathMicroserviceOrder(path, context.codeFlow);
       if (graphState.selectedCodeFlowId) rebuildGraph();
       else renderer.refresh();
       // The normal Explorer deliberately has no port overlays. Rebuild them

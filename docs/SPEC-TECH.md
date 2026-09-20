@@ -421,11 +421,15 @@ source paths must wrap instead of widening the panel.
 Selecting a reconciled code flow records its persisted ID only in transient
 graph state. Node and edge reducers, HTML-card overlays, and port overlays use
 the exact reconciled path sets to hide every unrelated node and edge; selected
-nodes retain flow-specific highlighting. This presentation state does not infer
-or persist any new architecture relation. A selected call graph projects only
+nodes retain flow-specific highlighting. The selected call graph layout uses
+its persisted directed service edges to compute graph levels and vertical
+sibling offsets; cyclic or edge-less flows fall back to the deterministic
+sequence order. This presentation state does not infer or persist any new
+architecture relation. A selected call graph projects only
 the microservices on its reconciled path; topic names remain in the selected
 ports and tooltips but topic nodes are omitted. Its nodes use a compact
-horizontal sequence so the call direction remains readable. Service-to-service
+horizontal sequence when no branches are available; otherwise its tree/DAG
+levels remain readable. Service-to-service
 call-graph edges
 use orthogonal straight-segment routes in the SVG overlay between their actual
 output and input port anchors. ELK.js supplies the positioned graph and the
@@ -457,6 +461,12 @@ clicking an input or output endpoint, or directly on an arc, records a
 transient endpoint focus and highlights every associated service arc, local
 port relation, and arc label; clicking the same port or arc clears the focus,
 while selecting another port or arc moves it.
+The analysis banner derives a compact timeline from persisted step endpoint
+IDs and the exported port inventory. It displays port labels, protocol,
+resource/topic names, and message types. Non-integration method-call steps are
+omitted from the compact timeline; full endpoint evidence remains in the DOM
+tooltip and the persisted flow details. It must not infer a message
+type when the indexed port does not provide one.
 The port gesture is isolated from the card drag and node-selection handlers, so
 analysis never changes the graph view or camera and does not persist data.
 Every visible SVG arc has a transparent, wider hit-area path layered above it;

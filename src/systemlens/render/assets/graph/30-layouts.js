@@ -466,6 +466,7 @@
           relatedEdges: null,
           selectedCodeFlowId: null,
           pathMicroserviceOrder: new Map(),
+          codeFlowTreeCoordinates: new Map(),
         });
         delete graphCanvas.dataset.selectedCodeFlow;
         clearPathControls();

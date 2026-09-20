@@ -257,6 +257,13 @@
     :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .view-controls .view-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: var(--ui-on-accent); background: var(--ui-selected); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: rgba(15, 27, 46, .84); }
     :root[data-theme="dark"] .toolbar-tab { color: var(--ui-text) !important; }
+    :root[data-theme="dark"] .graph-mode-flow-step { border-color: var(--ui-border); background: var(--ui-control); }
+    :root[data-theme="dark"] .graph-mode-flow-step b { color: var(--ui-accent-text); }
+    :root[data-theme="dark"] .graph-mode-flow-step strong { color: var(--ui-title); }
+    :root[data-theme="dark"] .graph-mode-flow-step small, :root[data-theme="dark"] .graph-mode-flow-arrow { color: var(--ui-muted); }
+    :root[data-theme="dark"] .graph-mode-tree-children { border-color: var(--ui-accent-border); }
+    :root[data-theme="dark"] .graph-mode-tree-node > strong { border-color: var(--ui-border); color: var(--ui-title); background: var(--ui-control); }
+    :root[data-theme="dark"] .graph-mode-tree-edge { color: var(--ui-accent-text); background: var(--ui-accent-soft); }
     :root[data-theme="dark"] .toolbar-tab.is-active { color: var(--ui-on-accent) !important; background: var(--ui-selected) !important; }
     :root[data-theme="dark"] .display-controls, :root[data-theme="dark"] .advanced-controls,
     :root[data-theme="dark"] .advanced-tools { border-color: var(--ui-border); background: var(--ui-widget); }

@@ -41,13 +41,21 @@
         });
       }
       if (graphState.selectedCodeFlowId && graphState.pathMicroserviceOrder?.size) {
-        // Call graphs are read as a sequence. Replace the overview's layer
-        // packing with a compact horizontal lane so the selected services and
-        // their topics remain legible at a glance.
+        // Call graphs are read as a directed tree/DAG. Use the persisted
+        // service edges to place each level horizontally and its branches
+        // vertically; fall back to the historical lane for flows without
+        // exported call-graph edges.
         const serviceGap = 4.8;
         const resourceGap = 2.4;
         const serviceX = new Map();
         layoutNodes.forEach(node => {
+          const treePosition = graphState.codeFlowTreeCoordinates?.get(node.id);
+          if (treePosition) {
+            node.x = treePosition.x;
+            node.y = treePosition.y;
+            serviceX.set(node.id, node.x);
+            return;
+          }
           const order = graphState.pathMicroserviceOrder.get(node.id);
           if (order) {
             serviceX.set(node.id, (order - 1) * serviceGap);
@@ -459,10 +467,83 @@
             ? `Analyse du flux · ${flowPath}`
             : trigger ? `Analyse du flux · ${trigger}` : "Analyse du flux";
           if (pathLabel) {
-            const steps = (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)?.steps || [];
-            pathLabel.textContent = steps.length
-              ? steps.map(step => codeFlowStepLabel(step.kind)).join(" → ")
-              : "Parcours de code sélectionné";
+            const selectedFlow = (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId);
+            const portsByEndpointId = new Map(
+              graphData.nodes.flatMap(node => (node.ports || []).map(port => [port.endpoint_id, port]))
+            );
+            pathLabel.replaceChildren();
+            pathLabel.classList.add("graph-mode-tree");
+            const callGraph = selectedFlow?.call_graph;
+            const edgeList = (callGraph?.edges || []).filter(edge => edge.source !== edge.target);
+            const graphNodes = [...new Set([
+              ...(callGraph?.nodes || []),
+              ...edgeList.flatMap(edge => [edge.source, edge.target]),
+            ])];
+            const childrenBySource = new Map();
+            const incoming = new Set();
+            edgeList.forEach(edge => {
+              childrenBySource.set(edge.source, [
+                ...(childrenBySource.get(edge.source) || []), edge,
+              ]);
+              incoming.add(edge.target);
+            });
+            const roots = graphNodes.filter(node => !incoming.has(node));
+            const treeRoots = roots.length ? roots : graphNodes;
+            const endpointLabel = endpointId => {
+              const port = portsByEndpointId.get(endpointId);
+              const code = port?.label?.match(/[IO]\d+/)?.[0] || "·";
+              const detail = port?.message_type?.split(".").at(-1) || port?.name || "relation";
+              const protocol = port?.system === "kafka" ? "Kafka" : port?.system === "rest" ? "HTTP" : "";
+              return { code, detail, protocol, title: port?.label || endpointId || "Port inconnu" };
+            };
+            const edgeLabel = edge => {
+              const sourcePort = endpointLabel(edge.endpoint_ids?.[0]);
+              const targetPort = endpointLabel(edge.endpoint_ids?.[1]);
+              const detail = sourcePort.detail !== "relation" ? sourcePort.detail : targetPort.detail;
+              const protocol = sourcePort.protocol || targetPort.protocol || (edge.kind === "kafka" ? "Kafka" : edge.kind === "rest" ? "HTTP" : edge.kind || "Relation");
+              return {
+                text: `${sourcePort.code} → ${targetPort.code} · ${detail} · ${protocol}`,
+                title: `${sourcePort.title} → ${targetPort.title} · ${edge.label || ""}`,
+              };
+            };
+            const renderTreeNode = (nodeName, ancestors = new Set()) => {
+              const item = document.createElement("li");
+              item.className = "graph-mode-tree-node";
+              const node = document.createElement("strong");
+              node.textContent = nodeName;
+              item.append(node);
+              if (ancestors.has(nodeName)) {
+                item.classList.add("is-cycle");
+                node.title = "Cycle détecté dans le graphe d’appel";
+                return item;
+              }
+              const children = childrenBySource.get(nodeName) || [];
+              if (!children.length) return item;
+              const childList = document.createElement("ul");
+              childList.className = "graph-mode-tree-children";
+              const nextAncestors = new Set(ancestors).add(nodeName);
+              children.forEach(edge => {
+                const branch = document.createElement("li");
+                branch.className = "graph-mode-tree-branch";
+                const relation = edgeLabel(edge);
+                const label = document.createElement("span");
+                label.className = "graph-mode-tree-edge";
+                label.textContent = relation.text;
+                label.title = relation.title;
+                branch.append(label, renderTreeNode(edge.target, nextAncestors));
+                childList.append(branch);
+              });
+              item.append(childList);
+              return item;
+            };
+            if (treeRoots.length) {
+              const tree = document.createElement("ul");
+              tree.className = "graph-mode-tree-list";
+              treeRoots.forEach(root => tree.append(renderTreeNode(root)));
+              pathLabel.append(tree);
+            } else {
+              pathLabel.textContent = "Parcours de code sélectionné";
+            }
           }
           help.textContent = graphState.analysisPortEndpointId
             ? "Arc associé sélectionné · cliquez sur un autre arc ou port pour changer"

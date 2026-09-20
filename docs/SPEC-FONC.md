@@ -369,9 +369,10 @@ Selecting a reconciled call graph opens
  the Explorer tab and displays only the microservices involved in the path,
  their indexed ports, and the direct dependencies between those ports. Topics
  remain available in the selected service's badges and tooltips, but are not
- rendered as nodes in this focused view. The focused view uses a compact
- horizontal lane for the selected sequence. The
- selected nodes retain a visible
+rendered as nodes in this focused view. The focused view uses graph levels and
+vertical offsets for sibling branches, so a branched call graph is presented
+as a tree/DAG rather than as a misleading single lane. The
+selected nodes retain a visible
 halo. Selecting it keeps the Flux tab and
 its card geometry unchanged; the selected card is marked in place instead of
 replacing the left widget with the graph detail view. Its entry microservice is marked `Racine`: in Cards, it appears in the secondary label; in Symbols, it appears as a badge. A second badge makes the persisted entry trigger explicit, with the exact HTTP route or Kafka topic and a protocol-specific color. These markers are presentation state derived from the selected persisted call graph; they do not infer or persist an architecture fact. The camera frames the selected flow inside the visible
@@ -406,7 +407,12 @@ Call-graph arcs use the same stroke thickness as ordinary topology paths; their
 selection remains identifiable through the selected-flow styling and colour.
 Clearing or replacing the selection restores the ordinary filtered graph.
 The focused graph displays a persistent context banner naming the selected
-flow and explaining that ports and arcs are analysis controls. When an arc is
+flow and showing a compact evidence timeline. Each timeline item prioritizes
+the indexed port (`I`/`O`), topic or resource, protocol, and message type;
+non-integration method calls are deliberately omitted from this summary;
+the complete indexed step is available from its tooltip. This avoids a long
+repetition of generic method-step names while preserving the full flow. The
+banner also explains that ports and arcs are analysis controls. When an arc is
 focused, the banner offers an explicit action to clear the analysis focus.
 Arc labels are intentionally subdued until their arc is hovered or selected;
 this keeps the route geometry readable without removing the port mapping.

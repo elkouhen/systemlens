@@ -304,10 +304,23 @@
     #search, #path-query { width: 100%; }
     .graph-context { display: grid; gap: 8px; }
     .graph-context[hidden] { display: none; }
-    .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 370px; display: flex; align-items: center; gap: 8px; width: min(460px, calc(100vw - 390px)); box-sizing: border-box; padding: 8px 9px; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 8px; color: #283b73; background: rgba(238, 242, 255, .96); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; }
+    .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 370px; display: flex; align-items: center; gap: 8px; width: min(760px, calc(100vw - 390px)); max-height: min(30vh, 210px); box-sizing: border-box; padding: 8px 9px; overflow: hidden; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 8px; color: #283b73; background: rgba(238, 242, 255, .96); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; }
     .graph-mode-context[hidden] { display: none; }
-    .graph-mode-context-copy { display: grid; gap: 2px; min-width: 0; flex: 1 1 auto; }
-    .graph-mode-context-path { color: #334155; font-size: 10px; font-weight: 750; overflow-wrap: anywhere; }
+    .graph-mode-context-copy { display: grid; gap: 2px; min-width: 0; min-height: 0; flex: 1 1 auto; overflow-y: auto; }
+    .graph-mode-context-path { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; max-width: 100%; max-height: min(14vh, 96px); padding: 1px 4px 2px 0; overflow-y: auto; color: #334155; font-size: 10px; font-weight: 750; scrollbar-width: thin; }
+    .graph-mode-context-path.graph-mode-tree { display: block; }
+    .graph-mode-tree-list, .graph-mode-tree-children { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+    .graph-mode-tree-children { margin: 2px 0 0 10px; padding-left: 8px; border-left: 1px solid #a5b4fc; }
+    .graph-mode-tree-node { min-width: 0; color: #293c82; font-size: 9px; line-height: 1.15; }
+    .graph-mode-tree-node > strong { display: inline-block; padding: 2px 5px; border: 1px solid #c7d2fe; border-radius: 4px; background: #fff; overflow-wrap: anywhere; }
+    .graph-mode-tree-branch { display: grid; gap: 2px; min-width: 0; }
+    .graph-mode-tree-edge { display: inline-block; width: fit-content; max-width: 100%; padding: 1px 4px; border-radius: 3px; color: #4338ca; background: #eef2ff; font-size: 8px; overflow-wrap: anywhere; }
+    .graph-mode-tree-node.is-cycle > strong { color: #9a3412; border-color: #fdba74; background: #fff7ed; }
+    .graph-mode-flow-step { display: flex; flex: 0 1 auto; align-items: baseline; gap: 3px; min-width: 0; max-width: 230px; padding: 2px 4px; border: 1px solid #c7d2fe; border-radius: 4px; background: #fff; }
+    .graph-mode-flow-step b { flex: 0 0 auto; color: #4338ca; font-size: 9px; }
+    .graph-mode-flow-step strong { min-width: 0; color: #293c82; font-size: 9px; line-height: 1.15; overflow-wrap: anywhere; }
+    .graph-mode-flow-step small { flex: 0 0 auto; color: #64748b; font-size: 8px; line-height: 1.15; white-space: nowrap; }
+    .graph-mode-flow-arrow { display: grid; flex: 0 0 auto; place-items: center; color: #64748b; font-size: 10px; }
     .graph-mode-context-copy strong { color: #293c82; font-size: 11px; overflow-wrap: anywhere; }
     .graph-mode-context-copy span { color: #52658f; }
     .graph-mode-context .graph-secondary-action { flex: 0 0 auto; height: 28px; padding: 0 7px; border: 1px solid #a5b4fc; border-radius: 6px; color: #3348b8; background: #fff; font-size: 10px; }
@@ -812,6 +825,13 @@
     :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .view-controls .view-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: var(--ui-on-accent); background: var(--ui-selected); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: rgba(15, 27, 46, .84); }
     :root[data-theme="dark"] .toolbar-tab { color: var(--ui-text) !important; }
+    :root[data-theme="dark"] .graph-mode-flow-step { border-color: var(--ui-border); background: var(--ui-control); }
+    :root[data-theme="dark"] .graph-mode-flow-step b { color: var(--ui-accent-text); }
+    :root[data-theme="dark"] .graph-mode-flow-step strong { color: var(--ui-title); }
+    :root[data-theme="dark"] .graph-mode-flow-step small, :root[data-theme="dark"] .graph-mode-flow-arrow { color: var(--ui-muted); }
+    :root[data-theme="dark"] .graph-mode-tree-children { border-color: var(--ui-accent-border); }
+    :root[data-theme="dark"] .graph-mode-tree-node > strong { border-color: var(--ui-border); color: var(--ui-title); background: var(--ui-control); }
+    :root[data-theme="dark"] .graph-mode-tree-edge { color: var(--ui-accent-text); background: var(--ui-accent-soft); }
     :root[data-theme="dark"] .toolbar-tab.is-active { color: var(--ui-on-accent) !important; background: var(--ui-selected) !important; }
     :root[data-theme="dark"] .display-controls, :root[data-theme="dark"] .advanced-controls,
     :root[data-theme="dark"] .advanced-tools { border-color: var(--ui-border); background: var(--ui-widget); }
@@ -1314,6 +1334,7 @@
       codeFlowRootNodeId: null,
       codeFlowTrigger: null,
       pathMicroserviceOrder: new Map(),
+      codeFlowTreeCoordinates: new Map(),
       layeredView: false,
       clusteredView: false,
       layeredClusterView: false,
@@ -1722,13 +1743,21 @@
         });
       }
       if (graphState.selectedCodeFlowId && graphState.pathMicroserviceOrder?.size) {
-        // Call graphs are read as a sequence. Replace the overview's layer
-        // packing with a compact horizontal lane so the selected services and
-        // their topics remain legible at a glance.
+        // Call graphs are read as a directed tree/DAG. Use the persisted
+        // service edges to place each level horizontally and its branches
+        // vertically; fall back to the historical lane for flows without
+        // exported call-graph edges.
         const serviceGap = 4.8;
         const resourceGap = 2.4;
         const serviceX = new Map();
         layoutNodes.forEach(node => {
+          const treePosition = graphState.codeFlowTreeCoordinates?.get(node.id);
+          if (treePosition) {
+            node.x = treePosition.x;
+            node.y = treePosition.y;
+            serviceX.set(node.id, node.x);
+            return;
+          }
           const order = graphState.pathMicroserviceOrder.get(node.id);
           if (order) {
             serviceX.set(node.id, (order - 1) * serviceGap);
@@ -2140,10 +2169,83 @@
             ? `Analyse du flux · ${flowPath}`
             : trigger ? `Analyse du flux · ${trigger}` : "Analyse du flux";
           if (pathLabel) {
-            const steps = (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)?.steps || [];
-            pathLabel.textContent = steps.length
-              ? steps.map(step => codeFlowStepLabel(step.kind)).join(" → ")
-              : "Parcours de code sélectionné";
+            const selectedFlow = (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId);
+            const portsByEndpointId = new Map(
+              graphData.nodes.flatMap(node => (node.ports || []).map(port => [port.endpoint_id, port]))
+            );
+            pathLabel.replaceChildren();
+            pathLabel.classList.add("graph-mode-tree");
+            const callGraph = selectedFlow?.call_graph;
+            const edgeList = (callGraph?.edges || []).filter(edge => edge.source !== edge.target);
+            const graphNodes = [...new Set([
+              ...(callGraph?.nodes || []),
+              ...edgeList.flatMap(edge => [edge.source, edge.target]),
+            ])];
+            const childrenBySource = new Map();
+            const incoming = new Set();
+            edgeList.forEach(edge => {
+              childrenBySource.set(edge.source, [
+                ...(childrenBySource.get(edge.source) || []), edge,
+              ]);
+              incoming.add(edge.target);
+            });
+            const roots = graphNodes.filter(node => !incoming.has(node));
+            const treeRoots = roots.length ? roots : graphNodes;
+            const endpointLabel = endpointId => {
+              const port = portsByEndpointId.get(endpointId);
+              const code = port?.label?.match(/[IO]\d+/)?.[0] || "·";
+              const detail = port?.message_type?.split(".").at(-1) || port?.name || "relation";
+              const protocol = port?.system === "kafka" ? "Kafka" : port?.system === "rest" ? "HTTP" : "";
+              return { code, detail, protocol, title: port?.label || endpointId || "Port inconnu" };
+            };
+            const edgeLabel = edge => {
+              const sourcePort = endpointLabel(edge.endpoint_ids?.[0]);
+              const targetPort = endpointLabel(edge.endpoint_ids?.[1]);
+              const detail = sourcePort.detail !== "relation" ? sourcePort.detail : targetPort.detail;
+              const protocol = sourcePort.protocol || targetPort.protocol || (edge.kind === "kafka" ? "Kafka" : edge.kind === "rest" ? "HTTP" : edge.kind || "Relation");
+              return {
+                text: `${sourcePort.code} → ${targetPort.code} · ${detail} · ${protocol}`,
+                title: `${sourcePort.title} → ${targetPort.title} · ${edge.label || ""}`,
+              };
+            };
+            const renderTreeNode = (nodeName, ancestors = new Set()) => {
+              const item = document.createElement("li");
+              item.className = "graph-mode-tree-node";
+              const node = document.createElement("strong");
+              node.textContent = nodeName;
+              item.append(node);
+              if (ancestors.has(nodeName)) {
+                item.classList.add("is-cycle");
+                node.title = "Cycle détecté dans le graphe d’appel";
+                return item;
+              }
+              const children = childrenBySource.get(nodeName) || [];
+              if (!children.length) return item;
+              const childList = document.createElement("ul");
+              childList.className = "graph-mode-tree-children";
+              const nextAncestors = new Set(ancestors).add(nodeName);
+              children.forEach(edge => {
+                const branch = document.createElement("li");
+                branch.className = "graph-mode-tree-branch";
+                const relation = edgeLabel(edge);
+                const label = document.createElement("span");
+                label.className = "graph-mode-tree-edge";
+                label.textContent = relation.text;
+                label.title = relation.title;
+                branch.append(label, renderTreeNode(edge.target, nextAncestors));
+                childList.append(branch);
+              });
+              item.append(childList);
+              return item;
+            };
+            if (treeRoots.length) {
+              const tree = document.createElement("ul");
+              tree.className = "graph-mode-tree-list";
+              treeRoots.forEach(root => tree.append(renderTreeNode(root)));
+              pathLabel.append(tree);
+            } else {
+              pathLabel.textContent = "Parcours de code sélectionné";
+            }
           }
           help.textContent = graphState.analysisPortEndpointId
             ? "Arc associé sélectionné · cliquez sur un autre arc ou port pour changer"
@@ -4140,6 +4242,7 @@
           relatedEdges: null,
           selectedCodeFlowId: null,
           pathMicroserviceOrder: new Map(),
+          codeFlowTreeCoordinates: new Map(),
         });
         delete graphCanvas.dataset.selectedCodeFlow;
         clearPathControls();
@@ -4978,6 +5081,7 @@
       graphState.selectedCodeFlowId = null;
       graphState.codeFlowRootNodeId = null;
       graphState.codeFlowTrigger = null;
+      graphState.codeFlowTreeCoordinates = new Map();
       graphState.relatedLocalPortLinks = new Set();
       graphFlowStatus.hidden = true;
       delete graphCanvas.dataset.selectedCodeFlow;
@@ -5157,13 +5261,60 @@
       search.value = query;
       searchStatus.textContent = "";
     }
-    function setPathMicroserviceOrder(path) {
+    function setPathMicroserviceOrder(path, codeFlow = null) {
       graphState.pathMicroserviceOrder = new Map();
+      graphState.codeFlowTreeCoordinates = new Map();
       let order = 1;
       path.nodes.forEach(id => {
         if (nodeDataById.get(id).kind !== "microservice") return;
         graphState.pathMicroserviceOrder.set(id, order);
         order += 1;
+      });
+      const callGraphEdges = codeFlow?.call_graph?.edges || [];
+      if (!callGraphEdges.length) return;
+      const serviceIdsByName = new Map(
+        [...graphState.pathMicroserviceOrder.keys()].map(id => [nodeDataById.get(id).name, id])
+      );
+      const children = new Map();
+      const incoming = new Set();
+      callGraphEdges.forEach(edge => {
+        const source = serviceIdsByName.get(edge.source);
+        const target = serviceIdsByName.get(edge.target);
+        if (!source || !target || source === target) return;
+        children.set(source, [...(children.get(source) || []), target]);
+        incoming.add(target);
+      });
+      const roots = [...graphState.pathMicroserviceOrder.keys()]
+        .filter(id => !incoming.has(id));
+      if (!roots.length) roots.push(...graphState.pathMicroserviceOrder.keys());
+      const levels = new Map(roots.map(id => [id, 0]));
+      const queue = [...roots];
+      for (let index = 0; index < queue.length; index += 1) {
+        const source = queue[index];
+        (children.get(source) || []).forEach(target => {
+          const nextLevel = (levels.get(source) || 0) + 1;
+          if (!levels.has(target)) {
+            levels.set(target, nextLevel);
+            queue.push(target);
+          }
+        });
+      }
+      const byLevel = new Map();
+      [...graphState.pathMicroserviceOrder.keys()].forEach(id => {
+        const level = levels.get(id) ?? 0;
+        byLevel.set(level, [...(byLevel.get(level) || []), id]);
+      });
+      byLevel.forEach((ids, level) => {
+        ids.sort((left, right) => (
+          nodeDataById.get(left).name.localeCompare(nodeDataById.get(right).name)
+        ));
+        const offset = (ids.length - 1) / 2;
+        ids.forEach((id, index) => {
+          graphState.codeFlowTreeCoordinates.set(id, {
+            x: level * 4.8,
+            y: (index - offset) * 3.2,
+          });
+        });
       });
     }
     function renderPathDetails(path, context = {}) {
@@ -5328,7 +5479,7 @@
       }
       if (graphState.selectedCodeFlowId) graphCanvas.dataset.selectedCodeFlow = graphState.selectedCodeFlowId;
       else delete graphCanvas.dataset.selectedCodeFlow;
-      setPathMicroserviceOrder(path);
+      setPathMicroserviceOrder(path, context.codeFlow);
       if (graphState.selectedCodeFlowId) rebuildGraph();
       else renderer.refresh();
       // The normal Explorer deliberately has no port overlays. Rebuild them
@@ -6398,6 +6549,7 @@
         analysisPortEndpointId: null,
         selectedCodeFlowId: null,
         pathMicroserviceOrder: new Map(),
+        codeFlowTreeCoordinates: new Map(),
       });
       delete graphCanvas.dataset.selectedCodeFlow;
       delete graphCanvas.dataset.flowFocusRatio;
