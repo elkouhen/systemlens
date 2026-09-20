@@ -24,12 +24,15 @@
     #search, #path-query { width: 100%; }
     .graph-context { display: grid; gap: 8px; }
     .graph-context[hidden] { display: none; }
-    .graph-mode-context { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 8px; color: #283b73; background: #eef2ff; font-size: 11px; line-height: 1.35; }
+    .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 370px; display: flex; align-items: center; gap: 8px; width: min(460px, calc(100vw - 390px)); box-sizing: border-box; padding: 8px 9px; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 8px; color: #283b73; background: rgba(238, 242, 255, .96); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; }
     .graph-mode-context[hidden] { display: none; }
     .graph-mode-context-copy { display: grid; gap: 2px; min-width: 0; flex: 1 1 auto; }
     .graph-mode-context-copy strong { color: #293c82; font-size: 11px; overflow-wrap: anywhere; }
     .graph-mode-context-copy span { color: #52658f; }
     .graph-mode-context .graph-secondary-action { flex: 0 0 auto; height: 28px; padding: 0 7px; border: 1px solid #a5b4fc; border-radius: 6px; color: #3348b8; background: #fff; font-size: 10px; }
+    @media (max-width: 720px) {
+      .graph-mode-context { top: auto; right: 8px; bottom: 8px; left: 8px; width: auto; }
+    }
     .graph-actions { display: grid; gap: 6px; }
     .graph-action-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
     .toolbar button { width: 34px; height: 34px; border: 1px solid #b9c5d6; border-radius: 6px; color: #315f9b; background: #fff; font-size: 19px; line-height: 1; cursor: pointer; }

@@ -79,13 +79,6 @@
         </div>
         <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
         <button id="inventory-status" class="inventory-status" type="button" hidden></button>
-        <div id="graph-mode-context" class="graph-mode-context" hidden>
-          <div class="graph-mode-context-copy">
-            <strong id="graph-mode-context-title"></strong>
-            <span id="graph-mode-context-help"></span>
-          </div>
-          <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" hidden>Réinitialiser l’analyse</button>
-        </div>
       </section>
       <details id="display-controls" class="display-controls">
         <summary>Filtres du graphe</summary>
@@ -185,6 +178,13 @@
       <section class="references-section"><input id="mongo-class-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou donnée" autocomplete="off" aria-label="Filtrer les classes de données persistées"><ul id="mongo-class-references" class="references-list"></ul><p id="mongo-class-references-empty" class="references-empty">Aucune classe de données persistées détectée.</p></section>
     </div>
     <div id="details" class="is-empty"><div class="details-empty">Selectionnez un noeud pour isoler ses relations et afficher ses APIs.</div></div>
+  </div>
+  <div id="graph-mode-context" class="graph-mode-context" hidden>
+    <div class="graph-mode-context-copy">
+      <strong id="graph-mode-context-title"></strong>
+      <span id="graph-mode-context-help"></span>
+    </div>
+    <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" hidden>Réinitialiser l’analyse</button>
   </div>
   <details id="graph-legend" class="legend" aria-label="Legende du graphe">
     <summary>Legende</summary>
