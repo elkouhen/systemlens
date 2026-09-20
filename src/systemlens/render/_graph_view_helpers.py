@@ -180,6 +180,9 @@ def _visual_graph_edges(
             )
         else:
             topic = edge.from_endpoint.topic
+            # Index-time Kafka matching requires the same concrete topic and
+            # message type, so this is an asserted service-to-service arc.
+            visual_edges.append(("microservice", edge.from_service, "microservice", edge.to_service, topic))
             visual_edges.append(("microservice", edge.from_service, "kafka_topic", topic, topic))
             visual_edges.append(("kafka_topic", topic, "microservice", edge.to_service, topic))
 
@@ -206,6 +209,8 @@ def _visual_link_evidence(
         if edge.kind == kind
         and (
             (kind == "rest" and edge.from_service == source_name and edge.to_service == target_name)
+            or (kind == "kafka" and source_kind == "microservice" and target_kind == "microservice"
+                and edge.from_service == source_name and edge.to_service == target_name)
             or (kind == "kafka" and source_kind == "microservice" and edge.from_service == source_name and edge.from_endpoint.topic == target_name)
             or (kind == "kafka" and target_kind == "microservice" and edge.to_service == target_name and edge.from_endpoint.topic == source_name)
         )

@@ -12,6 +12,7 @@ from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod
+from systemlens.indexing.code_flows import _deduplicate_code_flows
 from systemlens.indexing.code_flows import materialize_code_flows, reconcile_code_flows
 from systemlens.indexing.code_flows import materialize_codeql_code_flows
 from systemlens.indexing.code_flows import materialize_kafka_flow_continuations
@@ -28,7 +29,8 @@ RUNNER = CliRunner()
 
 
 def _endpoint(
-    identifier: str, role: str, system: str, topic: str, path: str, line: int
+    identifier: str, role: str, system: str, topic: str, path: str, line: int,
+    message_type: str | None = None,
 ) -> MessageEndpoint:
     return MessageEndpoint(
         id=identifier,
@@ -42,6 +44,7 @@ def _endpoint(
         start_line=line,
         end_line=line,
         snippet=topic,
+        message_type=message_type or ("TestMessage" if system == "kafka" else None),
         module="orders",
         qualified_name="com.example.OrderController",
     )
@@ -187,6 +190,50 @@ def test_kafka_continuations_require_concrete_topics_and_preserve_producer_effec
     assert materialize_kafka_flow_continuations(
         [producer_with_later_effect, consumer], endpoints
     ) == [consumer, producer_with_later_effect]
+
+
+def test_kafka_continuations_require_matching_message_types() -> None:
+    producer = CodeFlow(
+        id="producer", module="orders", method="OrderController.place", path="OrderController.java",
+        start_line=1, end_line=3, status="potential", confidence="medium", reason="test",
+        steps=(
+            CodeFlowStep(1, "http_entry", "POST /orders", "OrderController.java", 1, 1, "entry"),
+            CodeFlowStep(2, "message_publish", "orders.created", "OrderController.java", 3, 3, "publish"),
+        ),
+    )
+    consumer = CodeFlow(
+        id="consumer", module="inventory", method="OrderConsumer.consume", path="Consumer.java",
+        start_line=1, end_line=2, status="potential", confidence="medium", reason="test",
+        steps=(CodeFlowStep(1, "message_entry", "orders.created", "Consumer.java", 1, 1, "consume"),),
+    )
+    endpoints = [
+        _endpoint("publish", "produce", "kafka", "orders.created", "Producer.java", 3, "OrderCreated"),
+        _endpoint("consume", "consume", "kafka", "orders.created", "Consumer.java", 1, "OrderUpdated"),
+    ]
+
+    result = materialize_kafka_flow_continuations([producer, consumer], endpoints)
+    assert {flow.id for flow in result} == {"producer", "consumer"}
+
+
+def test_code_flow_deduplication_keeps_shortest_strongest_route() -> None:
+    entry = _endpoint("entry", "serve", "rest", "POST /orders", "Orders.java", 1)
+    output = _endpoint("output", "call", "rest", "POST /inventory", "Orders.java", 8)
+    long = CodeFlow(
+        id="long", module="orders", method="Orders.place", path="Orders.java",
+        start_line=1, end_line=8, status="potential", confidence="low", reason="long",
+        steps=(
+            CodeFlowStep(1, "http_entry", entry.topic, entry.path, 1, 1, entry.id),
+            CodeFlowStep(2, "method_call", "Orders.helper", entry.path, 3, 3),
+            CodeFlowStep(3, "method_call", "Orders.other", entry.path, 5, 5),
+            CodeFlowStep(4, "http_call", output.topic, output.path, 8, 8, output.id),
+        ),
+    )
+    short = replace(long, id="short", confidence="medium", steps=(
+        CodeFlowStep(1, "http_entry", entry.topic, entry.path, 1, 1, entry.id),
+        CodeFlowStep(2, "http_call", output.topic, output.path, 8, 8, output.id),
+    ))
+
+    assert _deduplicate_code_flows([long, short]) == [short]
 
 
 def test_reconcile_code_flows_marks_missing_topology_as_partial() -> None:

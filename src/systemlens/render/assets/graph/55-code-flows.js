@@ -97,6 +97,14 @@
       const steps = flow.steps || [];
       const trigger = steps[0];
       if (!trigger) return null;
+      const directKafkaLink = (topic, source, target) => graphData.links
+        .map((link, index) => ({ link, index }))
+        .find(({ link }) => (
+          link.kind === "kafka"
+          && link.label === topic
+          && link.source === source
+          && link.target === target
+        ));
 
       if (trigger.kind === "message_entry") {
         const consumer = nodeIdForEndpoint(trigger.endpoint_id);
@@ -105,8 +113,29 @@
           link.link.target === serviceId
         ));
         if (incoming.length !== 1) return null;
-        addFirst(incoming[0].link.source);
-        if (!addHop(incoming[0])) return null;
+        const topicNode = incoming[0].link.source;
+        // Include the concrete producer before the topic so a selected call
+        // graph shows the asserted service-to-service message hop.
+        const producers = graphData.links
+          .map((link, index) => ({ link, index }))
+          .filter(({ link }) => (
+            link.target === topicNode
+            && link.kind === "kafka"
+            && nodeDataById.get(link.source)?.kind === "microservice"
+            && link.label === incoming[0].link.label
+          ));
+        if (producers.length === 1) {
+          const direct = directKafkaLink(incoming[0].link.label, producers[0].link.source, serviceId);
+          if (direct) {
+            addFirst(direct.link.source);
+            nodes.push(serviceId);
+            edges.push({ edge: `edge-${direct.index}`, link: direct.link });
+          } else {
+            addFirst(serviceId);
+          }
+        } else {
+          addFirst(serviceId);
+        }
       } else {
         addFirst(serviceId);
       }
@@ -125,16 +154,38 @@
         if (step.kind === "message_publish") {
           const publishingService = nodes.at(-1);
           if (nodeDataById.get(publishingService)?.kind !== "microservice") return null;
-          const outgoing = uniqueTopologyLink(step.endpoint_id, publishingService);
-          if (!outgoing || outgoing.link.kind !== "kafka" || !addHop(outgoing)) return null;
+          const output = uniqueTopologyLink(step.endpoint_id, publishingService);
+          if (!output || output.link.kind !== "kafka") return null;
+          // The selected method's publication is an external effect. Project
+          // every proven consumer of its concrete topic so the root service
+          // does not appear isolated merely because the persisted flow ended
+          // at the publish step.
+          graphData.links
+            .map((link, index) => ({ link, index }))
+            .filter(({ link }) => (
+              link.kind === "kafka"
+              && link.source === publishingService
+              && link.label === output.link.label
+              && nodeDataById.get(link.target)?.kind === "microservice"
+            ))
+            .forEach(({ link, index }) => {
+              if (!nodes.includes(link.target)) nodes.push(link.target);
+              edges.push({ edge: `edge-${index}`, link });
+            });
           if (inputEndpointId && internalOutputsByInput.get(inputEndpointId)?.has(step.endpoint_id)) {
             localLinks.push({ input_endpoint_id: inputEndpointId, output_endpoint_id: step.endpoint_id });
           }
           continue;
         }
         if (step.kind === "message_entry") {
-          const incoming = uniqueTopologyLink(step.endpoint_id, nodes.at(-1));
-          if (!incoming || incoming.link.kind !== "kafka" || !addHop(incoming)) return null;
+          const target = nodeIdForEndpoint(step.endpoint_id);
+          const incoming = (graphLinksByEndpoint.get(step.endpoint_id) || []).find(candidate => (
+            candidate.link.target === target && candidate.link.kind === "kafka"
+          ));
+          const direct = incoming && directKafkaLink(incoming.link.label, nodes.at(-1), target);
+          if (!direct) return null;
+          nodes.push(target);
+          edges.push({ edge: `edge-${direct.index}`, link: direct.link });
         }
       }
       // A same-service input → output link is also persisted topology evidence.
@@ -310,7 +361,8 @@
           ? "Flux détecté ; le chemin complet ne peut pas être rapproché de la topologie affichée"
           : "Flux détecté ; le chemin n’est pas disponible dans la topologie affichée";
       }
-      item.append(header, meta, servicesSection);
+      item.append(header, meta);
+      item.append(servicesSection);
       return item;
     }
 

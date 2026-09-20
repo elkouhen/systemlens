@@ -22,7 +22,6 @@ from systemlens.application.architecture import (
     list_objects as list_architecture_objects,
     neighbors as architecture_neighbors,
     render_text as render_architecture_text,
-    request_reply_patterns,
     show_object as show_architecture_object,
     trace_topic_flows,
 )
@@ -63,7 +62,6 @@ from systemlens.render import (
     render_endpoints_text,
     render_graph_html,
     render_graph_likec4,
-    render_request_reply_html,
     render_graph_json,
     render_module_detail_json,
     render_module_detail_text,
@@ -428,7 +426,7 @@ def mongodb_cmd(
 def analyze_cmd(
     arguments: list[str] = typer.Argument(
         None,
-        help="Cible et requête : microservices, topics, apis, mongodb, request-reply, audit ou coverage.",
+        help="Cible et requête : microservices, topics, apis, mongodb, audit ou coverage.",
     ),
     root: Optional[Path] = typer.Option(  # noqa: UP007
         None, "--root", help="Répertoire parent indexé. Défaut : répertoire courant."
@@ -463,14 +461,13 @@ def analyze_cmd(
     `systemlens analyze topics trace orders.created`
     `systemlens analyze apis providers "POST /payments"`
     `systemlens analyze mongodb services orders`
-    `systemlens analyze request-reply`
     `systemlens analyze audit`
     `systemlens analyze coverage`
     """
     arguments = arguments or []
     if not arguments:
         typer.echo(
-            "Usage : `systemlens analyze <microservices|topics|apis|mongodb|request-reply|audit|coverage> ...`.",
+            "Usage : `systemlens analyze <microservices|topics|apis|mongodb|audit|coverage> ...`.",
             err=True,
         )
         raise typer.Exit(code=2)
@@ -573,9 +570,6 @@ def analyze_cmd(
             raise typer.Exit(code=2)
         _emit_architecture(result, json_output)
         return
-    if subject in {"request-reply", "request_reply"} and len(arguments) == 1:
-        _render_request_reply_patterns(workspace_root, json_output)
-        return
     if subject == "audit" and len(arguments) == 1:
         _render_audit(workspace_root, workspace, json_output)
         return
@@ -583,7 +577,7 @@ def analyze_cmd(
         _render_inventory_coverage(workspace_root, json_output)
         return
     typer.echo(
-        "Usage : `systemlens analyze <microservices|topics|apis|mongodb|request-reply|audit|coverage> ...`.",
+        "Usage : `systemlens analyze <microservices|topics|apis|mongodb|audit|coverage> ...`.",
         err=True,
     )
     raise typer.Exit(code=2)
@@ -1000,17 +994,6 @@ def analyze_flows_diagnostic(
     inventory = load_architecture_inventory(_option_root(root))
     result = diagnose_flows(inventory)
     typer.echo(json.dumps(result) if _option_json(json_output) else render_flow_diagnostic_text(result))
-
-
-@analyze_app.command("request-reply")
-def analyze_request_reply(
-    root: Path | None = typer.Option(
-        None, "--root", help="Répertoire indexé à analyser."
-    ),
-    json_output: bool = typer.Option(False, "--json"),
-) -> None:
-    """Lister les patterns Topic request/reply détectés par Strategy1."""
-    _render_request_reply_patterns(_option_root(root), _option_json(json_output))
 
 
 @analyze_microservices_app.command("calls")
@@ -1783,32 +1766,6 @@ def export_namespaces_cmd(
     )
 
 
-@export_app.command(name="request-reply")
-def export_request_reply_cmd(
-    html: Path | None = typer.Option(None, "--html", help="Fichier HTML à produire."),
-) -> None:
-    """Exporter une vue dédiée des patterns Topic request/reply Strategy1.
-
-    Exemple : `systemlens export request-reply --html request-reply.html`.
-    """
-    if html is None:
-        typer.echo("`systemlens export request-reply` requiert --html FILE.", err=True)
-        raise typer.Exit(code=2)
-    repo_root = Path.cwd()
-    _require_index(repo_root)
-    inventory = load_architecture_inventory(repo_root)
-    result = request_reply_patterns(
-        build_catalog(
-            inventory.modules,
-            inventory.endpoints,
-            inventory.relations,
-            strategy1=inventory.strategy1,
-        )
-    )
-    html.write_text(render_request_reply_html(result), encoding="utf-8")
-    typer.echo(f"Vue request/reply écrite dans {html} ({result['count']} pattern(s)).")
-
-
 def _render_audit(repo_root: Path, workspace: Path | None, json_output: bool) -> None:
     inventory = load_architecture_inventory(repo_root, workspace)
     catalog = build_catalog(
@@ -1863,18 +1820,6 @@ def _render_indexing_issues(repo_root: Path, json_output: bool) -> None:
         typer.echo(
             f"- [{issue['severity']}] {issue['code']} : {issue['message']}{location}"
         )
-
-
-def _render_request_reply_patterns(repo_root: Path, json_output: bool) -> None:
-    inventory = load_architecture_inventory(repo_root)
-    catalog = build_catalog(
-        inventory.modules,
-        inventory.endpoints,
-        inventory.relations,
-        strategy1=inventory.strategy1,
-    )
-    result = request_reply_patterns(catalog)
-    _emit_architecture(result, json_output)
 
 
 def microservices_cmd(

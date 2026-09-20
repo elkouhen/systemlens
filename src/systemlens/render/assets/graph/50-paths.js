@@ -61,7 +61,6 @@
           : `API · ${source.name} appelle ${target.name} (contrat non indexe)`;
       }
       if (link.kind === "mongodb") return `Data · ${source.name} stocke dans ${target.name}`;
-      if (link.kind === "request_reply") return `Topic request/reply · ${source.name} → ${target.name}`;
       if (source.kind === "microservice") {
         const types = link.published_message_types || [];
         return `Topic · ${source.name} publie${types.length ? ` <${types.join(", ")}>` : ""} sur ${target.name}${warning}`;
@@ -276,7 +275,6 @@
       const nodeIds = path.nodes.filter(id => (
         network.hasNode(id)
         && isVisibleNodeId(id)
-        && (!graphState.selectedCodeFlowId || nodeDataById.get(id)?.kind === "microservice")
       ));
       if (!nodeIds.length) return false;
       const viewport = graphCanvas.getBoundingClientRect();
@@ -760,8 +758,6 @@
           link => nodeDataById.get(link.source).name, relationsGroup);
         appendRelationList("Services consommateurs", edges.filter(link => link.kind === "kafka" && link.source === id), id,
           link => nodeDataById.get(link.target).name, relationsGroup);
-        appendRelationList("Pattern request/reply", edges.filter(link => link.kind === "request_reply" && (link.source === id || link.target === id)), id,
-          link => nodeDataById.get(link.source === id ? link.target : link.source).name, relationsGroup);
         const dtos = (graphData.kafka_dtos || [])
           .filter(dto => (dto.topics || []).includes(node.name))
           .sort((left, right) => dtoLabel(left).localeCompare(dtoLabel(right)));

@@ -1,4 +1,4 @@
-ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v23-helm-template-yaml"
+ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v24-http-interfaces-helper-strings"
 
 
 def current_endpoint_inventory_signature() -> str:

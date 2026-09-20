@@ -91,14 +91,12 @@
       http: "#D55E00",
       kafkaPublish: "#009E73",
       kafkaConsume: "#0072B2",
-      requestReply: "#7C3AED",
       mongodb: "#CC79A7",
       build: "#475569",
     });
     function relationColor(link) {
       if (link.kind === "rest") return RELATION_COLORS.http;
       if (link.kind === "build") return RELATION_COLORS.build;
-      if (link.kind === "request_reply") return RELATION_COLORS.requestReply;
       if (link.direction === "incoming") return RELATION_COLORS.kafkaConsume;
       if (link.direction === "data_access") return RELATION_COLORS.mongodb;
       if (link.kind.startsWith("mcp_") && ["reads", "writes", "uses"].includes(link.label)) return RELATION_COLORS.mongodb;
@@ -288,7 +286,7 @@
       const label = String(link.label || "").toLocaleLowerCase();
       const endpointKinds = [source, target].map(id => nodeDataById.get(id)?.kind);
       if (kind === "rest" || ["calls", "call", "invokes", "http"].includes(label)) return "http";
-      if (["kafka", "request_reply"].includes(kind)
+      if (kind === "kafka"
           || endpointKinds.some(value => ["kafka_topic", "message_channel"].includes(value))
           || ["publishes", "consumes", "produce", "consume"].includes(label)) return "kafka";
       if (kind === "mongodb" || link.direction === "data_access"

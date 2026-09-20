@@ -32,6 +32,7 @@ from systemlens.scanner._spring_properties import (
     _resolve_value_annotated_variable,
     resolve_spring_property,
 )
+from systemlens.scanner.java_strings import local_string
 from systemlens.scanner.rest_client_config import (
     _is_rest_client_configuration,
     _rest_configuration_domains,
@@ -240,6 +241,77 @@ def _resolved_http_host(expr: str, repo_root: Path, source_path: str) -> str | N
     raw, _dynamic = _resolve_rest_expression(expr, repo_root, source_path)
     match = re.match(r"https?://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", raw, re.IGNORECASE)
     return match.group(1).lower() if match is not None else None
+
+
+def _resolve_rest_ast_expression(
+    expression, source: bytes, repo_root: Path, source_path: str
+) -> tuple[str, bool]:
+    """Resolve a bounded Java string expression before text fallback.
+
+    The AST resolver handles a literal, a uniquely initialized local and a
+    private deterministic helper with literal arguments. Anything it cannot
+    prove remains subject to the existing conservative expression resolver.
+    """
+    resolved = local_string(source, expression)
+    if resolved is not None:
+        return _normalize_rest_path(resolved), False
+    return _resolve_rest_path_expression(
+        java_parser.node_text(source, expression), repo_root, source_path,
+        preserve_dynamic_segments=True,
+    )
+
+
+def _resolved_http_host_ast(expression, source: bytes, repo_root: Path, source_path: str) -> str | None:
+    resolved = local_string(source, expression)
+    if resolved is not None:
+        match = re.match(r"https?://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", resolved, re.IGNORECASE)
+        return match.group(1).lower() if match is not None else None
+    return _resolved_http_host(java_parser.node_text(source, expression), repo_root, source_path)
+
+
+def _infer_http_interface_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
+    """Extract Spring HTTP interface contracts (`@HttpExchange`)."""
+    parsed = java_parser.parse_java(str(repo_root), rel_path)
+    if parsed is None:
+        return []
+    source, root = parsed
+    endpoints: list[MessageEndpoint] = []
+    methods = {
+        "GetExchange": "GET", "PostExchange": "POST", "PutExchange": "PUT",
+        "DeleteExchange": "DELETE", "PatchExchange": "PATCH",
+    }
+    for owner in java_parser.type_declarations(root):
+        exchange = next((a for a in java_parser.annotations_of(owner)
+                         if java_parser.annotation_name(a, source) == "HttpExchange"), None)
+        if exchange is None:
+            continue
+        registration = next((a for a in java_parser.annotations_of(owner)
+                             if java_parser.annotation_name(a, source) == "ClientRegistrationId"), None)
+        target_node = java_parser.annotation_argument(registration, source) if registration else None
+        target = java_parser.string_value(target_node, source) if target_node is not None else None
+        prefix, prefix_dynamic = _ast_mapping_value(exchange, source, repo_root, rel_path)
+        for method in java_parser.walk(owner):
+            if method.type != "method_declaration":
+                continue
+            annotation = next((a for a in java_parser.annotations_of(method)
+                               if java_parser.annotation_name(a, source) in methods), None)
+            if annotation is None:
+                continue
+            suffix, suffix_dynamic = _ast_mapping_value(annotation, source, repo_root, rel_path)
+            dynamic = prefix_dynamic or suffix_dynamic
+            route = _join_rest_paths(_normalize_rest_path(prefix), _normalize_rest_path(suffix))
+            if dynamic and (prefix_dynamic or suffix_dynamic):
+                route = "<dynamic>"
+            snippet = java_parser.node_text(source, method)
+            if target is not None:
+                snippet += f"\n// systemlens-api-domain:{target}"
+            endpoints.append(_build_endpoint(
+                repo_root, rel_path, annotation.start_point.row + 1,
+                method.end_point.row + 1, "call", "rest",
+                f"{methods[java_parser.annotation_name(annotation, source)]} {route}",
+                "http-interface", snippet, topic_dynamic=dynamic,
+            ))
+    return endpoints
 
 
 @lru_cache(maxsize=1024)
@@ -1113,10 +1185,9 @@ def _infer_resttemplate_exchange_endpoints(
                 continue
         else:
             http_method = direct_methods[method_name]
-        expression = java_parser.node_text(source, args[0])
-        route, dynamic = _resolve_rest_path_expression(expression, repo_root, rel_path)
+        route, dynamic = _resolve_rest_ast_expression(args[0], source, repo_root, rel_path)
         snippet = java_parser.node_text(source, invocation)
-        host = _resolved_http_host(expression, repo_root, rel_path)
+        host = _resolved_http_host_ast(args[0], source, repo_root, rel_path)
         if host is not None:
             snippet = f"{snippet}\n// systemlens-api-domain:{host}"
         inferred.append(
@@ -1146,13 +1217,9 @@ def _infer_webclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageEn
         if verb_call is None:
             continue
         http_method, anchor = verb_call
-        route, dynamic = _resolve_rest_path_expression(
-            java_parser.node_text(source, args[0]), repo_root, rel_path,
-            preserve_dynamic_segments=True,
-        )
-        expression = java_parser.node_text(source, args[0])
+        route, dynamic = _resolve_rest_ast_expression(args[0], source, repo_root, rel_path)
         snippet = java_parser.node_text(source, invocation)
-        host = _resolved_http_host(expression, repo_root, rel_path)
+        host = _resolved_http_host_ast(args[0], source, repo_root, rel_path)
         if host is not None:
             snippet = f"{snippet}\n// systemlens-api-domain:{host}"
         endpoints.append(
@@ -1432,6 +1499,7 @@ def infer_framework_endpoints(
         if rel_path.endswith(".java"):
             for endpoint in (
                 _infer_generic_request_mapping_endpoints(repo_root, rel_path)
+                + _infer_http_interface_endpoints(repo_root, rel_path)
                 + _infer_spring_data_rest_endpoints(repo_root, rel_path)
                 + _infer_swagger_endpoint(repo_root, rel_path)
                 + _infer_resttemplate_exchange_endpoints(repo_root, rel_path)

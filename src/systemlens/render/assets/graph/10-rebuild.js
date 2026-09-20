@@ -28,7 +28,7 @@
           // Leave room for the labels on either side of a relation. The
           // browser camera fits the resulting graph, so this only improves
           // readability instead of making a large graph harder to navigate.
-          const desired = ["kafka", "request_reply"].includes(link.kind) ? 1.28 : link.kind === "mongodb" ? .86 : 1.02;
+          const desired = link.kind === "kafka" ? 1.28 : link.kind === "mongodb" ? .86 : 1.02;
           const pull = (distance - desired) * .035;
           const ux = dx / distance, uy = dy / distance;
           source.vx += ux * pull; source.vy += uy * pull;
@@ -40,56 +40,33 @@
           node.vx *= .72; node.vy *= .72;
         });
       }
-      // Preserve the architectural reading after the force calculation:
-      // each software layer occupies a horizontal row, with domain at the
-      // bottom. Resources without a layer follow the services they connect.
-      const layerOrder = ["api", "application", "orchestration", "infrastructure", "domain", "persistence", "external"];
-      const cardSpacingX = 4.0;
-      const cardSpacingY = 2.6;
-      const nodesByLayer = new Map(layerOrder.map(layer => [layer, []]));
-      const resourcesByLayer = new Map(layerOrder.map(layer => [layer, []]));
-      const layerForNode = node => {
-        if (node?.architecture_layer && nodesByLayer.has(node.architecture_layer)) return node.architecture_layer;
-        if (node?.kind === "microservice" && nodesByLayer.has(node.layer)) return node.layer;
-        const relatedLayers = links
-          .filter(link => link.source === node?.id || link.target === node?.id)
-          .map(link => layoutById.get(link.source === node.id ? link.target : link.source)?.layer)
-          .filter(layer => nodesByLayer.has(layer));
-        return relatedLayers[0] || "application";
-      };
-      layoutNodes.forEach(node => {
-        if (node.kind === "microservice" && nodesByLayer.has(node.layer)) nodesByLayer.get(node.layer).push(node);
-        else resourcesByLayer.get(layerForNode(node)).push(node);
-      });
-      let layerCursor = 0;
-      nodesByLayer.forEach((items, layer) => {
-        const serviceColumns = Math.min(6, Math.max(1, items.length));
-        const resourceItems = resourcesByLayer.get(layer) || [];
-        const resourceColumns = Math.min(4, Math.max(1, resourceItems.length));
-        const serviceRows = Math.max(1, Math.ceil(items.length / serviceColumns));
-        const resourceRows = resourceItems.length ? Math.ceil(resourceItems.length / resourceColumns) : 0;
-        const rows = Math.max(serviceRows, resourceRows);
-        const layerHeight = Math.max(3.8, (rows - 1) * cardSpacingY + 3.8);
-        const centerY = -(layerCursor + layerHeight / 2);
-        items.sort((left, right) => left.name.localeCompare(right.name));
-        items.forEach((node, index) => {
-          const column = index % serviceColumns;
-          const row = Math.floor(index / serviceColumns);
-          node.x = (column - (serviceColumns - 1) / 2) * cardSpacingX;
-          node.y = centerY + (row - (serviceRows - 1) / 2) * cardSpacingY;
+      if (graphState.selectedCodeFlowId && graphState.pathMicroserviceOrder?.size) {
+        // Call graphs are read as a sequence. Replace the overview's layer
+        // packing with a compact horizontal lane so the selected services and
+        // their topics remain legible at a glance.
+        const serviceGap = 4.8;
+        const resourceGap = 2.4;
+        const serviceX = new Map();
+        layoutNodes.forEach(node => {
+          const order = graphState.pathMicroserviceOrder.get(node.id);
+          if (order) {
+            serviceX.set(node.id, (order - 1) * serviceGap);
+            node.x = (order - 1) * serviceGap;
+            node.y = 0;
+          }
         });
-        resourceItems.sort((left, right) => left.name.localeCompare(right.name));
-        resourceItems.forEach((node, index) => {
-          const column = index % resourceColumns;
-          const row = Math.floor(index / resourceColumns);
-          const serviceRight = ((serviceColumns - 1) / 2) * cardSpacingX;
-          node.x = serviceRight + 4.8 + column * cardSpacingX;
-          node.y = centerY + (row - (resourceRows - 1) / 2) * cardSpacingY;
+        layoutNodes.forEach(node => {
+          if (serviceX.has(node.id)) return;
+          const neighbours = links
+            .filter(link => link.source === node.id || link.target === node.id)
+            .map(link => serviceX.get(link.source === node.id ? link.target : link.source))
+            .filter(value => Number.isFinite(value));
+          if (!neighbours.length) return;
+          node.x = (Math.min(...neighbours) + Math.max(...neighbours)) / 2;
+          if (neighbours.length === 1) node.x += resourceGap;
+          node.y = 0;
         });
-        layerCursor += layerHeight + 1.1;
-      });
-      const verticalOffset = layerCursor / 2;
-      layoutNodes.forEach(node => { node.y += verticalOffset; });
+      }
       return layoutNodes;
     }
     function layoutIsolatedNodes(nodes, connectedNodes) {
@@ -113,11 +90,19 @@
     }
     function rebuildGraph() {
       const callGraphOnly = Boolean(graphState.selectedCodeFlowId);
-      const visibleLinks = callGraphOnly ? [] : graphData.links.filter(link => (
-        isVisibleRelation(link)
-        && isVisibleNode(nodeDataById.get(link.source))
-        && isVisibleNode(nodeDataById.get(link.target))
-      ));
+      const visibleLinks = callGraphOnly
+        ? graphData.links.filter((link, index) => (
+          link.kind !== "contains"
+          && graphState.relatedNodes?.has(link.source)
+          && graphState.relatedNodes?.has(link.target)
+          && nodeDataById.get(link.source)?.kind === "microservice"
+          && nodeDataById.get(link.target)?.kind === "microservice"
+        ))
+        : graphData.links.filter(link => (
+          isVisibleRelation(link)
+          && isVisibleNode(nodeDataById.get(link.source))
+          && isVisibleNode(nodeDataById.get(link.target))
+        ));
       const visibleNodeIds = new Set(visibleLinks.flatMap(link => [link.source, link.target]));
       const filteredNodes = graphData.nodes.filter(node => (
         isVisibleNode(node)
@@ -166,12 +151,7 @@
       );
       const selectedCallGraphLinks = callGraphOnly
         ? [
-          ...graphData.links
-          .map((link, index) => ({ link, index }))
-          .filter(({ link, index }) => (
-            graphState.relatedEdges?.has(`edge-${index}`)
-            && [link.source, link.target].every(nodeId => nodeDataById.get(nodeId)?.kind === "microservice")
-          )),
+          ...visibleLinks.map((link, index) => ({ link, index, edgeKey: `call-edge-topology-${index}` })),
           ...(graphData.port_links || [])
             .filter(link => selectedEndpointIds.has(link.source_endpoint_id)
               && selectedEndpointIds.has(link.target_endpoint_id))
@@ -280,8 +260,8 @@
         edgeReducer: (edge, data) => {
           if (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge))) return { ...data, hidden: true };
           if (graphState.selectedCodeFlowId) {
-            return (graphState.relatedEdges.has(edge) || callGraphEdgeKeys.has(edge)) && !data.obstacleRouted
-              ? { ...data, size: 2.1 }
+            return !data.obstacleRouted
+              ? { ...data, size: 2.8, color: "#6d28d9" }
               : { ...data, hidden: true };
           }
           if (graphState.selectedId && graphState.relatedEdges.has(edge)) return { ...data, size: 1.5 };
@@ -409,6 +389,7 @@
           const point = graphPointToViewport({ x: attributes.x, y: attributes.y });
           const node = nodeDataById.get(id);
           if (!node || !point) return;
+          if (graphState.selectedCodeFlowId && node.kind !== "microservice") return;
           nodePoints.set(id, point);
         });
         const adaptiveLabels = adaptiveSymbolLabelPlacements(nodePoints);
@@ -713,6 +694,11 @@
               const method = document.createElement("code");
               method.textContent = `Méthode Java : ${port.method || "inconnue"}`;
               tooltip.append(title, endpoint, method);
+              if (isTopicMessage) {
+                const topic = document.createElement("code");
+                topic.textContent = `${portDirection === "in" ? "Topic en entrée" : "Topic en sortie"} : ${port.name}`;
+                tooltip.append(topic);
+              }
               if (port.message_type) {
                 const messageType = document.createElement("code");
                 messageType.textContent = `Type Java : ${port.message_type}`;
@@ -728,7 +714,9 @@
                 const outputList = document.createElement("ul");
                 port.local_outputs.forEach(output => {
                   const item = document.createElement("li");
-                  item.textContent = `${output.label} · ${output.type} : ${output.name} · ${output.method}${output.message_type ? ` · Type Java : ${output.message_type}` : ""}`;
+                  const outputTopic = /kafka|topic|message/i.test(`${output.type} ${output.name}`)
+                    ? ` · Topic en sortie : ${output.name}` : "";
+                  item.textContent = `${output.label} · ${output.type} : ${output.name} · ${output.method}${outputTopic}${output.message_type ? ` · Type Java : ${output.message_type}` : ""}`;
                   outputList.append(item);
                 });
                 tooltip.append(localOutputs, outputList);
@@ -1131,12 +1119,20 @@
           const source = nodeLabelOverlay.querySelector(`[data-node-id="${CSS.escape(sourceId)}"]`);
           const target = nodeLabelOverlay.querySelector(`[data-node-id="${CSS.escape(targetId)}"]`);
           if (!source || !target) return null;
+          const sourcePort = (nodeDataById.get(sourceId)?.ports || []).find(port => (
+            port.direction === "out" && (!link.label || port.name === link.label)
+          ));
+          const targetPort = (nodeDataById.get(targetId)?.ports || []).find(port => (
+            port.direction === "in" && (!link.label || port.name === link.label)
+          ));
           const sourceAnchor = (link.endpoint_ids || [])
             .map(endpointId => anchorsByEndpointId.get(endpointId))
-            .find(anchor => anchor?.classList.contains("is-out"));
+            .find(anchor => anchor?.classList.contains("is-out"))
+            || [...(sourcePort ? [anchorsByEndpointId.get(sourcePort.endpoint_id)] : [])][0];
           const targetAnchor = (link.endpoint_ids || [])
             .map(endpointId => anchorsByEndpointId.get(endpointId))
-            .find(anchor => anchor?.classList.contains("is-in"));
+            .find(anchor => anchor?.classList.contains("is-in"))
+            || [...(targetPort ? [anchorsByEndpointId.get(targetPort.endpoint_id)] : [])][0];
           const sourceBounds = (sourceAnchor || source).getBoundingClientRect();
           const targetBounds = (targetAnchor || target).getBoundingClientRect();
           const sourceCenter = [sourceBounds.left + sourceBounds.width / 2, sourceBounds.top + sourceBounds.height / 2];
@@ -1207,6 +1203,23 @@
           if (routed.router) path.dataset.router = routed.router;
           path.setAttribute("d", routed.d);
           portPathOverlay.append(path);
+          const arcLabel = document.createElementNS(svgNamespace, "text");
+          arcLabel.classList.add("graph-call-label");
+          const sourcePort = (nodeDataById.get(link.source)?.ports || []).find(port => (
+            port.direction === "out" && (!link.label || port.name === link.label)
+          ));
+          const targetPort = (nodeDataById.get(link.target)?.ports || []).find(port => (
+            port.direction === "in" && (!link.label || port.name === link.label)
+          ));
+          const shortPortLabel = (port, direction) => {
+            const match = String(port?.label || "").match(direction === "out" ? /O\d+/ : /I\d+/);
+            return match?.[0] || (direction === "out" ? "O?" : "I?");
+          };
+          arcLabel.textContent = `${shortPortLabel(sourcePort, "out")} => ${shortPortLabel(targetPort, "in")}`;
+          const labelPoint = routed.points[Math.floor(routed.points.length / 2)] || routed.points[0];
+          arcLabel.setAttribute("x", String(labelPoint[0]));
+          arcLabel.setAttribute("y", String(labelPoint[1] - 8));
+          portPathOverlay.append(arcLabel);
         });
         routeWithLibavoid(
           [...libavoidEdges].map(edge => `${edge.id}:${edge.source}:${edge.target}`).join("|"),

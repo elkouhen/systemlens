@@ -37,6 +37,8 @@
     .graph-port-path.is-kafka { stroke: #009e73; }
     .graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 1; }
     .graph-call-path.is-kafka { stroke: #008f69; }
+    .graph-call-label { fill: #4c1d95; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; }
+    :root[data-theme="dark"] .graph-call-label { fill: #ddd6fe; stroke: #111827; }
     .graph-local-port-path { fill: none; stroke: #d97706; stroke-width: 1.5; stroke-dasharray: 3 2; stroke-linecap: round; opacity: .9; }
     .graph-local-port-path.is-code-flow-path { stroke: #7c3aed; stroke-width: 3; stroke-dasharray: none; opacity: 1; }
     :root[data-theme="dark"] .graph-port-path { stroke: #c4b5fd; }

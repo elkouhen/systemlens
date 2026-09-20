@@ -7,7 +7,6 @@ from systemlens.domain.models import ArchitectureRelation, MessageEndpoint, comp
 from systemlens.domain.graph import build_graph, group_endpoints_by_module
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.scanner import local_spring_application_names
-from systemlens.conventions.strategy1.kafka import request_reply_topic_pairs
 
 
 class _RelationEvidence(TypedDict):
@@ -128,18 +127,6 @@ def build_architecture_relations(
             dto_relation = "publishes_type" if endpoint.role == "produce" else "consumes_type"
             add(_relation(
                 "topic", endpoint.topic, dto_relation, "dto", endpoint.message_type, **evidence
-            ))
-
-    if kafka_reply_strategy1:
-        kafka_topics = {
-            endpoint.topic
-            for endpoint in endpoints
-            if endpoint.system == "kafka" and not endpoint.topic_dynamic
-        }
-        for request_topic, reply_topic in request_reply_topic_pairs(kafka_topics):
-            add(_relation(
-                "topic", request_topic, "request_reply", "topic", reply_topic,
-                origin="derived", confidence="high",
             ))
 
     for module in modules:

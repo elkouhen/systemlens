@@ -78,12 +78,10 @@ in the architecture snapshot.
 | `systemlens analyze microservices calls\|dependencies\|external-apis\|orphan-integrations [NAME] [--root DIR] [--json]` | Lists a service's outgoing calls, dependencies, external APIs, or integrations with no resolved caller/callee, depending on the subcommand. `external-apis` and `orphan-integrations` accept an optional `NAME` to scope the result to one service. |
 | `systemlens analyze microservices impact NAME [--root DIR] [--json]` | Lists direct and transitive impact paths. |
 | `systemlens analyze microservices path FROM TO [--root DIR] [--json] [--max-depth N] [--limit N]` | Lists bounded paths between services. |
-| `systemlens analyze request-reply [--root DIR] [--json]` | Lists Strategy1 Topic request/reply candidates. |
 | `systemlens export microservices (--html FILE | --c4 DIRECTORY | --json) [--graph FILE] [--workspace DIRECTORY] [--root-path DIRECTORY]` | Exports the deployable microservice, API, Data, and Topic topology. Non-deployable indexed projects (libraries and aggregators without an application entry point) are excluded from this view and remain available to `export projects` and `export layers`. Persisted MCP graph facts are included in the HTML export. `--graph FILE` reads a validated `systemlens-ai-graph-v1` manifest; `--workspace` federates separately indexed services below one parent directory; `--root-path` provides the local source root for HTML source links. |
 | `systemlens export projects --html FILE` | Exports the Maven/Gradle build-dependency view. |
 | `systemlens export layers --html FILE` | Exports a dedicated software-layer view. With the persisted Strategy1 profile, the project groups `PORTAIL` and `CYCLE-DE-VIE` are rendered in API/contracts and Orchestration, `DOMAIN-*` projects in Domain, and the documented layer-name prefixes/suffixes in their matching layers; shared libraries and other non-deployable projects are omitted, and without Strategy1 the repository-specific conventions are disabled. |
 | `systemlens export modules --html FILE` | Exports the structural hierarchy where a module can contain child modules and indexed projects. Membership comes from project directory paths, never from Kubernetes namespaces. The legacy `export clusters` and `export namespaces` spellings remain hidden compatibility aliases. |
-| `systemlens export request-reply --html FILE` | Exports Strategy1 Topic request/reply candidates. |
 | `systemlens web [--host HOST] [--port PORT]` | Starts the local Python web application at `http://127.0.0.1:8765/` by default. Its home page links to Architecture. Architecture renders the persisted snapshot for each request, excluding test-fixture microservices and every relation attached to them; when no index exists, it offers an explicit local button that creates the default configuration when needed and indexes the repository. The default loopback host prevents network exposure unless the user explicitly changes `--host`. |
 | `simpleweb [DIRECTORY] [--host HOST] [--port PORT]` | Serves static files from `DIRECTORY`, or from the current directory when omitted, for opening generated HTML files that load adjacent JSON. It binds to `http://127.0.0.1:8000/` by default, has no write routes, and does not create or modify files. The directory must exist. |
 | `systemlens mcp` | Starts the stdio MCP server. |
@@ -93,9 +91,11 @@ count and materialized relations. AST extraction receives all changed files in
 one pass and reports the `AST 1/1` checkpoint. CodeQL creates one global
 database, then reports each source-owning Maven/Gradle module as `module
 <current>/<total>` with its extracted-call count and elapsed duration. The
-indexing output also lists every persisted REST/Kafka port with its `IN` or
-`OUT` direction, module, route or topic, source location, and resolved Java
-implementation when available.
+indexing output ends with compact statistics for each module: the number of
+`IN` ports, `OUT` ports, and internal code flows. A global line then reports
+the same totals across the indexed repository. Individual port paths and Java
+implementations remain available through the persisted endpoint and module
+commands rather than being printed in the indexing summary.
 remaining indexing stages also report their progress and elapsed wall-clock
 duration with two decimal places. The total duration follows, then a next-step
 hint towards the interactive microservice HTML export. Its result line is:
@@ -161,14 +161,18 @@ a system, a topic (`METHOD /path` for REST), source location, framework and
 optional module, qualified name and Java message type. A value that cannot be
 resolved statically is flagged `topic_dynamic=true`; it is never fabricated.
 
-The Java AST extractor covers Spring MVC/WebFlux, Feign, RestTemplate,
-WebClient, Spring Cloud Gateway, Spring Data REST, Spring Kafka and Spring
+The Java AST extractor covers Spring MVC/WebFlux, Feign, Spring HTTP interfaces
+(`@HttpExchange` with `@GetExchange`/`@PostExchange` and related annotations),
+RestTemplate, WebClient, Spring Cloud Gateway, Spring Data REST, Spring Kafka and Spring
 Cloud Stream. Markdown and JSON Kafka manifests are supported as explicit
 sources and are labelled `source=manifest`.
 
 For REST clients, a literal URL or a unique, never-reassigned local string
 base URL is normalized to its route and retains its HTTP host as target
-evidence. Spring application names are read from multi-document YAML files;
+evidence. A private, uniquely named helper with a single unconditional String
+return and literal arguments may be evaluated transitively under the same
+rules. Spring HTTP interfaces retain `@ClientRegistrationId` as explicit
+service-target evidence when present. Spring application names are read from multi-document YAML files;
 profile-specific values do not override the base document without an explicit
 active-profile selection. A mutable or otherwise unresolved URL remains a
 dynamic, unresolved port rather than a guessed service link.
@@ -206,13 +210,15 @@ architecture edges. Reflection, dynamic routing, and runtime-only routing are
 not added.
 
 For Kafka, SystemLens can continue a potential flow from a concrete,
-statically resolved producer topic to a persisted concrete consumer entry. It
+statically resolved producer topic and known message type to a persisted
+consumer entry with the same topic and message type. It
 does not join dynamic topics and does not compose a producer whose later
 external effect would be hidden by a linear rendering. Continuations are
 bounded to four asynchronous hops and never revisit the same consumer flow.
-The architecture graph remains tolerant when message payload typing is
-missing or contradictory: topic matching uses the concrete topic identity, not
-the inferred Java type. The export keeps unmatched concrete endpoints and
+The architecture graph remains conservative when message payload typing is
+missing or contradictory: a producer/consumer service arc requires the same
+concrete topic and the same known Java message type on both endpoints. The
+export keeps unmatched concrete endpoints and
 dynamic topic expressions as partial, explicitly unresolved topic evidence;
 these evidence links never imply a producer/consumer pairing. Missing or
 different producer/consumer types are displayed as warnings on the topic,
@@ -245,7 +251,11 @@ example `I4 → O3, O5`. The graph anchor shows its compact global identifier
 outputs are centred and distributed independently on their respective sides
 of a card rather than sharing one positional index. A selected service lists
 only its triggered inputs, while the Flux widget uses the same labels; method
-and Data steps remain ordered but unlabelled.
+and Data steps remain ordered but unlabelled. When a selected flow port is
+backed by Kafka, its tooltip explicitly shows `Topic en entrée` for a consumed
+topic or `Topic en sortie` for a published topic. The Flux entry also lists all
+input and output topics carried by the persisted flow; HTTP ports keep their
+method and route presentation.
 
 ### Port-to-port call rendering
 
@@ -258,9 +268,11 @@ each output.
 
 When a persisted REST or Kafka topology edge has both a source endpoint and a
 resolved target endpoint, the export draws a directed port-to-port path from
-the source `O<n>` to the target `I<n>`. Kafka topics remain visible as indexed
-resources; the port path is a readable projection of the same evidence, not a
-replacement for the topic relation. Several ports on one side are distributed
+the source `O<n>` to the target `I<n>`. For an asserted Kafka edge, the graph
+also draws a direct service-to-service arc labelled with the topic, while the
+topic resource path remains visible. Kafka topics remain visible as indexed
+resources; these paths are readable projections of the same evidence, not
+replacements for the topic relation. Several ports on one side are distributed
 deterministically to avoid overlap. Cycles remain visible as directed return
 paths. An unresolved target, dynamic topic, or ambiguous route MUST NOT create
 a port-to-port path. The corresponding endpoint evidence remains visible as a
@@ -331,7 +343,9 @@ flows whose topology cannot be fully reconciled.
 Selecting a reconciled call graph opens
  the Explorer tab and displays only the microservices involved in the path,
  their indexed ports, and the direct dependencies between those ports. Topics
- and intermediate topology edges are not rendered in this focused view. The
+ remain available in the selected service's badges and tooltips, but are not
+ rendered as nodes in this focused view. The focused view uses a compact
+ horizontal lane for the selected sequence. The
  selected nodes retain a visible
 halo. Selecting it keeps the Flux tab and
 its card geometry unchanged; the selected card is marked in place instead of
@@ -353,6 +367,8 @@ fallback when the external WASM module cannot be loaded.
 Endpoint-to-endpoint dependencies are projected into the selected
 service-to-service arc; the duplicate raw port path is hidden in this focused
 view so the same dependency is not drawn twice.
+Each selected arc displays its port mapping in the form `Ox => Iy`, using the
+actual indexed output and input labels.
 Call-graph arcs use the same stroke thickness as ordinary topology paths; their
 selection remains identifiable through the selected-flow styling and colour.
 Clearing or replacing the selection restores the ordinary filtered graph.
@@ -809,8 +825,9 @@ JSON OpenAPI document under its own `src/main/resources/openapi/` directory;
 contract file names do not need to follow an `openapi.*` or `swagger.*`
 pattern.
 
-With Strategy1, it may also derive a high-confidence request/reply pair when
-both sides follow the `retour_<request-topic>` convention.
+Topic conventions never create synthetic request/reply relations. Kafka
+relations are derived only from indexed producers, consumers, concrete topics,
+and compatible payload evidence.
 
 ## Incrementality and freshness
 

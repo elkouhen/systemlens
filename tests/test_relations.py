@@ -1,7 +1,7 @@
 from dataclasses import replace
 from pathlib import Path
 
-from systemlens.application.architecture import build_catalog, indexing_issues, request_reply_patterns
+from systemlens.application.architecture import build_catalog, indexing_issues
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, MongoMethod
 from systemlens.indexing.relations import build_architecture_relations
@@ -80,7 +80,7 @@ def test_relations_materialize_kafka_http_mongo_and_module_dependency(tmp_path: 
     assert ("microservice", "orders", "depends_on", "module", "shared") in facts
 
 
-def test_strategy1_links_a_reply_topic_to_its_request_topic(tmp_path: Path) -> None:
+def test_strategy1_does_not_create_topic_request_reply_relations(tmp_path: Path) -> None:
     relations = build_architecture_relations(
         [],
         [
@@ -91,12 +91,7 @@ def test_strategy1_links_a_reply_topic_to_its_request_topic(tmp_path: Path) -> N
         kafka_reply_strategy1=True,
     )
 
-    assert any(
-        relation.source_name == "orders.request"
-        and relation.relation == "request_reply"
-        and relation.target_name == "retour_orders.request"
-        for relation in relations
-    )
+    assert not any(relation.relation == "request_reply" for relation in relations)
 
 
 def test_relations_materialize_the_resolved_interservice_topology() -> None:
@@ -135,17 +130,6 @@ def test_catalog_topology_uses_persisted_relations_not_a_new_endpoint_match() ->
         ("rest", "orders", "payments")
     ]
 
-
-def test_request_reply_view_requires_a_persisted_strategy_relation() -> None:
-    endpoints = [
-        _endpoint("produce", "kafka", "orders.request"),
-        _endpoint("consume", "kafka", "retour_orders.request"),
-    ]
-
-    assert request_reply_patterns(build_catalog([], endpoints, []) )["count"] == 0
-
-    relations = build_architecture_relations([], endpoints, [], kafka_reply_strategy1=True)
-    assert request_reply_patterns(build_catalog([], endpoints, relations))["count"] == 1
 
 
 def test_indexing_issues_exposes_source_evidence_for_heuristic_review() -> None:

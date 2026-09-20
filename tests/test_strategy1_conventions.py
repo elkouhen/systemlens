@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from systemlens.conventions.strategy1.indexing import is_openapi_declaration_path
-from systemlens.conventions.strategy1.kafka import request_reply_topic_pairs
 from systemlens.conventions.strategy1.layers import classify_module
 from systemlens.conventions.strategy1.profile import is_enabled
 from systemlens.conventions.strategy1.rest import rest_target_service_hint
@@ -22,10 +21,6 @@ def test_strategy1_pack_keeps_repository_rules_out_of_the_default_profile(tmp_pa
     assert is_enabled("default") is False
     assert is_openapi_declaration_path("orders/src/main/resources/openapi/orders.rest")
     assert not is_openapi_declaration_path("orders/src/test/resources/openapi/orders.rest")
-    assert request_reply_topic_pairs({"orders", "retour_orders", "orphan"}) == [
-        ("orders", "retour_orders")
-    ]
-
     module = _module("domain-orders", tmp_path / "DOMAIN" / "domain-orders")
     assert classify_module(module, tmp_path) == "domain"
 

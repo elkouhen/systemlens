@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import time
+from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Sequence
@@ -724,30 +725,47 @@ def _index_repo(
     ]
     input_ports = [endpoint for endpoint in indexed_ports if endpoint.role in {"serve", "consume"}]
     output_ports = [endpoint for endpoint in indexed_ports if endpoint.role in {"call", "produce"}]
-    method_by_endpoint_id = {
-        endpoint_id: method
-        for method in store.all_integration_methods()
-        for endpoint_id in (*method.input_endpoint_ids, *method.output_endpoint_ids)
-    }
-    _report_progress(
-        progress,
-        f"→ Indexation : ports détectés ({len(input_ports)} IN, {len(output_ports)} OUT).",
+    # Keep the end-of-index output useful on large repositories: report one
+    # compact line per module instead of flooding the terminal with every port.
+    endpoint_by_id = {endpoint.id: endpoint for endpoint in indexed_ports}
+    internal_flows_by_module: Counter[str] = Counter()
+    for flow in store.all_code_flows():
+        involved_modules = {
+            endpoint_by_id[step.endpoint_id].module
+            for step in flow.steps
+            if step.endpoint_id in endpoint_by_id and endpoint_by_id[step.endpoint_id].module
+        }
+        if not involved_modules or involved_modules == {flow.module}:
+            internal_flows_by_module[flow.module] += 1
+    in_by_module = Counter(
+        endpoint.module or "<racine>"
+        for endpoint in input_ports
     )
-    for endpoint in sorted(
-        indexed_ports,
-        key=lambda item: (item.module or "", item.path, item.start_line, item.id),
-    ):
-        direction = "IN" if endpoint.role in {"serve", "consume"} else "OUT"
-        method = method_by_endpoint_id.get(endpoint.id)
-        implementation = (
-            f" ; Java {method.qualified_method} ({method.path}:{method.start_line})"
-            if method is not None else ""
-        )
+    out_by_module = Counter(
+        endpoint.module or "<racine>"
+        for endpoint in output_ports
+    )
+    module_names = sorted(
+        {module_identity(module) for module in relation_modules}
+        | set(in_by_module)
+        | set(out_by_module)
+        | set(internal_flows_by_module)
+    )
+    _report_progress(progress, "→ Indexation : statistiques par module")
+    for module_name in module_names:
         _report_progress(
             progress,
-            f"  • {direction} [{endpoint.system}] {endpoint.module or '<racine>'} : "
-            f"{endpoint.topic} ({endpoint.path}:{endpoint.start_line}){implementation}",
+            f"  • {module_name} : {in_by_module[module_name]} IN, "
+            f"{out_by_module[module_name]} OUT, "
+            f"{internal_flows_by_module[module_name]} flux internes",
         )
+    _report_progress(
+        progress,
+        "→ Indexation : statistiques globales : "
+        f"{len(input_ports)} IN, {len(output_ports)} OUT, "
+        f"{sum(internal_flows_by_module.values())} flux internes, "
+        f"{len(module_names)} modules",
+    )
 
     _trace("index_repo.end", scanned=len(changed), skipped=len(unchanged))
     timer.total()

@@ -24,6 +24,7 @@ def make_endpoint(
     framework: str | None = None,
     module: str | None = None,
     snippet: str = "",
+    message_type: str | None = None,
 ) -> MessageEndpoint:
     return MessageEndpoint(
         id=compute_endpoint_id(role, topic, path, start_line, end_line),
@@ -38,6 +39,7 @@ def make_endpoint(
         end_line=end_line,
         snippet=snippet,
         module=module,
+        message_type=message_type,
     )
 
 
@@ -197,10 +199,10 @@ def test_build_graph_keeps_ambiguous_normalized_service_alias_unresolved() -> No
 def test_build_graph_creates_kafka_edges_on_matching_topic_only() -> None:
     endpoints_by_service = {
         "producer-svc": [
-            make_endpoint("produce", "orders.created", "app/producer.py", 1, 1, system="kafka")
+            make_endpoint("produce", "orders.created", "app/producer.py", 1, 1, system="kafka", message_type="OrderCreated")
         ],
         "consumer-svc": [
-            make_endpoint("consume", "orders.created", "app/consumer.py", 1, 1, system="kafka"),
+            make_endpoint("consume", "orders.created", "app/consumer.py", 1, 1, system="kafka", message_type="OrderCreated"),
             make_endpoint(
                 "consume", "orders.cancelled", "app/other_consumer.py", 1, 1, system="kafka"
             ),
@@ -214,13 +216,28 @@ def test_build_graph_creates_kafka_edges_on_matching_topic_only() -> None:
     assert edges[0].to_endpoint.path == "app/consumer.py"
 
 
+def test_build_graph_does_not_assert_kafka_arc_without_matching_payload_type() -> None:
+    producer = make_endpoint(
+        "produce", "orders.created", "app/producer.py", system="kafka", message_type="OrderCreated"
+    )
+    different = make_endpoint(
+        "consume", "orders.created", "app/different.py", system="kafka", message_type="OrderUpdated"
+    )
+    unknown = make_endpoint(
+        "consume", "orders.created", "app/unknown.py", system="kafka"
+    )
+
+    assert build_graph({"producer-svc": [producer], "consumer-svc": [different]}) == []
+    assert build_graph({"producer-svc": [producer], "consumer-svc": [unknown]}) == []
+
+
 def test_build_graph_uses_manifest_kafka_endpoints_as_service_authority() -> None:
     manifest_produce = replace(
-        make_endpoint("produce", "documented.topic", "topics.md", system="kafka"),
+        make_endpoint("produce", "documented.topic", "topics.md", system="kafka", message_type="Documented"),
         source="manifest",
     )
     manifest_consume = replace(
-        make_endpoint("consume", "documented.topic", "topics.md", 2, 2, system="kafka"),
+        make_endpoint("consume", "documented.topic", "topics.md", 2, 2, system="kafka", message_type="Documented"),
         source="manifest",
     )
     endpoints_by_service = {
@@ -409,19 +426,21 @@ def test_group_endpoints_by_module_ignores_endpoints_without_a_module() -> None:
 
 def test_build_graph_works_from_module_grouped_endpoints() -> None:
     endpoints = [
-        make_endpoint(
-            "produce",
-            "orders.created",
-            "order-service/Producer.java",
-            system="kafka",
-            module="order-service",
+            make_endpoint(
+                "produce",
+                "orders.created",
+                "order-service/Producer.java",
+                system="kafka",
+                module="order-service",
+                message_type="OrderCreated",
         ),
         make_endpoint(
             "consume",
             "orders.created",
             "payment-service/Consumer.java",
-            system="kafka",
-            module="payment-service",
+                system="kafka",
+                module="payment-service",
+                message_type="OrderCreated",
         ),
     ]
 

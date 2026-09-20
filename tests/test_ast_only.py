@@ -144,6 +144,46 @@ class VetsClient {
     assert "systemlens-api-domain:vets-service" in endpoint.snippet
 
 
+def test_http_exchange_interface_preserves_registration_target(tmp_path: Path) -> None:
+    source = tmp_path / "src/main/java/com/example/OrdersClient.java"
+    source.parent.mkdir(parents=True)
+    source.write_text("""
+import org.springframework.security.oauth2.client.annotation.ClientRegistrationId;
+import org.springframework.web.service.annotation.HttpExchange;
+import org.springframework.web.service.annotation.PostExchange;
+@ClientRegistrationId("order-service")
+@HttpExchange("/api/v1")
+interface OrdersClient {
+  @PostExchange("/orders") void create();
+}
+""", encoding="utf-8")
+
+    endpoints = infer_framework_endpoints(tmp_path)
+
+    endpoint = next(item for item in endpoints if item.framework == "http-interface")
+    assert endpoint.topic == "POST /api/v1/orders"
+    assert endpoint.topic_dynamic is False
+    assert "systemlens-api-domain:order-service" in endpoint.snippet
+
+
+def test_resttemplate_private_helper_resolves_literal_service_name(tmp_path: Path) -> None:
+    source = tmp_path / "src/main/java/com/example/Client.java"
+    source.parent.mkdir(parents=True)
+    source.write_text("""
+import org.springframework.web.client.RestTemplate;
+class Client {
+  private String serviceUrl(String service) { return "http://" + service; }
+  RestTemplate restTemplate;
+  void run() { restTemplate.getForObject(serviceUrl("inventory-service") + "/api/items", String.class); }
+}
+""", encoding="utf-8")
+
+    endpoint = next(item for item in infer_framework_endpoints(tmp_path) if item.role == "call")
+    assert endpoint.topic == "GET /api/items"
+    assert endpoint.topic_dynamic is False
+    assert "systemlens-api-domain:inventory-service" in endpoint.snippet
+
+
 def test_multidocument_spring_yaml_keeps_base_application_name(tmp_path: Path) -> None:
     properties = tmp_path / "application.yml"
     properties.write_text("""spring:
@@ -305,7 +345,9 @@ def test_index_scans_all_changed_files_in_one_ast_pass(
     assert all(len(extractor_calls) == 1 for extractor_calls in calls.values())
     assert all(extractor_calls[0] == sorted(extractor_calls[0]) for extractor_calls in calls.values())
     assert any("AST 1/1" in message for message in progress)
-    assert any("ports détectés" in message for message in progress)
+    assert any("statistiques par module" in message for message in progress)
+    assert any("statistiques globales" in message for message in progress)
+    assert not any("IN [" in message or "OUT [" in message for message in progress)
 
 
 def test_incremental_property_change_reindexes_dependent_java_endpoints(tmp_path: Path) -> None:

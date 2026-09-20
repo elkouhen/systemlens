@@ -20,13 +20,3 @@ def apply_kafka_endpoints(
     from systemlens.scanner.kafka_conventions import apply_kafka_topic_strategy1
 
     return apply_kafka_topic_strategy1(endpoints, strategy_endpoints)
-
-
-def request_reply_topic_pairs(topics: set[str]) -> list[tuple[str, str]]:
-    """Return concrete ``request → retour_request`` convention pairs."""
-    return [
-        (request_topic, reply_topic)
-        for reply_topic in sorted(topics)
-        if reply_topic.casefold().startswith("retour_")
-        if (request_topic := reply_topic[len("retour_"):]) in topics
-    ]

@@ -99,8 +99,9 @@ Strategy1 facts are explicitly identified as convention-derived.
 **Status:** Accepted.
 
 **Context:** Strategy1 rules had grown across Kafka extraction, REST target
-resolution, OpenAPI declaration invalidation, topic request/reply derivation,
-and layer classification. Passing a `strategy1` boolean through generic modules
+resolution, OpenAPI declaration invalidation, and layer classification. Topic
+request/reply pairing was retired because a naming convention does not prove a
+runtime exchange. Passing a `strategy1` boolean through generic modules
 made it easy for repository-specific rules to leak into portable analysis.
 
 **Decision:** Place Strategy1 rules in `systemlens.conventions.strategy1` and
@@ -501,3 +502,64 @@ per-source predecessor trees consume memory proportional to their relations;
 the QL closures remain potentially large but are explicitly output-anchored.
 Subprocess deadlines cover progress reads as well as execution and terminate
 the POSIX process group. The code-flow signature changes to rebuild old flows.
+
+## ADR-31 — Resolve declarative HTTP clients and bounded URL helpers conservatively
+
+**Status:** Accepted.
+
+**Context:** Representative Spring repositories use `@HttpExchange` contracts
+and small private helpers to construct service URLs. Treating these as dynamic
+loses explicit calls, while evaluating arbitrary Java would invent targets.
+
+**Decision:** Extract method-level HTTP exchange annotations and retain an
+explicit `@ClientRegistrationId` as target evidence. Resolve only source-local
+String expressions that are literal, uniquely initialized and never reassigned,
+or a uniquely named private/static String helper with one unconditional return
+and statically resolvable arguments. Reject overload ambiguity, mutation,
+conditionals, recursion and foreign receivers. Reuse the existing target
+identity matching, so unresolved or multiply matched aliases remain endpoint
+facts without topology edges.
+
+**Consequences:** Declarative clients and common service-name helpers become
+visible in endpoint and flow analysis without broadening inference to runtime
+configuration. The bounded evaluator adds a small AST traversal cost per URL
+expression. Reflection, service discovery, mutable hosts and arbitrary helper
+logic remain explicit unresolved cases.
+
+## ADR-32 — Require topic and payload type for an asserted Kafka service arc
+
+**Status:** Accepted.
+
+**Context:** Sharing a Kafka topic is insufficient proof that two services
+exchange the same logical message. A topic may carry several payload types,
+and an endpoint may have no reliable type evidence.
+
+**Decision:** Build an asserted producer-to-consumer service arc only when both
+endpoints have a concrete identical topic and a known identical Java message
+type. Keep topic-level endpoints, topic nodes, and warnings for missing or
+mismatched types, but do not project them as an `A → B` relation. Potential
+Kafka flow continuations use the same pairwise condition.
+
+**Consequences:** The graph contains fewer but stronger Kafka arcs. Topic-level
+evidence remains visible for investigation, while unknown, dynamic, and
+contradictory payloads remain explicitly unresolved.
+
+## ADR-33 — Keep topics in selected call-graph views
+
+**Status:** Accepted.
+
+**Context:** A selected code flow previously projected only microservices and
+service-level endpoint dependencies. That hid the topic that explains a Kafka
+handoff and made a valid producer-to-consumer arc difficult to interpret.
+
+**Decision:** When a selected message flow has one concrete producer for its
+entry topic, include the producer and consumer in the focused path and retain
+the topic only as endpoint and tooltip evidence. Keep the corresponding direct
+persisted service edge and arrange the selected microservices in a compact
+horizontal lane. Do not add a producer when the topic has multiple ambiguous
+producers.
+
+**Consequences:** Call-graph screenshots and exports show only microservice
+nodes while retaining the asserted direct service arc and its topic evidence in
+badges and tooltips. Ambiguous topic ownership remains unresolved and is not
+turned into a guessed path.

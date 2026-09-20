@@ -145,6 +145,7 @@ def test_global_input_label_references_its_local_output() -> None:
         (link["source"], link["target"], tuple(link.get("endpoint_ids", [])))
         for link in data["links"]
     } >= {
+        ("microservice:orders", "microservice:payments", ()),
         ("microservice:orders", "kafka_topic:orders.created", ("orders-out",)),
         ("kafka_topic:orders.created", "microservice:payments", ("payments-in",)),
         ("microservice:payments", "kafka_topic:orders.created", ("payments-out",)),
@@ -613,7 +614,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "function relationCategory(link" in document
     assert "Commit the view mode only after its layout and camera are ready" in document
     assert "const previousLayout = graphState.activeLayout" in document
-    assert "const visibleLinks = callGraphOnly ? [] : graphData.links.filter(link => (" in document
+    assert "const visibleLinks = callGraphOnly" in document
+    assert "graphState.relatedEdges?.has(`edge-${index}`)" in document
     assert "renderer?.refresh();" in document
     assert 'activeLayout: "forceatlas2-noverlap"' in document
     assert "applyLayout(graphState.activeLayout)" in document
@@ -719,6 +721,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert ".toolbar-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));" in document
     assert ".toolbar > .toolbar-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in document
     assert 'http_entry: "Entrée HTTP"' in document
+    assert 'Topic en entrée' in document
+    assert 'Topic en sortie' in document
+    assert 'function topicsForCodeFlow(flow)' not in document
     assert 'title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`' in document
     assert 'meta.textContent = flow.module;' in document
     assert 'javaMethod.textContent = `Méthode Java : ${flow.method}`' not in document
@@ -731,7 +736,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'const sourceAnchor = (link.endpoint_ids || [])' in document
     assert 'orthogonalPath(' in document
     assert 'const selectedCallGraphLinks = callGraphOnly' in document
-    assert 'graphState.relatedEdges.has(edge) || callGraphEdgeKeys.has(edge)' in document
+    assert 'const directKafkaLink = (topic, source, target)' in document
+    assert 'return !data.obstacleRouted' in document
     assert 'path.classList.add("graph-call-path")' in document
     assert ".graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2;" in document
     assert 'obstacleRouted' in document

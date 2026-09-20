@@ -403,9 +403,9 @@ def build_graph(
         seen.add(key)
         edges.append(GraphEdge("rest", call_service, service, call, None))
 
-    # A dynamic topic is evidence of a Kafka integration, not an identity.
-    # Matching two `<dynamic>` placeholders would fabricate an inter-service
-    # dependency, so only statically resolved topic names may form a Kafka edge.
+    # A dynamic topic or an unknown payload type is evidence of an integration,
+    # not proof of a producer/consumer pairing. An arc is asserted only when
+    # both the concrete topic and the message type match exactly.
     for produce_service, produce in produces:
         if produce.topic_dynamic:
             continue
@@ -414,7 +414,12 @@ def build_graph(
                 continue
             if consume.topic_dynamic:
                 continue
-            if produce.topic == consume.topic:
+            if (
+                produce.topic == consume.topic
+                and produce.message_type is not None
+                and consume.message_type is not None
+                and produce.message_type == consume.message_type
+            ):
                 key = ("kafka", produce_service, consume_service, produce.id, consume.id)
                 if key in seen:
                     continue

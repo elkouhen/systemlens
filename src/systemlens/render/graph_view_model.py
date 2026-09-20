@@ -24,7 +24,6 @@ from systemlens.domain.module_inventory import (
     module_identity,
 )
 from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
-from systemlens.conventions.strategy1.kafka import request_reply_topic_pairs
 from systemlens.render.namespaces import project_namespace, project_namespace_path
 from systemlens.render.software_layers import software_layer
 from systemlens.render._graph_view_helpers import (
@@ -937,6 +936,24 @@ def build_graph_view_model(
             link["published_message_types"] = sorted(
                 published_message_types_by_relation.get((source_name, target_name), set())
             )
+        if kind == "kafka" and source_kind == "microservice" and target_kind == "microservice":
+            link["published_message_types"] = sorted({
+                edge.from_endpoint.message_type
+                for edge in edges
+                if edge.kind == "kafka"
+                and edge.from_service == source_name
+                and edge.to_service == target_name
+                and edge.from_endpoint.message_type
+            })
+            link["consumed_message_types"] = sorted({
+                edge.to_endpoint.message_type
+                for edge in edges
+                if edge.kind == "kafka"
+                and edge.from_service == source_name
+                and edge.to_service == target_name
+                and edge.to_endpoint is not None
+                and edge.to_endpoint.message_type
+            })
         if kind == "kafka" and source_kind == "kafka_topic" and target_kind == "microservice":
             link["consumed_message_types"] = sorted(
                 consumed_message_types_by_relation.get((target_name, source_name), set())
@@ -946,6 +963,11 @@ def build_graph_view_model(
                 edge for edge in edges
                 if edge.kind == "kafka"
                 and (
+                    (source_kind == "microservice"
+                     and target_kind == "microservice"
+                     and edge.from_service == source_name
+                     and edge.to_service == target_name)
+                    or
                     (source_kind == "microservice"
                      and edge.from_service == source_name
                      and edge.from_endpoint.topic == target_name)
@@ -1092,19 +1114,6 @@ def build_graph_view_model(
                 collections_by_service
             )
         ]
-    if request_reply_strategy1:
-        links += [
-            {
-                "source": f"kafka_topic:{request_topic}",
-                "target": f"kafka_topic:{reply_topic}",
-                "kind": "request_reply",
-                "direction": "reply",
-                "label": "request/reply",
-                "confidence": "conventional",
-                "provenance": "Strategy1 · retour_",
-            }
-            for request_topic, reply_topic in request_reply_topic_pairs(set(kafka_topics))
-        ]
     # Complexity is derived from the links exported to the browser, rather
     # than from a parallel graph projection. A microservice score is exactly:
     # inbound HTTP clients + outbound HTTP targets + Kafka relations + MongoDB
@@ -1113,6 +1122,11 @@ def build_graph_view_model(
         (str(link["source"]), str(link["target"]), str(link["kind"]))
         for link in links
         if link["kind"] in {"rest", "kafka", "mongodb"}
+        and not (
+            link["kind"] == "kafka"
+            and str(link["source"]).startswith("microservice:")
+            and str(link["target"]).startswith("microservice:")
+        )
     }
     relation_counts: dict[str, int] = {str(node["id"]): 0 for node in nodes}
     relation_breakdowns: dict[str, dict[str, int]] = {

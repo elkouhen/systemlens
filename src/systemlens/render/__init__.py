@@ -29,7 +29,6 @@ from systemlens.render.html_export import render_graph_html
 from systemlens.render.likec4_export import (
     ComplexityRanking,
     render_graph_likec4,
-    render_request_reply_html,
 )
 from systemlens.render.module_graph import (
     EndpointHit,
@@ -78,7 +77,6 @@ __all__ = [
     "render_graph_html",
     "ComplexityRanking",
     "render_graph_likec4",
-    "render_request_reply_html",
     "EndpointHit",
     "FlowResultInfo",
     "FlowSiteInfo",

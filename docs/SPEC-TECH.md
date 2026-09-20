@@ -404,8 +404,10 @@ graph state. Node and edge reducers, HTML-card overlays, and port overlays use
 the exact reconciled path sets to hide every unrelated node and edge; selected
 nodes retain flow-specific highlighting. This presentation state does not infer
 or persist any new architecture relation. A selected call graph projects only
-its microservice nodes and endpoint dependencies; topic nodes and topology
-edges are omitted from that focused view. Service-to-service call-graph edges
+the microservices on its reconciled path; topic names remain in the selected
+ports and tooltips but topic nodes are omitted. Its nodes use a compact
+horizontal sequence so the call direction remains readable. Service-to-service
+call-graph edges
 use orthogonal straight-segment routes in the SVG overlay between their actual
 output and input port anchors. ELK.js supplies the positioned graph and the
 browser libavoid WASM router receives fixed node rectangles plus explicit port
@@ -526,20 +528,26 @@ available executable leaves the whole previous successful snapshot intact.
 ## Extractors
 
 `infer_framework_endpoints` walks Java declarations, annotations and method
-invocations to discover Spring MVC/WebFlux routes, Feign clients, RestTemplate,
+invocations to discover Spring MVC/WebFlux routes, Feign clients, Spring HTTP
+interfaces (`@HttpExchange` and method-level exchange annotations), RestTemplate,
 WebClient, Spring Data REST and gateway routes. It resolves literals, known
-Spring property expressions, and unique never-reassigned local string base
-URLs conservatively. Multi-document Spring YAML is read document by document;
+Spring property expressions, unique never-reassigned local string base URLs,
+and bounded private String helpers with one unconditional return. Multi-document Spring YAML is read document by document;
 base-document values take precedence where no active-profile selection exists.
 YAML parse failures, including unrendered Helm Go-template expressions, leave
 that file without Spring-property facts and never abort the repository index.
 
 REST graph construction first resolves an explicit target identity from an HTTP
 host, `lb://` URI, configured client domain, or an opt-in Strategy1 convention.
-For a URL expression that concatenates a local `@Value`-annotated field, or a
-unique never-reassigned local string base URL, and a path, the extractor
+For a URL expression that concatenates a local `@Value`-annotated field, a
+unique never-reassigned local string base URL, or a bounded private String
+helper with literal arguments, and a path, the extractor
 resolves the value and retains its HTTP host as endpoint evidence while
 persisting only the normalized route as the endpoint topic.
+HTTP-interface targets come from the explicit `@ClientRegistrationId` marker;
+the interface group alone is not treated as a target. Helper evaluation is
+source-only and rejects mutation, overload ambiguity, conditional returns,
+foreign receivers, recursion and unresolved arguments.
 The normalized alias must match exactly one indexed service; prefix, suffix and
 substring matching are not used. Route compatibility is evaluated only within
 that service. A targetless or ambiguous call remains an endpoint fact and is
@@ -549,11 +557,12 @@ reported as unresolved rather than creating an internal edge.
 KafkaTemplate/ProducerRecord usage and Spring Cloud Stream StreamBridge calls.
 It preserves dynamic topic expressions and derives a payload type only from an
 explicit listener parameter or client generic signature. The graph projection
-does not require that type: concrete Kafka endpoints are matched by topic and
-remain linked when one side has no type or the two declarations differ. An
-unmatched concrete endpoint is exported as a partial relation, and a dynamic
-topic receives an endpoint-specific unresolved topic node; neither case
-creates a producer/consumer pairing. The HTML payload includes a warning
+requires matching known message types for a service arc: concrete Kafka
+endpoints are paired only when both topic and Java message type are identical.
+An unmatched, unknown-type, or type-mismatched endpoint is exported as partial
+evidence, and a dynamic topic receives an endpoint-specific unresolved topic
+node; none of these cases creates a producer/consumer pairing. The HTML payload
+includes a warning
 status (`unknown`, `partial`, or `mismatch`) so consumers can distinguish
 evidence from a complete typed match. For topic-based
 `KafkaTemplate.send` overloads, the final argument is the payload: preceding
@@ -626,8 +635,8 @@ naming conventions.
 
 Strategy1 is implemented behind the `systemlens.conventions.strategy1` pack.
 The pack owns Kafka topic normalization and replacement, REST target hints,
-OpenAPI-declaration invalidation, request/reply topic pairing, and module-layer
-classification. Generic indexing, graph, relation, and rendering modules call
+OpenAPI-declaration invalidation, and module-layer classification. Generic
+indexing, graph, relation, and rendering modules call
 those explicit operations only when the persisted profile selects Strategy1.
 CLI selection, profile persistence, SQLite snapshots, and export mechanics
 remain outside the pack. Historical scanner imports remain compatibility

@@ -15,13 +15,57 @@ from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 from systemlens.indexing.java_symbols import JavaSymbols
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v16-exact-source-dispatch"
+CODE_FLOW_SIGNATURE = "code-flow-v17-deduplicated-endpoints"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
     "bulkOps", "findAndModify", "findAndReplace", "insert", "remove", "save",
     "updateFirst", "updateMulti", "upsert",
 })
+
+
+def _deduplicate_code_flows(flows: list[CodeFlow]) -> list[CodeFlow]:
+    """Keep one representative for each evidenced endpoint-to-endpoint flow.
+
+    Call-graph enumeration can expose several implementation/dispatch routes
+    for the same integration pair.  Those routes are useful while debugging
+    the join, but are not distinct application flows.  Prefer a non-cycle,
+    higher-confidence, shorter route and retain deterministic ordering.
+    """
+    confidence_rank = {"high": 0, "medium": 1, "low": 2}
+    selected: dict[tuple[str, str, str], CodeFlow] = {}
+    for flow in flows:
+        endpoint_steps = [step for step in flow.steps if step.endpoint_id]
+        if not endpoint_steps:
+            key = (flow.id, "", flow.status)
+        else:
+            # A cycle has the same endpoint as both ends. Keep it separate from
+            # an ordinary entry-to-output flow, but only once per entry.
+            key = (
+                endpoint_steps[0].endpoint_id or flow.id,
+                endpoint_steps[-1].endpoint_id or flow.id,
+                flow.status,
+            )
+        current = selected.get(key)
+        if current is None:
+            selected[key] = flow
+            continue
+        current_score = (
+            confidence_rank.get(current.confidence, 99),
+            len(current.steps),
+            current.id,
+        )
+        candidate_score = (
+            confidence_rank.get(flow.confidence, 99),
+            len(flow.steps),
+            flow.id,
+        )
+        if candidate_score < current_score:
+            selected[key] = flow
+    return sorted(
+        selected.values(),
+        key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id),
+    )
 
 
 def _endpoint_step(endpoint: MessageEndpoint, order: int) -> CodeFlowStep:
@@ -528,8 +572,7 @@ def materialize_codeql_code_flows(
             (flow.steps[0].endpoint_id, flow.steps[-1].endpoint_id) not in direct_flows
         ]
         flows.extend(direct_flows.values())
-    unique = {flow.id: flow for flow in flows}
-    return sorted(unique.values(), key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
+    return _deduplicate_code_flows(flows)
 
 
 def reconcile_code_flows(
@@ -619,14 +662,18 @@ def materialize_kafka_flow_continuations(
         endpoint.id for endpoint in endpoints
         if endpoint.system == "kafka" and not endpoint.topic_dynamic
     }
-    consumers: dict[str, list[CodeFlow]] = defaultdict(list)
+    endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
+    consumers: dict[tuple[str, str], list[CodeFlow]] = defaultdict(list)
     for flow in flows:
+        entry = endpoint_by_id.get(flow.steps[0].endpoint_id) if flow.steps else None
         if (
             flow.steps
             and flow.steps[0].kind == "message_entry"
             and flow.steps[0].endpoint_id in concrete_kafka_endpoints
+            and entry is not None
+            and entry.message_type is not None
         ):
-            consumers[flow.steps[0].name].append(flow)
+            consumers[(flow.steps[0].name, entry.message_type)].append(flow)
     continuations: list[CodeFlow] = []
     # ``seen_consumers`` is intentionally carried independently from the
     # rendered steps: a cycle can revisit a topic without ever revisiting the
@@ -648,7 +695,10 @@ def materialize_kafka_flow_continuations(
             if any(step.kind in {"http_call", "message_publish", "data_read", "data_write"}
                    for step in flow.steps[publish_index + 1:]):
                 continue
-            for consumer in consumers.get(publish.name, []):
+            publish_endpoint = endpoint_by_id.get(publish.endpoint_id)
+            if publish_endpoint is None or publish_endpoint.message_type is None:
+                continue
+            for consumer in consumers.get((publish.name, publish_endpoint.message_type), []):
                 if consumer.id == flow.id or consumer.id in seen_consumers:
                     cycle_steps = [*flow.steps[:publish_index + 1], consumer.steps[0]]
                     steps = tuple(
@@ -693,5 +743,4 @@ def materialize_kafka_flow_continuations(
                     (*seen_consumers, consumer.id),
                     hop_count + 1,
                 ))
-    unique = {flow.id: flow for flow in [*flows, *continuations]}
-    return sorted(unique.values(), key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
+    return _deduplicate_code_flows([*flows, *continuations])
