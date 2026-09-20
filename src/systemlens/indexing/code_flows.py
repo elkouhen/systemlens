@@ -52,14 +52,20 @@ def _deduplicate_code_flows(flows: list[CodeFlow]) -> list[CodeFlow]:
     grouped: dict[tuple[str, str, str], list[CodeFlow]] = {}
     for source, target, edge_key, data in candidates.edges(keys=True, data=True):
         grouped.setdefault((source, target, edge_key[0]), []).append(data["flow"])
-    selected = [min(
-        parallel,
-        key=lambda flow: (
-            confidence_rank.get(flow.confidence, 99),
-            len(flow.steps),
-            flow.id,
-        ),
-    ) for _, parallel in sorted(grouped.items())]
+    selected = []
+    for _, parallel in sorted(grouped.items()):
+        representative = min(
+            parallel,
+            key=lambda flow: (
+                confidence_rank.get(flow.confidence, 99),
+                len(flow.steps),
+                flow.id,
+            ),
+        )
+        selected.append(replace(
+            representative,
+            alternative_count=sum(flow.alternative_count for flow in parallel),
+        ))
     return sorted(
         selected,
         key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id),
@@ -474,6 +480,7 @@ def materialize_codeql_code_flows(
         tree_cache: dict[
             tuple[str, str], dict[str, tuple[str, IntegrationMethod, CodeQLCall, bool]]
         ] = {}
+        max_cached_trees = 8
         direct_flows: dict[tuple[str, str], CodeFlow] = {}
 
         def representative_route(
@@ -481,9 +488,8 @@ def materialize_codeql_code_flows(
         ) -> list[tuple[IntegrationMethod, CodeQLCall, bool]]:
             key = (source.id, confidence)
             if key not in tree_cache:
-                # Relations are grouped below; release the previous tree so
-                # memory does not grow with the number of input methods.
-                tree_cache.clear()
+                if len(tree_cache) >= max_cached_trees:
+                    tree_cache.pop(next(iter(tree_cache)))
                 predecessors: dict[str, tuple[str, IntegrationMethod, CodeQLCall, bool]] = {}
                 queue = deque([source.id])
                 visited = {source.id}
@@ -622,7 +628,7 @@ def reconcile_code_flows(
                             if edge.to_endpoint is not None
                             and edge.to_endpoint.id == next_endpoint.id
                         ]
-                    if not matching_outgoing:
+                    if len(matching_outgoing) != 1:
                         status = "partial"
                         break
                 if endpoint.role in {"serve", "consume"} and step is not endpoint_steps[0]:
@@ -632,7 +638,7 @@ def reconcile_code_flows(
                             edge for edge in matching_incoming
                             if edge.from_endpoint.id == previous_endpoint.id
                         ]
-                    if not matching_incoming:
+                    if len(matching_incoming) != 1:
                         status = "partial"
                         break
         reconciled.append(replace(flow, reconciliation=status))
@@ -676,7 +682,7 @@ def materialize_kafka_flow_continuations(
     # rendered steps: a cycle can revisit a topic without ever revisiting the
     # exact source location of a message entry.
     queue: list[tuple[CodeFlow, tuple[str, ...], int]] = [
-        (flow, (), 0) for flow in flows
+        (flow, (flow.id,), 0) for flow in flows
     ]
     while queue:
         flow, seen_consumers, hop_count = queue.pop(0)

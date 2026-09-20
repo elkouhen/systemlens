@@ -1,15 +1,18 @@
 """Local CodeQL call-graph adapter for Java integration flows."""
 
 import csv
+import errno
 import os
 import signal
 import shutil
 import subprocess
 import tempfile
+import time
 from threading import Timer
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Iterable, Mapping
 from typing import Callable, Iterator, Sequence
 
 from systemlens.domain.code_flows import IntegrationMethod
@@ -42,6 +45,23 @@ class CodeQLReachability:
 
 class CodeQLError(RuntimeError):
     pass
+
+
+class CodeQLTimeout(subprocess.TimeoutExpired):
+    """A CodeQL deadline with any rows recovered from a completed result."""
+
+    def __init__(self, command: list[str], timeout: float, *, calls: list[CodeQLCall] | None = None):
+        super().__init__(command, timeout)
+        self.calls = calls or []
+
+
+def _remaining_timeout(timeout_seconds: float, deadline: float | None) -> float:
+    if deadline is None:
+        return timeout_seconds
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired(["codeql"], timeout_seconds)
+    return min(timeout_seconds, remaining)
 
 
 # Keep the query pack reproducible and offline during indexing.  Users install
@@ -204,21 +224,16 @@ def codeql_executable() -> str | None:
 def _run_with_progress(
     command: list[str],
     *,
-    timeout: int,
+    timeout: float,
     progress: Callable[[str], None] | None,
     cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run CodeQL while optionally forwarding its combined output live."""
-    if progress is None:
-        return subprocess.run(
-            command, capture_output=True, text=True, timeout=timeout, check=False, cwd=cwd,
-        )
+    """Run CodeQL with one timeout and process-group cleanup policy."""
     process = subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        command, stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT if progress is not None else subprocess.PIPE,
         text=True, bufsize=1, cwd=cwd, start_new_session=os.name == "posix",
     )
-    output: list[str] = []
-    expired = False
 
     def stop() -> None:
         try:
@@ -228,6 +243,35 @@ def _run_with_progress(
                 process.kill()
         except ProcessLookupError:
             pass
+        except PermissionError:
+            # A process can exit between poll() and killpg(), or the platform
+            # can reject the group operation during interpreter shutdown. Fall
+            # back to the direct child and never turn cleanup into an indexing
+            # failure.
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+        except OSError as exc:
+            if exc.errno not in {errno.ESRCH, errno.EPERM}:
+                raise
+
+    if progress is None:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            stop()
+            stdout, stderr = process.communicate()
+            raise subprocess.TimeoutExpired(
+                command, timeout, output=stdout, stderr=stderr
+            ) from exc
+        finally:
+            stop()
+            process.wait()
+        return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+
+    output: list[str] = []
+    expired = False
 
     def expire() -> None:
         nonlocal expired
@@ -283,6 +327,17 @@ def _prepare_source_only_root(repo_root: Path, destination: Path) -> int:
     return copied
 
 
+def _decode_bqrs(
+    executable: str, bqrs: Path, output: Path, *, timeout: float,
+) -> subprocess.CompletedProcess[str]:
+    """Decode a BQRS file with the same process-group timeout guarantees."""
+    return _run_with_progress(
+        [executable, "bqrs", "decode", str(bqrs), "--format=csv", f"--output={output}"],
+        timeout=timeout,
+        progress=None,
+    )
+
+
 def _prepare_generation_workspace(repo_root: Path, destination: Path) -> None:
     """Copy the project to a disposable workspace before source generation."""
     shutil.copytree(
@@ -295,7 +350,7 @@ def _prepare_generation_workspace(repo_root: Path, destination: Path) -> None:
 
 
 def _generate_sources(
-    workspace: Path, *, timeout: int, progress: Callable[[str], None] | None,
+    workspace: Path, *, timeout: float, progress: Callable[[str], None] | None,
 ) -> None:
     """Run build-tool source generation only, never compilation or tests."""
     if (workspace / "pom.xml").is_file():
@@ -316,6 +371,7 @@ def automatic_codeql_database(
     ram_mb: int | None = None, verbosity: str | None = None,
     progress: Callable[[str], None] | None = None,
     generate_sources: bool = False,
+    deadline: float | None = None,
 ) -> Iterator[Path | None]:
     """Create a temporary source-only Java database for one index run.
 
@@ -334,7 +390,11 @@ def automatic_codeql_database(
         codeql_input = repo_root
         if generate_sources:
             _prepare_generation_workspace(repo_root, generation_root)
-            _generate_sources(generation_root, timeout=timeout_seconds, progress=progress)
+            _generate_sources(
+                generation_root,
+                timeout=_remaining_timeout(timeout_seconds, deadline),
+                progress=progress,
+            )
             codeql_input = generation_root
         _prepare_source_only_root(codeql_input, source_root)
         command = [
@@ -346,7 +406,7 @@ def automatic_codeql_database(
         if ram_mb is not None:
             command.append(f"--ram={ram_mb}")
         completed = _run_with_progress(
-            command, timeout=timeout_seconds, progress=progress,
+            command, timeout=_remaining_timeout(timeout_seconds, deadline), progress=progress,
         )
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip()
@@ -363,6 +423,7 @@ def extract_codeql_calls(
     ram_mb: int | None = None,
     verbosity: str | None = None,
     progress: Callable[[str], None] | None = None,
+    deadline: float | None = None,
 ) -> list[CodeQLCall]:
     """Return statically resolved Java method calls from one CodeQL database.
 
@@ -397,15 +458,30 @@ def extract_codeql_calls(
         user_packs = Path.home() / ".codeql" / "packages"
         if user_packs.is_dir():
             command.append(f"--additional-packs={user_packs}")
-        completed = _run_with_progress(
-            command, timeout=timeout_seconds, progress=progress,
-        )
+        try:
+            completed = _run_with_progress(
+                command, timeout=_remaining_timeout(timeout_seconds, deadline), progress=progress,
+            )
+        except subprocess.TimeoutExpired as exc:
+            partial_calls: list[CodeQLCall] = []
+            if bqrs.is_file():
+                try:
+                    decoded_partial = _decode_bqrs(
+                        executable, bqrs, output,
+                        timeout=max(0.01, min(timeout_seconds, 5, _remaining_timeout(timeout_seconds, deadline))),
+                    )
+                    if decoded_partial.returncode == 0 and output.is_file():
+                        with output.open(newline="", encoding="utf-8") as handle:
+                            partial_calls = _parse_codeql_calls(csv.DictReader(handle), path_prefix)
+                except (OSError, subprocess.TimeoutExpired, CodeQLError):
+                    pass
+            raise CodeQLTimeout(command, timeout_seconds, calls=partial_calls) from exc
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip()
             raise CodeQLError(f"CodeQL call graph failed: {detail}")
-        decoded = subprocess.run(
-            [executable, "bqrs", "decode", str(bqrs), "--format=csv", f"--output={output}"],
-            capture_output=True, text=True, timeout=timeout_seconds, check=False,
+        decoded = _decode_bqrs(
+            executable, bqrs, output,
+            timeout=_remaining_timeout(timeout_seconds, deadline),
         )
         if decoded.returncode != 0:
             detail = (decoded.stderr or decoded.stdout).strip()
@@ -415,6 +491,10 @@ def extract_codeql_calls(
                 rows = list(csv.DictReader(handle))
         except OSError as exc:
             raise CodeQLError("CodeQL did not produce a CSV call graph.") from exc
+    return _parse_codeql_calls(rows, path_prefix)
+
+
+def _parse_codeql_calls(rows: Iterable[Mapping[str, str]], path_prefix: str) -> list[CodeQLCall]:
     normalized_prefix = path_prefix.strip("/")
 
     def repository_path(path: str) -> str:
@@ -445,6 +525,7 @@ def extract_codeql_reachability(
     timeout_seconds: int = 600,
     threads: int = 1,
     ram_mb: int | None = None,
+    deadline: float | None = None,
 ) -> list[CodeQLReachability]:
     """Return unbounded CodeQL reachability between indexed input/output methods."""
     if not database.is_dir():
@@ -473,14 +554,14 @@ def extract_codeql_reachability(
         if user_packs.is_dir():
             command.append(f"--additional-packs={user_packs}")
         completed = _run_with_progress(
-            command, timeout=timeout_seconds, progress=None,
+            command, timeout=_remaining_timeout(timeout_seconds, deadline), progress=None,
         )
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip()
             raise CodeQLError(f"CodeQL reachability query failed: {detail}")
-        decoded = subprocess.run(
-            [executable, "bqrs", "decode", str(bqrs), "--format=csv", f"--output={output}"],
-            capture_output=True, text=True, timeout=timeout_seconds, check=False,
+        decoded = _decode_bqrs(
+            executable, bqrs, output,
+            timeout=_remaining_timeout(timeout_seconds, deadline),
         )
         if decoded.returncode != 0:
             detail = (decoded.stderr or decoded.stdout).strip()

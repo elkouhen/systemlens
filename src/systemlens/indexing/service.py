@@ -34,6 +34,7 @@ from systemlens.indexing.codeql import (
     CodeQLCall,
     CodeQLReachability,
     CodeQLError,
+    CodeQLTimeout,
     automatic_codeql_database,
     codeql_executable,
     extract_codeql_calls,
@@ -529,6 +530,7 @@ def _index_repo(
                     code_flows=partial_flows,
                 ))
 
+            codeql_deadline = time.monotonic() + config.codeql_timeout_seconds
             try:
                 if codeql_database is not None:
                     timer.begin("codeql-extract", "→ CodeQL : extraction des appels Java depuis la base fournie...")
@@ -537,12 +539,14 @@ def _index_repo(
                         threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
                         verbosity=codeql_verbosity,
                         progress=progress if codeql_verbosity is not None else None,
+                        deadline=codeql_deadline,
                     )
                     timer.end("codeql-extract", "extraction des appels CodeQL")
                     reachability = extract_codeql_reachability(
                         codeql_database, methods,
                         timeout_seconds=config.codeql_timeout_seconds,
                         threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                        deadline=codeql_deadline,
                     )
                     if call_graph_progress is not None:
                         prepared_codeql_flows = materialize_codeql_code_flows(
@@ -569,6 +573,7 @@ def _index_repo(
                                     threads=config.codeql_threads,
                                     ram_mb=config.codeql_ram_mb,
                                     generate_sources=True,
+                                    deadline=codeql_deadline,
                                 )
                             else:
                                 database_context = automatic_codeql_database(
@@ -576,6 +581,7 @@ def _index_repo(
                                     timeout_seconds=config.codeql_timeout_seconds,
                                     threads=config.codeql_threads,
                                     ram_mb=config.codeql_ram_mb,
+                                    deadline=codeql_deadline,
                                 )
                         elif generate_sources:
                             database_context = automatic_codeql_database(
@@ -586,6 +592,7 @@ def _index_repo(
                                 verbosity=codeql_verbosity,
                                 progress=progress,
                                 generate_sources=True,
+                                deadline=codeql_deadline,
                             )
                         else:
                             database_context = automatic_codeql_database(
@@ -595,6 +602,7 @@ def _index_repo(
                                 ram_mb=config.codeql_ram_mb,
                                 verbosity=codeql_verbosity,
                                 progress=progress,
+                                deadline=codeql_deadline,
                             )
                         with database_context as database:
                             assert database is not None
@@ -603,11 +611,13 @@ def _index_repo(
                                 threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
                                 verbosity=codeql_verbosity,
                                 progress=progress if codeql_verbosity is not None else None,
+                                deadline=codeql_deadline,
                             )
                             reachability = extract_codeql_reachability(
                                 database, methods,
                                 timeout_seconds=config.codeql_timeout_seconds,
                                 threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                                deadline=codeql_deadline,
                             )
                         partitioned_calls = _partition_codeql_calls(calls, roots)
                         if call_graph_progress is not None:
@@ -634,6 +644,15 @@ def _index_repo(
                                 f"en {time.perf_counter() - module_started_at:.2f} s.",
                             )
                     timer.end(stage, f"création et extraction globale {engine_label}")
+            except CodeQLTimeout as exc:
+                calls = exc.calls
+                codeql_timed_out = True
+                reachability = []
+                _report_progress(
+                    progress,
+                    "→ CodeQL : délai dépassé ; poursuite avec les faits déjà indexés "
+                    "et exécution des post-traitements.",
+                )
             except subprocess.TimeoutExpired:
                 # A CodeQL deadline is a soft indexing boundary. AST facts,
                 # relations and any calls obtained before the deadline remain

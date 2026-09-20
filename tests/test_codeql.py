@@ -90,7 +90,7 @@ def test_reachability_decodes_named_columns(tmp_path: Path, monkeypatch) -> None
                               "C.in,C.java,1,C.out,C.java,2,medium\n")
         return CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr(codeql.subprocess, "run", run)
+    monkeypatch.setattr(codeql, "_run_with_progress", run)
     assert codeql.extract_codeql_reachability(tmp_path, methods, executable="codeql") == [
         codeql.CodeQLReachability("C.in", "C.java", 1, "C.out", "C.java", 2, "medium")
     ]
@@ -140,7 +140,7 @@ def test_automatic_codeql_database_is_source_only_and_temporary(
         return CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
-    monkeypatch.setattr(codeql.subprocess, "run", run)
+    monkeypatch.setattr(codeql, "_run_with_progress", run)
 
     with codeql.automatic_codeql_database(
         tmp_path, timeout_seconds=42, threads=4, ram_mb=4096
@@ -183,7 +183,7 @@ def test_extract_codeql_calls_uses_pinned_local_pack_without_installing(
             )
         return CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr(codeql.subprocess, "run", run)
+    monkeypatch.setattr(codeql, "_run_with_progress", run)
 
     calls = codeql.extract_codeql_calls(
         database, executable="custom-codeql", timeout_seconds=42, threads=4, ram_mb=4096
@@ -215,7 +215,7 @@ def test_extract_codeql_calls_prefixes_module_relative_evidence_paths(
             )
         return CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr(codeql.subprocess, "run", run)
+    monkeypatch.setattr(codeql, "_run_with_progress", run)
 
     calls = codeql.extract_codeql_calls(
         database, executable="custom-codeql", path_prefix="module-a"

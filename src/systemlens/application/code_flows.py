@@ -15,6 +15,7 @@ def code_flow_summary(flow: CodeFlow) -> dict[str, object]:
         "status": flow.status,
         "confidence": flow.confidence,
         "reconciliation": flow.reconciliation,
+        "alternative_count": flow.alternative_count,
     }
 
 

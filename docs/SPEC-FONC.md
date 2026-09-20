@@ -135,19 +135,20 @@ older configuration still contains `analysis.codeql_verbosity`. The explicit
 `--codeql-progress` option temporarily enables `progress++` for one command.
 CodeQL's messages are diagnostic progress only; they do not provide a
 guaranteed percentage or remaining-time estimate.
-`analysis.codeql_timeout_seconds` sets the positive timeout in seconds for each
-CodeQL subprocess (temporary database creation, query execution, and BQRS
-decoding); its default is `600` seconds. The deadline includes live progress
-reading, even when the subprocess stops producing output. On POSIX, timeout
-or interrupted progress handling terminates and reaps the subprocess and
-terminates its process group. A timeout is a soft boundary for the index:
-SystemLens keeps AST facts and any CodeQL calls obtained before expiration,
-executes the remaining relation, flow, continuation, reconciliation and
-statistics post-processing, then commits the resulting partial snapshot so it
-can be exported to HTML. The CLI reports that the graph is partial. A timed-out
-CodeQL pass does not update the code-flow signature, so the next index retries
-the interprocedural analysis even when source files are unchanged. Other
-CodeQL failures remain fatal and preserve the previous committed snapshot.
+`analysis.codeql_timeout_seconds` sets the positive wall-clock budget for the
+complete CodeQL pass, including source generation, temporary database creation,
+query execution and BQRS decoding; its default is `600` seconds. The remaining
+budget is propagated to every subprocess. The deadline includes live progress
+reading, even when a subprocess stops producing output. On POSIX, timeout or
+interrupted progress handling terminates and reaps the complete process group.
+A timeout is a soft boundary for the index: SystemLens keeps AST facts and any
+CodeQL calls recovered from a completed partial result, executes the remaining
+relation, flow, continuation, reconciliation and statistics post-processing,
+then commits the resulting partial snapshot so it can be exported to HTML. The
+CLI reports that the graph is partial. A timed-out CodeQL pass does not update
+the code-flow signature, so the next index retries the interprocedural analysis
+even when source files are unchanged. Other CodeQL failures remain fatal and
+preserve the previous committed snapshot.
 `analysis.codeql_threads` sets the number of threads passed to CodeQL database
 creation and query execution; its default is `0`, which delegates one thread
 per available core to CodeQL. `analysis.codeql_ram_mb` optionally sets

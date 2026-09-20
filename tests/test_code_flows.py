@@ -235,7 +235,7 @@ def test_code_flow_deduplication_keeps_shortest_strongest_route() -> None:
         CodeFlowStep(2, "http_call", output.topic, output.path, 8, 8, output.id),
     ))
 
-    assert _deduplicate_code_flows([long, short]) == [short]
+    assert _deduplicate_code_flows([long, short]) == [replace(short, alternative_count=2)]
 
 
 def test_reconcile_code_flows_marks_missing_topology_as_partial() -> None:
@@ -286,6 +286,28 @@ def test_reconcile_code_flows_requires_the_matching_topology_endpoints() -> None
     assert reconcile_code_flows(
         [flow], [entry, output, unrelated, downstream], [wrong_edge]
     )[0].reconciliation == "partial"
+
+
+def test_reconcile_code_flows_marks_ambiguous_topology_as_partial() -> None:
+    entry = _endpoint("entry", "serve", "rest", "POST /orders", "orders/Orders.java", 1)
+    output = replace(
+        _endpoint("output", "call", "rest", "POST /payments", "orders/Orders.java", 2),
+        module="payments",
+    )
+    edges = [
+        GraphEdge("rest", "orders", "payments", output, None),
+        GraphEdge("rest", "orders", "payments", output, None),
+    ]
+    flow = CodeFlow(
+        id="flow", module="orders", method="Orders.place", path="orders/Orders.java",
+        start_line=1, end_line=2, status="potential", confidence="medium", reason="test",
+        steps=(
+            CodeFlowStep(1, "http_entry", entry.topic, entry.path, 1, 1, entry.id),
+            CodeFlowStep(2, "http_call", output.topic, output.path, 2, 2, output.id),
+        ),
+    )
+
+    assert reconcile_code_flows([flow], [entry, output], edges)[0].reconciliation == "partial"
 
 
 def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None:
@@ -374,6 +396,7 @@ def test_index_uses_automatic_codeql_database_when_available(
         timeout_seconds: int = 600,
         threads: int = 1,
         ram_mb: int | None = None,
+        deadline: float | None = None,
     ):
         observed_roots.append(root)
         assert timeout_seconds == 600
@@ -594,7 +617,7 @@ def test_store_additively_migrates_previous_schema_for_code_flows(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'integration_methods'"
         ).fetchone()
         assert methods_table is not None
-        assert store.get_meta("schema_version") == "30"
+        assert store.get_meta("schema_version") == "31"
 
 
 def test_codeql_calls_join_ast_entry_and_output_methods(tmp_path: Path) -> None:

@@ -425,7 +425,9 @@ derived only from endpoint identifiers and the current topology edges:
 `complete` for fully matched evidence and `partial` when code evidence remains
 but an endpoint or cross-service edge is missing, unresolved, dynamic, or
 ambiguous. Same-service input/output evidence does not require an
-inter-service edge.
+inter-service edge. Multiple matching topology edges are ambiguous and remain
+`partial`. A canonical deduplicated flow also persists `alternative_count` so
+the UI can disclose how many static routes it represents.
 
 **Consequences:** Enrichment imports cannot silently degrade a confirmed fact,
 while explicit complete-manifest deletion remains available for stale facts in
@@ -579,8 +581,10 @@ were already extracted by the AST and prevents users from inspecting the
 available architecture in the HTML graph.
 
 **Decision:** Treat `analysis.codeql_timeout_seconds` expiration as a soft
-boundary. Terminate and reap the timed-out CodeQL subprocess, retain AST facts
-and any CodeQL calls decoded before the deadline, run relation and flow
+boundary for the complete CodeQL pass. Propagate the remaining wall-clock
+budget to source generation, database creation, queries and decoders. Terminate
+and reap the complete timed-out CodeQL process group, retain AST facts and any
+CodeQL calls recovered from a completed partial result, run relation and flow
 post-processing, reconcile the resulting facts, and commit the partial
 snapshot. Do not mark the code-flow signature current after a timeout, so the
 next index retries CodeQL. Other CodeQL errors remain fatal and preserve the

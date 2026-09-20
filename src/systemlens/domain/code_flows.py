@@ -42,6 +42,7 @@ class CodeFlow:
     reason: str
     steps: tuple[CodeFlowStep, ...]
     reconciliation: str = "unknown"
+    alternative_count: int = 1
 
 
 @dataclass(frozen=True)

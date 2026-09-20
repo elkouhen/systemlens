@@ -209,6 +209,7 @@ def render_graph_html(
             "status": flow.status,
             "confidence": flow.confidence,
             "reconciliation": flow.reconciliation,
+            "alternative_count": flow.alternative_count,
             "reason": flow.reason,
             "vscode_uri": flow_vscode_uri(flow),
             "call_graph": _networkx_call_graph(flow, endpoints_by_service, edges),

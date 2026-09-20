@@ -31,7 +31,7 @@ from systemlens.domain.module_inventory import (
 from systemlens.domain.runtime import KubernetesWorkload
 from systemlens.infrastructure.paths import db_path
 
-SCHEMA_VERSION = "30"
+SCHEMA_VERSION = "31"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
@@ -360,7 +360,8 @@ class Store:
                 confidence TEXT NOT NULL,
                 reason TEXT NOT NULL,
                 steps TEXT NOT NULL,
-                reconciliation TEXT NOT NULL DEFAULT 'unknown'
+                reconciliation TEXT NOT NULL DEFAULT 'unknown',
+                alternative_count INTEGER NOT NULL DEFAULT 1
             );
             CREATE INDEX IF NOT EXISTS idx_code_flows_module ON code_flows(module);
             CREATE INDEX IF NOT EXISTS idx_code_flows_path ON code_flows(path);
@@ -448,11 +449,15 @@ class Store:
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_facts_namespace ON graph_facts(namespace)")
 
     def _migrate_code_flow_columns(self) -> None:
-        """Schema v29 -> v30: persisted topology reconciliation status."""
+        """Migrate persisted code-flow metadata columns additively."""
         cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(code_flows)")}
         if "reconciliation" not in cols:
             self.conn.execute(
                 "ALTER TABLE code_flows ADD COLUMN reconciliation TEXT NOT NULL DEFAULT 'unknown'"
+            )
+        if "alternative_count" not in cols:
+            self.conn.execute(
+                "ALTER TABLE code_flows ADD COLUMN alternative_count INTEGER NOT NULL DEFAULT 1"
             )
 
     # -- meta --
@@ -690,8 +695,8 @@ class Store:
         self.conn.execute("DELETE FROM code_flows")
         self.conn.executemany(
             """INSERT INTO code_flows
-            (id, module, method, path, start_line, end_line, status, confidence, reason, steps, reconciliation)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, module, method, path, start_line, end_line, status, confidence, reason, steps, reconciliation, alternative_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     flow.id,
@@ -705,6 +710,7 @@ class Store:
                     flow.reason,
                     json.dumps([step.__dict__ for step in flow.steps]),
                     flow.reconciliation,
+                    flow.alternative_count,
                 )
                 for flow in flows
             ],
@@ -726,6 +732,7 @@ class Store:
                 confidence=row["confidence"],
                 reason=row["reason"],
                 reconciliation=row["reconciliation"],
+                alternative_count=row["alternative_count"],
                 steps=tuple(
                     CodeFlowStep(**step) for step in json.loads(row["steps"])
                 ),

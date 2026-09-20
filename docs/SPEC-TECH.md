@@ -188,7 +188,7 @@ persisted AST method facts to form interprocedural flows; `method_call` steps ke
 the call-site line. For CodeQL, reachability is computed from indexed output
 methods backwards through their callers until indexed input methods are reached.
 The transitive query has no business-level hop or global path limit; the
-configured subprocess timeout remains the operational safeguard. The legacy
+configured complete-pass deadline remains the operational safeguard. The legacy
 `analysis.codeql_max_hops` remains for bounded route reconstruction; it does
 not authorize inferred call edges.
 By default, SystemLens creates one
@@ -250,6 +250,10 @@ the code evidence remains valid but at least one endpoint or topology edge is
 missing, unresolved, dynamic, or ambiguous. Same-service input-to-output
 evidence can be complete without an inter-service edge. The status is derived
 during indexing from endpoint identifiers and never from route-label matching.
+If multiple topology edges match the same flow step, reconciliation remains
+`partial` because the evidence is ambiguous. When several static call routes
+collapse to one canonical flow, `alternative_count` records the number of
+routes represented by that flow for diagnostics and UI disclosure.
 
 When explicitly requested through `systemlens index --codeql-progress-html FILE`,
 the indexing service emits one in-memory checkpoint after each completed
@@ -297,7 +301,8 @@ The SQLite store is standard-library-only: it does not load native vector
 extensions or persist/query vector representations. The retained findings
 search compatibility path uses deterministic lexical matching.
 
-Schema version 30 adds the persisted `code_flows.reconciliation` status and
+Schema version 31 adds persisted `code_flows.alternative_count` route metadata
+to the schema 30 `code_flows.reconciliation` status and
 migrates older snapshots with `unknown`. Schema version 29 adds the
 `asyncapi_contracts` table for validated AsyncAPI
 documents owned by a module and rendered from the persisted snapshot. When an
@@ -551,16 +556,18 @@ method/confidence state
 at most once per input endpoint, under the configured depth/global transition
 bounds. Cyclic witness paths are retained without expansion. Medium-confidence
 witnesses exclude possible dispatch. One predecessor tree is
-cached per input method/confidence, costing O(V+E) time and O(V) working memory,
-with pairs grouped so the previous tree can be released,
-plus route reconstruction proportional to emitted steps, instead of a BFS per
-input/output pair. HTML checkpoints filter cached flows instead of rebuilding
-and retraversing the call graph for every module. No database path is
-persisted. Live progress uses a wall-clock watchdog covering pipe reads; POSIX
-timeouts terminate the process group, and subprocesses are reaped on errors.
+cached per input method/confidence in a bounded in-memory cache, costing
+O(V+E) per retained tree plus route reconstruction proportional to emitted
+steps, instead of a BFS per input/output pair. HTML checkpoints filter cached
+flows instead of rebuilding and retraversing the call graph for every module.
+No database path is persisted. Live progress uses a wall-clock watchdog
+covering pipe reads; POSIX timeouts terminate the complete process group, and
+subprocesses are reaped on errors. The configured deadline covers the complete
+CodeQL pass, not each command independently.
 An absent selected engine is reported and keeps AST-only results. A CodeQL
-timeout is handled as a partial pass: the index keeps AST facts and calls
-already decoded, runs all remaining materializers and commits the partial
+timeout is handled as a partial pass: the index keeps AST facts and any calls
+recovered from a completed partial result, runs all remaining materializers and
+commits the partial
 snapshot; the code-flow signature stays invalid so a later index retries
 CodeQL. Non-timeout failures from an available executable remain fatal and
 leave the previous successful snapshot intact.
