@@ -242,11 +242,12 @@ export keeps unmatched concrete endpoints and
 dynamic topic expressions as partial, explicitly unresolved topic evidence;
 these evidence links never imply a producer/consumer pairing. Missing or
 different producer/consumer types are displayed as warnings on the topic,
-relation, or integration port. The `flows-diagnostic` analysis may still
-report a possible composition gap for a concrete topic with a downstream
-consumer when payload types are absent; this diagnostic hint does not create
-an asserted architecture edge or relax the export's conservative graph
-contract.
+relation, or integration port.
+
+The `flows-diagnostic` analysis may still report a possible composition gap
+for a concrete topic with a downstream consumer when payload types are absent.
+This diagnostic hint does not create an asserted architecture edge or relax
+the export's conservative graph contract.
 
 A REST call forms an internal architecture relation only when its target
 service is identified by an exact normalized explicit alias, such as an HTTP

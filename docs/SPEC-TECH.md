@@ -274,8 +274,10 @@ If multiple topology edges match the same flow step, reconciliation remains
 `partial` because the evidence is ambiguous. When several static call routes
 collapse to one canonical flow, `alternative_count` records the number of
 distinct evidence-bearing routes represented by that flow for diagnostics and
-UI disclosure. Equivalent AST and CodeQL observations of the same ordered
-route count once; genuinely different intermediate routes remain distinct.
+UI disclosure.
+
+Equivalent AST and CodeQL observations of the same ordered route count once;
+genuinely different intermediate routes remain distinct.
 
 When explicitly requested through `systemlens index --codeql-progress-html FILE`,
 the indexing service emits one in-memory checkpoint after each completed

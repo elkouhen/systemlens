@@ -56,6 +56,9 @@ test together.
    `../systemlens-skill/` in the same pass.
 8. Keep changes consistent with the existing codebase and ensure the code is
    correct, including its behavior, contracts, and edge cases.
+9. Keep documentation paragraphs to no more than five short lines where
+   practical. Split longer explanations into focused paragraphs or lists so
+   they remain readable without changing the technical meaning.
 
 ## Non-negotiable engineering invariants
 
