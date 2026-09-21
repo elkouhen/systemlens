@@ -190,8 +190,10 @@ def test_discover_modules_excludes_maven_and_gradle_modules_in_test_directories(
     _write_pom(production / "pom.xml", "orders-api", "1.0.0")
     (gradle_test / "build.gradle").write_text("archivesBaseName = 'contract-api'\n")
 
+    # Maven modules under an explicit test directory are excluded even when
+    # their artifactId itself does not contain "test".
     assert [module.name for module in discover_modules(tmp_path)] == [
-        "contract-api", "orders-api", "orders-api"
+        "contract-api", "orders-api"
     ]
 
 

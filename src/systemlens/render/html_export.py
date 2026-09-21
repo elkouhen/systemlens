@@ -213,13 +213,15 @@ def _distinct_export_flows(
     ] = {}
     for flow in flows:
         call_graph = _networkx_call_graph(flow, endpoints_by_service, edges)
-        signature = (
-            tuple(call_graph["nodes"]),
+        graph_nodes = cast(list[str], call_graph["nodes"])
+        graph_edges = cast(list[dict[str, str]], call_graph["edges"])
+        signature: tuple[tuple[str, ...], tuple[tuple[str, str, str, str], ...]] = (
+            tuple(graph_nodes),
             tuple(
                 (
                     edge["source"], edge["target"], edge["kind"], edge["label"]
                 )
-                for edge in call_graph["edges"]
+                for edge in graph_edges
             ),
         )
         grouped.setdefault(signature, []).append((flow, call_graph))

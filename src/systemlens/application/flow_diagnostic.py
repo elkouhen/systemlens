@@ -104,6 +104,37 @@ def diagnose_flows(inventory: ArchitectureInventory) -> dict[str, object]:
         if edge.to_endpoint is not None:
             relation_targets[edge.from_endpoint.id].add(edge.to_service)
 
+    # Keep the diagnostic more informative than the asserted topology.  A
+    # concrete Kafka topic with a downstream consumer is enough to explain a
+    # possible composition gap, but not enough to create a topology edge: the
+    # graph still requires compatible, known payload types.
+    consumers_by_topic: dict[str, list[MessageEndpoint]] = defaultdict(list)
+    for endpoint in inventory.endpoints:
+        if (
+            endpoint.system == "kafka"
+            and endpoint.role == "consume"
+            and not endpoint.topic_dynamic
+        ):
+            consumers_by_topic[endpoint.topic].append(endpoint)
+    for endpoint in inventory.endpoints:
+        if (
+            endpoint.system != "kafka"
+            or endpoint.role != "produce"
+            or endpoint.topic_dynamic
+            or endpoint.module is None
+        ):
+            continue
+        for consumer in consumers_by_topic.get(endpoint.topic, ()):
+            if consumer.module is None or consumer.module == endpoint.module:
+                continue
+            if (
+                endpoint.message_type is not None
+                and consumer.message_type is not None
+                and endpoint.message_type != consumer.message_type
+            ):
+                continue
+            relation_targets[endpoint.id].add(consumer.module)
+
     entries = [
         endpoint for endpoint in inventory.endpoints
         if (endpoint.system, endpoint.role) in _ENTRY_ROLES

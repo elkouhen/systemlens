@@ -287,7 +287,23 @@
       const nodes = graph.node_order
         .map(service => nodeIdForCodeFlowResource(service, "microservice"))
         .filter(Boolean);
-      return nodes.length >= 2 ? { nodes, edges: [] } : null;
+      if (nodes.length < 2) return null;
+      const endpointIds = new Set((flow.steps || [])
+        .map(step => step.endpoint_id)
+        .filter(Boolean));
+      const localLinks = [];
+      internalOutputsByInput.forEach((outputs, inputEndpointId) => {
+        if (!endpointIds.has(inputEndpointId)) return;
+        outputs.forEach(outputEndpointId => {
+          if (endpointIds.has(outputEndpointId)) {
+            localLinks.push({
+              input_endpoint_id: inputEndpointId,
+              output_endpoint_id: outputEndpointId,
+            });
+          }
+        });
+      });
+      return { nodes, edges: [], localLinks };
     }
 
     function openCodeFlowInList(flow) {

@@ -36,6 +36,21 @@ preview the commands. The script runs `uv sync --group dev` to create the
 project environment. CodeQL is the default call-graph engine. SystemLens
 remains usable with AST-only flows when CodeQL is not selected or installed.
 
+For the common development checks, use the repository `Makefile`:
+
+```bash
+make setup       # install development dependencies
+make lint        # run Ruff
+make test        # run the default test suite
+make typecheck   # run mypy
+make check       # run lint, typecheck, and tests
+make help        # list all available tasks
+```
+
+Use `make test-slow` for tests marked as slow, `make browser-test` for the
+browser export test, and `make companion-contracts` to validate the companion
+repositories when they are available.
+
 ## Quick start
 
 From the root of the Java/Spring repository:

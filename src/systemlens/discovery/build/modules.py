@@ -167,9 +167,13 @@ def _is_excluded_module(name: str, module_dir: Path, root: Path) -> bool:
 def _is_excluded_maven_module(name: str, module_dir: Path, root: Path) -> bool:
     """Exclude Maven modules whose identity is test-only or templated."""
     identities = (name.casefold(), module_dir.name.casefold())
-    return _is_excluded_module(name, module_dir, root) or any(
+    # The workspace root is also a valid Maven aggregator. Its directory name
+    # may be an implementation detail such as ``pytest-123`` and must not
+    # make the root POM disappear from discovery.
+    module_name_is_test = module_dir.resolve() != root.resolve() and any(
         "test" in identity for identity in identities
     )
+    return _is_excluded_module(name, module_dir, root) or module_name_is_test
 
 
 def discover_excluded_module_paths(root: Path) -> tuple[Path, ...]:

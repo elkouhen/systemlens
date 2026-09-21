@@ -35,6 +35,27 @@ def _deduplicate_code_flows(flows: list[CodeFlow]) -> list[CodeFlow]:
     higher-confidence, shorter route and retain deterministic ordering.
     """
     confidence_rank = {"high": 0, "medium": 1, "low": 2}
+
+    def route_signature(flow: CodeFlow) -> tuple[tuple[object, ...], ...]:
+        """Return the evidence-bearing shape of one candidate route.
+
+        AST and CodeQL can emit the same route independently.  They must be
+        collapsed into one represented alternative, while genuinely different
+        intermediate routes must remain countable.
+        """
+        return tuple(
+            (
+                step.kind,
+                step.name,
+                step.path,
+                step.start_line,
+                step.end_line,
+                step.endpoint_id,
+                step.operation,
+            )
+            for step in flow.steps
+        )
+
     grouped: dict[tuple[str, str, str], list[CodeFlow]] = {}
     for flow in flows:
         endpoint_steps = [step for step in flow.steps if step.endpoint_id]
@@ -61,7 +82,7 @@ def _deduplicate_code_flows(flows: list[CodeFlow]) -> list[CodeFlow]:
         )
         selected.append(replace(
             representative,
-            alternative_count=sum(flow.alternative_count for flow in parallel),
+            alternative_count=len({route_signature(flow) for flow in parallel}),
         ))
     return sorted(
         selected,
@@ -284,7 +305,7 @@ def materialize_code_flows(
                     if producer.qualified_name
                     else method_name
                 )
-                ordered_effects = sorted(
+                scheduled_effects: list[tuple[int, str, MessageEndpoint]] = sorted(
                     (
                         (endpoint.start_line, endpoint.id, endpoint)
                         for endpoint in endpoint_effects
@@ -292,7 +313,7 @@ def materialize_code_flows(
                     key=lambda item: (item[0], item[1]),
                 )
                 steps = [scheduled_trigger]
-                for order, (_line, _key, effect) in enumerate(ordered_effects, start=2):
+                for order, (_line, _key, effect) in enumerate(scheduled_effects, start=2):
                     steps.append(_endpoint_step(effect, order))
                 flows.append(CodeFlow(
                     id=compute_code_flow_id(
