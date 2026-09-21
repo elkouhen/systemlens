@@ -146,12 +146,11 @@ def _matching_fanout_consumers(
     producer: MessageEndpoint,
     endpoints: list[MessageEndpoint],
 ) -> list[MessageEndpoint]:
-    """Return consumers proven compatible with one Kafka publication.
+    """Return consumers compatible with one concrete Kafka publication.
 
-    A publication without a message type is not joined to several consumers
-    by topic alone: that would turn an ambiguous dynamic fact into a guessed
-    branch. A typed publication may fan out to every typed consumer of the
-    same topic and message type.
+    A shared concrete topic establishes the integration. Missing payload types
+    lower the confidence of the resulting flow but do not block it. Two known
+    and different types remain incompatible because the evidence conflicts.
     """
     if producer.system != "kafka" or producer.role != "produce" or producer.topic_dynamic:
         return []
@@ -162,8 +161,9 @@ def _matching_fanout_consumers(
         and endpoint.topic == producer.topic
         and endpoint.id != producer.id
         and (
-            producer.message_type is not None
-            and endpoint.message_type == producer.message_type
+            producer.message_type is None
+            or endpoint.message_type is None
+            or endpoint.message_type == producer.message_type
         )
     ]
     return sorted(candidates, key=lambda endpoint: (endpoint.module or "", endpoint.id))
@@ -877,7 +877,7 @@ def materialize_kafka_flow_continuations(
         if endpoint.system == "kafka" and not endpoint.topic_dynamic
     }
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
-    consumers: dict[tuple[str, str], list[CodeFlow]] = defaultdict(list)
+    consumers: dict[str, list[CodeFlow]] = defaultdict(list)
     for flow in flows:
         entry = (
             endpoint_by_id.get(flow.steps[0].endpoint_id)
@@ -889,9 +889,8 @@ def materialize_kafka_flow_continuations(
             and flow.steps[0].kind == "message_entry"
             and flow.steps[0].endpoint_id in concrete_kafka_endpoints
             and entry is not None
-            and entry.message_type is not None
         ):
-            consumers[(flow.steps[0].name, entry.message_type)].append(flow)
+            consumers[flow.steps[0].name].append(flow)
     continuations: list[CodeFlow] = []
     # ``seen_consumers`` is intentionally carried independently from the
     # rendered steps: a cycle can revisit a topic without ever revisiting the
@@ -913,10 +912,24 @@ def materialize_kafka_flow_continuations(
             if any(step.kind in {"http_call", "message_publish", "data_read", "data_write"}
                    for step in flow.steps[publish_index + 1:]):
                 continue
-            publish_endpoint = endpoint_by_id.get(publish.endpoint_id)
-            if publish_endpoint is None or publish_endpoint.message_type is None:
+            if publish.name is None:
                 continue
-            for consumer in consumers.get((publish.name, publish_endpoint.message_type), []):
+            publish_endpoint = endpoint_by_id.get(publish.endpoint_id)
+            if publish_endpoint is None:
+                continue
+            for consumer in consumers.get(publish.name, []):
+                consumer_endpoint_id = consumer.steps[0].endpoint_id
+                if consumer_endpoint_id is None:
+                    continue
+                consumer_endpoint = endpoint_by_id.get(consumer_endpoint_id)
+                if consumer_endpoint is None:
+                    continue
+                if (
+                    publish_endpoint.message_type is not None
+                    and consumer_endpoint.message_type is not None
+                    and publish_endpoint.message_type != consumer_endpoint.message_type
+                ):
+                    continue
                 if consumer.id == flow.id or consumer.id in seen_consumers:
                     cycle_steps = [*flow.steps[:publish_index + 1], consumer.steps[0]]
                     steps = tuple(

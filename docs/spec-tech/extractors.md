@@ -32,13 +32,13 @@ reported as unresolved rather than creating an internal edge.
 `infer_kafka_endpoints` recognises Spring Kafka listeners and send sites,
 KafkaTemplate/ProducerRecord usage and Spring Cloud Stream StreamBridge calls.
 It preserves dynamic topic expressions and derives a payload type only from an
-explicit listener parameter or client generic signature. The graph projection
-requires matching known message types for a service arc: concrete Kafka
-endpoints are paired only when both topic and Java message type are identical.
-An unmatched, unknown-type, or type-mismatched endpoint is exported as partial
-evidence, and a dynamic topic receives an endpoint-specific unresolved topic
-node; none of these cases creates a producer/consumer pairing. The HTML payload
-includes a warning
+explicit listener parameter or client generic signature. A concrete shared
+topic creates a producer/consumer service arc even when one or both Java
+message types are unknown. The arc has medium confidence when type evidence is
+missing. Two known and different types remain incompatible and do not create an
+arc. An unmatched endpoint is exported as partial evidence, and a dynamic
+topic receives an endpoint-specific unresolved topic node; dynamic topics do
+not create a producer/consumer pairing. The HTML payload includes a warning
 status (`unknown`, `partial`, or `mismatch`) so consumers can distinguish
 evidence from a complete typed match. For topic-based
 `KafkaTemplate.send` overloads, the final argument is the payload: preceding
@@ -123,4 +123,3 @@ remediation review payload. Each endpoint-backed issue has a stable code,
 severity, service, framework, topic/API, extracted message type and its source
 path, line range and snippet. The command does not infer or apply a heuristic;
 its evidence is intended for a human or an AI to assess a conservative rule.
-

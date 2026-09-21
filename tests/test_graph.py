@@ -216,7 +216,7 @@ def test_build_graph_creates_kafka_edges_on_matching_topic_only() -> None:
     assert edges[0].to_endpoint.path == "app/consumer.py"
 
 
-def test_build_graph_does_not_assert_kafka_arc_without_matching_payload_type() -> None:
+def test_build_graph_does_not_assert_kafka_arc_with_conflicting_payload_types() -> None:
     producer = make_endpoint(
         "produce", "orders.created", "app/producer.py", system="kafka", message_type="OrderCreated"
     )
@@ -228,7 +228,10 @@ def test_build_graph_does_not_assert_kafka_arc_without_matching_payload_type() -
     )
 
     assert build_graph({"producer-svc": [producer], "consumer-svc": [different]}) == []
-    assert build_graph({"producer-svc": [producer], "consumer-svc": [unknown]}) == []
+    edges = build_graph({"producer-svc": [producer], "consumer-svc": [unknown]})
+    assert len(edges) == 1
+    assert edges[0].kind == "kafka"
+    assert edges[0].to_endpoint is unknown
 
 
 def test_build_graph_uses_manifest_kafka_endpoints_as_service_authority() -> None:

@@ -143,13 +143,13 @@ layout remains a rendering concern handled by the browser graph stack. Each expo
 also carries a NetworkX-derived service subgraph and deterministic component
 order; the Flux view uses that snapshot instead of reconstructing the call
 sequence from display labels.
-Typed Kafka publications are expanded as fan-out branches only within an
-existing input-triggered flow. A publication without an input trigger does not
-become a flow root. The exception is a publisher explicitly annotated with a
-cron expression: it creates one `CodeFlow` per matching consumer whose first
-step is `cron_entry`, followed by the publication and consumer entry. A
-missing or conflicting message type prevents this fan-out join rather than
-guessing a branch.
+Kafka publications are expanded as fan-out branches for a concrete topic within
+an existing input-triggered flow. A publication without an input trigger does
+not become a flow root. The exception is a publisher explicitly annotated with
+a cron expression: it creates one `CodeFlow` per matching consumer whose first
+step is `cron_entry`, followed by the publication and consumer entry. Known
+message types must match when both endpoints provide one. Missing type evidence
+does not prevent the join, while conflicting known types prevent it.
 The exported call-graph projection is always a rooted arborescence: its root is
 the first persisted endpoint, or the unique proven producer immediately before
 a Kafka entry. For Kafka fan-in, no producer is selected arbitrarily. A
@@ -194,7 +194,8 @@ contract: they are an opt-in observability aid, may omit later call-graph
 facts, and are never read by normal export, query, MCP, or web workflows.
 
 Kafka flow continuations join only concrete, statically resolved Kafka endpoint
-identifiers. A continuation is not materialized when the producer has a later
+identifiers. Known message types must match when both endpoints provide one;
+missing type evidence remains compatible. A continuation is not materialized when the producer has a later
 external effect, because a linear composed flow would otherwise omit that
 evidence. A composed flow can follow up to four Kafka producer-to-consumer
 hops, using only original persisted message-entry flows as consumers and never
@@ -304,4 +305,3 @@ AsyncAPI documents are materialized from module source trees after build-module
 discovery. Build-output paths (`target/` and `build/`) are excluded at inventory,
 discovery, and scanner boundaries, so generated artifacts never enter the
 snapshot even when a scanner is invoked outside the normal index pipeline.
-

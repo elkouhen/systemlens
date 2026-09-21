@@ -252,7 +252,7 @@ def test_kafka_continuations_require_concrete_topics_and_preserve_producer_effec
     ) == [consumer, producer_with_later_effect]
 
 
-def test_kafka_continuations_require_matching_message_types() -> None:
+def test_kafka_continuations_allow_unknown_message_types_but_reject_conflicts() -> None:
     producer = CodeFlow(
         id="producer", module="orders", method="OrderController.place", path="OrderController.java",
         start_line=1, end_line=3, status="potential", confidence="medium", reason="test",
@@ -266,13 +266,27 @@ def test_kafka_continuations_require_matching_message_types() -> None:
         start_line=1, end_line=2, status="potential", confidence="medium", reason="test",
         steps=(CodeFlowStep(1, "message_entry", "orders.created", "Consumer.java", 1, 1, "consume"),),
     )
-    endpoints = [
+    conflicting_endpoints = [
         _endpoint("publish", "produce", "kafka", "orders.created", "Producer.java", 3, "OrderCreated"),
         _endpoint("consume", "consume", "kafka", "orders.created", "Consumer.java", 1, "OrderUpdated"),
     ]
 
-    result = materialize_kafka_flow_continuations([producer, consumer], endpoints)
+    result = materialize_kafka_flow_continuations([producer, consumer], conflicting_endpoints)
     assert {flow.id for flow in result} == {"producer", "consumer"}
+
+    unknown_consumer = replace(
+        _endpoint("consume", "consume", "kafka", "orders.created", "Consumer.java", 1),
+        message_type=None,
+    )
+    result = materialize_kafka_flow_continuations(
+        [producer, consumer],
+        [conflicting_endpoints[0], unknown_consumer],
+    )
+    assert any(
+        flow.id not in {"producer", "consumer"}
+        and flow.steps[-1].endpoint_id == "consume"
+        for flow in result
+    )
 
 
 def test_code_flow_deduplication_keeps_shortest_strongest_route() -> None:

@@ -62,16 +62,17 @@ the same source-evidenced call flow from being listed twice when AST and CodeQL
 describe it.
 
 For Kafka, SystemLens can continue a potential flow from a concrete,
-statically resolved producer topic and known message type to a persisted
-consumer entry with the same topic and message type. A publication remains an
-effect of its input-triggered flow and does not create an independent flow
-root. Only a publisher explicitly triggered by a cron expression creates a
-source flow, with the Cron event as its first step. The persisted flow is one
-representative producer-to-consumer path, while its exported call graph
-retains every proven consumer branch. It does not join dynamic topics and does
-not compose a producer whose later external effect would be hidden by a linear
-rendering. Continuations are bounded to four asynchronous hops and never
-revisit the same consumer flow.
+statically resolved producer topic to a persisted consumer entry with the same
+topic. Known message types must match when both sides provide one; an unknown
+type is compatible with the other side and lowers the flow confidence. A
+publication remains an effect of its input-triggered flow and does not create
+an independent flow root. Only a publisher explicitly triggered by a cron
+expression creates a source flow, with the Cron event as its first step. The
+persisted flow is one representative producer-to-consumer path, while its
+exported call graph retains every proven consumer branch. It does not join
+dynamic topics or compose a producer whose later external effect would be
+hidden by a linear rendering. Continuations are bounded to four asynchronous
+hops and never revisit the same consumer flow.
 When the publishing method is annotated with `@Scheduled(cron = "...")`, the
 flow starts with an explicit `Déclencheur Cron` step, followed by the Kafka
 publication and its proven consumers. The cron expression is retained as
@@ -79,12 +80,13 @@ source evidence; methods scheduled by a fixed delay/rate without a cron
 expression remain outside this trigger classification.
 The architecture graph remains conservative when message payload typing is
 missing or contradictory: a producer/consumer service arc requires the same
-concrete topic and the same known Java message type on both endpoints. The
-export keeps unmatched concrete endpoints and
-dynamic topic expressions as partial, explicitly unresolved topic evidence;
-these evidence links never imply a producer/consumer pairing. Missing or
-different producer/consumer types are displayed as warnings on the topic,
-relation, or integration port.
+concrete topic, while two known and different Java message types prevent the
+arc. Missing type evidence does not prevent the arc and is shown as a partial
+or unknown type status with medium confidence. The export keeps unmatched
+concrete endpoints and dynamic topic expressions as partial, explicitly
+unresolved topic evidence; dynamic topics never imply a producer/consumer
+pairing. Different known producer and consumer types are displayed as warnings
+on the topic, relation, or integration port.
 
 The `flows-diagnostic` analysis may still report a possible composition gap
 for a concrete topic with a downstream consumer when payload types are absent.
@@ -99,4 +101,3 @@ method and route only refines a resource within that already identified
 service; it never identifies a service by itself. Calls without a unique target
 remain indexed as unresolved evidence and are reported by coverage and indexing
 issues rather than being linked to a coincidentally similar route.
-

@@ -403,9 +403,9 @@ def build_graph(
         seen.add(key)
         edges.append(GraphEdge("rest", call_service, service, call, None))
 
-    # A dynamic topic or an unknown payload type is evidence of an integration,
-    # not proof of a producer/consumer pairing. An arc is asserted only when
-    # both the concrete topic and the message type match exactly.
+    # A concrete shared topic establishes a producer/consumer relation. Missing
+    # payload types lower confidence but do not prevent the relation. Two known
+    # and different types remain incompatible because the evidence conflicts.
     for produce_service, produce in produces:
         if produce.topic_dynamic:
             continue
@@ -416,9 +416,11 @@ def build_graph(
                 continue
             if (
                 produce.topic == consume.topic
-                and produce.message_type is not None
-                and consume.message_type is not None
-                and produce.message_type == consume.message_type
+                and (
+                    produce.message_type is None
+                    or consume.message_type is None
+                    or produce.message_type == consume.message_type
+                )
             ):
                 key = ("kafka", produce_service, consume_service, produce.id, consume.id)
                 if key in seen:

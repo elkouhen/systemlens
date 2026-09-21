@@ -175,6 +175,15 @@ def build_architecture_relations(
         service_aliases=service_aliases,
     ):
         relation_name = "calls_service" if edge.kind == "rest" else "publishes_to"
+        confidence = "high"
+        if edge.from_endpoint.topic_dynamic:
+            confidence = "medium"
+        elif edge.kind == "kafka" and (
+            edge.to_endpoint is None
+            or edge.from_endpoint.message_type is None
+            or edge.to_endpoint.message_type is None
+        ):
+            confidence = "medium"
         add(_relation(
             "microservice",
             edge.from_service,
@@ -182,7 +191,7 @@ def build_architecture_relations(
             "microservice",
             edge.to_service,
             origin=edge.from_endpoint.source,
-            confidence="medium" if edge.from_endpoint.topic_dynamic else "high",
+            confidence=confidence,
             module=edge.from_service,
             path=edge.from_endpoint.path,
             start_line=edge.from_endpoint.start_line,

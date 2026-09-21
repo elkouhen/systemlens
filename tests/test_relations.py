@@ -114,6 +114,26 @@ def test_relations_materialize_the_resolved_interservice_topology() -> None:
     assert catalog.relations == tuple(relations)
 
 
+def test_relations_materialize_kafka_topology_when_consumer_type_is_unknown() -> None:
+    producer = replace(
+        _endpoint("produce", "kafka", "orders.created", message_type="OrderCreated"),
+        module="orders",
+    )
+    consumer = replace(
+        _endpoint("consume", "kafka", "orders.created"),
+        module="inventory",
+        qualified_name="com.example.OrderConsumer",
+    )
+
+    relations = build_architecture_relations([], [producer, consumer], [])
+
+    topology = [relation for relation in relations if relation.relation == "publishes_to"]
+    assert len(topology) == 1
+    assert topology[0].source_name == "orders"
+    assert topology[0].target_name == "inventory"
+    assert topology[0].confidence == "medium"
+
+
 def test_catalog_topology_uses_persisted_relations_not_a_new_endpoint_match() -> None:
     call = _endpoint("call", "rest", "GET /payments", snippet="http://payments")
     served = replace(

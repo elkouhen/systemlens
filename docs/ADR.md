@@ -14,7 +14,7 @@ functional or technical contract.
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
 | Indexed contracts and implementation boundaries | [ADR-25](#adr-25-separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26-organize-implementation-modules-by-architectural-ownership) |
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence) |
-| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views) |
+| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 
 ## ADR-1: Local static architecture analysis
@@ -595,3 +595,27 @@ interprocedural coverage, and the CLI explicitly reports that the graph is
 partial. HTML export remains available and deterministic from the committed
 snapshot. Repeated indexes may retry CodeQL until it completes successfully;
 the timeout does not weaken extraction confidence or invent missing calls.
+
+## ADR-35: Use shared Kafka topics before payload type resolution
+
+**Status:** Accepted.
+
+**Context:** A Kafka producer and consumer can share a concrete topic even when
+the indexed source does not expose a usable Java payload type. Requiring both
+types to match hides an evidenced service connection and removes the services
+from the corresponding call graph.
+
+**Decision:** Create a producer-to-consumer service relation when two distinct
+microservices use the same concrete Kafka topic. Missing payload types remain
+compatible and lower the relation and flow confidence to medium. Two known and
+different payload types remain incompatible, because the indexed evidence
+indicates a possible contract conflict rather than a proven exchange.
+Apply the same compatibility rule to persisted Kafka flow continuations.
+Dynamic topics remain unresolved and never create a pairing.
+
+**Consequences:** Call graphs include more topic-backed service connections
+without inventing a payload type. HTML and catalog views expose the type status
+as unknown or partial, while contract mismatch warnings remain visible. Topic
+fan-out can include consumers with missing type evidence, so analysts must use
+the confidence and type status before treating the relation as a confirmed
+payload contract.
