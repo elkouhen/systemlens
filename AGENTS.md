@@ -1,4 +1,4 @@
-# AGENTS.md — How to navigate and maintain this project's documentation
+# AGENTS.md: How to navigate and maintain this project's documentation
 
 This file is for any agent working on `systemlens`. It points to the right
 documents and summarizes the documentation hygiene expected in this repository.
@@ -59,6 +59,8 @@ test together.
 9. Keep documentation paragraphs to no more than five short lines where
    practical. Split longer explanations into focused paragraphs or lists so
    they remain readable without changing the technical meaning.
+10. Load the `technical-writing` skill before writing or restructuring
+    technical prose, and run its review checklist before delivery.
 
 ## Non-negotiable engineering invariants
 

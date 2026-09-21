@@ -234,6 +234,7 @@ RabbitMQ, SQS, or other middleware facts.
 
 | Read this when you need… | Document |
 |---|---|
+| A map of documentation ownership and reading paths | [Documentation index](docs/README.md) |
 | An interactive overview and examples | [Documentation site](docs/index.html) |
 | CLI, MCP, and HTML-export behaviour | [Functional specification](docs/SPEC-FONC.md) |
 | Extraction, storage, and layout design | [Technical specification](docs/SPEC-TECH.md) |
