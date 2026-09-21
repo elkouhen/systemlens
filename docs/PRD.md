@@ -1,10 +1,10 @@
-# Product requirements — systemlens
+# Product requirements: SystemLens
 
-## At a glance
+## Product summary
 
-SystemLens gives people who need to analyse a Java/Spring codebase a
-trustworthy, local architecture inventory. Its defining rule is simple:
-preserve evidence and uncertainty; do not guess dependencies.
+SystemLens provides a local architecture inventory for Java and Spring
+codebases. The product preserves evidence and uncertainty instead of guessing
+dependencies.
 
 | Audience | Primary outcome |
 |---|---|
@@ -12,14 +12,13 @@ preserve evidence and uncertainty; do not guess dependencies.
 | Developer | A navigable inventory of services and integrations |
 | Architect | A reviewable topology with visible uncertainty |
 
-## Purpose
+## Product purpose
 
-`systemlens` gives analysts, developers, and architects trustworthy, local
-architecture context before they change or review a Java/Spring system. It
-derives source facts directly from local ASTs, without starting an external rule
-engine or sending source code to a service. When CodeQL is installed locally,
-it also creates a temporary source-only call graph to establish bounded
-inter-method flows.
+SystemLens gives analysts, developers, and architects local architecture
+context before they change or review a Java or Spring system. It derives
+source facts from local ASTs without starting an external rule engine or
+sending source code to a service. When CodeQL is installed locally, it also
+creates a temporary source-only call graph for bounded inter-method flows.
 
 The product answers questions such as:
 
@@ -44,18 +43,19 @@ evidence.
 | Architect | Review topology, uncertainty and static architecture risks across services | `analyze`, graph export |
 
 The primary workflow is `systemlens init`, `systemlens doctor`, and
-`systemlens index`, then the analyst uses the catalog or graph for the question
-at hand. When deterministic extraction leaves a bounded gap, the optional
-companion skill can direct an agent to write a reviewable JSON fact manifest,
-which the analyst imports into its own namespace before exporting or querying
-the merged model. `coverage`, `indexing-issues`, and `audit` are optional
-diagnostics: use them respectively when inventory completeness is in doubt,
-extraction needs investigation, or a static topology-risk review is requested.
-Reindex after an edit. Developers can follow the same workflow through
-`microservices`, `topics`, `apis`, `projects`, `analyze`, and HTML export.
-Indexing is incremental; `--full` refreshes every eligible source file.
+`systemlens index`. The analyst then uses the catalog or graph for the
+question at hand. The optional companion skill can produce a reviewable JSON
+fact manifest when deterministic extraction leaves a bounded gap. The analyst
+can import that manifest into its own namespace before exporting or querying
+the merged model.
 
-## Scope and non-goals
+The `coverage`, `indexing-issues`, and `audit` commands provide optional
+diagnostics for inventory completeness, extraction issues, and static topology
+risk. Reindex after an edit. Indexing is incremental, while `--full` refreshes
+every eligible source file. The complete command and MCP contracts belong to
+the [functional specification](SPEC-FONC.md).
+
+## Scope boundaries
 
 ### Delivered
 
@@ -123,7 +123,8 @@ Indexing is incremental; `--full` refreshes every eligible source file.
   latency and error hotspots, determine the completeness of the observation,
   and navigate only to explicitly linked static evidence.
 
-For observable command and MCP contracts, see
-[SPEC-FONC.md](./SPEC-FONC.md). For implementation details, see
-[SPEC-TECH.md](./SPEC-TECH.md). Historical decisions, including the retired
-external-analyzer design, remain in [ADR.md](./ADR.md).
+For observable command and MCP contracts, see the
+[functional specification](./SPEC-FONC.md). For implementation details, see
+the [technical specification](./SPEC-TECH.md). Historical decisions,
+including the retired external-analyzer design, remain in
+[ADR.md](./ADR.md).
