@@ -29,6 +29,11 @@ substring matching are not used. Route compatibility is evaluated only within
 that service. A targetless or ambiguous call remains an endpoint fact and is
 reported as unresolved rather than creating an internal edge.
 
+When source generation is requested for a Maven project, SystemLens invokes
+`mvn generate-sources` in batch, non-interactive and offline mode. It does not
+compile the project or run tests. If the local Maven cache lacks a required
+plugin or dependency, source generation fails instead of accessing a registry.
+
 `infer_kafka_endpoints` recognises Spring Kafka listeners and send sites,
 KafkaTemplate/ProducerRecord usage and Spring Cloud Stream StreamBridge calls.
 It preserves dynamic topic expressions and derives a payload type only from an

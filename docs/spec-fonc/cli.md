@@ -52,6 +52,11 @@ scanned=<N> skipped=<N> +integrations=<N> -integrations=<N>
 
 The first AST-only run removes stale results from the retired analyzer.
 
+When `--generate-sources` is enabled for a Maven project, SystemLens runs only
+`mvn generate-sources` in a temporary copy, with batch, non-interactive and
+offline options. Maven must find its plugins and dependencies in the local
+cache. The command never compiles the project or runs tests.
+
 Automatic method-call analysis creates one source-only Java database for the
 whole repository with `codeql`. Progress
 reports the completed project over the total and the calls extracted from it.

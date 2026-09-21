@@ -354,7 +354,7 @@ def _generate_sources(
 ) -> None:
     """Run build-tool source generation only, never compilation or tests."""
     if (workspace / "pom.xml").is_file():
-        command = ["mvn", "-B", "-ntp", "generate-sources"]
+        command = ["mvn", "-B", "-ntp", "-o", "generate-sources"]
     elif (workspace / "gradlew").is_file():
         command = ["./gradlew", "--no-daemon", "generateSources"]
     else:

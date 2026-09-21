@@ -126,7 +126,7 @@ def test_generate_sources_runs_only_the_maven_generation_phase(tmp_path: Path, m
     monkeypatch.setattr(codeql, "_run_with_progress", run)
     codeql._generate_sources(tmp_path, timeout=42, progress=None)
 
-    assert observed == [(["mvn", "-B", "-ntp", "generate-sources"], tmp_path)]
+    assert observed == [(["mvn", "-B", "-ntp", "-o", "generate-sources"], tmp_path)]
 
 
 def test_automatic_codeql_database_is_source_only_and_temporary(

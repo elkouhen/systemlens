@@ -16,6 +16,7 @@ functional or technical contract.
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence) |
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
+| Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
 
 ## ADR-1: Local static architecture analysis
 
@@ -619,3 +620,22 @@ as unknown or partial, while contract mismatch warnings remain visible. Topic
 fan-out can include consumers with missing type evidence, so analysts must use
 the confidence and type status before treating the relation as a confirmed
 payload contract.
+
+## ADR-36: Run Maven source generation offline
+
+**Status:** Accepted.
+
+**Context:** CodeQL can request Maven source generation before building its
+source-only database. Allowing Maven to resolve plugins or dependencies from a
+registry violates the local and reproducible indexing boundary.
+
+**Decision:** Invoke Maven source generation with batch, non-interactive and
+offline options. Maven may use only the local repository cache. A missing
+plugin or dependency is an explicit source-generation failure; SystemLens does
+not retry by contacting a remote registry. Gradle source generation keeps its
+existing local wrapper invocation.
+
+**Consequences:** CodeQL indexing remains network-independent when source
+generation is enabled. A cold local Maven cache can prevent generated sources
+from being produced, so the index reports the failure instead of silently
+falling back to a network access or an incomplete generated-source result.
