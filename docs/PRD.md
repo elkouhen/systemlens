@@ -18,7 +18,7 @@ SystemLens gives analysts, developers, and architects local architecture
 context before they change or review a Java or Spring system. It derives
 source facts from local ASTs without starting an external rule engine or
 sending source code to a service. When CodeQL is installed locally, it also
-creates a temporary source-only call graph for bounded inter-method flows.
+creates a temporary source-only method-call graph for bounded inter-method flows.
 
 The product answers questions such as:
 

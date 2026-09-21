@@ -80,7 +80,7 @@ class IndexReport:
 
 @dataclass(frozen=True)
 class CallGraphProgress:
-    """One explicitly provisional call-graph checkpoint.
+    """One explicitly provisional method-call checkpoint.
 
     The checkpoint is emitted only after one local analyzer project has
     completed.  It is intentionally separate from the transactional SQLite
@@ -219,7 +219,7 @@ def _index_repo(
     # would still flood the index command's output.
     codeql_verbosity = "progress++" if codeql_progress else None
     if codeql_database is not None and config.call_graph_engine != "codeql":
-        raise ValueError("A CodeQL database requires the codeql call-graph engine.")
+        raise ValueError("A CodeQL database requires the codeql method-call engine.")
     topic_strategy = topic_strategy or config.strategy
     disabled = disabled or frozenset(config.disabled_extractors)
     # BACKLOG-16 P2 : purge les lru_cache d'analyse best-effort (package

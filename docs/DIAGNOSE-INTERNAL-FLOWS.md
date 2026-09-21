@@ -38,10 +38,10 @@ The final counters answer most first questions:
 | `ports détectés (X IN, Y OUT)` | The endpoint extractor found the inputs and outputs required for a flow. `OUT=0` means no input-to-output flow can be materialized. |
 | `CodeQL : préparation de l'analyse interprocédurale`  | An interprocedural engine is active. |
 | `indisponible ; flux interprocéduraux ignorés` | Only same-method AST flows are available. |
-| `N appel(s) extrait(s)` | Number of Java calls returned by the call-graph engine. |
+| `N appel(s) extrait(s)` | Number of Java calls returned by the method-call engine. |
 | `N jointure(s)` | Number of calls attached to indexed integration methods. A high call count with zero joins usually indicates a source-location or method-name resolution problem. |
 | `N flux interprocédural(aux)` | Flows that cross method boundaries and reach an indexed output endpoint. |
-| `limite atteinte (N transitions)` | The bounded call-graph exploration stopped before considering every transition. |
+| `limite atteinte (N transitions)` | The bounded method-call exploration stopped before considering every transition. |
 | `N parcours de code potentiel(s) matérialisé(s)` | Total persisted flows after local, interprocedural and Kafka continuation materialization. |
 
 The direct CodeQL reachability query is not limited by the configured hop
@@ -205,7 +205,7 @@ dispatch evidence.
 ### Inputs and outputs are missing
 
 If the `IN` or `OUT` counter is unexpectedly low, the problem is in endpoint
-extraction rather than call-graph traversal. Check custom annotations, source
+extraction rather than method-call traversal. Check custom annotations, source
 generation, non-standard Spring DSLs, malformed YAML and endpoint declarations
 that are built dynamically.
 
@@ -217,7 +217,7 @@ are generated or relocated source paths, unresolved external types, overloaded
 methods without a unique source location, and module boundaries that cannot be
 proven from source-only analysis.
 
-### The call graph engine is unavailable
+### The method-call engine is unavailable
 
 Without CodeQL, SystemLens retains same-method flows but cannot
 reliably follow `Controller -> Service -> Adapter` chains. Check the doctor

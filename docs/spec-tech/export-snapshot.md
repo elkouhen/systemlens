@@ -47,16 +47,16 @@ source paths must wrap instead of widening the panel.
 Selecting a reconciled code flow records its persisted ID only in transient
 graph state. Node and edge reducers, HTML-card overlays, and port overlays use
 the exact reconciled path sets to hide every unrelated node and edge; selected
-nodes retain flow-specific highlighting. The selected call graph layout uses
+nodes retain flow-specific highlighting. The selected flow graph layout uses
 its persisted directed service edges to compute graph levels and vertical
 sibling offsets; cyclic or edge-less flows fall back to the deterministic
 sequence order. This presentation state does not infer or persist any new
-architecture relation. A selected call graph projects only
+architecture relation. A selected flow graph projects only
 the microservices on its reconciled path; topic names remain in the selected
 ports and tooltips but topic nodes are omitted. Its nodes use a compact
 horizontal sequence when no branches are available; otherwise its tree/DAG
 levels remain readable. Service-to-service
-call-graph edges
+interaction-graph edges
 use orthogonal straight-segment routes in the SVG overlay between their actual
 output and input port anchors. ELK.js supplies the positioned graph and the
 browser libavoid WASM router receives fixed node rectangles plus explicit port
@@ -80,7 +80,7 @@ color as their associated paths, including the theme-specific dark-mode colors,
 and are subdued until hover or analysis selection. A two-point route remains
 direct when the segment is clear; a rectangular detour is created
 only when an obstacle blocks that direct segment. In the focused
-call-graph view, endpoint arcs are represented by the
+flow graph view, endpoint arcs are represented by the
 projected service edge and are not drawn a second time in the port overlay.
 While a code flow is selected, port anchors are interactive analysis controls:
 clicking an input or output endpoint, or directly on an arc, records a
@@ -126,4 +126,3 @@ report multiple same-name resources as ambiguous.
 The legacy `findings` table and model are retained only to open existing index
 databases. `Store.clear_findings_once("ast_only_analysis_v1")` removes stale
 external-analyzer data on the first AST-only index run.
-

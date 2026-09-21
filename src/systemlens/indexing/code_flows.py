@@ -29,7 +29,7 @@ _MONGO_WRITE_OPERATIONS = frozenset({
 def _deduplicate_code_flows(flows: list[CodeFlow]) -> list[CodeFlow]:
     """Keep one representative for each evidenced endpoint-to-endpoint flow.
 
-    Call-graph enumeration can expose several implementation/dispatch routes
+    Method-call enumeration can expose several implementation/dispatch routes
     for the same integration pair.  Those routes are useful while debugging
     the join, but are not distinct application flows.  Prefer a non-cycle,
     higher-confidence, shorter route and retain deterministic ordering.
@@ -349,7 +349,7 @@ def materialize_code_flows(
                     else method_name
                 )
                 # A CodeFlow remains one auditable endpoint path for
-                # compatibility. The exported call graph expands this
+                # compatibility. The exported flow graph expands this
                 # representative path with every matching consumer branch.
                 for consumer in consumers:
                     trigger_kind = (
@@ -384,8 +384,8 @@ def materialize_code_flows(
                         status="potential",
                         confidence="medium",
                         reason=(
-                            "A typed Kafka publication fans out to a matching "
-                            "consumer; the call graph retains every proven branch."
+                            "A Kafka publication fans out to a compatible "
+                            "consumer; the flow graph retains every proven branch."
                         ),
                         steps=tuple(steps),
                     ))
@@ -775,7 +775,7 @@ def materialize_codeql_code_flows(
                             "CodeQL directly proved reverse reachability from the indexed output "
                             "method to the indexed input method."
                             if not route else
-                            "CodeQL proved reverse reachability and the indexed call graph "
+                            "CodeQL proved reverse reachability and the indexed method-call graph "
                             "provided a representative intermediate route."
                         ),
                         steps=tuple([*steps, _endpoint_step(output, len(steps) + 1)]),

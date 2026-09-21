@@ -613,7 +613,7 @@ indicates a possible contract conflict rather than a proven exchange.
 Apply the same compatibility rule to persisted Kafka flow continuations.
 Dynamic topics remain unresolved and never create a pairing.
 
-**Consequences:** Call graphs include more topic-backed service connections
+**Consequences:** Interaction graphs include more topic-backed service connections
 without inventing a payload type. HTML and catalog views expose the type status
 as unknown or partial, while contract mismatch warnings remain visible. Topic
 fan-out can include consumers with missing type evidence, so analysts must use

@@ -1248,13 +1248,13 @@ def index_cmd(
         typer.echo("`--generate-sources` requiert CodeQL.", err=True)
         raise typer.Exit(code=2)
     if codeql_database is not None and call_graph_engine not in (None, "codeql"):
-        typer.echo("`--codeql-database` requiert `--call-graph-engine codeql`.", err=True)
+        typer.echo("`--codeql-database` requiert le moteur d'appels de méthodes `--call-graph-engine codeql`.", err=True)
         raise typer.Exit(code=2)
     if generate_sources and codeql_database is not None:
         typer.echo("`--generate-sources` ne peut pas être combiné avec `--codeql-database`.", err=True)
         raise typer.Exit(code=2)
     if no_codeql and call_graph_engine not in (None, "none"):
-        typer.echo("`--no-codeql` ne peut pas être combiné avec un moteur de graphe d'appel.", err=True)
+        typer.echo("`--no-codeql` ne peut pas être combiné avec un moteur d'appels de méthodes.", err=True)
         raise typer.Exit(code=2)
     try:
         config = load_config(repo_root)
@@ -1266,7 +1266,7 @@ def index_cmd(
     elif call_graph_engine is not None:
         config = replace(config, call_graph_engine=call_graph_engine)
     if codeql_progress_html is not None and config.call_graph_engine != "codeql":
-        typer.echo("`--codeql-progress-html` requiert `--call-graph-engine codeql`.", err=True)
+        typer.echo("`--codeql-progress-html` requiert le moteur d'appels de méthodes `--call-graph-engine codeql`.", err=True)
         raise typer.Exit(code=2)
 
     def write_codeql_progress(checkpoint: CallGraphProgress) -> None:

@@ -25,7 +25,7 @@ uv tool install systemlens
 ### Development dependencies
 
 On macOS and Ubuntu, provision the local development tools (uv, Java 17, and
-the optional CodeQL Java call-graph analyser) with:
+the optional CodeQL Java method-call analyser) with:
 
 ```bash
 scripts/install-dependencies.sh
@@ -33,7 +33,7 @@ scripts/install-dependencies.sh
 
 Use `scripts/install-dependencies.sh --help` to omit the optional component or
 preview the commands. The script runs `uv sync --group dev` to create the
-project environment. CodeQL is the default call-graph engine. SystemLens
+project environment. CodeQL is the default method-call engine. SystemLens
 remains usable with AST-only flows when CodeQL is not selected or installed.
 
 For the common development checks, use the repository `Makefile`:
@@ -194,7 +194,7 @@ generic dependency graph. The main relations are:
 
 Each relation retains its relative source location, origin and confidence.
 Unresolved or dynamic endpoints remain visible as evidence, but never become a
-guessed internal link. The selected local call-graph engine (CodeQL by default)
+guessed internal link. The selected local method-call engine (CodeQL by default)
 additionally extends potential code flows across statically resolved
 Java method calls; these flows are kept separate from asserted topology relations.
 

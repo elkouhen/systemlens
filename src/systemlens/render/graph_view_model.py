@@ -43,7 +43,7 @@ from systemlens.render.snapshot import kafka_dto_views
 
 
 def _deduplicated_call_port_links(edges: list[GraphEdge]) -> list[dict[str, str]]:
-    """Return one browser call-graph edge per endpoint pair and protocol.
+    """Return one browser interaction-graph edge per endpoint pair and protocol.
 
     The architecture snapshot can contain several equivalent evidence rows
     for one call. A set gives those rows a canonical directed identity before
@@ -522,7 +522,7 @@ def build_graph_view_model(
             direction = "in" if endpoint.role in {"serve", "consume"} else "out"
             # A port label identifies an architecture vertex.  It must not use
             # the position of one CodeQL route: the same port can be incident
-            # to several independently evidenced call-graph arcs.
+            # to several independently evidenced interaction-graph arcs.
             ports.append({
                 "label": port_label_by_endpoint_id[endpoint.id],
                 "direction": direction,

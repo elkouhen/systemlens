@@ -1,4 +1,4 @@
-# Port-to-port call rendering
+# Port-to-port interaction rendering
 
 Parent: [Functional specification](../SPEC-FONC.md).
 
@@ -30,7 +30,7 @@ services; their `Port IN` and `Port OUT` headings identify the direction, so
 the topic or route is shown only once. Port tooltips remain limited to the
 endpoint itself. The
 tooltip does not add or infer any architecture fact.
-In a selected call-graph view, clicking a port or an arc enters transient
+In a selected flow view, clicking a port or an arc enters transient
 analysis mode. The selected arc, its label, and its endpoint ports are
 highlighted; clicking the same port or arc clears the focus, and clicking
 another port or arc moves it. This interaction does not change the view,
@@ -73,11 +73,11 @@ inspector also shows its source, declared fields, enum values, and conservative
 recursive project-type navigation.
 
 The HTML export opens on the Explorer tab with the global architecture graph.
-Before a call-graph selection it shows only the high-level node cards and
+Before a flow selection it shows only the high-level node cards and
 persisted topology edges: it does not show CodeQL input/output ports,
 port-to-port relations, or internal links. Hovering a microservice, topic,
 collection, or topology arc shows a concise contextual tooltip; the Flux tab
-presents a compact list of persisted potential call graphs whose endpoint
+presents a compact list of persisted potential flows whose endpoint
 evidence spans at least two microservices, grouped by trigger type; it
 does not show method, confidence, or status details before selection. A flow
 remains listed when one of its topology edges is unresolved or absent from
@@ -101,17 +101,17 @@ indexed Kafka ports and accepts partial text matching. A compact
 summary reports the number of visible flows and each card summarizes its
 service sequence, effects, confidence, reconciliation status, and alternative
 route count. A selected flow can be recentered from the analysis banner.
-Equivalent persisted routes that render the same call graph are grouped into
+Equivalent persisted routes that render the same interaction graph are grouped into
 one visible flow, preventing duplicate graph cards while retaining their count
 in the export model.
-Selecting a reconciled call graph opens
+Selecting a reconciled flow opens
  the Explorer tab and displays only the microservices involved in the path,
  their indexed ports, and the direct dependencies between those ports. Topics
  remain available in the selected service's badges and tooltips, but are not
 rendered as nodes in this focused view. The focused view uses graph levels and
-vertical offsets for sibling branches, so a branched call graph is presented
+vertical offsets for sibling branches, so a branched interaction graph is presented
 as a tree/DAG rather than as a misleading single lane. The
-exported call graph always has one visible root. When the indexed evidence has
+exported flow graph always has one visible root. When the indexed evidence has
 several incoming producers, the entry service remains the root; when it
 contains a cycle, the return arc is omitted from this visual projection so the
 graph remains navigable as an arborescence. The persisted flow and its cycle
@@ -119,7 +119,7 @@ status are not altered. The
 selected nodes retain a visible
 halo. Selecting it keeps the Flux tab and
 its card geometry unchanged; the selected card is marked in place instead of
-replacing the left widget with the graph detail view. Its entry microservice is marked `Racine`: in Cards, it appears in the secondary label; in Symbols, it appears as a badge. A second badge makes the persisted entry trigger explicit, with the exact HTTP route or Kafka topic and a protocol-specific color. These markers are presentation state derived from the selected persisted call graph; they do not infer or persist an architecture fact. The camera frames the selected flow inside the visible
+replacing the left widget with the graph detail view. Its entry microservice is marked `Racine`: in Cards, it appears in the secondary label; in Symbols, it appears as a badge. A second badge makes the persisted entry trigger explicit, with the exact HTTP route or Kafka topic and a protocol-specific color. These markers are presentation state derived from the selected persisted flow graph; they do not infer or persist an architecture fact. The camera frames the selected flow inside the visible
 workspace beside the toolbar on wide screens and below it when that is the
 larger available region, while preserving margins for fixed-size cards. This
 fit never zooms in beyond the current readable view, is reapplied after a
@@ -128,7 +128,7 @@ When a selected flow occupies less space than the available focus area, its
 specific framing may zoom in (a camera ratio below the overview ratio) so the
 flow remains readable; the ratio is bounded and the cards remain inside the
 visible margins.
-The selected call graph's service-to-service arcs are rendered as orthogonal
+The selected interaction graph's service-to-service arcs are rendered as orthogonal
 straight segments between the actual output and input ports. ELK.js keeps the
 node placement while `@mr_mint/elkjs-libavoid` computes obstacle-avoiding routes
 around the visible microservice cards, with a padding margin and nudging for
@@ -142,12 +142,12 @@ Each selected arc displays its port mapping in the form `Ox → Iy`, using the
 actual indexed output and input labels.
 The arc label uses the same protocol-specific color as its associated arc in
 both light and dark themes.
-In a selected call graph, clicking an input or output port enters a transient
+In a selected flow graph, clicking an input or output port enters a transient
 analysis mode: the associated topology or local flow arc and its label are
 highlighted. Clicking the same port clears the analysis highlight; selecting a
 different flow resets it. Port analysis does not change the selected flow,
 camera position, or persisted architecture facts.
-Call-graph arcs use the same stroke thickness as ordinary topology paths; their
+Interaction-graph arcs use the same stroke thickness as ordinary topology paths; their
 selection remains identifiable through the selected-flow styling and colour.
 Clearing or replacing the selection restores the ordinary filtered graph.
 The focused graph displays a persistent context banner naming the selected

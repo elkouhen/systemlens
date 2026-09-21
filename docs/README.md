@@ -22,6 +22,14 @@ The PRD owns product scope and success measures. The functional specification
 owns observable behavior. The technical specification owns implementation
 constraints and persisted data contracts. ADRs own durable decisions.
 
+## Terminology
+
+Use `architecture topology` for the complete inventory of services, topics,
+APIs, and resources. Use `inter-service interaction graph` for the relations
+between microservices, including asynchronous Kafka exchanges. Use `flow graph`
+for one selected path through that topology. Reserve `method call graph` for
+the Java method relationships resolved by CodeQL or an equivalent engine.
+
 Tests verify these sources. The current implementation is the fallback source
 only when the authoritative documents and tests leave a detail unspecified.
 

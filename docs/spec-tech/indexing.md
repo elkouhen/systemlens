@@ -73,7 +73,7 @@ witnesses exclude possible dispatch. One predecessor tree is
 cached per input method/confidence in a bounded in-memory cache, costing
 O(V+E) per retained tree plus route reconstruction proportional to emitted
 steps, instead of a BFS per input/output pair. HTML checkpoints filter cached
-flows instead of rebuilding and retraversing the call graph for every module.
+flows instead of rebuilding and retraversing the method-call graph for every module.
 No database path is persisted. Live progress uses a wall-clock watchdog
 covering pipe reads; POSIX timeouts terminate the complete process group, and
 subprocesses are reaped on errors. The configured deadline covers the complete

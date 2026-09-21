@@ -69,7 +69,7 @@ publication remains an effect of its input-triggered flow and does not create
 an independent flow root. Only a publisher explicitly triggered by a cron
 expression creates a source flow, with the Cron event as its first step. The
 persisted flow is one representative producer-to-consumer path, while its
-exported call graph retains every proven consumer branch. It does not join
+exported flow graph retains every proven consumer branch. It does not join
 dynamic topics or compose a producer whose later external effect would be
 hidden by a linear rendering. Continuations are bounded to four asynchronous
 hops and never revisit the same consumer flow.

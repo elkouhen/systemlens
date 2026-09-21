@@ -77,7 +77,7 @@ missing token. The file-level diagnostic remains visible so partial coverage is
 never presented as a complete parse.
 
 `CodeFlow` is a persisted, ordered potential path through one Java method or a
-chain of Java methods resolved by the selected call-graph engine. Its
+chain of Java methods resolved by the selected method-call engine. Its
 first `CodeFlowStep` is an indexed HTTP/Kafka entry point or a source-evidenced
 `@Scheduled(cron = "...")` trigger; later steps are HTTP calls, Kafka
 publications, or MongoDB reads/writes located within the
@@ -90,7 +90,7 @@ the traversed AST nodes for Java files that contain eligible endpoints. Maven
 `target/` and Gradle `build/` output trees are excluded from the inventory, so
 copied resources and generated classes cannot duplicate source facts. A
 same-method relation remains `potential` with medium confidence because static
-lexical order does not prove branch execution. Call-graph facts join
+lexical order does not prove branch execution. Method-call facts join
 persisted AST method facts to form interprocedural flows; `method_call` steps keep
 the call-site line. For CodeQL, reachability is computed from indexed output
 methods backwards through their callers until indexed input methods are reached.
@@ -131,7 +131,7 @@ For a virtual call, CodeQL's unique `exactVirtualMethod` target is retained at
 medium confidence. If no unique target can be proven, its `viableCallable`
 candidates are retained individually at low confidence; SystemLens does not
 select an implementation on Spring bean metadata alone. The analysis profile,
-including the selected call-graph engine, availability, activation and its bounds, participates in the
+including the selected method-call engine, availability, activation and its bounds, participates in the
 code-flow signature so switching profile recalculates unchanged repositories.
 
 The flow join groups AST and interprocedural candidates with deterministic
@@ -150,7 +150,7 @@ a cron expression: it creates one `CodeFlow` per matching consumer whose first
 step is `cron_entry`, followed by the publication and consumer entry. Known
 message types must match when both endpoints provide one. Missing type evidence
 does not prevent the join, while conflicting known types prevent it.
-The exported call-graph projection is always a rooted arborescence: its root is
+The exported flow-graph projection is always a rooted arborescence: its root is
 the first persisted endpoint, or the unique proven producer immediately before
 a Kafka entry. For Kafka fan-in, no producer is selected arbitrarily. A
 breadth-first traversal keeps each reachable service under its first parent,
@@ -163,7 +163,7 @@ then the lexicographically smallest pair. The browser receives only these
 canonical service arcs; it does not append a second set reconstructed from
 port links.
 Before serialization, HTML export groups flows by their complete rendered
-call-graph signature (nodes, directed arcs, protocol and resource labels).
+flow-graph signature (nodes, directed arcs, protocol and resource labels).
 Equivalent CodeQL or continuation routes produce one visible representative,
 chosen by status, confidence, route length and stable source ordering;
 `equivalent_count` retains the number of persisted variants. Index storage is
@@ -190,7 +190,7 @@ the indexing service emits one in-memory checkpoint after each completed
 CodeQL project. The delivery adapter renders that checkpoint to `FILE` by
 atomic replacement and labels it as provisional with its completed-project
 count. These progress documents are deliberately outside the SQLite snapshot
-contract: they are an opt-in observability aid, may omit later call-graph
+contract: they are an opt-in observability aid, may omit later method-call
 facts, and are never read by normal export, query, MCP, or web workflows.
 
 Kafka flow continuations join only concrete, statically resolved Kafka endpoint

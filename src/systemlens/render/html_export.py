@@ -50,7 +50,7 @@ def _networkx_call_graph(
     endpoints_by_service: dict[str, list[MessageEndpoint]],
     edges: list[GraphEdge],
 ) -> dict[str, object]:
-    """Build the proven service call graph for one persisted code flow."""
+    """Build the proven inter-service interaction graph for one persisted flow."""
     endpoint_by_id = {
         endpoint.id: endpoint
         for service_endpoints in endpoints_by_service.values()
@@ -108,7 +108,7 @@ def _networkx_call_graph(
     for source_id, target_id in zip(endpoint_steps, endpoint_steps[1:]):
         add_relation(source_id, target_id)
     # A producer can have several proven consumers. Keep all of those
-    # branches in the exported call graph even though the persisted CodeFlow
+    # branches in the exported interaction graph even though the persisted flow
     # remains one representative endpoint path for compatibility.
     for source_id in endpoint_steps:
         source_endpoint = endpoint_by_id.get(source_id)
@@ -199,7 +199,7 @@ def _distinct_export_flows(
     endpoints_by_service: dict[str, list[MessageEndpoint]],
     edges: list[GraphEdge],
 ) -> list[tuple[CodeFlow, dict[str, object], int]]:
-    """Collapse flows that render to the same service call graph.
+    """Collapse flows that render to the same inter-service interaction graph.
 
     Indexing keeps distinct evidence and diagnostics. The HTML flow picker,
     however, should not present the same graph repeatedly just because CodeQL

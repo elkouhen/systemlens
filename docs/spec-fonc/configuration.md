@@ -34,7 +34,6 @@ excluded. Maven modules whose artifact identifier or directory name contains
 `min_severity` setting remains accepted for database compatibility
 but does not alter AST endpoint extraction.
 `analysis` is the versionable source of truth for the topic convention,
-call-graph engine, and disabled extractors. `root_path` is local export configuration only:
+method-call engine, and disabled extractors. `root_path` is local export configuration only:
 it resolves relative source evidence into VS Code links and is never persisted
 in the architecture snapshot.
-

@@ -11,7 +11,7 @@ Parent: [Functional specification](../SPEC-FONC.md).
 | `systemlens index [MANIFEST]... [--full] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--call-graph-engine codeql\|none] [--codeql-database DIR] [--codeql-progress] [--codeql-progress-html FILE] [--generate-sources] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. The default `codeql` engine creates one temporary source-only Java database for the whole repository, then reports extracted calls project by project; this preserves cross-project references. `--codeql-progress` forwards CodeQL's detailed live progress output. `--generate-sources` runs only the Maven/Gradle source-generation phase in a temporary copy; it never compiles or runs tests. `none` keeps AST-only flows. `--codeql-database` reuses an already-built global CodeQL database and requires the `codeql` engine. `--codeql-progress-html` rewrites an explicitly provisional HTML graph after each reported CodeQL project; it requires the `codeql` engine and is not a final export. `--no-codeql` is the legacy AST-only alias. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts a reviewable fact manifest, including one produced by an agent through the companion skill, into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
-| `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows from an entry point to a source-evidenced external effect, within one method or across calls resolved by the selected call-graph engine. Each flow reports whether its endpoint evidence is `complete` or `partial` relative to the persisted topology snapshot. |
+| `systemlens flows [list] [--root DIR] [--json]` | Lists persisted potential code flows from an entry point to a source-evidenced external effect, within one method or across method calls resolved by the selected method-call engine. Each flow reports whether its endpoint evidence is `complete` or `partial` relative to the persisted topology snapshot. |
 | `systemlens flows show ID_OR_QUERY [--root DIR] [--json]` | Shows the ordered steps and source evidence of one unambiguously selected potential code flow. |
 | `systemlens microservices topics\|apis\|mongodb\|properties\|openapi NAME [--root DIR] [--json]` | Follow one linked object kind from a single named microservice. |
 | `systemlens microservices implementation KIND ID [--root DIR] [--json]` | Jump to the source implementation of one identified integration. |
@@ -52,7 +52,7 @@ scanned=<N> skipped=<N> +integrations=<N> -integrations=<N>
 
 The first AST-only run removes stale results from the retired analyzer.
 
-Automatic call-graph analysis creates one source-only Java database for the
+Automatic method-call analysis creates one source-only Java database for the
 whole repository with `codeql`. Progress
 reports the completed project over the total and the calls extracted from it.
 SystemLens maps module-relative evidence paths back to the repository root,
@@ -66,12 +66,12 @@ the index and reused by incremental MCP reindexing and all derived views.
 The automatic CodeQL projection preserves Java sources below
 `target/generated-sources` so generated AsyncAPI/OpenAPI types remain
 available; other build outputs and build descriptors are excluded.
-`--call-graph-engine` overrides it for one run and does not modify
+`--call-graph-engine` selects the method-call engine for one run and does not modify
 `.systemlens/config.yml`. `--no-codeql` remains a legacy AST-only alias.
 `--codeql-progress-html FILE` is an opt-in progress aid: after each completed
 CodeQL project it atomically replaces `FILE` with a graph labelled as
 provisional, including the completed-project count. Users may refresh that
-file in a browser to inspect the current call-graph coverage. It is generated
+file in a browser to inspect the current method-call coverage. It is generated
 by filtering the once-materialized global flows to reported call sites; direct
 answers without intermediate evidence appear at the final checkpoint.
 These in-progress indexing facts must not be treated as an exportable or
@@ -103,4 +103,3 @@ the positive RAM limit in MiB for those operations; it defaults to `null`, so
 CodeQL chooses its own limit.
 `--disable` accepts `properties`,
 `module-architecture`, and `module-tree-sitter`.
-
