@@ -1,4 +1,4 @@
-# Architecture Decision Records — systemlens (`systemlens`)
+# Architecture decision records: SystemLens (`systemlens`)
 
 ## Reading guide
 
@@ -7,17 +7,17 @@ functional or technical contract.
 
 | Topic | ADRs |
 |---|---|
-| Local, conservative extraction | [ADR-1](#adr-1--local-static-architecture-analysis), [ADR-3](#adr-3--conservative-static-resolution) |
-| Snapshot storage and compatibility | [ADR-2](#adr-2--sqlite-is-the-local-fact-store), [ADR-7](#adr-7--publish-each-index-as-an-atomic-sqlite-snapshot), [ADR-11](#adr-11--separate-module-identity-from-its-display-alias) |
-| Delivery and graph projection | [ADR-8](#adr-8--persisted-relations-are-the-canonical-architecture-projection), [ADR-9](#adr-9--exports-never-enrich-a-snapshot-from-live-source-files), [ADR-23](#adr-23--mcp-control-in-two-phases-with-a-graph-enrichment-layer) |
-| Optional or repository-specific behaviour | [ADR-5](#adr-5--strategy1-conventions-are-opt-in), [ADR-12](#adr-12--kubernetes-discovery-is-explicit-and-snapshot-based) |
-| Product namespace and module vocabulary | [ADR-6](#adr-6--systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24--use-module-terminology-for-structural-project-grouping) |
-| Indexed contracts and implementation boundaries | [ADR-25](#adr-25--separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26--organize-implementation-modules-by-architectural-ownership) |
-| Potential code flows and call-graph resolution | [ADR-27](#adr-27--persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b--preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29--ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30--resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence) |
-| Graph rendering and integration evidence | [ADR-28](#adr-28--render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31--resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32--require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33--keep-topics-in-selected-call-graph-views) |
-| Index timeout and partial snapshots | [ADR-34](#adr-34--commit-a-partial-snapshot-after-a-codeql-timeout) |
+| Local, conservative extraction | [ADR-1](#adr-1-local-static-architecture-analysis), [ADR-3](#adr-3-conservative-static-resolution) |
+| Snapshot storage and compatibility | [ADR-2](#adr-2-sqlite-is-the-local-fact-store), [ADR-7](#adr-7-publish-each-index-as-an-atomic-sqlite-snapshot), [ADR-11](#adr-11-separate-module-identity-from-its-display-alias) |
+| Delivery and graph projection | [ADR-8](#adr-8-persisted-relations-are-the-canonical-architecture-projection), [ADR-9](#adr-9-exports-never-enrich-a-snapshot-from-live-source-files), [ADR-23](#adr-23-mcp-control-in-two-phases-with-a-graph-enrichment-layer) |
+| Optional or repository-specific behaviour | [ADR-5](#adr-5-strategy1-conventions-are-opt-in), [ADR-12](#adr-12-kubernetes-discovery-is-explicit-and-snapshot-based) |
+| Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
+| Indexed contracts and implementation boundaries | [ADR-25](#adr-25-separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26-organize-implementation-modules-by-architectural-ownership) |
+| Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence) |
+| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views) |
+| Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 
-## ADR-1 — Local static architecture analysis
+## ADR-1: Local static architecture analysis
 
 **Status:** Accepted.
 
@@ -40,7 +40,7 @@ values are surfaced as unresolved facts instead of being guessed. Offline
 CodeQL staging may reduce resolution of external types, which is an explicit
 accuracy trade-off for deterministic, network-independent indexing.
 
-## ADR-2 — SQLite is the local fact store
+## ADR-2: SQLite is the local fact store
 
 **Status:** Accepted.
 
@@ -55,7 +55,7 @@ with existing installations.
 and MCP contracts rather than writing SQL. Legacy external-analyzer results are
 cleared during the first AST-only index run.
 
-## ADR-3 — Conservative static resolution
+## ADR-3: Conservative static resolution
 
 **Status:** Accepted.
 
@@ -68,7 +68,7 @@ the rest as dynamic and preserve source evidence.
 **Consequences:** The inventory favours trustworthy partial results over
 plausible but unsupported dependencies.
 
-## ADR-4 — Workspace federation is read-only
+## ADR-4: Workspace federation is read-only
 
 **Status:** Accepted.
 
@@ -80,7 +80,7 @@ audit queries.
 **Consequences:** Federated exploration never rewrites another repository’s
 index and reports incomplete or stale sources as warnings.
 
-## ADR-5 — Strategy1 conventions are opt-in
+## ADR-5: Strategy1 conventions are opt-in
 
 **Status:** Accepted.
 
@@ -99,7 +99,7 @@ related forms) are also Strategy1-only conventions.
 **Consequences:** Default indexing remains framework-oriented and portable;
 Strategy1 facts are explicitly identified as convention-derived.
 
-## ADR-5a — Strategy1 conventions live behind one pack boundary
+## ADR-5a: Strategy1 conventions live behind one pack boundary
 
 **Status:** Accepted.
 
@@ -121,7 +121,7 @@ mechanics.
 Future repository convention packs get a clear extension boundary without a
 schema fork, while existing third-party scanner imports remain usable.
 
-## ADR-6 — SystemLens is the public product and state namespace
+## ADR-6: SystemLens is the public product and state namespace
 
 **Status:** Accepted.
 
@@ -140,7 +140,7 @@ and `.codeatlas/` configuration and index data are not read by SystemLens: run
 `.systemlens/` inventory. Trace environment variables use the `SYSTEMLENS_`
 prefix.
 
-## ADR-7 — Publish each index as an atomic SQLite snapshot
+## ADR-7: Publish each index as an atomic SQLite snapshot
 
 **Status:** Accepted.
 
@@ -159,7 +159,7 @@ while a refresh is in progress, then the next complete snapshot after commit.
 An index holds the single-writer SQLite lock for its run; this favours a
 trustworthy local inventory over concurrent writers.
 
-## ADR-8 — Persisted relations are the canonical architecture projection
+## ADR-8: Persisted relations are the canonical architecture projection
 
 **Status:** Accepted.
 
@@ -178,7 +178,7 @@ across local catalog and coverage adapters. Graph-shaped renderers can still
 adapt endpoint evidence for route and topic labels, but must not independently
 infer service topology or rescan repository sources.
 
-## ADR-9 — Exports never enrich a snapshot from live source files
+## ADR-9: Exports never enrich a snapshot from live source files
 
 **Status:** Accepted.
 
@@ -195,7 +195,7 @@ explicit indexed data model first.
 field and enum inspection is deliberately unavailable until its facts are
 persisted at index time.
 
-## ADR-10 — Persist the analysis profile with each snapshot
+## ADR-10: Persist the analysis profile with each snapshot
 
 **Status:** Accepted.
 
@@ -212,7 +212,7 @@ whose profiles are incompatible.
 Strategy1 convention cannot appear in a default inventory or disappear from a
 Strategy1 one because of the delivery path.
 
-## ADR-11 — Separate module identity from its display alias
+## ADR-11: Separate module identity from its display alias
 
 **Status:** Accepted.
 
@@ -230,7 +230,7 @@ services with the same display name coexist without data loss. Existing SQLite
 indexes receive the additive `modules.identity` migration on their next
 writable open.
 
-## ADR-12 — Kubernetes discovery is explicit and snapshot-based
+## ADR-12: Kubernetes discovery is explicit and snapshot-based
 
 **Status:** Accepted.
 
@@ -249,7 +249,7 @@ credentials, or API connectivity are unavailable. The resulting dimensions are
 persisted in the SQLite snapshot, so catalog and HTML export do not re-query a
 cluster after indexing.
 
-## ADR-23 — MCP control in two phases with a graph enrichment layer
+## ADR-23: MCP control in two phases with a graph enrichment layer
 
 **Status:** Accepted.
 
@@ -265,7 +265,7 @@ be extracted deterministically, while ensuring reindexing preserves enrichment
 and MCP deletion never destroys source evidence. `architecture_graph` merges
 both layers for reading. Added evidence paths remain relative to the repository.
 
-## ADR-24 — Use module terminology for structural project grouping
+## ADR-24: Use module terminology for structural project grouping
 
 **Status:** Accepted.
 
@@ -289,7 +289,7 @@ uses `projects` for the Maven/Gradle catalog and build export, and `export
 modules` for the structural hierarchy; legacy unambiguous spellings remain
 hidden aliases.
 
-## ADR-25 — Separate indexed DTO materialization from graph rendering
+## ADR-25: Separate indexed DTO materialization from graph rendering
 
 **Status:** Accepted.
 
@@ -312,7 +312,7 @@ requires changing the view-model projection, while changing Java DTO discovery
 requires changing the inventory module and its focused tests. Asset ordering is
 an explicit build-time convention rather than an implicit monolithic file.
 
-## ADR-26 — Organize implementation modules by architectural ownership
+## ADR-26: Organize implementation modules by architectural ownership
 
 **Status:** Accepted.
 
@@ -338,7 +338,7 @@ while compatibility packages keep existing Python and console consumers
 working. Large files may still be split further inside their owning package
 without changing the top-level layer model.
 
-## ADR-27 — Persist potential code flows separately from topology and runtime truth
+## ADR-27: Persist potential code flows separately from topology and runtime truth
 
 **Status:** Accepted.
 
@@ -382,9 +382,9 @@ Indexing performs AST traversal and a bounded CodeQL call-graph join when the
 local prerequisite is available, while exports and queries continue to consume
 only persisted snapshots.
 
-## ADR-27a — Use AST symbol facts to constrain buildless call-graph fallbacks
+## ADR-27a: Use AST symbol facts to constrain buildless call-graph fallbacks
 
-**Status:** Superseded by [ADR-30](#adr-30--resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence).
+**Status:** Superseded by [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence).
 
 **Context:** A source-only CodeQL database can lack enough dependency/type
 information to resolve a Java interface or bean call. The existing fallback
@@ -407,7 +407,7 @@ ambiguity when the receiver type or source hierarchy is unavailable. The
 fallback remains intentionally weaker than CodeQL and does not resolve runtime
 Spring bean selection.
 
-## ADR-27b — Preserve stronger enrichment facts and label topology reconciliation
+## ADR-27b: Preserve stronger enrichment facts and label topology reconciliation
 
 **Status:** Accepted.
 
@@ -434,7 +434,7 @@ while explicit complete-manifest deletion remains available for stale facts in
 that namespace. Flow consumers can distinguish a valid partial code path from
 a fully reconciled topology path without discarding either one.
 
-## ADR-28 — Render selected call-graph arcs with orthogonal port routes
+## ADR-28: Render selected call-graph arcs with orthogonal port routes
 
 **Status:** Accepted.
 
@@ -457,7 +457,7 @@ The routes are presentation-only and are recomputed after camera or layout
 changes. If the CDN or WASM runtime is unavailable, the existing local
 orthogonal router preserves a usable export.
 
-## ADR-29 — Ask CodeQL directly for input-to-output reachability
+## ADR-29: Ask CodeQL directly for input-to-output reachability
 
 **Status:** Accepted.
 
@@ -481,7 +481,7 @@ orthogonal router preserves a usable export.
  operational guardrail. Reflection, runtime routing, and calls absent from the
  CodeQL database remain explicit blind spots.
 
-## ADR-30 — Resolve fallback dispatch by qualified symbols and union partial evidence
+## ADR-30: Resolve fallback dispatch by qualified symbols and union partial evidence
 
 **Status:** Accepted. Supersedes the endpoint-only fallback in ADR-27a.
 
@@ -510,7 +510,7 @@ the QL closures remain potentially large but are explicitly output-anchored.
 Subprocess deadlines cover progress reads as well as execution and terminate
 the POSIX process group. The code-flow signature changes to rebuild old flows.
 
-## ADR-31 — Resolve declarative HTTP clients and bounded URL helpers conservatively
+## ADR-31: Resolve declarative HTTP clients and bounded URL helpers conservatively
 
 **Status:** Accepted.
 
@@ -533,7 +533,7 @@ configuration. The bounded evaluator adds a small AST traversal cost per URL
 expression. Reflection, service discovery, mutable hosts and arbitrary helper
 logic remain explicit unresolved cases.
 
-## ADR-32 — Require topic and payload type for an asserted Kafka service arc
+## ADR-32: Require topic and payload type for an asserted Kafka service arc
 
 **Status:** Accepted.
 
@@ -551,7 +551,7 @@ Kafka flow continuations use the same pairwise condition.
 evidence remains visible for investigation, while unknown, dynamic, and
 contradictory payloads remain explicitly unresolved.
 
-## ADR-33 — Keep topics in selected call-graph views
+## ADR-33: Keep topics in selected call-graph views
 
 **Status:** Accepted.
 
@@ -571,7 +571,7 @@ nodes while retaining the asserted direct service arc and its topic evidence in
 badges and tooltips. Ambiguous topic ownership remains unresolved and is not
 turned into a guessed path.
 
-## ADR-34 — Commit a partial snapshot after a CodeQL timeout
+## ADR-34: Commit a partial snapshot after a CodeQL timeout
 
 **Status:** Accepted.
 
