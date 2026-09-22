@@ -62,6 +62,15 @@ whole repository with `codeql`. Progress
 reports the completed project over the total and the calls extracted from it.
 After each completed project, SystemLens persists a partial `code_flows`
 snapshot and emits a checkpoint line with the number of provisional flows.
+The checkpoint line names the source-owning Maven module and lists the Java
+methods searched for IN and OUT integration points. The optional HTML
+checkpoint carries the same summary in its provisional progress banner.
+During the final join, progress reports the number of calls attached to Java
+methods, the IN methods explored, the transitions traversed, and the flows
+materialized before final reconciliation.
+The index commits a provisional flow snapshot after each join batch, so an
+HTML progress export or a later export from the index retains the arcs found
+before an interruption.
 The final reconciliation replaces this partial snapshot and marks it complete.
 SystemLens maps module-relative evidence paths back to the repository root,
 aggregates all calls, and only then joins them to the global method inventory.

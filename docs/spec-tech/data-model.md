@@ -193,8 +193,15 @@ After each completed CodeQL project, the indexing service persists a partial
 `code_flows` checkpoint with `code_flow_snapshot_status=partial`. The optional
 `--codeql-progress-html FILE` delivery adapter renders the same checkpoint to
 `FILE` by atomic replacement and labels it as provisional with its
-completed-project count. Partial checkpoints may omit later method-call facts;
-the final reconciliation replaces them and marks the snapshot complete.
+completed-project count. Each checkpoint also carries the source-owning Maven
+module and the Java methods associated with its indexed IN and OUT integration
+points. Partial checkpoints may omit later method-call facts; the final
+reconciliation replaces them and marks the snapshot complete.
+The join emits periodic progress logs while traversing input methods and
+call-graph transitions. After each join batch, the current provisional
+`code_flows` snapshot is committed, allowing exports to retain the arcs found
+before an interruption. These snapshots remain partial until final
+reconciliation.
 
 Kafka flow continuations join only concrete, statically resolved Kafka endpoint
 identifiers. Known message types must match when both endpoints provide one;

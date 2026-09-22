@@ -56,7 +56,9 @@ on a `@RestController` when its name exactly matches the contract
 `operationId`; otherwise the method remains unknown.
 Detected CodeQL call cycles and concrete Kafka topic cycles are retained as
 potential `cycle` flows. They are visually distinguished and listed before
-non-cyclic flows; within each category, longer flows appear first.
+non-cyclic flows; within each category, flows traversing more distinct
+microservices appear first. The service count comes from the persisted
+call-graph node order when available, with endpoint evidence as a fallback.
 The Flux tab provides a `Cycles only` control with the detected-cycle count to
 isolate them immediately.
 Explorer path selections are ephemeral. URL fragments such as `from`, `to`,
@@ -89,9 +91,10 @@ remains listed when one of its topology edges is unresolved or absent from
 the export; selecting it marks the graph as partial instead of hiding the
 persisted interprocedural evidence. Flows confined to one microservice remain
 persisted source evidence but are excluded from the default list. Each flow
-card also displays an ordered sub-list of the microservice names resolved from
-its indexed endpoint identities, or explicitly says that they could not be
-resolved in the graph.
+card also displays the ordered microservice names from its persisted call graph
+when available, or resolves them from indexed endpoint identities as a fallback.
+The flow list is ordered by descending number of distinct microservices
+traversed, then by flow length.
 This diagnostic text belongs to the widget and does not change graph path
 rendering. The Flux tab
 provides a

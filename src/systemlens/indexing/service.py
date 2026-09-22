@@ -96,6 +96,11 @@ class CallGraphProgress:
     relations: list[ArchitectureRelation]
     integration_methods: list[IntegrationMethod]
     code_flows: list[CodeFlow]
+    project_input_methods: list[IntegrationMethod]
+    project_output_methods: list[IntegrationMethod]
+    phase: str = "projects"
+    completed_units: int = 0
+    total_units: int = 0
 
 
 CallGraphProgressCallback = Callable[[CallGraphProgress], None]
@@ -493,6 +498,7 @@ def _index_repo(
                 total_projects: int,
                 project_name: str,
                 calls: list[CodeQLCall],
+                project_prefix: str = "",
             ) -> None:
                 if prepared_codeql_flows is not None:
                     available_sites = {(call.caller_path, call.call_line) for call in calls}
@@ -511,6 +517,7 @@ def _index_repo(
                         methods, all_endpoints, calls, repo_root=repo_root,
                         source_paths=list(current_hashes),
                         max_hops=config.codeql_max_hops,
+                        progress=progress,
                     )
                 partial_flows = [
                     *flows,
@@ -521,10 +528,38 @@ def _index_repo(
                 store.delete_meta("code_flow_signature")
                 store.set_meta("code_flow_snapshot_status", "partial")
                 store.commit_checkpoint()
+                method_paths = {
+                    method.path for method in methods
+                    if not project_prefix
+                    or method.path == project_prefix
+                    or method.path.startswith(f"{project_prefix}/")
+                }
+                project_input_methods = sorted(
+                    (
+                        method for method in methods
+                        if method.path in method_paths and method.input_endpoint_ids
+                    ),
+                    key=lambda method: (method.path, method.start_line, method.id),
+                )
+                project_output_methods = sorted(
+                    (
+                        method for method in methods
+                        if method.path in method_paths and method.output_endpoint_ids
+                    ),
+                    key=lambda method: (method.path, method.start_line, method.id),
+                )
+                input_names = ", ".join(
+                    method.qualified_method for method in project_input_methods
+                ) or "aucun"
+                output_names = ", ".join(
+                    method.qualified_method for method in project_output_methods
+                ) or "aucun"
                 _report_progress(
                     progress,
                     f"→ CodeQL : checkpoint {completed_projects}/{total_projects} "
-                    f"persisté ({len(partial_flows)} flux provisoire(s)).",
+                    f"persisté · module {project_name} · "
+                    f"IN [{input_names}] · OUT [{output_names}] · "
+                    f"{len(partial_flows)} flux provisoire(s).",
                 )
                 if call_graph_progress is not None:
                     call_graph_progress(CallGraphProgress(
@@ -537,6 +572,44 @@ def _index_repo(
                         relations=relations,
                         integration_methods=methods,
                         code_flows=partial_flows,
+                        project_input_methods=project_input_methods,
+                        project_output_methods=project_output_methods,
+                    ))
+
+            def publish_join_checkpoint(
+                partial_codeql_flows: list[CodeFlow],
+                completed_methods: int,
+                total_methods: int,
+            ) -> None:
+                partial_flows = _deduplicate_code_flows([
+                    *flows,
+                    *partial_codeql_flows,
+                ])
+                store.replace_code_flows(partial_flows)
+                store.delete_meta("code_flow_signature")
+                store.set_meta("code_flow_snapshot_status", "partial")
+                store.commit_checkpoint()
+                _report_progress(
+                    progress,
+                    f"→ CodeQL : checkpoint jointure {completed_methods}/{total_methods} "
+                    f"méthode(s) IN · {len(partial_flows)} flux provisoire(s).",
+                )
+                if call_graph_progress is not None:
+                    call_graph_progress(CallGraphProgress(
+                        engine=call_graph_engine,
+                        completed_projects=1,
+                        total_projects=1,
+                        project_name="jointure CodeQL",
+                        endpoints=all_endpoints,
+                        modules=relation_modules,
+                        relations=relations,
+                        integration_methods=methods,
+                        code_flows=partial_flows,
+                        project_input_methods=[],
+                        project_output_methods=[],
+                        phase="join",
+                        completed_units=completed_methods,
+                        total_units=total_methods,
                     ))
 
             codeql_deadline = time.monotonic() + config.codeql_timeout_seconds
@@ -580,8 +653,13 @@ def _index_repo(
                     scoped_completed_calls: list[CodeQLCall] = []
                     for number, (name, project_calls) in enumerate(scoped_project_calls, start=1):
                         scoped_completed_calls.extend(project_calls)
+                        project_prefix = next(
+                            (prefix for root_name, _root, prefix in roots if root_name == name),
+                            "",
+                        )
                         publish_call_graph_progress(
-                            number, len(scoped_project_calls), name, scoped_completed_calls
+                            number, len(scoped_project_calls), name, scoped_completed_calls,
+                            project_prefix,
                         )
                     timer.end("codeql-extract", "extraction des appels CodeQL")
                     reachability = extract_codeql_reachability(
@@ -596,6 +674,8 @@ def _index_repo(
                             source_paths=list(current_hashes),
                             max_hops=config.codeql_max_hops,
                             stats=codeql_stats, reachability=reachability,
+                            progress=progress,
+                            join_checkpoint=publish_join_checkpoint,
                         )
                 else:
                     roots = _codeql_module_roots(
@@ -667,6 +747,8 @@ def _index_repo(
                                 source_paths=list(current_hashes),
                                 max_hops=config.codeql_max_hops,
                                 stats=codeql_stats, reachability=reachability,
+                                progress=progress,
+                                join_checkpoint=publish_join_checkpoint,
                             )
                         completed_calls: list[CodeQLCall] = []
                         for number, (name, project_calls) in enumerate(partitioned_calls, start=1):
@@ -676,8 +758,12 @@ def _index_repo(
                                 f"  • {engine_label} module {number}/{len(roots)} : {name}",
                             )
                             completed_calls.extend(project_calls)
+                            project_prefix = next(
+                                (prefix for root_name, _root, prefix in roots if root_name == name),
+                                "",
+                            )
                             publish_call_graph_progress(
-                                number, len(roots), name, completed_calls
+                                number, len(roots), name, completed_calls, project_prefix
                             )
                             _report_progress(
                                 progress,
@@ -716,6 +802,8 @@ def _index_repo(
                 max_hops=config.codeql_max_hops,
                 stats=codeql_stats,
                 reachability=reachability,
+                progress=progress,
+                join_checkpoint=publish_join_checkpoint,
             )
             # AST and the interprocedural engine can describe the same
             # endpoint-to-endpoint flow. Keep one representative before

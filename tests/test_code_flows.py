@@ -509,21 +509,38 @@ def test_index_uses_automatic_codeql_database_when_available(
 
     assert observed_roots == [repo]
     assert len(materializations) == 1  # shared by progress and final persistence
-    assert [(item.engine, item.completed_projects, item.total_projects, item.project_name) for item in checkpoints] == [
+    project_checkpoints = [item for item in checkpoints if item.phase == "projects"]
+    join_checkpoints = [item for item in checkpoints if item.phase == "join"]
+    assert [(item.engine, item.completed_projects, item.total_projects, item.project_name) for item in project_checkpoints] == [
         ("codeql", 1, 1, "orders"),
     ]
-    assert checkpoints[0].relations
-    assert persisted_checkpoints == [("partial", len(checkpoints[0].code_flows))]
+    assert join_checkpoints
+    assert join_checkpoints[-1].completed_units == join_checkpoints[-1].total_units
+    assert project_checkpoints[0].relations
+    assert project_checkpoints[0].project_name == "orders"
+    assert project_checkpoints[0].project_input_methods
+    assert project_checkpoints[0].project_output_methods
+    assert any(
+        method.qualified_method.endswith(".onOrderCreated")
+        for method in project_checkpoints[0].project_input_methods
+    )
+    assert all(status == "partial" for status, _count in persisted_checkpoints)
     assert any("checkpoint 1/1 persisté" in message for message in progress_messages)
     with Store(repo, readonly=True) as reader:
         assert reader.get_meta("code_flow_snapshot_status") == "complete"
     progress_html = tmp_path / "codeql-progress.html"
-    cli._write_call_graph_progress_html(repo, progress_html, checkpoints[0])
+    cli._write_call_graph_progress_html(repo, progress_html, project_checkpoints[0])
     content = progress_html.read_text(encoding="utf-8")
     assert "INDEXATION CODEQL EN COURS" in content
     assert "1/1 projet(s) terminé(s)" in content
+    assert "module Maven : orders" in content
+    assert "Méthodes Java cherchées : IN [" in content
     assert 'id="progress-notice"' in content
     assert '"progress_notice": "INDEXATION CODEQL EN COURS' in content
+    join_progress_html = tmp_path / "codeql-join-progress.html"
+    cli._write_call_graph_progress_html(repo, join_progress_html, join_checkpoints[-1])
+    join_content = join_progress_html.read_text(encoding="utf-8")
+    assert "jointure CodeQL : 1/1 méthode(s) IN traitée(s)" in join_content
 
 
 def test_codeql_timeout_commits_partial_snapshot_and_runs_post_processing(

@@ -3,7 +3,7 @@
 from collections import defaultdict, deque
 from dataclasses import replace
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
 from tree_sitter import Node
 
@@ -398,6 +398,8 @@ def materialize_codeql_code_flows(
     stats: dict[str, int] | None = None,
     reachability: Sequence[CodeQLReachability] = (),
     source_paths: Sequence[str] = (),
+    progress: Callable[[str], None] | None = None,
+    join_checkpoint: Callable[[list[CodeFlow], int, int], None] | None = None,
 ) -> list[CodeFlow]:
     """Join AST method facts through resolved CodeQL calls.
 
@@ -406,6 +408,15 @@ def materialize_codeql_code_flows(
     index, but every synthetic edge remains possible/low-confidence.
     """
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
+
+    def report(message: str) -> None:
+        if progress is not None:
+            progress(message)
+
+    report(
+        f"→ CodeQL : jointure de {len(calls)} appel(s) avec "
+        f"{len(methods)} méthode(s) Java..."
+    )
     def normalized_method_name(name: str) -> str:
         """Align analyzer method names with Java source declarations."""
         # Analyzer names may include ``package.Type.method:return(args)``.
@@ -534,12 +545,21 @@ def materialize_codeql_code_flows(
             if caller is not None and resolved_target is not None:
                 add_edge(caller, resolved_target[0], call, True)
 
+    joined_calls = sum(len(targets) for targets in adjacency.values())
+    report(
+        f"→ CodeQL : {joined_calls} appel(s) rattaché(s) à "
+        f"{len(adjacency)} méthode(s) appelante(s) ; exploration des chemins..."
+    )
+
     flows: list[CodeFlow] = []
     # Contract-only HTTP inputs (for example generated OpenAPI interfaces)
     # have no source endpoint path for the AST materializer. If the same
     # indexed method also owns an output endpoint, the method itself is still
     # sufficient evidence for a direct input-to-output flow.
-    for entry in methods:
+    input_methods = [entry for entry in methods if entry.input_endpoint_ids]
+    explored_entries = 0
+    last_reported_explored = 0
+    for entry in input_methods:
         for trigger_id in entry.input_endpoint_ids:
             trigger = endpoint_by_id.get(trigger_id)
             if trigger is None:
@@ -685,6 +705,20 @@ def materialize_codeql_code_flows(
                     if state not in visited:
                         visited.add(state)
                         queue.append((target, next_route))
+        explored_entries += 1
+        if (
+            explored_entries == len(input_methods)
+            or explored_entries % 25 == 0
+            or explored - last_reported_explored >= 5_000
+        ):
+            report(
+                f"→ CodeQL : jointure en cours · méthode IN "
+                f"{explored_entries}/{len(input_methods)} · "
+                f"{explored} transition(s) explorée(s) · {len(flows)} flux..."
+            )
+            if join_checkpoint is not None:
+                join_checkpoint(list(flows), explored_entries, len(input_methods))
+            last_reported_explored = explored
     if stats is not None:
         stats.update({
             "calls": len(calls), "joined_calls": sum(len(targets) for targets in adjacency.values()),
@@ -786,6 +820,10 @@ def materialize_codeql_code_flows(
             (flow.steps[0].endpoint_id, flow.steps[-1].endpoint_id) not in direct_flows
         ]
         flows.extend(direct_flows.values())
+    report(
+        f"→ CodeQL : jointure terminée · {explored} transition(s), "
+        f"{len(reachability)} reachability(s), {len(flows)} flux avant déduplication."
+    )
     return _deduplicate_code_flows(flows)
 
 

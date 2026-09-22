@@ -1345,11 +1345,23 @@ def _write_call_graph_progress_html(
         integration_methods=checkpoint.integration_methods,
     )
     projection = project_architecture_graph(inventory, include_module_details=True)
-    warning = (
-        f"INDEXATION {checkpoint.engine.upper()} EN COURS — "
-        f"{checkpoint.completed_projects}/{checkpoint.total_projects} projet(s) terminé(s) "
-        f"(dernier : {checkpoint.project_name}). Ce graphe est provisoire et incomplet."
-    )
+    def format_methods(methods: list[IntegrationMethod]) -> str:
+        return ", ".join(method.qualified_method for method in methods) or "aucun"
+    if checkpoint.phase == "join":
+        warning = (
+            f"INDEXATION {checkpoint.engine.upper()} EN COURS — "
+            f"jointure CodeQL : {checkpoint.completed_units}/{checkpoint.total_units} "
+            "méthode(s) IN traitée(s). Ce graphe est provisoire et incomplet."
+        )
+    else:
+        warning = (
+            f"INDEXATION {checkpoint.engine.upper()} EN COURS — "
+            f"{checkpoint.completed_projects}/{checkpoint.total_projects} projet(s) terminé(s) "
+            f"(module Maven : {checkpoint.project_name}). "
+            f"Méthodes Java cherchées : IN [{format_methods(checkpoint.project_input_methods)}] · "
+            f"OUT [{format_methods(checkpoint.project_output_methods)}]. "
+            "Ce graphe est provisoire et incomplet."
+        )
     html = render_graph_html(
         projection.services_by_name,
         projection.edges,

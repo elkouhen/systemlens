@@ -34,6 +34,23 @@
       return flow.status === "cycle" ? 1 : 0;
     }
 
+    function serviceIdsForCodeFlow(flow) {
+      const callGraphOrder = flow.call_graph?.node_order;
+      if (Array.isArray(callGraphOrder) && callGraphOrder.length) {
+        const callGraphServices = callGraphOrder
+          .map(service => nodeIdForCodeFlowResource(service, "microservice"))
+          .filter(Boolean);
+        if (callGraphServices.length) return new Set(callGraphServices);
+      }
+      return new Set(
+        [...new Set((flow.steps || [])
+          .map(step => step.endpoint_id)
+          .filter(Boolean))]
+          .flatMap(endpointId => nodeIdsByEndpoint.get(endpointId) || [])
+          .filter(nodeId => nodeDataById.get(nodeId)?.kind === "microservice")
+      );
+    }
+
     function codeFlowProtocols(flow) {
       const protocols = new Set();
       (flow.steps || []).forEach(step => {
@@ -56,6 +73,7 @@
 
     function compareCodeFlows(left, right) {
       return codeFlowPriority(right) - codeFlowPriority(left)
+        || serviceIdsForCodeFlow(right).size - serviceIdsForCodeFlow(left).size
         || (right.steps?.length || 0) - (left.steps?.length || 0)
         || left.id.localeCompare(right.id);
     }
@@ -115,14 +133,6 @@
       ));
       return candidates.length === 1 ? candidates[0] : null;
     };
-    const serviceIdsForCodeFlow = flow => new Set(
-      [...new Set((flow.steps || [])
-        .map(step => step.endpoint_id)
-        .filter(Boolean))]
-        .flatMap(endpointId => nodeIdsByEndpoint.get(endpointId) || [])
-        .filter(nodeId => nodeDataById.get(nodeId)?.kind === "microservice")
-    );
-
     function pathForCodeFlow(flow) {
       const serviceId = nodeIdForCodeFlowResource(flow.module, "microservice");
       if (!serviceId) return null;
@@ -367,18 +377,16 @@
     }
 
     function servicesForCodeFlow(flow) {
-      const services = [];
-      const seen = new Set();
-      (flow.steps || []).forEach(step => {
-        if (!step.endpoint_id) return;
-        (nodeIdsByEndpoint.get(step.endpoint_id) || []).forEach(nodeId => {
-          const node = nodeDataById.get(nodeId);
-          if (node?.kind !== "microservice" || seen.has(node.name)) return;
-          seen.add(node.name);
-          services.push(node.name);
-        });
-      });
-      return services;
+      const callGraphOrder = flow.call_graph?.node_order;
+      if (Array.isArray(callGraphOrder) && callGraphOrder.length) {
+        const names = callGraphOrder.filter(service => (
+          nodeIdForCodeFlowResource(service, "microservice") !== null
+        ));
+        if (names.length) return [...new Set(names)];
+      }
+      return [...serviceIdsForCodeFlow(flow)]
+        .map(nodeId => nodeDataById.get(nodeId)?.name)
+        .filter(Boolean);
     }
 
     function codeFlowItem(flow) {
