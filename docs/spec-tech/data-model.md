@@ -202,6 +202,10 @@ call-graph transitions. After each join batch, the current provisional
 `code_flows` snapshot is committed, allowing exports to retain the arcs found
 before an interruption. These snapshots remain partial until final
 reconciliation.
+The join offset and compatibility signature are stored in `meta`; an explicit
+resume request can therefore skip completed IN methods after a process crash.
+The resume path is valid only while source and analysis-input signatures remain
+unchanged; generated presentation files such as HTML exports are ignored.
 
 Kafka flow continuations join only concrete, statically resolved Kafka endpoint
 identifiers. Known message types must match when both endpoints provide one;

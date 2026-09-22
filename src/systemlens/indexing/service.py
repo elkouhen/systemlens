@@ -202,6 +202,17 @@ def _trace(stage: str, **fields: object) -> None:
     print(f"SYSTEMLENS_TRACE ts={time.monotonic():.6f} stage={stage} {details}".rstrip(), file=sys.stderr, flush=True)
 
 
+def _resume_invalidating_paths(paths: Sequence[str]) -> list[str]:
+    """Return changes that can invalidate a persisted CodeQL join checkpoint."""
+    presentation_suffixes = {
+        ".adoc", ".css", ".html", ".js", ".log", ".md", ".rst", ".svg", ".txt",
+    }
+    return [
+        path for path in paths
+        if Path(path).suffix.lower() not in presentation_suffixes
+    ]
+
+
 def _index_repo(
     repo_root: Path,
     config: Config,
@@ -217,6 +228,7 @@ def _index_repo(
     call_graph_progress: CallGraphProgressCallback | None = None,
     codeql_progress: bool = False,
     generate_sources: bool = False,
+    resume_codeql_join: bool = False,
 ) -> IndexReport:
     timer = _IndexStageTimer(progress)
     # CodeQL diagnostics are opt-in.  Do not inherit the verbosity from older
@@ -327,6 +339,34 @@ def _index_repo(
         f"{CODE_FLOW_SIGNATURE}|engine={call_graph_engine}|"
         f"available={engine_available}|hops={config.codeql_max_hops}"
     )
+    join_signature = f"{flow_signature}|inputs={analysis_inputs_signature}"
+    resume_join_entries = 0
+    resume_join_flows: list[CodeFlow] = []
+    if resume_codeql_join:
+        resume_invalidating_paths = _resume_invalidating_paths([*changed, *deleted])
+        if full or resume_invalidating_paths:
+            raise ValueError(
+                "CodeQL join resume requires unchanged analysis inputs; "
+                f"changed files: {', '.join(resume_invalidating_paths[:10])}. "
+                "Run a normal index first."
+            )
+        if store.get_meta("code_flow_snapshot_status") != "partial":
+            raise ValueError("No partial CodeQL join snapshot is available to resume.")
+        if store.get_meta("codeql_join_signature") != join_signature:
+            raise ValueError(
+                "The partial CodeQL join checkpoint does not match the current "
+                "repository or analysis configuration."
+            )
+        try:
+            resume_join_entries = int(store.get_meta("codeql_join_completed_entries") or "0")
+        except ValueError as exc:
+            raise ValueError("The CodeQL join checkpoint offset is invalid.") from exc
+        resume_join_flows = store.all_code_flows()
+        _report_progress(
+            progress,
+            f"→ CodeQL : reprise de la jointure après la méthode IN "
+            f"{resume_join_entries} ({len(resume_join_flows)} flux persisté(s)).",
+        )
     codeql_timed_out = False
     if (
         topic_strategy == "strategy1"
@@ -487,6 +527,11 @@ def _index_repo(
             (call_graph_engine == "codeql" and codeql_database is not None) or engine_available
         ):
             engine_label = "CodeQL"
+            if not resume_codeql_join:
+                store.delete_meta("codeql_join_completed_entries")
+                store.set_meta("codeql_join_signature", join_signature)
+                store.set_meta("codeql_join_completed_entries", "0")
+                store.set_meta("code_flow_snapshot_status", "partial")
             _report_progress(progress, f"→ {engine_label} : préparation de l'analyse interprocédurale...")
             reachability: list[CodeQLReachability] = []
             prepared_codeql_flows: list[CodeFlow] | None = None
@@ -588,6 +633,7 @@ def _index_repo(
                 store.replace_code_flows(partial_flows)
                 store.delete_meta("code_flow_signature")
                 store.set_meta("code_flow_snapshot_status", "partial")
+                store.set_meta("codeql_join_completed_entries", str(completed_methods))
                 store.commit_checkpoint()
                 _report_progress(
                     progress,
@@ -676,6 +722,8 @@ def _index_repo(
                             stats=codeql_stats, reachability=reachability,
                             progress=progress,
                             join_checkpoint=publish_join_checkpoint,
+                            resume_from_entry=resume_join_entries,
+                            initial_flows=resume_join_flows,
                         )
                 else:
                     roots = _codeql_module_roots(
@@ -749,6 +797,8 @@ def _index_repo(
                                 stats=codeql_stats, reachability=reachability,
                                 progress=progress,
                                 join_checkpoint=publish_join_checkpoint,
+                                resume_from_entry=resume_join_entries,
+                                initial_flows=resume_join_flows,
                             )
                         completed_calls: list[CodeQLCall] = []
                         for number, (name, project_calls) in enumerate(partitioned_calls, start=1):
@@ -804,6 +854,8 @@ def _index_repo(
                 reachability=reachability,
                 progress=progress,
                 join_checkpoint=publish_join_checkpoint,
+                resume_from_entry=resume_join_entries,
+                initial_flows=resume_join_flows,
             )
             # AST and the interprocedural engine can describe the same
             # endpoint-to-endpoint flow. Keep one representative before
@@ -848,6 +900,8 @@ def _index_repo(
         else:
             store.set_meta("code_flow_signature", flow_signature)
             store.set_meta("code_flow_snapshot_status", "complete")
+            store.delete_meta("codeql_join_signature")
+            store.delete_meta("codeql_join_completed_entries")
         _report_progress(
             progress,
             f"→ Indexation : {len(flows)} parcours de code potentiel(s) matérialisé(s).",
@@ -932,6 +986,7 @@ def index_repo(
     call_graph_progress: CallGraphProgressCallback | None = None,
     codeql_progress: bool = False,
     generate_sources: bool = False,
+    resume_codeql_join: bool = False,
 ) -> IndexReport:
     """Index one repository, publishing explicit CodeQL checkpoints when needed."""
     with store.transaction():
@@ -950,4 +1005,5 @@ def index_repo(
             call_graph_progress=call_graph_progress,
             codeql_progress=codeql_progress,
             generate_sources=generate_sources,
+            resume_codeql_join=resume_codeql_join,
         )

@@ -1154,6 +1154,11 @@ def index_cmd(
         None, help="Manifeste(s) de Topics Markdown ou JSON à indexer explicitement."
     ),
     full: bool = typer.Option(False, "--full", help="Force un scan complet."),
+    resume_codeql_join: bool = typer.Option(
+        False,
+        "--resume-codeql-join",
+        help="Reprend une jointure CodeQL interrompue depuis son dernier checkpoint.",
+    ),
     manifests: Optional[list[Path]] = typer.Option(  # noqa: UP007
         None, "--manifest", help="Manifeste de Topics Markdown ou JSON (répétable)."
     ),
@@ -1241,6 +1246,12 @@ def index_cmd(
     if no_codeql and codeql_database is not None:
         typer.echo("`--no-codeql` ne peut pas être combiné avec `--codeql-database`.", err=True)
         raise typer.Exit(code=2)
+    if resume_codeql_join and full:
+        typer.echo("`--resume-codeql-join` ne peut pas être combiné avec `--full`.", err=True)
+        raise typer.Exit(code=2)
+    if resume_codeql_join and no_codeql:
+        typer.echo("`--resume-codeql-join` requiert CodeQL.", err=True)
+        raise typer.Exit(code=2)
     if no_codeql and codeql_progress_html is not None:
         typer.echo("`--codeql-progress-html` requiert CodeQL.", err=True)
         raise typer.Exit(code=2)
@@ -1272,9 +1283,13 @@ def index_cmd(
     def write_codeql_progress(checkpoint: CallGraphProgress) -> None:
         assert codeql_progress_html is not None
         _write_call_graph_progress_html(repo_root, codeql_progress_html, checkpoint)
+        progress_label = (
+            f"{checkpoint.completed_units}/{checkpoint.total_units} méthode(s) IN"
+            if checkpoint.phase == "join" else
+            f"{checkpoint.completed_projects}/{checkpoint.total_projects} projet(s)"
+        )
         typer.echo(
-            "  ✓ HTML de progression CodeQL : "
-            f"{codeql_progress_html} ({checkpoint.completed_projects}/{checkpoint.total_projects})"
+            f"  ✓ HTML de progression CodeQL : {codeql_progress_html} ({progress_label})"
         )
 
     _trace_index("store.open.begin")
@@ -1295,6 +1310,7 @@ def index_cmd(
             call_graph_progress=write_codeql_progress if codeql_progress_html is not None else None,
             codeql_progress=codeql_progress,
             generate_sources=generate_sources,
+            resume_codeql_join=resume_codeql_join,
         )
         store.set_meta("index_engine", "manual")
         _trace_index("store.close.begin")
