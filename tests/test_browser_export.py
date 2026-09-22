@@ -1016,7 +1016,7 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
             state="visible"
         )
         assert toolbar_before_selection is not None
-        assert page.locator("#graph-tab").get_attribute("aria-selected") == "true"
+        assert page.locator("#flows-tab").get_attribute("aria-selected") == "true"
         assert page.locator(".code-flow-item.is-selected").count() == 1
         assert page.locator(".code-flow-item").get_attribute(
             "data-selection-sentinel"
@@ -1033,6 +1033,8 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert page.locator("#analysis-ports-toggle").inner_text() == "Afficher les ports référencés"
         assert page.locator(".graph-node-port-reference").count() > referenced_port_count
         assert page.locator("#analysis-ports-toggle").get_attribute("aria-pressed") == "true"
+        page.locator("#graph-tab").click()
+        assert page.locator("#graph-tab").get_attribute("aria-selected") == "true"
         assert page.locator(".graph-local-port-path.is-code-flow-path").count() >= 1
         assert page.locator(".graph-port-path").count() == 0
         assert page.locator(".graph-call-path").count() >= 1
@@ -1471,7 +1473,7 @@ def test_generated_simple_supermarket_starts_with_every_node_in_view() -> None:
         page.locator(".graph-node-card-label.is-code-flow-node").first.wait_for(
             state="visible"
         )
-        assert page.locator("#graph-tab").get_attribute("aria-selected") == "true"
+        assert page.locator("#flows-tab").get_attribute("aria-selected") == "true"
         assert page.locator(".code-flow-item.is-selected").count() == 1
         assert toolbar_before_selection is not None
         assert page.locator("#graph").get_attribute("data-selected-code-flow") == expected_flow_id

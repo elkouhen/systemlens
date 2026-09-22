@@ -109,7 +109,7 @@ route count. A selected flow can be recentered from the analysis banner.
 Equivalent persisted routes that render the same interaction graph are grouped into
 one visible flow, preventing duplicate graph cards while retaining their count
 in the export model.
-Selecting a reconciled flow opens
+Selecting a reconciled flow outside the Flux de code tab opens
  the Explorer tab and displays only the microservices involved in the path,
  their indexed ports, and the direct dependencies between those ports. Topics
  remain available in the selected service's badges and tooltips, but are not
@@ -129,6 +129,10 @@ workspace beside the toolbar on wide screens and below it when that is the
 larger available region, while preserving margins for fixed-size cards. This
 fit never zooms in beyond the current readable view, is reapplied after a
 viewport resize, and cannot make the toolbar scroll horizontally.
+When a flow is selected from the Flux de code tab, that tab remains active so
+the user can select another flow directly. The selected flow still updates the
+Explorer graph and its analysis state; opening the Explorer tab remains
+available through the normal tab control.
 When a selected flow occupies less space than the available focus area, its
 specific framing may zoom in (a camera ratio below the overview ratio) so the
 flow remains readable; the ratio is bounded and the cards remain inside the

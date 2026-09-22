@@ -270,7 +270,11 @@
       // entry service for HTTP, fan-in, or Cron flows.
       const rootNodeId = path.nodes[0];
       if (!rootNodeId) return;
-      setToolbarTab("graph");
+      // Keep the flow list open when the user selected this flow there. This
+      // lets the next flow be selected without reopening the Flux de code tab.
+      if (flowsTab?.getAttribute("aria-selected") !== "true") {
+        setToolbarTab("graph");
+      }
       showPath(path, path.nodes, {
         codeFlow: flow,
         codeFlowRootNodeId: rootNodeId,
