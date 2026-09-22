@@ -548,6 +548,7 @@ def _index_repo(
                         [path for path in current_hashes if path.endswith(".java")],
                         relation_modules,
                     ) or [("base CodeQL fournie", repo_root, "")]
+                    scoped_project_calls: list[tuple[str, list[CodeQLCall]]] = []
                     for number, (name, _root, prefix) in enumerate(roots, start=1):
                         project_calls = extract_codeql_calls(
                             codeql_database, timeout_seconds=config.codeql_timeout_seconds,
@@ -557,8 +558,31 @@ def _index_repo(
                             caller_prefix=prefix,
                             deadline=codeql_deadline,
                         )
+                        scoped_project_calls.append((name, project_calls))
                         calls.extend(project_calls)
-                        publish_call_graph_progress(number, len(roots), name, calls)
+                    if not calls and any(prefix for _name, _root, prefix in roots):
+                        _report_progress(
+                            progress,
+                            "→ CodeQL : aucun appel trouvé avec les préfixes de modules ; "
+                            "repli vers la racine de la base fournie.",
+                        )
+                        calls = extract_codeql_calls(
+                            codeql_database, timeout_seconds=config.codeql_timeout_seconds,
+                            threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                            verbosity=codeql_verbosity,
+                            progress=progress if codeql_verbosity is not None else None,
+                            deadline=codeql_deadline,
+                        )
+                        scoped_project_calls = [
+                            (name, project_calls)
+                            for name, project_calls in _partition_codeql_calls(calls, roots)
+                        ]
+                    scoped_completed_calls: list[CodeQLCall] = []
+                    for number, (name, project_calls) in enumerate(scoped_project_calls, start=1):
+                        scoped_completed_calls.extend(project_calls)
+                        publish_call_graph_progress(
+                            number, len(scoped_project_calls), name, scoped_completed_calls
+                        )
                     timer.end("codeql-extract", "extraction des appels CodeQL")
                     reachability = extract_codeql_reachability(
                         codeql_database, methods,

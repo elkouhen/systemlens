@@ -108,7 +108,9 @@ database, the call query is scoped to each source-owning project while
 retaining cross-project callees. Direct answers without an intermediate
 witness are withheld until the final checkpoint. The complete global call
 list, including cross-project references, is used for final method-flow
-materialization.
+materialization. If the scoped queries produce no calls because the supplied
+database uses a different source-root spelling, indexing retries one unscoped
+query before materializing the checkpoints.
 The call facts are kept in memory, their paths are remapped to root-relative
 evidence, and all repository results are aggregated before method-flow
 materialization. A missing or untrusted callee
