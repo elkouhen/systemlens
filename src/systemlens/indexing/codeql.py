@@ -132,10 +132,15 @@ select enclosing.getQualifiedName() as caller,
 def _calls_query(caller_prefix: str) -> str:
     normalized_prefix = caller_prefix.strip("/")
     if not normalized_prefix:
-        scope = "true"
+        scope = "exists(Callable candidate | candidate = enclosing)"
     else:
         pattern = _ql_string(f"^{re.escape(normalized_prefix)}/")
-        scope = f"enclosing.getFile().getRelativePath().regexpMatch({pattern})"
+        scope = (
+            "exists(string path | "
+            "path = enclosing.getFile().getRelativePath() and "
+            f"path.regexpMatch({pattern})"
+            ")"
+        )
     return _QUERY.replace("__CALLER_SCOPE__", scope)
 
 

@@ -248,4 +248,4 @@ def test_extract_codeql_calls_scopes_global_database_by_caller_prefix(
 
     codeql.extract_codeql_calls(database, executable="custom-codeql", caller_prefix="payments")
 
-    assert 'regexpMatch("^payments/")' in queries[0]
+    assert 'path = enclosing.getFile().getRelativePath() and path.regexpMatch("^payments/")' in queries[0]
