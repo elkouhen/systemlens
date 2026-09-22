@@ -60,6 +60,9 @@ cache. The command never compiles the project or runs tests.
 Automatic method-call analysis creates one source-only Java database for the
 whole repository with `codeql`. Progress
 reports the completed project over the total and the calls extracted from it.
+After each completed project, SystemLens persists a partial `code_flows`
+snapshot and emits a checkpoint line with the number of provisional flows.
+The final reconciliation replaces this partial snapshot and marks it complete.
 SystemLens maps module-relative evidence paths back to the repository root,
 aggregates all calls, and only then joins them to the global method inventory.
 An explicit `--codeql-database` remains a caller-managed CodeQL-only

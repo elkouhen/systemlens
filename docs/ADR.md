@@ -16,6 +16,7 @@ functional or technical contract.
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence) |
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
+| Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
 
 ## ADR-1: Local static architecture analysis
@@ -639,3 +640,25 @@ existing local wrapper invocation.
 generation is enabled. A cold local Maven cache can prevent generated sources
 from being produced, so the index reports the failure instead of silently
 falling back to a network access or an incomplete generated-source result.
+
+## ADR-37: Publish CodeQL flow checkpoints during indexing
+
+**Status:** Accepted.
+
+**Context:** A complete CodeQL pass can take long enough that users need to
+inspect the flows already resolved while indexing continues. Keeping every
+mutation inside one transaction hides those usable intermediate results.
+
+**Decision:** After each completed CodeQL analysis project, commit the current
+architecture facts and provisional `code_flows` as an explicit partial
+checkpoint. Mark the checkpoint with
+`code_flow_snapshot_status=partial`, keep the code-flow signature unset, and
+emit a progress line with the checkpoint count and provisional flow count. The
+final reconciliation replaces the provisional flows and marks the snapshot
+`complete`.
+
+**Consequences:** Read-only clients can inspect progressively enriched flows
+while CodeQL continues, but a checkpoint is not a complete architecture
+snapshot. A failed run after a checkpoint leaves the last explicitly partial
+snapshot available for inspection; the missing code-flow signature causes the
+next index to retry the interprocedural stage.

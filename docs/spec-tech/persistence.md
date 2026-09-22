@@ -18,3 +18,9 @@ configuration and index namespace remain unambiguous.
 The endpoint-inventory signature in `meta` is bumped whenever extractor
 behaviour changes. This forces a complete refresh before new facts are served.
 
+Long-running CodeQL indexing can publish an explicit partial checkpoint after
+each completed analysis project. The checkpoint persists the currently known
+`code_flows` together with `code_flow_snapshot_status=partial`; the completed
+index replaces those flows after reconciliation and sets the status to
+`complete`. A missing or partial code-flow signature causes the next index to
+retry the interprocedural stage.

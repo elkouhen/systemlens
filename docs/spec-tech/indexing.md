@@ -34,9 +34,11 @@ temporary source-only Java projection (Java files only, without Maven/Gradle
 descriptors or build outputs, except Java files below `target/generated-sources`),
 create a database from that projection, query
 it, and decode the result as CSV;
-progress checkpoints group the global result by source-owning project, while
-all call facts are joined together. CodeQL's temporary query pack exports only
-source-located resolved calls. `--codeql-database` reuses one global database
+progress checkpoints group the global result by source-owning project. Each
+completed project publishes the currently available `code_flows` as an
+explicit partial checkpoint, while the final pass joins all call facts
+together. CodeQL's temporary query pack exports only source-located resolved
+calls. `--codeql-database` reuses one global database
 supplied by the caller. The temporary CodeQL query pack pins
 `codeql/java-all` and resolves it only from the already installed local CodeQL
 pack cache; indexing never runs `codeql pack install` or downloads analyzer

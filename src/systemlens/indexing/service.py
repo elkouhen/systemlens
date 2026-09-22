@@ -139,7 +139,7 @@ def _partition_codeql_calls(
     calls: Sequence[CodeQLCall],
     roots: Sequence[tuple[str, Path, str]],
 ) -> list[tuple[str, list[CodeQLCall]]]:
-    """Partition global CodeQL results by caller project for progress only."""
+    """Partition global CodeQL results by caller project for checkpoints."""
     by_project: dict[str, list[CodeQLCall]] = {
         name: [] for name, _root, _prefix in roots
     }
@@ -494,8 +494,6 @@ def _index_repo(
                 project_name: str,
                 calls: list[CodeQLCall],
             ) -> None:
-                if call_graph_progress is None:
-                    return
                 if prepared_codeql_flows is not None:
                     available_sites = {(call.caller_path, call.call_line) for call in calls}
                     progress_flows = [
@@ -518,17 +516,28 @@ def _index_repo(
                     *flows,
                     *progress_flows,
                 ]
-                call_graph_progress(CallGraphProgress(
-                    engine=call_graph_engine,
-                    completed_projects=completed_projects,
-                    total_projects=total_projects,
-                    project_name=project_name,
-                    endpoints=all_endpoints,
-                    modules=relation_modules,
-                    relations=relations,
-                    integration_methods=methods,
-                    code_flows=partial_flows,
-                ))
+                partial_flows = _deduplicate_code_flows(partial_flows)
+                store.replace_code_flows(partial_flows)
+                store.delete_meta("code_flow_signature")
+                store.set_meta("code_flow_snapshot_status", "partial")
+                store.commit_checkpoint()
+                _report_progress(
+                    progress,
+                    f"→ CodeQL : checkpoint {completed_projects}/{total_projects} "
+                    f"persisté ({len(partial_flows)} flux provisoire(s)).",
+                )
+                if call_graph_progress is not None:
+                    call_graph_progress(CallGraphProgress(
+                        engine=call_graph_engine,
+                        completed_projects=completed_projects,
+                        total_projects=total_projects,
+                        project_name=project_name,
+                        endpoints=all_endpoints,
+                        modules=relation_modules,
+                        relations=relations,
+                        integration_methods=methods,
+                        code_flows=partial_flows,
+                    ))
 
             codeql_deadline = time.monotonic() + config.codeql_timeout_seconds
             try:
@@ -715,8 +724,10 @@ def _index_repo(
             # next incremental index must retry CodeQL even when source files
             # are unchanged.
             store.delete_meta("code_flow_signature")
+            store.set_meta("code_flow_snapshot_status", "partial")
         else:
             store.set_meta("code_flow_signature", flow_signature)
+            store.set_meta("code_flow_snapshot_status", "complete")
         _report_progress(
             progress,
             f"→ Indexation : {len(flows)} parcours de code potentiel(s) matérialisé(s).",
@@ -802,7 +813,7 @@ def index_repo(
     codeql_progress: bool = False,
     generate_sources: bool = False,
 ) -> IndexReport:
-    """Index one repository and publish its facts as an atomic snapshot."""
+    """Index one repository, publishing explicit CodeQL checkpoints when needed."""
     with store.transaction():
         return _index_repo(
             repo_root,

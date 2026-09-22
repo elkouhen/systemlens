@@ -185,13 +185,12 @@ UI disclosure.
 Equivalent AST and CodeQL observations of the same ordered route count once;
 genuinely different intermediate routes remain distinct.
 
-When explicitly requested through `systemlens index --codeql-progress-html FILE`,
-the indexing service emits one in-memory checkpoint after each completed
-CodeQL project. The delivery adapter renders that checkpoint to `FILE` by
-atomic replacement and labels it as provisional with its completed-project
-count. These progress documents are deliberately outside the SQLite snapshot
-contract: they are an opt-in observability aid, may omit later method-call
-facts, and are never read by normal export, query, MCP, or web workflows.
+After each completed CodeQL project, the indexing service persists a partial
+`code_flows` checkpoint with `code_flow_snapshot_status=partial`. The optional
+`--codeql-progress-html FILE` delivery adapter renders the same checkpoint to
+`FILE` by atomic replacement and labels it as provisional with its
+completed-project count. Partial checkpoints may omit later method-call facts;
+the final reconciliation replaces them and marks the snapshot complete.
 
 Kafka flow continuations join only concrete, statically resolved Kafka endpoint
 identifiers. Known message types must match when both endpoints provide one;

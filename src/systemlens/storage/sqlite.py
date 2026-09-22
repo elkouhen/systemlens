@@ -145,11 +145,12 @@ class Store:
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
-        """Atomically publish one architecture snapshot.
+        """Publish one architecture snapshot, with optional explicit checkpoints.
 
         Schema creation happens when the writable store is opened. All domain
-        mutations for an index run must happen within this boundary, so an
-        exception never exposes a mixture of old and new inventory facts.
+        mutations for an index run happen within this boundary. Long-running
+        enrichment stages may call :meth:`commit_checkpoint` to publish an
+        explicitly partial snapshot before continuing.
         """
         if self._readonly:
             raise StoreError("Une transaction n'est pas disponible en lecture seule.")
@@ -166,6 +167,15 @@ class Store:
             self.conn.commit()
         finally:
             self._transaction_active = False
+
+    def commit_checkpoint(self) -> None:
+        """Commit the current partial snapshot and reopen the index transaction."""
+        if self._readonly:
+            raise StoreError("Un checkpoint n'est pas disponible en lecture seule.")
+        if not self._transaction_active:
+            raise StoreError("Un checkpoint nécessite une transaction active.")
+        self.conn.commit()
+        self.conn.execute("BEGIN IMMEDIATE")
 
     def _check_schema_compatible(self) -> None:
         try:

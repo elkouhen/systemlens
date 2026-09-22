@@ -488,8 +488,24 @@ def test_index_uses_automatic_codeql_database_when_available(
     )
 
     checkpoints = []
+    persisted_checkpoints = []
+    progress_messages: list[str] = []
+
+    def observe_checkpoint(checkpoint) -> None:
+        checkpoints.append(checkpoint)
+        with Store(repo, readonly=True) as reader:
+            persisted_checkpoints.append(
+                (reader.get_meta("code_flow_snapshot_status"), len(reader.all_code_flows()))
+            )
+
     with Store(repo) as store:
-        index_repo(repo, Config(), store, call_graph_progress=checkpoints.append)
+        index_repo(
+            repo,
+            Config(),
+            store,
+            progress=progress_messages.append,
+            call_graph_progress=observe_checkpoint,
+        )
 
     assert observed_roots == [repo]
     assert len(materializations) == 1  # shared by progress and final persistence
@@ -497,6 +513,10 @@ def test_index_uses_automatic_codeql_database_when_available(
         ("codeql", 1, 1, "orders"),
     ]
     assert checkpoints[0].relations
+    assert persisted_checkpoints == [("partial", len(checkpoints[0].code_flows))]
+    assert any("checkpoint 1/1 persisté" in message for message in progress_messages)
+    with Store(repo, readonly=True) as reader:
+        assert reader.get_meta("code_flow_snapshot_status") == "complete"
     progress_html = tmp_path / "codeql-progress.html"
     cli._write_call_graph_progress_html(repo, progress_html, checkpoints[0])
     content = progress_html.read_text(encoding="utf-8")
@@ -534,6 +554,7 @@ def test_codeql_timeout_commits_partial_snapshot_and_runs_post_processing(
         assert store.all_architecture_relations()
         assert store.all_code_flows()
         assert store.get_meta("code_flow_signature") is None
+        assert store.get_meta("code_flow_snapshot_status") == "partial"
 
     assert any("délai dépassé" in message for message in progress)
 
