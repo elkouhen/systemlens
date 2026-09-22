@@ -103,10 +103,12 @@ temporary CodeQL database for the whole indexed repository, with CodeQL's
 `--build-mode=none` source-only mode, then deletes it. The resulting calls are
 partitioned by caller project only for progress checkpoints. With HTML progress,
 global flows are materialized once, reused for final persistence, and filtered
-by reported call-site evidence for partial views. Direct answers without an
-intermediate witness are withheld until the final checkpoint. The
-complete global call list, including cross-project references, is used for
-method-flow materialization.
+by reported call-site evidence for partial views. With an explicit global
+database, the call query is scoped to each source-owning project while
+retaining cross-project callees. Direct answers without an intermediate
+witness are withheld until the final checkpoint. The complete global call
+list, including cross-project references, is used for final method-flow
+materialization.
 The call facts are kept in memory, their paths are remapped to root-relative
 evidence, and all repository results are aggregated before method-flow
 materialization. A missing or untrusted callee

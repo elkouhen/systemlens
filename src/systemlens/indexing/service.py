@@ -83,8 +83,8 @@ class CallGraphProgress:
     """One explicitly provisional method-call checkpoint.
 
     The checkpoint is emitted only after one local analyzer project has
-    completed.  It is intentionally separate from the transactional SQLite
-    snapshot: consumers must label it as incomplete until indexing commits.
+    completed. Consumers must label it as incomplete until final indexing
+    reconciliation commits the complete snapshot.
     """
 
     engine: str
@@ -543,13 +543,22 @@ def _index_repo(
             try:
                 if codeql_database is not None:
                     timer.begin("codeql-extract", "→ CodeQL : extraction des appels Java depuis la base fournie...")
-                    calls = extract_codeql_calls(
-                        codeql_database, timeout_seconds=config.codeql_timeout_seconds,
-                        threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
-                        verbosity=codeql_verbosity,
-                        progress=progress if codeql_verbosity is not None else None,
-                        deadline=codeql_deadline,
-                    )
+                    roots = _codeql_module_roots(
+                        repo_root,
+                        [path for path in current_hashes if path.endswith(".java")],
+                        relation_modules,
+                    ) or [("base CodeQL fournie", repo_root, "")]
+                    for number, (name, _root, prefix) in enumerate(roots, start=1):
+                        project_calls = extract_codeql_calls(
+                            codeql_database, timeout_seconds=config.codeql_timeout_seconds,
+                            threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                            verbosity=codeql_verbosity,
+                            progress=progress if codeql_verbosity is not None else None,
+                            caller_prefix=prefix,
+                            deadline=codeql_deadline,
+                        )
+                        calls.extend(project_calls)
+                        publish_call_graph_progress(number, len(roots), name, calls)
                     timer.end("codeql-extract", "extraction des appels CodeQL")
                     reachability = extract_codeql_reachability(
                         codeql_database, methods,
@@ -564,7 +573,6 @@ def _index_repo(
                             max_hops=config.codeql_max_hops,
                             stats=codeql_stats, reachability=reachability,
                         )
-                    publish_call_graph_progress(1, 1, "base CodeQL fournie", calls)
                 else:
                     roots = _codeql_module_roots(
                         repo_root,

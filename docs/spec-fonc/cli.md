@@ -65,8 +65,9 @@ snapshot and emits a checkpoint line with the number of provisional flows.
 The final reconciliation replaces this partial snapshot and marks it complete.
 SystemLens maps module-relative evidence paths back to the repository root,
 aggregates all calls, and only then joins them to the global method inventory.
-An explicit `--codeql-database` remains a caller-managed CodeQL-only
-global-database override and is queried once.
+An explicit `--codeql-database` remains a caller-managed global-database
+override, but its call query is scoped to each source-owning project so it
+produces the same progressive checkpoints.
 
 `--strategy strategy1` is opt-in. The selected strategy is persisted with
 the index and reused by incremental MCP reindexing and all derived views.

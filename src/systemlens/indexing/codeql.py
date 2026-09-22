@@ -3,6 +3,7 @@
 import csv
 import errno
 import os
+import re
 import signal
 import shutil
 import subprocess
@@ -109,8 +110,13 @@ predicate resolvedTarget(MethodCall call, Method target, string confidence) {
   target = call.getMethod() and target.fromSource() and confidence = "possible"
 }
 
+predicate callerInScope(Callable enclosing) {
+  __CALLER_SCOPE__
+}
+
 from SourceMethodCall call, Callable enclosing, Method invoked, string dispatch_confidence
-where enclosing = call.getEnclosingCallable() and
+where callerInScope(enclosing) and
+  enclosing = call.getEnclosingCallable() and
   resolvedTarget(call, invoked, dispatch_confidence)
 select enclosing.getQualifiedName() as caller,
   enclosing.getFile().getRelativePath() as caller_path,
@@ -121,6 +127,16 @@ select enclosing.getQualifiedName() as caller,
   call.getLocation().getStartLine() as call_line,
   dispatch_confidence
 """
+
+
+def _calls_query(caller_prefix: str) -> str:
+    normalized_prefix = caller_prefix.strip("/")
+    if not normalized_prefix:
+        scope = "true"
+    else:
+        pattern = _ql_string(f"^{re.escape(normalized_prefix)}/")
+        scope = f"enclosing.getFile().getRelativePath().regexpMatch({pattern})"
+    return _QUERY.replace("__CALLER_SCOPE__", scope)
 
 
 def _ql_string(value: str) -> str:
@@ -419,6 +435,7 @@ def extract_codeql_calls(
     executable: str | None = None,
     timeout_seconds: int = 600,
     path_prefix: str = "",
+    caller_prefix: str = "",
     threads: int = 1,
     ram_mb: int | None = None,
     verbosity: str | None = None,
@@ -430,6 +447,9 @@ def extract_codeql_calls(
     A database created for a build module reports paths relative to that
     module. ``path_prefix`` maps those paths back to the indexed repository
     root so that calls from several module databases can be joined together.
+    ``caller_prefix`` restricts a global database query to callers below one
+    repository-relative project prefix, while retaining callees from other
+    projects for cross-project joins.
     """
     if not database.is_dir():
         raise CodeQLError(f"CodeQL database not found: {database}")
@@ -439,7 +459,7 @@ def extract_codeql_calls(
     with tempfile.TemporaryDirectory(prefix="systemlens-codeql-") as directory:
         work = Path(directory)
         query = work / "calls.ql"
-        query.write_text(_QUERY, encoding="utf-8")
+        query.write_text(_calls_query(caller_prefix), encoding="utf-8")
         (work / "qlpack.yml").write_text(_QLPACK, encoding="utf-8")
         bqrs = work / "calls.bqrs"
         output = work / "calls.csv"

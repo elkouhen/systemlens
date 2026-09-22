@@ -223,3 +223,29 @@ def test_extract_codeql_calls_prefixes_module_relative_evidence_paths(
 
     assert calls[0].caller_path == "module-a/src/main/java/A.java"
     assert calls[0].callee_path == "module-a/src/main/java/B.java"
+
+
+def test_extract_codeql_calls_scopes_global_database_by_caller_prefix(
+    tmp_path: Path, monkeypatch
+) -> None:
+    database = tmp_path / "database"
+    database.mkdir()
+    queries: list[str] = []
+
+    def run(command: list[str], **_kwargs: object) -> CompletedProcess[str]:
+        if command[1:3] == ["query", "run"]:
+            query_path = next(part for part in command if part.endswith("calls.ql"))
+            queries.append(Path(query_path).read_text(encoding="utf-8"))
+        if command[1:3] == ["bqrs", "decode"]:
+            output = next(part.removeprefix("--output=") for part in command if part.startswith("--output="))
+            Path(output).write_text(
+                "caller,caller_path,caller_line,callee,callee_path,callee_line,call_line,dispatch_confidence\n",
+                encoding="utf-8",
+            )
+        return CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(codeql, "_run_with_progress", run)
+
+    codeql.extract_codeql_calls(database, executable="custom-codeql", caller_prefix="payments")
+
+    assert 'regexpMatch("^payments/")' in queries[0]
