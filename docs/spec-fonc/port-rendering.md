@@ -35,6 +35,11 @@ analysis mode. The selected arc, its label, and its endpoint ports are
 highlighted; clicking the same port or arc clears the focus, and clicking
 another port or arc moves it. This interaction does not change the view,
 selected flow, camera, or persisted facts.
+The selected call graph displays only its referenced IN and OUT ports by
+default. The analysis context provides an `Afficher tous les ports` control to
+show every indexed port on the services in the selected graph. Returning to a
+different flow restores the referenced-port default; this control changes only
+the rendered view and does not change persisted facts.
 The visible arc remains visually thin, but its interactive hit area is wider so
 that selecting an arc remains usable in a dense graph.
 Its primary card title is the input trigger, while the Java method remains

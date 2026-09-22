@@ -454,9 +454,17 @@
           const pathLabel = document.getElementById("graph-mode-context-path");
           const help = document.getElementById("graph-mode-context-help");
           const clear = document.getElementById("analysis-mode-clear");
+          const portsToggle = document.getElementById("analysis-ports-toggle");
           if (!context || !title || !help || !clear) return;
           const active = Boolean(graphState.selectedCodeFlowId);
           context.hidden = !active;
+          if (portsToggle) {
+            portsToggle.hidden = !active;
+            portsToggle.setAttribute("aria-pressed", String(Boolean(graphState.showAllCodeFlowPorts)));
+            portsToggle.textContent = graphState.showAllCodeFlowPorts
+              ? "Afficher les ports référencés"
+              : "Afficher tous les ports";
+          }
           if (!active) return;
           const flowPath = [...(graphState.pathMicroserviceOrder?.keys() || [])]
             .map(id => nodeDataById.get(id)?.name)
@@ -561,6 +569,13 @@
           requestGraphRender();
         };
         updateAnalysisModeIndicator();
+        const selectedFlow = graphState.selectedCodeFlowId
+          ? (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)
+          : null;
+        const referencedCodeFlowPortIds = new Set([
+          ...(selectedFlow?.steps || []).map(step => step.endpoint_id),
+          ...(selectedFlow?.call_graph?.edges || []).flatMap(edge => edge.endpoint_ids || []),
+        ].filter(Boolean));
         network.forEachNode((id, attributes) => {
           if (
             !isVisibleNodeId(id)
@@ -855,7 +870,10 @@
           }
           const portsByDirection = { in: [], out: [] };
           if (graphState.selectedCodeFlowId) {
-          (node.ports || []).filter(port => port.label).forEach(port => {
+          (node.ports || []).filter(port => (
+            port.label
+            && (graphState.showAllCodeFlowPorts || referencedCodeFlowPortIds.has(port.endpoint_id))
+          )).forEach(port => {
             portsByDirection[port.direction]?.push(port);
           });
           Object.entries(portsByDirection).forEach(([portDirection, ports]) => ports.forEach((port, index) => {

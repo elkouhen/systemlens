@@ -7,6 +7,7 @@
         relatedEdges: null,
         analysisPortEndpointId: null,
         selectedCodeFlowId: null,
+        showAllCodeFlowPorts: false,
         pathMicroserviceOrder: new Map(),
         codeFlowTreeCoordinates: new Map(),
       });
@@ -30,6 +31,7 @@
     const renderSymbolsButton = document.getElementById("render-symbols");
     const analysisModeClear = document.getElementById("analysis-mode-clear");
     const analysisModeCenter = document.getElementById("analysis-mode-center");
+    const analysisPortsToggle = document.getElementById("analysis-ports-toggle");
     graphCanvas.dataset.renderMode = graphState.renderMode;
     analysisModeClear?.addEventListener("click", () => {
       graphState.analysisPortEndpointId = null;
@@ -40,6 +42,11 @@
       const orderedNodes = [...(graphState.pathMicroserviceOrder?.keys() || [])];
       const remainingNodes = [...graphState.relatedNodes].filter(id => !orderedNodes.includes(id));
       scheduleFlowCameraFit({ nodes: [...orderedNodes, ...remainingNodes] });
+    });
+    analysisPortsToggle?.addEventListener("click", () => {
+      if (!graphState.selectedCodeFlowId) return;
+      graphState.showAllCodeFlowPorts = !graphState.showAllCodeFlowPorts;
+      requestGraphRender();
     });
     function updateFitModeControls(mode) {
       [

@@ -421,6 +421,7 @@
       )));
       graphState.analysisPortEndpointId = null;
       graphState.selectedCodeFlowId = context.codeFlow?.id || null;
+      graphState.showAllCodeFlowPorts = false;
       graphState.codeFlowRootNodeId = context.codeFlowRootNodeId || null;
       graphState.codeFlowTrigger = context.codeFlowTrigger || null;
       graphFlowStatus.hidden = context.topologyReconciled !== false;

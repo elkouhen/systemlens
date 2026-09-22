@@ -170,6 +170,7 @@ def _code_flow_document() -> str:
     orders_publish = kafka_endpoint("produce", "orders.created", "OrderPublisher.java", "orders")
     payments_consume = kafka_endpoint("consume", "orders.created", "PaymentHandler.java", "payments")
     payments_publish = kafka_endpoint("produce", "payments.completed", "PaymentHandler.java", "payments")
+    payments_unrelated = kafka_endpoint("produce", "payments.audit", "PaymentAuditPublisher.java", "payments")
     inventory_consume = kafka_endpoint("consume", "payments.completed", "InventoryHandler.java", "inventory")
     flow = CodeFlow(
         id="flow-readable",
@@ -214,7 +215,7 @@ def _code_flow_document() -> str:
     return render_graph_html(
         {
             "orders": [orders_publish],
-            "payments": [payments_consume, payments_publish],
+            "payments": [payments_consume, payments_publish, payments_unrelated],
             "inventory": [inventory_consume],
         },
         [
@@ -1025,6 +1026,13 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         )
         assert float(page.locator("#graph").get_attribute("data-flow-focus-ratio")) > 0
         assert page.locator(".graph-node-card-label.is-code-flow-node").count() == 3
+        assert page.locator("#analysis-ports-toggle").inner_text() == "Afficher tous les ports"
+        referenced_port_count = page.locator(".graph-node-port-reference").count()
+        assert referenced_port_count > 0
+        page.locator("#analysis-ports-toggle").click()
+        assert page.locator("#analysis-ports-toggle").inner_text() == "Afficher les ports référencés"
+        assert page.locator(".graph-node-port-reference").count() > referenced_port_count
+        assert page.locator("#analysis-ports-toggle").get_attribute("aria-pressed") == "true"
         assert page.locator(".graph-local-port-path.is-code-flow-path").count() >= 1
         assert page.locator(".graph-port-path").count() == 0
         assert page.locator(".graph-call-path").count() >= 1

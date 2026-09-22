@@ -115,6 +115,7 @@
       relatedLocalPortLinks: new Set(),
       analysisPortEndpointId: null,
       selectedCodeFlowId: null,
+      showAllCodeFlowPorts: false,
       codeFlowRootNodeId: null,
       codeFlowTrigger: null,
       pathMicroserviceOrder: new Map(),
