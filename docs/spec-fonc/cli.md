@@ -99,7 +99,10 @@ CodeQL diagnostics are silent by default, including for repositories whose
 older configuration still contains `analysis.codeql_verbosity`. The explicit
 `--codeql-progress` option temporarily enables `progress++` for one command.
 CodeQL's messages are diagnostic progress only; they do not provide a
-guaranteed percentage or remaining-time estimate.
+guaranteed percentage or remaining-time estimate. During the Python-side join,
+SystemLens reports the call-attachment phase and the input-method exploration
+at least every five seconds while work continues. These messages include
+processed calls or methods, explored transitions, and elapsed time.
 `analysis.codeql_timeout_seconds` sets the positive wall-clock budget for the
 complete CodeQL pass, including source generation, temporary database creation,
 query execution and BQRS decoding; its default is `600` seconds. The remaining

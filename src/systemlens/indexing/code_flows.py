@@ -1,6 +1,7 @@
 """Materialize conservative same-method flows during indexing."""
 
 import hashlib
+import time
 from collections import defaultdict, deque
 from dataclasses import replace
 from pathlib import Path
@@ -572,7 +573,18 @@ def materialize_codeql_code_flows(
             seen_edges.add(key)
             adjacency[caller.id].append((callee, call, inferred))
 
-    for call in calls:
+    call_join_started_at = time.monotonic()
+    last_call_join_report_at = call_join_started_at
+    for call_number, call in enumerate(calls, start=1):
+        now = time.monotonic()
+        if now - last_call_join_report_at >= 5.0:
+            report(
+                f"→ CodeQL : rattachement des appels en cours · "
+                f"{call_number - 1}/{len(calls)} appel(s) analysé(s) · "
+                f"{sum(len(targets) for targets in adjacency.values())} "
+                f"rattachement(s) · {now - call_join_started_at:.0f} s."
+            )
+            last_call_join_report_at = now
         caller = locate_caller(call)
         resolved_callee = locate(
             call.callee, call.callee_path, call.callee_line,
@@ -623,6 +635,7 @@ def materialize_codeql_code_flows(
         )
     explored_entries = resume_from_entry
     last_reported_explored = 0
+    last_exploration_report_at = time.monotonic()
     for entry in input_methods[resume_from_entry:]:
         for trigger_id in entry.input_endpoint_ids:
             trigger = endpoint_by_id.get(trigger_id)
@@ -691,6 +704,16 @@ def materialize_codeql_code_flows(
                     if not dispatch_matches_entry(entry, current, target):
                         continue
                     explored += 1
+                    now = time.monotonic()
+                    if now - last_exploration_report_at >= 5.0:
+                        report(
+                            f"→ CodeQL : jointure en cours · méthode IN "
+                            f"{explored_entries + 1}/{len(input_methods)} · "
+                            f"{explored} transition(s) explorée(s) · "
+                            f"{len(current_flows())} flux... "
+                            f"({now - call_join_started_at:.0f} s)"
+                        )
+                        last_exploration_report_at = now
                     next_route = [*route, (target, call, signature_join)]
                     if target.id == entry.id or any(previous.id == target.id for previous, _edge, _signature in route):
                         steps = [_endpoint_step(trigger, 1)]
@@ -770,19 +793,23 @@ def materialize_codeql_code_flows(
                         visited.add(state)
                         queue.append((target, next_route))
         explored_entries += 1
+        now = time.monotonic()
         if (
             explored_entries == len(input_methods)
             or explored_entries % 25 == 0
             or explored - last_reported_explored >= 5_000
+            or now - last_exploration_report_at >= 5.0
         ):
             report(
                 f"→ CodeQL : jointure en cours · méthode IN "
                 f"{explored_entries}/{len(input_methods)} · "
-                f"{explored} transition(s) explorée(s) · {len(current_flows())} flux..."
+                f"{explored} transition(s) explorée(s) · {len(current_flows())} flux... "
+                f"({now - call_join_started_at:.0f} s)"
             )
             if join_checkpoint is not None:
                 join_checkpoint(current_flows(), explored_entries, len(input_methods))
             last_reported_explored = explored
+            last_exploration_report_at = now
     if stats is not None:
         stats.update({
             "calls": len(calls), "joined_calls": sum(len(targets) for targets in adjacency.values()),
