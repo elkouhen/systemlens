@@ -121,7 +121,10 @@ When the join itself is interrupted after one or more committed batches,
 `systemlens index --resume-codeql-join` reuses the compatible repository
 checkpoint and skips the completed IN methods. The option rejects changed
 analysis inputs, incompatible settings, or a non-partial snapshot; generated
-presentation files such as HTML exports do not invalidate it.
+presentation files such as HTML exports do not invalidate it. If the persisted
+method list no longer
+matches the current indexed method list, the command discards the stale join
+cursor and restarts the CodeQL join from the beginning.
 `analysis.codeql_threads` sets the number of threads passed to CodeQL database
 creation and query execution; its default is `0`, which delegates one thread
 per available core to CodeQL. `analysis.codeql_ram_mb` optionally sets

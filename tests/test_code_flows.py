@@ -13,7 +13,7 @@ from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod
-from systemlens.indexing.code_flows import _deduplicate_code_flows
+from systemlens.indexing.code_flows import _deduplicate_code_flows, codeql_join_methods_signature
 from systemlens.indexing.code_flows import materialize_code_flows, reconcile_code_flows
 from systemlens.indexing.code_flows import materialize_codeql_code_flows
 from systemlens.indexing.code_flows import materialize_kafka_flow_continuations
@@ -793,6 +793,26 @@ def test_codeql_materializes_same_method_contract_input_and_output(tmp_path: Pat
 
     assert len(flows) == 1
     assert [step.kind for step in flows[0].steps] == ["http_entry", "http_call"]
+
+
+def test_codeql_join_methods_signature_changes_when_input_method_facts_change(
+    tmp_path: Path,
+) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    file = tmp_path / source
+    file.parent.mkdir(parents=True)
+    file.write_text("package com.example; class OrderController { void place() {} }\n", encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    entry = _endpoint("entry", "serve", "rest", "POST /orders", source, 1)
+    output = replace(_endpoint("output", "call", "rest", "POST /inventory", source, 1), module="orders")
+    methods = materialize_integration_methods(tmp_path, [entry, output], [source], [module])
+
+    changed = [replace(methods[0], end_line=methods[0].end_line + 1), *methods[1:]]
+
+    assert codeql_join_methods_signature(methods) != codeql_join_methods_signature(changed)
 
 
 def test_possible_signature_only_call_uses_explicit_low_confidence_join(tmp_path: Path) -> None:

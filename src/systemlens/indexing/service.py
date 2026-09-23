@@ -25,7 +25,7 @@ from systemlens.conventions.strategy1.kafka import (
 from systemlens.indexing.materializers import materialize_asyncapi_contracts, materialize_openapi_contracts
 from systemlens.indexing.code_flows import (
     CODE_FLOW_SIGNATURE, _deduplicate_code_flows, materialize_code_flows,
-    materialize_codeql_code_flows,
+    codeql_join_methods_signature, materialize_codeql_code_flows,
     materialize_kafka_flow_continuations, reconcile_code_flows,
 )
 from systemlens.indexing.integration_methods import materialize_integration_methods
@@ -342,6 +342,7 @@ def _index_repo(
     join_signature = f"{flow_signature}|inputs={analysis_inputs_signature}"
     resume_join_entries = 0
     resume_join_flows: list[CodeFlow] = []
+    resume_join_methods_signature: str | None = None
     if resume_codeql_join:
         resume_invalidating_paths = _resume_invalidating_paths([*changed, *deleted])
         if full or resume_invalidating_paths:
@@ -361,6 +362,7 @@ def _index_repo(
             resume_join_entries = int(store.get_meta("codeql_join_completed_entries") or "0")
         except ValueError as exc:
             raise ValueError("The CodeQL join checkpoint offset is invalid.") from exc
+        resume_join_methods_signature = store.get_meta("codeql_join_methods_signature")
         resume_join_flows = store.all_code_flows()
         _report_progress(
             progress,
@@ -522,6 +524,25 @@ def _index_repo(
             repo_root, all_endpoints, list(current_hashes), relation_modules
         )
         store.replace_integration_methods(methods)
+        current_join_methods_signature = codeql_join_methods_signature(methods)
+        if resume_codeql_join:
+            input_method_count = sum(bool(method.input_endpoint_ids) for method in methods)
+            checkpoint_matches = (
+                resume_join_methods_signature == current_join_methods_signature
+                and 0 <= resume_join_entries <= input_method_count
+            )
+            if not checkpoint_matches:
+                _report_progress(
+                    progress,
+                    "→ CodeQL : checkpoint de reprise incompatible avec les méthodes "
+                    "IN courantes ; reprise complète de la jointure.",
+                )
+                resume_join_entries = 0
+                resume_join_flows = []
+                store.set_meta("codeql_join_completed_entries", "0")
+                store.set_meta("codeql_join_methods_signature", current_join_methods_signature)
+        else:
+            store.set_meta("codeql_join_methods_signature", current_join_methods_signature)
         flows = materialize_code_flows(repo_root, all_endpoints, relation_modules)
         if methods and call_graph_engine != "none" and (
             (call_graph_engine == "codeql" and codeql_database is not None) or engine_available

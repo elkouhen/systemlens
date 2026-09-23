@@ -28,6 +28,25 @@ _MONGO_WRITE_OPERATIONS = frozenset({
 })
 
 
+def codeql_join_methods_signature(methods: Sequence[IntegrationMethod]) -> str:
+    """Fingerprint the ordered input-method list used by resumable joins."""
+    input_methods = [method for method in methods if method.input_endpoint_ids]
+    payload = repr([
+        (
+            method.id,
+            method.module,
+            method.path,
+            method.start_line,
+            method.end_line,
+            method.qualified_method,
+            tuple(sorted(method.input_endpoint_ids)),
+            tuple(sorted(method.output_endpoint_ids)),
+        )
+        for method in input_methods
+    ]).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def _deduplicate_code_flows(flows: list[CodeFlow]) -> list[CodeFlow]:
     """Keep one representative for each evidenced endpoint-to-endpoint flow.
 
