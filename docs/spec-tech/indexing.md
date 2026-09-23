@@ -54,7 +54,11 @@ created. The indexed repository is never modified, compiled, or tested; the
 generation command may still require cached or remote plugin dependencies.
 The call query keeps both caller and callee in source code, folds exact
 dispatch before viable-dispatch expansion, and computes that resolution once
-per call. CodeQL also runs an output-anchored transitive reachability query whose source and target
+per call. The Python post-processing has two distinct stages: it first resolves
+the CodeQL rows into one source-backed internal call graph, then traverses that
+graph from indexed input methods to indexed output methods to reconstruct
+complete potential flows. It does not connect endpoint facts by name alone.
+CodeQL also runs an output-anchored transitive reachability query whose source and target
 predicates are restricted to the already indexed input/output methods by
 relative path and start line. Exact input-to-output reachability is persisted
 with medium confidence; CodeQL-reported possible dispatch is persisted with

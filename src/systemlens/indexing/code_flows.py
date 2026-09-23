@@ -3,7 +3,7 @@
 import hashlib
 import time
 from collections import defaultdict, deque
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Sequence
 
@@ -26,6 +26,23 @@ _MONGO_WRITE_OPERATIONS = frozenset({
     "bulkOps", "findAndModify", "findAndReplace", "insert", "remove", "save",
     "updateFirst", "updateMulti", "upsert",
 })
+
+
+CodeQLEdge = tuple[IntegrationMethod, CodeQLCall, bool]
+
+
+@dataclass(frozen=True)
+class CodeQLCallGraph:
+    """The source-backed internal call graph used for flow reconstruction."""
+
+    adjacency: dict[str, list[CodeQLEdge]]
+    synthetic_calls: set[CodeQLCall]
+    call_count: int
+    locate: Callable[[str, str, int], tuple[IntegrationMethod, bool] | None]
+
+    @property
+    def joined_calls(self) -> int:
+        return sum(len(targets) for targets in self.adjacency.values())
 
 
 def codeql_join_methods_signature(methods: Sequence[IntegrationMethod]) -> str:
@@ -414,6 +431,144 @@ def materialize_code_flows(
     return sorted(flows, key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
 
 
+def _build_codeql_call_graph(
+    methods: list[IntegrationMethod],
+    calls: list[CodeQLCall],
+    *,
+    repo_root: Path | None,
+    source_paths: Sequence[str],
+    progress: Callable[[str], None] | None,
+) -> CodeQLCallGraph:
+    """Resolve CodeQL rows into the internal graph consumed by reconstruction."""
+    def report(message: str) -> None:
+        if progress is not None:
+            progress(message)
+
+    def normalized_method_name(name: str) -> str:
+        """Align analyzer method names with Java source declarations."""
+        normalized = name.replace("$", ".").split(":", 1)[0]
+        open_parenthesis = normalized.find("(")
+        if open_parenthesis >= 0:
+            normalized = normalized[:open_parenthesis]
+        return normalized
+
+    def normalized_path(path: str) -> str:
+        """Normalize harmless extractor spelling differences in source paths."""
+        return path.replace("\\", "/").removeprefix("./")
+
+    by_locator = {
+        (normalized_method_name(item.qualified_method), normalized_path(item.path), item.start_line): item
+        for item in methods
+    }
+    methods_by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
+    for item in methods:
+        methods_by_path[normalized_path(item.path)].append(item)
+
+    def locate(
+        name: str, path: str, line: int, *, allow_signature_fallback: bool = False,
+    ) -> tuple[IntegrationMethod, bool] | None:
+        """Resolve one CodeQL method to an indexed method."""
+        normalized_name = normalized_method_name(name)
+        path = normalized_path(path)
+        exact = by_locator.get((normalized_name, path, line))
+        if exact is not None:
+            return exact, False
+        same_file = [
+            item for item in methods
+            if normalized_method_name(item.qualified_method) == normalized_name
+            and normalized_path(item.path) == path
+            and item.start_line <= line <= item.end_line
+        ]
+        if same_file:
+            return min(same_file, key=lambda item: item.end_line - item.start_line), False
+        if allow_signature_fallback:
+            candidates = [
+                item for item in methods
+                if normalized_method_name(item.qualified_method) == normalized_name
+            ]
+            if len(candidates) == 1:
+                return candidates[0], True
+        return None
+
+    def locate_caller(call: CodeQLCall) -> IntegrationMethod | None:
+        resolved = locate(call.caller, call.caller_path, call.caller_line)
+        if resolved is not None:
+            return resolved[0]
+        if not call.caller.startswith("<anonymous"):
+            return None
+        enclosing = [
+            item for item in methods_by_path.get(normalized_path(call.caller_path), [])
+            if item.start_line <= call.call_line <= item.end_line
+        ]
+        return min(enclosing, key=lambda item: item.end_line - item.start_line) if enclosing else None
+
+    adjacency: dict[str, list[CodeQLEdge]] = defaultdict(list)
+    symbols = JavaSymbols(repo_root, methods, source_paths) if repo_root is not None else None
+    bridges: dict[str, IntegrationMethod | None] = {}
+    resolved_sites: set[tuple[str, int]] = set()
+    seen_edges: set[tuple[str, str, int, str, bool]] = set()
+    synthetic_calls: set[CodeQLCall] = set()
+
+    def add_edge(
+        caller: IntegrationMethod, callee: IntegrationMethod, call: CodeQLCall,
+        inferred: bool = False,
+    ) -> None:
+        key = (caller.id, callee.id, call.call_line, call.dispatch_confidence, inferred)
+        if key not in seen_edges:
+            seen_edges.add(key)
+            adjacency[caller.id].append((callee, call, inferred))
+
+    started_at = time.monotonic()
+    last_report_at = started_at
+    for call_number, call in enumerate(calls, start=1):
+        now = time.monotonic()
+        if now - last_report_at >= 5.0:
+            report(
+                f"→ CodeQL : rattachement des appels en cours · "
+                f"{call_number - 1}/{len(calls)} appel(s) analysé(s) · "
+                f"{sum(len(targets) for targets in adjacency.values())} "
+                f"rattachement(s) · {now - started_at:.0f} s."
+            )
+            last_report_at = now
+        caller = locate_caller(call)
+        resolved_callee = locate(
+            call.callee, call.callee_path, call.callee_line,
+            allow_signature_fallback=True,
+        )
+        if caller is None or resolved_callee is None:
+            continue
+        callee, signature_join = resolved_callee
+        add_edge(caller, callee, call, signature_join)
+        if symbols is not None:
+            info = symbols.methods.get(callee.id)
+            if info is not None and info.concrete:
+                resolved_sites.add((caller.id, call.call_line))
+            if callee.id not in bridges:
+                bridges[callee.id] = symbols.bridge(callee)
+            candidate = bridges[callee.id]
+            if candidate is not None:
+                synthetic = replace(
+                    call, callee=candidate.qualified_method, callee_path=candidate.path,
+                    callee_line=candidate.start_line, dispatch_confidence="possible",
+                )
+                synthetic_calls.add(synthetic)
+                add_edge(caller, candidate, synthetic, True)
+
+    if symbols is not None:
+        for call in symbols.fallback_calls(resolved_sites):
+            caller = locate_caller(call)
+            resolved_target = locate(call.callee, call.callee_path, call.callee_line)
+            if caller is not None and resolved_target is not None:
+                add_edge(caller, resolved_target[0], call, True)
+
+    return CodeQLCallGraph(
+        adjacency=adjacency,
+        synthetic_calls=synthetic_calls,
+        call_count=len(calls),
+        locate=lambda name, path, line: locate(name, path, line),
+    )
+
+
 def materialize_codeql_code_flows(
     methods: list[IntegrationMethod], endpoints: list[MessageEndpoint], calls: list[CodeQLCall],
     *, repo_root: Path | None = None, max_hops: int = 12,
@@ -425,11 +580,12 @@ def materialize_codeql_code_flows(
     resume_from_entry: int = 0,
     initial_flows: Sequence[CodeFlow] = (),
 ) -> list[CodeFlow]:
-    """Join AST method facts through resolved CodeQL calls.
+    """Reconstruct endpoint flows from the internal CodeQL call graph.
 
-    Source-located CodeQL pairs are authoritative. Missing or imperfect
-    virtual-dispatch edges may be completed by the transient source symbol
-    index, but every synthetic edge remains possible/low-confidence.
+    The call graph is built first from source-located CodeQL rows. This phase
+    then traverses its edges from indexed inputs to indexed outputs. Missing or
+    imperfect virtual-dispatch edges may be completed by the transient source
+    symbol index, but every synthetic edge remains possible/low-confidence.
     """
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
     confidence_rank = {"high": 0, "medium": 1, "low": 2}
@@ -497,158 +653,24 @@ def materialize_codeql_code_flows(
         f"→ CodeQL : jointure de {len(calls)} appel(s) avec "
         f"{len(methods)} méthode(s) Java..."
     )
-    def normalized_method_name(name: str) -> str:
-        """Align analyzer method names with Java source declarations."""
-        # Analyzer names may include ``package.Type.method:return(args)``.
-        # The AST inventory deliberately stores the stable Java declaration name
-        # only. Removing the CPG signature is safe because the following lookup
-        # still requires an exact source location or one unique declaration.
-        normalized = name.replace("$", ".").split(":", 1)[0]
-        # CodeQL normally omits parameters, while some versions
-        # expose ``Type.method(arg, ...)``.  The AST projection intentionally
-        # keeps only the stable owner-and-method part, so discard a terminal
-        # signature before doing the source-backed join.
-        open_parenthesis = normalized.find("(")
-        if open_parenthesis >= 0:
-            normalized = normalized[:open_parenthesis]
-        return normalized
-
-    def normalized_path(path: str) -> str:
-        """Normalize harmless extractor spelling differences in source paths."""
-        return path.replace("\\", "/").removeprefix("./")
-
-    by_locator = {
-        (normalized_method_name(item.qualified_method), normalized_path(item.path), item.start_line): item
-        for item in methods
-    }
-    methods_by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
-    for item in methods:
-        methods_by_path[normalized_path(item.path)].append(item)
-    def locate(
-        name: str, path: str, line: int, *, allow_signature_fallback: bool = False,
-    ) -> tuple[IntegrationMethod, bool] | None:
-        """Resolve a method and report whether its source path was joined.
-
-        A signature fallback is accepted only when the extractor explicitly
-        lacks a source path and exactly one indexed method has that qualified
-        name. It remains low-confidence evidence, never an exact CodeQL fact.
-        """
-        normalized_name = normalized_method_name(name)
-        path = normalized_path(path)
-        exact = by_locator.get((normalized_name, path, line))
-        if exact is not None:
-            return exact, False
-        same_file = [
-            item for item in methods
-            if normalized_method_name(item.qualified_method) == normalized_name
-            and normalized_path(item.path) == path
-            and item.start_line <= line <= item.end_line
-        ]
-        if same_file:
-            return min(same_file, key=lambda item: item.end_line - item.start_line), False
-        if allow_signature_fallback:
-            candidates = [item for item in methods if normalized_method_name(item.qualified_method) == normalized_name]
-            if len(candidates) == 1:
-                return candidates[0], True
-        return None
-
-    def locate_caller(call: CodeQLCall) -> IntegrationMethod | None:
-        """Locate a caller, including a lambda's enclosing Java method.
-
-        CodeQL represents a Java lambda as a synthetic anonymous ``apply``
-        method. Its qualified name has no direct AST counterpart, but its call
-        site remains within the lexical method declaration SystemLens stored.
-        Prefer the narrowest containing declaration to avoid attributing a
-        local/anonymous-class method to an outer method when both are present.
-        """
-        resolved = locate(call.caller, call.caller_path, call.caller_line)
-        direct = resolved[0] if resolved is not None else None
-        if direct is not None:
-            return direct
-        # The only name-less caller recovery supported is CodeQL's explicit
-        # synthetic anonymous/lambda callable. Ordinary unknown names must not
-        # be attributed to whichever method happens to contain the line.
-        if not call.caller.startswith("<anonymous"):
-            return None
-        enclosing = [
-            item for item in methods_by_path.get(normalized_path(call.caller_path), [])
-            if item.start_line <= call.call_line <= item.end_line
-        ]
-        return min(enclosing, key=lambda item: item.end_line - item.start_line) if enclosing else None
-
-    adjacency: dict[str, list[tuple[IntegrationMethod, CodeQLCall, bool]]] = defaultdict(list)
-    symbols = JavaSymbols(repo_root, methods, source_paths) if repo_root is not None else None
-    bridges: dict[str, IntegrationMethod | None] = {}
-    resolved_sites: set[tuple[str, int]] = set()
-    seen_edges: set[tuple[str, str, int, str, bool]] = set()
-    synthetic_calls: set[CodeQLCall] = set()
-    call_count = len(calls)
-
-    def add_edge(
-        caller: IntegrationMethod, callee: IntegrationMethod, call: CodeQLCall,
-        inferred: bool = False,
-    ) -> None:
-        key = (caller.id, callee.id, call.call_line, call.dispatch_confidence, inferred)
-        if key not in seen_edges:
-            seen_edges.add(key)
-            adjacency[caller.id].append((callee, call, inferred))
-
     call_join_started_at = time.monotonic()
-    last_call_join_report_at = call_join_started_at
-    for call_number, call in enumerate(calls, start=1):
-        now = time.monotonic()
-        if now - last_call_join_report_at >= 5.0:
-            report(
-                f"→ CodeQL : rattachement des appels en cours · "
-                f"{call_number - 1}/{len(calls)} appel(s) analysé(s) · "
-                f"{sum(len(targets) for targets in adjacency.values())} "
-                f"rattachement(s) · {now - call_join_started_at:.0f} s."
-            )
-            last_call_join_report_at = now
-        caller = locate_caller(call)
-        resolved_callee = locate(
-            call.callee, call.callee_path, call.callee_line,
-            allow_signature_fallback=True,
-        )
-        if caller is None or resolved_callee is None:
-            continue
-        callee, signature_join = resolved_callee
-        add_edge(caller, callee, call, signature_join)
-        if symbols is not None:
-            info = symbols.methods.get(callee.id)
-            if info is not None and info.concrete:
-                resolved_sites.add((caller.id, call.call_line))
-            if callee.id not in bridges:
-                bridges[callee.id] = symbols.bridge(callee)
-            candidate = bridges[callee.id]
-            if candidate is not None:
-                synthetic = replace(
-                    call, callee=candidate.qualified_method, callee_path=candidate.path,
-                    callee_line=candidate.start_line, dispatch_confidence="possible",
-                )
-                synthetic_calls.add(synthetic)
-                add_edge(caller, candidate, synthetic, True)
-
-    if symbols is not None:
-        for call in symbols.fallback_calls(resolved_sites):
-            caller = locate_caller(call)
-            resolved_target = locate(call.callee, call.callee_path, call.callee_line)
-            if caller is not None and resolved_target is not None:
-                add_edge(caller, resolved_target[0], call, True)
-
-    # The adjacency is the only call-graph representation needed by the BFS.
-    # Release the decoded rows and source-symbol indexes before route expansion,
-    # which can itself retain a large number of flow alternatives.
-    symbols = None
-    bridges.clear()
-    resolved_sites.clear()
-    del calls
-
-    joined_calls = sum(len(targets) for targets in adjacency.values())
-    report(
-        f"→ CodeQL : {joined_calls} appel(s) rattaché(s) à "
-        f"{len(adjacency)} méthode(s) appelante(s) ; exploration des chemins..."
+    call_graph = _build_codeql_call_graph(
+        methods,
+        calls,
+        repo_root=repo_root,
+        source_paths=source_paths,
+        progress=progress,
     )
+    adjacency = call_graph.adjacency
+    synthetic_calls = call_graph.synthetic_calls
+    call_count = call_graph.call_count
+    locate = call_graph.locate
+    joined_calls = call_graph.joined_calls
+    report(
+        f"→ CodeQL : graphe d'appels interne construit · {joined_calls} "
+        f"arête(s) rattachée(s) à {len(adjacency)} méthode(s) appelante(s)."
+    )
+    report("→ CodeQL : reconstruction des parcours input → output...")
 
     # Contract-only HTTP inputs (for example generated OpenAPI interfaces)
     # have no source endpoint path for the AST materializer. If the same
