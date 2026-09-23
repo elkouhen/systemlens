@@ -582,6 +582,7 @@ def materialize_codeql_code_flows(
     resolved_sites: set[tuple[str, int]] = set()
     seen_edges: set[tuple[str, str, int, str, bool]] = set()
     synthetic_calls: set[CodeQLCall] = set()
+    call_count = len(calls)
 
     def add_edge(
         caller: IntegrationMethod, callee: IntegrationMethod, call: CodeQLCall,
@@ -630,11 +631,18 @@ def materialize_codeql_code_flows(
 
     if symbols is not None:
         for call in symbols.fallback_calls(resolved_sites):
-            synthetic_calls.add(call)
             caller = locate_caller(call)
             resolved_target = locate(call.callee, call.callee_path, call.callee_line)
             if caller is not None and resolved_target is not None:
                 add_edge(caller, resolved_target[0], call, True)
+
+    # The adjacency is the only call-graph representation needed by the BFS.
+    # Release the decoded rows and source-symbol indexes before route expansion,
+    # which can itself retain a large number of flow alternatives.
+    symbols = None
+    bridges.clear()
+    resolved_sites.clear()
+    del calls
 
     joined_calls = sum(len(targets) for targets in adjacency.values())
     report(
@@ -831,7 +839,7 @@ def materialize_codeql_code_flows(
             last_exploration_report_at = now
     if stats is not None:
         stats.update({
-            "calls": len(calls), "joined_calls": sum(len(targets) for targets in adjacency.values()),
+            "calls": call_count, "joined_calls": sum(len(targets) for targets in adjacency.values()),
             "explored_paths": explored,
         })
     if reachability:

@@ -76,8 +76,11 @@ cached per input method/confidence in a bounded in-memory cache, costing
 O(V+E) per retained tree plus route reconstruction proportional to emitted
 steps, instead of a BFS per input/output pair. HTML checkpoints filter cached
 flows instead of rebuilding and retraversing the method-call graph for every module.
-No database path is persisted. Live progress uses a wall-clock watchdog
-covering pipe reads; POSIX timeouts terminate the complete process group, and
+After the call adjacency is built, the decoded CodeQL rows and transient Java
+symbol indexes are released before route expansion; the adjacency remains the
+single in-memory call-graph representation used by the BFS. No database path
+is persisted. Live progress uses a wall-clock watchdog covering pipe reads;
+POSIX timeouts terminate the complete process group, and
 subprocesses are reaped on errors. The configured deadline covers the complete
 CodeQL pass, not each command independently.
 An absent selected engine is reported and keeps AST-only results. A CodeQL
