@@ -37,6 +37,7 @@ from systemlens.application.code_flows import (
     show_code_flow,
 )
 from systemlens.application.flow_diagnostic import diagnose_flows, render_flow_diagnostic_text
+from systemlens.application.indexing_audit import audit_indexing
 from systemlens.application.architecture_projection import project_architecture_graph
 from systemlens.application.audit import assess_architecture, render_audit_json, render_audit_text
 from systemlens.infrastructure.config import ConfigError, init_config, load_config
@@ -983,6 +984,33 @@ def analyze_indexing_issues(
     heuristique de résolution conservatrice.
     """
     _render_indexing_issues(_option_root(root), _option_json(json_output))
+
+
+@analyze_app.command("indexing-audit")
+def analyze_indexing_audit(
+    root: Path | None = typer.Option(
+        None, "--root", help="Répertoire indexé à analyser."
+    ),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Auditer vingt familles de problèmes de qualité d'indexation."""
+    result = audit_indexing(load_architecture_inventory(_option_root(root)))
+    if _option_json(json_output):
+        typer.echo(json.dumps(result))
+        return
+    typer.echo(
+        f"Audit d'indexation : {result['finding_count']} problème(s) "
+        f"détecté(s) sur {result['rule_count']} contrôles."
+    )
+    for issue in cast(list[dict[str, object]], result["issues"]):
+        source = cast(dict[str, object] | None, issue.get("source"))
+        location = ""
+        if source is not None and source.get("path"):
+            location = f" ({source['path']}:{source.get('start_line')})"
+        typer.echo(
+            f"- [{issue['severity']}] {issue['rule']} : "
+            f"{issue['message']}{location}"
+        )
 
 
 @analyze_app.command("flows-diagnostic")

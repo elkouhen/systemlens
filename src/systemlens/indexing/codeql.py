@@ -86,15 +86,25 @@ class SourceMethodCall extends MethodCall {
   SourceMethodCall() { this.getEnclosingCallable().fromSource() }
 }
 
-/** Compute the exact-dispatch relation once as a tightly bound predicate. */
+/**
+ * Resolve a call when CodeQL can identify one exact virtual-dispatch target.
+ * The target must also be source-backed because the Python join needs a file
+ * and line that exist in the indexed repository.
+ */
 predicate exactTarget(MethodCall call, Method target) {
   target = exactVirtualMethod(call) and target.fromSource()
 }
 
 /**
- * Prefer the unique target.  Only calls with no exact target reach the more
- * expensive viable-dispatch relation; this also avoids evaluating
- * exactVirtualMethod twice in the main result predicate.
+ * Pick one resolution strategy for each call.
+ *
+ * Exact dispatch has priority.  The possible-dispatch branches are evaluated
+ * only when no exact target exists, so one call does not produce both an
+ * exact edge and a wider set of possible edges.
+ *
+ * The final branch keeps the declared source method when a buildless database
+ * cannot expose its concrete implementation.  Python may then add a
+ * conservative source-backed bridge if it can prove one.
  */
 predicate resolvedTarget(MethodCall call, Method target, string confidence) {
   exactTarget(call, target) and confidence = "exact"
@@ -118,6 +128,8 @@ from SourceMethodCall call, Callable enclosing, Method invoked, string dispatch_
 where callerInScope(enclosing) and
   enclosing = call.getEnclosingCallable() and
   resolvedTarget(call, invoked, dispatch_confidence)
+// Return source locations rather than database-internal IDs.  SystemLens uses
+// these locations to join CodeQL rows to its indexed IntegrationMethod facts.
 select enclosing.getQualifiedName() as caller,
   enclosing.getFile().getRelativePath() as caller_path,
   enclosing.getLocation().getStartLine() as caller_line,
@@ -177,6 +189,8 @@ class SourceMethodCall extends MethodCall {{
   SourceMethodCall() {{ this.getEnclosingCallable().fromSource() }}
 }}
 
+// Keep the exact and possible relations separate.  The final query can then
+// report lower confidence when a route exists only through possible dispatch.
 predicate exactTarget(MethodCall call, Method target) {{
   target = exactVirtualMethod(call) and target.fromSource()
 }}
@@ -203,6 +217,9 @@ predicate possibleEdge(Callable caller, Callable callee) {{
   )
 }}
 
+// The recursion is written backwards: it starts at an indexed output method
+// and walks through callers until it reaches an indexed input method.  CodeQL
+// computes the transitive closure of these recursive predicates.
 predicate exactCallerReachable(Callable callee, Callable caller) {{
   outputAnchor(callee) and exactEdge(caller, callee)
   or
@@ -219,9 +236,13 @@ predicate possibleCallerReachable(Callable callee, Callable caller) {{
   )
 }}
 
+// These anchors are generated from SystemLens' integration-method inventory.
+// They prevent this query from returning arbitrary method-to-method paths.
 {_anchor_predicate("inputAnchor", methods, input_anchor=True)}
 {_anchor_predicate("outputAnchor", methods, input_anchor=False)}
 
+// Prefer an exact route.  A possible route is reported only when no exact
+// route exists for the same input/output pair.
 from Method inputMethod, Method outputMethod, string confidence
 where outputAnchor(outputMethod) and inputAnchor(inputMethod) and
   inputMethod != outputMethod and

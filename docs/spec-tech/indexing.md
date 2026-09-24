@@ -82,6 +82,12 @@ cached per input method/confidence in a bounded in-memory cache, costing
 O(V+E) per retained tree plus route reconstruction proportional to emitted
 steps, instead of a BFS per input/output pair. HTML checkpoints filter cached
 flows instead of rebuilding and retraversing the method-call graph for every module.
+The read-only `analyze indexing-audit` command evaluates twenty distinct
+quality-control rules against the persisted snapshot. It reports only detected
+findings, keeps zero-count rules in the JSON summary, and includes relative
+source evidence when the finding has a persisted location. The audit does not
+re-parse source files or convert informational uncertainty into an asserted
+architecture relation.
 After the call adjacency is built, the decoded CodeQL rows and transient Java
 symbol indexes are released before route expansion; the adjacency remains the
 single in-memory call-graph representation used by the BFS, and its normalized

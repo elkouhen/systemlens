@@ -620,6 +620,23 @@ def test_cli_indexing_issues_emits_ai_ready_json(tmp_path: Path, monkeypatch) ->
     assert isinstance(payload["issues"], list)
 
 
+def test_cli_indexing_audit_reports_twenty_rules(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
+    monkeypatch.chdir(repo)
+    assert RUNNER.invoke(app, ["init"]).exit_code == 0
+    assert RUNNER.invoke(app, ["index"]).exit_code == 0
+
+    result = RUNNER.invoke(app, ["analyze", "indexing-audit", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["kind"] == "indexing_audit"
+    assert payload["rule_count"] == 20
+    assert len(payload["by_rule"]) == 20
+    assert isinstance(payload["issues"], list)
+
+
 def test_infer_framework_endpoints_reads_json_openapi_contract(tmp_path: Path) -> None:
     contract = tmp_path / "src" / "main" / "resources" / "openapi.json"
     contract.parent.mkdir(parents=True)
