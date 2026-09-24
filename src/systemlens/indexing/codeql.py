@@ -150,21 +150,60 @@ select enclosing.getQualifiedName() as caller,
 """
 
 _KAFKA_MESSAGE_TYPES_QUERY = """import java
+import semmle.code.java.dataflow.DataFlow
 
 /**
  * Strategy1 names the topic convention, but the payload can be hidden behind
  * a local variable or a method parameter. CodeQL resolves that expression's
  * declared Java type without guessing from the topic name or serializer.
  */
-from MethodCall call, Expr payload, Type payloadType
+predicate wrappedPayloadType(Expr payload, string messageType) {
+  exists(ParameterizedType type |
+    type = payload.getType() and
+    (
+      type.getGenericType().getName() = ["Message", "GenericMessage"] and
+      messageType = type.getTypeArgument(0).getName() and
+      not messageType in ["?", "Object"]
+      or
+      type.getGenericType().getName() = "ProducerRecord" and
+      messageType = type.getTypeArgument(1).getName() and
+      not messageType in ["?", "Object"]
+    )
+  )
+}
+
+predicate sourcePayloadType(Callable enclosing, Expr payload, string messageType) {
+  exists(Expr source |
+    source != payload and
+    source.getEnclosingCallable() = enclosing and
+    DataFlow::localFlow(DataFlow::exprNode(source), DataFlow::exprNode(payload)) and
+    not source.getType().getName() in ["Object", "Message", "GenericMessage", "ProducerRecord"] and
+    messageType = source.getType().getName()
+  )
+}
+
+predicate inferredPayloadType(Callable enclosing, Expr payload, string messageType) {
+  wrappedPayloadType(payload, messageType)
+  or
+  not exists(ParameterizedType type | type = payload.getType() and
+    type.getGenericType().getName() = ["Message", "GenericMessage", "ProducerRecord"]
+  ) and (
+    sourcePayloadType(enclosing, payload, messageType)
+    or
+    not exists(string sourceType | sourcePayloadType(enclosing, payload, sourceType)) and
+    messageType = payload.getType().getName()
+  )
+}
+
+from MethodCall call, Callable enclosing, Expr payload, string messageType
 where call.getMethod().getName().regexpMatch("^envoyerMessageKafka.*")
-  and call.getEnclosingCallable().fromSource()
+  and enclosing = call.getEnclosingCallable()
+  and enclosing.fromSource()
   and payload = call.getArgument(1)
-  and payloadType = payload.getType()
-  and payloadType.getName() != ""
+  and inferredPayloadType(enclosing, payload, messageType)
 select call.getFile().getRelativePath() as path,
   call.getLocation().getStartLine() as line,
-  payloadType.getName() as message_type
+  messageType as message_type
 """
 
 

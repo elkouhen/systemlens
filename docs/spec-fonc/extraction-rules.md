@@ -70,8 +70,10 @@ both sides provide one; an unknown type remains compatible and lowers the
 confidence of the topology fact. A publication without an input trigger does
 not become a code-flow root.
 For Strategy1 producer conventions, CodeQL may complete a missing payload type
-from the second argument of `envoyerMessageKafka*`. It never replaces an AST
-type and applies only a unique source-backed result; ambiguous results remain
+from the second argument of `envoyerMessageKafka*`, including local data-flow
+within the enclosing method. Simple `Message<T>`, `GenericMessage<T>` and
+`ProducerRecord<K,V>` wrappers are unwrapped. It never replaces an AST type
+and applies only a unique source-backed result; ambiguous results remain
 unknown.
 When the publishing method is annotated with `@Scheduled(cron = "...")`, the
 flow starts with an explicit `Déclencheur Cron` step, followed by the Kafka

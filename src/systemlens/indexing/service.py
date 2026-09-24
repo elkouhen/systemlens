@@ -528,7 +528,9 @@ def _index_repo(
         store.replace_integration_methods(methods)
         store.replace_codeql_call_edges([])
 
-        def enrich_strategy1_kafka_types(database: Path) -> None:
+        def enrich_strategy1_kafka_types(
+            database: Path, *, deadline: float | None = None
+        ) -> None:
             """Complete missing Strategy1 producer types from CodeQL evidence."""
             nonlocal all_endpoints, relations
             if topic_strategy != "strategy1":
@@ -538,6 +540,7 @@ def _index_repo(
                 timeout_seconds=config.codeql_timeout_seconds,
                 threads=config.codeql_threads,
                 ram_mb=config.codeql_ram_mb,
+                deadline=deadline,
             )
             by_site: dict[tuple[str, int], set[str]] = {}
             for item in evidence:
@@ -785,7 +788,7 @@ def _index_repo(
                             (name, project_calls)
                             for name, project_calls in _partition_codeql_calls(calls, roots)
                         ]
-                    enrich_strategy1_kafka_types(codeql_database)
+                    enrich_strategy1_kafka_types(codeql_database, deadline=codeql_deadline)
                     scoped_completed_calls: list[CodeQLCall] = []
                     for number, (name, project_calls) in enumerate(scoped_project_calls, start=1):
                         scoped_completed_calls.extend(project_calls)
@@ -867,7 +870,7 @@ def _index_repo(
                             )
                         with database_context as database:
                             assert database is not None
-                            enrich_strategy1_kafka_types(database)
+                            enrich_strategy1_kafka_types(database, deadline=codeql_deadline)
                             calls = extract_codeql_calls(
                                 database, timeout_seconds=config.codeql_timeout_seconds,
                                 threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
