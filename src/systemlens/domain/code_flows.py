@@ -62,3 +62,15 @@ class IntegrationMethod:
     end_line: int
     input_endpoint_ids: tuple[str, ...]
     output_endpoint_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CodeQLCallGraphEdge:
+    """One source-backed directed edge in the persisted Java call graph."""
+
+    caller_id: str
+    callee_id: str
+    path: str
+    line: int
+    dispatch_confidence: str
+    inferred: bool = False

@@ -25,8 +25,8 @@ from systemlens.conventions.strategy1.kafka import (
 from systemlens.indexing.materializers import materialize_asyncapi_contracts, materialize_openapi_contracts
 from systemlens.indexing.code_flows import (
     CODE_FLOW_SIGNATURE, _deduplicate_code_flows, materialize_code_flows,
-    codeql_join_methods_signature, materialize_codeql_code_flows,
-    materialize_kafka_flow_continuations, reconcile_code_flows,
+    CodeQLCallGraph, codeql_join_methods_signature, materialize_codeql_code_flows,
+    reconcile_code_flows,
 )
 from systemlens.indexing.integration_methods import materialize_integration_methods
 from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
@@ -524,6 +524,11 @@ def _index_repo(
             repo_root, all_endpoints, list(current_hashes), relation_modules
         )
         store.replace_integration_methods(methods)
+        store.replace_codeql_call_edges([])
+
+        def persist_call_graph(call_graph: CodeQLCallGraph) -> None:
+            store.replace_codeql_call_edges(list(call_graph.edges()))
+
         current_join_methods_signature = codeql_join_methods_signature(methods)
         if resume_codeql_join:
             input_method_count = sum(bool(method.input_endpoint_ids) for method in methods)
@@ -584,6 +589,7 @@ def _index_repo(
                         source_paths=list(current_hashes),
                         max_hops=config.codeql_max_hops,
                         progress=progress,
+                        call_graph_sink=persist_call_graph,
                     )
                 partial_flows = [
                     *flows,
@@ -745,6 +751,7 @@ def _index_repo(
                             join_checkpoint=publish_join_checkpoint,
                             resume_from_entry=resume_join_entries,
                             initial_flows=resume_join_flows,
+                            call_graph_sink=persist_call_graph,
                         )
                 else:
                     roots = _codeql_module_roots(
@@ -820,6 +827,7 @@ def _index_repo(
                                 join_checkpoint=publish_join_checkpoint,
                                 resume_from_entry=resume_join_entries,
                                 initial_flows=resume_join_flows,
+                                call_graph_sink=persist_call_graph,
                             )
                         completed_calls: list[CodeQLCall] = []
                         for number, (name, project_calls) in enumerate(partitioned_calls, start=1):
@@ -877,11 +885,11 @@ def _index_repo(
                 join_checkpoint=publish_join_checkpoint,
                 resume_from_entry=resume_join_entries,
                 initial_flows=resume_join_flows,
+                call_graph_sink=persist_call_graph,
             )
             # AST and the interprocedural engine can describe the same
-            # endpoint-to-endpoint flow. Keep one representative before
-            # composing Kafka continuations, otherwise the same flow is
-            # rendered more than once in the Flux view.
+            # endpoint-to-endpoint flow. Keep one representative while the
+            # CodeQL call graph remains the source of internal call edges.
             flows = _deduplicate_code_flows([*flows, *codeql_flows])
             timer.end("call-graph-join", f"jointure {engine_label} et matérialisation des flux")
             _report_progress(
@@ -897,7 +905,6 @@ def _index_repo(
                 progress,
                 f"→ Indexation : {call_graph_engine} indisponible ; flux interprocéduraux ignorés.",
             )
-        flows = materialize_kafka_flow_continuations(flows, all_endpoints)
         service_aliases = {
             module_identity(module): local_spring_application_names(module.path, None)
             for module in relation_modules

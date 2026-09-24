@@ -80,6 +80,7 @@ class SystemLensWebApplication:
             asyncapi_contracts=inventory.asyncapi_contracts,
             architecture_relations=inventory.relations,
             integration_methods=projection.integration_methods,
+            codeql_call_edges=inventory.codeql_call_edges,
         )
         return HTTPStatus.OK, document
 

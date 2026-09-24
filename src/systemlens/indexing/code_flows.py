@@ -10,7 +10,12 @@ from typing import Callable, Sequence
 from tree_sitter import Node
 
 from systemlens.discovery.java import parser as java_parser
-from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, compute_code_flow_id
+from systemlens.domain.code_flows import (
+    CodeFlow,
+    CodeFlowStep,
+    CodeQLCallGraphEdge,
+    compute_code_flow_id,
+)
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
@@ -43,6 +48,64 @@ class CodeQLCallGraph:
     @property
     def joined_calls(self) -> int:
         return sum(len(targets) for targets in self.adjacency.values())
+
+    def edges(self) -> tuple[CodeQLCallGraphEdge, ...]:
+        """Return deterministic persisted edges for the internal call graph."""
+        return tuple(sorted(
+            (
+                CodeQLCallGraphEdge(
+                    caller_id=caller_id,
+                    callee_id=callee.id,
+                    path=call.caller_path.replace("\\", "/").removeprefix("./"),
+                    line=call.call_line,
+                    dispatch_confidence=call.dispatch_confidence,
+                    inferred=inferred,
+                )
+                for caller_id, targets in self.adjacency.items()
+                for callee, call, inferred in targets
+            ),
+            key=lambda edge: (
+                edge.caller_id,
+                edge.callee_id,
+                edge.path,
+                edge.line,
+                edge.dispatch_confidence,
+                edge.inferred,
+            ),
+        ))
+
+    def connected_components(
+        self, method_ids: Sequence[str] = ()
+    ) -> tuple[frozenset[str], ...]:
+        """Return weak components of the source-backed call graph.
+
+        Components are only a grouping operation.  They do not turn a call
+        edge into a reverse edge and do not create a route between methods.
+        Direction is preserved by the traversal that materializes flows.
+        """
+        neighbours: dict[str, set[str]] = {method_id: set() for method_id in method_ids}
+        for caller_id, targets in self.adjacency.items():
+            neighbours.setdefault(caller_id, set())
+            for target, _call, _inferred in targets:
+                neighbours[caller_id].add(target.id)
+                neighbours[target.id].add(caller_id)
+
+        components: list[frozenset[str]] = []
+        unseen = set(neighbours)
+        while unseen:
+            seed = min(unseen)
+            component: set[str] = set()
+            queue = [seed]
+            unseen.remove(seed)
+            while queue:
+                current = queue.pop()
+                component.add(current)
+                for neighbour in sorted(neighbours[current]):
+                    if neighbour in unseen:
+                        unseen.remove(neighbour)
+                        queue.append(neighbour)
+            components.append(frozenset(component))
+        return tuple(sorted(components, key=lambda component: min(component)))
 
 
 def codeql_join_methods_signature(methods: Sequence[IntegrationMethod]) -> str:
@@ -178,33 +241,6 @@ def _scheduled_trigger_step(
             end_line=method_node.start_point.row + 1,
         )
     return None
-
-
-def _matching_fanout_consumers(
-    producer: MessageEndpoint,
-    endpoints: list[MessageEndpoint],
-) -> list[MessageEndpoint]:
-    """Return consumers compatible with one concrete Kafka publication.
-
-    A shared concrete topic establishes the integration. Missing payload types
-    lower the confidence of the resulting flow but do not block it. Two known
-    and different types remain incompatible because the evidence conflicts.
-    """
-    if producer.system != "kafka" or producer.role != "produce" or producer.topic_dynamic:
-        return []
-    candidates = [
-        endpoint for endpoint in endpoints
-        if endpoint.system == "kafka"
-        and endpoint.role == "consume"
-        and endpoint.topic == producer.topic
-        and endpoint.id != producer.id
-        and (
-            producer.message_type is None
-            or endpoint.message_type is None
-            or endpoint.message_type == producer.message_type
-        )
-    ]
-    return sorted(candidates, key=lambda endpoint: (endpoint.module or "", endpoint.id))
 
 
 def _repository_path(repo_root: Path, module: DiscoveredModule, path: str) -> str:
@@ -372,62 +408,6 @@ def materialize_code_flows(
                     ),
                     steps=tuple(steps),
                 ))
-            for producer in endpoint_effects:
-                # A publication is an effect of an input-triggered flow, not
-                # an independent trigger. Only a method explicitly scheduled
-                # by a cron expression can create a source flow here.
-                if scheduled_trigger is None:
-                    continue
-                consumers = _matching_fanout_consumers(producer, endpoints)
-                if not consumers:
-                    continue
-                assert producer.module is not None
-                qualified_method = (
-                    f"{producer.qualified_name}.{method_name}"
-                    if producer.qualified_name
-                    else method_name
-                )
-                # A CodeFlow remains one auditable endpoint path for
-                # compatibility. The exported flow graph expands this
-                # representative path with every matching consumer branch.
-                for consumer in consumers:
-                    trigger_kind = (
-                        "cron_entry"
-                        if scheduled_trigger is not None
-                        else "message_publish"
-                    )
-                    trigger_name = (
-                        scheduled_trigger.name
-                        if scheduled_trigger is not None
-                        else producer.topic
-                    )
-                    prefix = [scheduled_trigger] if scheduled_trigger is not None else []
-                    steps = [
-                        *prefix,
-                        _endpoint_step(producer, len(prefix) + 1),
-                        _endpoint_step(consumer, len(prefix) + 2),
-                    ]
-                    flows.append(CodeFlow(
-                        id=compute_code_flow_id(
-                            producer.module,
-                            path,
-                            qualified_method,
-                            trigger_kind,
-                            f"{trigger_name}|fanout|{consumer.id}",
-                        ),
-                        module=producer.module,
-                        method=qualified_method,
-                        path=path,
-                        start_line=start_line,
-                        end_line=end_line,
-                        status="potential",
-                        confidence="medium",
-                        reason=(
-                            "A Kafka publication fans out to a compatible "
-                            "consumer; the flow graph retains every proven branch."
-                        ),
-                        steps=tuple(steps),
-                    ))
     return sorted(flows, key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
 
 
@@ -456,13 +436,16 @@ def _build_codeql_call_graph(
         """Normalize harmless extractor spelling differences in source paths."""
         return path.replace("\\", "/").removeprefix("./")
 
-    by_locator = {
-        (normalized_method_name(item.qualified_method), normalized_path(item.path), item.start_line): item
-        for item in methods
-    }
+    by_locator: dict[tuple[str, str, int], list[IntegrationMethod]] = defaultdict(list)
+    for item in methods:
+        by_locator[
+            (normalized_method_name(item.qualified_method), normalized_path(item.path), item.start_line)
+        ].append(item)
     methods_by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
+    methods_by_name: dict[str, list[IntegrationMethod]] = defaultdict(list)
     for item in methods:
         methods_by_path[normalized_path(item.path)].append(item)
+        methods_by_name[normalized_method_name(item.qualified_method)].append(item)
 
     def locate(
         name: str, path: str, line: int, *, allow_signature_fallback: bool = False,
@@ -470,22 +453,22 @@ def _build_codeql_call_graph(
         """Resolve one CodeQL method to an indexed method."""
         normalized_name = normalized_method_name(name)
         path = normalized_path(path)
-        exact = by_locator.get((normalized_name, path, line))
-        if exact is not None:
-            return exact, False
+        exact = by_locator.get((normalized_name, path, line), [])
+        if len(exact) == 1:
+            return exact[0], False
+        if len(exact) > 1:
+            return None
         same_file = [
-            item for item in methods
+            item for item in methods_by_path.get(path, [])
             if normalized_method_name(item.qualified_method) == normalized_name
-            and normalized_path(item.path) == path
             and item.start_line <= line <= item.end_line
         ]
-        if same_file:
-            return min(same_file, key=lambda item: item.end_line - item.start_line), False
+        if len(same_file) == 1:
+            return same_file[0], False
+        if len(same_file) > 1:
+            return None
         if allow_signature_fallback:
-            candidates = [
-                item for item in methods
-                if normalized_method_name(item.qualified_method) == normalized_name
-            ]
+            candidates = methods_by_name.get(normalized_name, [])
             if len(candidates) == 1:
                 return candidates[0], True
         return None
@@ -579,6 +562,7 @@ def materialize_codeql_code_flows(
     join_checkpoint: Callable[[list[CodeFlow], int, int], None] | None = None,
     resume_from_entry: int = 0,
     initial_flows: Sequence[CodeFlow] = (),
+    call_graph_sink: Callable[[CodeQLCallGraph], None] | None = None,
 ) -> list[CodeFlow]:
     """Reconstruct endpoint flows from the internal CodeQL call graph.
 
@@ -661,6 +645,8 @@ def materialize_codeql_code_flows(
         source_paths=source_paths,
         progress=progress,
     )
+    if call_graph_sink is not None:
+        call_graph_sink(call_graph)
     adjacency = call_graph.adjacency
     synthetic_calls = call_graph.synthetic_calls
     call_count = call_graph.call_count
@@ -669,6 +655,16 @@ def materialize_codeql_code_flows(
     report(
         f"→ CodeQL : graphe d'appels interne construit · {joined_calls} "
         f"arête(s) rattachée(s) à {len(adjacency)} méthode(s) appelante(s)."
+    )
+    components = call_graph.connected_components(tuple(method.id for method in methods))
+    component_by_method = {
+        method_id: component
+        for component in components
+        for method_id in component
+    }
+    report(
+        f"→ CodeQL : {len(components)} composante(s) connexe(s) dans le "
+        "graphe d'appels interne."
     )
     report("→ CodeQL : reconstruction des parcours input → output...")
 
@@ -739,6 +735,7 @@ def materialize_codeql_code_flows(
     for entry in methods:
         if not entry.input_endpoint_ids:
             continue
+        component = component_by_method.get(entry.id, frozenset({entry.id}))
         for trigger_id in entry.input_endpoint_ids:
             trigger = endpoint_by_id.get(trigger_id)
             if trigger is None:
@@ -750,6 +747,8 @@ def materialize_codeql_code_flows(
                 if len(route) >= max_hops:
                     continue
                 for target, call, signature_join in adjacency.get(current.id, []):
+                    if target.id not in component:
+                        continue
                     if not dispatch_matches_entry(entry, current, target):
                         continue
                     explored += 1
@@ -1036,120 +1035,3 @@ def reconcile_code_flows(
                         break
         reconciled.append(replace(flow, reconciliation=status))
     return reconciled
-
-
-def materialize_kafka_flow_continuations(
-    flows: list[CodeFlow], endpoints: list[MessageEndpoint]
-) -> list[CodeFlow]:
-    """Add bounded, source-evidenced Kafka producer-to-consumer continuations.
-
-    Only the original, persisted trigger flows can be consumers.  Composed
-    flows are then placed back on the work queue so a later publication can be
-    followed as well, without treating an arbitrary intermediate step as a
-    new entry point.  The hop cap prevents cyclic topics from producing an
-    unbounded number of candidates.
-    """
-    max_hops = 4
-    concrete_kafka_endpoints = {
-        endpoint.id for endpoint in endpoints
-        if endpoint.system == "kafka" and not endpoint.topic_dynamic
-    }
-    endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
-    consumers: dict[str, list[CodeFlow]] = defaultdict(list)
-    for flow in flows:
-        entry = (
-            endpoint_by_id.get(flow.steps[0].endpoint_id)
-            if flow.steps and flow.steps[0].endpoint_id
-            else None
-        )
-        if (
-            flow.steps
-            and flow.steps[0].kind == "message_entry"
-            and flow.steps[0].endpoint_id in concrete_kafka_endpoints
-            and entry is not None
-        ):
-            consumers[flow.steps[0].name].append(flow)
-    continuations: list[CodeFlow] = []
-    # ``seen_consumers`` is intentionally carried independently from the
-    # rendered steps: a cycle can revisit a topic without ever revisiting the
-    # exact source location of a message entry.
-    queue: list[tuple[CodeFlow, tuple[str, ...], int]] = [
-        (flow, (flow.id,), 0) for flow in flows
-    ]
-    while queue:
-        flow, seen_consumers, hop_count = queue.pop(0)
-        if hop_count >= max_hops:
-            continue
-        for publish_index, publish in enumerate(flow.steps):
-            if publish.kind != "message_publish":
-                continue
-            if publish.endpoint_id not in concrete_kafka_endpoints:
-                continue
-            # A composed line must not silently discard effects that occur
-            # after publication in the producer method.
-            if any(step.kind in {"http_call", "message_publish", "data_read", "data_write"}
-                   for step in flow.steps[publish_index + 1:]):
-                continue
-            if publish.name is None:
-                continue
-            publish_endpoint = endpoint_by_id.get(publish.endpoint_id)
-            if publish_endpoint is None:
-                continue
-            for consumer in consumers.get(publish.name, []):
-                consumer_endpoint_id = consumer.steps[0].endpoint_id
-                if consumer_endpoint_id is None:
-                    continue
-                consumer_endpoint = endpoint_by_id.get(consumer_endpoint_id)
-                if consumer_endpoint is None:
-                    continue
-                if (
-                    publish_endpoint.message_type is not None
-                    and consumer_endpoint.message_type is not None
-                    and publish_endpoint.message_type != consumer_endpoint.message_type
-                ):
-                    continue
-                if consumer.id == flow.id or consumer.id in seen_consumers:
-                    cycle_steps = [*flow.steps[:publish_index + 1], consumer.steps[0]]
-                    steps = tuple(
-                        CodeFlowStep(**{**step.__dict__, "order": order})
-                        for order, step in enumerate(cycle_steps, start=1)
-                    )
-                    continuations.append(CodeFlow(
-                        id=compute_code_flow_id(
-                            flow.module, flow.path, flow.method, steps[0].kind,
-                            f"{steps[0].name}|kafka-cycle|{consumer.id}",
-                        ),
-                        module=flow.module, method=flow.method, path=flow.path,
-                        start_line=flow.start_line, end_line=flow.end_line,
-                        status="cycle", confidence="low" if "low" in {flow.confidence, consumer.confidence} else "medium",
-                        reason="A concrete Kafka publication returns to an already traversed message entry.",
-                        steps=steps,
-                    ))
-                    continue
-                combined_steps = [*flow.steps[:publish_index + 1], *consumer.steps]
-                steps = tuple(
-                    CodeFlowStep(**{**step.__dict__, "order": order})
-                    for order, step in enumerate(combined_steps, start=1)
-                )
-                continuation = CodeFlow(
-                    id=compute_code_flow_id(
-                        flow.module, flow.path, flow.method, steps[0].kind,
-                        f"{steps[0].name}|kafka|{'|'.join((*seen_consumers, consumer.id))}",
-                    ),
-                    module=flow.module, method=flow.method, path=flow.path,
-                    start_line=flow.start_line, end_line=flow.end_line,
-                    status="potential",
-                    confidence="low" if "low" in {flow.confidence, consumer.confidence} else "medium",
-                    reason=(
-                        "A concrete Kafka publication matches the indexed message entry "
-                        "of a downstream potential flow."
-                    ),
-                    steps=steps,
-                )
-                continuations.append(continuation)
-                queue.append((
-                    continuation,
-                    (*seen_consumers, consumer.id),
-                    hop_count + 1,
-                ))
-    return _deduplicate_code_flows([*flows, *continuations])

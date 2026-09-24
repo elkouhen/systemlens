@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 from systemlens.domain.graph import group_endpoints_by_module
-from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
+from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
 from systemlens.indexing.freshness import endpoint_inventory_warning
 from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, Finding, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
@@ -71,6 +71,7 @@ class ArchitectureInventory:
     profile: AnalysisProfile
     code_flows: list[CodeFlow] = field(default_factory=list)
     integration_methods: list[IntegrationMethod] = field(default_factory=list)
+    codeql_call_edges: list[CodeQLCallGraphEdge] = field(default_factory=list)
     kafka_dto_definitions: list[dict[str, object]] | None = None
     openapi_contracts: list[dict[str, object]] | None = None
     asyncapi_contracts: list[dict[str, object]] | None = None
@@ -160,6 +161,7 @@ def load_architecture_inventory(
         relations = store.all_architecture_relations()
         code_flows = store.all_code_flows()
         integration_methods = store.all_integration_methods()
+        codeql_call_edges = store.all_codeql_call_edges()
         diagnostics = store.all_extraction_diagnostics()
         kafka_dto_definitions = store.all_kafka_dto_definitions()
         openapi_contracts = store.all_openapi_contracts()
@@ -203,6 +205,7 @@ def load_architecture_inventory(
         relations=relations,
         code_flows=code_flows,
         integration_methods=integration_methods,
+        codeql_call_edges=codeql_call_edges,
         diagnostics=diagnostics,
         warnings=[warning] if warning else [],
         source_roots=[repo_root],

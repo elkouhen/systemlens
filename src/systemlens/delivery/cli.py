@@ -46,7 +46,7 @@ from systemlens.domain.graph import (
     find_outbound_calls_in_consumers,
     group_endpoints_by_module,
 )
-from systemlens.domain.code_flows import CodeFlow
+from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.indexing.service import CallGraphProgress, index_repo
 from systemlens.indexing.freshness import endpoint_inventory_warning
@@ -1424,6 +1424,7 @@ class _MicroserviceGraphData:
     code_flows: list[CodeFlow] | None = None
     integration_methods: list[IntegrationMethod] | None = None
     architecture_relations: list[ArchitectureRelation] | None = None
+    codeql_call_edges: list[CodeQLCallGraphEdge] | None = None
 
 
 def _load_microservice_graph(
@@ -1467,6 +1468,7 @@ def _load_microservice_graph(
         inventory.code_flows,
         projection.integration_methods,
         architecture_relations,
+        inventory.codeql_call_edges,
     )
 
 
@@ -1487,7 +1489,7 @@ def _load_ai_graph(path: Path) -> _MicroserviceGraphData:
         ]
     result = render_graph_json(list(services), edges, [], warnings=issues, cross_module_data_available=True)
     return _MicroserviceGraphData(
-        services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, None, graph_facts, [], [], []
+        services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, None, graph_facts, [], [], [], []
     )
 
 
@@ -1645,6 +1647,7 @@ def export_microservices_cmd(
                 architecture_relations=getattr(graph_data, "architecture_relations", []),
                 code_flows=getattr(graph_data, "code_flows", []),
                 integration_methods=getattr(graph_data, "integration_methods", []),
+                codeql_call_edges=getattr(graph_data, "codeql_call_edges", []),
             ),
             encoding="utf-8",
         )

@@ -55,29 +55,25 @@ types and `methodFullName` values without source evidence are diagnostics, not
 architecture edges. Reflection, dynamic routing, and runtime-only routing are
 not added.
 
-Before Kafka continuations are composed, AST-only and interprocedural candidates
-are merged into a directed multigraph with NetworkX and reduced to one
-representative per source endpoint, target endpoint, and status. This prevents
-the same source-evidenced call flow from being listed twice when AST and CodeQL
-describe it.
+CodeQL call rows are first merged into a directed method graph. Weak connected
+components group methods linked by source-evidenced calls; they do not reverse
+call direction or create routes. Flow reconstruction traverses the directed
+edges from indexed input methods to indexed output methods within the relevant
+component. AST-only and CodeQL observations of the same endpoint flow are then
+deduplicated to one representative.
 
-For Kafka, SystemLens can continue a potential flow from a concrete,
-statically resolved producer topic to a persisted consumer entry with the same
-topic. Known message types must match when both sides provide one; an unknown
-type is compatible with the other side and lowers the flow confidence. A
-publication remains an effect of its input-triggered flow and does not create
-an independent flow root. Only a publisher explicitly triggered by a cron
-expression creates a source flow, with the Cron event as its first step. The
-persisted flow is one representative producer-to-consumer path, while its
-exported flow graph retains every proven consumer branch. It does not join
-dynamic topics or compose a producer whose later external effect would be
-hidden by a linear rendering. Continuations are bounded to four asynchronous
-hops and never revisit the same consumer flow.
+Kafka producer and consumer endpoints remain separate architecture facts. A
+Kafka topic match contributes a topology edge, while the CodeQL call graph
+connects internal Java methods. Indexing does not compose Kafka endpoints into
+new multi-service code-flow candidates. Known message types must match when
+both sides provide one; an unknown type remains compatible and lowers the
+confidence of the topology fact. A publication without an input trigger does
+not become a code-flow root.
 When the publishing method is annotated with `@Scheduled(cron = "...")`, the
 flow starts with an explicit `Déclencheur Cron` step, followed by the Kafka
-publication and its proven consumers. The cron expression is retained as
-source evidence; methods scheduled by a fixed delay/rate without a cron
-expression remain outside this trigger classification.
+publication owned by that method. The cron expression is retained as source
+evidence; methods scheduled by a fixed delay/rate without a cron expression
+remain outside this trigger classification.
 The architecture graph remains conservative when message payload typing is
 missing or contradictory: a producer/consumer service arc requires the same
 concrete topic, while two known and different Java message types prevent the

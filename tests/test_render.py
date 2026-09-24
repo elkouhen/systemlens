@@ -5,7 +5,12 @@ from pathlib import Path
 
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint, compute_endpoint_id
 from systemlens.domain.graph import GraphEdge
-from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
+from systemlens.domain.code_flows import (
+    CodeFlow,
+    CodeFlowStep,
+    CodeQLCallGraphEdge,
+    IntegrationMethod,
+)
 from systemlens.discovery.kubernetes import KubernetesWorkload
 from systemlens.domain.module_inventory import (
     DiscoveredModule,
@@ -61,6 +66,50 @@ def _html_graph_data(document: str) -> dict[str, object]:
     )
     assert match is not None
     return json.loads(match.group(1))
+
+
+def test_export_includes_persisted_codeql_call_graph() -> None:
+    caller = IntegrationMethod("a", "orders", "Orders.receive", "Orders.java", 1, 4, ("in",), ())
+    callee = IntegrationMethod("b", "orders", "Orders.publish", "Orders.java", 5, 7, (), ("out",))
+    data = _html_graph_data(render_graph_html(
+        {"orders": []},
+        [],
+        integration_methods=[caller, callee],
+        codeql_call_edges=[CodeQLCallGraphEdge("a", "b", "Orders.java", 3, "exact")],
+    ))
+
+    assert data["codeql_call_graph"] == {
+        "nodes": [
+            {
+                "id": "a",
+                "module": "orders",
+                "method": "Orders.receive",
+                "path": "Orders.java",
+                "start_line": 1,
+                "end_line": 4,
+                "input_endpoint_ids": ["in"],
+                "output_endpoint_ids": [],
+            },
+            {
+                "id": "b",
+                "module": "orders",
+                "method": "Orders.publish",
+                "path": "Orders.java",
+                "start_line": 5,
+                "end_line": 7,
+                "input_endpoint_ids": [],
+                "output_endpoint_ids": ["out"],
+            },
+        ],
+        "edges": [{
+            "caller_id": "a",
+            "callee_id": "b",
+            "path": "Orders.java",
+            "line": 3,
+            "dispatch_confidence": "exact",
+            "inferred": False,
+        }],
+    }
 
 
 def test_global_input_label_references_its_local_output() -> None:
@@ -212,6 +261,52 @@ def test_export_collapses_equivalent_call_graphs() -> None:
     ))
     assert len(data["code_flows"]) == 1
     assert data["code_flows"][0]["equivalent_count"] == 2
+
+
+def test_export_fuses_kafka_producer_and_consumer_fragments() -> None:
+    producer = replace(_kafka_endpoint("produce", "OrderCreated", "Publisher.java"), id="orders-out")
+    consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Inventory.java"), id="inventory-in")
+    downstream = replace(
+        _kafka_endpoint("produce", "StockDepleted", "Inventory.java"),
+        id="stock-out",
+        topic="stock.depleted",
+    )
+    restock = replace(
+        _kafka_endpoint("consume", "StockDepleted", "Restock.java"),
+        id="restock-in",
+        topic="stock.depleted",
+    )
+    scheduled = CodeFlow(
+        id="scheduled-flow", module="orders", method="Publisher.publish",
+        path="Publisher.java", start_line=1, end_line=2,
+        status="potential", confidence="medium", reason="scheduled",
+        steps=(CodeFlowStep(1, "cron_entry", "cron", "Publisher.java", 1, 1),
+               CodeFlowStep(2, "message_publish", "orders.created", "Publisher.java", 2, 2, producer.id)),
+    )
+    consumer_fragment = CodeFlow(
+        id="consumer-flow", module="inventory", method="Consumer.consume",
+        path="Inventory.java", start_line=1, end_line=5,
+        status="potential", confidence="medium", reason="consumer",
+        steps=(CodeFlowStep(1, "message_entry", "orders.created", "Inventory.java", 1, 1, consumer.id),
+               CodeFlowStep(2, "message_publish", "stock.depleted", "Inventory.java", 5, 5, downstream.id)),
+    )
+    data = _html_graph_data(render_graph_html(
+        {"orders": [producer], "inventory": [consumer, downstream], "restock": [restock]},
+        [
+            GraphEdge("kafka", "orders", "inventory", producer, consumer),
+            GraphEdge("kafka", "inventory", "restock", downstream, restock),
+        ],
+        code_flows=[scheduled, consumer_fragment],
+    ))
+
+    assert len(data["code_flows"]) == 1
+    flow = data["code_flows"][0]
+    assert flow["module"] == "orders"
+    assert flow["equivalent_count"] == 2
+    assert {
+        (edge["source"], edge["target"])
+        for edge in flow["call_graph"]["edges"]
+    } == {("orders", "inventory"), ("inventory", "restock")}
 
 
 def test_call_graph_is_rooted_when_architecture_has_fan_in_or_cycles() -> None:

@@ -9,14 +9,17 @@ from typer.testing import CliRunner
 
 from systemlens import cli
 from systemlens.delivery.cli import app
-from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod
-from systemlens.indexing.code_flows import _deduplicate_code_flows, codeql_join_methods_signature
+from systemlens.indexing.code_flows import (
+    CodeQLCallGraph,
+    _deduplicate_code_flows,
+    codeql_join_methods_signature,
+)
 from systemlens.indexing.code_flows import materialize_code_flows, reconcile_code_flows
 from systemlens.indexing.code_flows import materialize_codeql_code_flows
-from systemlens.indexing.code_flows import materialize_kafka_flow_continuations
 from systemlens.indexing import codeql
 from systemlens.indexing.codeql import CodeQLCall
 from systemlens.indexing.integration_methods import materialize_integration_methods
@@ -123,7 +126,7 @@ def test_materialize_code_flows_orders_same_method_effects(tmp_path: Path) -> No
     assert shifted_flows[0].id == flows[0].id
 
 
-def test_materialize_code_flows_indexes_typed_kafka_fanout(tmp_path: Path) -> None:
+def test_materialize_code_flows_keeps_scheduled_kafka_publication_local(tmp_path: Path) -> None:
     module_root = tmp_path / "orders"
     relative_source = "orders/src/main/java/com/example/ScheduledPublisher.java"
     source = tmp_path / relative_source
@@ -154,7 +157,7 @@ class ScheduledPublisher {
     flows = materialize_code_flows(tmp_path, [producer, *consumers], [module])
 
     assert {(flow.module, flow.steps[-1].endpoint_id) for flow in flows} == {
-        ("orders", "publish"), ("orders", "inventory"), ("orders", "restock"),
+        ("orders", "publish"),
     }
     assert all(flow.steps[0].kind == "cron_entry" for flow in flows)
     assert {flow.steps[0].name for flow in flows} == {"0 * * * * *"}
@@ -181,114 +184,6 @@ def test_materialize_code_flows_does_not_root_on_untriggered_publication(tmp_pat
 
     assert materialize_code_flows(tmp_path, [producer, consumer], [module]) == []
 
-def test_kafka_continuations_require_concrete_topics_and_preserve_producer_effects() -> None:
-    producer = CodeFlow(
-        id="producer", module="orders", method="OrderController.place", path="OrderController.java",
-        start_line=1, end_line=8, status="potential", confidence="medium", reason="test",
-        steps=(
-            CodeFlowStep(1, "http_entry", "POST /orders", "OrderController.java", 1, 1, "entry"),
-            CodeFlowStep(2, "message_publish", "orders.created", "OrderController.java", 3, 3, "publish"),
-        ),
-    )
-    consumer = CodeFlow(
-        id="consumer", module="inventory", method="OrderConsumer.consume", path="OrderConsumer.java",
-        start_line=1, end_line=8, status="potential", confidence="medium", reason="test",
-        steps=(
-            CodeFlowStep(1, "message_entry", "orders.created", "OrderConsumer.java", 1, 1, "consume"),
-            CodeFlowStep(2, "message_publish", "stock.reserved", "OrderConsumer.java", 3, 3, "out"),
-        ),
-    )
-    dynamic_consumer = replace(
-        consumer, id="dynamic", steps=(
-            replace(consumer.steps[0], endpoint_id="dynamic-consume"), consumer.steps[1],
-        ),
-    )
-    endpoints = [
-        _endpoint("entry", "serve", "rest", "POST /orders", "OrderController.java", 1),
-        _endpoint("publish", "produce", "kafka", "orders.created", "OrderController.java", 3),
-        _endpoint("consume", "consume", "kafka", "orders.created", "OrderConsumer.java", 1),
-        replace(_endpoint("dynamic-consume", "consume", "kafka", "orders.created", "Other.java", 1), topic_dynamic=True),
-    ]
-
-    flows = materialize_kafka_flow_continuations([producer, consumer, dynamic_consumer], endpoints)
-
-    combined = [flow for flow in flows if flow.id not in {"producer", "consumer", "dynamic"}]
-    assert len(combined) == 1
-    assert [step.kind for step in combined[0].steps] == [
-        "http_entry", "message_publish", "message_entry", "message_publish",
-    ]
-
-    downstream = replace(
-        consumer,
-        id="downstream",
-        module="shipping",
-        method="ShippingConsumer.consume",
-        steps=(
-            CodeFlowStep(1, "message_entry", "stock.reserved", "ShippingConsumer.java", 1, 1, "stock-in"),
-            CodeFlowStep(2, "http_call", "POST /shipments", "ShippingConsumer.java", 3, 3, "ship-out"),
-        ),
-    )
-    endpoints.extend([
-        _endpoint("out", "produce", "kafka", "stock.reserved", "OrderConsumer.java", 3),
-        _endpoint("stock-in", "consume", "kafka", "stock.reserved", "ShippingConsumer.java", 1),
-        _endpoint("ship-out", "call", "rest", "POST /shipments", "ShippingConsumer.java", 3),
-    ])
-    chained = materialize_kafka_flow_continuations([producer, consumer, downstream], endpoints)
-    assert any(
-        [step.kind for step in flow.steps] == [
-            "http_entry", "message_publish", "message_entry", "message_publish",
-            "message_entry", "http_call",
-        ]
-        for flow in chained
-    )
-
-    producer_with_later_effect = replace(
-        producer, steps=(*producer.steps, CodeFlowStep(
-            3, "data_write", "orders", "OrderController.java", 4, 4,
-        )),
-    )
-    assert materialize_kafka_flow_continuations(
-        [producer_with_later_effect, consumer], endpoints
-    ) == [consumer, producer_with_later_effect]
-
-
-def test_kafka_continuations_allow_unknown_message_types_but_reject_conflicts() -> None:
-    producer = CodeFlow(
-        id="producer", module="orders", method="OrderController.place", path="OrderController.java",
-        start_line=1, end_line=3, status="potential", confidence="medium", reason="test",
-        steps=(
-            CodeFlowStep(1, "http_entry", "POST /orders", "OrderController.java", 1, 1, "entry"),
-            CodeFlowStep(2, "message_publish", "orders.created", "OrderController.java", 3, 3, "publish"),
-        ),
-    )
-    consumer = CodeFlow(
-        id="consumer", module="inventory", method="OrderConsumer.consume", path="Consumer.java",
-        start_line=1, end_line=2, status="potential", confidence="medium", reason="test",
-        steps=(CodeFlowStep(1, "message_entry", "orders.created", "Consumer.java", 1, 1, "consume"),),
-    )
-    conflicting_endpoints = [
-        _endpoint("publish", "produce", "kafka", "orders.created", "Producer.java", 3, "OrderCreated"),
-        _endpoint("consume", "consume", "kafka", "orders.created", "Consumer.java", 1, "OrderUpdated"),
-    ]
-
-    result = materialize_kafka_flow_continuations([producer, consumer], conflicting_endpoints)
-    assert {flow.id for flow in result} == {"producer", "consumer"}
-
-    unknown_consumer = replace(
-        _endpoint("consume", "consume", "kafka", "orders.created", "Consumer.java", 1),
-        message_type=None,
-    )
-    result = materialize_kafka_flow_continuations(
-        [producer, consumer],
-        [conflicting_endpoints[0], unknown_consumer],
-    )
-    assert any(
-        flow.id not in {"producer", "consumer"}
-        and flow.steps[-1].endpoint_id == "consume"
-        for flow in result
-    )
-
-
 def test_code_flow_deduplication_keeps_shortest_strongest_route() -> None:
     entry = _endpoint("entry", "serve", "rest", "POST /orders", "Orders.java", 1)
     output = _endpoint("output", "call", "rest", "POST /inventory", "Orders.java", 8)
@@ -308,6 +203,29 @@ def test_code_flow_deduplication_keeps_shortest_strongest_route() -> None:
     ))
 
     assert _deduplicate_code_flows([long, short]) == [replace(short, alternative_count=2)]
+
+
+def test_codeql_call_graph_groups_edges_without_reversing_direction() -> None:
+    caller = IntegrationMethod("a", "orders", "A.receive", "A.java", 1, 1, ("in",), ())
+    middle = IntegrationMethod("b", "orders", "B.process", "B.java", 1, 1, (), ())
+    target = IntegrationMethod("c", "orders", "C.send", "C.java", 1, 1, (), ("out",))
+    call_ab = CodeQLCall("A.receive", "A.java", 1, "B.process", "B.java", 1, 1)
+    call_bc = CodeQLCall("B.process", "B.java", 1, "C.send", "C.java", 1, 1)
+    graph = CodeQLCallGraph(
+        adjacency={
+            caller.id: [(middle, call_ab, False)],
+            middle.id: [(target, call_bc, False)],
+        },
+        synthetic_calls=set(),
+        call_count=2,
+        locate=lambda _name, _path, _line: None,
+    )
+
+    assert graph.connected_components(("a", "b", "c", "isolated")) == (
+        frozenset({"a", "b", "c"}),
+        frozenset({"isolated"}),
+    )
+    assert [edge[0].id for edge in graph.adjacency["a"]] == ["b"]
 
 
 def test_reconcile_code_flows_marks_missing_topology_as_partial() -> None:
@@ -728,7 +646,11 @@ def test_store_additively_migrates_previous_schema_for_code_flows(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'integration_methods'"
         ).fetchone()
         assert methods_table is not None
-        assert store.get_meta("schema_version") == "31"
+        call_edges_table = store.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'codeql_call_edges'"
+        ).fetchone()
+        assert call_edges_table is not None
+        assert store.get_meta("schema_version") == "32"
 
 
 def test_codeql_calls_join_ast_entry_and_output_methods(tmp_path: Path) -> None:
@@ -768,11 +690,21 @@ class OrderPublisher {
         CodeQLCall("com.example.OrderController.publish", source, 4,
                    "com.example.OrderPublisher.send", target, 3, 4),
     ]
-    flows = materialize_codeql_code_flows(methods, endpoints, calls)
+    persisted_edges = []
+    flows = materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        calls,
+        call_graph_sink=lambda graph: persisted_edges.extend(graph.edges()),
+    )
 
     assert len(flows) == 1
     assert [step.kind for step in flows[0].steps] == [
         "message_entry", "method_call", "method_call", "message_publish",
+    ]
+    assert [(edge.caller_id, edge.callee_id, edge.line) for edge in persisted_edges] == [
+        (methods[0].id, methods[1].id, 3),
+        (methods[1].id, methods[2].id, 4),
     ]
 
 

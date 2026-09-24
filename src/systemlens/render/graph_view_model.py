@@ -23,7 +23,7 @@ from systemlens.domain.module_inventory import (
     MongoPersistenceClass,
     module_identity,
 )
-from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
+from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
 from systemlens.render.namespaces import project_namespace, project_namespace_path
 from systemlens.render.software_layers import software_layer
 from systemlens.render._graph_view_helpers import (
@@ -207,6 +207,7 @@ def build_graph_view_model(
     architecture_relations: list[ArchitectureRelation] | None = None,
     integration_methods: list[IntegrationMethod] | None = None,
     code_flows: list[CodeFlow] | None = None,
+    codeql_call_edges: list[CodeQLCallGraphEdge] | None = None,
 ) -> dict[str, object]:
     """Render an interactive Sigma.js graph as a self-contained HTML document.
 
@@ -1247,6 +1248,7 @@ def build_graph_view_model(
         project_dto_definitions = [
             item for item in kafka_dto_definitions if not item.get("root", True)
         ]
+    methods_by_id = {method.id: method for method in integration_methods or []}
     return {
             "nodes": nodes,
             "links": links,
@@ -1288,4 +1290,39 @@ def build_graph_view_model(
                 root_path,
                 diagnostics,
             ),
+            "codeql_call_graph": {
+                "nodes": [
+                    {
+                        "id": method.id,
+                        "module": method.module,
+                        "method": method.qualified_method,
+                        "path": method.path,
+                        "start_line": method.start_line,
+                        "end_line": method.end_line,
+                        "input_endpoint_ids": list(method.input_endpoint_ids),
+                        "output_endpoint_ids": list(method.output_endpoint_ids),
+                    }
+                    for method in sorted(methods_by_id.values(), key=lambda item: item.id)
+                ],
+                "edges": [
+                    {
+                        "caller_id": edge.caller_id,
+                        "callee_id": edge.callee_id,
+                        "path": edge.path,
+                        "line": edge.line,
+                        "dispatch_confidence": edge.dispatch_confidence,
+                        "inferred": edge.inferred,
+                    }
+                    for edge in sorted(
+                        codeql_call_edges or [],
+                        key=lambda item: (
+                            item.caller_id,
+                            item.callee_id,
+                            item.path,
+                            item.line,
+                        ),
+                    )
+                    if edge.caller_id in methods_by_id and edge.callee_id in methods_by_id
+                ],
+            },
     }

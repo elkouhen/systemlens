@@ -42,7 +42,7 @@ The final counters answer most first questions:
 | `N jointure(s)` | Number of calls attached to indexed integration methods. A high call count with zero joins usually indicates a source-location or method-name resolution problem. |
 | `N flux interprocédural(aux)` | Flows that cross method boundaries and reach an indexed output endpoint. |
 | `limite atteinte (N transitions)` | The bounded method-call exploration stopped before considering every transition. |
-| `N parcours de code potentiel(s) matérialisé(s)` | Total persisted flows after local, interprocedural and Kafka continuation materialization. |
+| `N parcours de code potentiel(s) matérialisé(s)` | Total persisted flows after local and interprocedural materialization. |
 
 The direct CodeQL reachability query is not limited by the configured hop
 count: it starts at indexed outputs and computes the
@@ -187,7 +187,7 @@ This distinguishes common cases such as:
 
 - an input endpoint with no indexed output;
 - an output endpoint with no entry flow;
-- a local flow that was found but has no cross-service continuation;
+- a local flow that was found while its cross-service topology remains separate;
 - a flow whose external relation could not be resolved.
 
 Then inspect unresolved extraction evidence:

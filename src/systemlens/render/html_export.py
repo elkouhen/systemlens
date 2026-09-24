@@ -11,7 +11,7 @@ from typing import cast
 import networkx as nx
 
 from systemlens.domain.graph import GraphEdge
-from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
+from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
 from systemlens.domain.models import (
     ArchitectureRelation,
     ExtractionDiagnostic,
@@ -241,8 +241,123 @@ def _distinct_export_flows(
             ),
         )
         distinct.append((flow, call_graph, len(parallel)))
+
+    # A Kafka publication and the consumer fragment that starts at the same
+    # topic are two indexing fragments of one rooted flow.  They can have
+    # different edge sets because one fragment discovers the downstream branch
+    # and the other discovers the upstream producer.  Merge only when the
+    # rendered root, topic and known message type agree; this is a keyed union,
+    # not a Cartesian product of producer and consumer routes.
+    endpoint_by_id = {
+        endpoint.id: endpoint
+        for service_endpoints in endpoints_by_service.values()
+        for endpoint in service_endpoints
+    }
+
+    def fragment_key(
+        item: tuple[CodeFlow, dict[str, object], int],
+    ) -> tuple[str, str, str | None, bool] | None:
+        flow, call_graph, _count = item
+        node_order = cast(list[str], call_graph["node_order"])
+        if not node_order:
+            return None
+        kafka_steps = [
+            endpoint_by_id[step.endpoint_id]
+            for step in flow.steps
+            if step.endpoint_id in endpoint_by_id
+            and endpoint_by_id[step.endpoint_id].system == "kafka"
+        ]
+        if not kafka_steps:
+            return None
+        has_entry = any(endpoint.role == "consume" for endpoint in kafka_steps)
+        has_publication = any(endpoint.role == "produce" for endpoint in kafka_steps)
+        if not has_entry and not has_publication:
+            return None
+        boundary = next(
+            (endpoint for endpoint in kafka_steps if endpoint.role == "consume"),
+            kafka_steps[0],
+        )
+        topic = boundary.topic
+        message_type = boundary.message_type
+        return node_order[0], topic, message_type, has_entry
+
+    def merge_call_graphs(
+        items: list[tuple[CodeFlow, dict[str, object], int]],
+    ) -> dict[str, object]:
+        root = cast(list[str], items[0][1]["node_order"])[0]
+        graph = nx.MultiDiGraph()
+        for _flow, call_graph, _count in items:
+            graph.add_nodes_from(cast(list[str], call_graph["nodes"]))
+            for edge in cast(list[dict[str, object]], call_graph["edges"]):
+                graph.add_edge(
+                    edge["source"], edge["target"],
+                    kind=edge["kind"], label=edge["label"],
+                    endpoint_ids=list(cast(list[object], edge.get("endpoint_ids", []))),
+                )
+        tree = nx.MultiDiGraph()
+        tree.add_node(root)
+        visited = {root}
+        pending = [root]
+        while pending:
+            source = pending.pop(0)
+            for target in sorted(graph.successors(source)):
+                if target in visited:
+                    continue
+                visited.add(target)
+                pending.append(target)
+                tree.add_node(target)
+                for key, data in sorted(
+                    graph[source][target].items(), key=lambda item: str(item[0])
+                ):
+                    tree.add_edge(source, target, key=key, **data)
+        return {
+            "nodes": sorted(tree.nodes),
+            "node_order": list(nx.topological_sort(tree)),
+            "edges": [
+                {
+                    "source": source,
+                    "target": target,
+                    "kind": str(data.get("kind", "")),
+                    "label": str(data.get("label", "")),
+                    "endpoint_ids": list(cast(list[object], data.get("endpoint_ids", []))),
+                }
+                for source, target, _key, data in sorted(
+                    tree.edges(keys=True, data=True),
+                    key=lambda item: (item[0], item[1], str(item[2])),
+                )
+            ],
+        }
+
+    fusion_groups: dict[tuple[str, str, str | None], list[int]] = {}
+    fusion_roles: dict[tuple[str, str, str | None], set[bool]] = {}
+    for index, item in enumerate(distinct):
+        key = fragment_key(item)
+        if key is not None:
+            fusion_groups.setdefault(key[:3], []).append(index)
+            fusion_roles.setdefault(key[:3], set()).add(key[3])
+    fused: set[int] = set()
+    fused_distinct: list[tuple[CodeFlow, dict[str, object], int]] = []
+    for group_key, indexes in fusion_groups.items():
+        if len(indexes) < 2 or fusion_roles[group_key] != {False, True}:
+            continue
+        candidates = [distinct[index] for index in indexes]
+        root = cast(list[str], candidates[0][1]["node_order"])[0]
+        flow, _graph, count = min(
+            candidates,
+            key=lambda item: (
+                item[0].module != root,
+                not any(step.kind == "cron_entry" for step in item[0].steps),
+                status_rank.get(item[0].status, 99),
+                confidence_rank.get(item[0].confidence, 99),
+                -len(item[0].steps),
+                item[0].id,
+            ),
+        )
+        fused_distinct.append((flow, merge_call_graphs(candidates), sum(item[2] for item in candidates)))
+        fused.update(indexes)
+    fused_distinct.extend(item for index, item in enumerate(distinct) if index not in fused)
     return sorted(
-        distinct,
+        fused_distinct,
         key=lambda item: (item[0].module, item[0].path, item[0].start_line, item[0].id),
     )
 
@@ -267,6 +382,7 @@ def render_graph_html(
     architecture_relations: list[ArchitectureRelation] | None = None,
     code_flows: list[CodeFlow] | None = None,
     integration_methods: list[IntegrationMethod] | None = None,
+    codeql_call_edges: list[CodeQLCallGraphEdge] | None = None,
     progress_notice: str | None = None,
 ) -> str:
     """Render a graph view model as one self-contained HTML document."""
@@ -291,6 +407,7 @@ def render_graph_html(
         architecture_relations=architecture_relations,
         integration_methods=integration_methods,
         code_flows=code_flows,
+        codeql_call_edges=codeql_call_edges,
     )
     port_labels = {
         str(port["endpoint_id"]): str(port["label"])

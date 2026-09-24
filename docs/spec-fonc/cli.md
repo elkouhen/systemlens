@@ -69,8 +69,8 @@ During the final join, progress reports the number of calls attached to Java
 methods, the IN methods explored, the transitions traversed, and the flows
 materialized before final reconciliation.
 The index commits a provisional flow snapshot after each join batch, so an
-HTML progress export or a later export from the index retains the arcs found
-before an interruption.
+HTML progress export or a later export from the index retains the call-graph
+arcs found before an interruption.
 The final reconciliation replaces this partial snapshot and marks it complete.
 SystemLens maps module-relative evidence paths back to the repository root,
 aggregates all calls, and only then joins them to the global method inventory.
@@ -111,8 +111,8 @@ reading, even when a subprocess stops producing output. On POSIX, timeout or
 interrupted progress handling terminates and reaps the complete process group.
 A timeout is a soft boundary for the index: SystemLens keeps AST facts and any
 CodeQL calls recovered from a completed partial result, executes the remaining
-relation, flow, continuation, reconciliation and statistics post-processing,
-then commits the resulting partial snapshot so it can be exported to HTML. The
+relation, flow, reconciliation and statistics post-processing, then commits
+the resulting partial snapshot so it can be exported to HTML. The
 CLI reports that the graph is partial. A timed-out CodeQL pass does not update
 the code-flow signature, so the next index retries the interprocedural analysis
 even when source files are unchanged. Other CodeQL failures remain fatal and

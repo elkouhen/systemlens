@@ -17,7 +17,12 @@ from systemlens.domain.models import (
     MessageEndpoint,
     merge_graph_facts,
 )
-from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
+from systemlens.domain.code_flows import (
+    CodeFlow,
+    CodeFlowStep,
+    CodeQLCallGraphEdge,
+    IntegrationMethod,
+)
 from systemlens.domain.module_inventory import (
     BlockingPoint,
     DiscoveredModule,
@@ -31,7 +36,7 @@ from systemlens.domain.module_inventory import (
 from systemlens.domain.runtime import KubernetesWorkload
 from systemlens.infrastructure.paths import db_path
 
-SCHEMA_VERSION = "31"
+SCHEMA_VERSION = "32"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
@@ -387,6 +392,19 @@ class Store:
             );
             CREATE INDEX IF NOT EXISTS idx_integration_methods_path ON integration_methods(path);
             CREATE INDEX IF NOT EXISTS idx_integration_methods_module ON integration_methods(module);
+            CREATE TABLE IF NOT EXISTS codeql_call_edges (
+                caller_id TEXT NOT NULL,
+                callee_id TEXT NOT NULL,
+                path TEXT NOT NULL,
+                line INTEGER NOT NULL,
+                dispatch_confidence TEXT NOT NULL,
+                inferred INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (caller_id, callee_id, path, line, dispatch_confidence, inferred),
+                FOREIGN KEY (caller_id) REFERENCES integration_methods(id),
+                FOREIGN KEY (callee_id) REFERENCES integration_methods(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_codeql_call_edges_caller ON codeql_call_edges(caller_id);
+            CREATE INDEX IF NOT EXISTS idx_codeql_call_edges_callee ON codeql_call_edges(callee_id);
             """
         )
         self._migrate_module_columns()
@@ -697,6 +715,46 @@ class Store:
                 path=row["path"], start_line=row["start_line"], end_line=row["end_line"],
                 input_endpoint_ids=tuple(json.loads(row["input_endpoint_ids"])),
                 output_endpoint_ids=tuple(json.loads(row["output_endpoint_ids"])),
+            )
+            for row in rows
+        ]
+
+    def replace_codeql_call_edges(self, edges: list[CodeQLCallGraphEdge]) -> None:
+        """Replace the source-backed CodeQL call graph edges."""
+        self.conn.execute("DELETE FROM codeql_call_edges")
+        self.conn.executemany(
+            """INSERT INTO codeql_call_edges
+            (caller_id, callee_id, path, line, dispatch_confidence, inferred)
+            VALUES (?, ?, ?, ?, ?, ?)""",
+            [
+                (
+                    edge.caller_id,
+                    edge.callee_id,
+                    edge.path,
+                    edge.line,
+                    edge.dispatch_confidence,
+                    int(edge.inferred),
+                )
+                for edge in edges
+            ],
+        )
+
+    def all_codeql_call_edges(self) -> list[CodeQLCallGraphEdge]:
+        rows = self.conn.execute(
+            """SELECT caller_id, callee_id, path, line,
+                      dispatch_confidence, inferred
+               FROM codeql_call_edges
+               ORDER BY caller_id, callee_id, path, line,
+                        dispatch_confidence, inferred"""
+        ).fetchall()
+        return [
+            CodeQLCallGraphEdge(
+                caller_id=row["caller_id"],
+                callee_id=row["callee_id"],
+                path=row["path"],
+                line=row["line"],
+                dispatch_confidence=row["dispatch_confidence"],
+                inferred=bool(row["inferred"]),
             )
             for row in rows
         ]

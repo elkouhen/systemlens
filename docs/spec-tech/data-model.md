@@ -111,9 +111,8 @@ list, including cross-project references, is used for final method-flow
 materialization. If the scoped queries produce no calls because the supplied
 database uses a different source-root spelling, indexing retries one unscoped
 query before materializing the checkpoints.
-The call facts are kept in memory, their paths are remapped to root-relative
-evidence, and all repository results are aggregated before method-flow
-materialization. A missing or untrusted callee
+The call facts are aggregated before method-flow materialization and persisted
+as root-relative `codeql_call_edges`. A missing or untrusted callee
 path may join one unique qualified indexed method, but is explicitly
 low-confidence and retains signature-join provenance; ambiguous names remain
 unresolved. An
@@ -139,7 +138,7 @@ including the selected method-call engine, availability, activation and its boun
 code-flow signature so switching profile recalculates unchanged repositories.
 
 The flow join groups AST and interprocedural candidates with deterministic
-in-memory keys before Kafka continuations are expanded. Parallel candidate
+in-memory keys. Parallel candidate
 routes are grouped by source endpoint, target endpoint, and status;
 the representative with the strongest confidence, then the shortest route, is
 persisted. The indexing deduplication uses plain deterministic collections; HTML
@@ -147,13 +146,16 @@ layout remains a rendering concern handled by the browser graph stack. Each expo
 also carries a NetworkX-derived service subgraph and deterministic component
 order; the Flux view uses that snapshot instead of reconstructing the call
 sequence from display labels.
-Kafka publications are expanded as fan-out branches for a concrete topic within
-an existing input-triggered flow. A publication without an input trigger does
-not become a flow root. The exception is a publisher explicitly annotated with
-a cron expression: it creates one `CodeFlow` per matching consumer whose first
-step is `cron_entry`, followed by the publication and consumer entry. Known
-message types must match when both endpoints provide one. Missing type evidence
-does not prevent the join, while conflicting known types prevent it.
+Kafka publications are not expanded into cross-service persisted CodeFlow
+candidates. The HTML projection can nevertheless fuse a publication fragment
+with a consumer fragment when their rendered root, concrete topic and known
+message type agree; it unions the already-proven service branches without
+enumerating routes. A publication without an input trigger does not become a flow root. A
+publisher explicitly annotated with a cron expression still creates a local
+source flow whose first step is `cron_entry`, followed by its publication.
+Known message types must match when both endpoints provide one. Missing type
+evidence does not prevent the topology relation, while conflicting known types
+prevent it.
 The exported flow-graph projection is always a rooted arborescence: its root is
 the first persisted endpoint, or the unique proven producer immediately before
 a Kafka entry. For Kafka fan-in, no producer is selected arbitrarily. A
@@ -168,14 +170,17 @@ canonical service arcs; it does not append a second set reconstructed from
 port links.
 Before serialization, HTML export groups flows by their complete rendered
 flow-graph signature (nodes, directed arcs, protocol and resource labels).
-Equivalent CodeQL or continuation routes produce one visible representative,
-chosen by status, confidence, route length and stable source ordering;
-`equivalent_count` retains the number of persisted variants. Index storage is
-not modified by this presentation deduplication.
+It also fuses a publication fragment with a consumer fragment when the
+rendered root, concrete topic and known message type agree. The fusion is a
+keyed union of the proven branches; it never enumerates producer/consumer
+combinations and does not modify index storage. One visible representative is
+chosen by root ownership, trigger kind, status, confidence, route length and
+stable source ordering. `equivalent_count` retains the number of persisted
+fragments represented by that card.
 
 Each persisted `CodeFlow` also carries a `reconciliation` status. `complete`
 means every endpoint step exists in the same snapshot and every cross-service
-effect/continuation has a matching persisted topology edge; `partial` means
+effect has a matching persisted topology edge; `partial` means
 the code evidence remains valid but at least one endpoint or topology edge is
 missing, unresolved, dynamic, or ambiguous. Same-service input-to-output
 evidence can be complete without an inter-service edge. The status is derived
@@ -210,14 +215,11 @@ such as HTML exports are ignored. If the persisted input-method signature no
 longer matches the current index, the stale cursor is discarded and the join
 restarts from the beginning.
 
-Kafka flow continuations join only concrete, statically resolved Kafka endpoint
-identifiers. Known message types must match when both endpoints provide one;
-missing type evidence remains compatible. A continuation is not materialized when the producer has a later
-external effect, because a linear composed flow would otherwise omit that
-evidence. A composed flow can follow up to four Kafka producer-to-consumer
-hops, using only original persisted message-entry flows as consumers and never
-revisiting the same consumer flow. This makes cyclic topics finite while
-retaining the complete ordered evidence for each bounded candidate.
+Kafka endpoint identifiers are reconciled as topology facts, not composed into
+new persisted code-flow candidates. Known message types must match when both
+endpoints provide one; missing type evidence remains compatible. The CodeQL
+call graph remains limited to source-backed Java method calls, so a Kafka topic
+does not create an internal method edge.
 
 The HTML graph model joins endpoint identifiers and statically inferred message
 types to the persisted
@@ -249,8 +251,9 @@ The SQLite store is standard-library-only: it does not load native vector
 extensions or persist/query vector representations. The retained findings
 search compatibility path uses deterministic lexical matching.
 
-Schema version 31 adds persisted `code_flows.alternative_count` route metadata
-to the schema 30 `code_flows.reconciliation` status and
+Schema version 32 adds the persisted `codeql_call_edges` source-backed method
+call graph to schema version 31, which added `code_flows.alternative_count`
+route metadata to the schema 30 `code_flows.reconciliation` status and
 migrates older snapshots with `unknown`. Schema version 29 adds the
 `asyncapi_contracts` table for validated AsyncAPI
 documents owned by a module and rendered from the persisted snapshot. When an

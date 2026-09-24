@@ -55,9 +55,11 @@ generation command may still require cached or remote plugin dependencies.
 The call query keeps both caller and callee in source code, folds exact
 dispatch before viable-dispatch expansion, and computes that resolution once
 per call. The Python post-processing has two distinct stages: it first resolves
-the CodeQL rows into one source-backed internal call graph, then traverses that
-graph from indexed input methods to indexed output methods to reconstruct
-complete potential flows. It does not connect endpoint facts by name alone.
+the CodeQL rows into one source-backed directed method graph, then groups its
+weak connected components and traverses the directed edges from indexed input
+methods to indexed output methods. Components only restrict the search to
+methods linked by observed calls; they do not reverse edges or create routes.
+It does not connect endpoint facts by name alone.
 CodeQL also runs an output-anchored transitive reachability query whose source and target
 predicates are restricted to the already indexed input/output methods by
 relative path and start line. Exact input-to-output reachability is persisted
@@ -82,8 +84,9 @@ steps, instead of a BFS per input/output pair. HTML checkpoints filter cached
 flows instead of rebuilding and retraversing the method-call graph for every module.
 After the call adjacency is built, the decoded CodeQL rows and transient Java
 symbol indexes are released before route expansion; the adjacency remains the
-single in-memory call-graph representation used by the BFS. No database path
-is persisted. Live progress uses a wall-clock watchdog covering pipe reads;
+single in-memory call-graph representation used by the BFS, and its normalized
+edges are persisted in `codeql_call_edges`. Live progress uses a wall-clock
+watchdog covering pipe reads;
 POSIX timeouts terminate the complete process group, and
 subprocesses are reaped on errors. The configured deadline covers the complete
 CodeQL pass, not each command independently.

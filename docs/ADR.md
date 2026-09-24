@@ -13,7 +13,7 @@ functional or technical contract.
 | Optional or repository-specific behaviour | [ADR-5](#adr-5-strategy1-conventions-are-opt-in), [ADR-12](#adr-12-kubernetes-discovery-is-explicit-and-snapshot-based) |
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
 | Indexed contracts and implementation boundaries | [ADR-25](#adr-25-separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26-organize-implementation-modules-by-architectural-ownership) |
-| Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence) |
+| Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph) |
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
@@ -662,3 +662,47 @@ while CodeQL continues, but a checkpoint is not a complete architecture
 snapshot. A failed run after a checkpoint leaves the last explicitly partial
 snapshot available for inspection; the missing code-flow signature causes the
 next index to retry the interprocedural stage.
+
+## ADR-38: Persist the source-backed CodeQL call graph
+
+**Status:** Accepted.
+
+**Context:** `CodeFlow` records describe only projections from indexed inputs to
+indexed outputs. They do not preserve isolated methods, internal call edges, or
+the complete set of source-backed methods needed to inspect the CodeQL graph.
+
+**Decision:** Persist every indexed Java method through `integration_methods` and
+persist every normalized CodeQL caller-to-callee edge in `codeql_call_edges`.
+Store the relative call-site path, line, dispatch confidence, and whether the
+edge came from a source-declared fallback. Compute weak connected components
+from all method IDs, including isolated methods. Keep `CodeFlow` as a bounded
+IN-to-OUT projection over this graph. For CodeFlow materialization, this
+supersedes the Kafka continuation decisions recorded in ADR-27, ADR-32 and
+ADR-35.
+
+**Consequences:** Read adapters can inspect the call graph after indexing, while
+existing flow and topology contracts remain compatible. A schema migration adds
+the edge table. Ambiguous overload resolution remains unresolved instead of
+selecting an arbitrary method.
+
+## ADR-39: Fuse matching Kafka flow fragments in the HTML projection
+
+**Status:** Accepted.
+
+**Context:** Indexing can produce one persisted fragment for a scheduled or
+explicit Kafka publication and another for the consumer that starts at the
+same topic. Showing both as independent Flux cards duplicates one rooted
+interaction, especially when the consumer continues to another topic.
+
+**Decision:** During HTML serialization, group a publication fragment and a
+consumer fragment only when their rendered root, concrete topic, and known
+message type agree. Build one rooted union of their already-proven service
+branches and retain one deterministic representative. Do not enumerate
+producer/consumer route combinations, and do not alter persisted `CodeFlow`
+records or architecture facts.
+
+**Consequences:** The HTML flow picker represents one root interaction for a
+matching Kafka boundary while preserving fan-out branches. A missing message
+type does not fuse with a known type, and fan-in remains conservative because
+the consumer fragment must already have one rendered root. `equivalent_count`
+reports how many persisted fragments the visible card represents.
