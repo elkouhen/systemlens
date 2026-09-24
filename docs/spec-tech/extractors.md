@@ -58,6 +58,11 @@ topic name; other values use the conservative topic resolver. The second
 argument is used to derive the payload type from its method parameter, local
 variable declaration or enclosing class field.
 
+When CodeQL is available, it completes a missing Strategy1 producer type from
+the static type of that second argument. An existing AST type is never
+replaced. A result is applied only when CodeQL returns one type for the source
+call; ambiguous or unresolved results remain unknown.
+
 Strategy1 also enables the `getXxxServiceUrl()` REST target-name convention;
 without it, SystemLens uses only an explicit URL or `lb://` service target.
 

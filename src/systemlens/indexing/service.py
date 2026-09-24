@@ -35,6 +35,7 @@ from systemlens.indexing.codeql import (
     CodeQLReachability,
     CodeQLError,
     CodeQLTimeout,
+    extract_codeql_kafka_message_types,
     automatic_codeql_database,
     codeql_executable,
     extract_codeql_calls,
@@ -527,6 +528,65 @@ def _index_repo(
         store.replace_integration_methods(methods)
         store.replace_codeql_call_edges([])
 
+        def enrich_strategy1_kafka_types(database: Path) -> None:
+            """Complete missing Strategy1 producer types from CodeQL evidence."""
+            nonlocal all_endpoints, relations
+            if topic_strategy != "strategy1":
+                return
+            evidence = extract_codeql_kafka_message_types(
+                database,
+                timeout_seconds=config.codeql_timeout_seconds,
+                threads=config.codeql_threads,
+                ram_mb=config.codeql_ram_mb,
+            )
+            by_site: dict[tuple[str, int], set[str]] = {}
+            for item in evidence:
+                by_site.setdefault((item.path, item.line), set()).add(item.message_type)
+
+            def complete_endpoint(endpoint: MessageEndpoint) -> MessageEndpoint:
+                types = by_site.get((endpoint.path, endpoint.start_line), set())
+                if (
+                    endpoint.framework == "kafka-topic-strategy1"
+                    and endpoint.role == "produce"
+                    and endpoint.message_type is None
+                    and len(types) == 1
+                ):
+                    return replace(endpoint, message_type=next(iter(types)))
+                return endpoint
+
+            enriched = [
+                complete_endpoint(endpoint)
+                for endpoint in all_endpoints
+            ]
+            if enriched == all_endpoints:
+                return
+            completed_count = sum(
+                1 for before, after in zip(all_endpoints, enriched) if before != after
+            )
+            store.replace_endpoints_for_files(
+                sorted({endpoint.path for endpoint in all_endpoints}), enriched
+            )
+            all_endpoints = enriched
+            endpoints_by_service = {
+                module: items
+                for module, items in group_endpoints_by_module(all_endpoints).items()
+            }
+            store.replace_kafka_dto_definitions(
+                materialize_kafka_dto_definitions(endpoints_by_service, relation_modules)
+            )
+            relations = build_architecture_relations(
+                relation_modules,
+                all_endpoints,
+                relation_dependencies,
+                kafka_reply_strategy1=True,
+            )
+            store.replace_architecture_relations(relations)
+            _report_progress(
+                progress,
+                f"→ CodeQL : {completed_count} "
+                "type(s) Kafka Strategy1 complété(s).",
+            )
+
         def persist_call_graph(call_graph: CodeQLCallGraph) -> None:
             store.replace_codeql_call_edges(list(call_graph.edges()))
 
@@ -725,6 +785,7 @@ def _index_repo(
                             (name, project_calls)
                             for name, project_calls in _partition_codeql_calls(calls, roots)
                         ]
+                    enrich_strategy1_kafka_types(codeql_database)
                     scoped_completed_calls: list[CodeQLCall] = []
                     for number, (name, project_calls) in enumerate(scoped_project_calls, start=1):
                         scoped_completed_calls.extend(project_calls)
@@ -806,6 +867,7 @@ def _index_repo(
                             )
                         with database_context as database:
                             assert database is not None
+                            enrich_strategy1_kafka_types(database)
                             calls = extract_codeql_calls(
                                 database, timeout_seconds=config.codeql_timeout_seconds,
                                 threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,

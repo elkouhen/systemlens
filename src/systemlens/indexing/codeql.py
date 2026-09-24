@@ -44,6 +44,15 @@ class CodeQLReachability:
     confidence: str
 
 
+@dataclass(frozen=True)
+class CodeQLKafkaMessageType:
+    """A source-backed payload type found at a Strategy1 Kafka send site."""
+
+    path: str
+    line: int
+    message_type: str
+
+
 class CodeQLError(RuntimeError):
     pass
 
@@ -138,6 +147,24 @@ select enclosing.getQualifiedName() as caller,
   invoked.getLocation().getStartLine() as callee_line,
   call.getLocation().getStartLine() as call_line,
   dispatch_confidence
+"""
+
+_KAFKA_MESSAGE_TYPES_QUERY = """import java
+
+/**
+ * Strategy1 names the topic convention, but the payload can be hidden behind
+ * a local variable or a method parameter. CodeQL resolves that expression's
+ * declared Java type without guessing from the topic name or serializer.
+ */
+from MethodCall call, Expr payload, Type payloadType
+where call.getMethod().getName().regexpMatch("^envoyerMessageKafka.*")
+  and call.getEnclosingCallable().fromSource()
+  and payload = call.getArgument(1)
+  and payloadType = payload.getType()
+  and payloadType.getName() != ""
+select call.getFile().getRelativePath() as path,
+  call.getLocation().getStartLine() as line,
+  payloadType.getName() as message_type
 """
 
 
@@ -561,6 +588,66 @@ def _parse_codeql_calls(rows: Iterable[Mapping[str, str]], path_prefix: str) -> 
         except (KeyError, TypeError, ValueError) as exc:
             raise CodeQLError("CodeQL returned an unexpected call-graph CSV schema.") from exc
     return calls
+
+
+def extract_codeql_kafka_message_types(
+    database: Path,
+    *,
+    executable: str | None = None,
+    timeout_seconds: int = 600,
+    threads: int = 1,
+    ram_mb: int | None = None,
+    deadline: float | None = None,
+) -> list[CodeQLKafkaMessageType]:
+    """Return unique payload types for Strategy1 Kafka producer calls."""
+    if not database.is_dir():
+        raise CodeQLError(f"CodeQL database not found: {database}")
+    executable = executable or codeql_executable()
+    if executable is None:
+        raise CodeQLError("CodeQL executable not found.")
+    with tempfile.TemporaryDirectory(prefix="systemlens-codeql-kafka-") as directory:
+        work = Path(directory)
+        query = work / "kafka_message_types.ql"
+        query.write_text(_KAFKA_MESSAGE_TYPES_QUERY, encoding="utf-8")
+        (work / "qlpack.yml").write_text(_QLPACK, encoding="utf-8")
+        bqrs = work / "kafka_message_types.bqrs"
+        output = work / "kafka_message_types.csv"
+        command = [
+            executable, "query", "run", str(query), f"--database={database}",
+            f"--output={bqrs}", f"--threads={threads}",
+        ]
+        if ram_mb is not None:
+            command.append(f"--ram={ram_mb}")
+        user_packs = Path.home() / ".codeql" / "packages"
+        if user_packs.is_dir():
+            command.append(f"--additional-packs={user_packs}")
+        completed = _run_with_progress(
+            command, timeout=_remaining_timeout(timeout_seconds, deadline), progress=None,
+        )
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout).strip()
+            raise CodeQLError(f"CodeQL Kafka message-type query failed: {detail}")
+        decoded = _decode_bqrs(
+            executable, bqrs, output,
+            timeout=_remaining_timeout(timeout_seconds, deadline),
+        )
+        if decoded.returncode != 0:
+            detail = (decoded.stderr or decoded.stdout).strip()
+            raise CodeQLError(f"CodeQL Kafka message-type decoding failed: {detail}")
+        try:
+            with output.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+        except OSError as exc:
+            raise CodeQLError("CodeQL did not produce a Kafka message-type CSV.") from exc
+    result: list[CodeQLKafkaMessageType] = []
+    for row in rows:
+        try:
+            result.append(CodeQLKafkaMessageType(
+                path=row["path"], line=int(row["line"]), message_type=row["message_type"],
+            ))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise CodeQLError("CodeQL returned an unexpected Kafka message-type CSV schema.") from exc
+    return result
 
 
 def extract_codeql_reachability(
