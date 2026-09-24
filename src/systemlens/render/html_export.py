@@ -286,13 +286,22 @@ def _distinct_export_flows(
     ) -> dict[str, object]:
         root = cast(list[str], items[0][1]["node_order"])[0]
         graph = nx.MultiDiGraph()
+        seen_edges: set[tuple[object, ...]] = set()
         for _flow, call_graph, _count in items:
             graph.add_nodes_from(cast(list[str], call_graph["nodes"]))
             for edge in cast(list[dict[str, object]], call_graph["edges"]):
+                endpoint_ids = tuple(cast(list[object], edge.get("endpoint_ids", [])))
+                edge_key = (
+                    edge["source"], edge["target"], edge["kind"], edge["label"],
+                    endpoint_ids,
+                )
+                if edge_key in seen_edges:
+                    continue
+                seen_edges.add(edge_key)
                 graph.add_edge(
                     edge["source"], edge["target"],
                     kind=edge["kind"], label=edge["label"],
-                    endpoint_ids=list(cast(list[object], edge.get("endpoint_ids", []))),
+                    endpoint_ids=list(endpoint_ids),
                 )
         tree = nx.MultiDiGraph()
         tree.add_node(root)

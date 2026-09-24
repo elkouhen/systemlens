@@ -309,6 +309,75 @@ def test_export_fuses_kafka_producer_and_consumer_fragments() -> None:
     } == {("orders", "inventory"), ("inventory", "restock")}
 
 
+def test_export_fusion_deduplicates_identical_inter_service_edges() -> None:
+    producer = replace(_kafka_endpoint("produce", "OrderCreated", "Publisher.java"), id="orders-out")
+    consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Inventory.java"), id="inventory-in")
+    first_output = replace(
+        _kafka_endpoint("produce", "StockDepleted", "Inventory.java"),
+        id="stock-out",
+        topic="stock.depleted",
+    )
+    second_output = replace(
+        _kafka_endpoint("produce", "StockLow", "Inventory.java"),
+        id="stock-low-out",
+        topic="stock.low",
+    )
+    first_consumer = replace(
+        _kafka_endpoint("consume", "StockDepleted", "Restock.java"),
+        id="restock-in",
+        topic="stock.depleted",
+    )
+    second_consumer = replace(
+        _kafka_endpoint("consume", "StockLow", "Alerts.java"),
+        id="alerts-in",
+        topic="stock.low",
+    )
+    scheduled = CodeFlow(
+        id="scheduled-flow", module="orders", method="Publisher.publish",
+        path="Publisher.java", start_line=1, end_line=2,
+        status="potential", confidence="medium", reason="scheduled",
+        steps=(CodeFlowStep(1, "cron_entry", "cron", "Publisher.java", 1, 1),
+               CodeFlowStep(2, "message_publish", "orders.created", "Publisher.java", 2, 2, producer.id)),
+    )
+    first_fragment = CodeFlow(
+        id="first-consumer-flow", module="inventory", method="Consumer.consume",
+        path="Inventory.java", start_line=1, end_line=5,
+        status="potential", confidence="medium", reason="consumer",
+        steps=(CodeFlowStep(1, "message_entry", "orders.created", "Inventory.java", 1, 1, consumer.id),
+               CodeFlowStep(2, "message_publish", "stock.depleted", "Inventory.java", 5, 5, first_output.id)),
+    )
+    second_fragment = replace(
+        first_fragment,
+        id="second-consumer-flow",
+        steps=(CodeFlowStep(1, "message_entry", "orders.created", "Inventory.java", 1, 1, consumer.id),
+               CodeFlowStep(2, "message_publish", "stock.low", "Inventory.java", 6, 6, second_output.id)),
+    )
+    data = _html_graph_data(render_graph_html(
+        {"orders": [producer], "inventory": [consumer, first_output, second_output],
+         "restock": [first_consumer], "alerts": [second_consumer]},
+        [
+            GraphEdge("kafka", "orders", "inventory", producer, consumer),
+            GraphEdge("kafka", "inventory", "restock", first_output, first_consumer),
+            GraphEdge("kafka", "inventory", "alerts", second_output, second_consumer),
+        ],
+        code_flows=[scheduled, first_fragment, second_fragment],
+    ))
+
+    edges = data["code_flows"][0]["call_graph"]["edges"]
+    assert sum(
+        edge["source"] == "orders" and edge["target"] == "inventory"
+        for edge in edges
+    ) == 1
+    assert {
+        (edge["source"], edge["target"])
+        for edge in edges
+    } == {
+        ("orders", "inventory"),
+        ("inventory", "restock"),
+        ("inventory", "alerts"),
+    }
+
+
 def test_call_graph_is_rooted_when_architecture_has_fan_in_or_cycles() -> None:
     first_producer = replace(_kafka_endpoint("produce", "OrderCreated", "Orders.java"), id="orders-out")
     second_producer = replace(_kafka_endpoint("produce", "OrderCreated", "LegacyOrders.java"), id="legacy-orders-out")
