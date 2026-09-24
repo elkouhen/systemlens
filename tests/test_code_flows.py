@@ -8,6 +8,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from systemlens import cli
+from systemlens.application.code_flows import list_code_flows
 from systemlens.delivery.cli import app
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.domain.graph import GraphEdge
@@ -328,12 +329,14 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
             "module": flows[0].module,
             "method": flows[0].method,
             "trigger": {"kind": "message_entry", "name": "orders.created"},
+            "input_topic": "orders.created",
+            "output_topics": [],
             "effects": 1,
-                "status": "potential",
-                "confidence": "medium",
-                "reconciliation": "complete",
-                "alternative_count": 1,
-            }
+            "status": "potential",
+            "confidence": "medium",
+            "reconciliation": "complete",
+            "alternative_count": 1,
+        }
     ]
 
     detail = RUNNER.invoke(
@@ -358,6 +361,47 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
         index_repo(repo, Config(), store)
         assert store.all_code_flows() == []
 
+
+def test_flows_list_can_filter_kafka_publications_and_exposes_topics() -> None:
+    flows = [
+        CodeFlow(
+            id="kafka-flow",
+            module="orders",
+            method="Orders.publish",
+            path="Orders.java",
+            start_line=1,
+            end_line=4,
+            status="potential",
+            confidence="medium",
+            reason="test",
+            steps=(
+                CodeFlowStep(1, "message_entry", "orders.in", "Orders.java", 1, 1),
+                CodeFlowStep(2, "message_publish", "orders.out", "Orders.java", 4, 4),
+            ),
+        ),
+        CodeFlow(
+            id="http-flow",
+            module="orders",
+            method="Orders.call",
+            path="Orders.java",
+            start_line=10,
+            end_line=12,
+            status="potential",
+            confidence="medium",
+            reason="test",
+            steps=(
+                CodeFlowStep(1, "http_entry", "GET /orders", "Orders.java", 10, 10),
+                CodeFlowStep(2, "http_call", "GET /payments", "Orders.java", 12, 12),
+            ),
+        ),
+    ]
+
+    all_items = list_code_flows(flows)
+    kafka_items = list_code_flows(flows, publishes_to_topic=True)
+
+    assert all_items[0]["input_topic"] == "orders.in"
+    assert all_items[0]["output_topics"] == ["orders.out"]
+    assert [item["id"] for item in kafka_items] == ["kafka-flow"]
 
 def test_index_uses_automatic_codeql_database_when_available(
     tmp_path: Path, monkeypatch

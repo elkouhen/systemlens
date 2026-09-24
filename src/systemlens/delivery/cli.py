@@ -904,10 +904,17 @@ def flows_root(
         None, "--root", help="Indexed repository to explore."
     ),
     json_output: bool = typer.Option(False, "--json"),
+    publishes_to_topic: bool = typer.Option(
+        False,
+        "--publishes-to-topic",
+        help="Only show flows that publish to at least one Kafka topic.",
+    ),
 ) -> None:
     """List potential code flows without a subcommand."""
     if ctx.invoked_subcommand is None:
-        items = list_code_flows(_load_code_flows(root))
+        items = list_code_flows(
+            _load_code_flows(root), publishes_to_topic=publishes_to_topic
+        )
         typer.echo(
             json.dumps(items)
             if _option_json(json_output)
@@ -919,9 +926,16 @@ def flows_root(
 def flows_list(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
+    publishes_to_topic: bool = typer.Option(
+        False,
+        "--publishes-to-topic",
+        help="Only show flows that publish to at least one Kafka topic.",
+    ),
 ) -> None:
     """List indexed potential code flows."""
-    items = list_code_flows(_load_code_flows(root))
+    items = list_code_flows(
+        _load_code_flows(root), publishes_to_topic=publishes_to_topic
+    )
     typer.echo(
         json.dumps(items)
         if _option_json(json_output)
