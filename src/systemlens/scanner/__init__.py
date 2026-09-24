@@ -25,16 +25,19 @@ caches `lru_cache` répartis dans plusieurs sous-modules."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from systemlens.discovery.build import gradle as gradle_module
 from systemlens.discovery.java import parser as java_parser
 from systemlens.discovery.build import maven as maven_module
 from systemlens.scanner._core import _java_qualified_name, _java_source
+from systemlens.domain.models import MessageEndpoint
 from systemlens.scanner._spring_properties import (
     _load_flat_spring_properties,
     _load_value_annotated_fields,
     _local_spring_application_names,
 )
-from systemlens.scanner.kafka_ast import infer_kafka_endpoints
+from systemlens.scanner.kafka_ast import infer_kafka_endpoints as _infer_kafka_endpoints
 from systemlens.scanner.kafka_conventions import (
     apply_kafka_topic_strategy1,
     infer_json_kafka_flow_graph_endpoints,
@@ -54,6 +57,23 @@ from systemlens.scanner.rest_mvc import (
 )
 
 local_spring_application_names = _local_spring_application_names
+
+
+def infer_kafka_endpoints(
+    repo_root: Path, files: list[str] | None = None, *, strategy1: bool = False
+) -> list[MessageEndpoint]:
+    """Infer Kafka endpoints using the selected convention profile.
+
+    The historical default remains AST-only. When ``strategy1`` is enabled,
+    the convention facts are merged here so every indexing caller gets the
+    same profile without needing a second, strategy-specific pass.
+    """
+    endpoints = _infer_kafka_endpoints(repo_root, files)
+    if strategy1:
+        endpoints = apply_kafka_topic_strategy1(
+            endpoints, infer_kafka_topic_strategy1_endpoints(repo_root, files)
+        )
+    return endpoints
 
 __all__ = [
     "apply_kafka_topic_strategy1",

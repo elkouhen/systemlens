@@ -18,10 +18,6 @@ from systemlens.indexing.file_inventory import (
     sha256_file as _sha256_file,
 )
 from systemlens.conventions.strategy1.indexing import requires_full_reindex
-from systemlens.conventions.strategy1.kafka import (
-    apply_kafka_endpoints,
-    infer_kafka_endpoints as infer_strategy1_kafka_endpoints,
-)
 from systemlens.indexing.materializers import materialize_asyncapi_contracts, materialize_openapi_contracts
 from systemlens.indexing.code_flows import (
     CODE_FLOW_SIGNATURE, _deduplicate_code_flows, materialize_code_flows,
@@ -239,6 +235,7 @@ def _index_repo(
     if codeql_database is not None and config.call_graph_engine != "codeql":
         raise ValueError("A CodeQL database requires the codeql method-call engine.")
     topic_strategy = topic_strategy or config.strategy
+    strategy1_enabled = topic_strategy == "strategy1"
     disabled = disabled or frozenset(config.disabled_extractors)
     # BACKLOG-16 P2 : purge les lru_cache d'analyse best-effort (package
     # Java, propriétés Spring, module Maven/Gradle) avant de relire le
@@ -422,17 +419,15 @@ def _index_repo(
             infer_framework_endpoints(
                 repo_root,
                 changed,
-                configured_api_client_strategy1=topic_strategy == "strategy1",
+                configured_api_client_strategy1=strategy1_enabled,
             )
         )
-        endpoints.extend(infer_kafka_endpoints(repo_root, changed))
+        endpoints.extend(
+            infer_kafka_endpoints(repo_root, changed, strategy1=strategy1_enabled)
+        )
         endpoints.extend(infer_markdown_topic_manifest_endpoints(repo_root, changed))
         endpoints.extend(infer_json_kafka_flow_graph_endpoints(repo_root, changed))
         _report_progress(progress, "  ✓ AST 1/1 : analyse terminée")
-        if topic_strategy == "strategy1":
-            endpoints = apply_kafka_endpoints(
-                endpoints, infer_strategy1_kafka_endpoints(repo_root, changed)
-            )
         _trace("endpoint_inference.end", endpoints=len(endpoints))
         timer.end("ast", "analyse AST")
 

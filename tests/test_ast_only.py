@@ -59,6 +59,31 @@ def test_ast_extractors_find_rest_and_kafka_facts() -> None:
     assert any(endpoint.role == "consume" and endpoint.message_type for endpoint in kafka)
 
 
+def test_kafka_index_extractor_applies_strategy1_when_enabled(tmp_path: Path) -> None:
+    source = tmp_path / "src/main/java/com/example/Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class Publisher {
+  void publish(OrderCreated event) {
+    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getOrdersCreated(), event);
+  }
+}
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_endpoints(
+        tmp_path,
+        ["src/main/java/com/example/Publisher.java"],
+        strategy1=True,
+    )
+
+    assert [(endpoint.topic, endpoint.framework) for endpoint in endpoints] == [
+        ("ORDERS_CREATED", "kafka-topic-strategy1")
+    ]
+
+
 def test_rest_ports_keep_declared_controller_and_feign_parameter_types(tmp_path: Path) -> None:
     controller = tmp_path / "src/main/java/com/example/OrdersController.java"
     controller.parent.mkdir(parents=True)

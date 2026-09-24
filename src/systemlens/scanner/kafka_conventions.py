@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import replace
 from pathlib import Path
 
 from systemlens.discovery.java import parser as java_parser
@@ -138,7 +139,13 @@ def infer_kafka_topic_strategy1_endpoints(
 def apply_kafka_topic_strategy1(
     endpoints: list[MessageEndpoint], strategy_endpoints: list[MessageEndpoint]
 ) -> list[MessageEndpoint]:
-    """Replace standard Kafka extraction at sites covered by strategy1."""
+    """Replace standard Kafka extraction without discarding known payload types."""
+    generic_by_site: dict[tuple[str, str, int], list[MessageEndpoint]] = {}
+    for endpoint in endpoints:
+        if endpoint.system == "kafka":
+            generic_by_site.setdefault(
+                (endpoint.role, endpoint.path, endpoint.start_line), []
+            ).append(endpoint)
     covered_sites = {
         (endpoint.role, endpoint.path, endpoint.start_line)
         for endpoint in strategy_endpoints
@@ -149,7 +156,20 @@ def apply_kafka_topic_strategy1(
         if endpoint.system != "kafka"
         or (endpoint.role, endpoint.path, endpoint.start_line) not in covered_sites
     ]
-    return [*retained, *strategy_endpoints]
+    enriched_strategy_endpoints = []
+    for endpoint in strategy_endpoints:
+        if endpoint.message_type is None:
+            message_types = {
+                candidate.message_type
+                for candidate in generic_by_site.get(
+                    (endpoint.role, endpoint.path, endpoint.start_line), []
+                )
+                if candidate.message_type is not None
+            }
+            if len(message_types) == 1:
+                endpoint = replace(endpoint, message_type=next(iter(message_types)))
+        enriched_strategy_endpoints.append(endpoint)
+    return [*retained, *enriched_strategy_endpoints]
 _MARKDOWN_MODULE_HEADING_RE = re.compile(r"^\s*###\s+(.+?)\s*$")
 _MARKDOWN_BOLD_SECTION_RE = re.compile(r"^\s*\*\*(Producer|Consumer)\*\*\s*$", re.IGNORECASE)
 _MARKDOWN_CODE_RE = re.compile(r"^`(.*)`$")

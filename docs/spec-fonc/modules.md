@@ -135,7 +135,8 @@ or package); Persistence filters by class, package, collection, or service. A
 persistent inventory status reports whether unresolved indexing facts exist and
 opens their review view.
 
-`--strategy strategy1` adds opt-in convention extraction for selected
+`--strategy strategy1` selects the Strategy1 profile for every indexing pass
+and adds opt-in convention extraction for selected
 `getTopics()` accessors and `envoyerMessageKafka*(kafkaProperties.getTopics().getXxx(), payload)` calls
 (including `envoyerMessageKafkaRequest` and `envoyerMessageKafkaReply`),
 `${kafka.topics.*.name}` expressions and configured REST client constants. It
@@ -159,4 +160,3 @@ pattern.
 Topic conventions never create synthetic request/reply relations. Kafka
 relations are derived only from indexed producers, consumers, concrete topics,
 and compatible payload evidence.
-
