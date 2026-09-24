@@ -46,16 +46,13 @@ muted-text tokens. Only the potential-flow marker may retain a status accent;
 source paths must wrap instead of widening the panel.
 Selecting a reconciled code flow records its persisted ID only in transient
 graph state. Node and edge reducers, HTML-card overlays, and port overlays use
-the exact reconciled path sets to hide every unrelated node and edge; selected
-nodes retain flow-specific highlighting. The selected flow graph layout uses
-its persisted directed service edges to compute graph levels and vertical
-sibling offsets; cyclic or edge-less flows fall back to the deterministic
-sequence order. This presentation state does not infer or persist any new
-architecture relation. A selected flow graph projects only
-the microservices on its reconciled path; topic names remain in the selected
-ports and tooltips but topic nodes are omitted. Its nodes use a compact
-horizontal sequence when no branches are available; otherwise its tree/DAG
-levels remain readable. Service-to-service
+the exact endpoint and service sets derived from the flow evidence; selected
+nodes retain flow-specific highlighting. The selected flow graph includes every
+module owning one of its endpoint steps and every proven microservice output to
+input arc touching those ports. Fan-in, fan-out, cycles, and modules without a
+matching arc remain visible. The graph records the trigger event under its
+owning microservice. Topic names remain in the selected ports and tooltips but
+topic nodes are omitted. Service-to-service
 interaction-graph edges
 use orthogonal straight-segment routes in the SVG overlay between their actual
 output and input port anchors. ELK.js supplies the positioned graph and the
@@ -93,6 +90,9 @@ resource/topic names, and message types. Non-integration method-call steps are
 omitted from the compact timeline; full endpoint evidence remains in the DOM
 tooltip and the persisted flow details. It must not infer a message
 type when the indexed port does not provide one.
+The export also includes `all_flows_call_graph`, built by scanning every
+persisted flow before adding module nodes, valid output-to-input service arcs,
+and trigger events.
 The port gesture is isolated from the card drag and node-selection handlers, so
 analysis never changes the graph view or camera and does not persist data.
 Every visible SVG arc has a transparent, wider hit-area path layered above it;

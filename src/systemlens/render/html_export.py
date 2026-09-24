@@ -46,11 +46,17 @@ _ASYNCAPI_WEB_COMPONENT_CSS_IMPORT_PATH = (
 
 
 def _networkx_call_graph(
-    flow: CodeFlow,
+    flows: list[CodeFlow],
     endpoints_by_service: dict[str, list[MessageEndpoint]],
     edges: list[GraphEdge],
 ) -> dict[str, object]:
-    """Build the proven inter-service interaction graph for one persisted flow."""
+    """Build the complete port graph evidenced by all persisted flows.
+
+    Every flow supplies endpoint and module seeds. Every topology arc that
+    touches those seeds is retained, including fan-in, fan-out and cycles. The
+    graph is not reduced to a rooted tree because that would discard proven
+    modules and port arcs.
+    """
     endpoint_by_id = {
         endpoint.id: endpoint
         for service_endpoints in endpoints_by_service.values()
@@ -62,121 +68,84 @@ def _networkx_call_graph(
         for endpoint in service_endpoints
     }
     graph = nx.MultiDiGraph()
+    seen_relation_keys: set[tuple[str, str, str, str | None]] = set()
     endpoint_steps = [
-        step.endpoint_id for step in flow.steps
+        step.endpoint_id for flow in flows for step in flow.steps
         if step.endpoint_id in endpoint_by_id
     ]
-    flow_endpoint_pairs = set(zip(endpoint_steps, endpoint_steps[1:]))
-    for endpoint_id in endpoint_steps:
-        graph.add_node(service_by_endpoint[endpoint_id])
+    flow_endpoint_ids = set(endpoint_steps)
 
-    def add_relation(source_id: str, target_id: str) -> None:
+    def add_relation(edge: GraphEdge) -> None:
+        source_id = edge.from_endpoint.id
+        target_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
         source_service = service_by_endpoint.get(source_id)
-        target_service = service_by_endpoint.get(target_id)
+        target_service = service_by_endpoint.get(target_id) if target_id else None
         if not source_service or not target_service or source_service == target_service:
             return
-        candidates = [
-            edge for edge in edges
-            if edge.from_endpoint.id == source_id
-            and edge.to_endpoint is not None
-            and edge.to_endpoint.id == target_id
-        ]
-        for edge in candidates:
-            label = edge.from_endpoint.topic
-            key = (edge.kind, label)
-            candidate = {
-                "kind": edge.kind,
-                "label": label,
-                "endpoint_ids": [source_id, target_id],
-            }
-            if graph.has_edge(source_service, target_service, key=key):
-                current = graph[source_service][target_service][key]
-                current_pair = tuple(current.get("endpoint_ids", []))
-                candidate_rank = (
-                    (source_id, target_id) not in flow_endpoint_pairs,
-                    (source_id, target_id),
-                )
-                current_rank = (
-                    current_pair not in flow_endpoint_pairs,
-                    current_pair,
-                )
-                if candidate_rank < current_rank:
-                    graph[source_service][target_service][key].update(candidate)
-            else:
-                graph.add_edge(source_service, target_service, key=key, **candidate)
+        label = edge.from_endpoint.topic
+        key = (edge.kind, label, source_id, target_id)
+        if key in seen_relation_keys:
+            return
+        seen_relation_keys.add(key)
+        graph.add_edge(
+            source_service,
+            target_service,
+            key=key,
+            kind=edge.kind,
+            label=label,
+            endpoint_ids=[source_id, target_id],
+        )
 
-    for source_id, target_id in zip(endpoint_steps, endpoint_steps[1:]):
-        add_relation(source_id, target_id)
-    # A producer can have several proven consumers. Keep all of those
-    # branches in the exported interaction graph even though the persisted flow
-    # remains one representative endpoint path for compatibility.
-    for source_id in endpoint_steps:
-        source_endpoint = endpoint_by_id.get(source_id)
-        if source_endpoint is None or (source_endpoint.system, source_endpoint.role) != ("kafka", "produce"):
-            continue
-        for edge in edges:
-            if edge.from_endpoint.id == source_id and edge.to_endpoint is not None:
-                add_relation(source_id, edge.to_endpoint.id)
-    if endpoint_steps:
-        first_id = endpoint_steps[0]
-        first_endpoint = endpoint_by_id[first_id]
-        incoming_by_source = {
-            edge.from_endpoint.id: edge
-            for edge in edges
-            if edge.to_endpoint is not None and edge.to_endpoint.id == first_id
-        }
-        incoming = list(incoming_by_source.values())
-        # An upstream service is part of the rooted call flow only for a
-        # message entry with one proven producer. HTTP entries are already
-        # roots, and a Kafka fan-in must not manufacture a root by selecting
-        # one of several producers.
+    # Include every service owning a flow endpoint, including a module that
+    # has no matching topology arc in the current snapshot.
+    for endpoint_id in endpoint_steps:
+        graph.add_node(service_by_endpoint[endpoint_id])
+    for flow in flows:
+        if flow.module:
+            graph.add_node(flow.module)
+
+    # A topology arc is relevant when either port is part of the persisted
+    # flow. This retains all proven incoming and outgoing branches around the
+    # flow instead of selecting only consecutive endpoint pairs.
+    for edge in edges:
+        source_id = edge.from_endpoint.id
+        target_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
+        source_role = (edge.from_endpoint.system, edge.from_endpoint.role)
+        target_role = (
+            (edge.to_endpoint.system, edge.to_endpoint.role)
+            if edge.to_endpoint is not None else None
+        )
         if (
-            (first_endpoint.system, first_endpoint.role) == ("kafka", "consume")
-            and len(incoming) == 1
+            (source_id in flow_endpoint_ids or target_id in flow_endpoint_ids)
+            and source_role in {("rest", "call"), ("kafka", "produce")}
+            and target_role in {("rest", "serve"), ("kafka", "consume")}
         ):
-            add_relation(incoming[0].from_endpoint.id, first_id)
-        last_id = endpoint_steps[-1]
-        for edge in edges:
-            if edge.from_endpoint.id == last_id and edge.to_endpoint is not None:
-                add_relation(last_id, edge.to_endpoint.id)
+            add_relation(edge)
 
-    # The call-flow view is intentionally an arborescence, even when the
-    # persisted architecture contains fan-in or cycles.  Pick one stable root
-    # and keep the first reachable parent for every service.  This preserves
-    # all proven branches from that root, while preventing a second root or a
-    # back-edge from turning the exported view into a disconnected graph/DAG.
-    first_service = service_by_endpoint.get(endpoint_steps[0]) if endpoint_steps else None
-    roots = sorted(node for node in graph if graph.in_degree(node) == 0)
-    upstream_roots = [
-        candidate for candidate in roots
-        if first_service is not None and nx.has_path(graph, candidate, first_service)
-    ]
-    if len(upstream_roots) == 1:
-        root = upstream_roots[0]
-    elif first_service is not None:
-        root = first_service
+    triggers: dict[str, list[dict[str, object]]] = {}
+    for flow in flows:
+        if flow.steps:
+            trigger = flow.steps[0]
+        else:
+            continue
+        trigger_service = (
+            service_by_endpoint.get(trigger.endpoint_id)
+            if trigger.endpoint_id else flow.module
+        )
+        if trigger_service:
+            triggers.setdefault(trigger_service, []).append({
+                "flow_id": flow.id,
+                "kind": trigger.kind,
+                "name": trigger.name,
+                "endpoint_id": trigger.endpoint_id,
+            })
+
+    if nx.is_directed_acyclic_graph(graph):
+        component_order = list(nx.lexicographical_topological_sort(graph))
     else:
-        root = sorted(graph.nodes)[0] if graph.nodes else None
-
-    tree = nx.MultiDiGraph()
-    if root is not None:
-        tree.add_node(root)
-        visited = {root}
-        pending = [root]
-        while pending:
-            source = pending.pop(0)
-            for target in sorted(graph.successors(source)):
-                if target in visited:
-                    continue
-                visited.add(target)
-                pending.append(target)
-                tree.add_node(target)
-                for key, data in sorted(graph[source][target].items(), key=lambda item: str(item[0])):
-                    tree.add_edge(source, target, key=key, **data)
-
-    component_order = list(nx.topological_sort(tree))
+        component_order = sorted(graph.nodes)
     return {
-        "nodes": sorted(tree.nodes),
+        "nodes": sorted(graph.nodes),
         "node_order": component_order,
         "edges": [
             {
@@ -187,10 +156,11 @@ def _networkx_call_graph(
                 "endpoint_ids": list(data.get("endpoint_ids", [])),
             }
             for source, target, _key, data in sorted(
-                tree.edges(keys=True, data=True),
+                graph.edges(keys=True, data=True),
                 key=lambda item: (item[0], item[1], str(item[2])),
             )
         ],
+        "triggers": triggers,
     }
 
 
@@ -212,7 +182,7 @@ def _distinct_export_flows(
         list[tuple[CodeFlow, dict[str, object]]],
     ] = {}
     for flow in flows:
-        call_graph = _networkx_call_graph(flow, endpoints_by_service, edges)
+        call_graph = _networkx_call_graph([flow], endpoints_by_service, edges)
         graph_nodes = cast(list[str], call_graph["nodes"])
         graph_edges = cast(list[dict[str, str]], call_graph["edges"])
         signature: tuple[tuple[str, ...], tuple[tuple[str, str, str, str], ...]] = (
@@ -417,6 +387,9 @@ def render_graph_html(
         integration_methods=integration_methods,
         code_flows=code_flows,
         codeql_call_edges=codeql_call_edges,
+    )
+    view_model["all_flows_call_graph"] = _networkx_call_graph(
+        list(code_flows or []), endpoints_by_service, edges
     )
     port_labels = {
         str(port["endpoint_id"]): str(port["label"])

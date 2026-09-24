@@ -706,3 +706,25 @@ matching Kafka boundary while preserving fan-out branches. A missing message
 type does not fuse with a known type, and fan-in remains conservative because
 the consumer fragment must already have one rendered root. `equivalent_count`
 reports how many persisted fragments the visible card represents.
+
+## ADR-40: Preserve complete service arcs in selected flow graphs
+
+**Status:** Accepted.
+
+**Context:** A rendered flow graph that chooses one root and one parent per
+service hides proven fan-in, cycles, branches, and modules whose endpoint has
+no matching topology arc. The persisted flow and topology snapshots already
+contain enough evidence to keep these facts visible.
+
+**Decision:** For each persisted flow, scan all endpoint steps, add their owning
+modules, and retain every topology arc touching one of those endpoints when
+the arc connects a microservice output port to a microservice input port. Keep
+fan-in, fan-out, cycles, and isolated flow modules. Record the first flow step
+as a trigger under its owning microservice. Preserve endpoint identities on
+each rendered service arc.
+
+**Consequences:** The selected graph represents the complete source-backed
+service interaction evidence for the flow instead of a presentation tree. A
+cycle can prevent a topological order, so the exporter uses a deterministic
+node order for cyclic graphs. Missing topology arcs remain visible as isolated
+modules and do not create guessed service relations.

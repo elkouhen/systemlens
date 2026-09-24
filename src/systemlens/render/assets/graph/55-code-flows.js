@@ -271,14 +271,21 @@
     });
 
     function showCodeFlow(flow) {
-      const exactPath = callGraphPathForCodeFlow(flow) || pathForCodeFlow(flow);
+      const globalCallGraph = graphData.all_flows_call_graph;
+      const globalNodes = (globalCallGraph?.node_order || globalCallGraph?.nodes || [])
+        .map(service => nodeIdForCodeFlowResource(service, "microservice"))
+        .filter(Boolean);
+      const globalPath = globalNodes.length
+        ? { nodes: globalNodes, edges: [], localLinks: [] }
+        : null;
+      const exactPath = globalPath || callGraphPathForCodeFlow(flow) || pathForCodeFlow(flow);
       const path = exactPath || nodePathForCodeFlow(flow);
       if (!path) return;
       // The owning module is the consumer for an input-triggered flow. The
       // visual root must follow the exported call-graph path instead: it is
       // the upstream producer when a single Kafka source is proven, and the
       // entry service for HTTP, fan-in, or Cron flows.
-      const rootNodeId = path.nodes[0];
+      const rootNodeId = nodeIdForCodeFlowResource(flow.module, "microservice") || path.nodes[0];
       if (!rootNodeId) return;
       // Keep the flow list open when the user selected this flow there. This
       // lets the next flow be selected without reopening the Flux de code tab.

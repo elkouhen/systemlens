@@ -378,7 +378,7 @@ def test_export_fusion_deduplicates_identical_inter_service_edges() -> None:
     }
 
 
-def test_call_graph_is_rooted_when_architecture_has_fan_in_or_cycles() -> None:
+def test_call_graph_keeps_all_fan_in_and_cycle_arcs() -> None:
     first_producer = replace(_kafka_endpoint("produce", "OrderCreated", "Orders.java"), id="orders-out")
     second_producer = replace(_kafka_endpoint("produce", "OrderCreated", "LegacyOrders.java"), id="legacy-orders-out")
     consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Payments.java"), id="payments-in")
@@ -396,9 +396,19 @@ def test_call_graph_is_rooted_when_architecture_has_fan_in_or_cycles() -> None:
         )],
     ))
     flow_graph = data["code_flows"][0]["call_graph"]
-    incoming = {edge["target"] for edge in flow_graph["edges"]}
-    assert len(set(flow_graph["nodes"]) - incoming) == 1
-    assert set(flow_graph["nodes"]) - incoming == {"payments"}
+    assert set(flow_graph["nodes"]) == {"orders", "legacy", "payments"}
+    assert {
+        (edge["source"], edge["target"])
+        for edge in flow_graph["edges"]
+    } == {("orders", "payments"), ("legacy", "payments")}
+    assert flow_graph["triggers"] == {
+        "payments": [{
+            "flow_id": "fan-in-flow",
+            "kind": "message_entry",
+            "name": "orders.created",
+            "endpoint_id": "payments-in",
+        }],
+    }
 
     cycle_a = replace(_kafka_endpoint("produce", "OrderCreated", "A.java"), id="a-out")
     cycle_b = replace(_kafka_endpoint("consume", "OrderCreated", "B.java"), id="b-in")
@@ -416,8 +426,11 @@ def test_call_graph_is_rooted_when_architecture_has_fan_in_or_cycles() -> None:
         )],
     ))
     cycle_graph = cycle_data["code_flows"][0]["call_graph"]
-    cycle_incoming = {edge["target"] for edge in cycle_graph["edges"]}
-    assert len(set(cycle_graph["nodes"]) - cycle_incoming) == 1
+    assert set(cycle_graph["nodes"]) == {"a", "b"}
+    assert {
+        (edge["source"], edge["target"])
+        for edge in cycle_graph["edges"]
+    } == {("a", "b")}
 def test_graph_keeps_unmatched_and_dynamic_kafka_evidence() -> None:
     producer = replace(_kafka_endpoint("produce", "OrderCreated", "Publisher.java"), id="orders-out")
     dynamic_consumer = replace(
@@ -685,7 +698,7 @@ def test_graph_html_marks_only_the_selected_call_graph_entry_service_as_root() -
     assert not any("is_graph_root" in node for node in graph_data["nodes"])
     assert 'graphState.codeFlowRootNodeId === id' in document
     assert 'codeFlowRootNodeId: rootNodeId' in document
-    assert 'const rootNodeId = path.nodes[0];' in document
+    assert 'const rootNodeId = nodeIdForCodeFlowResource(flow.module, "microservice") || path.nodes[0];' in document
     assert 'codeFlowTrigger: flow.steps?.[0] || null' in document
     assert 'isCodeFlowRoot ? `${kindLabel} · Racine` : kindLabel' in document
     assert 'rootBadge.textContent = "Racine";' in document
@@ -701,6 +714,7 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "function serviceIdsForCodeFlow(flow)" in document
     assert "function servicesForCodeFlow(flow)" in document
     assert "flow.call_graph?.node_order" in document
+    assert "graphData.all_flows_call_graph" in document
     assert "serviceIdsForCodeFlow(right).size - serviceIdsForCodeFlow(left).size" in document
     assert 'servicesLabel.textContent = "Services traversés"' in document
     assert 'serviceList.className = "code-flow-service-list"' in document
@@ -717,6 +731,50 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "Flux inter-services (${visible.length}/${interServiceCodeFlows.length})" in document
     assert "Tous les flux (${visible.length}/${codeFlows.length})" in document
     assert "Flux internes (${visible.length}/${localCodeFlows.length})" in document
+
+
+def test_export_builds_one_call_graph_from_all_flows() -> None:
+    producer = replace(_kafka_endpoint("produce", "OrderCreated", "Orders.java"), id="orders-out")
+    first_consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Payments.java"), id="payments-in")
+    second_consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Inventory.java"), id="inventory-in")
+    flows = [
+        CodeFlow(
+            id="orders-flow", module="orders", method="Orders.publish",
+            path="Orders.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_publish", "orders.created", "Orders.java", 1, 1, producer.id),),
+        ),
+        CodeFlow(
+            id="payments-flow", module="payments", method="Payments.consume",
+            path="Payments.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_entry", "orders.created", "Payments.java", 1, 1, first_consumer.id),),
+        ),
+        CodeFlow(
+            id="inventory-flow", module="inventory", method="Inventory.consume",
+            path="Inventory.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_entry", "orders.created", "Inventory.java", 1, 1, second_consumer.id),),
+        ),
+    ]
+    data = _html_graph_data(render_graph_html(
+        {"orders": [producer], "payments": [first_consumer], "inventory": [second_consumer]},
+        [
+            GraphEdge("kafka", "orders", "payments", producer, first_consumer),
+            GraphEdge("kafka", "orders", "payments", producer, first_consumer),
+            GraphEdge("kafka", "orders", "inventory", producer, second_consumer),
+        ],
+        code_flows=flows,
+    ))
+
+    graph = data["all_flows_call_graph"]
+    assert set(graph["nodes"]) == {"orders", "payments", "inventory"}
+    assert {
+        (edge["source"], edge["target"])
+        for edge in graph["edges"]
+    } == {("orders", "payments"), ("orders", "inventory")}
+    assert len(graph["edges"]) == 2
+    assert set(graph["triggers"]) == {"orders", "payments", "inventory"}
 
 
 def test_graph_html_uses_only_indexed_kafka_dto_facts(tmp_path: Path) -> None:

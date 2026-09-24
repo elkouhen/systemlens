@@ -157,18 +157,14 @@ source flow whose first step is `cron_entry`, followed by its publication.
 Known message types must match when both endpoints provide one. Missing type
 evidence does not prevent the topology relation, while conflicting known types
 prevent it.
-The exported flow-graph projection is always a rooted arborescence: its root is
-the first persisted endpoint, or the unique proven producer immediately before
-a Kafka entry. For Kafka fan-in, no producer is selected arbitrarily. A
-breadth-first traversal keeps each reachable service under its first parent,
-omitting only disconnected alternatives and back-edges. This is a presentation
-projection of the persisted evidence; cycle `CodeFlow` records remain intact.
-Within that subgraph, parallel evidence rows are keyed by directed service
-pair, protocol and resource label. Duplicate rows select one deterministic
-endpoint pair, preferring a pair that is consecutive in the persisted flow and
-then the lexicographically smallest pair. The browser receives only these
-canonical service arcs; it does not append a second set reconstructed from
-port links.
+The exported flow-graph projection scans every endpoint step in the persisted
+flow, adds its owning modules, then retains every topology arc whose input or
+output port belongs to that flow. Arcs are accepted only when they connect a
+microservice output port to a microservice input port. Fan-in, fan-out, cycles,
+and modules without a matching topology arc remain visible. The graph also
+records the flow's trigger event under the owning microservice. The browser
+receives these canonical service arcs with their endpoint identities and does
+not reconstruct a second set from display labels.
 Before serialization, HTML export groups flows by their complete rendered
 flow-graph signature (nodes, directed arcs, protocol and resource labels).
 It also fuses a publication fragment with a consumer fragment when the

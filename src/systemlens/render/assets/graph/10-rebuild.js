@@ -101,8 +101,9 @@
       const selectedFlow = callGraphOnly
         ? (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)
         : null;
+      const selectedCallGraph = graphData.all_flows_call_graph || selectedFlow?.call_graph;
       const selectedCallGraphPairs = new Set(
-        (selectedFlow?.call_graph?.edges || []).map(edge => `${edge.source}->${edge.target}`)
+        (selectedCallGraph?.edges || []).map(edge => `${edge.source}->${edge.target}`)
       );
       const visibleLinks = callGraphOnly
         ? graphData.links.filter((link, index) => (
@@ -124,9 +125,9 @@
       // may not carry the concrete ports used by the selected flow. Restore
       // those endpoint ids from the projected edge so the overlay can route
       // each connector from the exact OUT port to the exact IN port.
-      if (callGraphOnly && selectedFlow?.call_graph?.edges?.length) {
+      if (callGraphOnly && selectedCallGraph?.edges?.length) {
         const callGraphEndpointsByPair = new Map(
-          selectedFlow.call_graph.edges.map(edge => [
+          selectedCallGraph.edges.map(edge => [
             `${edge.source}->${edge.target}`,
             edge.endpoint_ids || [],
           ])
@@ -178,7 +179,7 @@
       );
       const selectedCallGraphLinks = callGraphOnly
         ? [
-          ...(selectedFlow?.call_graph?.edges || [])
+          ...(selectedCallGraph?.edges || [])
             .map((edge, index) => ({
               link: {
                 source: `microservice:${edge.source}`,
