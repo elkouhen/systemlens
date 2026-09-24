@@ -138,8 +138,9 @@ including the selected method-call engine, availability, activation and its boun
 code-flow signature so switching profile recalculates unchanged repositories.
 
 The flow join groups AST and interprocedural candidates with deterministic
-in-memory keys. Parallel candidate
-routes are grouped by source endpoint, target endpoint, and status;
+in-memory keys. Parallel candidate routes are grouped by their source endpoint
+identities, module, input flow, input Java type, output flow, output Java type,
+and status;
 the representative with the strongest confidence, then the shortest route, is
 persisted. The indexing deduplication uses plain deterministic collections; HTML
 layout remains a rendering concern handled by the browser graph stack. Each exported code flow

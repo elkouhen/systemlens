@@ -127,7 +127,9 @@ def codeql_join_methods_signature(methods: Sequence[IntegrationMethod]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def _deduplicate_code_flows(flows: list[CodeFlow]) -> list[CodeFlow]:
+def _deduplicate_code_flows(
+    flows: list[CodeFlow], endpoints: Sequence[MessageEndpoint] = ()
+) -> list[CodeFlow]:
     """Keep one representative for each evidenced endpoint-to-endpoint flow.
 
     Method-call enumeration can expose several implementation/dispatch routes
@@ -157,22 +159,45 @@ def _deduplicate_code_flows(flows: list[CodeFlow]) -> list[CodeFlow]:
             for step in flow.steps
         )
 
-    grouped: dict[tuple[str, str, str], list[CodeFlow]] = {}
+    endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
+
+    def flow_identity(flow: CodeFlow) -> tuple[object, ...]:
+        endpoint_steps = [step for step in flow.steps if step.endpoint_id]
+        input_endpoint = (
+            endpoint_by_id.get(endpoint_steps[0].endpoint_id or "")
+            if endpoint_steps
+            else None
+        )
+        output_endpoint = (
+            endpoint_by_id.get(endpoint_steps[-1].endpoint_id or "")
+            if endpoint_steps
+            else None
+        )
+        return (
+            flow.module,
+            endpoint_steps[0].endpoint_id if endpoint_steps else None,
+            input_endpoint.topic if input_endpoint else (
+                endpoint_steps[0].name if endpoint_steps else None
+            ),
+            input_endpoint.message_type if input_endpoint else None,
+            endpoint_steps[-1].endpoint_id if endpoint_steps else None,
+            output_endpoint.topic if output_endpoint else (
+                endpoint_steps[-1].name if endpoint_steps else None
+            ),
+            output_endpoint.message_type if output_endpoint else None,
+            flow.status,
+        )
+
+    grouped: dict[tuple[object, ...], list[CodeFlow]] = {}
     for flow in flows:
         endpoint_steps = [step for step in flow.steps if step.endpoint_id]
         if not endpoint_steps:
-            key = (flow.id, "", flow.status)
+            key = flow_identity(flow) + (flow.id,)
         else:
-            # A cycle has the same endpoint as both ends. Keep it separate from
-            # an ordinary entry-to-output flow, but only once per entry.
-            key = (
-                endpoint_steps[0].endpoint_id or flow.id,
-                endpoint_steps[-1].endpoint_id or flow.id,
-                flow.status,
-            )
+            key = flow_identity(flow)
         grouped.setdefault(key, []).append(flow)
     selected = []
-    for _, parallel in sorted(grouped.items()):
+    for _, parallel in sorted(grouped.items(), key=lambda item: repr(item[0])):
         representative = min(
             parallel,
             key=lambda flow: (
@@ -978,7 +1003,7 @@ def materialize_codeql_code_flows(
         f"→ CodeQL : jointure terminée · {explored} transition(s), "
         f"{len(reachability)} reachability(s), {len(current_flows())} flux dédupliqué(s)."
     )
-    return _deduplicate_code_flows(current_flows())
+    return _deduplicate_code_flows(current_flows(), endpoints)
 
 
 def reconcile_code_flows(

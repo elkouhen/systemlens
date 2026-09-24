@@ -327,6 +327,10 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
         {
             "id": flows[0].id,
             "module": flows[0].module,
+            "input_flow": "orders.created",
+            "input_java_type": "String",
+            "output_flow": "POST /charge",
+            "output_java_type": None,
             "method": flows[0].method,
             "trigger": {"kind": "message_entry", "name": "orders.created"},
             "input_topic": "orders.created",
@@ -362,7 +366,7 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
         assert store.all_code_flows() == []
 
 
-def test_flows_list_can_filter_kafka_publications_and_exposes_topics() -> None:
+def test_flows_list_can_filter_kafka_publications_and_exposes_flow_types() -> None:
     flows = [
         CodeFlow(
             id="kafka-flow",
@@ -396,12 +400,63 @@ def test_flows_list_can_filter_kafka_publications_and_exposes_topics() -> None:
         ),
     ]
 
-    all_items = list_code_flows(flows)
-    kafka_items = list_code_flows(flows, publishes_to_topic=True)
+    endpoints = [
+        _endpoint("in", "consume", "kafka", "orders.in", "Orders.java", 1, "OrderIn"),
+        _endpoint("out", "produce", "kafka", "orders.out", "Orders.java", 4, "OrderOut"),
+    ]
+    flows[0] = replace(
+        flows[0],
+        steps=(
+            replace(flows[0].steps[0], endpoint_id="in"),
+            replace(flows[0].steps[1], endpoint_id="out"),
+        ),
+    )
+
+    all_items = list_code_flows(flows, endpoints)
+    kafka_items = list_code_flows(flows, endpoints, publishes_to_topic=True)
 
     assert all_items[0]["input_topic"] == "orders.in"
     assert all_items[0]["output_topics"] == ["orders.out"]
+    assert all_items[0]["input_flow"] == "orders.in"
+    assert all_items[0]["input_java_type"] == "OrderIn"
+    assert all_items[0]["output_flow"] == "orders.out"
+    assert all_items[0]["output_java_type"] == "OrderOut"
     assert [item["id"] for item in kafka_items] == ["kafka-flow"]
+
+
+def test_flow_deduplication_keeps_distinct_java_types() -> None:
+    endpoints = [
+        _endpoint("in", "consume", "kafka", "orders.in", "Orders.java", 1, "OrderIn"),
+        _endpoint("out", "produce", "kafka", "orders.out", "Orders.java", 4, "OrderOut"),
+        _endpoint("in2", "consume", "kafka", "orders.in", "Orders.java", 1, "LegacyOrder"),
+        _endpoint("out2", "produce", "kafka", "orders.out", "Orders.java", 4, "LegacyEvent"),
+    ]
+    base = CodeFlow(
+        id="flow",
+        module="orders",
+        method="Orders.publish",
+        path="Orders.java",
+        start_line=1,
+        end_line=4,
+        status="potential",
+        confidence="medium",
+        reason="test",
+        steps=(
+            CodeFlowStep(1, "message_entry", "orders.in", "Orders.java", 1, 1, "in"),
+            CodeFlowStep(2, "message_publish", "orders.out", "Orders.java", 4, 4, "out"),
+        ),
+    )
+    duplicate = replace(
+        base,
+        id="duplicate",
+        method="Orders.other",
+        steps=(
+            replace(base.steps[0], endpoint_id="in2"),
+            replace(base.steps[1], endpoint_id="out2"),
+        ),
+    )
+
+    assert len(_deduplicate_code_flows([base, duplicate], endpoints)) == 2
 
 def test_index_uses_automatic_codeql_database_when_available(
     tmp_path: Path, monkeypatch

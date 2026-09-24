@@ -655,7 +655,7 @@ def _index_repo(
                     *flows,
                     *progress_flows,
                 ]
-                partial_flows = _deduplicate_code_flows(partial_flows)
+                partial_flows = _deduplicate_code_flows(partial_flows, all_endpoints)
                 store.replace_code_flows(partial_flows)
                 store.delete_meta("code_flow_signature")
                 store.set_meta("code_flow_snapshot_status", "partial")
@@ -713,10 +713,9 @@ def _index_repo(
                 completed_methods: int,
                 total_methods: int,
             ) -> None:
-                partial_flows = _deduplicate_code_flows([
-                    *flows,
-                    *partial_codeql_flows,
-                ])
+                partial_flows = _deduplicate_code_flows(
+                    [*flows, *partial_codeql_flows], all_endpoints
+                )
                 store.replace_code_flows(partial_flows)
                 store.delete_meta("code_flow_signature")
                 store.set_meta("code_flow_snapshot_status", "partial")
@@ -955,7 +954,7 @@ def _index_repo(
             # AST and the interprocedural engine can describe the same
             # endpoint-to-endpoint flow. Keep one representative while the
             # CodeQL call graph remains the source of internal call edges.
-            flows = _deduplicate_code_flows([*flows, *codeql_flows])
+            flows = _deduplicate_code_flows([*flows, *codeql_flows], all_endpoints)
             timer.end("call-graph-join", f"jointure {engine_label} et matérialisation des flux")
             _report_progress(
                 progress,

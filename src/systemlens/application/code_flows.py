@@ -3,9 +3,25 @@
 from dataclasses import asdict
 
 from systemlens.domain.code_flows import CodeFlow
+from systemlens.domain.models import MessageEndpoint
 
 
-def code_flow_summary(flow: CodeFlow) -> dict[str, object]:
+def _endpoint_summary(
+    flow: CodeFlow, endpoints: dict[str, MessageEndpoint]
+) -> tuple[MessageEndpoint | None, MessageEndpoint | None]:
+    endpoint_steps = [step for step in flow.steps if step.endpoint_id]
+    if not endpoint_steps:
+        return None, None
+    first = endpoints.get(endpoint_steps[0].endpoint_id or "")
+    last = endpoints.get(endpoint_steps[-1].endpoint_id or "")
+    return first, last
+
+
+def code_flow_summary(
+    flow: CodeFlow, endpoints: dict[str, MessageEndpoint] | None = None
+) -> dict[str, object]:
+    endpoint_by_id = endpoints or {}
+    input_endpoint, output_endpoint = _endpoint_summary(flow, endpoint_by_id)
     input_topics = [
         step.name for step in flow.steps if step.kind == "message_entry"
     ]
@@ -15,6 +31,10 @@ def code_flow_summary(flow: CodeFlow) -> dict[str, object]:
     return {
         "id": flow.id,
         "module": flow.module,
+        "input_flow": input_endpoint.topic if input_endpoint else None,
+        "input_java_type": input_endpoint.message_type if input_endpoint else None,
+        "output_flow": output_endpoint.topic if output_endpoint else None,
+        "output_java_type": output_endpoint.message_type if output_endpoint else None,
         "method": flow.method,
         "trigger": {"kind": flow.steps[0].kind, "name": flow.steps[0].name},
         "input_topic": input_topics[0] if input_topics else None,
@@ -28,9 +48,13 @@ def code_flow_summary(flow: CodeFlow) -> dict[str, object]:
 
 
 def list_code_flows(
-    flows: list[CodeFlow], *, publishes_to_topic: bool = False
+    flows: list[CodeFlow],
+    endpoints: list[MessageEndpoint] | None = None,
+    *,
+    publishes_to_topic: bool = False,
 ) -> list[dict[str, object]]:
-    items = [code_flow_summary(flow) for flow in flows]
+    endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints or []}
+    items = [code_flow_summary(flow, endpoint_by_id) for flow in flows]
     if publishes_to_topic:
         items = [item for item in items if item["output_topics"]]
     return items
@@ -66,6 +90,13 @@ def render_code_flows_text(items: list[dict[str, object]]) -> str:
         assert isinstance(output_topics, list)
         if input_topic is not None or output_topics:
             line += f"  Kafka in={input_topic or '-'} out={','.join(output_topics) or '-'}"
+        line += (
+            f"  module={item['module']}"
+            f" in={item['input_flow'] or '-'}"
+            f" in_type={item['input_java_type'] or '-'}"
+            f" out={item['output_flow'] or '-'}"
+            f" out_type={item['output_java_type'] or '-'}"
+        )
         lines.append(line)
     return "\n".join(lines)
 

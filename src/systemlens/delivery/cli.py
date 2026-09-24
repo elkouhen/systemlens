@@ -897,6 +897,10 @@ def _load_code_flows(root: Path | None) -> list[CodeFlow]:
     return load_architecture_inventory(_option_root(root)).code_flows
 
 
+def _load_flow_inventory(root: Path | None):
+    return load_architecture_inventory(_option_root(root))
+
+
 @flows_app.callback(invoke_without_command=True)
 def flows_root(
     ctx: typer.Context,
@@ -912,8 +916,11 @@ def flows_root(
 ) -> None:
     """List potential code flows without a subcommand."""
     if ctx.invoked_subcommand is None:
+        inventory = _load_flow_inventory(root)
         items = list_code_flows(
-            _load_code_flows(root), publishes_to_topic=publishes_to_topic
+            inventory.code_flows,
+            inventory.endpoints,
+            publishes_to_topic=publishes_to_topic,
         )
         typer.echo(
             json.dumps(items)
@@ -933,8 +940,11 @@ def flows_list(
     ),
 ) -> None:
     """List indexed potential code flows."""
+    inventory = _load_flow_inventory(root)
     items = list_code_flows(
-        _load_code_flows(root), publishes_to_topic=publishes_to_topic
+        inventory.code_flows,
+        inventory.endpoints,
+        publishes_to_topic=publishes_to_topic,
     )
     typer.echo(
         json.dumps(items)
