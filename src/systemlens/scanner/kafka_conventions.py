@@ -19,6 +19,7 @@ from systemlens.scanner._core import _build_endpoint
 from systemlens.scanner.kafka_ast import (
     _kafka_endpoint,
     _kafka_topic_from_value,
+    _listener_payload_type,
     _producer_send_payload_type,
 )
 
@@ -85,6 +86,15 @@ def infer_kafka_topic_strategy1_endpoints(
         lines = source.splitlines()
         for match in _STRATEGY1_PRODUCER_RE.finditer(source):
             line_no = source.count("\n", 0, match.start()) + 1
+            method = next(
+                (
+                    node
+                    for node in java_parser.walk(root)
+                    if node.type == "method_declaration"
+                    and node.start_byte <= match.start() < node.end_byte
+                ),
+                None,
+            )
             endpoint = _build_endpoint(
                 repo_root,
                 rel_path,
@@ -95,6 +105,9 @@ def infer_kafka_topic_strategy1_endpoints(
                 _strategy1_topic_name(match.group(1)),
                 "kafka-topic-strategy1",
                 lines[line_no - 1].strip(),
+            )
+            endpoint = replace(
+                endpoint, message_type=_listener_payload_type(source_bytes, method)
             )
             endpoints[endpoint.id] = endpoint
         for offset, annotation in _kafka_listener_annotation_blocks(source):

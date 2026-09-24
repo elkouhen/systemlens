@@ -322,6 +322,29 @@ record ReplyCreated(String replyId) {}
     ]
 
 
+def test_strategy1_get_topics_uses_the_publishing_method_dto_type(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class Publisher {
+  void publish(OrderCreated event) {
+    kafkaService.send(kafkaProperties.getTopics().getOrdersCreated(), event);
+  }
+}
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_topic_strategy1_endpoints(
+        tmp_path, ["src/main/java/com/example/Publisher.java"]
+    )
+
+    assert [(endpoint.topic, endpoint.message_type) for endpoint in endpoints] == [
+        ("ORDERS_CREATED", "OrderCreated")
+    ]
+
+
 def test_index_is_incremental_without_embeddings(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
