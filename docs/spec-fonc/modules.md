@@ -137,8 +137,10 @@ opens their review view.
 
 `--strategy strategy1` selects the Strategy1 profile for every indexing pass
 and adds opt-in convention extraction for selected
-`getTopics()` accessors and `envoyerMessageKafka*(kafkaProperties.getTopics().getXxx(), payload)` calls
-(including `envoyerMessageKafkaRequest` and `envoyerMessageKafkaReply`),
+`getTopics()` accessors and `envoyerMessageKafka*(kafkaProperties.getTopics().getXxx(), payload[, ...])` calls.
+The second argument is always the DTO, including the three-argument form;
+this applies to `envoyerMessageKafka`, `envoyerMessageKafkaRequest` and
+`envoyerMessageKafkaReply`.
 `${kafka.topics.*.name}` expressions and configured REST client constants. It
 also enables the `getXxxServiceUrl()` REST target-name convention.
 

@@ -20,7 +20,10 @@ from systemlens.scanner.kafka_ast import (
     _kafka_endpoint,
     _kafka_topic_from_value,
     _listener_payload_type,
-    _producer_send_payload_type,
+    _message_payload_type,
+    _object_creation_type,
+    _declared_identifier_payload_type,
+    _method_param_payload_type,
 )
 
 _STRATEGY1_PRODUCER_RE = re.compile(r"\bgetTopics\s*\(\s*\)\s*\.\s*get([A-Z]\w*)\s*\(\s*\)")
@@ -55,6 +58,33 @@ def _kafka_listener_annotation_blocks(source: str) -> list[tuple[int, str]]:
                     blocks.append((match.start(), source[match.start():index + 1]))
                     break
     return blocks
+
+
+def _strategy1_method_payload_type(source: bytes, invocation) -> str | None:
+    """Resolve the DTO from the second argument of a Strategy1 send method.
+
+    The repository convention is positional: the second argument is the DTO
+    for ``envoyerMessageKafka``, ``envoyerMessageKafkaRequest`` and
+    ``envoyerMessageKafkaReply``. A third argument does not change that rule.
+    """
+    arguments = java_parser.argument_nodes(invocation)
+    if len(arguments) < 2:
+        return None
+    payload = arguments[1]
+    if payload.type == "identifier":
+        method = java_parser.enclosing(invocation, "method_declaration")
+        if method is None:
+            return None
+        variable_name = java_parser.node_text(source, payload)
+        return (
+            _method_param_payload_type(source, method, variable_name)
+            or _declared_identifier_payload_type(source, invocation, variable_name)
+        )
+    if payload.type == "object_creation_expression":
+        return _message_payload_type(_object_creation_type(source, payload))
+    return None
+
+
 def infer_kafka_topic_strategy1_endpoints(
     repo_root: Path, files: list[str] | None = None
 ) -> list[MessageEndpoint]:
@@ -145,7 +175,7 @@ def infer_kafka_topic_strategy1_endpoints(
                 "kafka-topic-strategy1",
                 topic,
                 dynamic,
-                _producer_send_payload_type(source_bytes, node),
+                _strategy1_method_payload_type(source_bytes, node),
             )
             endpoints[endpoint.id] = endpoint
     return list(endpoints.values())

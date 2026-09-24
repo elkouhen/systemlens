@@ -55,8 +55,11 @@ With `--strategy strategy1`, every method whose name starts with
 `envoyerMessageKafkaReply(topic, payload)`. A first argument shaped as
 `kafkaProperties.getTopics().getXxx()` resolves to the normalized Strategy1
 topic name; other values use the conservative topic resolver. The second
-argument is used to derive the payload type from its method parameter, local
-variable declaration or enclosing class field.
+argument is always used to derive the payload type from its method parameter,
+local variable declaration or enclosing class field, including calls with
+three arguments. This positional rule applies identically to
+`envoyerMessageKafka`, `envoyerMessageKafkaRequest` and
+`envoyerMessageKafkaReply`.
 
 When CodeQL is available, it completes a missing Strategy1 producer type from
 the second argument, including local data-flow within the enclosing method.

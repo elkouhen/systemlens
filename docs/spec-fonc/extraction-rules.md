@@ -71,7 +71,8 @@ confidence of the topology fact. A publication without an input trigger does
 not become a code-flow root.
 For Strategy1 producer conventions, CodeQL may complete a missing payload type
 from the second argument of `envoyerMessageKafka*`, including local data-flow
-within the enclosing method. Simple `Message<T>`, `GenericMessage<T>` and
+within the enclosing method. The second argument remains authoritative when a
+third argument is present. Simple `Message<T>`, `GenericMessage<T>` and
 `ProducerRecord<K,V>` wrappers are unwrapped. It never replaces an AST type
 and applies only a unique source-backed result; ambiguous results remain
 unknown.

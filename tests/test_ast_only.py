@@ -65,7 +65,7 @@ def test_kafka_index_extractor_applies_strategy1_when_enabled(tmp_path: Path) ->
     source.write_text(
         """class Publisher {
   void publish(OrderCreated event) {
-    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getOrdersCreated(), event);
+    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getOrdersCreated(), event, "key");
   }
 }
 record OrderCreated(String id) {}
@@ -294,7 +294,7 @@ def test_strategy1_recognizes_envoyer_message_kafka_method_family_as_producers(t
 class Publisher {
   void publish() {
     OrderCreated event = new OrderCreated("42");
-    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getOrdersCreated(), event);
+    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getOrdersCreated(), event, "key");
     RequestCreated request = new RequestCreated("43");
     kafkaService.envoyerMessageKafkaRequest(kafkaProperties.getTopics().getRequestsCreated(), request);
     ReplyCreated reply = new ReplyCreated("44");
