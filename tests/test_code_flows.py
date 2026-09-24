@@ -816,6 +816,39 @@ def test_codeql_call_normalizes_method_signature_and_path_spelling(tmp_path: Pat
     assert flows[0].steps[-1].name == "orders.out"
 
 
+def test_codeql_edge_confidence_can_exclude_possible_dispatch(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    target = "orders/src/main/java/com/example/OrderPublisher.java"
+    for path, content in {
+        source: "package com.example; class OrderController { void receive() {} }\n",
+        target: "package com.example; class OrderPublisher { void send() {} }\n",
+    }.items():
+        file = tmp_path / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(content, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        _endpoint("entry", "consume", "kafka", "orders.in", source, 1),
+        replace(_endpoint("output", "produce", "kafka", "orders.out", target, 1),
+                qualified_name="com.example.OrderPublisher"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
+    call = CodeQLCall(
+        "com.example.OrderController.receive", source, 1,
+        "com.example.OrderPublisher.send", target, 1, 1, "possible",
+    )
+
+    assert materialize_codeql_code_flows(
+        methods, endpoints, [call], codeql_edge_confidence="exact"
+    ) == []
+    assert len(materialize_codeql_code_flows(
+        methods, endpoints, [call], codeql_edge_confidence="possible"
+    )) == 1
+
+
 def test_codeql_call_without_callee_source_location_uses_explicit_low_confidence_join(tmp_path: Path) -> None:
     source = "orders/src/main/java/com/example/OrderController.java"
     target = "publisher/src/main/java/com/example/OrderPublisher.java"

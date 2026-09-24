@@ -338,6 +338,7 @@ def _index_repo(
     flow_signature = (
         f"{CODE_FLOW_SIGNATURE}|engine={call_graph_engine}|"
         f"available={engine_available}|hops={config.codeql_max_hops}"
+        f"|edge-confidence={config.codeql_edge_confidence}"
     )
     join_signature = f"{flow_signature}|inputs={analysis_inputs_signature}"
     resume_join_entries = 0
@@ -588,6 +589,7 @@ def _index_repo(
                         methods, all_endpoints, calls, repo_root=repo_root,
                         source_paths=list(current_hashes),
                         max_hops=config.codeql_max_hops,
+                        codeql_edge_confidence=config.codeql_edge_confidence,
                         progress=progress,
                         call_graph_sink=persist_call_graph,
                     )
@@ -746,6 +748,7 @@ def _index_repo(
                             methods, all_endpoints, calls, repo_root=repo_root,
                             source_paths=list(current_hashes),
                             max_hops=config.codeql_max_hops,
+                            codeql_edge_confidence=config.codeql_edge_confidence,
                             stats=codeql_stats, reachability=reachability,
                             progress=progress,
                             join_checkpoint=publish_join_checkpoint,
@@ -822,6 +825,7 @@ def _index_repo(
                                 methods, all_endpoints, calls, repo_root=repo_root,
                                 source_paths=list(current_hashes),
                                 max_hops=config.codeql_max_hops,
+                                codeql_edge_confidence=config.codeql_edge_confidence,
                                 stats=codeql_stats, reachability=reachability,
                                 progress=progress,
                                 join_checkpoint=publish_join_checkpoint,
@@ -879,6 +883,7 @@ def _index_repo(
                 methods, all_endpoints, calls, repo_root=repo_root,
                 source_paths=list(current_hashes),
                 max_hops=config.codeql_max_hops,
+                codeql_edge_confidence=config.codeql_edge_confidence,
                 stats=codeql_stats,
                 reachability=reachability,
                 progress=progress,

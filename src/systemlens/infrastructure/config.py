@@ -11,6 +11,7 @@ DEFAULT_MIN_SEVERITY = "INFO"
 VALID_SEVERITIES = ("INFO", "WARNING", "ERROR")
 VALID_TOPIC_STRATEGIES = ("default", "strategy1")
 VALID_CALL_GRAPH_ENGINES = ("codeql", "none")
+VALID_CODEQL_EDGE_CONFIDENCES = ("exact", "possible")
 VALID_CODEQL_VERBOSITIES = ("errors", "progress", "progress+", "progress++", "progress+++")
 
 
@@ -32,6 +33,7 @@ class Config:
     codeql_ram_mb: int | None = None
     codeql_verbosity: str | None = None
     codeql_max_hops: int = 12
+    codeql_edge_confidence: str = "possible"
     disabled_extractors: list[str] = field(default_factory=list)
     root_path: str | None = None
 
@@ -79,8 +81,14 @@ def load_config(repo_root: Path) -> Config:
     codeql_ram_mb = analysis.get("codeql_ram_mb")
     codeql_verbosity = analysis.get("codeql_verbosity")
     codeql_max_hops = analysis.get("codeql_max_hops", 12)
+    codeql_edge_confidence = analysis.get("codeql_edge_confidence", "possible")
     if not isinstance(codeql_max_hops, int) or codeql_max_hops < 1:
         raise ConfigError("analysis.codeql_max_hops doit être un entier positif.")
+    if codeql_edge_confidence not in VALID_CODEQL_EDGE_CONFIDENCES:
+        raise ConfigError(
+            "analysis.codeql_edge_confidence invalide : "
+            f"{codeql_edge_confidence!r}. Valeurs : {', '.join(VALID_CODEQL_EDGE_CONFIDENCES)}."
+        )
     if not isinstance(codeql_timeout_seconds, int) or codeql_timeout_seconds < 1:
         raise ConfigError("analysis.codeql_timeout_seconds doit être un entier positif.")
     if isinstance(codeql_threads, bool) or not isinstance(codeql_threads, int) or codeql_threads < 0:
@@ -107,6 +115,7 @@ def load_config(repo_root: Path) -> Config:
         codeql_ram_mb=codeql_ram_mb,
         codeql_verbosity=codeql_verbosity,
         codeql_max_hops=codeql_max_hops,
+        codeql_edge_confidence=codeql_edge_confidence,
         disabled_extractors=list(analysis.get("disabled_extractors", [])),
         root_path=raw.get("root_path"),
     )
@@ -129,6 +138,7 @@ def init_config(repo_root: Path) -> Path:
             "codeql_threads": 0, "codeql_ram_mb": None,
             "codeql_verbosity": None,
             "codeql_max_hops": 12,
+            "codeql_edge_confidence": "possible",
             "disabled_extractors": [],
         },
     }

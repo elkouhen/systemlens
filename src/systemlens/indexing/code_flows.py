@@ -563,6 +563,7 @@ def materialize_codeql_code_flows(
     resume_from_entry: int = 0,
     initial_flows: Sequence[CodeFlow] = (),
     call_graph_sink: Callable[[CodeQLCallGraph], None] | None = None,
+    codeql_edge_confidence: str = "possible",
 ) -> list[CodeFlow]:
     """Reconstruct endpoint flows from the internal CodeQL call graph.
 
@@ -651,7 +652,21 @@ def materialize_codeql_code_flows(
     synthetic_calls = call_graph.synthetic_calls
     call_count = call_graph.call_count
     locate = call_graph.locate
-    joined_calls = call_graph.joined_calls
+    if codeql_edge_confidence not in {"exact", "possible"}:
+        raise ValueError(
+            f"Invalid CodeQL edge confidence {codeql_edge_confidence!r}; "
+            "expected 'exact' or 'possible'."
+        )
+    if codeql_edge_confidence == "exact":
+        adjacency = {
+            caller_id: [
+                (target, call, inferred)
+                for target, call, inferred in targets
+                if not inferred and call.dispatch_confidence == "exact"
+            ]
+            for caller_id, targets in adjacency.items()
+        }
+    joined_calls = sum(len(targets) for targets in adjacency.values())
     report(
         f"→ CodeQL : graphe d'appels interne construit · {joined_calls} "
         f"arête(s) rattachée(s) à {len(adjacency)} méthode(s) appelante(s)."

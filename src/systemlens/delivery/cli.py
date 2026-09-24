@@ -1238,6 +1238,11 @@ def index_cmd(
         "--call-graph-engine",
         help="Moteur des flux interprocéduraux : codeql ou none.",
     ),
+    codeql_edge_confidence: Optional[Literal["exact", "possible"]] = typer.Option(
+        None,
+        "--codeql-edge-confidence",
+        help="Niveau minimal accepté pour les arêtes CodeQL : exact ou possible.",
+    ),
     disable: list[str] = typer.Option(
         None,
         "--disable",
@@ -1304,6 +1309,8 @@ def index_cmd(
         config = replace(config, codeql_enabled=False, call_graph_engine="none")
     elif call_graph_engine is not None:
         config = replace(config, call_graph_engine=call_graph_engine)
+    if codeql_edge_confidence is not None:
+        config = replace(config, codeql_edge_confidence=codeql_edge_confidence)
     if codeql_progress_html is not None and config.call_graph_engine != "codeql":
         typer.echo("`--codeql-progress-html` requiert le moteur d'appels de méthodes `--call-graph-engine codeql`.", err=True)
         raise typer.Exit(code=2)

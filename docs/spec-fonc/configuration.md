@@ -19,6 +19,7 @@ analysis:
   codeql_ram_mb: null
   codeql_verbosity: null
   codeql_max_hops: 12
+  codeql_edge_confidence: possible
   disabled_extractors: []
 ```
 
