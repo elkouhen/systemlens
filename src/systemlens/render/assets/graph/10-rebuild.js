@@ -271,16 +271,23 @@
       const selectedCallGraphLinks = callGraphOnly
         ? [
           ...(selectedCallGraph?.edges || [])
-            .map((edge, index, edges) => ({
-              order: Number(edge.order) > 0
-                ? Number(edge.order)
-                : Math.max(0, ...edges.map(item => Number(item.order) || 0)) + index + 1,
+            .map((edge, index) => ({ edge, index }))
+            .sort((left, right) => {
+              const leftOrder = Number(left.edge.order);
+              const rightOrder = Number(right.edge.order);
+              if (leftOrder > 0 && rightOrder > 0) return leftOrder - rightOrder || left.index - right.index;
+              if (leftOrder > 0) return -1;
+              if (rightOrder > 0) return 1;
+              return left.index - right.index;
+            })
+            .map(({ edge, index }, order) => ({
+              order: order + 1,
               link: {
                 source: `microservice:${edge.source}`,
                 target: `microservice:${edge.target}`,
                 kind: edge.kind,
                 label: edge.label,
-                order: Number(edge.order) > 0 ? Number(edge.order) : undefined,
+                order: order + 1,
                 endpoint_ids: edge.endpoint_ids || [],
               },
               index,
