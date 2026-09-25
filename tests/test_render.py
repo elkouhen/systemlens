@@ -1153,6 +1153,12 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="code-flow-kind"' in document
     assert 'id="code-flow-message-type"' in document
     assert 'id="code-flow-message-types"' in document
+    assert 'id="code-flow-collapse"' in document
+    assert 'is-code-flow-collapsed' in document
+    assert 'window.__systemlensCallGraphArcKeyboardNavigation' in document
+    assert 'event.key.toLowerCase() === "n"' in document
+    assert 'event.key.toLowerCase() === "p"' in document
+    assert 'const focusCallGraphArc = index =>' in document
     assert 'messageTypesForCodeFlow' in document
     assert 'graphFlowStatus.hidden = context.topologyReconciled !== false;' in document
     assert 'Cycles uniquement (${cycleCount})' in document

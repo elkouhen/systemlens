@@ -1,4 +1,34 @@
 // Ordered source module: 10-rebuild.js
+    let callGraphArcNavigator = { links: [], views: [], activeIndex: null };
+    const focusCallGraphArc = index => {
+      const { views } = callGraphArcNavigator;
+      if (!views.length) return;
+      const normalizedIndex = (index + views.length) % views.length;
+      const view = views[normalizedIndex];
+      if (!view) return;
+      callGraphArcNavigator.activeIndex = normalizedIndex;
+      graphState.selectedCallGraphEdgeKey = view.edgeKey;
+      views.forEach(candidate => {
+        const active = candidate === view;
+        candidate.path.classList.toggle("is-analysis-selected", active);
+        candidate.arcLabel.classList.toggle("is-analysis-selected", active);
+      });
+      view.showTooltip();
+    };
+    if (!window.__systemlensCallGraphArcKeyboardNavigation) {
+      window.__systemlensCallGraphArcKeyboardNavigation = true;
+      window.addEventListener("keydown", event => {
+        if (!graphState.selectedCodeFlowId || !callGraphArcNavigator.views.length) return;
+        if (event.target.closest?.("input, select, textarea, button, [contenteditable='true']")) return;
+        if (event.key.toLowerCase() === "n") {
+          event.preventDefault();
+          focusCallGraphArc((callGraphArcNavigator.activeIndex ?? -1) + 1);
+        } else if (event.key.toLowerCase() === "p") {
+          event.preventDefault();
+          focusCallGraphArc((callGraphArcNavigator.activeIndex ?? 0) - 1);
+        }
+      });
+    }
     function layoutGraphNodes(nodes, links) {
       const layoutNodes = nodes.map((node, index) => {
         const angle = (Math.PI * 2 * index) / Math.max(1, nodes.length);
@@ -195,6 +225,13 @@
             )),
         ]
         : [];
+      const selectedCallGraphEdgeIndex = selectedCallGraphLinks.findIndex(
+        ({ edgeKey }) => edgeKey === graphState.selectedCallGraphEdgeKey,
+      );
+      if (selectedCallGraphEdgeIndex < 0) {
+        graphState.selectedCallGraphEdgeKey = null;
+      }
+      callGraphArcNavigator = { links: selectedCallGraphLinks, views: [], activeIndex: null };
       const callGraphEdgeKeys = new Set(selectedCallGraphLinks.map(({ index, edgeKey }) => edgeKey || `edge-${index}`));
       const visualNodeKind = node => {
         if (node.kind === "data_schema") return "mongodb_collection";
@@ -1537,8 +1574,7 @@
           const match = String(port?.label || "").match(direction === "out" ? /O\d+/ : /I\d+/);
           return match?.[0] || (direction === "out" ? "O?" : "I?");
         };
-        const bindArcTooltip = (path, link, sourcePort, targetPort) => {
-          path.addEventListener("pointerenter", event => {
+        const createArcTooltip = (link, sourcePort, targetPort) => {
             const tooltip = document.createElement("span");
             tooltip.className = "graph-arc-tooltip";
             const title = document.createElement("strong");
@@ -1570,18 +1606,26 @@
               type.textContent = `Type : ${sourcePort?.message_type || targetPort?.message_type}`;
               tooltip.append(type);
             }
+            return tooltip;
+        };
+        const showArcTooltip = (path, link, sourcePort, targetPort, event = null) => {
+            const tooltip = createArcTooltip(link, sourcePort, targetPort);
             flowTooltipOverlay.replaceChildren(tooltip);
             const bounds = path.getBoundingClientRect();
             const tooltipBounds = tooltip.getBoundingClientRect();
-            const anchorX = event.clientX || bounds.left + bounds.width / 2;
+            const anchorX = event?.clientX || bounds.left + bounds.width / 2;
             const left = Math.max(8, Math.min(window.innerWidth - tooltipBounds.width - 8, anchorX - tooltipBounds.width / 2));
             const below = bounds.bottom + tooltipBounds.height + 10 <= window.innerHeight;
             tooltip.dataset.placement = below ? "bottom" : "top";
             tooltip.style.setProperty("--tooltip-arrow-left", `${Math.max(10, Math.min(tooltipBounds.width - 10, anchorX - left))}px`);
             tooltip.style.left = `${left}px`;
             tooltip.style.top = `${below ? bounds.bottom + 10 : Math.max(8, bounds.top - tooltipBounds.height - 10)}px`;
+        };
+        const bindArcTooltip = (path, link, sourcePort, targetPort, edgeKey) => {
+          path.addEventListener("pointerenter", event => showArcTooltip(path, link, sourcePort, targetPort, event));
+          path.addEventListener("pointerleave", () => {
+            if (graphState.selectedCallGraphEdgeKey !== edgeKey) flowTooltipOverlay.replaceChildren();
           });
-          path.addEventListener("pointerleave", () => flowTooltipOverlay.replaceChildren());
         };
         const addArcHitArea = path => {
           const hitArea = path.cloneNode();
@@ -1660,10 +1704,26 @@
             arcLabel.classList.remove("is-analysis-hovered");
           });
           hitArea.addEventListener("click", event => {
+            graphState.selectedCallGraphEdgeKey = resolvedEdgeKey;
+            const viewIndex = callGraphArcNavigator.views.findIndex(view => view.edgeKey === resolvedEdgeKey);
+            if (viewIndex >= 0) focusCallGraphArc(viewIndex);
             toggleAnalysisEndpoint(sourcePort?.endpoint_id || targetPort?.endpoint_id, event);
           });
-          bindArcTooltip(hitArea, link, sourcePort, targetPort);
+          bindArcTooltip(hitArea, link, sourcePort, targetPort, resolvedEdgeKey);
+          callGraphArcNavigator.views.push({
+            edgeKey: resolvedEdgeKey,
+            path,
+            arcLabel,
+            showTooltip: () => showArcTooltip(path, link, sourcePort, targetPort),
+          });
         });
+        const activeIndex = callGraphArcNavigator.views.findIndex(
+          view => view.edgeKey === graphState.selectedCallGraphEdgeKey,
+        );
+        callGraphArcNavigator.activeIndex = activeIndex >= 0 ? activeIndex : null;
+        if (activeIndex >= 0) {
+          requestAnimationFrame(() => focusCallGraphArc(activeIndex));
+        }
         const libavoidRouteKeyForGeometry = [
           ...[...libavoidNodes.values()].map(node => (
             `${node.id}:${node.x}:${node.y}:${node.width}:${node.height}:`

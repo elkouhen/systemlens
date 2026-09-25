@@ -120,6 +120,7 @@
       relatedLocalPortLinks: new Set(),
       analysisPortEndpointId: null,
       selectedCodeFlowId: null,
+      selectedCallGraphEdgeKey: null,
       showAllCodeFlowPorts: false,
       codeFlowRootNodeId: null,
       codeFlowTrigger: null,

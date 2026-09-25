@@ -564,10 +564,12 @@
       codeFlowCycles.setAttribute("aria-pressed", String(codeFlowCycles.getAttribute("aria-pressed") !== "true"));
       renderCodeFlows();
     });
-    codeFlowCollapse.addEventListener("click", () => {
-      const collapsed = flowsPanel.classList.toggle("is-code-flow-collapsed");
-      codeFlowCollapse.setAttribute("aria-expanded", String(!collapsed));
-      codeFlowCollapse.textContent = collapsed ? "Développer" : "Réduire";
-    });
+    if (codeFlowCollapse && flowsPanel) {
+      codeFlowCollapse.addEventListener("click", () => {
+        const collapsed = flowsPanel.classList.toggle("is-code-flow-collapsed");
+        codeFlowCollapse.setAttribute("aria-expanded", String(!collapsed));
+        codeFlowCollapse.textContent = collapsed ? "Développer" : "Réduire";
+      });
+    }
     document.getElementById("flows-panel").addEventListener("systemlens:flows-open", renderCodeFlows);
     renderCodeFlows();

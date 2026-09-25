@@ -131,7 +131,8 @@
     .code-flow-cycle-filter[aria-pressed="true"] { border-color: #dc2626 !important; color: #fff !important; background: #dc2626 !important; }
     .code-flows-summary { margin: 0; color: var(--ui-muted); font-size: 11px; line-height: 1.35; }
     .code-flow-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .code-flow-collapse { flex: 0 0 auto; width: auto !important; min-height: 26px; padding: 3px 8px !important; border: 1px solid var(--ui-border) !important; border-radius: var(--control-radius); color: var(--ui-muted) !important; background: var(--ui-control) !important; font-size: 10px !important; font-weight: 800; }
+    .code-flow-collapse { flex: 0 0 auto; width: auto !important; min-height: 28px; padding: 4px 10px !important; border: 1px solid #94a3b8 !important; border-radius: var(--control-radius); color: #334155 !important; background: #f8fafc !important; box-shadow: 0 1px 2px rgb(15 23 42 / 12%); font-size: 11px !important; font-weight: 800; }
+    .code-flow-collapse:hover { border-color: #475569 !important; background: #e2e8f0 !important; }
     #flows-panel.is-code-flow-collapsed .references-section { display: none; }
     .code-flow-summary { margin: 0; color: var(--ui-muted); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
     .code-flow-badges .is-warning { color: #9a3412; border-color: #fdba74; background: #fff7ed; }
