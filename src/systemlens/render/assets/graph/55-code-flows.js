@@ -292,9 +292,11 @@
       // entry service for HTTP, fan-in, or Cron flows.
       const rootNodeId = nodeIdForCodeFlowResource(flow.module, "microservice") || path.nodes[0];
       if (!rootNodeId) return;
-      // Keep the flow list open when the user selected this flow there. This
-      // lets the next flow be selected without reopening the Flux de code tab.
-      if (flowsTab?.getAttribute("aria-selected") !== "true") {
+      // Keep the catalogue selected while revealing the selected flow behind
+      // it. Switching to Graphe remains an explicit navigation action.
+      if (flowsTab?.getAttribute("aria-selected") === "true") {
+        setToolbarTab("flows", { showFlowGraph: true });
+      } else {
         setToolbarTab("graph");
       }
       showPath(path, path.nodes, {

@@ -4,8 +4,14 @@ from collections import Counter, defaultdict
 from typing import Callable
 
 from systemlens.application.architecture_inventory import ArchitectureInventory
+from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
 from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
-from systemlens.domain.graph import build_graph, group_endpoints_by_module, resolve_rest_target_service
+from systemlens.domain.graph import (
+    DEFAULT_REST_TARGET_POLICY,
+    build_graph,
+    group_endpoints_by_module,
+    resolve_rest_target_service,
+)
 from systemlens.domain.models import MessageEndpoint
 
 
@@ -55,7 +61,9 @@ def audit_indexing(inventory: ArchitectureInventory) -> dict[str, object]:
     methods = inventory.integration_methods
     flows = inventory.code_flows
     edges = build_graph(
-        group_endpoints_by_module(endpoints), strategy1=inventory.strategy1
+        group_endpoints_by_module(endpoints),
+        rest_policy=(STRATEGY1_REST_TARGET_POLICY if inventory.strategy1 else None)
+        or DEFAULT_REST_TARGET_POLICY,
     )
     service_names = sorted({endpoint.module for endpoint in endpoints if endpoint.module})
     issues: list[dict[str, object]] = []
@@ -148,13 +156,25 @@ def audit_indexing(inventory: ArchitectureInventory) -> dict[str, object]:
         for endpoint in endpoints
         if endpoint.system == "rest" and endpoint.role == "call"
         and endpoint.id not in matched_http
-        for resolution in [resolve_rest_target_service(endpoint, service_names)]
+        for resolution in [
+            resolve_rest_target_service(
+                endpoint,
+                service_names,
+                rest_policy=(STRATEGY1_REST_TARGET_POLICY if inventory.strategy1 else None)
+                or DEFAULT_REST_TARGET_POLICY,
+            )
+        ]
         if resolution.status == "ambiguous"
     ])
     add_many("unmatched_http_call", lambda: endpoint_rule(
         "unmatched_http_call",
         lambda endpoint: endpoint.system == "rest" and endpoint.role == "call" and endpoint.id not in matched_http
-        and resolve_rest_target_service(endpoint, service_names).status != "ambiguous",
+        and resolve_rest_target_service(
+            endpoint,
+            service_names,
+            rest_policy=(STRATEGY1_REST_TARGET_POLICY if inventory.strategy1 else None)
+            or DEFAULT_REST_TARGET_POLICY,
+        ).status != "ambiguous",
         "warning",
         lambda endpoint: f"Aucun fournisseur indexé pour l'appel HTTP {endpoint.topic!r}.",
     ))

@@ -4,7 +4,8 @@ import re
 from typing import TypedDict
 
 from systemlens.domain.models import ArchitectureRelation, MessageEndpoint, compute_architecture_relation_id
-from systemlens.domain.graph import build_graph, group_endpoints_by_module
+from systemlens.domain.graph import DEFAULT_REST_TARGET_POLICY, build_graph, group_endpoints_by_module
+from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.scanner import local_spring_application_names
 
@@ -171,7 +172,12 @@ def build_architecture_relations(
         for module in modules
     }
     for edge in build_graph(
-        group_endpoints_by_module(endpoints), strategy1=kafka_reply_strategy1,
+        group_endpoints_by_module(endpoints),
+        rest_policy=(
+            STRATEGY1_REST_TARGET_POLICY
+            if kafka_reply_strategy1
+            else DEFAULT_REST_TARGET_POLICY
+        ),
         service_aliases=service_aliases,
     ):
         relation_name = "calls_service" if edge.kind == "rest" else "publishes_to"

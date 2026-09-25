@@ -6,17 +6,59 @@
       const key = normalizeNodeName(node.name);
       nodesByNormalizedName.set(key, [...(nodesByNormalizedName.get(key) || []), node]);
     });
-    function setToolbarTab(tab) {
+    function setToolbarTab(tab, options = {}) {
+      const showingGraph = tab === "graph";
+      const showingFlows = tab === "flows";
+      const showingFlowGraph = showingFlows && options.showFlowGraph === true;
+      const graphVisible = showingGraph || showingFlowGraph;
+      // The graph canvas and its overlays are fixed-position siblings of the
+      // toolbar panels, so hiding graphPanel alone does not hide the rendered
+      // architecture behind the Flux de code list.
+      [
+        graphCanvas,
+        document.getElementById("graph-layers"),
+        document.getElementById("graph-groups"),
+        document.getElementById("graph-port-paths"),
+        document.getElementById("graph-node-labels"),
+        document.getElementById("graph-flow-tooltips"),
+      ].forEach(element => { if (element) element.hidden = !graphVisible; });
+      if (!graphVisible && graphFlowStatus) graphFlowStatus.hidden = true;
+      // The two navigation surfaces have different meanings: Graphe is the
+      // static architecture view, while Flux de code only becomes a graph
+      // after the user explicitly selects a flow from its list.
+      if ((tab === "graph" || tab === "flows") && !showingFlowGraph) {
+        graphState.selectedId = null;
+        graphState.selectedClusterKey = null;
+        graphState.relatedNodes = null;
+        graphState.relatedEdges = null;
+        graphState.analysisPortEndpointId = null;
+        graphState.selectedCodeFlowId = null;
+        graphState.selectedCallGraphEdgeKey = null;
+        graphState.showAllCodeFlowPorts = false;
+        graphState.pathMicroserviceOrder = new Map();
+        graphState.codeFlowTreeCoordinates = new Map();
+        graphState.relatedLocalPortLinks = new Set();
+        graphState.codeFlowRootNodeId = null;
+        graphState.codeFlowTrigger = null;
+        delete graphCanvas.dataset.selectedCodeFlow;
+        delete graphCanvas.dataset.selectedCallGraphArc;
+        delete graphCanvas.dataset.flowFocusRatio;
+        // The Flux de code panel is hidden behind the toolbar and does not
+        // need a graph rebuild. Rebuild only when returning to Graphe, after
+        // the static view has become visible again.
+        if (tab === "graph") {
+          rebuildGraph();
+          applyLayout(graphState.activeLayout);
+        }
+      }
       if (document.querySelector(".toolbar")?.classList.contains("has-details")) {
         setDetailsEmpty("Sélectionnez un nœud pour afficher ses détails.");
       }
-      const showingGraph = tab === "graph";
       const showingResources = tab === "resources";
       const showingIssues = tab === "issues";
       const showingOpenApi = tab === "openapi";
       const showingKafka = tab === "kafka";
       const showingPersistence = tab === "persistence";
-      const showingFlows = tab === "flows";
       const resourceTabGroup = document.getElementById("resource-tab-group");
       if (resourceTabGroup) resourceTabGroup.hidden = showingFlows || showingIssues;
       graphTab.classList.toggle("is-active", showingGraph);
@@ -42,7 +84,7 @@
       kafkaPanel.hidden = !showingKafka;
       persistencePanel.hidden = !showingPersistence;
       flowsPanel.hidden = !showingFlows;
-      graphLegend.hidden = !showingGraph;
+      graphLegend.hidden = !graphVisible;
       if (showingFlows) flowsPanel.dispatchEvent(new Event("systemlens:flows-open"));
     }
     function renderIndexingIssues() {

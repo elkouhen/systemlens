@@ -327,7 +327,7 @@
       );
       const callGraphPortLabel = (port, direction) => {
         const globalLabel = String(port?.label || "").match(direction === "out" ? /O\d+/ : /I\d+/)?.[0];
-        if (!callGraphOnly || !port?.endpoint_id) return globalLabel || (direction === "out" ? "O?" : "I?");
+        if (!callGraphOnly || !port?.endpoint_id) return globalLabel || (direction === "out" ? "OUT" : "IN");
         if (!callGraphPortLabels.has(port.endpoint_id)) {
           const counterKey = `${portNodeIdByEndpoint.get(port.endpoint_id) || "unknown"}:${direction}`;
           const next = (callGraphPortCounters.get(counterKey) || 0) + 1;
@@ -387,16 +387,19 @@
           const service = sourceIsTopic ? target : source;
           const action = sourceIsTopic ? "Consomme" : "Publie";
           const title = document.createElement("strong");
-          title.textContent = topic?.name || "Topic inconnu";
+          title.textContent = service?.name || topic?.name || "Relation";
           tooltip.append(title);
-          addTooltipLine(tooltip, `Microservice : ${service?.name || "inconnu"} · ${action}`, "graph-edge-tooltip-kind");
-          addTooltipLine(tooltip, `Topic : ${topic?.name || "inconnu"}`, "graph-edge-tooltip-detail");
+          const details = [action, topic?.name].filter(Boolean).join(" · ");
+          if (details) addTooltipLine(tooltip, details, "graph-edge-tooltip-kind");
         } else {
           const title = document.createElement("strong");
-          title.textContent = `${source?.name || link.source} → ${target?.name || link.target}`;
+          title.textContent = [source?.name, target?.name].filter(Boolean).join(" → ") || "Relation";
           tooltip.append(title);
-          const order = link.order ? `Arc #${link.order} · ` : "";
-          addTooltipLine(tooltip, `${order}${link.kind || "Relation"}${link.label ? ` · ${link.label}` : ""}`, "graph-edge-tooltip-kind");
+          const details = [
+            link.kind === "kafka" ? "Kafka" : link.kind === "rest" ? "HTTP" : link.kind,
+            link.label,
+          ].filter(Boolean).join(" · ");
+          if (details) addTooltipLine(tooltip, details, "graph-edge-tooltip-kind");
         }
         placeGraphTooltip(
           tooltip,
@@ -1738,34 +1741,16 @@
             const tooltip = document.createElement("span");
             tooltip.className = "graph-arc-tooltip";
             const title = document.createElement("strong");
-            title.textContent = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;
+            const sourceName = nodeDataById.get(link.source)?.name;
+            const targetName = nodeDataById.get(link.target)?.name;
+            title.textContent = [sourceName, targetName].filter(Boolean).join(" → ") || "Relation";
             const relation = document.createElement("span");
             relation.className = "graph-arc-tooltip-relation";
             const order = link.order ? `Arc #${link.order} · ` : "";
-            relation.textContent = `${order}${link.kind === "kafka" ? "Kafka" : link.kind === "rest" ? "HTTP" : link.kind || "Relation"} · ${link.label || sourcePort?.name || targetPort?.name || "Endpoint"}`;
+            const protocol = link.kind === "kafka" ? "Kafka" : link.kind === "rest" ? "HTTP" : link.kind;
+            const relationText = [protocol, link.label].filter(Boolean).join(" · ");
+            relation.textContent = `${order}${relationText || "Relation"}`;
             tooltip.append(title, relation);
-            const portBlock = (port, direction, serviceId) => {
-              const block = document.createElement("span");
-              block.className = "graph-arc-tooltip-port";
-              const heading = document.createElement("strong");
-              heading.textContent = `Port ${direction} · ${shortPortLabel(port, direction === "OUT" ? "out" : "in")}`;
-              const service = document.createElement("span");
-              service.textContent = `Microservice : ${serviceId?.replace(/^microservice:/, "") || "inconnu"}`;
-              const method = document.createElement("span");
-              method.textContent = `Méthode : ${port?.method || "Méthode inconnue"}`;
-              block.append(heading, service, method);
-              return block;
-            };
-            tooltip.append(
-              portBlock(sourcePort, "OUT", link.source),
-              portBlock(targetPort, "IN", link.target),
-            );
-            if (sourcePort?.message_type || targetPort?.message_type) {
-              const type = document.createElement("span");
-              type.className = "graph-arc-tooltip-type";
-              type.textContent = `Type : ${sourcePort?.message_type || targetPort?.message_type}`;
-              tooltip.append(type);
-            }
             return tooltip;
         };
         const showArcTooltip = (path, link, sourcePort, targetPort, event = null) => {
@@ -1788,11 +1773,12 @@
           });
         };
         const callGraphArcTooltipLabel = (link, sourcePort, targetPort) => {
-          const source = nodeDataById.get(link.source)?.name || link.source;
-          const target = nodeDataById.get(link.target)?.name || link.target;
+          const source = nodeDataById.get(link.source)?.name;
+          const target = nodeDataById.get(link.target)?.name;
           const ports = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;
           const relation = link.label || (link.kind === "kafka" ? "Kafka" : link.kind || "Relation");
-          return `Arc #${link.order ?? "?"} · ${source} → ${target} · ${relation} · ${ports}`;
+          const arc = link.order ? `Arc #${link.order} · ` : "";
+          return `${arc}${[source, target].filter(Boolean).join(" → ") || "Relation"} · ${relation} · ${ports}`;
         };
         const addArcHitArea = path => {
           const hitArea = path.cloneNode();
@@ -1987,8 +1973,8 @@
             {
               kind: "internal",
               label: "Flux interne",
-              source: `microservice:${output.closest(".graph-node-card-label")?.dataset.nodeId || "?"}`,
-              target: `microservice:${input.closest(".graph-node-card-label")?.dataset.nodeId || "?"}`,
+              source: `microservice:${output.closest(".graph-node-card-label")?.dataset.nodeId || ""}`,
+              target: `microservice:${input.closest(".graph-node-card-label")?.dataset.nodeId || ""}`,
             },
             portsByEndpointId.get(link.output_endpoint_id),
             portsByEndpointId.get(link.input_endpoint_id),
@@ -2016,8 +2002,8 @@
             {
               kind: link.kind,
               label: link.kind === "kafka" ? source.dataset.endpointId : "HTTP",
-              source: `microservice:${source.closest(".graph-node-card-label")?.dataset.nodeId || "?"}`,
-              target: `microservice:${target.closest(".graph-node-card-label")?.dataset.nodeId || "?"}`,
+              source: `microservice:${source.closest(".graph-node-card-label")?.dataset.nodeId || ""}`,
+              target: `microservice:${target.closest(".graph-node-card-label")?.dataset.nodeId || ""}`,
             },
             portsByEndpointId.get(link.source_endpoint_id),
             portsByEndpointId.get(link.target_endpoint_id),

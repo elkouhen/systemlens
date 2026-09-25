@@ -367,11 +367,10 @@ def dto_summary(catalog: ArchitectureCatalog, dto: str) -> dict[str, object]:
 
 
 def endpoint_summary(endpoint: MessageEndpoint) -> dict[str, object]:
-    return {
+    summary: dict[str, object] = {
         "kind": "integration",
         "id": endpoint.id,
         "name": endpoint.topic,
-        "topic": endpoint.topic,
         "role": endpoint.role,
         "system": endpoint.system,
         "module": endpoint.module,
@@ -379,6 +378,13 @@ def endpoint_summary(endpoint: MessageEndpoint) -> dict[str, object]:
         "message_type": endpoint.message_type,
         "dynamic": endpoint.topic_dynamic,
     }
+    if endpoint.system == "kafka":
+        summary["resource_kind"] = "topic"
+        summary["topic"] = endpoint.kafka_topic
+    else:
+        summary["resource_kind"] = "route"
+        summary["route"] = endpoint.route
+    return summary
 
 
 def show_object(catalog: ArchitectureCatalog, kind: str, name: str) -> dict[str, object] | None:

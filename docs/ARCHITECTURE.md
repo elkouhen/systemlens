@@ -114,6 +114,32 @@ including freshness and incomplete-federation warnings, before graph and audit
 queries use them. The catalog, graph, dependency audit, and flow tracing are
 all derived views: they must not write back to the index.
 
+### Domain vocabulary and policy injection
+
+`MessageEndpoint` is the storage-compatible name for a static integration
+point. Its `topic` field is a legacy resource identity: callers must use
+`kafka_topic` for Kafka and `route` for HTTP. New application contracts expose
+`topic` and `route` explicitly and identify the resource with `resource_kind`.
+
+The domain graph applies a `RestTargetPolicy` but does not import repository
+conventions. Strategy1 supplies that policy from an outer adapter. This keeps
+the domain responsible for conservative graph resolution while keeping
+convention-specific parsing outside the domain.
+
+The following terms are intentionally distinct:
+
+| Term | Meaning |
+|---|---|
+| `ArchitectureSnapshot` | Immutable application projection of one indexed state |
+| `ArchitectureCatalog` | Compatibility name for the snapshot query facade |
+| `ArchitectureRelation` | Persisted, evidenced architecture fact |
+| `GraphEdge` | Derived topology edge adapted for graph and dependency queries |
+| `CodeFlow` | Potential static code path, not an asserted runtime dependency |
+
+When a public contract needs a new name, add an explicit adapter rather than
+reusing `topic`, `dependency`, or `edge` for a different bounded-context
+concept.
+
 ### Reading a call site
 
 Start at its adapter decorator (`@app.command` or `@mcp.tool`), follow the

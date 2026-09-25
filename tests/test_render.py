@@ -1173,7 +1173,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'appendActionList("Sous-modules"' in document
     assert 'appendActionList("Ressources contenues"' in document
     assert 'box.dataset.clusterKey = cluster.key' in document
-    assert 'graphLegend.hidden = !showingGraph' in document
+    assert 'graphLegend.hidden = !graphVisible' in document
     assert 'issue.vscode_uri ? "a" : "code"' in document
     assert "max-height: calc(100vh - 32px)" in document
     assert "scroll-padding-bottom: 8px" in document
@@ -1311,6 +1311,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'Topic en sortie' in document
     assert 'function topicsForCodeFlow(flow)' not in document
     assert 'title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`' in document
+    assert 'Keep the catalogue selected while revealing the selected flow behind' in document
+    assert 'setToolbarTab("flows", { showFlowGraph: true });' in document
     assert 'meta.textContent = flow.module;' in document
     assert 'javaMethod.textContent = `Méthode Java : ${flow.method}`' not in document
     assert 'function codeFlowStats(flow)' in document
@@ -1324,6 +1326,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="code-flow-collapse"' in document
     assert 'id="analysis-context-collapse"' in document
     assert 'id="graph-mode-context-copy"' in document
+    assert 'if ((tab === "graph" || tab === "flows") && !showingFlowGraph) {' in document
+    assert 'if (tab === "graph") {' in document
+    assert 'applyLayout(graphState.activeLayout);' in document
+    assert 'document.getElementById("graph-port-paths")' in document
+    assert 'element.hidden = !graphVisible' in document
     assert 'is-code-flow-collapsed' in document
     assert 'is-keyboard-selected' in document
     assert 'candidate.path.style.setProperty("stroke", "#dc2626")' in document
@@ -1355,14 +1362,14 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "Keeping Sigma's straight edge underneath would draw" in document
     assert 'path.classList.add("graph-call-path")' in document
     assert 'if (link.kind === "kafka") arcLabel.classList.add("is-kafka");' in document
-    assert 'title.textContent = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;' in document
+    assert 'title.textContent = [sourceName, targetName].filter(Boolean).join(" → ") || "Relation";' in document
     assert 'arcLabel.textContent = String(link.order ?? index + 1);' in document
     assert 'path.getPointAtLength(path.getTotalLength() / 2)' in document
     assert 'renderEdgeLabels: true' in document
     assert 'enableEdgeHoverEvents: true' in document
     assert 'const sourceIsTopic = ["kafka_topic", "message_channel"].includes(source?.kind);' in document
-    assert 'Microservice : ${service?.name || "inconnu"} · ${action}' in document
-    assert 'Topic : ${topic?.name || "inconnu"}' in document
+    assert 'title.textContent = service?.name || topic?.name || "Relation";' in document
+    assert 'const details = [action, topic?.name].filter(Boolean).join(" · ");' in document
     assert 'const showDependencyTooltip = (link, clientX, clientY) =>' in document
     assert 'graph-dependency-hit-area' in document
     assert 'stroke-width: 24px' in document
@@ -1373,7 +1380,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'match(/^edge(?:-hit)?-(\\d+)$/)' in document
     assert 'label: String(link.order)' not in document
     assert 'const order = link.order ? `Arc #${link.order} · ` : "";' in document
-    assert 'method.textContent = `Méthode : ${port?.method || "Méthode inconnue"}`;' in document
+    assert 'const relationText = [protocol, link.label].filter(Boolean).join(" · ");' in document
     assert 'arcLabel.setAttribute(' in document
     assert 'const addArcHitArea = path => {' in document
     assert 'hitArea.classList.add("graph-arc-hit-area");' in document

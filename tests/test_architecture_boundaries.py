@@ -37,6 +37,7 @@ def test_domain_does_not_depend_on_outer_layers() -> None:
         "systemlens.render",
         "systemlens.scanner",
         "systemlens.storage",
+        "systemlens.conventions",
     )
     for path in (SOURCE_ROOT / "domain").glob("*.py"):
         imported = _imported_modules(path)

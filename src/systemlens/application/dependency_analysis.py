@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import NotRequired, TypedDict
 
 from systemlens.application.audit import assess_architecture, render_audit_json
+from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
 from systemlens.domain.graph import (
+    DEFAULT_REST_TARGET_POLICY,
     build_graph,
     configured_api_client_domain,
     external_microservice_name,
@@ -138,7 +140,11 @@ def build_dependency_graph(
     internal_edges = (
         graph_edges_from_relations(relations, endpoints_by_service)
         if relations is not None
-        else build_graph(endpoints_by_service, strategy1=strategy1)
+        else build_graph(
+            endpoints_by_service,
+            rest_policy=(STRATEGY1_REST_TARGET_POLICY if strategy1 else None)
+            or DEFAULT_REST_TARGET_POLICY,
+        )
     )
     matched_calls = {edge.from_endpoint.id for edge in internal_edges if edge.kind == "rest"}
 
@@ -193,7 +199,11 @@ def build_dependency_graph(
             if configured_domain is not None:
                 configured_clients.setdefault(service, set()).add(configured_domain)
                 continue
-            external_microservice = external_microservice_name(endpoint)
+            external_microservice = external_microservice_name(
+                endpoint,
+                rest_policy=(STRATEGY1_REST_TARGET_POLICY if strategy1 else None)
+                or DEFAULT_REST_TARGET_POLICY,
+            )
             if external_microservice is not None:
                 target_id = add_node("microservice", external_microservice, external=True)
                 add_edge(service_id, target_id, "http", qualified_rest_resource(external_microservice, "API"))
@@ -329,7 +339,11 @@ def audit_dependency_graph(
             (
                 graph_edges_from_relations(relations, endpoints_by_service)
                 if relations is not None
-                else build_graph(endpoints_by_service, strategy1=strategy1)
+                else build_graph(
+                    endpoints_by_service,
+                    rest_policy=(STRATEGY1_REST_TARGET_POLICY if strategy1 else None)
+                    or DEFAULT_REST_TARGET_POLICY,
+                )
             ),
             modules=list(modules_by_service.values()),
             endpoints_by_module=endpoints_by_service,

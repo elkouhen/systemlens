@@ -6,18 +6,41 @@ import os
 import re
 import sys
 import time
+from collections.abc import Callable
 from typing import Literal
 
 from systemlens.domain.models import ArchitectureRelation, MessageEndpoint
-from systemlens.conventions.strategy1.rest import (
-    external_service_name as _strategy1_external_service_name,
-    rest_target_service_hint,
+
+
+@dataclass(frozen=True)
+class RestTargetPolicy:
+    """Injected policy for resolving REST target conventions.
+
+    The domain graph only knows how to apply a resolution policy. Repository
+    conventions such as Strategy1 are supplied by an outer adapter.
+    """
+
+    target_hint: Callable[[MessageEndpoint], str | None] = lambda _endpoint: None
+    external_service: Callable[[MessageEndpoint], str | None] = lambda _endpoint: None
+
+
+_EXPLICIT_EXTERNAL_SERVICE_RE = re.compile(
+    r"systemlens-external-microservice:([^\s]+)", re.IGNORECASE
 )
+
+
+def _explicit_external_service(endpoint: MessageEndpoint) -> str | None:
+    """Read the stable external-service evidence emitted by the scanner."""
+    match = _EXPLICIT_EXTERNAL_SERVICE_RE.search(endpoint.snippet)
+    return match.group(1).casefold() if match else None
+
+
+DEFAULT_REST_TARGET_POLICY = RestTargetPolicy(external_service=_explicit_external_service)
 
 
 @dataclass(frozen=True)
 class GraphEdge:
-    kind: str  # "rest" | "kafka"
+    kind: str  # Literal["rest", "kafka"]
     from_service: str
     to_service: str
     from_endpoint: MessageEndpoint  # site d'appel (call) ou de production (produce)
@@ -136,9 +159,13 @@ def configured_api_client_domain(endpoint: MessageEndpoint) -> str | None:
     return match.group(1).lower() if match is not None else None
 
 
-def external_microservice_name(endpoint: MessageEndpoint) -> str | None:
-    """Return the external microservice explicitly named by a Strategy1 call."""
-    return _strategy1_external_service_name(endpoint)
+def external_microservice_name(
+    endpoint: MessageEndpoint,
+    *,
+    rest_policy: RestTargetPolicy = DEFAULT_REST_TARGET_POLICY,
+) -> str | None:
+    """Return the external service explicitly identified by the injected policy."""
+    return rest_policy.external_service(endpoint)
 
 
 def external_microservice_names(edges: list[GraphEdge]) -> set[str]:
@@ -151,11 +178,12 @@ def external_microservice_names(edges: list[GraphEdge]) -> set[str]:
 
 
 def _rest_target_service_hint(
-    call: MessageEndpoint, *, strategy1: bool = False
+    call: MessageEndpoint,
+    *,
+    rest_policy: RestTargetPolicy = DEFAULT_REST_TARGET_POLICY,
 ) -> str | None:
-    if strategy1:
-        if hint := rest_target_service_hint(call):
-            return hint
+    if hint := rest_policy.target_hint(call):
+        return hint
     host_match = _SERVICE_URL_HOST_RE.search(call.snippet)
     if host_match is not None:
         return host_match.group(1).lower()
@@ -239,7 +267,10 @@ def _services_matching_hint(
 
 
 def resolve_rest_target_service(
-    call: MessageEndpoint, service_names: list[str], *, strategy1: bool = False,
+    call: MessageEndpoint,
+    service_names: list[str],
+    *,
+    rest_policy: RestTargetPolicy = DEFAULT_REST_TARGET_POLICY,
     service_aliases: dict[str, tuple[str, ...]] | None = None,
 ) -> RestTargetResolution:
     """Resolve an explicit REST target without using route similarity.
@@ -248,9 +279,9 @@ def resolve_rest_target_service(
     service. A call explicitly marked as an external microservice is retained
     as such; a missing target or several equivalent aliases stays unresolved.
     """
-    if external_service := external_microservice_name(call):
+    if external_service := external_microservice_name(call, rest_policy=rest_policy):
         return RestTargetResolution("external", service=external_service)
-    hint = _rest_target_service_hint(call, strategy1=strategy1)
+    hint = _rest_target_service_hint(call, rest_policy=rest_policy)
     matches = _services_matching_hint(service_names, hint, service_aliases)
     if len(matches) == 1:
         return RestTargetResolution("resolved", hint=hint, service=matches[0])
@@ -290,7 +321,8 @@ def paths_match(call_topic: str, serve_topic: str) -> bool:
 
 
 def build_graph(
-    endpoints_by_service: dict[str, list[MessageEndpoint]], *, strategy1: bool = False,
+    endpoints_by_service: dict[str, list[MessageEndpoint]], *,
+    rest_policy: RestTargetPolicy = DEFAULT_REST_TARGET_POLICY,
     service_aliases: dict[str, tuple[str, ...]] | None = None,
 ) -> list[GraphEdge]:
     """Construit les arêtes REST et Kafka entre services distincts.
@@ -298,8 +330,9 @@ def build_graph(
     Une arête REST n'est créée que si le site d'appel désigne exactement un
     unique service interne (URL de service, ``lb://`` ou convention Strategy1).
     La méthode et la route ne font alors que confirmer la compatibilité au sein
-    de ce service. Le getter de configuration ``getXxxServiceUrl()`` n'est
-    considéré que lorsque ``strategy1=True``.
+    de ce service. Les conventions de résolution sont fournies par
+    ``rest_policy``. Strategy1 is supplied by an outer adapter and is not a
+    domain flag.
     Pas d'auto-arête : un service qui s'appelle lui-même n'entre pas dans le
     graphe inter-services.
 
@@ -341,7 +374,7 @@ def build_graph(
     service_names = sorted(endpoints_by_service)
     for call_service, call in calls:
         resolution = resolve_rest_target_service(
-            call, service_names, strategy1=strategy1, service_aliases=service_aliases
+            call, service_names, rest_policy=rest_policy, service_aliases=service_aliases
         )
         if resolution.status != "resolved" or resolution.service is None:
             continue
@@ -401,7 +434,7 @@ def build_graph(
     # outside the indexed workspace.  Keep it as a microservice relation (not
     # an untyped external API) so the topology can label the target external.
     for call_service, call in calls:
-        external_service = external_microservice_name(call)
+        external_service = external_microservice_name(call, rest_policy=rest_policy)
         if external_service is None or call_service == external_service:
             continue
         key = ("rest", call_service, external_service, "configured-external", "")

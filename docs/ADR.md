@@ -732,3 +732,25 @@ tree. A cycle can prevent a topological order, so the exporter uses a
 deterministic node order for cyclic graphs. If no trigger flow has zero
 indegree, all trigger flows are used as deterministic roots while preserving
 arc direction; missing topology arcs do not create guessed service relations.
+
+## ADR-41: Keep repository conventions outside the domain graph
+
+**Status:** Accepted.
+
+**Context:** The domain graph previously imported Strategy1 REST conventions
+directly. This made the domain depend on a repository-specific adapter and
+made the integration vocabulary ambiguous by using `topic` for both Kafka
+topics and HTTP routes.
+
+**Decision:** The domain graph accepts an injected `RestTargetPolicy`. Strategy1
+constructs that policy in `conventions.strategy1.graph` and application or
+indexing services pass it at the boundary. `MessageEndpoint` retains its
+storage-compatible `topic` field, but exposes `kafka_topic` and `route` typed by
+the integration system. Application endpoint summaries identify the resource
+with `resource_kind` and expose the corresponding explicit field.
+
+**Consequences:** The domain no longer imports Strategy1 and the architecture
+boundary test rejects convention imports from the domain. Existing persisted
+indexes and the legacy `topic` field remain compatible. New code must not use
+`topic` as the vocabulary for an HTTP route, and callers must inject a policy
+when they need repository-specific target resolution.

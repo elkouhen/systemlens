@@ -8,6 +8,7 @@ from systemlens.domain.graph import (
     paths_match,
     qualified_rest_resource,
 )
+from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
 from dataclasses import replace
 
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
@@ -300,7 +301,10 @@ def test_build_graph_uses_service_url_getter_hint_only_with_strategy1() -> None:
     }
 
     assert build_graph(endpoints_by_service) == []
-    strategy1_edges = build_graph(endpoints_by_service, strategy1=True)
+    strategy1_edges = build_graph(
+        endpoints_by_service,
+        rest_policy=STRATEGY1_REST_TARGET_POLICY,
+    )
     assert len(strategy1_edges) == 1
     assert strategy1_edges[0].to_service == "order-service"
 

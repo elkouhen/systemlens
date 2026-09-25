@@ -1,5 +1,15 @@
 import hashlib
 from dataclasses import dataclass, replace
+from typing import Literal, TypeAlias
+
+
+IntegrationSystem: TypeAlias = Literal["kafka", "rest"]
+KafkaRole: TypeAlias = Literal["produce", "consume"]
+RestRole: TypeAlias = Literal["serve", "call"]
+ArchitectureRelationType: TypeAlias = Literal[
+    "depends_on", "calls_service", "publishes_to", "reads", "writes"
+]
+Confidence: TypeAlias = Literal["low", "medium", "high"]
 
 
 def compute_finding_id(
@@ -69,19 +79,16 @@ def compute_architecture_relation_id(
 
 @dataclass(frozen=True)
 class MessageEndpoint:
-    """Un site statique d'échange entre services — production/consommation
-    d'un topic Kafka, ou exposition/appel d'une route REST (BACKLOG-10 K1).
+    """A static integration point backed by source evidence.
 
-    `topic` porte le nom du topic Kafka, ou "METHODE /chemin" pour REST (ex.
-    "GET /orders/{id}"). `path`/`start_line`/`end_line` localisent le site :
-    pour `source="manifest"`, `path` est le chemin du manifeste (`TOPICS.md`
-    ou `kafka-flow-graph.json`) et `start_line`/`end_line` pointent l'entrée déclarative, pas un
-    site de code.
+    ``topic`` is retained as the storage-compatible resource identity. Use
+    :attr:`kafka_topic` for Kafka and :attr:`route` for HTTP so the ubiquitous
+    language does not call an HTTP route a topic.
     """
 
     id: str
-    role: str  # produce | consume (kafka) ; serve | call (rest)
-    system: str  # kafka | rest
+    role: str  # KafkaRole or RestRole
+    system: str  # IntegrationSystem
     topic: str
     topic_dynamic: bool
     source: str  # code | manifest
@@ -101,6 +108,24 @@ class MessageEndpoint:
     # par une convention d'indexation, notamment Strategy1.
     topic_display: str | None = None
 
+    @property
+    def kafka_topic(self) -> str | None:
+        """Return the Kafka topic when this point belongs to Kafka."""
+        return self.topic if self.system == "kafka" else None
+
+    @property
+    def route(self) -> str | None:
+        """Return the HTTP method and route when this point belongs to HTTP."""
+        return self.topic if self.system == "rest" else None
+
+    def validate_semantics(self) -> None:
+        """Raise when a persisted integration point uses an invalid vocabulary."""
+        valid_roles = {"produce", "consume"} if self.system == "kafka" else {"serve", "call"}
+        if self.system not in {"kafka", "rest"} or self.role not in valid_roles:
+            raise ValueError(
+                f"Invalid integration point: system={self.system!r}, role={self.role!r}"
+            )
+
 
 @dataclass(frozen=True)
 class ArchitectureRelation:
@@ -113,7 +138,7 @@ class ArchitectureRelation:
     target_kind: str
     target_name: str
     origin: str  # code | manifest | derived
-    confidence: str  # high | medium
+    confidence: str  # Confidence
     module: str | None = None
     path: str | None = None
     start_line: int | None = None

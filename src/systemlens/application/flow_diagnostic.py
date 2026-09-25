@@ -4,8 +4,9 @@ from collections import Counter, defaultdict
 from typing import Iterable
 
 from systemlens.application.architecture_inventory import ArchitectureInventory
+from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
 from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
-from systemlens.domain.graph import build_graph, group_endpoints_by_module
+from systemlens.domain.graph import DEFAULT_REST_TARGET_POLICY, build_graph, group_endpoints_by_module
 from systemlens.domain.models import MessageEndpoint
 
 
@@ -97,7 +98,8 @@ def diagnose_flows(inventory: ArchitectureInventory) -> dict[str, object]:
     flows = inventory.code_flows
     graph_edges = build_graph(
         group_endpoints_by_module(inventory.endpoints),
-        strategy1=inventory.strategy1,
+        rest_policy=(STRATEGY1_REST_TARGET_POLICY if inventory.strategy1 else None)
+        or DEFAULT_REST_TARGET_POLICY,
     )
     relation_targets: dict[str, set[str]] = defaultdict(set)
     for edge in graph_edges:

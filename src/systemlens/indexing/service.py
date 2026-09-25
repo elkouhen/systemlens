@@ -18,6 +18,7 @@ from systemlens.indexing.file_inventory import (
     sha256_file as _sha256_file,
 )
 from systemlens.conventions.strategy1.indexing import requires_full_reindex
+from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
 from systemlens.indexing.materializers import materialize_asyncapi_contracts, materialize_openapi_contracts
 from systemlens.indexing.code_flows import (
     CODE_FLOW_SIGNATURE, _deduplicate_code_flows, materialize_code_flows,
@@ -39,7 +40,7 @@ from systemlens.indexing.codeql import (
 )
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, MessageEndpoint
-from systemlens.domain.graph import build_graph, group_endpoints_by_module
+from systemlens.domain.graph import DEFAULT_REST_TARGET_POLICY, build_graph, group_endpoints_by_module
 from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 from systemlens.discovery.build.modules import (
     discover_module_dependencies,
@@ -978,7 +979,11 @@ def _index_repo(
             all_endpoints,
             build_graph(
                 group_endpoints_by_module(all_endpoints),
-                strategy1=topic_strategy == "strategy1",
+                rest_policy=(
+                    STRATEGY1_REST_TARGET_POLICY
+                    if topic_strategy == "strategy1"
+                    else DEFAULT_REST_TARGET_POLICY
+                ),
                 service_aliases=service_aliases,
             ),
         )
