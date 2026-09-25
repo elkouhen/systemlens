@@ -238,7 +238,7 @@ def test_call_graph_retains_all_typed_kafka_fanout_branches() -> None:
     } == {("orders", "inventory"), ("orders", "restock")}
 
 
-def test_export_collapses_equivalent_call_graphs() -> None:
+def test_export_keeps_equivalent_persisted_flows() -> None:
     producer = replace(_kafka_endpoint("produce", "OrderCreated", "Publisher.java"), id="orders-out")
     consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Inventory.java"), id="inventory-in")
     steps = (
@@ -256,8 +256,10 @@ def test_export_collapses_equivalent_call_graphs() -> None:
         [GraphEdge("kafka", "orders", "inventory", producer, consumer)],
         code_flows=[first, duplicate],
     ))
-    assert len(data["code_flows"]) == 1
-    assert data["code_flows"][0]["equivalent_count"] == 2
+    assert len(data["code_flows"]) == 2
+    assert {flow["id"] for flow in data["code_flows"]} == {
+        "first-flow", "duplicate-flow"
+    }
 
 
 def test_export_fuses_kafka_producer_and_consumer_fragments() -> None:
@@ -793,7 +795,7 @@ def test_export_builds_one_call_graph_from_all_flows() -> None:
         for edge in graph["edges"]
     } == {("orders", "payments"), ("orders", "inventory")}
     assert len(graph["edges"]) == 2
-    assert graph["traversal_levels"] == [["orders"], ["payments", "inventory"]]
+    assert graph["traversal_levels"] == [["orders"], ["inventory", "payments"]]
     assert graph["call_tree"]["edges"] == [
         {"source": "orders", "target": "payments", "order": 1},
         {"source": "orders", "target": "inventory", "order": 2},

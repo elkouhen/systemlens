@@ -403,6 +403,13 @@ def test_flows_list_can_filter_kafka_publications_and_exposes_flow_types() -> No
     endpoints = [
         _endpoint("in", "consume", "kafka", "orders.in", "Orders.java", 1, "OrderIn"),
         _endpoint("out", "produce", "kafka", "orders.out", "Orders.java", 4, "OrderOut"),
+        replace(
+            _endpoint(
+                "target", "consume", "kafka", "orders.out", "Payments.java", 1,
+                "TestMessage",
+            ),
+            module="payments",
+        ),
     ]
     flows[0] = replace(
         flows[0],
@@ -421,6 +428,7 @@ def test_flows_list_can_filter_kafka_publications_and_exposes_flow_types() -> No
     assert all_items[0]["input_java_type"] == "OrderIn"
     assert all_items[0]["output_flow"] == "orders.out"
     assert all_items[0]["output_java_type"] == "OrderOut"
+    assert all_items[0]["target_modules"] == ["payments"]
     assert all_items[0]["root"] is True
     assert all_items[1]["root"] is True
     assert [item["id"] for item in kafka_items] == ["kafka-flow"]

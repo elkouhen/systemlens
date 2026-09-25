@@ -22,6 +22,7 @@ def code_flow_summary(
 ) -> dict[str, object]:
     endpoint_by_id = endpoints or {}
     input_endpoint, output_endpoint = _endpoint_summary(flow, endpoint_by_id)
+    target_modules = _target_modules(flow, list(endpoint_by_id.values()))
     input_topics = [
         step.name for step in flow.steps if step.kind == "message_entry"
     ]
@@ -35,6 +36,7 @@ def code_flow_summary(
         "input_java_type": input_endpoint.message_type if input_endpoint else None,
         "output_flow": output_endpoint.topic if output_endpoint else None,
         "output_java_type": output_endpoint.message_type if output_endpoint else None,
+        "target_modules": target_modules,
         "method": flow.method,
         "root": _is_root_flow(flow),
         "trigger": {"kind": flow.steps[0].kind, "name": flow.steps[0].name},
@@ -57,6 +59,34 @@ def _is_root_flow(flow: CodeFlow) -> bool:
     read-only exports.
     """
     return bool(flow.steps) and flow.steps[0].kind != "message_entry"
+
+
+def _endpoints_compatible(
+    source: MessageEndpoint, target: MessageEndpoint
+) -> bool:
+    return source.system == target.system and source.topic == target.topic
+
+
+def _target_modules(
+    flow: CodeFlow, endpoints: list[MessageEndpoint]
+) -> list[str]:
+    output_endpoints = {
+        step.endpoint_id
+        for step in flow.steps
+        if step.endpoint_id and step.kind in {"http_call", "message_publish"}
+    }
+    outputs = [endpoint for endpoint in endpoints if endpoint.id in output_endpoints]
+    target_roles = {"call": "serve", "produce": "consume"}
+    modules = {
+        endpoint.module
+        for output in outputs
+        for endpoint in endpoints
+        if endpoint.role == target_roles.get(output.role)
+        and _endpoints_compatible(output, endpoint)
+        and endpoint.module
+        and endpoint.module != flow.module
+    }
+    return sorted(modules)
 
 
 def list_code_flows(
@@ -99,8 +129,7 @@ def _flow_children(
         if input_endpoint is None:
             continue
         if any(
-            output.system == input_endpoint.system
-            and output.topic == input_endpoint.topic
+            _endpoints_compatible(output, input_endpoint)
             and output.role in {"produce", "call"}
             for output in output_endpoints
         ):

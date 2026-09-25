@@ -148,10 +148,10 @@ also carries a NetworkX-derived service subgraph and deterministic component
 order; the Flux view uses that snapshot instead of reconstructing the call
 sequence from display labels.
 Kafka publications are not expanded into cross-service persisted CodeFlow
-candidates. The HTML projection can nevertheless fuse a publication fragment
-with a consumer fragment when their rendered root, concrete topic and known
-message type agree; it unions the already-proven service branches without
-enumerating routes. A publication without an input trigger does not become a flow root. A
+candidates. The flow views can nevertheless follow a publication to every
+opposite-role endpoint with the same protocol and concrete topic/route, even
+when the endpoint's Java type is unknown or differs. A publication without an
+input trigger does not become a flow root. A
 publisher explicitly annotated with a cron expression still creates a local
 source flow whose first step is `cron_entry`, followed by its publication.
 Known message types must match when both endpoints provide one. Missing type
@@ -179,15 +179,10 @@ OUT-to-IN topology: a flow is a root when no persisted flow reaches its input
 endpoint. `flows show` uses the persisted endpoint snapshot to connect an OUT
 endpoint to downstream matching IN endpoints and emits that reachable forest
 as `tree`; cycles and repeated flow IDs are emitted only once.
-Before serialization, HTML export groups flows by their complete rendered
-flow-graph signature (nodes, directed arcs, protocol and resource labels).
-It also fuses a publication fragment with a consumer fragment when the
-rendered root, concrete topic and known message type agree. The fusion is a
-keyed union of the proven branches; it never enumerates producer/consumer
-combinations and does not modify index storage. One visible representative is
-chosen by root ownership, trigger kind, status, confidence, route length and
-stable source ordering. `equivalent_count` retains the number of persisted
-fragments represented by that card.
+Before serialization, HTML export keeps one entry per persisted flow, matching
+the CLI flow listing. Graph-arc deduplication remains inside each call graph;
+the export does not collapse equivalent persisted flows or fuse producer and
+consumer fragments into one visible card.
 
 Each persisted `CodeFlow` also carries a `reconciliation` status. `complete`
 means every endpoint step exists in the same snapshot and every cross-service

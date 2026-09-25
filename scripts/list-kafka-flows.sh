@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # List one row per module, input flow/type and output flow/type combination,
-# including the representative flow ID and its root status.
+# including the representative flow ID, root status and target modules.
 # Additional arguments are forwarded to `systemlens flows list`, for example:
 #   scripts/list-kafka-flows.sh --root /path/to/indexed-repository
 systemlens flows list "$@" --publishes-to-topic --json \
@@ -14,6 +14,7 @@ systemlens flows list "$@" --publishes-to-topic --json \
           .id,
           (.root | tostring),
           .module,
+          ((.target_modules // []) | join(",")),
           (.input_flow // "-"),
           (.input_java_type // "-"),
           (.output_flow // "-"),
