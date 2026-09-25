@@ -271,7 +271,7 @@
     });
 
     function showCodeFlow(flow) {
-      const globalCallGraph = graphData.all_flows_call_graph;
+      const globalCallGraph = flow.call_graph || graphData.all_flows_call_graph;
       const globalNodes = (globalCallGraph?.node_order || globalCallGraph?.nodes || [])
         .map(service => nodeIdForCodeFlowResource(service, "microservice"))
         .filter(Boolean);

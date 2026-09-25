@@ -47,12 +47,21 @@ source paths must wrap instead of widening the panel.
 Selecting a reconciled code flow records its persisted ID only in transient
 graph state. Node and edge reducers, HTML-card overlays, and port overlays use
 the exact endpoint and service sets derived from the flow evidence; selected
-nodes retain flow-specific highlighting. The selected flow graph includes every
-module owning one of its endpoint steps and every proven microservice output to
-input arc touching those ports. Fan-in, fan-out, cycles, and modules without a
-matching arc remain visible. The graph records the trigger event under its
-owning microservice. Topic names remain in the selected ports and tooltips but
-topic nodes are omitted. Service-to-service
+nodes retain flow-specific highlighting. The flow graph builds directed
+candidate arcs from persisted flow OUT ports, starts at trigger flows with no
+incoming flow arc, and follows those flows breadth-first. It adds reachable
+microservice output-to-input arcs
+and continues with the flow triggered by each target IN port, with expanded
+OUT-port and endpoint-pair guards for cycles and duplicates. Fan-in and
+fan-out remain visible, as do
+reachable modules without a matching arc. The graph records only HTTP, message,
+and cron trigger events under their owning microservices. Topic names remain in
+the selected ports and tooltips but topic nodes are omitted. If the candidate
+graph is cyclic and has no zero-indegree module, all flow modules are used as
+deterministic roots while preserving arc direction.
+The snapshot also exposes the breadth-first traversal levels and call tree that
+assign arc numbers before they are copied to the rendered call graph.
+Service-to-service
 interaction-graph edges
 use orthogonal straight-segment routes in the SVG overlay between their actual
 output and input port anchors. ELK.js supplies the positioned graph and the

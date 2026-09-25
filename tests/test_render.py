@@ -138,14 +138,11 @@ def test_global_input_label_references_its_local_output() -> None:
         )],
     ))
     flow_graph = data["code_flows"][0]["call_graph"]
-    assert flow_graph["node_order"] == ["orders", "payments", "inventory"]
+    assert flow_graph["node_order"] == ["payments", "inventory"]
     assert [
         (edge["source"], edge["target"], edge["kind"])
         for edge in flow_graph["edges"]
-    ] == [
-        ("orders", "payments", "kafka"),
-        ("payments", "inventory", "kafka"),
-    ]
+    ] == [("payments", "inventory", "kafka")]
 
     ports_by_id = {
         port["endpoint_id"]
@@ -299,10 +296,9 @@ def test_export_fuses_kafka_producer_and_consumer_fragments() -> None:
         code_flows=[scheduled, consumer_fragment],
     ))
 
-    assert len(data["code_flows"]) == 1
-    flow = data["code_flows"][0]
-    assert flow["module"] == "orders"
-    assert flow["equivalent_count"] == 2
+    assert len(data["code_flows"]) == 2
+    assert {flow["module"] for flow in data["code_flows"]} == {"orders", "inventory"}
+    flow = next(flow for flow in data["code_flows"] if flow["module"] == "orders")
     assert {
         (edge["source"], edge["target"])
         for edge in flow["call_graph"]["edges"]
@@ -363,11 +359,7 @@ def test_export_fusion_deduplicates_identical_inter_service_edges() -> None:
         code_flows=[scheduled, first_fragment, second_fragment],
     ))
 
-    edges = data["code_flows"][0]["call_graph"]["edges"]
-    assert sum(
-        edge["source"] == "orders" and edge["target"] == "inventory"
-        for edge in edges
-    ) == 1
+    edges = data["all_flows_call_graph"]["edges"]
     assert {
         (edge["source"], edge["target"])
         for edge in edges
@@ -393,9 +385,23 @@ def test_call_graph_keeps_all_fan_in_and_cycle_arcs() -> None:
             path="Payments.java", start_line=1, end_line=1,
             status="potential", confidence="medium", reason="test",
             steps=(CodeFlowStep(1, "message_entry", "orders.created", "Payments.java", 1, 1, consumer.id),),
+        ),
+        CodeFlow(
+            id="orders-flow", module="orders", method="Orders.publish",
+            path="Orders.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "cron_entry", "cron", "Orders.java", 1, 1),
+                   CodeFlowStep(2, "message_publish", "orders.created", "Orders.java", 2, 2, first_producer.id)),
+        ),
+        CodeFlow(
+            id="legacy-flow", module="legacy", method="LegacyOrders.publish",
+            path="LegacyOrders.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "cron_entry", "cron", "LegacyOrders.java", 1, 1),
+                   CodeFlowStep(2, "message_publish", "orders.created", "LegacyOrders.java", 2, 2, second_producer.id)),
         )],
     ))
-    flow_graph = data["code_flows"][0]["call_graph"]
+    flow_graph = data["all_flows_call_graph"]
     assert set(flow_graph["nodes"]) == {"orders", "legacy", "payments"}
     assert {
         (edge["source"], edge["target"])
@@ -407,6 +413,18 @@ def test_call_graph_keeps_all_fan_in_and_cycle_arcs() -> None:
             "kind": "message_entry",
             "name": "orders.created",
             "endpoint_id": "payments-in",
+        }],
+        "orders": [{
+            "flow_id": "orders-flow",
+            "kind": "cron_entry",
+            "name": "cron",
+            "endpoint_id": None,
+        }],
+        "legacy": [{
+            "flow_id": "legacy-flow",
+            "kind": "cron_entry",
+            "name": "cron",
+            "endpoint_id": None,
         }],
     }
 
@@ -742,7 +760,8 @@ def test_export_builds_one_call_graph_from_all_flows() -> None:
             id="orders-flow", module="orders", method="Orders.publish",
             path="Orders.java", start_line=1, end_line=1,
             status="potential", confidence="medium", reason="test",
-            steps=(CodeFlowStep(1, "message_publish", "orders.created", "Orders.java", 1, 1, producer.id),),
+            steps=(CodeFlowStep(1, "cron_entry", "cron", "Orders.java", 1, 1),
+                   CodeFlowStep(2, "message_publish", "orders.created", "Orders.java", 2, 2, producer.id)),
         ),
         CodeFlow(
             id="payments-flow", module="payments", method="Payments.consume",
@@ -774,7 +793,66 @@ def test_export_builds_one_call_graph_from_all_flows() -> None:
         for edge in graph["edges"]
     } == {("orders", "payments"), ("orders", "inventory")}
     assert len(graph["edges"]) == 2
+    assert graph["traversal_levels"] == [["orders"], ["payments", "inventory"]]
+    assert graph["call_tree"]["edges"] == [
+        {"source": "orders", "target": "payments", "order": 1},
+        {"source": "orders", "target": "inventory", "order": 2},
+    ]
+    assert [edge["order"] for edge in graph["edges"]] == [1, 2]
     assert set(graph["triggers"]) == {"orders", "payments", "inventory"}
+
+
+def test_untriggered_flow_remains_a_root_when_module_has_another_triggered_flow() -> None:
+    entry = replace(_kafka_endpoint("consume", "OrderCreated", "Orders.java"), id="orders-in")
+    producer = replace(_kafka_endpoint("produce", "PaymentCreated", "Orders.java"), id="orders-out")
+    target = replace(_kafka_endpoint("consume", "PaymentCreated", "Payments.java"), id="payments-in")
+    data = _html_graph_data(render_graph_html(
+        {"orders": [entry, producer], "payments": [target]},
+        [GraphEdge("kafka", "orders", "payments", producer, target)],
+        code_flows=[
+            CodeFlow(
+                id="triggered-orders-flow", module="orders", method="Orders.consume",
+                path="Orders.java", start_line=1, end_line=1,
+                status="potential", confidence="medium", reason="test",
+                steps=(CodeFlowStep(1, "message_entry", "orders.created", "Orders.java", 1, 1, entry.id),
+                       CodeFlowStep(2, "message_publish", "payment.created", "Orders.java", 2, 2, producer.id)),
+            ),
+            CodeFlow(
+                id="internal-orders-flow", module="orders", method="Orders.publish",
+                path="Orders.java", start_line=2, end_line=2,
+                status="potential", confidence="medium", reason="test",
+                steps=(CodeFlowStep(1, "message_publish", "payment.created", "Orders.java", 2, 2, producer.id),),
+            ),
+        ],
+    ))
+    assert {
+        (edge["source"], edge["target"])
+        for edge in data["all_flows_call_graph"]["edges"]
+    } == {("orders", "payments")}
+
+
+def test_call_graph_follows_only_arcs_outgoing_from_current_module() -> None:
+    orders_output = replace(_kafka_endpoint("produce", "OrderCreated", "Orders.java"), id="orders-out")
+    payments_input = replace(_kafka_endpoint("consume", "OrderCreated", "Payments.java"), id="payments-in")
+    data = _html_graph_data(render_graph_html(
+        {"orders": [orders_output], "payments": [payments_input]},
+        [
+            GraphEdge("kafka", "orders", "payments", orders_output, payments_input),
+            # The endpoint direction is deliberately inconsistent with the
+            # current module and must not create a reverse traversal.
+            GraphEdge("kafka", "payments", "orders", payments_input, orders_output),
+        ],
+        code_flows=[CodeFlow(
+            id="orders-flow", module="orders", method="Orders.publish",
+            path="Orders.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_publish", "orders.created", "Orders.java", 1, 1, orders_output.id),),
+        )],
+    ))
+    assert [
+        (edge["source"], edge["target"])
+        for edge in data["all_flows_call_graph"]["edges"]
+    ] == [("orders", "payments")]
 
 
 def test_graph_html_uses_only_indexed_kafka_dto_facts(tmp_path: Path) -> None:
@@ -1073,7 +1151,15 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'path.classList.add("graph-call-path")' in document
     assert 'if (link.kind === "kafka") arcLabel.classList.add("is-kafka");' in document
     assert 'title.textContent = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;' in document
-    assert 'arcLabel.textContent = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;' in document
+    assert 'arcLabel.textContent = String(link.order ?? index + 1);' in document
+    assert 'path.getPointAtLength(path.getTotalLength() / 2)' in document
+    assert 'renderEdgeLabels: true' in document
+    assert 'label: String(link.order)' in document
+    assert 'const order = link.order ? `Arc #${link.order} · ` : "";' in document
+    assert 'method.textContent = `Méthode : ${port?.method || "Méthode inconnue"}`;' in document
+    assert 'Méthode OUT :' in document
+    assert 'Méthode IN :' in document
+    assert 'arcLabel.setAttribute(' in document
     assert 'const addArcHitArea = path => {' in document
     assert 'hitArea.classList.add("graph-arc-hit-area");' in document
     assert ".graph-arc-hit-area { fill: none; stroke: transparent !important; stroke-width: 14px !important;" in document

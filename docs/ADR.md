@@ -711,20 +711,24 @@ reports how many persisted fragments the visible card represents.
 
 **Status:** Accepted.
 
-**Context:** A rendered flow graph that chooses one root and one parent per
-service hides proven fan-in, cycles, branches, and modules whose endpoint has
-no matching topology arc. The persisted flow and topology snapshots already
-contain enough evidence to keep these facts visible.
+**Context:** A rendered flow graph that aggregates every arc touching an
+endpoint can include unrelated topology and cannot establish where traversal
+starts. The persisted flow and topology snapshots contain enough evidence to
+follow internal outputs from source modules while retaining branches and
+cycles.
 
-**Decision:** For each persisted flow, scan all endpoint steps, add their owning
-modules, and retain every topology arc touching one of those endpoints when
-the arc connects a microservice output port to a microservice input port. Keep
-fan-in, fan-out, cycles, and isolated flow modules. Record the first flow step
-as a trigger under its owning microservice. Preserve endpoint identities on
-each rendered service arc.
+**Decision:** Build directed candidate arcs from flow-associated `call` or
+`produce` OUT ports to `serve` or `consume` IN ports. Treat trigger flows with
+no incoming flow arc as roots. After adding an arc, continue with the flow
+whose trigger is the target IN port and visit flows in breadth-first order.
+Preserve fan-in, fan-out, and cycles, and deduplicate by expanded OUT port
+plus protocol, topic, and endpoint pair. Record only external trigger steps
+under their owning microservice.
+Preserve endpoint identities on each rendered service arc.
 
-**Consequences:** The selected graph represents the complete source-backed
-service interaction evidence for the flow instead of a presentation tree. A
-cycle can prevent a topological order, so the exporter uses a deterministic
-node order for cyclic graphs. Missing topology arcs remain visible as isolated
-modules and do not create guessed service relations.
+**Consequences:** The graph represents reachable source-backed service
+interaction evidence rather than an arbitrary aggregation or presentation
+tree. A cycle can prevent a topological order, so the exporter uses a
+deterministic node order for cyclic graphs. If no trigger flow has zero
+indegree, all trigger flows are used as deterministic roots while preserving
+arc direction; missing topology arcs do not create guessed service relations.

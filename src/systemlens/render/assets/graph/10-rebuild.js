@@ -101,7 +101,7 @@
       const selectedFlow = callGraphOnly
         ? (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)
         : null;
-      const selectedCallGraph = graphData.all_flows_call_graph || selectedFlow?.call_graph;
+      const selectedCallGraph = selectedFlow?.call_graph || graphData.all_flows_call_graph;
       const selectedCallGraphPairs = new Set(
         (selectedCallGraph?.edges || []).map(edge => `${edge.source}->${edge.target}`)
       );
@@ -186,6 +186,7 @@
                 target: `microservice:${edge.target}`,
                 kind: edge.kind,
                 label: edge.label,
+                order: edge.order ?? index + 1,
                 endpoint_ids: edge.endpoint_ids || [],
               },
               index,
@@ -258,11 +259,35 @@
             ? node.kind : visualNodeKind(node) === "kafka_topic" || visualNodeKind(node) === "mongodb_collection"
               ? visualNodeKind(node) : "generic",
       }));
-      visibleLinks.forEach((link, index) => network.addEdgeWithKey(`edge-${index}`, link.source, link.target, {
-        label: link.label, size: .85, color: relationColor(link), kind: link.kind, type: "arrow",
-      }));
+      const globalArcOrders = new Map();
+      (graphData.all_flows_call_graph?.edges || []).forEach(edge => {
+        const key = `${edge.source}->${edge.target}|${edge.kind}|${edge.label || ""}`;
+        const orders = globalArcOrders.get(key) || [];
+        orders.push(edge.order);
+        globalArcOrders.set(key, orders);
+      });
+      let fallbackArcOrder = Math.max(
+        0,
+        ...(graphData.all_flows_call_graph?.edges || []).map(edge => Number(edge.order) || 0),
+      ) + 1;
+      const visibleArcOrder = link => {
+        const sourceName = nodeDataById.get(link.source)?.name || link.source;
+        const targetName = nodeDataById.get(link.target)?.name || link.target;
+        const key = `${sourceName}->${targetName}|${link.kind}|${link.label || ""}`;
+        const orders = globalArcOrders.get(key);
+        if (orders?.length) return orders.shift();
+        const nextOrder = fallbackArcOrder;
+        fallbackArcOrder += 1;
+        return nextOrder;
+      };
+      visibleLinks.forEach((link, index) => {
+        link.order = visibleArcOrder(link);
+        network.addEdgeWithKey(`edge-${index}`, link.source, link.target, {
+          label: String(link.order), size: .85, color: relationColor(link), kind: link.kind, type: "arrow",
+        });
+      });
       selectedCallGraphLinks.forEach(({ link, index, edgeKey }) => network.addEdgeWithKey(edgeKey || `edge-${index}`, link.source, link.target, {
-        label: link.label, size: 1.8, color: relationColor(link), kind: link.kind,
+        label: String(link.order ?? index + 1), size: 1.8, color: relationColor(link), kind: link.kind,
         type: "arrow",
       }));
       initialNodePositions = new Map();
@@ -289,7 +314,7 @@
         // selection feedback is rendered by the HTML card glow instead.
         enableNodeHoverEvents: true,
         hoverRenderer: () => {},
-        renderEdgeLabels: false, labelDensity: .06, labelGridCellSize: 160, labelRenderedSizeThreshold: 10,
+        renderEdgeLabels: true, labelDensity: .06, labelGridCellSize: 160, labelRenderedSizeThreshold: 10,
         // A drag can end close enough to a second click to trigger Sigma's
         // double-click zoom. Zoom remains available through the wheel and the
         // explicit controls, so disable this ambiguous gesture.
@@ -482,7 +507,7 @@
             );
             pathLabel.replaceChildren();
             pathLabel.classList.add("graph-mode-tree");
-            const callGraph = selectedFlow?.call_graph;
+            const callGraph = selectedCallGraph;
             const edgeList = (callGraph?.edges || []).filter(edge => edge.source !== edge.target);
             const graphNodes = [...new Set([
               ...(callGraph?.nodes || []),
@@ -575,7 +600,7 @@
           : null;
         const referencedCodeFlowPortIds = new Set([
           ...(selectedFlow?.steps || []).map(step => step.endpoint_id),
-          ...(selectedFlow?.call_graph?.edges || []).flatMap(edge => edge.endpoint_ids || []),
+          ...(selectedCallGraph?.edges || []).flatMap(edge => edge.endpoint_ids || []),
         ].filter(Boolean));
         network.forEachNode((id, attributes) => {
           if (
@@ -1521,7 +1546,8 @@
             title.textContent = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;
             const relation = document.createElement("span");
             relation.className = "graph-arc-tooltip-relation";
-            relation.textContent = `${link.kind === "kafka" ? "Kafka" : link.kind === "rest" ? "HTTP" : link.kind || "Relation"} · ${link.label || sourcePort?.name || targetPort?.name || "Endpoint"}`;
+            const order = link.order ? `Arc #${link.order} · ` : "";
+            relation.textContent = `${order}${link.kind === "kafka" ? "Kafka" : link.kind === "rest" ? "HTTP" : link.kind || "Relation"} · ${link.label || sourcePort?.name || targetPort?.name || "Endpoint"}`;
             tooltip.append(title, relation);
             const portBlock = (port, direction, serviceId) => {
               const block = document.createElement("span");
@@ -1530,7 +1556,9 @@
               heading.textContent = `Port ${direction} · ${shortPortLabel(port, direction === "OUT" ? "out" : "in")}`;
               const service = document.createElement("span");
               service.textContent = `Microservice : ${serviceId?.replace(/^microservice:/, "") || "inconnu"}`;
-              block.append(heading, service);
+              const method = document.createElement("span");
+              method.textContent = `Méthode : ${port?.method || "Méthode inconnue"}`;
+              block.append(heading, service, method);
               return block;
             };
             tooltip.append(
@@ -1614,10 +1642,14 @@
             const match = String(port?.label || "").match(direction === "out" ? /O\d+/ : /I\d+/);
             return match?.[0] || (direction === "out" ? "O?" : "I?");
           };
-          arcLabel.textContent = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;
-          const labelPoint = routed.points[Math.floor(routed.points.length / 2)] || routed.points[0];
-          arcLabel.setAttribute("x", String(labelPoint[0]));
-          arcLabel.setAttribute("y", String(labelPoint[1] - 8));
+          arcLabel.textContent = String(link.order ?? index + 1);
+          arcLabel.setAttribute(
+            "aria-label",
+            `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`,
+          );
+          const labelPoint = path.getPointAtLength(path.getTotalLength() / 2);
+          arcLabel.setAttribute("x", String(labelPoint.x));
+          arcLabel.setAttribute("y", String(labelPoint.y - 8));
           portPathOverlay.append(arcLabel);
           const hitArea = addArcHitArea(path);
           hitArea.addEventListener("pointerenter", () => {
@@ -1784,7 +1816,15 @@
         const title = document.createElement("strong");
         title.textContent = `${source?.name || link.source} → ${target?.name || link.target}`;
         tooltip.append(title);
-        addTooltipLine(tooltip, `${link.kind || "Relation"}${link.label ? ` · ${link.label}` : ""}`, "graph-edge-tooltip-kind");
+        addTooltipLine(tooltip, `Arc #${link.order || "?"} · ${link.kind || "Relation"}${link.label ? ` · ${link.label}` : ""}`, "graph-edge-tooltip-kind");
+        const sourcePort = (link.endpoint_ids || [])
+          .map(endpointId => portsByEndpointId.get(endpointId))
+          .find(port => port?.direction === "out");
+        const targetPort = (link.endpoint_ids || [])
+          .map(endpointId => portsByEndpointId.get(endpointId))
+          .find(port => port?.direction === "in");
+        if (sourcePort?.method) addTooltipLine(tooltip, `Méthode OUT : ${sourcePort.method}`, "graph-edge-tooltip-detail");
+        if (targetPort?.method) addTooltipLine(tooltip, `Méthode IN : ${targetPort.method}`, "graph-edge-tooltip-detail");
         if (link.message_type) addTooltipLine(tooltip, `Type : ${link.message_type}`);
         if (link.provenance) addTooltipLine(tooltip, `Preuve : ${link.provenance}`, "graph-edge-tooltip-detail");
         placeGraphTooltip(tooltip, document.getElementById("graph").getBoundingClientRect());

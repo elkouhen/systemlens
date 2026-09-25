@@ -49,13 +49,14 @@ def _networkx_call_graph(
     flows: list[CodeFlow],
     endpoints_by_service: dict[str, list[MessageEndpoint]],
     edges: list[GraphEdge],
+    root_flow_ids: set[str] | None = None,
 ) -> dict[str, object]:
-    """Build the complete port graph evidenced by all persisted flows.
+    """Build the port graph by following internal flow outputs.
 
-    Every flow supplies endpoint and module seeds. Every topology arc that
-    touches those seeds is retained, including fan-in, fan-out and cycles. The
-    graph is not reduced to a rooted tree because that would discard proven
-    modules and port arcs.
+    Candidate arcs are built from flow-associated OUT ports. Traversal starts
+    at trigger flows and follows each OUT-to-IN arc to the flow triggered by
+    its target IN port. This keeps fan-in, fan-out and cycles while avoiding
+    unrelated flows.
     """
     endpoint_by_id = {
         endpoint.id: endpoint
@@ -68,24 +69,36 @@ def _networkx_call_graph(
         for endpoint in service_endpoints
     }
     graph = nx.MultiDiGraph()
+    traversal_tree = nx.MultiDiGraph()
     seen_relation_keys: set[tuple[str, str, str, str | None]] = set()
-    endpoint_steps = [
-        step.endpoint_id for flow in flows for step in flow.steps
-        if step.endpoint_id in endpoint_by_id
-    ]
-    flow_endpoint_ids = set(endpoint_steps)
+    trigger_kinds = {"http_entry", "message_entry", "cron_entry"}
+    flow_by_id = {flow.id: flow for flow in flows}
+    output_endpoint_ids_by_flow: dict[str, set[str]] = {}
+    output_order_by_endpoint: dict[str, tuple[int, int]] = {}
+    for flow_index, flow in enumerate(flows):
+        if not flow.module:
+            continue
+        for step in flow.steps:
+            if not step.endpoint_id:
+                continue
+            endpoint = endpoint_by_id.get(step.endpoint_id)
+            if endpoint and endpoint.role in {"call", "produce"}:
+                output_endpoint_ids_by_flow.setdefault(flow.id, set()).add(endpoint.id)
+                output_order_by_endpoint.setdefault(
+                    endpoint.id, (flow_index, step.order)
+                )
 
-    def add_relation(edge: GraphEdge) -> None:
+    def add_relation(edge: GraphEdge) -> tuple[str, str, str, str | None] | None:
         source_id = edge.from_endpoint.id
         target_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
         source_service = service_by_endpoint.get(source_id)
         target_service = service_by_endpoint.get(target_id) if target_id else None
         if not source_service or not target_service or source_service == target_service:
-            return
+            return None
         label = edge.from_endpoint.topic
         key = (edge.kind, label, source_id, target_id)
         if key in seen_relation_keys:
-            return
+            return None
         seen_relation_keys.add(key)
         graph.add_edge(
             source_service,
@@ -95,39 +108,115 @@ def _networkx_call_graph(
             label=label,
             endpoint_ids=[source_id, target_id],
         )
+        return key
 
-    # Include every service owning a flow endpoint, including a module that
-    # has no matching topology arc in the current snapshot.
-    for endpoint_id in endpoint_steps:
-        graph.add_node(service_by_endpoint[endpoint_id])
-    for flow in flows:
-        if flow.module:
-            graph.add_node(flow.module)
-
-    # A topology arc is relevant when either port is part of the persisted
-    # flow. This retains all proven incoming and outgoing branches around the
-    # flow instead of selecting only consecutive endpoint pairs.
+    edges_by_output: dict[str, list[GraphEdge]] = {}
     for edge in edges:
-        source_id = edge.from_endpoint.id
-        target_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
         source_role = (edge.from_endpoint.system, edge.from_endpoint.role)
         target_role = (
             (edge.to_endpoint.system, edge.to_endpoint.role)
             if edge.to_endpoint is not None else None
         )
         if (
-            (source_id in flow_endpoint_ids or target_id in flow_endpoint_ids)
-            and source_role in {("rest", "call"), ("kafka", "produce")}
+            source_role in {("rest", "call"), ("kafka", "produce")}
             and target_role in {("rest", "serve"), ("kafka", "consume")}
         ):
-            add_relation(edge)
+            edges_by_output.setdefault(edge.from_endpoint.id, []).append(edge)
+
+    trigger_flow_ids_by_endpoint: dict[str, list[str]] = {}
+    trigger_flow_ids: set[str] = set()
+    for flow in flows:
+        if not flow.steps or flow.steps[0].kind not in trigger_kinds:
+            continue
+        trigger_flow_ids.add(flow.id)
+        endpoint_id = flow.steps[0].endpoint_id
+        if endpoint_id:
+            trigger_flow_ids_by_endpoint.setdefault(endpoint_id, []).append(flow.id)
+
+    incoming_flow_ids = {
+        target_flow_id
+        for output_endpoint_ids in output_endpoint_ids_by_flow.values()
+        for endpoint_id in output_endpoint_ids
+        for edge in edges_by_output.get(endpoint_id, [])
+        for target_flow_id in trigger_flow_ids_by_endpoint.get(
+            edge.to_endpoint.id if edge.to_endpoint is not None else "", []
+        )
+    }
+    default_root_flow_ids = trigger_flow_ids - incoming_flow_ids
+    frontier = sorted(
+        root_flow_ids if root_flow_ids is not None else default_root_flow_ids
+    )
+    if not frontier:
+        # A cycle without an external trigger has no natural flow root.
+        frontier = sorted(root_flow_ids or trigger_flow_ids or flow_by_id)
+    traversal_levels: list[list[str]] = []
+    expanded_output_ids: set[str] = set()
+    while frontier:
+        traversal_levels.append([
+            flow_by_id[flow_id].module
+            for flow_id in frontier
+            if flow_id in flow_by_id and flow_by_id[flow_id].module
+        ])
+        next_frontier: list[str] = []
+        next_frontier_set: set[str] = set()
+        for flow_id in frontier:
+            current_flow = flow_by_id.get(flow_id)
+            if current_flow is None or not current_flow.module:
+                continue
+            module = current_flow.module
+            graph.add_node(module)
+            for endpoint_id in sorted(
+                output_endpoint_ids_by_flow.get(flow_id, set()),
+                key=lambda endpoint_id: (output_order_by_endpoint[endpoint_id], endpoint_id),
+            ):
+                if endpoint_id in expanded_output_ids:
+                    continue
+                expanded_output_ids.add(endpoint_id)
+                if service_by_endpoint.get(endpoint_id) != module:
+                    continue
+                for edge in edges_by_output.get(endpoint_id, []):
+                    target_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
+                    target_module = service_by_endpoint.get(target_id) if target_id else None
+                    if not target_module or target_module == module:
+                        continue
+                    graph_edge_key = add_relation(edge)
+                    if graph_edge_key is None:
+                        continue
+                    traversal_tree.add_edge(
+                        module,
+                        target_module,
+                        key=graph_edge_key,
+                        graph_edge_key=graph_edge_key,
+                    )
+                    for target_flow_id in (
+                        trigger_flow_ids_by_endpoint.get(target_id, [])
+                        if target_id else []
+                    ):
+                        if target_flow_id not in next_frontier_set:
+                            next_frontier.append(target_flow_id)
+                            next_frontier_set.add(target_flow_id)
+        frontier = next_frontier
+
+    # The tree/forest is the source of truth for numbering. It is traversed
+    # level by level, then its labels are copied to the corresponding graph
+    # arcs. This keeps the final graph complete without making its topology
+    # responsible for traversal order.
+    next_edge_order = 1
+    for level in traversal_levels:
+        for module in level:
+            for _source, _target, tree_key, tree_data in traversal_tree.out_edges(
+                module, keys=True, data=True
+            ):
+                graph_edge_key = tree_data["graph_edge_key"]
+                graph.edges[module, _target, graph_edge_key]["order"] = next_edge_order
+                traversal_tree.edges[module, _target, tree_key]["order"] = next_edge_order
+                next_edge_order += 1
 
     triggers: dict[str, list[dict[str, object]]] = {}
     for flow in flows:
-        if flow.steps:
-            trigger = flow.steps[0]
-        else:
+        if not flow.steps or flow.steps[0].kind not in trigger_kinds:
             continue
+        trigger = flow.steps[0]
         trigger_service = (
             service_by_endpoint.get(trigger.endpoint_id)
             if trigger.endpoint_id else flow.module
@@ -147,17 +236,32 @@ def _networkx_call_graph(
     return {
         "nodes": sorted(graph.nodes),
         "node_order": component_order,
+        "traversal_levels": traversal_levels,
+        "call_tree": {
+            "levels": traversal_levels,
+            "edges": [
+                {
+                    "source": source,
+                    "target": target,
+                    "order": int(data["order"]),
+                }
+                for source, target, _key, data in traversal_tree.edges(
+                    keys=True, data=True
+                )
+            ],
+        },
         "edges": [
             {
                 "source": source,
                 "target": target,
                 "kind": str(data.get("kind", "")),
                 "label": str(data.get("label", "")),
+                "order": int(data.get("order", 0)),
                 "endpoint_ids": list(data.get("endpoint_ids", [])),
             }
             for source, target, _key, data in sorted(
                 graph.edges(keys=True, data=True),
-                key=lambda item: (item[0], item[1], str(item[2])),
+                key=lambda item: int(item[3].get("order", 0)),
             )
         ],
         "triggers": triggers,
@@ -182,7 +286,9 @@ def _distinct_export_flows(
         list[tuple[CodeFlow, dict[str, object]]],
     ] = {}
     for flow in flows:
-        call_graph = _networkx_call_graph([flow], endpoints_by_service, edges)
+        call_graph = _networkx_call_graph(
+            flows, endpoints_by_service, edges, root_flow_ids={flow.id}
+        )
         graph_nodes = cast(list[str], call_graph["nodes"])
         graph_edges = cast(list[dict[str, str]], call_graph["edges"])
         signature: tuple[tuple[str, ...], tuple[tuple[str, str, str, str], ...]] = (
@@ -257,6 +363,7 @@ def _distinct_export_flows(
         root = cast(list[str], items[0][1]["node_order"])[0]
         graph = nx.MultiDiGraph()
         seen_edges: set[tuple[object, ...]] = set()
+        next_edge_order = 1
         for _flow, call_graph, _count in items:
             graph.add_nodes_from(cast(list[str], call_graph["nodes"]))
             for edge in cast(list[dict[str, object]], call_graph["edges"]):
@@ -268,9 +375,13 @@ def _distinct_export_flows(
                 if edge_key in seen_edges:
                     continue
                 seen_edges.add(edge_key)
+                source = str(edge["source"])
+                edge_order = next_edge_order
+                next_edge_order += 1
                 graph.add_edge(
                     edge["source"], edge["target"],
                     kind=edge["kind"], label=edge["label"],
+                    order=edge_order,
                     endpoint_ids=list(endpoint_ids),
                 )
         tree = nx.MultiDiGraph()
@@ -298,11 +409,12 @@ def _distinct_export_flows(
                     "target": target,
                     "kind": str(data.get("kind", "")),
                     "label": str(data.get("label", "")),
+                    "order": int(data.get("order", 0)),
                     "endpoint_ids": list(cast(list[object], data.get("endpoint_ids", []))),
                 }
                 for source, target, _key, data in sorted(
                     tree.edges(keys=True, data=True),
-                    key=lambda item: (item[0], item[1], str(item[2])),
+                    key=lambda item: int(item[3].get("order", 0)),
                 )
             ],
         }

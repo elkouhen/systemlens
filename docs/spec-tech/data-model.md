@@ -157,14 +157,23 @@ source flow whose first step is `cron_entry`, followed by its publication.
 Known message types must match when both endpoints provide one. Missing type
 evidence does not prevent the topology relation, while conflicting known types
 prevent it.
-The exported flow-graph projection scans every endpoint step in the persisted
-flow, adds its owning modules, then retains every topology arc whose input or
-output port belongs to that flow. Arcs are accepted only when they connect a
-microservice output port to a microservice input port. Fan-in, fan-out, cycles,
-and modules without a matching topology arc remain visible. The graph also
-records the flow's trigger event under the owning microservice. The browser
-receives these canonical service arcs with their endpoint identities and does
-not reconstruct a second set from display labels.
+The exported flow-graph projection builds directed candidate arcs from the
+flow-associated OUT ports, identifies trigger flows with no incoming flow
+arc as roots, and traverses those flows in breadth-first order. A trigger is only
+an `http_entry`, `message_entry`, or `cron_entry` first step; a publication or
+HTTP call is an internal output. For each visited module, the traversal follows
+only its flow-associated OUT ports and valid output-to-input topology arcs,
+then visits the flow whose trigger is the target IN port.
+Expanded OUT ports and endpoint pairs prevent duplicate work and terminate
+cycles without suppressing a module reached again through another branch.
+Fan-in, fan-out, and reachable modules without a matching arc remain visible.
+If the candidate graph is cyclic and has no zero-indegree module, all flow
+modules are used as deterministic roots while preserving arc direction.
+The snapshot retains the traversal levels and call tree used to assign arc
+orders before copying those orders onto the final call graph.
+The graph records external trigger events under their owning microservices.
+The browser receives these canonical service arcs with their endpoint identities
+and does not reconstruct a second set from display labels.
 Before serialization, HTML export groups flows by their complete rendered
 flow-graph signature (nodes, directed arcs, protocol and resource labels).
 It also fuses a publication fragment with a consumer fragment when the
