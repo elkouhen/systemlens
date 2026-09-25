@@ -960,7 +960,8 @@ def flows_show(
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Show the steps and evidence for one potential code flow."""
-    item = show_code_flow(_load_code_flows(root), flow)
+    inventory = _load_flow_inventory(root)
+    item = show_code_flow(inventory.code_flows, flow, inventory.endpoints)
     if item is None:
         typer.echo(f"Flow not found or ambiguous: {flow}", err=True)
         raise typer.Exit(code=2)

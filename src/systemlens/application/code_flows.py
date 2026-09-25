@@ -36,6 +36,7 @@ def code_flow_summary(
         "output_flow": output_endpoint.topic if output_endpoint else None,
         "output_java_type": output_endpoint.message_type if output_endpoint else None,
         "method": flow.method,
+        "root": _is_root_flow(flow),
         "trigger": {"kind": flow.steps[0].kind, "name": flow.steps[0].name},
         "input_topic": input_topics[0] if input_topics else None,
         "output_topics": output_topics,
@@ -47,6 +48,17 @@ def code_flow_summary(
     }
 
 
+def _is_root_flow(flow: CodeFlow) -> bool:
+    """Return whether a flow starts at an external trigger.
+
+    Kafka consumer flows are continuation flows in the persisted flow model;
+    HTTP and scheduled entries are external triggers. Keeping this derived
+    avoids changing the SQLite schema while making the distinction explicit in
+    read-only exports.
+    """
+    return bool(flow.steps) and flow.steps[0].kind != "message_entry"
+
+
 def list_code_flows(
     flows: list[CodeFlow],
     endpoints: list[MessageEndpoint] | None = None,
@@ -54,13 +66,98 @@ def list_code_flows(
     publishes_to_topic: bool = False,
 ) -> list[dict[str, object]]:
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints or []}
+    root_ids = _flow_root_ids(flows, endpoint_by_id)
     items = [code_flow_summary(flow, endpoint_by_id) for flow in flows]
+    for flow, item in zip(flows, items, strict=True):
+        item["root"] = flow.id in root_ids
     if publishes_to_topic:
         items = [item for item in items if item["output_topics"]]
     return items
 
 
-def show_code_flow(flows: list[CodeFlow], flow_id: str) -> dict[str, object] | None:
+def _flow_children(
+    flow: CodeFlow,
+    flows: list[CodeFlow],
+    endpoints: dict[str, MessageEndpoint],
+) -> list[CodeFlow]:
+    output_ids = {
+        step.endpoint_id
+        for step in flow.steps
+        if step.endpoint_id and step.kind in {"http_call", "message_publish"}
+    }
+    output_endpoints = [
+        endpoints[endpoint_id] for endpoint_id in output_ids if endpoint_id in endpoints
+    ]
+    children: list[CodeFlow] = []
+    for candidate in flows:
+        if candidate.id == flow.id or not candidate.steps:
+            continue
+        first_step = candidate.steps[0]
+        if first_step.kind not in {"http_entry", "message_entry"} or not first_step.endpoint_id:
+            continue
+        input_endpoint = endpoints.get(first_step.endpoint_id)
+        if input_endpoint is None:
+            continue
+        if any(
+            output.system == input_endpoint.system
+            and output.topic == input_endpoint.topic
+            and output.role in {"produce", "call"}
+            for output in output_endpoints
+        ):
+            children.append(candidate)
+    return sorted(
+        children,
+        key=lambda item: (item.module, item.path, item.start_line, item.id),
+    )
+
+
+def _flow_root_ids(
+    flows: list[CodeFlow], endpoints: dict[str, MessageEndpoint]
+) -> set[str]:
+    incoming = {
+        child.id
+        for flow in flows
+        for child in _flow_children(flow, flows, endpoints)
+    }
+    return {flow.id for flow in flows if flow.id not in incoming}
+
+
+def _flow_tree(
+    flow: CodeFlow,
+    flows: list[CodeFlow],
+    endpoints: dict[str, MessageEndpoint],
+    root_ids: set[str],
+    visited: set[str] | None = None,
+) -> dict[str, object]:
+    visited = set() if visited is None else visited
+    visited.add(flow.id)
+    children = []
+    for child in _flow_children(flow, flows, endpoints):
+        if child.id in visited:
+            continue
+        children.append(_flow_tree(child, flows, endpoints, root_ids, visited))
+    return {
+        "id": flow.id,
+        "module": flow.module,
+        "method": flow.method,
+        "root": flow.id in root_ids,
+        "trigger": (
+            {
+                "kind": flow.steps[0].kind,
+                "name": flow.steps[0].name,
+            }
+            if flow.steps
+            else None
+        ),
+        "children": children,
+    }
+
+
+def show_code_flow(
+    flows: list[CodeFlow],
+    flow_id: str,
+    endpoints: list[MessageEndpoint] | None = None,
+) -> dict[str, object] | None:
     matches = [flow for flow in flows if flow.id == flow_id]
     if not matches:
         folded = flow_id.casefold()
@@ -71,7 +168,12 @@ def show_code_flow(flows: list[CodeFlow], flow_id: str) -> dict[str, object] | N
         ]
     if len(matches) != 1:
         return None
-    return asdict(matches[0])
+    item = asdict(matches[0])
+    endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints or []}
+    root_ids = _flow_root_ids(flows, endpoint_by_id)
+    item["root"] = matches[0].id in root_ids
+    item["tree"] = _flow_tree(matches[0], flows, endpoint_by_id, root_ids)
+    return item
 
 
 def render_code_flows_text(items: list[dict[str, object]]) -> str:
@@ -105,7 +207,8 @@ def render_code_flow_text(item: dict[str, object]) -> str:
     steps = item["steps"]
     assert isinstance(steps, tuple | list)
     lines = [
-        f"Potential code flow {item['id']}",
+        f"Potential code flow {item['id']}  "
+        f"root={str(item.get('root', False)).lower()}",
         f"Method: {item['method']}",
         f"Confidence: {item['confidence']} — {item['reason']}",
         f"Topology reconciliation: {item['reconciliation']}",
@@ -116,4 +219,31 @@ def render_code_flow_text(item: dict[str, object]) -> str:
             f"  {step['order']}. {step['kind']} {step['name']} "
             f"({step['path']}:{step['start_line']})"
         )
+    tree = item.get("tree")
+    if isinstance(tree, dict):
+        lines.append("Call tree:")
+        _render_flow_tree_text(tree, lines)
     return "\n".join(lines)
+
+
+def _render_flow_tree_text(
+    tree: dict[str, object], lines: list[str], prefix: str = "", branch: str = ""
+) -> None:
+    trigger = tree.get("trigger")
+    trigger_text = ""
+    if isinstance(trigger, dict):
+        trigger_text = f" [{trigger.get('kind')}: {trigger.get('name')}]"
+    root_text = " root" if tree.get("root") else ""
+    lines.append(
+        f"{prefix}{branch}{tree['id']}  "
+        f"{tree['module']}::{tree['method']}{root_text}{trigger_text}"
+    )
+    children = tree.get("children")
+    if not isinstance(children, list):
+        return
+    child_prefix = prefix if not branch else prefix + ("    " if branch == "└── " else "│   ")
+    for index, child in enumerate(children):
+        if not isinstance(child, dict):
+            continue
+        child_branch = "└── " if index == len(children) - 1 else "├── "
+        _render_flow_tree_text(child, lines, child_prefix, child_branch)

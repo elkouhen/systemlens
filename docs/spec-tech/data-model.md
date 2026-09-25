@@ -174,6 +174,11 @@ orders before copying those orders onto the final call graph.
 The graph records external trigger events under their owning microservices.
 The browser receives these canonical service arcs with their endpoint identities
 and does not reconstruct a second set from display labels.
+The `flows list` query derives a read-only `root` boolean from the same
+OUT-to-IN topology: a flow is a root when no persisted flow reaches its input
+endpoint. `flows show` uses the persisted endpoint snapshot to connect an OUT
+endpoint to downstream matching IN endpoints and emits that reachable forest
+as `tree`; cycles and repeated flow IDs are emitted only once.
 Before serialization, HTML export groups flows by their complete rendered
 flow-graph signature (nodes, directed arcs, protocol and resource labels).
 It also fuses a publication fragment with a consumer fragment when the

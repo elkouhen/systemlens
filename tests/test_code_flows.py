@@ -8,7 +8,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from systemlens import cli
-from systemlens.application.code_flows import list_code_flows
+from systemlens.application.code_flows import list_code_flows, render_code_flow_text, show_code_flow
 from systemlens.delivery.cli import app
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.domain.graph import GraphEdge
@@ -421,7 +421,36 @@ def test_flows_list_can_filter_kafka_publications_and_exposes_flow_types() -> No
     assert all_items[0]["input_java_type"] == "OrderIn"
     assert all_items[0]["output_flow"] == "orders.out"
     assert all_items[0]["output_java_type"] == "OrderOut"
+    assert all_items[0]["root"] is True
+    assert all_items[1]["root"] is True
     assert [item["id"] for item in kafka_items] == ["kafka-flow"]
+
+
+def test_flow_show_renders_downstream_tree() -> None:
+    producer = _endpoint("out", "produce", "kafka", "orders.out", "Orders.java", 4)
+    consumer = _endpoint("in2", "consume", "kafka", "orders.out", "Payments.java", 1)
+    root = CodeFlow(
+        id="root-flow", module="orders", method="Orders.publish", path="Orders.java",
+        start_line=1, end_line=4, status="potential", confidence="medium", reason="test",
+        steps=(
+            CodeFlowStep(1, "cron_entry", "cron", "Orders.java", 1, 1),
+            CodeFlowStep(2, "message_publish", "orders.out", "Orders.java", 4, 4, "out"),
+        ),
+    )
+    child = CodeFlow(
+        id="child-flow", module="payments", method="Payments.consume", path="Payments.java",
+        start_line=1, end_line=1, status="potential", confidence="medium", reason="test",
+        steps=(CodeFlowStep(1, "message_entry", "orders.out", "Payments.java", 1, 1, "in2"),),
+    )
+
+    item = show_code_flow([root, child], "root-flow", [producer, consumer])
+
+    assert item is not None
+    assert item["root"] is True
+    assert item["tree"]["children"][0]["id"] == "child-flow"
+    text = render_code_flow_text(item)
+    assert "Call tree:" in text
+    assert "└── child-flow" in text
 
 
 def test_flow_deduplication_keeps_distinct_java_types() -> None:

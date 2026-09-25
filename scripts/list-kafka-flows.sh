@@ -10,6 +10,7 @@ systemlens flows list "$@" --publishes-to-topic --json \
       unique_by([.module, .input_flow, .input_java_type, .output_flow, .output_java_type])
       | .[]
       | [
+          .id,
           .module,
           (.input_flow // "-"),
           (.input_java_type // "-"),
