@@ -78,7 +78,7 @@
     }
 
     function compareCodeFlows(left, right) {
-      return codeFlowPriority(right) - codeFlowPriority(left)
+      return codeFlowPriority(left) - codeFlowPriority(right)
         || serviceIdsForCodeFlow(right).size - serviceIdsForCodeFlow(left).size
         || callGraphArcCount(right) - callGraphArcCount(left)
         || (right.steps?.length || 0) - (left.steps?.length || 0)
