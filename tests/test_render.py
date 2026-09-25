@@ -746,9 +746,8 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "graphData.all_flows_call_graph" in document
     assert "serviceIdsForCodeFlow(right).size - serviceIdsForCodeFlow(left).size" in document
     assert "callGraphArcCount(right) - callGraphArcCount(left)" in document
-    assert 'servicesLabel.textContent = "Services traversés"' in document
-    assert 'serviceList.className = "code-flow-service-list"' in document
-    assert 'unresolved.textContent = "Non résolus dans le graphe"' in document
+    assert 'function codeFlowStats(flow)' in document
+    assert 'className = "code-flow-stats"' in document
     assert "return serviceIdsForCodeFlow(flow).size >= 2;" in document
     assert "Keep a partially reconciled interprocedural flow selectable" in document
     assert 'id="code-flow-scope"' in document
@@ -1148,7 +1147,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`' in document
     assert 'meta.textContent = flow.module;' in document
     assert 'javaMethod.textContent = `Méthode Java : ${flow.method}`' not in document
-    assert 'item.append(header, meta, summary, badges);' in document
+    assert 'function codeFlowStats(flow)' in document
+    assert 'className = "code-flow-stats"' in document
+    assert 'className = "code-flow-stat"' in document
+    assert 'item.append(header, meta, stats, badges);' in document
     assert 'id="code-flow-confidence"' in document
     assert 'id="code-flow-kind"' in document
     assert 'id="code-flow-message-type"' in document
@@ -1175,6 +1177,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'const sourceAnchor = (link.endpoint_ids || [])' in document
     assert 'orthogonalPath(' in document
     assert 'const selectedCallGraphLinks = callGraphOnly' in document
+    assert 'order: order + 1' in document
+    assert 'leftOrder - rightOrder || left.index - right.index' in document
     assert 'const directKafkaLink = (topic, source, target)' in document
     assert "Keeping Sigma's straight edge underneath would draw" in document
     assert 'path.classList.add("graph-call-path")' in document

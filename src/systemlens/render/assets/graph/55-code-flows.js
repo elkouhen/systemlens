@@ -65,15 +65,14 @@
       return protocols;
     }
 
-    function codeFlowSummary(flow) {
-      const services = servicesForCodeFlow(flow);
-      const serviceText = services.length
-        ? `${services[0]}${services.length > 1 ? ` → ${services.slice(1).join(" → ")}` : ""}`
-        : flow.module;
-      const effects = (flow.steps || []).filter(step => ["message_publish", "http_call", "data_write"].includes(step.kind)).length;
-      const confidence = codeFlowConfidenceLabel(flow.confidence);
-      const alternatives = Math.max(1, Number(flow.alternative_count || 1));
-      return `${serviceText} · ${services.length} service${services.length > 1 ? "s" : ""} · ${effects} effet${effects > 1 ? "s" : ""} · confiance ${confidence}${alternatives > 1 ? ` · ${alternatives} routes alternatives` : ""}`;
+    function codeFlowStats(flow) {
+      const steps = flow.steps || [];
+      return [
+        ["Microservices", servicesForCodeFlow(flow).length],
+        ["Appels", callGraphArcCount(flow)],
+        ["Étapes", steps.length],
+        ["Effets", steps.filter(step => ["message_publish", "http_call", "data_write"].includes(step.kind)).length],
+      ];
     }
 
     function compareCodeFlows(left, right) {
@@ -419,9 +418,14 @@
       const meta = document.createElement("div");
       meta.className = "reference-meta";
       meta.textContent = flow.module;
-      const summary = document.createElement("p");
-      summary.className = "code-flow-summary";
-      summary.textContent = codeFlowSummary(flow);
+      const stats = document.createElement("div");
+      stats.className = "code-flow-stats";
+      codeFlowStats(flow).forEach(([label, value]) => {
+        const stat = document.createElement("span");
+        stat.className = "code-flow-stat";
+        stat.innerHTML = `<strong>${value}</strong><small>${label}</small>`;
+        stats.append(stat);
+      });
       const badges = document.createElement("div");
       badges.className = "code-flow-badges";
       [[`Confiance ${codeFlowConfidenceLabel(flow.confidence)}`, `is-confidence-${flow.confidence || "unknown"}`],
@@ -433,27 +437,6 @@
         badge.textContent = text;
         badges.append(badge);
       });
-      const servicesSection = document.createElement("div");
-      servicesSection.className = "code-flow-services";
-      const servicesLabel = document.createElement("div");
-      servicesLabel.className = "code-flow-services-label";
-      servicesLabel.textContent = "Services traversés";
-      const serviceNames = servicesForCodeFlow(flow);
-      if (serviceNames.length) {
-        const serviceList = document.createElement("ol");
-        serviceList.className = "code-flow-service-list";
-        serviceNames.forEach(serviceName => {
-          const serviceItem = document.createElement("li");
-          serviceItem.textContent = serviceName;
-          serviceList.append(serviceItem);
-        });
-        servicesSection.append(servicesLabel, serviceList);
-      } else {
-        const unresolved = document.createElement("div");
-        unresolved.className = "code-flow-services-unresolved";
-        unresolved.textContent = "Non résolus dans le graphe";
-        servicesSection.append(servicesLabel, unresolved);
-      }
       if (path) {
         item.tabIndex = 0;
         item.title = flow.reconciliation === "partial"
@@ -472,8 +455,7 @@
           ? "Flux détecté ; le chemin complet ne peut pas être rapproché de la topologie affichée"
           : "Flux détecté ; le chemin n’est pas disponible dans la topologie affichée";
       }
-      item.append(header, meta, summary, badges);
-      item.append(servicesSection);
+      item.append(header, meta, stats, badges);
       return item;
     }
 

@@ -138,6 +138,10 @@
     .code-flow-collapse:hover { border-color: #475569 !important; background: #e2e8f0 !important; }
     #flows-panel.is-code-flow-collapsed .references-section { display: none; }
     .code-flow-summary { margin: 0; color: var(--ui-muted); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
+    .code-flow-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+    .code-flow-stat { display: grid; gap: 1px; min-width: 0; padding: 4px 5px; border: 1px solid var(--ui-border); border-radius: 5px; color: var(--ui-muted); background: var(--ui-control); text-align: center; }
+    .code-flow-stat strong { color: var(--ui-title); font-size: 13px; line-height: 1; }
+    .code-flow-stat small { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
     .code-flow-badges .is-warning { color: #9a3412; border-color: #fdba74; background: #fff7ed; }
     .code-flow-badges .is-complete { color: #166534; border-color: #86efac; background: #f0fdf4; }
     .code-flow-badges .is-protocol { color: #4338ca; border-color: #c4b5fd; background: #eef2ff; }
