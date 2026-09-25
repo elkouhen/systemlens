@@ -97,6 +97,9 @@ class MessageEndpoint:
     # statiquement. Les manifestes et appels sans signature exploitable restent
     # à `None`.
     message_type: str | None = None
+    # Libellé source conservé pour l'affichage lorsque `topic` est normalisé
+    # par une convention d'indexation, notamment Strategy1.
+    topic_display: str | None = None
 
 
 @dataclass(frozen=True)

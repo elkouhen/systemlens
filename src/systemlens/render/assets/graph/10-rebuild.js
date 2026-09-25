@@ -354,21 +354,56 @@
         if (node.kind === "message_channel") return "kafka_topic";
         return node.kind;
       };
-      const placeGraphTooltip = (tooltip, bounds, clientX = bounds.left + bounds.width / 2) => {
+      const placeGraphTooltip = (
+        tooltip,
+        bounds,
+        clientX = bounds.left + bounds.width / 2,
+        clientY = bounds.bottom,
+      ) => {
         flowTooltipOverlay.replaceChildren(tooltip);
         const tooltipBounds = tooltip.getBoundingClientRect();
         const left = Math.max(8, Math.min(window.innerWidth - tooltipBounds.width - 8, clientX - tooltipBounds.width / 2));
-        const below = bounds.bottom + tooltipBounds.height + 10 <= window.innerHeight;
+        const below = clientY + tooltipBounds.height + 10 <= window.innerHeight;
         tooltip.dataset.placement = below ? "bottom" : "top";
         tooltip.style.setProperty("--tooltip-arrow-left", `${Math.max(10, Math.min(tooltipBounds.width - 10, clientX - left))}px`);
         tooltip.style.left = `${left}px`;
-        tooltip.style.top = `${below ? bounds.bottom + 10 : Math.max(8, bounds.top - tooltipBounds.height - 10)}px`;
+        tooltip.style.top = `${below ? clientY + 10 : Math.max(8, clientY - tooltipBounds.height - 10)}px`;
       };
       const addTooltipLine = (tooltip, text, className = "") => {
         const line = document.createElement("span");
         if (className) line.className = className;
         line.textContent = text;
         tooltip.append(line);
+      };
+      const showDependencyTooltip = (link, clientX, clientY) => {
+        const source = nodeDataById.get(link.source);
+        const target = nodeDataById.get(link.target);
+        const tooltip = document.createElement("span");
+        tooltip.className = "graph-edge-tooltip";
+        const sourceIsTopic = ["kafka_topic", "message_channel"].includes(source?.kind);
+        const targetIsTopic = ["kafka_topic", "message_channel"].includes(target?.kind);
+        if (sourceIsTopic !== targetIsTopic) {
+          const topic = sourceIsTopic ? source : target;
+          const service = sourceIsTopic ? target : source;
+          const action = sourceIsTopic ? "Consomme" : "Publie";
+          const title = document.createElement("strong");
+          title.textContent = topic?.name || "Topic inconnu";
+          tooltip.append(title);
+          addTooltipLine(tooltip, `Microservice : ${service?.name || "inconnu"} · ${action}`, "graph-edge-tooltip-kind");
+          addTooltipLine(tooltip, `Topic : ${topic?.name || "inconnu"}`, "graph-edge-tooltip-detail");
+        } else {
+          const title = document.createElement("strong");
+          title.textContent = `${source?.name || link.source} → ${target?.name || link.target}`;
+          tooltip.append(title);
+          const order = link.order ? `Arc #${link.order} · ` : "";
+          addTooltipLine(tooltip, `${order}${link.kind || "Relation"}${link.label ? ` · ${link.label}` : ""}`, "graph-edge-tooltip-kind");
+        }
+        placeGraphTooltip(
+          tooltip,
+          { left: clientX, right: clientX, top: clientY, bottom: clientY, width: 0, height: 0 },
+          clientX,
+          clientY,
+        );
       };
       const showNodeTooltip = (node, element, event) => {
         const tooltip = document.createElement("span");
@@ -408,34 +443,12 @@
             ? node.kind : visualNodeKind(node) === "kafka_topic" || visualNodeKind(node) === "mongodb_collection"
               ? visualNodeKind(node) : "generic",
       }));
-      const numberingGraph = callGraphOnly
-        ? selectedCallGraph
-        : graphData.all_flows_call_graph;
-      const globalArcOrders = new Map();
-      (numberingGraph?.edges || []).forEach(edge => {
-        const key = `${edge.source}->${edge.target}|${edge.kind}|${edge.label || ""}`;
-        const orders = globalArcOrders.get(key) || [];
-        if (Number(edge.order) > 0) orders.push(Number(edge.order));
-        globalArcOrders.set(key, orders);
-      });
-      let fallbackArcOrder = Math.max(
-        0,
-        ...(numberingGraph?.edges || []).map(edge => Number(edge.order) || 0),
-      ) + 1;
-      const visibleArcOrder = link => {
-        const sourceName = nodeDataById.get(link.source)?.name || link.source;
-        const targetName = nodeDataById.get(link.target)?.name || link.target;
-        const key = `${sourceName}->${targetName}|${link.kind}|${link.label || ""}`;
-        const orders = globalArcOrders.get(key);
-        if (orders?.length) return orders.shift();
-        const nextOrder = fallbackArcOrder;
-        fallbackArcOrder += 1;
-        return nextOrder;
-      };
       visibleLinks.forEach((link, index) => {
-        link.order = visibleArcOrder(link);
         network.addEdgeWithKey(`edge-${index}`, link.source, link.target, {
-          label: String(link.order), size: .85, color: relationColor(link), kind: link.kind, type: "arrow",
+          size: .85, color: relationColor(link), kind: link.kind, type: "arrow",
+        });
+        network.addEdgeWithKey(`edge-hit-${index}`, link.source, link.target, {
+          size: 14, color: "rgba(0,0,0,0)", kind: link.kind, hitArea: true, type: "line",
         });
       });
       selectedCallGraphLinks.forEach(({ link, index, edgeKey }) => network.addEdgeWithKey(edgeKey || `edge-${index}`, link.source, link.target, {
@@ -465,6 +478,7 @@
         // Keep clicks enabled while disabling Sigma's circular hover overlay;
         // selection feedback is rendered by the HTML card glow instead.
         enableNodeHoverEvents: true,
+        enableEdgeHoverEvents: true,
         hoverRenderer: () => {},
         renderEdgeLabels: true, labelDensity: .06, labelGridCellSize: 160, labelRenderedSizeThreshold: 10,
         // A drag can end close enough to a second click to trigger Sigma's
@@ -507,6 +521,7 @@
         },
         edgeReducer: (edge, data) => {
           if (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge))) return { ...data, hidden: true };
+          if (data.hitArea) return data;
           if (graphState.selectedCodeFlowId) {
             // The selected call graph is rendered once by the LibAvoid SVG
             // overlay. Keeping Sigma's straight edge underneath would draw
@@ -1214,6 +1229,25 @@
         // than from graph nodes. This keeps its endpoints attached to the
         // readable port anchors through every pan, zoom, and card scale.
         portPathOverlay.replaceChildren();
+        if (graphState.renderMode !== "symbols" && !graphState.selectedCodeFlowId) {
+          const svgNamespace = "http://www.w3.org/2000/svg";
+          visibleLinks.forEach(link => {
+            const source = nodePoints.get(link.source);
+            const target = nodePoints.get(link.target);
+            if (!source || !target) return;
+            const hitArea = document.createElementNS(svgNamespace, "path");
+            hitArea.classList.add("graph-dependency-hit-area");
+            hitArea.setAttribute("d", `M ${source.x} ${source.y} L ${target.x} ${target.y}`);
+            hitArea.addEventListener("pointerenter", event => {
+              showDependencyTooltip(link, event.clientX, event.clientY);
+            });
+            hitArea.addEventListener("pointermove", event => {
+              showDependencyTooltip(link, event.clientX, event.clientY);
+            });
+            hitArea.addEventListener("pointerleave", () => flowTooltipOverlay.replaceChildren());
+            portPathOverlay.append(hitArea);
+          });
+        }
         if (graphState.renderMode === "symbols" || !graphState.selectedCodeFlowId) return;
         const svgNamespace = "http://www.w3.org/2000/svg";
         const marker = document.createElementNS(svgNamespace, "marker");
@@ -1753,6 +1787,13 @@
             if (graphState.selectedCallGraphEdgeKey !== edgeKey) flowTooltipOverlay.replaceChildren();
           });
         };
+        const callGraphArcTooltipLabel = (link, sourcePort, targetPort) => {
+          const source = nodeDataById.get(link.source)?.name || link.source;
+          const target = nodeDataById.get(link.target)?.name || link.target;
+          const ports = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;
+          const relation = link.label || (link.kind === "kafka" ? "Kafka" : link.kind || "Relation");
+          return `Arc #${link.order ?? "?"} · ${source} → ${target} · ${relation} · ${ports}`;
+        };
         const addArcHitArea = path => {
           const hitArea = path.cloneNode();
           hitArea.classList.add("graph-arc-hit-area");
@@ -1826,6 +1867,9 @@
           arcLabel.setAttribute("y", String(labelPoint.y - 8));
           portPathOverlay.append(arcLabel);
           const hitArea = addArcHitArea(path);
+          const tooltipLabel = callGraphArcTooltipLabel(link, sourcePort, targetPort);
+          hitArea.setAttribute("aria-label", tooltipLabel);
+          hitArea.setAttribute("title", tooltipLabel);
           if (resolvedEdgeKey === currentSelectedCallGraphEdgeKey) {
             hitArea.classList.add("is-keyboard-selected");
           }
@@ -1998,30 +2042,16 @@
       requestGraphRender();
       renderer.on("enterNode", ({ node }) => { graphState.hoveredId = node; requestGraphRender(); });
       renderer.on("leaveNode", () => { graphState.hoveredId = null; requestGraphRender(); });
-      renderer.on("enterEdge", ({ edge }) => {
+      renderer.on("enterEdge", ({ edge, event }) => {
         if (String(edge).startsWith("call-edge-")) return;
-        const match = String(edge).match(/^edge-(\d+)$/);
+        const match = String(edge).match(/^edge(?:-hit)?-(\d+)$/);
         const link = match ? visibleLinks[Number(match[1])] : null;
         if (!link) return;
-        const source = nodeDataById.get(link.source);
-        const target = nodeDataById.get(link.target);
-        const tooltip = document.createElement("span");
-        tooltip.className = "graph-edge-tooltip";
-        const title = document.createElement("strong");
-        title.textContent = `${source?.name || link.source} → ${target?.name || link.target}`;
-        tooltip.append(title);
-        addTooltipLine(tooltip, `Arc #${link.order || "?"} · ${link.kind || "Relation"}${link.label ? ` · ${link.label}` : ""}`, "graph-edge-tooltip-kind");
-        const sourcePort = (link.endpoint_ids || [])
-          .map(endpointId => portsByEndpointId.get(endpointId))
-          .find(port => port?.direction === "out");
-        const targetPort = (link.endpoint_ids || [])
-          .map(endpointId => portsByEndpointId.get(endpointId))
-          .find(port => port?.direction === "in");
-        if (sourcePort?.method) addTooltipLine(tooltip, `Méthode OUT : ${sourcePort.method}`, "graph-edge-tooltip-detail");
-        if (targetPort?.method) addTooltipLine(tooltip, `Méthode IN : ${targetPort.method}`, "graph-edge-tooltip-detail");
-        if (link.message_type) addTooltipLine(tooltip, `Type : ${link.message_type}`);
-        if (link.provenance) addTooltipLine(tooltip, `Preuve : ${link.provenance}`, "graph-edge-tooltip-detail");
-        placeGraphTooltip(tooltip, document.getElementById("graph").getBoundingClientRect());
+        const graphBounds = document.getElementById("graph").getBoundingClientRect();
+        const pointer = event?.originalEvent || event;
+        const clientX = pointer?.clientX ?? graphBounds.left + graphBounds.width / 2;
+        const clientY = pointer?.clientY ?? graphBounds.top + graphBounds.height / 2;
+        showDependencyTooltip(link, clientX, clientY);
       });
       renderer.on("leaveEdge", () => flowTooltipOverlay.replaceChildren());
       renderer.on("clickNode", ({ node }) => selectNode(node));

@@ -36,7 +36,7 @@ from systemlens.domain.module_inventory import (
 from systemlens.domain.runtime import KubernetesWorkload
 from systemlens.infrastructure.paths import db_path
 
-SCHEMA_VERSION = "32"
+SCHEMA_VERSION = "33"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
@@ -271,7 +271,8 @@ class Store:
                 snippet TEXT NOT NULL,
                 module TEXT,
                 qualified_name TEXT,
-                message_type TEXT
+                message_type TEXT,
+                topic_display TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_endpoints_path ON endpoints(path);
             CREATE INDEX IF NOT EXISTS idx_endpoints_topic ON endpoints(topic);
@@ -409,6 +410,7 @@ class Store:
         )
         self._migrate_module_columns()
         self._migrate_endpoint_message_type()
+        self._migrate_endpoint_topic_display()
         self._migrate_module_architecture_columns()
         self._migrate_module_identity()
         self._migrate_graph_fact_columns()
@@ -459,6 +461,12 @@ class Store:
         cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(endpoints)")}
         if "message_type" not in cols:
             self.conn.execute("ALTER TABLE endpoints ADD COLUMN message_type TEXT")
+
+    def _migrate_endpoint_topic_display(self) -> None:
+        """Schema v32 -> v33: preserve source topic labels for the UI."""
+        cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(endpoints)")}
+        if "topic_display" not in cols:
+            self.conn.execute("ALTER TABLE endpoints ADD COLUMN topic_display TEXT")
 
     def _migrate_graph_fact_columns(self) -> None:
         cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(graph_facts)")}
@@ -1078,8 +1086,9 @@ class Store:
                 """
                 INSERT INTO endpoints
                     (id, role, system, topic, topic_dynamic, source, framework,
-                     path, start_line, end_line, snippet, module, qualified_name, message_type)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     path, start_line, end_line, snippet, module, qualified_name, message_type,
+                     topic_display)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     role = excluded.role,
                     system = excluded.system,
@@ -1093,7 +1102,8 @@ class Store:
                     snippet = excluded.snippet,
                     module = excluded.module,
                     qualified_name = excluded.qualified_name,
-                    message_type = excluded.message_type
+                    message_type = excluded.message_type,
+                    topic_display = excluded.topic_display
                 """,
                 (
                     endpoint.id,
@@ -1110,6 +1120,7 @@ class Store:
                     endpoint.module,
                     endpoint.qualified_name,
                     endpoint.message_type,
+                    endpoint.topic_display,
                 ),
             )
 
@@ -1239,4 +1250,5 @@ def _row_to_endpoint(row: sqlite3.Row) -> MessageEndpoint:
         module=row["module"],
         qualified_name=row["qualified_name"],
         message_type=row["message_type"],
+        topic_display=row["topic_display"],
     )

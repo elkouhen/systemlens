@@ -482,6 +482,21 @@ def test_graph_keeps_unmatched_and_dynamic_kafka_evidence() -> None:
     assert any("Aucun endpoint opposé" in link["message_type_warning"] for link in data["links"])
 
 
+def test_graph_displays_source_topic_label_without_changing_topic_identity() -> None:
+    producer = replace(
+        _kafka_endpoint("produce", "OrderCreated", "Publisher.java"),
+        topic="orderscreated",
+        topic_display="Orders_Created",
+    )
+
+    data = _html_graph_data(render_graph_html({"orders": [producer]}, []))
+
+    topic = next(node for node in data["nodes"] if node["kind"] == "kafka_topic")
+    assert topic["id"] == "kafka_topic:orderscreated"
+    assert topic["name"] == "Orders_Created"
+    assert data["nodes"]
+
+
 def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> None:
     endpoint = _rest_endpoint("serve", "POST /orders", "OrderController.java")
     endpoint = replace(endpoint, id="receive-order", qualified_name="com.example.OrderController")
@@ -1344,14 +1359,26 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'arcLabel.textContent = String(link.order ?? index + 1);' in document
     assert 'path.getPointAtLength(path.getTotalLength() / 2)' in document
     assert 'renderEdgeLabels: true' in document
-    assert 'label: String(link.order)' in document
+    assert 'enableEdgeHoverEvents: true' in document
+    assert 'const sourceIsTopic = ["kafka_topic", "message_channel"].includes(source?.kind);' in document
+    assert 'Microservice : ${service?.name || "inconnu"} · ${action}' in document
+    assert 'Topic : ${topic?.name || "inconnu"}' in document
+    assert 'const showDependencyTooltip = (link, clientX, clientY) =>' in document
+    assert 'graph-dependency-hit-area' in document
+    assert 'stroke-width: 24px' in document
+    assert 'hitArea.addEventListener("pointermove"' in document
+    assert 'network.addEdgeWithKey(`edge-hit-${index}`' in document
+    assert 'size: 14, color: "rgba(0,0,0,0)", kind: link.kind, hitArea: true' in document
+    assert 'if (data.hitArea) return data;' in document
+    assert 'match(/^edge(?:-hit)?-(\\d+)$/)' in document
+    assert 'label: String(link.order)' not in document
     assert 'const order = link.order ? `Arc #${link.order} · ` : "";' in document
     assert 'method.textContent = `Méthode : ${port?.method || "Méthode inconnue"}`;' in document
-    assert 'Méthode OUT :' in document
-    assert 'Méthode IN :' in document
     assert 'arcLabel.setAttribute(' in document
     assert 'const addArcHitArea = path => {' in document
     assert 'hitArea.classList.add("graph-arc-hit-area");' in document
+    assert 'const callGraphArcTooltipLabel = (link, sourcePort, targetPort) =>' in document
+    assert 'hitArea.setAttribute("title", tooltipLabel);' in document
     assert ".graph-arc-hit-area { fill: none; stroke: transparent !important; stroke-width: 14px !important;" in document
     assert ".graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2;" in document
     assert ".graph-call-label { fill: #6d28d9;" in document

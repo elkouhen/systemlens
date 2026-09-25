@@ -19,7 +19,8 @@ For a URL expression that concatenates a local `@Value`-annotated field, a
 unique never-reassigned local string base URL, or a bounded private String
 helper with literal arguments, and a path, the extractor
 resolves the value and retains its HTTP host as endpoint evidence while
-persisting only the normalized route as the endpoint topic.
+persisting the normalized route as the endpoint topic and retaining the source
+spelling for presentation.
 HTTP-interface targets come from the explicit `@ClientRegistrationId` marker;
 the interface group alone is not treated as a target. Helper evaluation is
 source-only and rejects mutation, overload ambiguity, conditional returns,
@@ -71,7 +72,8 @@ With `--strategy strategy1`, every method whose name starts with
 `envoyerMessageKafkaRequest(topic, payload)` and
 `envoyerMessageKafkaReply(topic, payload)`. A first argument shaped as
 `kafkaProperties.getTopics().getXxx()` resolves to the normalized Strategy1
-topic key. A conditional first argument with two such accessors creates one
+topic key while retaining `Xxx` as its display label. A conditional first
+argument with two such accessors creates one
 producer fact for each statically resolved branch. Other values use the
 conservative topic resolver and receive the same normalization when they are
 concrete. Strategy1 normalization applies

@@ -1038,6 +1038,8 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert page.locator(".graph-local-port-path.is-code-flow-path").count() >= 1
         assert page.locator(".graph-port-path").count() == 0
         assert page.locator(".graph-call-path").count() >= 1
+        assert page.locator("#graph-port-paths .graph-arc-hit-area").count() >= 1
+        assert page.locator("#graph-port-paths .graph-arc-hit-area").first.get_attribute("title")
         assert page.locator(".graph-call-path").evaluate_all(
             "paths => paths.every(path => /^M(?: [0-9.-]+){2}(?: L(?: [0-9.-]+){2})+$/.test(path.getAttribute('d')))"
         )

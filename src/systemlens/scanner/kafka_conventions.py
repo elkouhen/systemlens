@@ -38,23 +38,25 @@ def _strategy1_topic_name(value: str) -> str:
     return separated.replace("-", "_").replace("_", "").casefold()
 
 
-def _strategy1_topic_from_value(value_node, source: bytes, repo_root: Path, rel_path: str) -> tuple[str, bool]:
+def _strategy1_topic_from_value(
+    value_node, source: bytes, repo_root: Path, rel_path: str
+) -> tuple[str, bool, str | None]:
     """Resolve a Strategy1 `getTopics().getXxx()` argument before fallback."""
     if value_node is not None:
         value = java_parser.node_text(source, value_node)
         if match := _STRATEGY1_PRODUCER_RE.search(value):
-            return _strategy1_topic_name(match.group(1)), False
+            return _strategy1_topic_name(match.group(1)), False, match.group(1)
     topic, dynamic = _kafka_topic_from_value(value_node, source, repo_root, rel_path)
-    return (_strategy1_topic_name(topic) if not dynamic else topic), dynamic
+    return (_strategy1_topic_name(topic) if not dynamic else topic), dynamic, topic if not dynamic else None
 
 
 def _strategy1_topic_values(
     value_node, source: bytes, repo_root: Path, rel_path: str
-) -> list[tuple[str, bool]]:
+) -> list[tuple[str, bool, str | None]]:
     """Resolve every branch of a Strategy1 topic conditional expression."""
     if value_node is None or value_node.type != "ternary_expression":
         return [_strategy1_topic_from_value(value_node, source, repo_root, rel_path)]
-    values: list[tuple[str, bool]] = []
+    values: list[tuple[str, bool, str | None]] = []
     for field in ("consequence", "alternative"):
         branch = value_node.child_by_field_name(field)
         if branch is not None:
@@ -176,7 +178,9 @@ def infer_kafka_topic_strategy1_endpoints(
                 lines[line_no - 1].strip(),
             )
             endpoint = replace(
-                endpoint, message_type=_listener_payload_type(source_bytes, method)
+                endpoint,
+                message_type=_listener_payload_type(source_bytes, method),
+                topic_display=match.group(1),
             )
             endpoints[endpoint.id] = endpoint
         for offset, annotation in _kafka_listener_annotation_blocks(source):
@@ -193,6 +197,7 @@ def infer_kafka_topic_strategy1_endpoints(
                     "kafka-topic-strategy1",
                     annotation,
                 )
+                endpoint = replace(endpoint, topic_display=key_match.group(1))
                 endpoints[endpoint.id] = endpoint
         for node in strategy_send_nodes:
             _object_node, method_name, args = java_parser.invocation_parts(node, source_bytes)
@@ -202,7 +207,7 @@ def infer_kafka_topic_strategy1_endpoints(
                 or len(args) < 2
             ):
                 continue
-            for topic, dynamic in _strategy1_topic_values(
+            for topic, dynamic, topic_display in _strategy1_topic_values(
                 args[0], source_bytes, repo_root, rel_path
             ):
                 endpoint = _kafka_endpoint(
@@ -216,6 +221,7 @@ def infer_kafka_topic_strategy1_endpoints(
                     dynamic,
                     _strategy1_method_payload_type(source_bytes, node),
                 )
+                endpoint = replace(endpoint, topic_display=topic_display)
                 endpoints[endpoint.id] = endpoint
     return list(endpoints.values())
 def apply_kafka_topic_strategy1(
@@ -223,7 +229,11 @@ def apply_kafka_topic_strategy1(
 ) -> list[MessageEndpoint]:
     """Replace standard Kafka extraction without discarding known payload types."""
     normalized_strategy_endpoints = [
-        replace(endpoint, topic=_strategy1_topic_name(endpoint.topic))
+        replace(
+            endpoint,
+            topic=_strategy1_topic_name(endpoint.topic),
+            topic_display=endpoint.topic_display or endpoint.topic,
+        )
         if endpoint.system == "kafka" and not endpoint.topic_dynamic
         else endpoint
         for endpoint in strategy_endpoints

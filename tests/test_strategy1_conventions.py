@@ -74,3 +74,4 @@ record OrderCreated(String id) {}
     )
 
     assert [endpoint.topic for endpoint in endpoints] == ["orderscreated"]
+    assert [endpoint.topic_display for endpoint in endpoints] == ["Orders_Created"]

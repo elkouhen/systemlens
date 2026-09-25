@@ -7,12 +7,17 @@ Parent: [Technical specification](../SPEC-TECH.md).
 
 `MessageEndpoint` is the primary extracted fact. It records role, system,
 topic, dynamic status, source (`code` or `manifest`), framework, location,
-snippet, module, qualified name and optional Kafka message type. Its identifier
+snippet, module, qualified name, optional Kafka message type, and an optional
+source display label for normalized Kafka topics. Its identifier
 is stable for a source location:
 
 ```text
 sha256(role | topic | path | start_line:end_line)[:16]
 ```
+
+The normalized `topic` remains the identity used for matching and graph
+relations. `topic_display`, when present, is the source spelling shown by UI
+adapters; it never changes topic identity or relation resolution.
 
 `ArchitectureRelation` records an evidenced link between source and target
 objects. It includes origin (`code`, `manifest` or `derived`), confidence,

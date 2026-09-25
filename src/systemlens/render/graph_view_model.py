@@ -223,6 +223,15 @@ def build_graph_view_model(
         for endpoint in endpoints
         if endpoint.system == "kafka"
     ]
+    topic_display_by_topic: dict[str, str] = {}
+    for endpoint in kafka_endpoints:
+        topic_display_by_topic.setdefault(endpoint.topic, endpoint.topic_display or endpoint.topic)
+
+    def topic_display(endpoint: MessageEndpoint) -> str:
+        return endpoint.topic_display or topic_display_by_topic.get(endpoint.topic, endpoint.topic)
+
+    def topic_name(topic: str) -> str:
+        return topic_display_by_topic.get(topic, topic)
     # Keep concrete topics visible even when no opposite endpoint was found.
     # This is evidence of an integration, not an inferred producer/consumer
     # pairing; the unmatched endpoint is rendered as a partial relation below.
@@ -512,7 +521,7 @@ def build_graph_view_model(
             "label": port_label_by_endpoint_id.get(target.id, "?"),
             "type": "HTTP receive",
             "method": port_method_label(target),
-            "name": target.topic,
+            "name": topic_display(target),
     }
     for name in ordered_services:
         endpoints = endpoints_by_service.get(name, [])
@@ -531,7 +540,7 @@ def build_graph_view_model(
                 "system": endpoint.system,
                 "role": endpoint.role,
                 "method": port_method_label(endpoint),
-                "name": endpoint.topic,
+                "name": topic_display(endpoint),
                 "path": endpoint.path,
                 "line": endpoint.start_line,
                 "endpoint_id": endpoint.id,
@@ -550,7 +559,7 @@ def build_graph_view_model(
                             "endpoint_id": output_id,
                             "label": port_label_by_endpoint_id[output_id],
                             "type": port_type_label(endpoint_by_id[output_id]),
-                            "name": endpoint_by_id[output_id].topic,
+                            "name": topic_display(endpoint_by_id[output_id]),
                             "method": port_method_label(endpoint_by_id[output_id]),
                             **(
                                 {"message_type": endpoint_by_id[output_id].message_type}
@@ -642,7 +651,7 @@ def build_graph_view_model(
                 "kafka_endpoints": [
                     {
                         "role": endpoint.role,
-                        "topic": endpoint.topic,
+                        "topic": topic_display(endpoint),
                         "message_type": endpoint.message_type,
                         "location": f"{endpoint.path}:{endpoint.start_line}",
                         "vscode_uri": _endpoint_vscode_uri(endpoint, all_modules, source_roots, root_path),
@@ -715,8 +724,8 @@ def build_graph_view_model(
         {
             "id": f"kafka_topic:{name}",
             "kind": "kafka_topic",
-            "name": name,
-            "label": name,
+            "name": topic_name(name),
+            "label": topic_name(name),
             "published_message_types": sorted(topic_message_types[name]["produce"]),
             "consumed_message_types": sorted(topic_message_types[name]["consume"]),
             "message_type_status": (
@@ -748,7 +757,7 @@ def build_graph_view_model(
             "id": node_id,
             "kind": "kafka_topic",
             "name": f"Topic dynamique · {service}",
-            "label": f"? {endpoint.topic} · {service}",
+            "label": f"? {topic_display(endpoint)} · {service}",
             "topic_expression": endpoint.topic,
             "unresolved": True,
             "message_type_status": "unknown" if not endpoint.message_type else "known",
@@ -1026,6 +1035,8 @@ def build_graph_view_model(
                 link["message_type_warning"] = (
                     "Type Java absent ou divergent ; relation conservée sur le topic."
                 )
+            if kafka_candidates:
+                link["label"] = topic_display(kafka_candidates[0].from_endpoint)
         links.append(link)
 
     # Preserve unmatched endpoint evidence in the topology. These links stop
@@ -1050,7 +1061,7 @@ def build_graph_view_model(
             "target": target,
             "kind": "kafka",
             "direction": "outgoing" if produces else "incoming",
-            "label": endpoint.topic,
+            "label": topic_display(endpoint),
             "confidence": "inferred" if endpoint.source == "code" else "proved",
             "provenance": endpoint.source,
             "endpoint_ids": [endpoint.id],
