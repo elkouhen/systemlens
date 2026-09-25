@@ -1,6 +1,7 @@
 """SQLite implementation of the local architecture snapshot store."""
 
 import json
+import re
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -467,6 +468,28 @@ class Store:
         cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(endpoints)")}
         if "topic_display" not in cols:
             self.conn.execute("ALTER TABLE endpoints ADD COLUMN topic_display TEXT")
+        # Backfill rows created before the display column existed. The source
+        # snippet is already persisted and is the only safe evidence available
+        # without reopening the indexed project during export.
+        rows = self.conn.execute(
+            "SELECT id, snippet FROM endpoints "
+            "WHERE system = 'kafka' AND framework = 'kafka-topic-strategy1' "
+            "AND topic_display IS NULL"
+        ).fetchall()
+        patterns = (
+            re.compile(r"getTopics\s*\(\s*\)\s*\.\s*get([A-Z]\w*)\s*\("),
+            re.compile(r"kafka\.topics\.([A-Za-z_]\w*)\b"),
+        )
+        for row in rows:
+            display = next(
+                (match.group(1) for pattern in patterns if (match := pattern.search(row["snippet"]))),
+                None,
+            )
+            if display:
+                self.conn.execute(
+                    "UPDATE endpoints SET topic_display = ? WHERE id = ?",
+                    (display, row["id"]),
+                )
 
     def _migrate_graph_fact_columns(self) -> None:
         cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(graph_facts)")}

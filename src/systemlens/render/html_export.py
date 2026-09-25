@@ -104,8 +104,8 @@ def _networkx_call_graph(
         target_service = service_by_endpoint.get(target_id) if target_id else None
         if not source_service or not target_service or source_service == target_service:
             return None
-        label = edge.from_endpoint.topic
-        key = (edge.kind, label, source_id, target_id)
+        label = edge.from_endpoint.topic_display or edge.from_endpoint.topic
+        key = (edge.kind, edge.from_endpoint.topic, source_id, target_id)
         if key in seen_relation_keys:
             return None
         seen_relation_keys.add(key)
@@ -660,6 +660,11 @@ def render_graph_html(
         for port in cast(list[dict[str, object]], node.get("ports", []))
         if "endpoint_id" in port and "label" in port
     }
+    endpoint_by_id = {
+        endpoint.id: endpoint
+        for service_endpoints in endpoints_by_service.values()
+        for endpoint in service_endpoints
+    }
     def flow_vscode_uri(flow: CodeFlow) -> str | None:
         if root_path is not None:
             return _vscode_file_uri(root_path / flow.path, root_path, source_roots, flow.start_line)
@@ -701,7 +706,12 @@ def render_graph_html(
                 {
                     "order": step.order,
                     "kind": step.kind,
-                    "name": step.name,
+                    "name": (
+                        endpoint_by_id[step.endpoint_id].topic_display
+                        or endpoint_by_id[step.endpoint_id].topic
+                        if step.endpoint_id in endpoint_by_id
+                        else step.name
+                    ),
                     "path": step.path,
                     "start_line": step.start_line,
                     "end_line": step.end_line,

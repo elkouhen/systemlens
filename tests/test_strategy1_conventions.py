@@ -51,6 +51,7 @@ def test_strategy1_replacement_keeps_an_ast_payload_type() -> None:
     result = apply_kafka_endpoints([generic], [strategy])
 
     assert result[0].topic == "orderscreated"
+    assert result[0].topic_display == "ORDERS_CREATED"
     assert result[0].message_type == "OrderCreated"
 
 
