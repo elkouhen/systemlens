@@ -16,7 +16,7 @@
       delete graphCanvas.dataset.selectedCallGraphArc;
       delete graphCanvas.dataset.flowFocusRatio;
       renderer.refresh();
-      setDetailsEmpty("Selectionnez un noeud ou un module pour afficher ses informations.");
+      setDetailsEmpty("Sélectionnez un nœud ou un module pour afficher ses informations.");
       search.value = "";
       clearPathControls();
       persistState();
@@ -157,7 +157,6 @@
     document.getElementById("inspector-close").addEventListener("click", closeInspector);
     inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });
     window.addEventListener("keydown", event => { if (event.key === "Escape" && !inspectorModal.hidden) closeInspector(); });
-    document.getElementById("show-path").addEventListener("click", showShortestPath);
     document.getElementById("show-simple-paths").addEventListener("click", showSimplePaths);
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
@@ -204,9 +203,6 @@
     mongoClassReferencesFilter.addEventListener("input", renderReferences);
     resourcesFilter.addEventListener("input", renderResources);
     pathLock.addEventListener("change", persistState);
-    pathQuery.addEventListener("keydown", event => {
-      if (event.key === "Enter") showShortestPath();
-    });
     renderIndexingIssues();
     renderReferences();
     renderResources();
@@ -245,7 +241,7 @@
     search.addEventListener("input", () => {
       const query = search.value.trim();
       searchStatus.textContent = "";
-      if (!query) { reset(); return; }
+      if (!query) return;
       // Keep the field usable while composing an itinerary. An exact service
       // name is selected only after Enter, otherwise typing `service-a ->`
       // immediately opens the service details and disrupts the next step.

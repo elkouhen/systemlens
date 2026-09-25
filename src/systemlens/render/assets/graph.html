@@ -29,7 +29,7 @@
         <div class="toolbar-tabs" role="tablist" aria-label="Vues d'exploration">
           <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel">Graphe</button>
           <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux de code</button>
-          <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problemes d'indexation">Diagnostics</button>
+          <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problèmes d’indexation">Diagnostics</button>
         </div>
       </section>
       <section id="resource-tab-group" class="toolbar-tab-group" aria-labelledby="resources-tabs-title">
@@ -48,7 +48,7 @@
         <label class="explore-search-label" for="search">Rechercher une ressource ou un itinéraire</label>
         <input id="search" type="search" list="node-suggestions" placeholder="orders ou orders -> payments" autocomplete="off" aria-describedby="search-help search-status" aria-label="Rechercher une ressource ou un itinéraire">
         <datalist id="node-suggestions"></datalist>
-        <p id="search-help" class="explore-search-help">Choisissez une suggestion ou saisissez le nom exact d'un noeud, puis appuyez sur Entrée pour le sélectionner. Utilisez <code>-></code>, puis Entrée, pour afficher l'itinéraire le plus court.</p>
+        <p id="search-help" class="explore-search-help">Choisissez une suggestion ou saisissez le nom exact d’un nœud. Utilisez <code>-&gt;</code> entre les étapes, puis appuyez sur Entrée pour afficher l’itinéraire le plus court.</p>
         <p id="search-status" class="explore-search-status" role="status"></p>
       </div>
       <section id="graph-context" class="graph-context" aria-label="Contexte du graphe">
@@ -101,7 +101,7 @@
         </div>
       </details>
       <details id="advanced-controls" class="advanced-controls">
-        <summary>Options avancées</summary>
+        <summary>Actions avancées</summary>
       <fieldset class="layout-controls">
         <legend>Placement des nœuds</legend>
         <div class="layout-options layout-strategy-options" role="group" aria-label="Choix du placement des nœuds">
@@ -114,13 +114,12 @@
         <label class="relation-filter" title="Afficher les répertoires qui regroupent plusieurs projets"><input id="show-project-groups" type="checkbox" checked aria-label="Afficher les groupes de projets">Groupes de projets</label>
       </fieldset>
       <details class="path-controls">
-        <summary>Outils d'itinéraire avancés</summary>
+        <summary>Comparer les itinéraires</summary>
         <div class="path-row">
-          <input id="path-query" type="text" placeholder="service-a -> topic-1 -> service-b" autocomplete="off" aria-label="Chemin avec des noms de services ou topics">
-          <button id="show-path" type="button" aria-label="Afficher le plus court chemin" title="Afficher le plus court chemin">Afficher</button>
+          <p class="path-help">Saisissez un itinéraire dans la recherche, puis utilisez cette action pour comparer les chemins simples entre son premier et son dernier microservice.</p>
           <div class="path-actions">
             <button id="show-simple-paths" type="button" aria-label="Lister les chemins simples entre les deux microservices" title="Lister les chemins simples entre les deux microservices">Chemins simples</button>
-            <label class="path-lock" title="Conserver le chemin lors de la selection d'un noeud"><input id="path-lock" type="checkbox" aria-label="Verrouiller le chemin">Verrouiller</label>
+            <label class="path-lock" title="Conserver l’itinéraire lors de la sélection d’un nœud"><input id="path-lock" type="checkbox" aria-label="Verrouiller l’itinéraire">Verrouiller</label>
           </div>
         </div>
       </details>
@@ -137,12 +136,12 @@
     </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
       <div class="indexing-issues-header">
-        <p class="indexing-issues-kicker">Qualite de l'inventaire</p>
-        <h2 id="indexing-issues-title" class="indexing-issues-title">Problemes d'indexation</h2>
+        <p class="indexing-issues-kicker">Qualité de l’inventaire</p>
+        <h2 id="indexing-issues-title" class="indexing-issues-title">Problèmes d’indexation</h2>
         <p class="indexing-issues-description">Corrigez ces points pour rendre le graphe plus complet et plus fiable.</p>
       </div>
-      <ul id="indexing-issues" class="indexing-issues-list" aria-label="Problemes d'indexation"></ul>
-      <p id="indexing-issues-empty" class="indexing-issues-empty">Aucun probleme d'indexation detecte.</p>
+      <ul id="indexing-issues" class="indexing-issues-list" aria-label="Problèmes d’indexation"></ul>
+      <p id="indexing-issues-empty" class="indexing-issues-empty">Aucun problème d’indexation détecté.</p>
     </div>
     <div id="flows-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="flows-tab" hidden>
       <div class="references-header">
@@ -177,7 +176,7 @@
       </div>
       <section class="references-section"><input id="mongo-class-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou donnée" autocomplete="off" aria-label="Filtrer les classes de données persistées"><ul id="mongo-class-references" class="references-list"></ul><p id="mongo-class-references-empty" class="references-empty">Aucune classe de données persistées détectée.</p></section>
     </div>
-    <div id="details" class="is-empty"><div class="details-empty">Selectionnez un noeud pour isoler ses relations et afficher ses APIs.</div></div>
+    <div id="details" class="is-empty"><div class="details-empty">Sélectionnez un nœud pour isoler ses relations et afficher ses API.</div></div>
   </div>
   <div id="graph-mode-context" class="graph-mode-context" hidden>
     <div id="graph-mode-context-copy" class="graph-mode-context-copy">
@@ -190,8 +189,8 @@
     <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" hidden>Réinitialiser l’analyse</button>
     <button id="analysis-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy">Réduire</button>
   </div>
-  <details id="graph-legend" class="legend" aria-label="Legende du graphe">
-    <summary>Legende</summary>
+  <details id="graph-legend" class="legend" aria-label="Légende du graphe">
+    <summary>Légende</summary>
     <div class="legend-content">
       <div class="legend-row"><span class="legend-mark" style="background:#2563eb"></span>Connectivité relative basse (premier tiers)</div>
       <div class="legend-row"><span class="legend-mark" style="background:#d97706"></span>Connectivité relative médiane (tiers central)</div>

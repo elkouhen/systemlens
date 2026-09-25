@@ -26,7 +26,7 @@
       // Explorer state is ephemeral; URL fragments never drive rendering.
     }
     function clearPathControls() {
-      pathQuery.value = "";
+      search.value = "";
       pathStops.splice(0, pathStops.length);
       graphState.selectedCodeFlowId = null;
       graphState.codeFlowRootNodeId = null;
@@ -172,18 +172,18 @@
     }
     function resolveExactNodeName(name, allowedKinds = null) {
       const candidates = nodesByNormalizedName.get(normalizeNodeName(name)) || [];
-      if (!candidates.length) return { error: `Noeud introuvable : ${name}. Saisissez son nom exact.` };
+      if (!candidates.length) return { error: `Nœud introuvable : ${name}. Saisissez son nom exact.` };
       const eligible = allowedKinds
         ? candidates.filter(candidate => allowedKinds.includes(nodeDataById.get(candidate.id).kind))
         : candidates;
-      if (!eligible.length) return { error: `Type de noeud invalide : ${name}.` };
-      if (eligible.length > 1) return { error: `Nom ambigu : ${name}. Precisez un nom de noeud unique.` };
+      if (!eligible.length) return { error: `Type de nœud invalide : ${name}.` };
+      if (eligible.length > 1) return { error: `Nom ambigu : ${name}. Précisez un nom de nœud unique.` };
       return { id: eligible[0].id };
     }
-    function parsePathQuery(query = pathQuery.value) {
+    function parsePathQuery(query = search.value) {
       const names = query.split("->").map(name => name.trim());
-      if (names.length < 2) return { error: "Saisissez au moins deux noeuds separes par ->." };
-      if (names.some(name => !name)) return { error: "Chaque etape de l'itineraire doit avoir un nom : retirez le -> en trop ou renseignez le noeud manquant." };
+      if (names.length < 2) return { error: "Saisissez au moins deux nœuds séparés par ->." };
+      if (names.some(name => !name)) return { error: "Chaque étape de l’itinéraire doit avoir un nom : retirez le -> en trop ou renseignez le nœud manquant." };
       const stops = [];
       for (const [index, name] of names.entries()) {
         const endpoint = index === 0 || index === names.length - 1;
@@ -195,19 +195,18 @@
         stops.push(resolved.id);
       }
       if (stops.some(id => !["microservice", "kafka_topic"].includes(nodeDataById.get(id).kind))) {
-        return { error: "Un itineraire de topics ne peut contenir que des microservices et des topics." };
+        return { error: "Un itinéraire de topics ne peut contenir que des microservices et des topics." };
       }
       if (nodeDataById.get(stops[0]).kind !== "microservice" || nodeDataById.get(stops.at(-1)).kind !== "microservice") {
-        return { error: "Un itineraire de topics doit commencer et se terminer par un microservice." };
+        return { error: "Un itinéraire de topics doit commencer et se terminer par un microservice." };
       }
       if (new Set(stops).size !== stops.length) {
-        return { error: "Un itineraire ne peut pas repeter le meme noeud." };
+        return { error: "Un itinéraire ne peut pas répéter le même nœud." };
       }
       return { stops };
     }
     function renderPathQuery() {
       const query = pathStops.map(id => nodeDataById.get(id).name).join(" -> ");
-      pathQuery.value = query;
       search.value = query;
       searchStatus.textContent = "";
     }
@@ -288,7 +287,7 @@
       const title = document.createElement("h1");
       title.className = "path-details-title";
       title.textContent = context.codeFlow?.method
-        || (pathStops.length > 2 ? "Chemin avec noeuds intermediaires" : "Chemin le plus court");
+        || (pathStops.length > 2 ? "Chemin avec nœuds intermédiaires" : "Chemin le plus court");
       const summary = document.createElement("p");
       summary.className = "path-details-summary";
       const serviceCount = path.nodes.filter(id => nodeDataById.get(id).kind === "microservice").length;
@@ -468,7 +467,7 @@
       title.textContent = "Chemins simples disponibles";
       const summary = document.createElement("p");
       summary.className = "simple-paths-summary";
-      summary.textContent = `${paths.length} chemin${paths.length > 1 ? "s" : ""} propose${paths.length > 1 ? "s" : ""}, sans repeter de noeud, sur au plus ${MAX_SIMPLE_PATH_DEPTH} relations.${limited ? ` Recherche limitee a ${MAX_SIMPLE_PATHS} chemins et ${MAX_SIMPLE_PATH_EXPLORATIONS} explorations.` : ""}`;
+      summary.textContent = `${paths.length} chemin${paths.length > 1 ? "s" : ""} proposé${paths.length > 1 ? "s" : ""}, sans répéter de nœud, sur au plus ${MAX_SIMPLE_PATH_DEPTH} relations.${limited ? ` Recherche limitée à ${MAX_SIMPLE_PATHS} chemins et ${MAX_SIMPLE_PATH_EXPLORATIONS} explorations.` : ""}`;
       const list = document.createElement("ol");
       list.className = "simple-paths-list";
       paths.forEach((path, index) => {
@@ -484,7 +483,7 @@
       section.append(title, summary, list);
       details.append(section);
     }
-    function showShortestPath(query = pathQuery.value, preserveGraphOnError = false) {
+    function showShortestPath(query = search.value, preserveGraphOnError = false) {
       const parsed = parsePathQuery(query);
       if (parsed.error) {
         if (preserveGraphOnError) { searchStatus.textContent = parsed.error; return false; }
@@ -498,7 +497,7 @@
       const stops = parsed.stops;
       const path = shortestPathThrough(stops);
       if (path === null) {
-        const message = "Aucun itineraire de topics oriente ne passe par les noeuds demandes dans cet ordre.";
+        const message = "Aucun itinéraire de topics orienté ne passe par les nœuds demandés dans cet ordre.";
         if (preserveGraphOnError) { searchStatus.textContent = message; return false; }
         graphState.selectedId = null; graphState.relatedNodes = null; graphState.relatedEdges = null; graphState.relatedLocalPortLinks = new Set(); graphState.pathMicroserviceOrder = new Map();
         renderer.refresh();
@@ -520,7 +519,7 @@
         return;
       }
       if (parsed.stops.length !== 2) {
-        setDetailsEmpty("Les chemins simples se recherchent entre un microservice source et un microservice cible, sans noeud intermediaire impose.");
+        setDetailsEmpty("Les chemins simples se recherchent entre un microservice source et un microservice cible, sans nœud intermédiaire imposé.");
         return;
       }
       const simplePaths = allSimplePaths(parsed.stops[0], parsed.stops[1]);
@@ -528,7 +527,7 @@
       pathStops.splice(0, pathStops.length);
       renderer.refresh();
       if (!simplePaths.paths.length) {
-        setDetailsEmpty(`Aucun chemin simple oriente, de ${nodeDataById.get(parsed.stops[0]).name} vers ${nodeDataById.get(parsed.stops[1]).name}, dans les limites de recherche.`);
+        setDetailsEmpty(`Aucun chemin simple orienté, de ${nodeDataById.get(parsed.stops[0]).name} vers ${nodeDataById.get(parsed.stops[1]).name}, dans les limites de recherche.`);
         persistState();
         return;
       }
@@ -618,22 +617,22 @@
       relationBadge.className = "detail-badge";
       relationBadge.textContent = edges.length === indexedEdges.length
         ? `Relations : ${indexedEdges.length}`
-        : `Relations indexees : ${indexedEdges.length}`;
+        : `Relations indexées : ${indexedEdges.length}`;
       meta.append(relationBadge);
       if (edges.length !== indexedEdges.length) {
         const visibleBadge = document.createElement("span");
         visibleBadge.className = "detail-badge";
-        visibleBadge.textContent = `Affichees : ${edges.length}`;
+        visibleBadge.textContent = `Affichées : ${edges.length}`;
         meta.append(visibleBadge);
       }
       if (isMicroservice) {
         [
-          `${publishedApiCount} API${publishedApiCount > 1 ? "s" : ""} exposee${publishedApiCount > 1 ? "s" : ""}`,
-          `${publishedTopicCount} topic${publishedTopicCount > 1 ? "s" : ""} publie${publishedTopicCount > 1 ? "s" : ""}`,
+          `${publishedApiCount} API${publishedApiCount > 1 ? "s" : ""} exposée${publishedApiCount > 1 ? "s" : ""}`,
+          `${publishedTopicCount} topic${publishedTopicCount > 1 ? "s" : ""} publié${publishedTopicCount > 1 ? "s" : ""}`,
           `${collectionCount} donnée${collectionCount > 1 ? "s" : ""} utilisée${collectionCount > 1 ? "s" : ""}`,
         ].forEach(label => { const badge = document.createElement("span"); badge.className = "detail-badge"; badge.textContent = label; meta.append(badge); });
       }
-      const confidenceLabels = { proved: "prouvee", inferred: "inferee", conventional: "conventionnelle" };
+      const confidenceLabels = { proved: "prouvée", inferred: "inférée", conventional: "conventionnelle" };
       ["proved", "inferred", "conventional"].forEach(confidence => {
         const count = edges.filter(link => link.confidence === confidence).length;
         if (!count) return;
@@ -735,7 +734,7 @@
           discardEmptyDetailsGroup(internalFlowsGroup);
         }
         if (kubernetesWorkloads.length) {
-          const kubernetesGroup = createDetailsGroup("Kubernetes");
+        const kubernetesGroup = createDetailsGroup("Kubernetes", false);
           appendList("Workloads", kubernetesWorkloads.map(workload => {
             const request = `requests CPU ${workload.cpu_request_millicores ?? "-"}m · RAM ${workload.memory_request_bytes ?? "-"}B`;
             const limit = `limits CPU ${workload.cpu_limit_millicores ?? "-"}m · RAM ${workload.memory_limit_bytes ?? "-"}B`;
@@ -758,10 +757,10 @@
             })),
         ];
         const relationsGroup = createDetailsGroup("Relations");
-        appendRelationList("APIs consommees", httpCalls, id, link => (
+        appendRelationList("APIs consommées", httpCalls, id, link => (
           `API de ${nodeDataById.get(link.target).name}`
         ), relationsGroup);
-        appendActionList("APIs publiees", publishedApis, relationsGroup);
+        appendActionList("APIs publiées", publishedApis, relationsGroup);
         appendActionList("Contrats AsyncAPI", asyncApiContracts.map(contract => ({
           label: `AsyncAPI · ${contract.path}`,
           title: `Inspecter le contrat AsyncAPI ${contract.path}`,
@@ -773,7 +772,7 @@
           nodeDataById.get(link.target).name
         ), relationsGroup);
         discardEmptyDetailsGroup(relationsGroup);
-        const associatedFlowsGroup = createDetailsGroup("Flux associés");
+        const associatedFlowsGroup = createDetailsGroup("Flux associés", false);
         appendAssociatedCodeFlows("Flux associés", associatedFlows, associatedFlowsGroup);
         discardEmptyDetailsGroup(associatedFlowsGroup);
         const sourceEntries = [
@@ -823,7 +822,7 @@
           ...(node.published_message_types || []),
           ...(node.consumed_message_types || []),
         ])].filter(type => !indexedDtoTypes.has(type) && !indexedDtoTypes.has(type.split(".").at(-1)));
-        appendList("Types de message non resolus", unresolvedTypes, relationsGroup);
+        appendList("Types de message non résolus", unresolvedTypes, relationsGroup);
         const endpointSources = graphData.nodes
           .filter(candidate => candidate.kind === "microservice")
           .flatMap(candidate => (candidate.kafka_endpoints || []).map(endpoint => ({ service: candidate.name, ...endpoint })))

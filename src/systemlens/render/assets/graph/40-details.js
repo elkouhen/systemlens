@@ -8,7 +8,7 @@
     });
     function setToolbarTab(tab) {
       if (document.querySelector(".toolbar")?.classList.contains("has-details")) {
-        setDetailsEmpty("Selectionnez un noeud pour afficher ses details.");
+        setDetailsEmpty("Sélectionnez un nœud pour afficher ses détails.");
       }
       const showingGraph = tab === "graph";
       const showingResources = tab === "resources";
@@ -57,7 +57,7 @@
       inventoryStatus.title = indexingIssues.length
         ? "Ouvrir les problèmes d'indexation"
         : "Aucun fait non résolu dans cet inventaire";
-      indexingIssuesTitle.textContent = `Problemes d'indexation (${indexingIssues.length})`;
+      indexingIssuesTitle.textContent = `Problèmes d’indexation (${indexingIssues.length})`;
       indexingIssuesList.replaceChildren();
       indexingIssuesEmpty.hidden = indexingIssues.length > 0;
       indexingIssues.forEach(issue => {
@@ -67,7 +67,7 @@
         header.className = "indexing-issue-header";
         const severity = document.createElement("span");
         severity.className = "indexing-issue-severity";
-        severity.textContent = issue.severity === "warning" ? "A corriger" : "A verifier";
+        severity.textContent = issue.severity === "warning" ? "À corriger" : "À vérifier";
         const category = document.createElement("span");
         category.className = "indexing-issue-category";
         category.textContent = issue.category;
@@ -405,7 +405,7 @@
         button.className = "relation-link";
         button.type = "button";
         button.textContent = label;
-        button.title = "Selectionner ce noeud dans le graphe";
+        button.title = "Sélectionner ce nœud dans le graphe";
         button.addEventListener("click", () => selectNode(targetId));
         item.append(button);
         list.append(item);

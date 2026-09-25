@@ -80,7 +80,7 @@ record OrderCreated(String id) {}
     )
 
     assert [(endpoint.topic, endpoint.framework) for endpoint in endpoints] == [
-        ("ORDERS_CREATED", "kafka-topic-strategy1")
+        ("orderscreated", "kafka-topic-strategy1")
     ]
 
 
@@ -316,9 +316,9 @@ record ReplyCreated(String replyId) {}
         (endpoint.role, endpoint.topic, endpoint.message_type, endpoint.framework)
         for endpoint in endpoints
     ) == [
-        ("produce", "ORDERS_CREATED", "OrderCreated", "kafka-topic-strategy1"),
-        ("produce", "REPLIES_CREATED", "ReplyCreated", "kafka-topic-strategy1"),
-        ("produce", "REQUESTS_CREATED", "RequestCreated", "kafka-topic-strategy1"),
+        ("produce", "orderscreated", "OrderCreated", "kafka-topic-strategy1"),
+        ("produce", "repliescreated", "ReplyCreated", "kafka-topic-strategy1"),
+        ("produce", "requestscreated", "RequestCreated", "kafka-topic-strategy1"),
     ]
 
 
@@ -341,7 +341,7 @@ record OrderCreated(String id) {}
     )
 
     assert [(endpoint.topic, endpoint.message_type) for endpoint in endpoints] == [
-        ("ORDERS_CREATED", "OrderCreated")
+        ("orderscreated", "OrderCreated")
     ]
 
 

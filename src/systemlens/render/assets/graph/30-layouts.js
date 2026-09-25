@@ -471,7 +471,7 @@
         });
         delete graphCanvas.dataset.selectedCodeFlow;
         clearPathControls();
-        setDetailsEmpty("Selectionnez un noeud ou un module pour afficher ses informations.");
+        setDetailsEmpty("Sélectionnez un nœud ou un module pour afficher ses informations.");
       }
       const zoomOutButton = document.getElementById("zoom-out");
       zoomOutButton.disabled = false;
@@ -494,13 +494,13 @@
       if (libraries === null && layout !== "cluster") {
         updateGraphState({ activeLayout: previousLayout });
         setActiveLayout(previousLayout);
-        layoutStatus.textContent = "Les dispositions du graphe sont indisponibles ; la disposition initiale est conservee.";
+        layoutStatus.textContent = "Les dispositions du graphe sont indisponibles ; la disposition initiale est conservée.";
         return;
       }
       if (layout === "elk" && libraries.elk === null) {
         updateGraphState({ activeLayout: previousLayout });
         setActiveLayout(previousLayout);
-        layoutStatus.textContent = "ELK.js est indisponible ; la disposition initiale est conservee.";
+        layoutStatus.textContent = "ELK.js est indisponible ; la disposition initiale est conservée.";
         return;
       }
       try {

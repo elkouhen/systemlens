@@ -32,17 +32,20 @@ _STRATEGY1_KAFKA_KEY_RE = re.compile(
 )
 _STRATEGY1_SEND_METHOD_PREFIX = "envoyerMessageKafka"
 def _strategy1_topic_name(value: str) -> str:
-    """Normalize a Java accessor or Spring property segment to a Kafka topic."""
+    """Normalize a Strategy1 topic key for case-insensitive matching."""
     separated = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", value)
     separated = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", separated)
-    return separated.replace("-", "_").upper()
+    return separated.replace("-", "_").replace("_", "").casefold()
+
+
 def _strategy1_topic_from_value(value_node, source: bytes, repo_root: Path, rel_path: str) -> tuple[str, bool]:
     """Resolve a Strategy1 `getTopics().getXxx()` argument before fallback."""
     if value_node is not None:
         value = java_parser.node_text(source, value_node)
         if match := _STRATEGY1_PRODUCER_RE.search(value):
             return _strategy1_topic_name(match.group(1)), False
-    return _kafka_topic_from_value(value_node, source, repo_root, rel_path)
+    topic, dynamic = _kafka_topic_from_value(value_node, source, repo_root, rel_path)
+    return (_strategy1_topic_name(topic) if not dynamic else topic), dynamic
 def _kafka_listener_annotation_blocks(source: str) -> list[tuple[int, str]]:
     """Return complete `@KafkaListener(...)` blocks without parsing Java AST."""
     blocks: list[tuple[int, str]] = []
@@ -94,8 +97,9 @@ def infer_kafka_topic_strategy1_endpoints(
     family call (`envoyerMessageKafka(topic, payload)`,
     `envoyerMessageKafkaRequest(...)`, `envoyerMessageKafkaReply(...)`, etc.).
     Listeners use a Spring key shaped as `kafka.topics.xxx.<property>`.
-    Accessor and property conventions are normalized to the physical Kafka
-    name in `SCREAMING_SNAKE_CASE`.
+    Accessor and property conventions are normalized to a case-folded Kafka
+    key with underscores removed. Topic dots and other physical separators
+    remain unchanged.
     """
     if files is None:
         candidate_files = [
@@ -183,6 +187,12 @@ def apply_kafka_topic_strategy1(
     endpoints: list[MessageEndpoint], strategy_endpoints: list[MessageEndpoint]
 ) -> list[MessageEndpoint]:
     """Replace standard Kafka extraction without discarding known payload types."""
+    normalized_strategy_endpoints = [
+        replace(endpoint, topic=_strategy1_topic_name(endpoint.topic))
+        if endpoint.system == "kafka" and not endpoint.topic_dynamic
+        else endpoint
+        for endpoint in strategy_endpoints
+    ]
     generic_by_site: dict[tuple[str, str, int], list[MessageEndpoint]] = {}
     for endpoint in endpoints:
         if endpoint.system == "kafka":
@@ -191,7 +201,7 @@ def apply_kafka_topic_strategy1(
             ).append(endpoint)
     covered_sites = {
         (endpoint.role, endpoint.path, endpoint.start_line)
-        for endpoint in strategy_endpoints
+        for endpoint in normalized_strategy_endpoints
     }
     retained = [
         endpoint
@@ -200,7 +210,7 @@ def apply_kafka_topic_strategy1(
         or (endpoint.role, endpoint.path, endpoint.start_line) not in covered_sites
     ]
     enriched_strategy_endpoints = []
-    for endpoint in strategy_endpoints:
+    for endpoint in normalized_strategy_endpoints:
         if endpoint.message_type is None:
             message_types = {
                 candidate.message_type

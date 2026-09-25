@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from systemlens.conventions.strategy1.indexing import is_openapi_declaration_path
-from systemlens.conventions.strategy1.kafka import apply_kafka_endpoints
+from systemlens.conventions.strategy1.kafka import apply_kafka_endpoints, infer_kafka_endpoints
 from systemlens.conventions.strategy1.layers import classify_module
 from systemlens.conventions.strategy1.profile import is_enabled
 from systemlens.conventions.strategy1.rest import rest_target_service_hint
@@ -50,4 +50,27 @@ def test_strategy1_replacement_keeps_an_ast_payload_type() -> None:
 
     result = apply_kafka_endpoints([generic], [strategy])
 
+    assert result[0].topic == "orderscreated"
     assert result[0].message_type == "OrderCreated"
+
+
+def test_strategy1_normalizes_topic_keys_without_underscores_and_with_casefold(tmp_path: Path) -> None:
+    source = tmp_path / "src/main/java/com/example/Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class Publisher {
+  void publish(OrderCreated event) {
+    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getOrders_Created(), event);
+  }
+}
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_endpoints(
+        tmp_path,
+        ["src/main/java/com/example/Publisher.java"],
+    )
+
+    assert [endpoint.topic for endpoint in endpoints] == ["orderscreated"]

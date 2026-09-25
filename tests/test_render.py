@@ -520,7 +520,7 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     assert '"Sorties",' in document
     assert 'createDetailsGroup("Flux internes", false)' in document
     assert 'appendPortFlowList("Flux potentiels", uniqueConnections, internalFlowsGroup)' in document
-    assert 'createDetailsGroup("Flux associés")' in document
+    assert 'createDetailsGroup("Flux associés", false)' in document
     assert 'appendAssociatedCodeFlows("Flux associés", associatedFlows, associatedFlowsGroup);' in document
     assert 'listAction.textContent = "Flux";' in document
     assert 'graphAction.textContent = "Graphe";' in document
@@ -597,7 +597,7 @@ def test_graph_uses_persisted_mongodb_relation_evidence_when_available() -> None
     assert not any(link["provenance"] == "module inventory" for link in links)
     assert '.toolbar.has-details .toolbar-panel { display: none; }' in document
     assert (
-        '.toolbar.has-details #graph-panel > :not(#graph-context):not(#layout-status) '
+        '.toolbar.has-details #graph-panel > :not(#quick-search):not(#graph-context):not(#layout-status) '
         "{ display: none; }"
     ) in document
     assert 'toolbar?.classList.add("has-details");' in document
@@ -1165,12 +1165,12 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'placeholder="orders ou orders -> payments"' in document
     assert "function resolveExactNodeName(name, allowedKinds = null)" in document
     assert "function runExploreSearch()" in document
-    assert "Aucun itineraire de topics oriente ne passe par les noeuds demandes dans cet ordre." in document
+    assert "Aucun itinéraire de topics orienté ne passe par les nœuds demandés dans cet ordre." in document
     assert 'link => link.kind === "kafka"' in document
     assert "${nodeKindLabel(node)}${dtoSuffix}" in document
     assert "function appendServiceKafkaActivities" in document
     assert document.count('createDetailsGroup("Relations")') == 3
-    assert 'appendRelationList("APIs consommees"' in document
+    assert 'appendRelationList("APIs consommées"' in document
     assert 'appendServiceKafkaActivities(node, "produce", "Messages publiés"' in document
     assert 'appendRelationList("Services utilisant cette donnée"' in document
     assert 'appendList("Stockee par", [node.owner], relationsGroup)' not in document
@@ -1410,6 +1410,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'if (graphState.selectedCodeFlowId) {' in document
     assert 'if (graphState.renderMode === "symbols" || !graphState.selectedCodeFlowId) return;' in document
     assert 'id="quick-search"' in document
+    assert 'id="path-query"' not in document
+    assert 'id="show-path"' not in document
+    assert 'class="path-help"' in document
     assert document.index('class="toolbar-tabs"') < document.index('id="quick-search"')
     assert document.index('id="quick-search"') < document.index('class="graph-actions"')
     graph_panel_start = document.index('id="graph-panel"')

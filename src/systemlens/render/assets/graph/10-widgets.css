@@ -17,11 +17,10 @@
     .toolbar-panel[hidden] { display: none; }
     .toolbar.has-details .toolbar-panel { display: none; }
     .toolbar.has-details #graph-panel:not([hidden]) { display: grid; }
-    .toolbar.has-details #graph-panel > :not(#graph-context):not(#layout-status) { display: none; }
-    .toolbar.has-details .quick-search, .toolbar.has-details .graph-summary, .toolbar.has-details .inventory-status { display: none; }
+    .toolbar.has-details #graph-panel > :not(#quick-search):not(#graph-context):not(#layout-status) { display: none; }
     .quick-search { display: grid; gap: 8px; }
     .quick-search[hidden] { display: none; }
-    #search, #path-query { width: 100%; }
+    #search { width: 100%; }
     .graph-context { display: grid; gap: 8px; }
     .graph-context[hidden] { display: none; }
     .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 370px; display: flex; align-items: center; gap: 8px; width: min(760px, calc(100vw - 390px)); max-height: min(30vh, 210px); box-sizing: border-box; padding: 8px 9px; overflow: hidden; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 8px; color: #283b73; background: rgba(238, 242, 255, .96); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; }
@@ -88,10 +87,11 @@
     .path-controls { border-top: 1px solid #e2e8f0; padding-top: 8px; }
     .path-controls summary, .legend summary { color: #315f9b; font-size: 12px; font-weight: 600; cursor: pointer; }
     .path-controls[open] summary { margin-bottom: 8px; }
-    .path-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+    .path-row { display: grid; gap: 6px; align-items: center; }
+    .path-help { margin: 0; color: #64748b; font-size: 11px; line-height: 1.4; }
     .path-actions { display: flex; align-items: center; gap: 6px; grid-column: 1 / -1; }
     .path-lock { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 8px; border: 1px solid #cdd7e5; border-radius: 6px; color: #315f9b; background: #fff; font-size: 12px; white-space: nowrap; cursor: pointer; }
-    #show-path, #show-simple-paths { width: auto; padding: 0 10px; font-size: 12px; font-weight: 600; }
+    #show-simple-paths { width: auto; padding: 0 10px; font-size: 12px; font-weight: 600; }
     .explore-search-label { color: #315f9b; font-size: var(--type-section); font-weight: 750; line-height: 1.3; }
     .explore-search-help, .explore-search-status { margin: -5px 0 0; color: #64748b; font-size: 11px; line-height: 1.35; }
     .explore-search-status { min-height: 15px; color: #a53f3f; font-weight: 600; }

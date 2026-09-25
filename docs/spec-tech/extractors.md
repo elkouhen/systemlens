@@ -71,7 +71,10 @@ With `--strategy strategy1`, every method whose name starts with
 `envoyerMessageKafkaRequest(topic, payload)` and
 `envoyerMessageKafkaReply(topic, payload)`. A first argument shaped as
 `kafkaProperties.getTopics().getXxx()` resolves to the normalized Strategy1
-topic name; other values use the conservative topic resolver. The second
+topic key; other values use the conservative topic resolver and receive the
+same normalization when they are concrete. Strategy1 normalization applies
+`casefold()` after removing underscores; dots and other physical separators
+remain unchanged. The second
 argument is always used to derive the payload type from its method parameter,
 local variable declaration or enclosing class field, including calls with
 three arguments. This positional rule applies identically to

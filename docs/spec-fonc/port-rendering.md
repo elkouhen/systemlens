@@ -234,6 +234,9 @@ not affect persisted inventory facts or exported architecture data.
 
 Its initial view places resource and itinerary search inside Explorer,
 immediately below the navigation tabs and before camera and rendering controls.
+The search is the single entry point for exact resource selection and shortest
+itinerary queries. Advanced actions reuse its current itinerary to list simple
+alternatives or lock the selection; they do not introduce a second path input.
 Graph-specific context follows the search: its first row contains zoom, fit
 and reset actions; its second row contains the graph-view and node-rendering
 selectors; architecture counters and inventory status follow. This whole context appears only in
@@ -244,7 +247,8 @@ external services, messaging resources, Data resources and other node
 categories. This filtering applies equally to native and MCP-enriched graph
 vocabularies. Placement strategies remain available as advanced controls.
 The toolbar does not expose a separate path-history section. Paths remain
-available directly from search and the advanced route tools in `Explore`.
+available from the Explorer search, while itinerary comparison remains in the
+advanced actions.
 The Explorer search field does not select a node while text is being composed:
 selection and itinerary evaluation occur when the user presses Enter. This
 allows a query such as `service-a -> service-b` to be entered continuously
@@ -320,15 +324,13 @@ redraws.
 The details panel is integrated into the left navigation panel and is hidden
 until a resource, architecture module, build project, or itinerary is selected. Opening it MUST
 NOT resize or crop the full-window graph workspace; only the floating panel's
-contents scroll vertically. The detail view temporarily
-replaces the active tab content while preserving the global toolbar,
-primary view controls and navigation tabs. The selection action is hidden when
-nothing is selected and becomes an explicit `Fermer` action while details are
-shown. Architecture
-counters are temporarily hidden to give the details usable vertical space;
-the current graph-view status remains visible so direct module navigation has
-an immediate confirmation. Clearing the selection restores the Explorer
-controls and counters. Buttons inside details use the full available width for
+contents scroll vertically. The detail view keeps the Explorer search and graph
+controls available above the selected content, while display filters and
+advanced actions remain collapsed to preserve vertical space. The selection
+action is hidden when nothing is selected and becomes an explicit `Fermer`
+action while details are shown. Architecture counters remain visible as compact
+context indicators. Clearing the selection restores the complete Explorer
+controls. Buttons inside details use the full available width for
 resource and module names rather than inheriting the compact square dimensions
 of toolbar icon buttons. Node selection MUST NOT
 move, zoom, refit, or otherwise alter the camera in any primary view. Selection
