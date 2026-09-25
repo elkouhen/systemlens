@@ -78,7 +78,8 @@ and applies only a unique source-backed result; ambiguous results remain
 unknown.
 Strategy1 topic keys are compared after `casefold()` and removal of `_`; dots
 and other physical separators remain unchanged. Dynamic topic expressions are
-not normalized or paired with concrete topics.
+not normalized or paired with concrete topics. A conditional topic expression
+creates one producer fact for each statically resolved branch.
 When the publishing method is annotated with `@Scheduled(cron = "...")`, the
 flow starts with an explicit `Déclencheur Cron` step, followed by the Kafka
 publication owned by that method. The cron expression is retained as source

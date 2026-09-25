@@ -46,6 +46,22 @@ def _strategy1_topic_from_value(value_node, source: bytes, repo_root: Path, rel_
             return _strategy1_topic_name(match.group(1)), False
     topic, dynamic = _kafka_topic_from_value(value_node, source, repo_root, rel_path)
     return (_strategy1_topic_name(topic) if not dynamic else topic), dynamic
+
+
+def _strategy1_topic_values(
+    value_node, source: bytes, repo_root: Path, rel_path: str
+) -> list[tuple[str, bool]]:
+    """Resolve every branch of a Strategy1 topic conditional expression."""
+    if value_node is None or value_node.type != "ternary_expression":
+        return [_strategy1_topic_from_value(value_node, source, repo_root, rel_path)]
+    values: list[tuple[str, bool]] = []
+    for field in ("consequence", "alternative"):
+        branch = value_node.child_by_field_name(field)
+        if branch is not None:
+            values.extend(_strategy1_topic_values(branch, source, repo_root, rel_path))
+    return list(dict.fromkeys(values))
+
+
 def _kafka_listener_annotation_blocks(source: str) -> list[tuple[int, str]]:
     """Return complete `@KafkaListener(...)` blocks without parsing Java AST."""
     blocks: list[tuple[int, str]] = []
@@ -118,7 +134,26 @@ def infer_kafka_topic_strategy1_endpoints(
         source_bytes, root = parsed
         source = source_bytes.decode("utf-8", errors="replace")
         lines = source.splitlines()
+        strategy_send_nodes = []
+        for candidate in java_parser.walk(root):
+            if candidate.type != "method_invocation":
+                continue
+            _object_node, candidate_name, candidate_args = java_parser.invocation_parts(
+                candidate, source_bytes
+            )
+            if (
+                candidate_name is not None
+                and candidate_name.startswith(_STRATEGY1_SEND_METHOD_PREFIX)
+                and len(candidate_args) >= 2
+            ):
+                strategy_send_nodes.append(candidate)
         for match in _STRATEGY1_PRODUCER_RE.finditer(source):
+            match_offset = len(source[:match.start()].encode("utf-8"))
+            if any(
+                candidate.start_byte <= match_offset < candidate.end_byte
+                for candidate in strategy_send_nodes
+            ):
+                continue
             line_no = source.count("\n", 0, match.start()) + 1
             method = next(
                 (
@@ -159,9 +194,7 @@ def infer_kafka_topic_strategy1_endpoints(
                     annotation,
                 )
                 endpoints[endpoint.id] = endpoint
-        for node in java_parser.walk(root):
-            if node.type != "method_invocation":
-                continue
+        for node in strategy_send_nodes:
             _object_node, method_name, args = java_parser.invocation_parts(node, source_bytes)
             if (
                 method_name is None
@@ -169,19 +202,21 @@ def infer_kafka_topic_strategy1_endpoints(
                 or len(args) < 2
             ):
                 continue
-            topic, dynamic = _strategy1_topic_from_value(args[0], source_bytes, repo_root, rel_path)
-            endpoint = _kafka_endpoint(
-                repo_root,
-                rel_path,
-                source_bytes,
-                node,
-                "produce",
-                "kafka-topic-strategy1",
-                topic,
-                dynamic,
-                _strategy1_method_payload_type(source_bytes, node),
-            )
-            endpoints[endpoint.id] = endpoint
+            for topic, dynamic in _strategy1_topic_values(
+                args[0], source_bytes, repo_root, rel_path
+            ):
+                endpoint = _kafka_endpoint(
+                    repo_root,
+                    rel_path,
+                    source_bytes,
+                    node,
+                    "produce",
+                    "kafka-topic-strategy1",
+                    topic,
+                    dynamic,
+                    _strategy1_method_payload_type(source_bytes, node),
+                )
+                endpoints[endpoint.id] = endpoint
     return list(endpoints.values())
 def apply_kafka_topic_strategy1(
     endpoints: list[MessageEndpoint], strategy_endpoints: list[MessageEndpoint]

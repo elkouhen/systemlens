@@ -345,6 +345,32 @@ record OrderCreated(String id) {}
     ]
 
 
+def test_strategy1_conditional_topic_creates_one_endpoint_per_static_branch(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class Publisher {
+  void publish(OrderCreated event, boolean retry) {
+    kafkaService.envoyerMessageKafka(
+        retry ? kafkaProperties.getTopics().getOrders_Created() : kafkaProperties.getTopics().getOrders_Retry(),
+        event);
+  }
+}
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_topic_strategy1_endpoints(
+        tmp_path, ["src/main/java/com/example/Publisher.java"]
+    )
+
+    assert sorted(endpoint.topic for endpoint in endpoints) == [
+        "orderscreated",
+        "ordersretry",
+    ]
+
+
 def test_index_is_incremental_without_embeddings(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
