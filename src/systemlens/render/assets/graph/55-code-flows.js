@@ -12,7 +12,6 @@
     const codeFlowsSummary = document.getElementById("code-flows-summary");
     const codeFlowsTitle = document.getElementById("code-flows-title");
     const codeFlowCollapse = document.getElementById("code-flow-collapse");
-    const flowsPanel = document.getElementById("flows-panel");
     function codeFlowStepLabel(kind) {
       return ({
         http_entry: "Entrée HTTP",
