@@ -5,6 +5,7 @@ import re
 import sys
 import time
 import xml.etree.ElementTree as ET
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,7 +38,10 @@ def _is_build_output_path(root: Path, path: Path) -> bool:
     example OpenAPI output below ``target/generated-sources``) are not source
     modules and must never affect the persisted module graph.
     """
-    return bool({"target", "build"}.intersection(path.relative_to(root).parts))
+    parts = path.relative_to(root).parts
+    if "target" in parts:
+        return True
+    return any(part == "build" and "src" not in parts[:index] for index, part in enumerate(parts))
 
 
 @dataclass(frozen=True)
@@ -85,10 +89,11 @@ def _expand_persistence_classes(
         for candidate in matches
     }
     root_keys = {(item.collection, item.qualified_name) for item in roots}
-    pending = list(sorted(root_keys))
+    pending = deque(sorted(root_keys))
+    scheduled = set(root_keys)
     definitions: dict[tuple[str, str], MongoPersistenceClass] = {}
     while pending:
-        collection, qualified_name = pending.pop(0)
+        collection, qualified_name = pending.popleft()
         key = (collection, qualified_name)
         if key in definitions:
             continue
@@ -112,11 +117,11 @@ def _expand_persistence_classes(
             root=key in root_keys,
         )
         for reference in fields:
-            pending.extend(
-                (collection, qualified_reference)
-                for qualified_reference in reference.references
-                if (collection, qualified_reference) not in definitions
-            )
+            for qualified_reference in reference.references:
+                reference_key = (collection, qualified_reference)
+                if reference_key not in scheduled:
+                    scheduled.add(reference_key)
+                    pending.append(reference_key)
     return tuple(sorted(definitions.values()))
 
 

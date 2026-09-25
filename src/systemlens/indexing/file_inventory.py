@@ -70,7 +70,15 @@ def is_build_output(rel_path: str) -> bool:
     with copied YAML files.  Treating those as source duplicates REST gateway
     ports and makes an index depend on whether someone compiled beforehand.
     """
-    return bool({"target", "build"}.intersection(rel_path.split("/")))
+    parts = rel_path.split("/")
+    if "target" in parts:
+        return True
+    # A Gradle output directory is rooted at the module level. A package or
+    # resource named ``build`` remains valid when it is below a source root.
+    for index, part in enumerate(parts):
+        if part == "build" and "src" not in parts[:index]:
+            return True
+    return False
 
 
 def _nested_build_roots(repo_root: Path) -> tuple[Path, ...]:

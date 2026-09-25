@@ -17,6 +17,7 @@ from collections.abc import Iterable, Mapping
 from typing import Callable, Iterator, Sequence
 
 from systemlens.domain.code_flows import IntegrationMethod
+from systemlens.indexing.file_inventory import is_build_output
 
 
 @dataclass(frozen=True)
@@ -415,7 +416,7 @@ def _prepare_source_only_root(repo_root: Path, destination: Path) -> int:
     signatures use generated DTOs, while the rest of ``target`` remains an
     untrusted build artifact and is intentionally excluded.
     """
-    excluded_directories = {".git", ".systemlens", "target", "build", "out"}
+    excluded_directories = {".git", ".systemlens", "target", "out"}
     copied = 0
     for source in repo_root.rglob("*.java"):
         if not source.is_file():
@@ -426,7 +427,10 @@ def _prepare_source_only_root(repo_root: Path, destination: Path) -> int:
             parts[index:index + 2] == ("target", "generated-sources")
             for index in range(len(parts) - 1)
         )
-        if any(part in excluded_directories for part in parts) and not generated_target:
+        if (
+            any(part in excluded_directories for part in parts)
+            or is_build_output(relative.as_posix())
+        ) and not generated_target:
             continue
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)

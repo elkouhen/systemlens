@@ -29,6 +29,12 @@ substring matching are not used. Route compatibility is evaluated only within
 that service. A targetless or ambiguous call remains an endpoint fact and is
 reported as unresolved rather than creating an internal edge.
 
+REST graph matching indexes served routes by resolved target service before
+checking route compatibility. If `C` is the number of calls and `S` the number
+of served routes, matching costs `O(C + S + M)`, where `M` is the number of
+actual route candidates, rather than comparing every call with every served
+route.
+
 When source generation is requested for a Maven project, SystemLens invokes
 `mvn generate-sources` in batch, non-interactive and offline mode. It does not
 compile the project or run tests. If the local Maven cache lacks a required
@@ -48,6 +54,17 @@ status (`unknown`, `partial`, or `mismatch`) so consumers can distinguish
 evidence from a complete typed match. For topic-based
 `KafkaTemplate.send` overloads, the final argument is the payload: preceding
 arguments are a partition and/or key and are never reported as a message type.
+
+Kafka consumers are indexed by concrete topic before producer matching. With
+`P` producers and `K` consumers, relation construction costs `O(P + K + M)`,
+where `M` is the number of producer and consumer pairs sharing a topic. Dynamic
+topics are excluded from this index and remain unresolved evidence.
+
+Mongo persistence classes use a queue to compute the transitive closure of
+statically resolved project-type references. Each `(collection, qualified type)`
+key is scheduled once, so the closure costs `O(V + E)` for `V` persisted types
+and `E` resolved field references, apart from the cost of resolving field type
+names.
 
 With `--strategy strategy1`, every method whose name starts with
 `envoyerMessageKafka` is an additional producer convention, including

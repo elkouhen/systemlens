@@ -115,6 +115,16 @@ def test_source_only_root_keeps_generated_sources_but_excludes_build_outputs(tmp
     assert (destination / "service" / "target" / "generated-sources" / "asyncapi" / "OrderPlaced.java").exists()
 
 
+def test_source_only_root_keeps_source_packages_named_build(tmp_path: Path) -> None:
+    source = tmp_path / "service/src/main/java/com/example/build/Order.java"
+    source.parent.mkdir(parents=True)
+    source.write_text("class Order {}", encoding="utf-8")
+    destination = tmp_path / "source"
+
+    assert codeql._prepare_source_only_root(tmp_path, destination) == 1
+    assert (destination / "service/src/main/java/com/example/build/Order.java").exists()
+
+
 def test_generate_sources_runs_only_the_maven_generation_phase(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "pom.xml").write_text("<project />", encoding="utf-8")
     observed: list[tuple[list[str], Path | None]] = []

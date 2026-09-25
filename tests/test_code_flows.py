@@ -844,6 +844,44 @@ class OrderPublisher {
     ]
 
 
+def test_codeql_join_resume_skips_completed_input_methods(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderFlow.java"
+    file = tmp_path / source
+    file.parent.mkdir(parents=True, exist_ok=True)
+    file.write_text(
+        """package com.example;
+class OrderFlow {
+  void first() { publish(); }
+  void second() { publish(); }
+  void publish() { kafka.send(); }
+}
+""",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        _endpoint("first-entry", "consume", "kafka", "orders.first", source, 3),
+        _endpoint("second-entry", "consume", "kafka", "orders.second", source, 4),
+        _endpoint("output", "produce", "kafka", "orders.out", source, 5),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
+    calls = [
+        CodeQLCall("com.example.OrderFlow.first", source, 3,
+                   "com.example.OrderFlow.publish", source, 5, 3),
+        CodeQLCall("com.example.OrderFlow.second", source, 4,
+                   "com.example.OrderFlow.publish", source, 5, 4),
+    ]
+
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, calls, resume_from_entry=1
+    )
+
+    assert {flow.steps[0].endpoint_id for flow in flows} == {"second-entry"}
+
+
 def test_codeql_materializes_same_method_contract_input_and_output(tmp_path: Path) -> None:
     source = "orders/src/main/java/com/example/OrderController.java"
     file = tmp_path / source

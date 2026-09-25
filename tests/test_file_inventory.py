@@ -15,3 +15,13 @@ def test_inventory_excludes_maven_and_gradle_build_outputs(tmp_path: Path) -> No
     files = list_repo_files(tmp_path, Config())
 
     assert set(files) == {"service/src/main/java/App.java"}
+
+
+def test_inventory_keeps_source_packages_named_build(tmp_path: Path) -> None:
+    source = tmp_path / "service/src/main/java/com/example/build/Order.java"
+    source.parent.mkdir(parents=True)
+    source.write_text("class Order {}", encoding="utf-8")
+
+    files = list_repo_files(tmp_path, Config())
+
+    assert set(files) == {"service/src/main/java/com/example/build/Order.java"}

@@ -19,6 +19,13 @@ Parent: [Technical specification](../SPEC-TECH.md).
    endpoints.
 7. Persist hashes, modules, dependencies and derived relations.
 
+The file inventory scans all eligible paths and hashes their contents on each
+index run. With `F` eligible files, `B` total bytes and `P` configured path
+patterns, its cost is `O(F log F + B + F × P)`. Sorting provides deterministic
+processing order, hashing provides the change decision, and pattern checks are
+applied once per file. Incrementality limits AST extraction to changed files,
+but it does not avoid this complete inventory pass.
+
 Steps 1 to 7 execute inside `Store.transaction()`. The writable connection uses
 `BEGIN IMMEDIATE`, then commits the complete snapshot only after relation
 materialization succeeds; any exception rolls back files, endpoints, modules,
@@ -82,6 +89,11 @@ cached per input method/confidence in a bounded in-memory cache, costing
 O(V+E) per retained tree plus route reconstruction proportional to emitted
 steps, instead of a BFS per input/output pair. HTML checkpoints filter cached
 flows instead of rebuilding and retraversing the method-call graph for every module.
+When a join is resumed, both the direct-flow pass and the bounded BFS start at
+the persisted input-method offset. Previously completed input methods are not
+revisited. The resume checkpoint therefore preserves the same `O(I × (V + E))`
+worst-case bound as a complete join while reducing the work in proportion to
+the completed prefix.
 The read-only `analyze indexing-audit` command evaluates twenty distinct
 quality-control rules against the persisted snapshot. It reports only detected
 findings, keeps zero-count rules in the JSON summary, and includes relative

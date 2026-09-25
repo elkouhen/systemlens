@@ -314,7 +314,10 @@ def build_graph(
         for endpoint in endpoints
     ]
     calls = [(s, e) for s, e in all_endpoints if e.system == "rest" and e.role == "call"]
-    serves = [(s, e) for s, e in all_endpoints if e.system == "rest" and e.role == "serve"]
+    serves_by_service: dict[str, list[MessageEndpoint]] = {}
+    for service, endpoint in all_endpoints:
+        if endpoint.system == "rest" and endpoint.role == "serve":
+            serves_by_service.setdefault(service, []).append(endpoint)
     manifest_services = {
         service
         for service, endpoint in all_endpoints
@@ -327,7 +330,10 @@ def build_graph(
         and (service not in manifest_services or endpoint.source == "manifest")
     ]
     produces = [(s, e) for s, e in kafka_endpoints if e.role == "produce"]
-    consumes = [(s, e) for s, e in kafka_endpoints if e.role == "consume"]
+    consumes_by_topic: dict[str, list[tuple[str, MessageEndpoint]]] = {}
+    for service, endpoint in kafka_endpoints:
+        if endpoint.role == "consume" and not endpoint.topic_dynamic:
+            consumes_by_topic.setdefault(endpoint.topic, []).append((service, endpoint))
 
     edges: list[GraphEdge] = []
     seen: set[tuple[str, str, str, str, str]] = set()
@@ -340,7 +346,8 @@ def build_graph(
         if resolution.status != "resolved" or resolution.service is None:
             continue
         target_service = resolution.service
-        for serve_service, serve in serves:
+        for serve in serves_by_service.get(target_service, ()):
+            serve_service = target_service
             if call_service == serve_service:
                 continue
             if serve_service != target_service:
@@ -394,14 +401,14 @@ def build_graph(
     # outside the indexed workspace.  Keep it as a microservice relation (not
     # an untyped external API) so the topology can label the target external.
     for call_service, call in calls:
-        service = external_microservice_name(call)
-        if service is None or call_service == service:
+        external_service = external_microservice_name(call)
+        if external_service is None or call_service == external_service:
             continue
-        key = ("rest", call_service, service, "configured-external", "")
+        key = ("rest", call_service, external_service, "configured-external", "")
         if key in seen:
             continue
         seen.add(key)
-        edges.append(GraphEdge("rest", call_service, service, call, None))
+        edges.append(GraphEdge("rest", call_service, external_service, call, None))
 
     # A concrete shared topic establishes a producer/consumer relation. Missing
     # payload types lower confidence but do not prevent the relation. Two known
@@ -409,18 +416,13 @@ def build_graph(
     for produce_service, produce in produces:
         if produce.topic_dynamic:
             continue
-        for consume_service, consume in consumes:
+        for consume_service, consume in consumes_by_topic.get(produce.topic, ()):
             if produce_service == consume_service:
                 continue
-            if consume.topic_dynamic:
-                continue
             if (
-                produce.topic == consume.topic
-                and (
-                    produce.message_type is None
-                    or consume.message_type is None
-                    or produce.message_type == consume.message_type
-                )
+                produce.message_type is None
+                or consume.message_type is None
+                or produce.message_type == consume.message_type
             ):
                 key = ("kafka", produce_service, consume_service, produce.id, consume.id)
                 if key in seen:

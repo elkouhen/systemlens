@@ -772,9 +772,7 @@ def materialize_codeql_code_flows(
         target_owner = target.qualified_method.rsplit(".", 1)[0]
         return entry_owner == target_owner
 
-    for entry in methods:
-        if not entry.input_endpoint_ids:
-            continue
+    for entry in input_methods[resume_from_entry:]:
         component = component_by_method.get(entry.id, frozenset({entry.id}))
         for trigger_id in entry.input_endpoint_ids:
             trigger = endpoint_by_id.get(trigger_id)
