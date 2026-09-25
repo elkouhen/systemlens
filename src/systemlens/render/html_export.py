@@ -617,6 +617,20 @@ def render_graph_html(
             return _vscode_file_uri(source_roots[0] / flow.path, root_path, source_roots, flow.start_line)
         return None
 
+    call_graphs: dict[str, dict[str, object]] = {}
+    graph_ids_by_json: dict[str, str] = {}
+    export_flow_items: list[tuple[CodeFlow, dict[str, object], int, str]] = []
+    for flow, call_graph, equivalent_count in _all_export_flows(
+        list(code_flows or []), endpoints_by_service, edges
+    ):
+        graph_json = json.dumps(call_graph, sort_keys=True, separators=(",", ":"))
+        call_graph_id = graph_ids_by_json.get(graph_json)
+        if call_graph_id is None:
+            call_graph_id = f"call-graph-{len(call_graphs) + 1}"
+            graph_ids_by_json[graph_json] = call_graph_id
+            call_graphs[call_graph_id] = call_graph
+        export_flow_items.append((flow, call_graph, equivalent_count, call_graph_id))
+
     serialized_code_flows = [
         {
             "id": flow.id,
@@ -632,7 +646,7 @@ def render_graph_html(
             "equivalent_count": equivalent_count,
             "reason": flow.reason,
             "vscode_uri": flow_vscode_uri(flow),
-            "call_graph": call_graph,
+            "call_graph_id": call_graph_id,
             "steps": [
                 {
                     "order": step.order,
@@ -648,11 +662,10 @@ def render_graph_html(
                 for step in flow.steps
             ],
         }
-        for flow, call_graph, equivalent_count in _all_export_flows(
-            list(code_flows or []), endpoints_by_service, edges
-        )
+        for flow, _call_graph, equivalent_count, call_graph_id in export_flow_items
     ]
     view_model["code_flows"] = serialized_code_flows
+    view_model["call_graphs"] = call_graphs
     view_model["progress_notice"] = progress_notice
     flow_counts = Counter(flow["module"] for flow in serialized_code_flows)
     nodes = cast(list[dict[str, object]], view_model["nodes"])

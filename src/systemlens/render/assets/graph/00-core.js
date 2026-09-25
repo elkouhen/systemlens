@@ -1,5 +1,10 @@
 // Ordered source module: 00-core.js
     const graphData = JSON.parse(document.getElementById("graph-data").textContent);
+    function callGraphForFlow(flow) {
+      return graphData.call_graphs?.[flow?.call_graph_id]
+        || flow?.call_graph
+        || graphData.all_flows_call_graph;
+    }
     // HTML cards are rendered in screen space. Layouts and collision envelopes
     // must use the same dimensions in every view; only their graph positions
     // change when the camera zooms or pans.

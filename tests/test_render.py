@@ -68,6 +68,14 @@ def _html_graph_data(document: str) -> dict[str, object]:
     return json.loads(match.group(1))
 
 
+def _flow_call_graph(data: dict[str, object], flow: dict[str, object]) -> dict[str, object]:
+    graphs = data.get("call_graphs", {})
+    assert isinstance(graphs, dict)
+    graph = graphs[flow["call_graph_id"]]
+    assert isinstance(graph, dict)
+    return graph
+
+
 def test_export_includes_persisted_codeql_call_graph() -> None:
     caller = IntegrationMethod("a", "orders", "Orders.receive", "Orders.java", 1, 4, ("in",), ())
     callee = IntegrationMethod("b", "orders", "Orders.publish", "Orders.java", 5, 7, (), ("out",))
@@ -137,7 +145,7 @@ def test_global_input_label_references_its_local_output() -> None:
             ),
         )],
     ))
-    flow_graph = data["code_flows"][0]["call_graph"]
+    flow_graph = _flow_call_graph(data, data["code_flows"][0])
     assert flow_graph["node_order"] == ["payments", "inventory"]
     assert [
         (edge["source"], edge["target"], edge["kind"])
@@ -231,7 +239,7 @@ def test_call_graph_retains_all_typed_kafka_fanout_branches() -> None:
             ),
         )],
     ))
-    flow_graph = data["code_flows"][0]["call_graph"]
+    flow_graph = _flow_call_graph(data, data["code_flows"][0])
     assert {
         (edge["source"], edge["target"])
         for edge in flow_graph["edges"]
@@ -303,7 +311,7 @@ def test_export_fuses_kafka_producer_and_consumer_fragments() -> None:
     flow = next(flow for flow in data["code_flows"] if flow["module"] == "orders")
     assert {
         (edge["source"], edge["target"])
-        for edge in flow["call_graph"]["edges"]
+            for edge in _flow_call_graph(data, flow)["edges"]
     } == {("orders", "inventory"), ("inventory", "restock")}
 
 
@@ -445,7 +453,7 @@ def test_call_graph_keeps_all_fan_in_and_cycle_arcs() -> None:
             steps=(CodeFlowStep(1, "message_publish", "orders.created", "A.java", 1, 1, cycle_a.id),),
         )],
     ))
-    cycle_graph = cycle_data["code_flows"][0]["call_graph"]
+    cycle_graph = _flow_call_graph(cycle_data, cycle_data["code_flows"][0])
     assert set(cycle_graph["nodes"]) == {"a", "b"}
     assert {
         (edge["source"], edge["target"])
@@ -733,7 +741,7 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "const interServiceCodeFlows = codeFlows.filter(flow =>" in document
     assert "function serviceIdsForCodeFlow(flow)" in document
     assert "function servicesForCodeFlow(flow)" in document
-    assert "flow.call_graph?.node_order" in document
+    assert "callGraphForFlow(flow)?.node_order" in document
     assert "graphData.all_flows_call_graph" in document
     assert "serviceIdsForCodeFlow(right).size - serviceIdsForCodeFlow(left).size" in document
     assert 'servicesLabel.textContent = "Services traversés"' in document
@@ -802,7 +810,7 @@ def test_export_builds_one_call_graph_from_all_flows() -> None:
     ]
     assert [edge["order"] for edge in graph["edges"]] == [1, 2]
     for flow in data["code_flows"]:
-        orders = [edge["order"] for edge in flow["call_graph"]["edges"]]
+        orders = [edge["order"] for edge in _flow_call_graph(data, flow)["edges"]]
         if orders:
             assert min(orders) == 1
     assert set(graph["triggers"]) == {"orders", "payments", "inventory"}

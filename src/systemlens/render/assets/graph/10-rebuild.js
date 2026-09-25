@@ -101,7 +101,7 @@
       const selectedFlow = callGraphOnly
         ? (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)
         : null;
-      const selectedCallGraph = selectedFlow?.call_graph || graphData.all_flows_call_graph;
+      const selectedCallGraph = callGraphForFlow(selectedFlow);
       const selectedCallGraphPairs = new Set(
         (selectedCallGraph?.edges || []).map(edge => `${edge.source}->${edge.target}`)
       );

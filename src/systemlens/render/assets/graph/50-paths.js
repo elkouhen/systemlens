@@ -220,7 +220,7 @@
         graphState.pathMicroserviceOrder.set(id, order);
         order += 1;
       });
-      const callGraphEdges = codeFlow?.call_graph?.edges || [];
+      const callGraphEdges = callGraphForFlow(codeFlow)?.edges || [];
       if (!callGraphEdges.length) return;
       const serviceIdsByName = new Map(
         [...graphState.pathMicroserviceOrder.keys()].map(id => [nodeDataById.get(id).name, id])

@@ -35,7 +35,7 @@
     }
 
     function serviceIdsForCodeFlow(flow) {
-      const callGraphOrder = flow.call_graph?.node_order;
+      const callGraphOrder = callGraphForFlow(flow)?.node_order;
       if (Array.isArray(callGraphOrder) && callGraphOrder.length) {
         const callGraphServices = callGraphOrder
           .map(service => nodeIdForCodeFlowResource(service, "microservice"))
@@ -271,7 +271,7 @@
     });
 
     function showCodeFlow(flow) {
-      const globalCallGraph = flow.call_graph || graphData.all_flows_call_graph;
+      const globalCallGraph = callGraphForFlow(flow);
       const globalNodes = (globalCallGraph?.node_order || globalCallGraph?.nodes || [])
         .map(service => nodeIdForCodeFlowResource(service, "microservice"))
         .filter(Boolean);
@@ -303,7 +303,7 @@
     }
 
     function callGraphPathForCodeFlow(flow) {
-      const graph = flow.call_graph;
+      const graph = callGraphForFlow(flow);
       if (!graph || !Array.isArray(graph.node_order) || graph.node_order.length < 2) return null;
       const nodes = graph.node_order
         .map(service => nodeIdForCodeFlowResource(service, "microservice"))
@@ -384,7 +384,7 @@
     }
 
     function servicesForCodeFlow(flow) {
-      const callGraphOrder = flow.call_graph?.node_order;
+      const callGraphOrder = callGraphForFlow(flow)?.node_order;
       if (Array.isArray(callGraphOrder) && callGraphOrder.length) {
         const names = callGraphOrder.filter(service => (
           nodeIdForCodeFlowResource(service, "microservice") !== null
