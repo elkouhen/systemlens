@@ -1,0 +1,26 @@
+{
+  "name": "libavoid-call-graph-5-services-10-arcs",
+  "nodes": [
+    {"id": "microservice:alpha", "kind": "microservice", "name": "alpha", "ports": [{"endpoint_id": "out-alpha-beta", "direction": "out", "name": "alphaToBeta", "label": "O1", "method": "callBeta", "system": "rest"}, {"endpoint_id": "out-alpha-gamma", "direction": "out", "name": "alphaToGamma", "label": "O2", "method": "callGamma", "system": "rest"}, {"endpoint_id": "out-alpha-delta", "direction": "out", "name": "alphaToDelta", "label": "O3", "method": "callDelta", "system": "rest"}, {"endpoint_id": "in-alpha-epsilon", "direction": "in", "name": "fromEpsilon", "label": "I1", "method": "receiveFromEpsilon", "system": "rest"}]},
+    {"id": "microservice:beta", "kind": "microservice", "name": "beta", "ports": [{"endpoint_id": "in-alpha-beta", "direction": "in", "name": "fromAlpha", "label": "I1", "method": "receiveFromAlpha", "system": "rest"}, {"endpoint_id": "out-beta-gamma", "direction": "out", "name": "betaToGamma", "label": "O1", "method": "callGamma", "system": "rest"}, {"endpoint_id": "out-beta-delta", "direction": "out", "name": "betaToDelta", "label": "O2", "method": "callDelta", "system": "rest"}, {"endpoint_id": "out-beta-epsilon", "direction": "out", "name": "betaToEpsilon", "label": "O3", "method": "callEpsilon", "system": "rest"}]},
+    {"id": "microservice:gamma", "kind": "microservice", "name": "gamma", "ports": [{"endpoint_id": "in-alpha-gamma", "direction": "in", "name": "fromAlpha", "label": "I1", "method": "receiveFromAlpha", "system": "rest"}, {"endpoint_id": "in-beta-gamma", "direction": "in", "name": "fromBeta", "label": "I2", "method": "receiveFromBeta", "system": "rest"}, {"endpoint_id": "out-gamma-delta", "direction": "out", "name": "gammaToDelta", "label": "O1", "method": "callDelta", "system": "rest"}, {"endpoint_id": "out-gamma-epsilon", "direction": "out", "name": "gammaToEpsilon", "label": "O2", "method": "callEpsilon", "system": "rest"}]},
+    {"id": "microservice:delta", "kind": "microservice", "name": "delta", "ports": [{"endpoint_id": "in-alpha-delta", "direction": "in", "name": "fromAlpha", "label": "I1", "method": "receiveFromAlpha", "system": "rest"}, {"endpoint_id": "in-beta-delta", "direction": "in", "name": "fromBeta", "label": "I2", "method": "receiveFromBeta", "system": "rest"}, {"endpoint_id": "in-gamma-delta", "direction": "in", "name": "fromGamma", "label": "I3", "method": "receiveFromGamma", "system": "rest"}, {"endpoint_id": "out-delta-epsilon", "direction": "out", "name": "deltaToEpsilon", "label": "O1", "method": "callEpsilon", "system": "rest"}]},
+    {"id": "microservice:epsilon", "kind": "microservice", "name": "epsilon", "ports": [{"endpoint_id": "in-beta-epsilon", "direction": "in", "name": "fromBeta", "label": "I1", "method": "receiveFromBeta", "system": "rest"}, {"endpoint_id": "in-gamma-epsilon", "direction": "in", "name": "fromGamma", "label": "I2", "method": "receiveFromGamma", "system": "rest"}, {"endpoint_id": "in-delta-epsilon", "direction": "in", "name": "fromDelta", "label": "I3", "method": "receiveFromDelta", "system": "rest"}, {"endpoint_id": "out-epsilon-alpha", "direction": "out", "name": "epsilonToAlpha", "label": "O1", "method": "callAlpha", "system": "rest"}]}
+  ],
+  "call_graph": {
+    "nodes": ["alpha", "beta", "gamma", "delta", "epsilon"],
+    "node_order": ["alpha", "beta", "gamma", "delta", "epsilon"],
+    "edges": [
+      {"source": "alpha", "target": "beta", "kind": "rest", "label": "alphaToBeta", "order": 1, "endpoint_ids": ["out-alpha-beta", "in-alpha-beta"]},
+      {"source": "alpha", "target": "gamma", "kind": "rest", "label": "alphaToGamma", "order": 2, "endpoint_ids": ["out-alpha-gamma", "in-alpha-gamma"]},
+      {"source": "alpha", "target": "delta", "kind": "rest", "label": "alphaToDelta", "order": 3, "endpoint_ids": ["out-alpha-delta", "in-alpha-delta"]},
+      {"source": "beta", "target": "gamma", "kind": "rest", "label": "betaToGamma", "order": 4, "endpoint_ids": ["out-beta-gamma", "in-beta-gamma"]},
+      {"source": "beta", "target": "delta", "kind": "rest", "label": "betaToDelta", "order": 5, "endpoint_ids": ["out-beta-delta", "in-beta-delta"]},
+      {"source": "beta", "target": "epsilon", "kind": "rest", "label": "betaToEpsilon", "order": 6, "endpoint_ids": ["out-beta-epsilon", "in-beta-epsilon"]},
+      {"source": "gamma", "target": "delta", "kind": "rest", "label": "gammaToDelta", "order": 7, "endpoint_ids": ["out-gamma-delta", "in-gamma-delta"]},
+      {"source": "gamma", "target": "epsilon", "kind": "rest", "label": "gammaToEpsilon", "order": 8, "endpoint_ids": ["out-gamma-epsilon", "in-gamma-epsilon"]},
+      {"source": "delta", "target": "epsilon", "kind": "rest", "label": "deltaToEpsilon", "order": 9, "endpoint_ids": ["out-delta-epsilon", "in-delta-epsilon"]},
+      {"source": "epsilon", "target": "alpha", "kind": "rest", "label": "epsilonToAlpha", "order": 10, "endpoint_ids": ["out-epsilon-alpha", "in-alpha-epsilon"]}
+    ]
+  }
+}

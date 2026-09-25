@@ -1179,6 +1179,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'const selectedCallGraphLinks = callGraphOnly' in document
     assert 'order: order + 1' in document
     assert 'leftOrder - rightOrder || left.index - right.index' in document
+    assert 'const callGraphPortLabels = new Map()' in document
+    assert 'callGraphPortLabels.set(port.endpoint_id' in document
+    assert 'callGraphPortLabel(port, port.direction)' in document
+    assert 'callGraphPortLabel(port, portDirection)' in document
     assert 'const directKafkaLink = (topic, source, target)' in document
     assert "Keeping Sigma's straight edge underneath would draw" in document
     assert 'path.classList.add("graph-call-path")' in document
@@ -1201,6 +1205,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert ".graph-call-label.is-kafka { fill: #008f69; }" in document
     assert 'obstacleRouted' in document
     assert 'const occupiedCallGraphSegments = []' in document
+    assert 'const viewportMargin = 90' in document
+    assert 'lane >= viewportMargin && lane <= overlayBounds.width - viewportMargin' in document
     assert '@mr_mint/elkjs-libavoid' in document
     assert 'routeEdges(routeGraph' in document
     assert 'shapeBufferDistance: 14' in document

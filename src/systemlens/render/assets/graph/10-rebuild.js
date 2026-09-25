@@ -312,6 +312,32 @@
         graphState.selectedCallGraphEdgeKey = null;
         document.getElementById("graph")?.removeAttribute("data-selected-call-graph-arc");
       }
+      const callGraphPortLabels = new Map();
+      const callGraphPortCounters = new Map();
+      const portNodeIdByEndpoint = new Map(
+        [...nodeDataById.values()].flatMap(node => (
+          (node.ports || []).map(port => [port.endpoint_id, node.id])
+        ))
+      );
+      const callGraphPortLabel = (port, direction) => {
+        const globalLabel = String(port?.label || "").match(direction === "out" ? /O\d+/ : /I\d+/)?.[0];
+        if (!callGraphOnly || !port?.endpoint_id) return globalLabel || (direction === "out" ? "O?" : "I?");
+        if (!callGraphPortLabels.has(port.endpoint_id)) {
+          const counterKey = `${portNodeIdByEndpoint.get(port.endpoint_id) || "unknown"}:${direction}`;
+          const next = (callGraphPortCounters.get(counterKey) || 0) + 1;
+          callGraphPortCounters.set(counterKey, next);
+          callGraphPortLabels.set(port.endpoint_id, `${direction === "out" ? "O" : "I"}${next}`);
+        }
+        return callGraphPortLabels.get(port.endpoint_id);
+      };
+      selectedCallGraphLinks.forEach(({ link }) => {
+        (link.endpoint_ids || []).forEach(endpointId => {
+          const port = [...nodeDataById.values()]
+            .flatMap(node => node.ports || [])
+            .find(candidate => candidate.endpoint_id === endpointId);
+          if (port) callGraphPortLabel(port, port.direction);
+        });
+      });
       callGraphArcNavigator = { links: selectedCallGraphLinks, views: [], activeIndex: null };
       const callGraphEdgeKeys = new Set(selectedCallGraphLinks.map(({ index, edgeKey }) => edgeKey || `edge-${index}`));
       const currentSelectedCallGraphEdgeKey = graphState.selectedCallGraphEdgeKey
@@ -654,7 +680,7 @@
             const treeRoots = roots.length ? roots : graphNodes;
             const endpointLabel = endpointId => {
               const port = portsByEndpointId.get(endpointId);
-              const code = port?.label?.match(/[IO]\d+/)?.[0] || "·";
+              const code = port ? callGraphPortLabel(port, port.direction) : "·";
               const detail = port?.message_type?.split(".").at(-1) || port?.name || "relation";
               const protocol = port?.system === "kafka" ? "Kafka" : port?.system === "rest" ? "HTTP" : "";
               return { code, detail, protocol, title: port?.label || endpointId || "Port inconnu" };
@@ -1044,13 +1070,13 @@
             // Keep the graph anchor compact. The full endpoint presentation
             // remains in the tooltip and the inspector.
             anchor.style.setProperty("--port-offset", `${(index + 1) / (ports.length + 1) * 100}%`);
-            anchor.textContent = String(port.label).split(" ← ", 1)[0];
+            anchor.textContent = callGraphPortLabel(port, portDirection);
             const direction = portDirection === "in" ? "Entrée" : "Sortie";
             const showPortTooltip = () => {
               const tooltip = document.createElement("span");
               tooltip.className = "graph-port-tooltip";
               const title = document.createElement("strong");
-              title.textContent = `${port.label} · ${direction}`;
+              title.textContent = `${callGraphPortLabel(port, portDirection)} · ${direction} · ${port.label}`;
               const protocol = document.createElement("span");
               protocol.className = "graph-port-tooltip-meta";
               protocol.textContent = `${port.type || "Endpoint"} · ${port.method || "Méthode inconnue"}`;
@@ -1232,7 +1258,7 @@
         });
         const orthogonalPath = (start, end, sourceId, targetId, occupiedSegments = []) => {
           const padding = 14;
-          const viewportMargin = 42;
+          const viewportMargin = 90;
           const obstacles = obstacleBounds
             .filter(obstacle => ![sourceId, targetId].includes(obstacle.id))
             .map(obstacle => ({
@@ -1242,13 +1268,19 @@
               bottom: obstacle.bottom + padding,
             }));
           const xLanes = [...new Set([
-            start[0], end[0], viewportMargin, Math.max(viewportMargin, overlayBounds.width - viewportMargin),
+            start[0], end[0],
             ...obstacles.flatMap(obstacle => [obstacle.left, obstacle.right]),
-          ])];
+          ])].filter((lane, index, lanes) => (
+            (lane === start[0] || lane === end[0] || (lane >= viewportMargin && lane <= overlayBounds.width - viewportMargin))
+            && lanes.indexOf(lane) === index
+          ));
           const yLanes = [...new Set([
-            start[1], end[1], viewportMargin, Math.max(viewportMargin, overlayBounds.height - viewportMargin),
+            start[1], end[1],
             ...obstacles.flatMap(obstacle => [obstacle.top, obstacle.bottom]),
-          ])];
+          ])].filter((lane, index, lanes) => (
+            (lane === start[1] || lane === end[1] || (lane >= viewportMargin && lane <= overlayBounds.height - viewportMargin))
+            && lanes.indexOf(lane) === index
+          ));
           const candidates = [];
           const addCandidate = points => {
             const compact = points.filter((point, index) => (
@@ -1259,13 +1291,9 @@
               const length = compact.slice(1).reduce((total, point, index) => (
                 total + Math.abs(point[0] - compact[index][0]) + Math.abs(point[1] - compact[index][1])
               ), 0);
-              const edgeLanePenalty = compact.slice(1, -1).some(point => (
-                point[0] < 100 || point[0] > overlayBounds.width - 100
-                || point[1] < 100 || point[1] > overlayBounds.height - 100
-              )) ? 500 : 0;
               candidates.push({
                 points: compact,
-                score: length + (compact.length - 2) * 80 + edgeLanePenalty,
+                score: length + (compact.length - 2) * 80,
               });
             }
           };
@@ -1550,7 +1578,7 @@
           // its points after routing would invalidate its obstacle guarantees.
           // Reject an out-of-bounds route and let the geometry fallback choose
           // a safe path instead.
-          const viewportMargin = 28;
+          const viewportMargin = 90;
           const routeInsideViewport = points.slice(1, -1).every(([x, y]) => (
             x >= viewportMargin
             && x <= overlayBounds.width - viewportMargin
@@ -1664,8 +1692,7 @@
           [...nodeDataById.values()].flatMap(node => (node.ports || []).map(port => [port.endpoint_id, port]))
         );
         const shortPortLabel = (port, direction) => {
-          const match = String(port?.label || "").match(direction === "out" ? /O\d+/ : /I\d+/);
-          return match?.[0] || (direction === "out" ? "O?" : "I?");
+          return callGraphPortLabel(port, direction);
         };
         const createArcTooltip = (link, sourcePort, targetPort) => {
             const tooltip = document.createElement("span");
@@ -1781,8 +1808,7 @@
               port.direction === "in" && (!link.label || port.name === link.label)
             ));
           const shortPortLabel = (port, direction) => {
-            const match = String(port?.label || "").match(direction === "out" ? /O\d+/ : /I\d+/);
-            return match?.[0] || (direction === "out" ? "O?" : "I?");
+            return callGraphPortLabel(port, direction);
           };
           arcLabel.textContent = String(link.order ?? index + 1);
           arcLabel.setAttribute(
