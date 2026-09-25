@@ -1,5 +1,64 @@
 // Ordered source module: 10-rebuild.js
     let callGraphArcNavigator = { links: [], views: [], activeIndex: null };
+    let selectedCallGraphArcVisualTimer = null;
+    const syncSelectedCallGraphArcVisual = () => {
+      const edgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc;
+      if (!edgeKey) {
+        if (selectedCallGraphArcVisualTimer) {
+          clearInterval(selectedCallGraphArcVisualTimer);
+          selectedCallGraphArcVisualTimer = null;
+        }
+        return;
+      }
+      document.querySelectorAll(".graph-call-path, .graph-call-label").forEach(element => {
+        const active = element.dataset.arcKey === edgeKey;
+        element.classList.toggle("is-keyboard-selected", active);
+        if (element.classList.contains("graph-call-path") && !element.classList.contains("graph-arc-hit-area")) {
+          if (active) {
+            element.style.setProperty("stroke", "#dc2626");
+            element.style.setProperty("stroke-width", "5px");
+            element.style.setProperty("filter", "drop-shadow(0 0 5px #dc2626)");
+          } else {
+            element.style.removeProperty("stroke");
+            element.style.removeProperty("stroke-width");
+            element.style.removeProperty("filter");
+          }
+        }
+      });
+    };
+    const keepSelectedCallGraphArcVisible = () => {
+      syncSelectedCallGraphArcVisual();
+      if (!document.getElementById("graph")?.dataset.selectedCallGraphArc) return;
+      if (!selectedCallGraphArcVisualTimer) {
+        selectedCallGraphArcVisualTimer = setInterval(syncSelectedCallGraphArcVisual, 80);
+      }
+    };
+    const callGraphArcVisualObserver = new MutationObserver(syncSelectedCallGraphArcVisual);
+    callGraphArcVisualObserver.observe(document.getElementById("graph-port-paths"), { childList: true });
+    const navigateVisibleCallGraphArc = direction => {
+      const paths = [...document.querySelectorAll(".graph-call-path:not(.graph-arc-hit-area)")];
+      const keys = [...new Set(paths.map(path => path.dataset.arcKey).filter(Boolean))];
+      if (!keys.length) return;
+      const currentIndex = keys.indexOf(graphState.selectedCallGraphEdgeKey);
+      const nextIndex = (currentIndex < 0 ? (direction > 0 ? 0 : keys.length - 1) : currentIndex + direction + keys.length) % keys.length;
+      const edgeKey = keys[nextIndex];
+      graphState.selectedCallGraphEdgeKey = edgeKey;
+      const graphCanvas = document.getElementById("graph");
+      graphCanvas?.setAttribute("data-selected-call-graph-arc", edgeKey);
+      document.querySelectorAll(".graph-call-path, .graph-call-label").forEach(element => {
+        element.classList.toggle("is-keyboard-selected", element.dataset.arcKey === edgeKey);
+      });
+      keepSelectedCallGraphArcVisible();
+      const viewIndex = callGraphArcNavigator.views.findIndex(view => view.edgeKey === edgeKey);
+      if (viewIndex >= 0) {
+        focusCallGraphArc(viewIndex);
+      } else {
+        requestAnimationFrame(() => {
+          const retryIndex = callGraphArcNavigator.views.findIndex(view => view.edgeKey === edgeKey);
+          if (retryIndex >= 0) focusCallGraphArc(retryIndex);
+        });
+      }
+    };
     const focusCallGraphArc = index => {
       const { views } = callGraphArcNavigator;
       if (!views.length) return;
@@ -8,6 +67,7 @@
       if (!view) return;
       callGraphArcNavigator.activeIndex = normalizedIndex;
       graphState.selectedCallGraphEdgeKey = view.edgeKey;
+      document.getElementById("graph")?.setAttribute("data-selected-call-graph-arc", view.edgeKey);
       views.forEach(candidate => {
         const active = candidate === view;
         candidate.path.classList.toggle("is-keyboard-selected", active);
@@ -28,14 +88,14 @@
     if (!window.__systemlensCallGraphArcKeyboardNavigation) {
       window.__systemlensCallGraphArcKeyboardNavigation = true;
       window.addEventListener("keydown", event => {
-        if (!graphState.selectedCodeFlowId || !callGraphArcNavigator.views.length) return;
-        if (event.target.closest?.("input, select, textarea, button, [contenteditable='true']")) return;
+        if (!graphState.selectedCodeFlowId) return;
+        if (event.target.closest?.("input, select, textarea, [contenteditable='true']")) return;
         if (event.key.toLowerCase() === "n") {
           event.preventDefault();
-          focusCallGraphArc((callGraphArcNavigator.activeIndex ?? -1) + 1);
+          navigateVisibleCallGraphArc(1);
         } else if (event.key.toLowerCase() === "p") {
           event.preventDefault();
-          focusCallGraphArc((callGraphArcNavigator.activeIndex ?? 0) - 1);
+          navigateVisibleCallGraphArc(-1);
         }
       });
     }
@@ -138,6 +198,9 @@
     }
     function rebuildGraph() {
       const callGraphOnly = Boolean(graphState.selectedCodeFlowId);
+      if (callGraphOnly && !graphState.selectedCallGraphEdgeKey) {
+        graphState.selectedCallGraphEdgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc || null;
+      }
       const selectedFlow = callGraphOnly
         ? (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)
         : null;
@@ -240,9 +303,13 @@
       );
       if (selectedCallGraphEdgeIndex < 0) {
         graphState.selectedCallGraphEdgeKey = null;
+        document.getElementById("graph")?.removeAttribute("data-selected-call-graph-arc");
       }
       callGraphArcNavigator = { links: selectedCallGraphLinks, views: [], activeIndex: null };
       const callGraphEdgeKeys = new Set(selectedCallGraphLinks.map(({ index, edgeKey }) => edgeKey || `edge-${index}`));
+      const currentSelectedCallGraphEdgeKey = graphState.selectedCallGraphEdgeKey
+        || document.getElementById("graph")?.dataset.selectedCallGraphArc
+        || null;
       const visualNodeKind = node => {
         if (node.kind === "data_schema") return "mongodb_collection";
         if (node.kind === "message_channel") return "kafka_topic";
@@ -1673,7 +1740,7 @@
           const path = document.createElementNS(svgNamespace, "path");
           path.classList.add("graph-call-path");
           path.dataset.arcKey = resolvedEdgeKey;
-          if (resolvedEdgeKey === graphState.selectedCallGraphEdgeKey) {
+          if (resolvedEdgeKey === currentSelectedCallGraphEdgeKey) {
             path.classList.add("is-keyboard-selected");
           }
           if (link.kind === "kafka") path.classList.add("is-kafka");
@@ -1687,7 +1754,7 @@
           const arcLabel = document.createElementNS(svgNamespace, "text");
           arcLabel.classList.add("graph-call-label");
           arcLabel.dataset.arcKey = resolvedEdgeKey;
-          if (resolvedEdgeKey === graphState.selectedCallGraphEdgeKey) {
+          if (resolvedEdgeKey === currentSelectedCallGraphEdgeKey) {
             arcLabel.classList.add("is-keyboard-selected");
           }
           if (link.kind === "kafka") arcLabel.classList.add("is-kafka");
@@ -1720,6 +1787,9 @@
           arcLabel.setAttribute("y", String(labelPoint.y - 8));
           portPathOverlay.append(arcLabel);
           const hitArea = addArcHitArea(path);
+          if (resolvedEdgeKey === currentSelectedCallGraphEdgeKey) {
+            hitArea.classList.add("is-keyboard-selected");
+          }
           hitArea.addEventListener("pointerenter", () => {
             path.classList.add("is-analysis-hovered");
             arcLabel.classList.add("is-analysis-hovered");
@@ -2013,6 +2083,7 @@
         layoutNodes.some(node => !Number.isFinite(node.x) || !Number.isFinite(node.y))
       );
       graphCanvas.setAttribute("aria-label", `Graphe des interactions : ${visibleLinks.length} relations`);
+      keepSelectedCallGraphArcVisible();
       // Keep Sigma's native camera coordinate system; layout coordinates are
       // centered above so the complete vertical stack stays in view.
       renderer.getCamera().animatedReset({ duration: 0 });

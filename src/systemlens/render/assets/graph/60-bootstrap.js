@@ -13,6 +13,7 @@
         codeFlowTreeCoordinates: new Map(),
       });
       delete graphCanvas.dataset.selectedCodeFlow;
+      delete graphCanvas.dataset.selectedCallGraphArc;
       delete graphCanvas.dataset.flowFocusRatio;
       renderer.refresh();
       setDetailsEmpty("Selectionnez un noeud ou un module pour afficher ses informations.");

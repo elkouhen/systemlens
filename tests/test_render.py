@@ -1160,9 +1160,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'is-keyboard-selected' in document
     assert 'candidate.path.style.setProperty("stroke", "#dc2626")' in document
     assert 'candidate.hitArea.classList.toggle("is-keyboard-selected", active)' in document
+    assert 'dataset.selectedCallGraphArc' in document
     assert 'window.__systemlensCallGraphArcKeyboardNavigation' in document
     assert 'event.key.toLowerCase() === "n"' in document
     assert 'event.key.toLowerCase() === "p"' in document
+    assert 'input, select, textarea, [contenteditable=\'true\']' in document
     assert 'const focusCallGraphArc = index =>' in document
     assert 'messageTypesForCodeFlow' in document
     assert 'graphFlowStatus.hidden = context.topologyReconciled !== false;' in document
