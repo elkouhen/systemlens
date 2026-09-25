@@ -740,10 +740,12 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
 
     assert "const interServiceCodeFlows = codeFlows.filter(flow =>" in document
     assert "function serviceIdsForCodeFlow(flow)" in document
+    assert "function callGraphArcCount(flow)" in document
     assert "function servicesForCodeFlow(flow)" in document
     assert "callGraphForFlow(flow)?.node_order" in document
     assert "graphData.all_flows_call_graph" in document
     assert "serviceIdsForCodeFlow(right).size - serviceIdsForCodeFlow(left).size" in document
+    assert "callGraphArcCount(right) - callGraphArcCount(left)" in document
     assert 'servicesLabel.textContent = "Services traversés"' in document
     assert 'serviceList.className = "code-flow-service-list"' in document
     assert 'unresolved.textContent = "Non résolus dans le graphe"' in document

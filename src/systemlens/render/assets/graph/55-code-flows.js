@@ -51,6 +51,10 @@
       );
     }
 
+    function callGraphArcCount(flow) {
+      return callGraphForFlow(flow)?.edges?.length || 0;
+    }
+
     function codeFlowProtocols(flow) {
       const protocols = new Set();
       (flow.steps || []).forEach(step => {
@@ -74,6 +78,7 @@
     function compareCodeFlows(left, right) {
       return codeFlowPriority(right) - codeFlowPriority(left)
         || serviceIdsForCodeFlow(right).size - serviceIdsForCodeFlow(left).size
+        || callGraphArcCount(right) - callGraphArcCount(left)
         || (right.steps?.length || 0) - (left.steps?.length || 0)
         || left.id.localeCompare(right.id);
     }

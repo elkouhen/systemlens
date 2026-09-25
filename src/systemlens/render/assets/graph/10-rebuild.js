@@ -259,8 +259,11 @@
             ? node.kind : visualNodeKind(node) === "kafka_topic" || visualNodeKind(node) === "mongodb_collection"
               ? visualNodeKind(node) : "generic",
       }));
+      const numberingGraph = callGraphOnly
+        ? selectedCallGraph
+        : graphData.all_flows_call_graph;
       const globalArcOrders = new Map();
-      (graphData.all_flows_call_graph?.edges || []).forEach(edge => {
+      (numberingGraph?.edges || []).forEach(edge => {
         const key = `${edge.source}->${edge.target}|${edge.kind}|${edge.label || ""}`;
         const orders = globalArcOrders.get(key) || [];
         orders.push(edge.order);
@@ -268,7 +271,7 @@
       });
       let fallbackArcOrder = Math.max(
         0,
-        ...(graphData.all_flows_call_graph?.edges || []).map(edge => Number(edge.order) || 0),
+        ...(numberingGraph?.edges || []).map(edge => Number(edge.order) || 0),
       ) + 1;
       const visibleArcOrder = link => {
         const sourceName = nodeDataById.get(link.source)?.name || link.source;

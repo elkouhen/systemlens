@@ -90,11 +90,11 @@ does not show method, confidence, or status details before selection. A flow
 remains listed when one of its topology edges is unresolved or absent from
 the export; selecting it marks the graph as partial instead of hiding the
 persisted interprocedural evidence. Flows confined to one microservice remain
-visible in the default list. Each flow
+excluded from the default list. Each flow
 card also displays the ordered microservice names from its persisted call graph
 when available, or resolves them from indexed endpoint identities as a fallback.
 The flow list is ordered by descending number of distinct microservices
-traversed, then by flow length.
+traversed, then by descending number of call-graph arcs, then by flow length.
 This diagnostic text belongs to the widget and does not change graph path
 rendering. The Flux tab
 provides a
