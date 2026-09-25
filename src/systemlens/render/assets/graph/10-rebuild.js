@@ -102,20 +102,8 @@
         ? (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)
         : null;
       const selectedCallGraph = callGraphForFlow(selectedFlow);
-      const selectedCallGraphPairs = new Set(
-        (selectedCallGraph?.edges || []).map(edge => `${edge.source}->${edge.target}`)
-      );
       const visibleLinks = callGraphOnly
-        ? graphData.links.filter((link, index) => (
-          link.kind !== "contains"
-          && graphState.relatedNodes?.has(link.source)
-          && graphState.relatedNodes?.has(link.target)
-          && nodeDataById.get(link.source)?.kind === "microservice"
-          && nodeDataById.get(link.target)?.kind === "microservice"
-          && selectedCallGraphPairs.has(
-            `${nodeDataById.get(link.source)?.name}->${nodeDataById.get(link.target)?.name}`
-          )
-        ))
+        ? []
         : graphData.links.filter(link => (
           isVisibleRelation(link)
           && isVisibleNode(nodeDataById.get(link.source))
@@ -180,15 +168,23 @@
       const selectedCallGraphLinks = callGraphOnly
         ? [
           ...(selectedCallGraph?.edges || [])
-            .map((edge, index) => ({
+            .map((edge, index, edges) => ({
+              order: Number(edge.order) > 0
+                ? Number(edge.order)
+                : Math.max(0, ...edges.map(item => Number(item.order) || 0)) + index + 1,
               link: {
                 source: `microservice:${edge.source}`,
                 target: `microservice:${edge.target}`,
                 kind: edge.kind,
                 label: edge.label,
-                order: edge.order ?? index + 1,
+                order: Number(edge.order) > 0 ? Number(edge.order) : undefined,
                 endpoint_ids: edge.endpoint_ids || [],
               },
+              index,
+              edgeKey: `call-edge-${index}`,
+            }))
+            .map(({ order, link, index }) => ({
+              link: { ...link, order },
               index,
               edgeKey: `call-edge-${index}`,
             }))
@@ -266,7 +262,7 @@
       (numberingGraph?.edges || []).forEach(edge => {
         const key = `${edge.source}->${edge.target}|${edge.kind}|${edge.label || ""}`;
         const orders = globalArcOrders.get(key) || [];
-        orders.push(edge.order);
+        if (Number(edge.order) > 0) orders.push(Number(edge.order));
         globalArcOrders.set(key, orders);
       });
       let fallbackArcOrder = Math.max(
