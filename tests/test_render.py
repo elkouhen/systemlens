@@ -799,6 +799,10 @@ def test_export_builds_one_call_graph_from_all_flows() -> None:
         {"source": "orders", "target": "inventory", "order": 2},
     ]
     assert [edge["order"] for edge in graph["edges"]] == [1, 2]
+    for flow in data["code_flows"]:
+        orders = [edge["order"] for edge in flow["call_graph"]["edges"]]
+        if orders:
+            assert min(orders) == 1
     assert set(graph["triggers"]) == {"orders", "payments", "inventory"}
 
 
