@@ -1158,6 +1158,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="graph-mode-context-copy"' in document
     assert 'is-code-flow-collapsed' in document
     assert 'is-keyboard-selected' in document
+    assert 'candidate.path.style.setProperty("stroke", "#dc2626")' in document
     assert 'window.__systemlensCallGraphArcKeyboardNavigation' in document
     assert 'event.key.toLowerCase() === "n"' in document
     assert 'event.key.toLowerCase() === "p"' in document

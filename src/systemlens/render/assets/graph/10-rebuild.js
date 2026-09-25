@@ -12,6 +12,15 @@
         const active = candidate === view;
         candidate.path.classList.toggle("is-keyboard-selected", active);
         candidate.arcLabel.classList.toggle("is-keyboard-selected", active);
+        if (active) {
+          candidate.path.style.setProperty("stroke", "#dc2626");
+          candidate.path.style.setProperty("stroke-width", "5px");
+          candidate.path.style.setProperty("filter", "drop-shadow(0 0 5px #dc2626)");
+        } else {
+          candidate.path.style.removeProperty("stroke");
+          candidate.path.style.removeProperty("stroke-width");
+          candidate.path.style.removeProperty("filter");
+        }
       });
       view.showTooltip();
     };
