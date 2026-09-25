@@ -11,6 +11,8 @@
     const codeFlowCycles = document.getElementById("code-flow-cycles");
     const codeFlowsSummary = document.getElementById("code-flows-summary");
     const codeFlowsTitle = document.getElementById("code-flows-title");
+    const codeFlowCollapse = document.getElementById("code-flow-collapse");
+    const flowsPanel = document.getElementById("flows-panel");
     function codeFlowStepLabel(kind) {
       return ({
         http_entry: "Entrée HTTP",
@@ -562,6 +564,11 @@
     codeFlowCycles.addEventListener("click", () => {
       codeFlowCycles.setAttribute("aria-pressed", String(codeFlowCycles.getAttribute("aria-pressed") !== "true"));
       renderCodeFlows();
+    });
+    codeFlowCollapse.addEventListener("click", () => {
+      const collapsed = flowsPanel.classList.toggle("is-code-flow-collapsed");
+      codeFlowCollapse.setAttribute("aria-expanded", String(!collapsed));
+      codeFlowCollapse.textContent = collapsed ? "Développer" : "Réduire";
     });
     document.getElementById("flows-panel").addEventListener("systemlens:flows-open", renderCodeFlows);
     renderCodeFlows();
