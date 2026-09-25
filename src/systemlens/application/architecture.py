@@ -7,7 +7,9 @@ L'accès à une implantation reste une opération explicite de la CLI.
 
 from collections import deque
 from dataclasses import dataclass
-from typing import cast
+from functools import cached_property
+from collections.abc import Sequence
+from typing import TypedDict, cast
 
 from systemlens.domain.graph import (
     GraphEdge,
@@ -38,6 +40,40 @@ _KINDS = {
     "endpoints": "endpoint",
 }
 
+_IMPACT_MAX_DEPTH = 32
+_IMPACT_LIMIT = 100
+
+
+class _GraphNode(TypedDict):
+    kind: str
+    name: str
+
+
+class _GraphRelation(TypedDict):
+    kind: str
+    label: str
+
+
+class _GraphPath(TypedDict):
+    nodes: list[_GraphNode]
+    relations: list[_GraphRelation]
+
+
+class _ImpactPaths(TypedDict):
+    paths: list[_GraphPath]
+    truncated: bool
+    max_depth: int
+    limit: int
+
+
+class _MicroservicePaths(TypedDict):
+    kind: str
+    source: str
+    target: str
+    paths: list[_GraphPath]
+    max_depth: int
+    truncated: bool
+
 
 @dataclass(frozen=True)
 class ArchitectureSnapshot:
@@ -48,9 +84,50 @@ class ArchitectureSnapshot:
     relations: tuple[ArchitectureRelation, ...]
     edges: tuple[GraphEdge, ...]
 
-    @property
+    @cached_property
     def modules_by_identity(self) -> dict[str, DiscoveredModule]:
         return {module_identity(module): module for module in self.modules}
+
+    @cached_property
+    def endpoints_by_module(self) -> dict[str, tuple[MessageEndpoint, ...]]:
+        grouped: dict[str, list[MessageEndpoint]] = {}
+        for endpoint in self.endpoints:
+            if endpoint.module is not None:
+                grouped.setdefault(endpoint.module, []).append(endpoint)
+        return {module: tuple(items) for module, items in grouped.items()}
+
+    @cached_property
+    def endpoints_by_topic(self) -> dict[tuple[str, str], tuple[MessageEndpoint, ...]]:
+        grouped: dict[tuple[str, str], list[MessageEndpoint]] = {}
+        for endpoint in self.endpoints:
+            grouped.setdefault((endpoint.system, endpoint.topic), []).append(endpoint)
+        return {key: tuple(items) for key, items in grouped.items()}
+
+    @cached_property
+    def endpoints_by_id(self) -> dict[str, MessageEndpoint]:
+        return {endpoint.id: endpoint for endpoint in self.endpoints}
+
+    @cached_property
+    def modules_by_collection(self) -> dict[str, tuple[DiscoveredModule, ...]]:
+        grouped: dict[str, list[DiscoveredModule]] = {}
+        for module in self.modules:
+            for collection in module.mongo_collections:
+                grouped.setdefault(collection, []).append(module)
+        return {collection: tuple(items) for collection, items in grouped.items()}
+
+    @cached_property
+    def relations_by_source(self) -> dict[tuple[str, str], tuple[ArchitectureRelation, ...]]:
+        grouped: dict[tuple[str, str], list[ArchitectureRelation]] = {}
+        for relation in self.relations:
+            grouped.setdefault((relation.source_kind, relation.source_name), []).append(relation)
+        return {key: tuple(items) for key, items in grouped.items()}
+
+    @cached_property
+    def relations_by_target(self) -> dict[tuple[str, str], tuple[ArchitectureRelation, ...]]:
+        grouped: dict[tuple[str, str], list[ArchitectureRelation]] = {}
+        for relation in self.relations:
+            grouped.setdefault((relation.target_kind, relation.target_name), []).append(relation)
+        return {key: tuple(items) for key, items in grouped.items()}
 
 
 # Compatibility name for the public navigation helpers.
@@ -113,7 +190,7 @@ def module_summary(catalog: ArchitectureCatalog, name: str) -> dict[str, object]
     if module is None:
         return None
     identity = module_identity(module)
-    endpoints = [endpoint for endpoint in catalog.endpoints if endpoint.module == identity]
+    endpoints = catalog.endpoints_by_module.get(identity, ())
     served = sorted({endpoint.topic for endpoint in endpoints if endpoint.system == "rest" and endpoint.role == "serve"})
     called = sorted({endpoint.topic for endpoint in endpoints if endpoint.system == "rest" and endpoint.role == "call"})
     produced = sorted({endpoint.topic for endpoint in endpoints if endpoint.system == "kafka" and endpoint.role == "produce"})
@@ -122,7 +199,7 @@ def module_summary(catalog: ArchitectureCatalog, name: str) -> dict[str, object]
     consumed_types = _kafka_message_types(endpoints, "consume")
     outgoing = sorted({
         relation.target_name
-        for relation in catalog.relations
+        for relation in catalog.relations_by_source.get(("microservice", identity), ())
         if relation.source_kind == "microservice"
         and relation.source_name == identity
         and relation.target_kind == "microservice"
@@ -130,7 +207,7 @@ def module_summary(catalog: ArchitectureCatalog, name: str) -> dict[str, object]
     })
     incoming = sorted({
         relation.source_name
-        for relation in catalog.relations
+        for relation in catalog.relations_by_target.get(("microservice", identity), ())
         if relation.source_kind == "microservice"
         and relation.target_name == identity
         and relation.target_kind == "microservice"
@@ -310,11 +387,11 @@ def show_object(catalog: ArchitectureCatalog, kind: str, name: str) -> dict[str,
         if summary is None or (kind == "microservice" and summary["kind"] != "microservice"):
             return None
         return summary
-    if kind == "topic" and any(endpoint.system == "kafka" and endpoint.topic == name for endpoint in catalog.endpoints):
+    if kind == "topic" and catalog.endpoints_by_topic.get(("kafka", name)):
         return topic_summary(catalog, name)
-    if kind == "api" and any(endpoint.system == "rest" and endpoint.topic == name for endpoint in catalog.endpoints):
+    if kind == "api" and catalog.endpoints_by_topic.get(("rest", name)):
         return api_summary(catalog, name)
-    if kind == "collection" and any(name in module.mongo_collections for module in catalog.modules):
+    if kind == "collection" and catalog.modules_by_collection.get(name):
         return collection_summary(catalog, name)
     if kind == "dto" and any(
         endpoint.system == "kafka" and endpoint.message_type == name
@@ -322,13 +399,13 @@ def show_object(catalog: ArchitectureCatalog, kind: str, name: str) -> dict[str,
     ):
         return dto_summary(catalog, name)
     if kind == "endpoint":
-        endpoint = next((item for item in catalog.endpoints if item.id == name), None)
+        endpoint = catalog.endpoints_by_id.get(name)
         return endpoint_summary(endpoint) if endpoint else None
     return None
 
 
 def _kafka_message_types(
-    endpoints: list[MessageEndpoint], role: str
+    endpoints: Sequence[MessageEndpoint], role: str
 ) -> dict[str, list[str]]:
     """Aggregate only statically inferred Java payload types by topic."""
     types: dict[str, set[str]] = {}
@@ -339,7 +416,13 @@ def _kafka_message_types(
     return {topic: sorted(values) for topic, values in sorted(types.items())}
 
 
-def neighbors(catalog: ArchitectureCatalog, kind: str, name: str) -> list[dict[str, str]] | None:
+class _Neighbor(TypedDict):
+    kind: str
+    name: str
+    relation: str
+
+
+def neighbors(catalog: ArchitectureCatalog, kind: str, name: str) -> list[_Neighbor] | None:
     if show_object(catalog, kind, name) is None:
         return None
     related: set[tuple[str, str, str]] = set()
@@ -347,7 +430,7 @@ def neighbors(catalog: ArchitectureCatalog, kind: str, name: str) -> list[dict[s
         module = _module_for_reference(catalog, name)
         assert module is not None
         identity = module_identity(module)
-        for endpoint in (endpoint for endpoint in catalog.endpoints if endpoint.module == identity):
+        for endpoint in catalog.endpoints_by_module.get(identity, ()):
             object_kind = "topic" if endpoint.system == "kafka" else "api"
             relation = {
                 "produce": "publishes",
@@ -364,11 +447,11 @@ def neighbors(catalog: ArchitectureCatalog, kind: str, name: str) -> list[dict[s
             if edge.to_service == identity:
                 related.add(("module", edge.from_service, "used_by"))
     elif kind == "topic":
-        for endpoint in (endpoint for endpoint in catalog.endpoints if endpoint.system == "kafka" and endpoint.topic == name):
+        for endpoint in catalog.endpoints_by_topic.get(("kafka", name), ()):
             if endpoint.module:
                 related.add(("module", endpoint.module, "producer" if endpoint.role == "produce" else "consumer"))
     elif kind == "api":
-        for endpoint in (endpoint for endpoint in catalog.endpoints if endpoint.system == "rest" and endpoint.topic == name):
+        for endpoint in catalog.endpoints_by_topic.get(("rest", name), ()):
             if endpoint.module:
                 related.add(("module", endpoint.module, "provider" if endpoint.role == "serve" else "consumer"))
     elif kind == "dto":
@@ -381,18 +464,57 @@ def neighbors(catalog: ArchitectureCatalog, kind: str, name: str) -> list[dict[s
             if endpoint.module:
                 related.add(("module", endpoint.module, "producer" if endpoint.role == "produce" else "consumer"))
     elif kind == "endpoint":
-        endpoint = next(item for item in catalog.endpoints if item.id == name)
+        endpoint = catalog.endpoints_by_id[name]
         if endpoint.module:
             related.add(("module", endpoint.module, "belongs_to"))
         related.add(("topic" if endpoint.system == "kafka" else "api", endpoint.topic, "implements"))
     else:
-        for module in catalog.modules:
-            if name in module.mongo_collections:
-                related.add(("module", module_identity(module), "uses"))
+        for module in catalog.modules_by_collection.get(name, ()):
+            related.add(("module", module_identity(module), "uses"))
     return [
         {"kind": item_kind, "name": item_name, "relation": relation}
         for item_kind, item_name, relation in sorted(related)
     ]
+
+
+def _topology_adjacency(
+    catalog: ArchitectureCatalog,
+    *,
+    reverse_rest: bool,
+    kafka_topic_nodes: bool,
+) -> dict[tuple[str, str], list[tuple[tuple[str, str], _GraphRelation]]]:
+    """Build one deterministic service topology projection for graph queries."""
+    adjacency: dict[tuple[str, str], list[tuple[tuple[str, str], _GraphRelation]]] = {}
+
+    def add_edge(
+        origin: tuple[str, str],
+        destination: tuple[str, str],
+        relation: _GraphRelation,
+    ) -> None:
+        adjacency.setdefault(origin, []).append((destination, relation))
+
+    for edge in catalog.edges:
+        origin = ("microservice", edge.from_service)
+        destination = ("microservice", edge.to_service)
+        if edge.kind == "rest":
+            if reverse_rest:
+                origin, destination = destination, origin
+            add_edge(
+                origin,
+                destination,
+                {"kind": "http", "label": graph_edge_rest_resource(edge)},
+            )
+        elif edge.kind == "kafka":
+            relation: _GraphRelation = {"kind": "kafka", "label": edge.from_endpoint.topic}
+            if kafka_topic_nodes:
+                topic = ("topic", edge.from_endpoint.topic)
+                add_edge(origin, topic, {"kind": "publishes", "label": edge.from_endpoint.topic})
+                add_edge(topic, destination, {"kind": "consumes", "label": edge.from_endpoint.topic})
+            else:
+                add_edge(origin, destination, relation)
+    for entries in adjacency.values():
+        entries.sort(key=lambda item: (item[0], item[1]["kind"], item[1]["label"]))
+    return adjacency
 
 
 def find_microservice_paths(
@@ -402,7 +524,7 @@ def find_microservice_paths(
     *,
     max_depth: int = 12,
     limit: int = 20,
-) -> dict[str, object] | None:
+) -> _MicroservicePaths | None:
     """Return bounded shortest directed paths between two microservices.
 
     Kafka is represented by an explicit topic node, preserving the same
@@ -422,36 +544,16 @@ def find_microservice_paths(
     target_identity = module_identity(target_module)
     source_node = ("microservice", source_identity)
     target_node = ("microservice", target_identity)
-    adjacency: dict[tuple[str, str], list[tuple[tuple[str, str], dict[str, str]]]] = {}
+    adjacency = _topology_adjacency(
+        catalog,
+        reverse_rest=False,
+        kafka_topic_nodes=True,
+    )
 
-    def add_edge(
-        origin: tuple[str, str], destination: tuple[str, str], relation: dict[str, str]
-    ) -> None:
-        adjacency.setdefault(origin, []).append((destination, relation))
-
-    for edge in catalog.edges:
-        origin = ("microservice", edge.from_service)
-        destination = ("microservice", edge.to_service)
-        if edge.kind == "rest":
-            add_edge(
-                origin,
-                destination,
-                {
-                    "kind": "http",
-                    "label": graph_edge_rest_resource(edge),
-                },
-            )
-            continue
-        topic = ("topic", edge.from_endpoint.topic)
-        add_edge(origin, topic, {"kind": "publishes", "label": edge.from_endpoint.topic})
-        add_edge(topic, destination, {"kind": "consumes", "label": edge.from_endpoint.topic})
-    for entries in adjacency.values():
-        entries.sort(key=lambda item: (item[0], item[1]["kind"], item[1]["label"]))
-
-    queue: deque[tuple[tuple[str, str], list[tuple[str, str]], list[dict[str, str]]]] = deque(
+    queue: deque[tuple[tuple[str, str], list[tuple[str, str]], list[_GraphRelation]]] = deque(
         [(source_node, [source_node], [])]
     )
-    paths: list[dict[str, object]] = []
+    paths: list[_GraphPath] = []
     shortest_depth: int | None = None
     truncated = False
     while queue:
@@ -488,6 +590,67 @@ def find_microservice_paths(
     }
 
 
+def _microservice_impact_paths(
+    catalog: ArchitectureCatalog, source: str
+) -> _ImpactPaths:
+    """Return bounded shortest paths to services affected by ``source``.
+
+    Impact direction follows dependency semantics: a REST provider affects its
+    callers, while a Kafka producer affects its consumers. The traversal is
+    over persisted topology edges only and keeps one deterministic shortest
+    path per affected service.
+    """
+    topology = _topology_adjacency(
+        catalog,
+        reverse_rest=True,
+        kafka_topic_nodes=False,
+    )
+    adjacency: dict[str, list[tuple[str, _GraphRelation]]] = {
+        origin[1]: [(destination[1], relation) for destination, relation in entries]
+        for origin, entries in topology.items()
+    }
+
+    queue: deque[tuple[str, list[str], list[_GraphRelation]]] = deque(
+        [(source, [source], [])]
+    )
+    paths: list[_GraphPath] = []
+    truncated = False
+    reached: set[str] = {source}
+    while queue:
+        node, nodes, relations = queue.popleft()
+        depth = len(relations)
+        if depth >= _IMPACT_MAX_DEPTH:
+            if any(
+                target not in nodes and target not in reached
+                for target, _relation in adjacency.get(node, ())
+            ):
+                truncated = True
+            continue
+        for target, relation in adjacency.get(node, []):
+            if target in nodes or target in reached:
+                continue
+            if len(paths) >= _IMPACT_LIMIT:
+                truncated = True
+                break
+            reached.add(target)
+            next_nodes = [*nodes, target]
+            next_relations = [*relations, relation]
+            paths.append({
+                "nodes": [
+                    {"kind": "microservice", "name": name}
+                    for name in next_nodes
+                ],
+                "relations": next_relations,
+            })
+            queue.append((target, next_nodes, next_relations))
+    return {
+        "paths": paths,
+        "truncated": truncated,
+        "max_depth": _IMPACT_MAX_DEPTH,
+        "limit": _IMPACT_LIMIT,
+    }
+
+
 def analyze(catalog: ArchitectureCatalog, query: str, target: str | None) -> dict[str, object] | None:
     normalized = query.casefold()
     if normalized in {"consumers", "consumer"} and target:
@@ -519,10 +682,20 @@ def analyze(catalog: ArchitectureCatalog, query: str, target: str | None) -> dic
         for kind in ("module", "topic", "api", "collection"):
             impact_neighbors = neighbors(catalog, kind, target)
             if impact_neighbors is not None:
+                module = _module_for_reference(catalog, target)
+                impact_paths = (
+                    _microservice_impact_paths(catalog, module_identity(module))
+                    if kind == "module" and module is not None and module.starts_application
+                    else {"paths": [], "truncated": False, "max_depth": _IMPACT_MAX_DEPTH, "limit": _IMPACT_LIMIT}
+                )
                 return {
                     "query": "impact",
                     "object": {"kind": kind, "name": target},
                     "neighbors": impact_neighbors,
+                    "paths": impact_paths["paths"],
+                    "paths_truncated": impact_paths["truncated"],
+                    "paths_max_depth": impact_paths["max_depth"],
+                    "paths_limit": impact_paths["limit"],
                 }
     return None
 
