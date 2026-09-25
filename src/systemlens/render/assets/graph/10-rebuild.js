@@ -12,6 +12,7 @@
         const active = candidate === view;
         candidate.path.classList.toggle("is-keyboard-selected", active);
         candidate.arcLabel.classList.toggle("is-keyboard-selected", active);
+        candidate.hitArea.classList.toggle("is-keyboard-selected", active);
         if (active) {
           candidate.path.style.setProperty("stroke", "#dc2626");
           candidate.path.style.setProperty("stroke-width", "5px");
@@ -1738,6 +1739,7 @@
             edgeKey: resolvedEdgeKey,
             path,
             arcLabel,
+            hitArea,
             showTooltip: () => showArcTooltip(path, link, sourcePort, targetPort),
           });
         });
