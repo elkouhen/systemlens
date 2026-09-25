@@ -121,6 +121,7 @@
       analysisPortEndpointId: null,
       selectedCodeFlowId: null,
       selectedCallGraphEdgeKey: null,
+      analysisContextCollapsed: false,
       showAllCodeFlowPorts: false,
       codeFlowRootNodeId: null,
       codeFlowTrigger: null,

@@ -465,6 +465,7 @@
           relatedNodes: null,
           relatedEdges: null,
           selectedCodeFlowId: null,
+          selectedCallGraphEdgeKey: null,
           pathMicroserviceOrder: new Map(),
           codeFlowTreeCoordinates: new Map(),
         });

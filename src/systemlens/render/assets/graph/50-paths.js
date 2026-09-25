@@ -421,6 +421,7 @@
       )));
       graphState.analysisPortEndpointId = null;
       graphState.selectedCodeFlowId = context.codeFlow?.id || null;
+      graphState.selectedCallGraphEdgeKey = null;
       graphState.showAllCodeFlowPorts = false;
       graphState.codeFlowRootNodeId = context.codeFlowRootNodeId || null;
       graphState.codeFlowTrigger = context.codeFlowTrigger || null;
@@ -923,6 +924,7 @@
         relatedEdges: null,
         relatedLocalPortLinks: new Set(),
         selectedCodeFlowId: null,
+        selectedCallGraphEdgeKey: null,
         codeFlowRootNodeId: null,
         codeFlowTrigger: null,
         pathMicroserviceOrder: new Map(),
@@ -942,6 +944,7 @@
       graphState.relatedEdges = new Set();
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
+      graphState.selectedCallGraphEdgeKey = null;
       graphState.codeFlowRootNodeId = null;
       graphState.codeFlowTrigger = null;
       delete graphCanvas.dataset.selectedCodeFlow;
@@ -968,6 +971,7 @@
       graphState.relatedEdges = new Set();
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
+      graphState.selectedCallGraphEdgeKey = null;
       graphState.codeFlowRootNodeId = null;
       graphState.codeFlowTrigger = null;
       delete graphCanvas.dataset.selectedCodeFlow;

@@ -10,8 +10,8 @@
       graphState.selectedCallGraphEdgeKey = view.edgeKey;
       views.forEach(candidate => {
         const active = candidate === view;
-        candidate.path.classList.toggle("is-analysis-selected", active);
-        candidate.arcLabel.classList.toggle("is-analysis-selected", active);
+        candidate.path.classList.toggle("is-keyboard-selected", active);
+        candidate.arcLabel.classList.toggle("is-keyboard-selected", active);
       });
       view.showTooltip();
     };
@@ -512,14 +512,23 @@
         };
         const updateAnalysisModeIndicator = () => {
           const context = document.getElementById("graph-mode-context");
+          const contextCopy = document.getElementById("graph-mode-context-copy");
           const title = document.getElementById("graph-mode-context-title");
           const pathLabel = document.getElementById("graph-mode-context-path");
           const help = document.getElementById("graph-mode-context-help");
           const clear = document.getElementById("analysis-mode-clear");
           const portsToggle = document.getElementById("analysis-ports-toggle");
+          const contextCollapse = document.getElementById("analysis-context-collapse");
           if (!context || !title || !help || !clear) return;
           const active = Boolean(graphState.selectedCodeFlowId);
           context.hidden = !active;
+          context.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
+          if (contextCopy) contextCopy.id = "graph-mode-context-copy";
+          if (contextCollapse) {
+            contextCollapse.hidden = !active;
+            contextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
+            contextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
+          }
           if (portsToggle) {
             portsToggle.hidden = !active;
             portsToggle.setAttribute("aria-pressed", String(Boolean(graphState.showAllCodeFlowPorts)));
@@ -1654,6 +1663,9 @@
           const path = document.createElementNS(svgNamespace, "path");
           path.classList.add("graph-call-path");
           path.dataset.arcKey = resolvedEdgeKey;
+          if (resolvedEdgeKey === graphState.selectedCallGraphEdgeKey) {
+            path.classList.add("is-keyboard-selected");
+          }
           if (link.kind === "kafka") path.classList.add("is-kafka");
           if ((link.endpoint_ids || []).includes(graphState.analysisPortEndpointId)) {
             path.classList.add("is-analysis-selected");
@@ -1665,6 +1677,9 @@
           const arcLabel = document.createElementNS(svgNamespace, "text");
           arcLabel.classList.add("graph-call-label");
           arcLabel.dataset.arcKey = resolvedEdgeKey;
+          if (resolvedEdgeKey === graphState.selectedCallGraphEdgeKey) {
+            arcLabel.classList.add("is-keyboard-selected");
+          }
           if (link.kind === "kafka") arcLabel.classList.add("is-kafka");
           if ((link.endpoint_ids || []).includes(graphState.analysisPortEndpointId)) {
             arcLabel.classList.add("is-analysis-selected");

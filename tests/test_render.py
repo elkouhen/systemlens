@@ -1154,7 +1154,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="code-flow-message-type"' in document
     assert 'id="code-flow-message-types"' in document
     assert 'id="code-flow-collapse"' in document
+    assert 'id="analysis-context-collapse"' in document
+    assert 'id="graph-mode-context-copy"' in document
     assert 'is-code-flow-collapsed' in document
+    assert 'is-keyboard-selected' in document
     assert 'window.__systemlensCallGraphArcKeyboardNavigation' in document
     assert 'event.key.toLowerCase() === "n"' in document
     assert 'event.key.toLowerCase() === "p"' in document

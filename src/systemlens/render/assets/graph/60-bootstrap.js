@@ -7,6 +7,7 @@
         relatedEdges: null,
         analysisPortEndpointId: null,
         selectedCodeFlowId: null,
+        selectedCallGraphEdgeKey: null,
         showAllCodeFlowPorts: false,
         pathMicroserviceOrder: new Map(),
         codeFlowTreeCoordinates: new Map(),
@@ -32,6 +33,7 @@
     const analysisModeClear = document.getElementById("analysis-mode-clear");
     const analysisModeCenter = document.getElementById("analysis-mode-center");
     const analysisPortsToggle = document.getElementById("analysis-ports-toggle");
+    const analysisContextCollapse = document.getElementById("analysis-context-collapse");
     graphCanvas.dataset.renderMode = graphState.renderMode;
     analysisModeClear?.addEventListener("click", () => {
       graphState.analysisPortEndpointId = null;
@@ -47,6 +49,13 @@
       if (!graphState.selectedCodeFlowId) return;
       graphState.showAllCodeFlowPorts = !graphState.showAllCodeFlowPorts;
       requestGraphRender();
+    });
+    analysisContextCollapse?.addEventListener("click", () => {
+      graphState.analysisContextCollapsed = !graphState.analysisContextCollapsed;
+      const context = document.getElementById("graph-mode-context");
+      context?.classList.toggle("is-collapsed", graphState.analysisContextCollapsed);
+      analysisContextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
+      analysisContextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
     });
     function updateFitModeControls(mode) {
       [
