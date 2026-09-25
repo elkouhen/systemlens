@@ -309,8 +309,14 @@
         ({ edgeKey }) => edgeKey === graphState.selectedCallGraphEdgeKey,
       );
       if (selectedCallGraphEdgeIndex < 0) {
-        graphState.selectedCallGraphEdgeKey = null;
-        document.getElementById("graph")?.removeAttribute("data-selected-call-graph-arc");
+        const firstCallGraphLink = selectedCallGraphLinks[0];
+        graphState.selectedCallGraphEdgeKey = firstCallGraphLink?.edgeKey || null;
+        const graphCanvas = document.getElementById("graph");
+        if (graphState.selectedCallGraphEdgeKey) {
+          graphCanvas?.setAttribute("data-selected-call-graph-arc", graphState.selectedCallGraphEdgeKey);
+        } else {
+          graphCanvas?.removeAttribute("data-selected-call-graph-arc");
+        }
       }
       const callGraphPortLabels = new Map();
       const callGraphPortCounters = new Map();

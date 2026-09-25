@@ -1276,6 +1276,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'const sourceAnchor = (link.endpoint_ids || [])' in document
     assert 'orthogonalPath(' in document
     assert 'const selectedCallGraphLinks = callGraphOnly' in document
+    assert 'const firstCallGraphLink = selectedCallGraphLinks[0]' in document
+    assert 'graphState.selectedCallGraphEdgeKey = firstCallGraphLink?.edgeKey || null' in document
     assert 'order: order + 1' in document
     assert 'leftOrder - rightOrder || left.index - right.index' in document
     assert 'const callGraphPortLabels = new Map()' in document
