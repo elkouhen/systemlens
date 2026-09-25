@@ -817,6 +817,105 @@ def test_export_builds_one_call_graph_from_all_flows() -> None:
     assert set(graph["triggers"]) == {"orders", "payments", "inventory"}
 
 
+def test_call_graph_follows_exact_target_endpoints_for_downstream_flows() -> None:
+    orders_payments = replace(_kafka_endpoint("produce", "payments", "Orders.java"), id="orders-payments", topic="payments")
+    orders_inventory = replace(_kafka_endpoint("produce", "inventory", "Orders.java"), id="orders-inventory", topic="inventory")
+    payments_in = replace(_kafka_endpoint("consume", "payments", "Payments.java"), id="payments-in", topic="payments")
+    inventory_in = replace(_kafka_endpoint("consume", "inventory", "Inventory.java"), id="inventory-in", topic="inventory")
+    payments_out = replace(_kafka_endpoint("produce", "settled", "Payments.java"), id="payments-out", topic="settled")
+    inventory_out = replace(_kafka_endpoint("produce", "indexed", "Inventory.java"), id="inventory-out", topic="indexed")
+    settled_in = replace(_kafka_endpoint("consume", "settled", "Settlement.java"), id="settled-in", topic="settled")
+    indexed_in = replace(_kafka_endpoint("consume", "indexed", "Index.java"), id="indexed-in", topic="indexed")
+    flows = [
+        CodeFlow(
+            id="orders-flow", module="orders", method="Orders.publish",
+            path="Orders.java", start_line=1, end_line=2,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "cron_entry", "cron", "Orders.java", 1, 1),
+                   CodeFlowStep(2, "message_publish", "payments", "Orders.java", 2, 2, orders_payments.id),
+                   CodeFlowStep(3, "message_publish", "inventory", "Orders.java", 3, 3, orders_inventory.id)),
+        ),
+        CodeFlow(
+            id="payments-flow", module="payments", method="Payments.consume",
+            path="Payments.java", start_line=1, end_line=2,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_entry", "payments", "Payments.java", 1, 1, payments_in.id),
+                   CodeFlowStep(2, "message_publish", "settled", "Payments.java", 2, 2, payments_out.id)),
+        ),
+        CodeFlow(
+            id="inventory-flow", module="inventory", method="Inventory.consume",
+            path="Inventory.java", start_line=1, end_line=2,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_entry", "inventory", "Inventory.java", 1, 1, inventory_in.id),
+                   CodeFlowStep(2, "message_publish", "indexed", "Inventory.java", 2, 2, inventory_out.id)),
+        ),
+        CodeFlow(
+            id="settled-flow", module="settlement", method="Settlement.consume",
+            path="Settlement.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_entry", "settled", "Settlement.java", 1, 1, settled_in.id),),
+        ),
+        CodeFlow(
+            id="indexed-flow", module="index", method="Index.consume",
+            path="Index.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_entry", "indexed", "Index.java", 1, 1, indexed_in.id),),
+        ),
+    ]
+    endpoints = {
+        "orders": [orders_payments, orders_inventory],
+        "payments": [payments_in, payments_out],
+        "inventory": [inventory_in, inventory_out],
+        "settlement": [settled_in],
+        "index": [indexed_in],
+    }
+    edges = [
+        GraphEdge("kafka", "orders", "payments", orders_payments, payments_in),
+        GraphEdge("kafka", "orders", "inventory", orders_inventory, inventory_in),
+        GraphEdge("kafka", "payments", "settlement", payments_out, settled_in),
+        GraphEdge("kafka", "inventory", "index", inventory_out, indexed_in),
+    ]
+    graph = _html_graph_data(render_graph_html(endpoints, edges, code_flows=flows))["all_flows_call_graph"]
+    assert {
+        (edge["source"], edge["target"])
+        for edge in graph["edges"]
+    } == {
+        ("orders", "payments"), ("orders", "inventory"),
+        ("payments", "settlement"), ("inventory", "index"),
+    }
+
+
+def test_call_graph_numbers_cycle_arcs_once_in_breadth_first_order() -> None:
+    a_in = replace(_kafka_endpoint("consume", "events", "A.java"), id="a-in")
+    a_out = replace(_kafka_endpoint("produce", "events", "A.java"), id="a-out")
+    b_in = replace(_kafka_endpoint("consume", "events", "B.java"), id="b-in")
+    b_out = replace(_kafka_endpoint("produce", "events", "B.java"), id="b-out")
+    a_flow = CodeFlow(
+        id="a-flow", module="a", method="A.consume", path="A.java",
+        start_line=1, end_line=2, status="potential", confidence="medium", reason="test",
+        steps=(CodeFlowStep(1, "message_entry", "events", "A.java", 1, 1, a_in.id),
+               CodeFlowStep(2, "message_publish", "events", "A.java", 2, 2, a_out.id)),
+    )
+    b_flow = CodeFlow(
+        id="b-flow", module="b", method="B.consume", path="B.java",
+        start_line=1, end_line=2, status="potential", confidence="medium", reason="test",
+        steps=(CodeFlowStep(1, "message_entry", "events", "B.java", 1, 1, b_in.id),
+               CodeFlowStep(2, "message_publish", "events", "B.java", 2, 2, b_out.id)),
+    )
+    data = _html_graph_data(render_graph_html(
+        {"a": [a_in, a_out], "b": [b_in, b_out]},
+        [
+            GraphEdge("kafka", "a", "b", a_out, b_in),
+            GraphEdge("kafka", "b", "a", b_out, a_in),
+        ],
+        code_flows=[a_flow, b_flow],
+    ))
+    graph = _flow_call_graph(data, next(flow for flow in data["code_flows"] if flow["id"] == "a-flow"))
+    assert [(edge["source"], edge["target"], edge["order"]) for edge in graph["edges"]] == [
+        ("a", "b", 1), ("b", "a", 2),
+    ]
+
+
 def test_untriggered_flow_remains_a_root_when_module_has_another_triggered_flow() -> None:
     entry = replace(_kafka_endpoint("consume", "OrderCreated", "Orders.java"), id="orders-in")
     producer = replace(_kafka_endpoint("produce", "PaymentCreated", "Orders.java"), id="orders-out")

@@ -68,9 +68,13 @@ def _networkx_call_graph(
         for service, service_endpoints in endpoints_by_service.items()
         for endpoint in service_endpoints
     }
+    service_order = {
+        service: index for index, service in enumerate(endpoints_by_service)
+    }
     graph = nx.MultiDiGraph()
     traversal_tree = nx.MultiDiGraph()
     seen_relation_keys: set[tuple[str, str, str, str | None]] = set()
+    relation_discovery_order = 0
     trigger_kinds = {"http_entry", "message_entry", "cron_entry"}
     flow_by_id = {flow.id: flow for flow in flows}
     output_endpoint_ids_by_flow: dict[str, set[str]] = {}
@@ -89,6 +93,7 @@ def _networkx_call_graph(
                 )
 
     def add_relation(edge: GraphEdge) -> tuple[str, str, str, str | None] | None:
+        nonlocal relation_discovery_order
         source_id = edge.from_endpoint.id
         target_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
         source_service = service_by_endpoint.get(source_id)
@@ -107,7 +112,9 @@ def _networkx_call_graph(
             kind=edge.kind,
             label=label,
             endpoint_ids=[source_id, target_id],
+            discovery_order=relation_discovery_order,
         )
+        relation_discovery_order += 1
         return key
 
     edges_by_output: dict[str, list[GraphEdge]] = {}
@@ -156,6 +163,20 @@ def _networkx_call_graph(
                 GraphEdge(kind, source_service, target_service, source, target)
             )
 
+    def edge_sort_key(edge: GraphEdge) -> tuple[int, str, str, str, str]:
+        target = edge.to_endpoint
+        target_service = service_by_endpoint.get(target.id) if target is not None else None
+        return (
+            service_order.get(target_service or "", len(service_order)),
+            edge.from_endpoint.topic,
+            edge.kind,
+            target.id if target is not None else "",
+            edge.from_endpoint.id,
+        )
+
+    for output_id in edges_by_output:
+        edges_by_output[output_id].sort(key=edge_sort_key)
+
     trigger_flow_ids_by_endpoint: dict[str, list[str]] = {}
     trigger_flow_ids: set[str] = set()
     for flow in flows:
@@ -184,15 +205,24 @@ def _networkx_call_graph(
         frontier = sorted(root_flow_ids or trigger_flow_ids or flow_by_id)
     traversal_levels: list[list[str]] = []
     expanded_output_ids: set[str] = set()
+    visited_flow_ids: set[str] = set()
+    queued_flow_ids = set(frontier)
+    root_modules: list[str] = []
+    for flow_id in frontier:
+        current_flow = flow_by_id.get(flow_id)
+        if current_flow and current_flow.module and current_flow.module not in root_modules:
+            root_modules.append(current_flow.module)
     while frontier:
-        traversal_levels.append([
-            flow_by_id[flow_id].module
-            for flow_id in frontier
-            if flow_id in flow_by_id and flow_by_id[flow_id].module
-        ])
+        current_frontier = [
+            flow_id for flow_id in frontier
+            if flow_id in flow_by_id and flow_id not in visited_flow_ids
+        ]
+        if not current_frontier:
+            break
+        visited_flow_ids.update(current_frontier)
         next_frontier: list[str] = []
         next_frontier_set: set[str] = set()
-        for flow_id in frontier:
+        for flow_id in current_frontier:
             current_flow = flow_by_id.get(flow_id)
             if current_flow is None or not current_flow.module:
                 continue
@@ -221,71 +251,88 @@ def _networkx_call_graph(
                     graph_edge_key = add_relation(edge)
                     if graph_edge_key is None:
                         continue
-                    target_flow_ids = (
-                        trigger_flow_ids_by_endpoint.get(target_id, [])
-                        if target_id
-                        else []
+                    target_flow_ids = trigger_flow_ids_by_endpoint.get(
+                        target_endpoint_id or "", []
                     )
-                    if not target_flow_ids and target_id and edge.to_endpoint is not None:
-                        target_flow_ids = [
-                            candidate.id
-                            for candidate in flows
-                            if candidate.module == target_module
-                            and candidate.steps
-                            and candidate.steps[0].endpoint_id
-                            and endpoint_by_id.get(candidate.steps[0].endpoint_id)
-                            and endpoint_by_id[candidate.steps[0].endpoint_id].topic
-                            == edge.to_endpoint.topic
-                        ]
                     if target_flow_ids:
-                        traversal_tree.add_edge(
-                            module,
-                            target_module,
-                            key=graph_edge_key,
-                            graph_edge_key=graph_edge_key,
-                        )
-                    for target_flow_id in (
-                        target_flow_ids
-                    ):
-                        if target_flow_id not in next_frontier_set:
+                        if target_module not in traversal_tree:
+                            traversal_tree.add_node(module)
+                            traversal_tree.add_node(target_module)
+                            traversal_tree.add_edge(
+                                module,
+                                target_module,
+                                key=graph_edge_key,
+                                graph_edge_key=graph_edge_key,
+                            )
+                    for target_flow_id in target_flow_ids:
+                        if (
+                            target_flow_id not in visited_flow_ids
+                            and target_flow_id not in queued_flow_ids
+                            and target_flow_id not in next_frontier_set
+                        ):
                             next_frontier.append(target_flow_id)
                             next_frontier_set.add(target_flow_id)
+                            queued_flow_ids.add(target_flow_id)
         frontier = next_frontier
 
-    # The tree contains the actual module arcs; derive its levels after flow
-    # discovery so modules reached through several flow fragments are not lost
-    # from the serialized traversal metadata.
-    tree_frontier = sorted(
+    # The tree is a spanning forest used for readable levels. The complete
+    # graph remains the source of truth for arc numbering, so cycle and
+    # cross-level arcs are retained and numbered as well.
+    tree_roots = sorted(
         node for node in traversal_tree if traversal_tree.in_degree(node) == 0
     )
     tree_levels: list[list[str]] = []
+    seen_tree_nodes: set[str] = set()
+    tree_frontier = tree_roots
     while tree_frontier:
-        tree_levels.append(tree_frontier)
-        tree_frontier = sorted(
+        level = [node for node in tree_frontier if node not in seen_tree_nodes]
+        if not level:
+            break
+        tree_levels.append(level)
+        seen_tree_nodes.update(level)
+        tree_frontier = sorted({
             target
-            for source in tree_frontier
+            for source in level
             for target in traversal_tree.successors(source)
-            if all(
-                predecessor in sum(tree_levels, [])
-                for predecessor in traversal_tree.predecessors(target)
-            )
-        )
-    if tree_levels:
-        traversal_levels = tree_levels
+            if target not in seen_tree_nodes
+        })
 
-    # The tree/forest is the source of truth for numbering. It is traversed
-    # level by level, then its labels are copied to the corresponding graph
-    # arcs. This keeps the final graph complete without making its topology
-    # responsible for traversal order.
+    graph_roots = [module for module in root_modules if module in graph]
+    graph_roots.extend(sorted(node for node in graph if node not in graph_roots))
+    graph_levels: list[list[str]] = []
+    seen_graph_nodes: set[str] = set()
+    graph_frontier = graph_roots[:len(root_modules)]
+    while graph_frontier:
+        level = [node for node in graph_frontier if node not in seen_graph_nodes]
+        if not level:
+            break
+        graph_levels.append(level)
+        seen_graph_nodes.update(level)
+        graph_frontier = sorted({
+            target
+            for source in level
+            for target in graph.successors(source)
+            if target not in seen_graph_nodes
+        })
+    graph_levels.extend([[node] for node in graph if node not in seen_graph_nodes])
+    traversal_levels = graph_levels
+
+    # Number every complete-graph arc by source BFS level. Sorting by the
+    # stable discovery key makes labels independent of input edge order.
     next_edge_order = 1
-    for level in traversal_levels:
+    for level in graph_levels:
         for module in level:
-            for _source, _target, tree_key, tree_data in traversal_tree.out_edges(
-                module, keys=True, data=True
-            ):
-                graph_edge_key = tree_data["graph_edge_key"]
-                graph.edges[module, _target, graph_edge_key]["order"] = next_edge_order
-                traversal_tree.edges[module, _target, tree_key]["order"] = next_edge_order
+            outgoing = sorted(
+                graph.out_edges(module, keys=True, data=True),
+                key=lambda item: (
+                    item[3].get("discovery_order", 0),
+                    str(item[2]),
+                ),
+            )
+            for _source, _target, graph_edge_key, graph_data in outgoing:
+                graph_data["order"] = next_edge_order
+                if traversal_tree.has_edge(module, _target, key=graph_edge_key):
+                    traversal_tree.edges[module, _target, graph_edge_key]["order"] = next_edge_order
                 next_edge_order += 1
 
     triggers: dict[str, list[dict[str, object]]] = {}
@@ -314,7 +361,7 @@ def _networkx_call_graph(
         "node_order": component_order,
         "traversal_levels": traversal_levels,
         "call_tree": {
-            "levels": traversal_levels,
+            "levels": tree_levels or [[module] for module in root_modules if module in graph],
             "edges": [
                 {
                     "source": source,
@@ -460,6 +507,8 @@ def _distinct_export_flows(
                     order=edge_order,
                     endpoint_ids=list(endpoint_ids),
                 )
+        reachable = {root} | nx.descendants(graph, root)
+        graph = graph.subgraph(reachable).copy()
         tree = nx.MultiDiGraph()
         tree.add_node(root)
         visited = {root}
@@ -472,13 +521,19 @@ def _distinct_export_flows(
                 visited.add(target)
                 pending.append(target)
                 tree.add_node(target)
-                for key, data in sorted(
+                first_edge = next(iter(sorted(
                     graph[source][target].items(), key=lambda item: str(item[0])
-                ):
-                    tree.add_edge(source, target, key=key, **data)
+                )))
+                key, data = first_edge
+                tree.add_edge(source, target, key=key, **data)
+        node_order = (
+            list(nx.lexicographical_topological_sort(graph))
+            if nx.is_directed_acyclic_graph(graph)
+            else sorted(graph.nodes)
+        )
         return {
-            "nodes": sorted(tree.nodes),
-            "node_order": list(nx.topological_sort(tree)),
+            "nodes": sorted(graph.nodes),
+            "node_order": node_order,
             "edges": [
                 {
                     "source": source,
@@ -489,10 +544,28 @@ def _distinct_export_flows(
                     "endpoint_ids": list(cast(list[object], data.get("endpoint_ids", []))),
                 }
                 for source, target, _key, data in sorted(
-                    tree.edges(keys=True, data=True),
+                    graph.edges(keys=True, data=True),
                     key=lambda item: int(item[3].get("order", 0)),
                 )
             ],
+            "traversal_levels": [
+                list(level)
+                for level in nx.bfs_layers(graph, root)
+            ],
+            "call_tree": {
+                "levels": [list(level) for level in nx.bfs_layers(tree, root)],
+                "edges": [
+                    {
+                        "source": source,
+                        "target": target,
+                        "order": int(data.get("order", 0)),
+                    }
+                    for source, target, _key, data in sorted(
+                        tree.edges(keys=True, data=True),
+                        key=lambda item: int(item[3].get("order", 0)),
+                    )
+                ],
+            },
         }
 
     fusion_groups: dict[tuple[str, str, str | None], list[int]] = {}
