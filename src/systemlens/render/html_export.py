@@ -69,17 +69,21 @@ def _networkx_call_graph(
         for endpoint in service_endpoints
     }
     service_order = {
-        service: index for index, service in enumerate(endpoints_by_service)
+        service: index for index, service in enumerate(sorted(endpoints_by_service))
     }
     graph = nx.MultiDiGraph()
     traversal_tree = nx.MultiDiGraph()
     seen_relation_keys: set[tuple[str, str, str, str | None]] = set()
     relation_discovery_order = 0
     trigger_kinds = {"http_entry", "message_entry", "cron_entry"}
-    flow_by_id = {flow.id: flow for flow in flows}
+    ordered_flows = sorted(
+        flows,
+        key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id),
+    )
+    flow_by_id = {flow.id: flow for flow in ordered_flows}
     output_endpoint_ids_by_flow: dict[str, set[str]] = {}
     output_order_by_endpoint: dict[str, tuple[int, int]] = {}
-    for flow_index, flow in enumerate(flows):
+    for flow_index, flow in enumerate(ordered_flows):
         if not flow.module:
             continue
         for step in flow.steps:
@@ -118,7 +122,6 @@ def _networkx_call_graph(
         return key
 
     edges_by_output: dict[str, list[GraphEdge]] = {}
-    edge_keys_by_output: dict[str, set[tuple[str, str]]] = {}
     for edge in edges:
         source_role = (edge.from_endpoint.system, edge.from_endpoint.role)
         target_role = (
@@ -130,38 +133,6 @@ def _networkx_call_graph(
             and target_role in {("rest", "serve"), ("kafka", "consume")}
         ):
             edges_by_output.setdefault(edge.from_endpoint.id, []).append(edge)
-            edge_keys_by_output.setdefault(edge.from_endpoint.id, set()).add(
-                (edge.kind, edge.to_endpoint.id if edge.to_endpoint else "")
-            )
-
-    # Keep the flow view aligned with `flows show`: an OUT endpoint can reach
-    # every opposite-role IN endpoint with the same protocol and topic/route.
-    # The architecture graph may omit such an endpoint pair when its broader
-    # topology relation was not materialized, but the persisted flow evidence
-    # still makes the pair observable in the flow tree.
-    for source_id, source in endpoint_by_id.items():
-        source_service = service_by_endpoint.get(source_id)
-        synthetic_target_role = {"call": "serve", "produce": "consume"}.get(source.role)
-        if not source_service or synthetic_target_role is None:
-            continue
-        for target_id, target in endpoint_by_id.items():
-            target_service = service_by_endpoint.get(target_id)
-            if (
-                target.role != synthetic_target_role
-                or target.system != source.system
-                or target.topic != source.topic
-                or not target_service
-                or target_service == source_service
-            ):
-                continue
-            kind = "rest" if source.system == "rest" else "kafka"
-            edge_key = (kind, target_id)
-            if edge_key in edge_keys_by_output.setdefault(source_id, set()):
-                continue
-            edge_keys_by_output[source_id].add(edge_key)
-            edges_by_output.setdefault(source_id, []).append(
-                GraphEdge(kind, source_service, target_service, source, target)
-            )
 
     def edge_sort_key(edge: GraphEdge) -> tuple[int, str, str, str, str]:
         target = edge.to_endpoint
@@ -179,7 +150,7 @@ def _networkx_call_graph(
 
     trigger_flow_ids_by_endpoint: dict[str, list[str]] = {}
     trigger_flow_ids: set[str] = set()
-    for flow in flows:
+    for flow in ordered_flows:
         if not flow.steps or flow.steps[0].kind not in trigger_kinds:
             continue
         trigger_flow_ids.add(flow.id)
@@ -212,6 +183,8 @@ def _networkx_call_graph(
         current_flow = flow_by_id.get(flow_id)
         if current_flow and current_flow.module and current_flow.module not in root_modules:
             root_modules.append(current_flow.module)
+    traversal_tree.add_nodes_from(root_modules)
+    tree_parent_modules: set[str] = set()
     while frontier:
         current_frontier = [
             flow_id for flow_id in frontier
@@ -254,16 +227,20 @@ def _networkx_call_graph(
                     target_flow_ids = trigger_flow_ids_by_endpoint.get(
                         target_endpoint_id or "", []
                     )
-                    if target_flow_ids:
-                        if target_module not in traversal_tree:
-                            traversal_tree.add_node(module)
-                            traversal_tree.add_node(target_module)
-                            traversal_tree.add_edge(
-                                module,
-                                target_module,
-                                key=graph_edge_key,
-                                graph_edge_key=graph_edge_key,
-                            )
+                    if target_flow_ids and (
+                        target_module not in traversal_tree
+                        and target_module not in tree_parent_modules
+                        and target_module not in root_modules
+                    ):
+                        traversal_tree.add_node(module)
+                        traversal_tree.add_node(target_module)
+                        traversal_tree.add_edge(
+                            module,
+                            target_module,
+                            key=graph_edge_key,
+                            graph_edge_key=graph_edge_key,
+                        )
+                        tree_parent_modules.add(target_module)
                     for target_flow_id in target_flow_ids:
                         if (
                             target_flow_id not in visited_flow_ids
@@ -314,7 +291,7 @@ def _networkx_call_graph(
             for target in graph.successors(source)
             if target not in seen_graph_nodes
         })
-    graph_levels.extend([[node] for node in graph if node not in seen_graph_nodes])
+    graph_levels.extend([[node] for node in sorted(graph) if node not in seen_graph_nodes])
     traversal_levels = graph_levels
 
     # Number every complete-graph arc by source BFS level. Sorting by the
@@ -336,7 +313,7 @@ def _networkx_call_graph(
                 next_edge_order += 1
 
     triggers: dict[str, list[dict[str, object]]] = {}
-    for flow in flows:
+    for flow in ordered_flows:
         if not flow.steps or flow.steps[0].kind not in trigger_kinds:
             continue
         trigger = flow.steps[0]

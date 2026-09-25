@@ -806,8 +806,8 @@ def test_export_builds_one_call_graph_from_all_flows() -> None:
     assert len(graph["edges"]) == 2
     assert graph["traversal_levels"] == [["orders"], ["inventory", "payments"]]
     assert graph["call_tree"]["edges"] == [
-        {"source": "orders", "target": "payments", "order": 1},
-        {"source": "orders", "target": "inventory", "order": 2},
+        {"source": "orders", "target": "inventory", "order": 1},
+        {"source": "orders", "target": "payments", "order": 2},
     ]
     assert [edge["order"] for edge in graph["edges"]] == [1, 2]
     for flow in data["code_flows"]:
@@ -882,6 +882,58 @@ def test_call_graph_follows_exact_target_endpoints_for_downstream_flows() -> Non
     } == {
         ("orders", "payments"), ("orders", "inventory"),
         ("payments", "settlement"), ("inventory", "index"),
+    }
+    reordered_graph = _html_graph_data(render_graph_html(
+        dict(reversed(list(endpoints.items()))),
+        list(reversed(edges)),
+        code_flows=list(reversed(flows)),
+    ))["all_flows_call_graph"]
+    assert [
+        (edge["source"], edge["target"], edge["order"])
+        for edge in graph["edges"]
+    ] == [
+        (edge["source"], edge["target"], edge["order"])
+        for edge in reordered_graph["edges"]
+    ]
+
+
+def test_call_graph_does_not_infer_same_topic_consumers_without_an_indexed_arc() -> None:
+    producer = replace(_kafka_endpoint("produce", "OrderCreated", "Orders.java"), id="orders-out")
+    indexed_consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Payments.java"), id="payments-in")
+    unrelated_consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Inventory.java"), id="inventory-in")
+    flows = [
+        CodeFlow(
+            id="orders-flow", module="orders", method="Orders.publish",
+            path="Orders.java", start_line=1, end_line=2,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "cron_entry", "cron", "Orders.java", 1, 1),
+                   CodeFlowStep(2, "message_publish", "orders.created", "Orders.java", 2, 2, producer.id)),
+        ),
+        CodeFlow(
+            id="payments-flow", module="payments", method="Payments.consume",
+            path="Payments.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_entry", "orders.created", "Payments.java", 1, 1, indexed_consumer.id),),
+        ),
+        CodeFlow(
+            id="inventory-flow", module="inventory", method="Inventory.consume",
+            path="Inventory.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_entry", "orders.created", "Inventory.java", 1, 1, unrelated_consumer.id),),
+        ),
+    ]
+    graph = _html_graph_data(render_graph_html(
+        {"orders": [producer], "payments": [indexed_consumer], "inventory": [unrelated_consumer]},
+        [GraphEdge("kafka", "orders", "payments", producer, indexed_consumer)],
+        code_flows=flows,
+    ))["all_flows_call_graph"]
+    assert ("orders", "payments") in {
+        (edge["source"], edge["target"])
+        for edge in graph["edges"]
+    }
+    assert ("orders", "inventory") not in {
+        (edge["source"], edge["target"])
+        for edge in graph["edges"]
     }
 
 
