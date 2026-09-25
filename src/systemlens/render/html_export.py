@@ -663,7 +663,7 @@ def render_graph_html(
     graph_data = json.dumps(
         view_model,
         ensure_ascii=False,
-    ).replace("</", "<\\/")
+    ).replace("<", "\\u003c")
     asyncapi_assets = ""
     if asyncapi_contracts:
         asyncapi_assets = (
