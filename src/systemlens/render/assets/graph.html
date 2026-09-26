@@ -78,9 +78,10 @@
             </div>
           </div>
           <div class="graph-action-row dependency-actions">
-            <label class="dependency-depth-control" for="dependency-depth" title="Limiter la mise en évidence aux dépendances à cette distance du nœud sélectionné">
-              <span>Profondeur des dépendances</span>
-              <select id="dependency-depth" aria-label="Profondeur des dépendances">
+            <label class="dependency-focus-control" title="Afficher uniquement le sous-graphe jusqu’à l’ordre choisi">
+              <input id="dependency-focus-only" type="checkbox" aria-label="Afficher uniquement les dépendances sélectionnées" disabled>
+              <span>Dépendances uniquement</span>
+              <select id="dependency-depth" aria-label="Ordre des dépendances">
                 <option value="1">1</option>
                 <option value="2">2</option>
                 <option value="3">3</option>

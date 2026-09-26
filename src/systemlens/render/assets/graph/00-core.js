@@ -114,6 +114,7 @@
     const graphState = {
       selectedId: null,
       dependencyDepth: 1,
+      dependencyFocusOnly: false,
       selectedClusterKey: null,
       hoveredId: null,
       relatedNodes: null,

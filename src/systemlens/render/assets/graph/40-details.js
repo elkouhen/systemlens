@@ -34,6 +34,7 @@
         graphState.selectedClusterKey = null;
         graphState.relatedNodes = null;
         graphState.relatedEdges = null;
+        graphState.dependencyFocusOnly = false;
         graphState.analysisPortEndpointId = null;
         graphState.selectedCodeFlowId = null;
         graphState.selectedCallGraphEdgeKey = null;
@@ -42,6 +43,8 @@
         graphState.codeFlowTreeCoordinates = new Map();
         graphState.relatedLocalPortLinks = new Set();
         graphState.codeFlowRootNodeId = null;
+        dependencyFocusOnly.checked = false;
+        dependencyFocusOnly.disabled = true;
         graphState.codeFlowTrigger = null;
         graphState.viewMode = tab === "graph" ? "architecture" : "empty";
         delete graphCanvas.dataset.selectedCodeFlow;

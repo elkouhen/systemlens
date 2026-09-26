@@ -1313,8 +1313,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "Espace d’architecture" in document
     assert 'id="toolbar-collapse"' in document
     assert 'id="dependency-depth"' in document
+    assert 'id="dependency-focus-only"' in document
     assert 'function updateSelectedNodeDependencyScope(id)' in document
     assert 'dependencyDepth.addEventListener("change"' in document
+    assert 'updateSelectedNodeDependencyScope(graphState.selectedId);' in document
     assert '.toolbar.is-collapsed > :not(.toolbar-header) { display: none; }' in document
     assert 'toolbarCollapse.setAttribute("aria-expanded", String(!collapsed));' in document
     assert "--type-kicker: 10px" in document

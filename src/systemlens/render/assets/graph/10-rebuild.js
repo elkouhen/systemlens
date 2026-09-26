@@ -233,12 +233,14 @@
         ? (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)
         : null;
       const selectedCallGraph = callGraphForFlow(selectedFlow);
+      const dependencyFocusOnly = graphState.dependencyFocusOnly && graphState.selectedId && !callGraphOnly;
       const visibleLinks = callGraphOnly
         ? []
-        : graphData.links.filter(link => (
+        : graphData.links.filter((link, index) => (
           isVisibleRelation(link)
           && isVisibleNode(nodeDataById.get(link.source))
           && isVisibleNode(nodeDataById.get(link.target))
+          && (!dependencyFocusOnly || graphState.relatedEdges?.has(`edge-${index}`))
         ));
       // Topology service links predate the NetworkX call-graph projection and
       // may not carry the concrete ports used by the selected flow. Restore
@@ -260,6 +262,7 @@
       const visibleNodeIds = new Set(visibleLinks.flatMap(link => [link.source, link.target]));
       const filteredNodes = graphData.nodes.filter(node => (
         isVisibleNode(node)
+        && (!dependencyFocusOnly || graphState.relatedNodes?.has(node.id))
         && (!callGraphOnly || (
           node.kind === "microservice" && graphState.relatedNodes?.has(node.id)
         ))

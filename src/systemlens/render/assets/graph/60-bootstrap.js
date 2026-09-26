@@ -2,6 +2,7 @@
     function reset() {
       updateGraphState({
         selectedId: null,
+        dependencyFocusOnly: false,
         selectedClusterKey: null,
         relatedNodes: null,
         relatedEdges: null,
@@ -19,6 +20,8 @@
       renderer.refresh();
       setDetailsEmpty("Sélectionnez un nœud ou un module pour afficher ses informations.");
       search.value = "";
+      dependencyFocusOnly.checked = false;
+      dependencyFocusOnly.disabled = true;
       clearPathControls();
       persistState();
     }
@@ -175,9 +178,20 @@
     dependencyDepth.addEventListener("change", () => {
       graphState.dependencyDepth = Number(dependencyDepth.value) || 1;
       if (!graphState.selectedId || graphState.selectedCodeFlowId) return;
+      dependencyFocusOnly.checked = true;
+      graphState.dependencyFocusOnly = true;
       updateSelectedNodeDependencyScope(graphState.selectedId);
-      renderer.refresh();
-      requestGraphRender();
+      rebuildGraph();
+      applyLayout(graphState.activeLayout);
+    });
+    dependencyFocusOnly.addEventListener("change", () => {
+      if (!graphState.selectedId || graphState.selectedCodeFlowId) {
+        dependencyFocusOnly.checked = false;
+        return;
+      }
+      graphState.dependencyFocusOnly = dependencyFocusOnly.checked;
+      rebuildGraph();
+      applyLayout(graphState.activeLayout);
     });
     document.getElementById("inspector-close").addEventListener("click", closeInspector);
     inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });
@@ -232,6 +246,7 @@
     renderReferences();
     renderResources();
     restoreState();
+    dependencyFocusOnly.disabled = true;
     setToolbarTab("graph");
     function updateWorkspaceViewport(refit = false) {
       const root = document.documentElement;

@@ -462,6 +462,7 @@
       if (switchingView) {
         updateGraphState({
           selectedId: null,
+          dependencyFocusOnly: false,
           selectedClusterKey: null,
           hoveredId: null,
           relatedNodes: null,
@@ -472,6 +473,8 @@
           pathMicroserviceOrder: new Map(),
           codeFlowTreeCoordinates: new Map(),
         });
+        dependencyFocusOnly.checked = false;
+        dependencyFocusOnly.disabled = true;
         delete graphCanvas.dataset.selectedCodeFlow;
         clearPathControls();
         setDetailsEmpty("Sélectionnez un nœud ou un module pour afficher ses informations.");

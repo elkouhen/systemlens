@@ -58,8 +58,10 @@
     .graph-actions { display: grid; gap: 6px; }
     .graph-action-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
     .dependency-actions { justify-content: flex-end; }
-    .dependency-depth-control { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; color: #52616b; font-size: 10px; font-weight: 750; }
-    .dependency-depth-control select { width: 42px; height: 28px; padding: 0 5px; border: 1px solid #b9c5d6; border-radius: 6px; color: #315f9b; background: #fff; font: inherit; font-size: 11px; font-weight: 800; }
+    .dependency-focus-control { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 7px; border: 1px solid #cdd7e5; border-radius: 6px; color: #52616b; background: #fff; font-size: 10px; font-weight: 750; white-space: nowrap; }
+    .dependency-focus-control input { width: 14px; height: 14px; margin: 0; accent-color: #315f9b; }
+    .dependency-focus-control select { width: 42px; height: 24px; padding: 0 4px; border: 1px solid #b9c5d6; border-radius: 5px; color: #315f9b; background: #fff; font: inherit; font-size: 11px; font-weight: 800; }
+    .dependency-focus-control:has(input:disabled) { opacity: .55; }
     .toolbar button { width: 34px; height: 34px; border: 1px solid #b9c5d6; border-radius: 6px; color: #315f9b; background: #fff; font-size: 19px; line-height: 1; cursor: pointer; }
     .toolbar button:hover { background: #eaf2ff; }
     .graph-actions .graph-action-label { width: auto; padding: 0 8px; font-size: 11px; font-weight: 700; }

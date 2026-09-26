@@ -100,7 +100,9 @@ traversed, then by descending number of call-graph arcs, then by flow length.
 Selecting a node highlights the node and its visible dependencies. The
 dependency-depth control limits this highlight to one through five graph
 relations from the selected node; changing it updates the current selection
-without changing the indexed graph.
+without changing the indexed graph. The `Dépendances uniquement` option hides
+everything outside that scope and recalculates the active graph layout around
+the remaining nodes.
 This diagnostic text belongs to the widget and does not change graph path
 rendering. The Flux tab
 provides a

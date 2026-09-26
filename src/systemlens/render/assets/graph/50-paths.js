@@ -942,6 +942,7 @@
       if (!pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
+      dependencyFocusOnly.disabled = false;
       graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
@@ -971,10 +972,13 @@
       const distances = new Map([[id, 0]]);
       const relatedEdges = new Set();
       const adjacency = new Map();
-      network.forEachEdge((edge, attributes, source, target) => {
-        if (!isVisibleRelation(attributes, source, target)) return;
-        adjacency.set(source, [...(adjacency.get(source) || []), { edge, node: target }]);
-        adjacency.set(target, [...(adjacency.get(target) || []), { edge, node: source }]);
+      graphData.links.forEach((link, index) => {
+        if (!isVisibleRelation(link)
+          || !isVisibleNode(nodeDataById.get(link.source))
+          || !isVisibleNode(nodeDataById.get(link.target))) return;
+        const edge = `edge-${index}`;
+        adjacency.set(link.source, [...(adjacency.get(link.source) || []), { edge, node: link.target }]);
+        adjacency.set(link.target, [...(adjacency.get(link.target) || []), { edge, node: link.source }]);
       });
       const queue = [id];
       for (let cursor = 0; cursor < queue.length; cursor += 1) {
@@ -995,6 +999,7 @@
       if (!preservePath && !pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
+      dependencyFocusOnly.disabled = false;
       graphState.selectedClusterKey = null;
       updateSelectedNodeDependencyScope(id);
       graphState.relatedLocalPortLinks = new Set();
