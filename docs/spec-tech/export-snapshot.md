@@ -20,6 +20,9 @@ render time. The export can show indexed Kafka payload-type identities and
 OpenAPI evidence paths; richer DTO/OpenAPI content requires an explicit future
 indexed contract rather than a live source read. This keeps an export
 reproducible when repository files change after `systemlens index`.
+Persisted JPA entity declarations are serialized on their owning service node
+as qualified names and root-relative source locations. The service inspector
+shows those entries without creating physical database nodes or access edges.
 
 The HTML renderer keeps its graph-detail section inside the left toolbar and
 hides it while empty. Selecting a resource or itinerary applies a panel state

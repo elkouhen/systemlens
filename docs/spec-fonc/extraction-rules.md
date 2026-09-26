@@ -14,6 +14,12 @@ RestTemplate, WebClient, Spring Cloud Gateway, Spring Data REST, Spring Kafka an
 Cloud Stream. Markdown and JSON Kafka manifests are supported as explicit
 sources and are labelled `source=manifest`.
 
+Module discovery records JPA entity classes only when source imports or fully
+qualifies the `jakarta.persistence` or `javax.persistence` `Entity` annotation. The service
+summary lists their qualified Java names, and the persisted graph has a `maps`
+relation with source evidence. It does not infer a table name, JDBC driver,
+database engine, or read/write operation from the annotation.
+
 For REST clients, a literal URL or a unique, never-reassigned local string
 base URL is normalized to its route and retains its HTTP host as target
 evidence. A private, uniquely named helper with a single unconditional String
@@ -29,6 +35,17 @@ HTTP/message entry endpoints and HTTP/message output endpoints. It then
 materializes conservative same-method code flows and, when CodeQL is
 available, creates a global source-only Java database to follow resolved
 static method calls from an indexed entry method to an indexed output method.
+
+When CodeQL is disabled or unavailable, a local Java symbol pass may also
+connect an entry to an output through a uniquely resolved receiver type and
+method signature. These source-declared calls remain `potential` with low
+confidence. Ambiguous receivers and overloads remain unresolved.
+
+When a Java method consumes multiple indexed Kafka topics and contains a
+`join` invocation, its same-method flow explanation states that the
+publication depends on a join. Each input remains a potential path; the graph
+does not claim that one message alone triggers the output.
+
 CodeQL additionally answers transitive reachability by starting at indexed
 output methods and walking callers until indexed input methods are reached;
 these direct answers are used when the Python-side traversal cannot reconstruct
@@ -39,9 +56,9 @@ Python materializer does not create additional targets.
 Calls are aggregated before the global flow join. `--codeql-database DIR`
 reuses an existing global CodeQL database instead.
 The temporary database and the supplied database path are never persisted. If
-the selected engine is unavailable, indexing reports that interprocedural flows were skipped
-and retains AST-only flows. A uniquely resolved dispatch yields a `potential`
-flow with medium confidence. When CodeQL identifies several compatible virtual
+the selected engine is unavailable, indexing reports the CodeQL limitation
+and retains same-method and source-symbol flows. A uniquely resolved dispatch
+yields a `potential` flow with medium confidence. When CodeQL identifies several compatible virtual
 method implementations, SystemLens retains each candidate as a `potential`
 flow with low confidence. Calls without an exact caller and callee source
 location remain unresolved unless the extractor cannot prove a usable path and

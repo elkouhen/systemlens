@@ -197,6 +197,7 @@ SystemLens builds a local inventory of the following architecture resources:
 | REST APIs | Spring MVC/WebFlux and Spring Data REST routes, plus Feign, RestTemplate, WebClient, and gateway calls. |
 | Messaging topics | Kafka producers and consumers, including Spring Kafka and Spring Cloud Stream; known Java payload types are retained. |
 | MongoDB collections | MongoDB collection access and the Java method that reads or writes it. |
+| JPA entities | Source classes annotated with `jakarta.persistence.Entity` or `javax.persistence.Entity`; no physical table or database is inferred. |
 | Supporting contracts | OpenAPI contracts, Spring properties, and optional Kafka facts from Markdown or JSON manifests. |
 | Kubernetes capacity (optional) | Deployment and StatefulSet CPU/RAM dimensions from the active local context, with `systemlens index --kubernetes`. |
 

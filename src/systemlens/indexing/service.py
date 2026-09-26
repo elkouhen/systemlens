@@ -968,8 +968,24 @@ def _index_repo(
         elif methods and call_graph_engine != "none":
             _report_progress(
                 progress,
-                f"→ Indexation : {call_graph_engine} indisponible ; flux interprocéduraux ignorés.",
+                f"→ Indexation : {call_graph_engine} indisponible ; "
+                "parcours AST conservateurs uniquement.",
             )
+        if methods and (
+            call_graph_engine == "none"
+            or (not engine_available and codeql_database is None)
+        ):
+            source_candidates = materialize_codeql_code_flows(
+                methods, all_endpoints, [], repo_root=repo_root,
+                source_paths=list(current_hashes),
+                max_hops=config.codeql_max_hops,
+                codeql_edge_confidence=config.codeql_edge_confidence,
+            )
+            source_flows = [
+                flow for flow in source_candidates
+                if any(step.kind == "method_call" for step in flow.steps)
+            ]
+            flows = _deduplicate_code_flows([*flows, *source_flows], all_endpoints)
         service_aliases = {
             module_identity(module): local_spring_application_names(module.path, None)
             for module in relation_modules

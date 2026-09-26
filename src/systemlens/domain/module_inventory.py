@@ -25,6 +25,7 @@ class DiscoveredModule:
     mongo_collections: tuple[str, ...] = ()
     mongo_methods: tuple["MongoMethod", ...] = ()
     mongo_persistence_classes: tuple["MongoPersistenceClass", ...] = ()
+    jpa_entities: tuple["JpaEntity", ...] = ()
     openapi_files: tuple[str, ...] = ()
     kafka_methods: tuple["KafkaMethod", ...] = ()
     blocking_points: tuple["BlockingPoint", ...] = ()
@@ -76,6 +77,13 @@ class MongoPersistenceClass:
     line: int
     fields: tuple[MongoField, ...] = ()
     root: bool = True
+
+
+@dataclass(frozen=True, order=True)
+class JpaEntity:
+    qualified_name: str
+    path: str
+    line: int
 
 
 @dataclass(frozen=True)

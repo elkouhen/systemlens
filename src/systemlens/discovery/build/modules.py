@@ -18,6 +18,7 @@ from systemlens.discovery.configuration import service_configuration_example
 from systemlens.domain.module_inventory import (
     BlockingPoint,
     DiscoveredModule,
+    JpaEntity,
     JavaArchitectureExtension,
     KafkaMethod,
     ModuleDependency,
@@ -815,9 +816,53 @@ def discover_rest_controllers(module_dir: Path, module_roots: set[Path]) -> tupl
     return tuple(sorted(set(controller_classes)))
 
 
+def discover_jpa_entities(
+    module_dir: Path, module_roots: set[Path], repo_root: Path
+) -> tuple[JpaEntity, ...]:
+    """Inventory source-declared JPA entities without inferring table names."""
+    parser = _java_parser("jpa_entities")
+    entities: set[JpaEntity] = set()
+    for java_file in _module_files(module_dir, module_roots, "*.java"):
+        source_parts = java_file.relative_to(module_dir).parts
+        if source_parts[:2] == ("src", "test") or source_parts[0] in {"test", "tests"}:
+            continue
+        try:
+            source = java_file.read_bytes()
+        except OSError:
+            continue
+        if not any(token in source for token in (
+            b"import jakarta.persistence.Entity;", b"import javax.persistence.Entity;",
+            b"import jakarta.persistence.*;", b"import javax.persistence.*;",
+            b"@jakarta.persistence.Entity", b"@javax.persistence.Entity",
+        )):
+            continue
+        root = parser.parse(source).root_node
+        if root.has_error:
+            continue
+        package = next((
+            java_parser.node_text(source, node).removeprefix("package").removesuffix(";").strip()
+            for node in root.named_children if node.type == "package_declaration"
+        ), "")
+        for declaration in java_parser.type_declarations(root):
+            if declaration.parent != root or declaration.type != "class_declaration" or not any(
+                java_parser.annotation_name(annotation, source).rsplit(".", 1)[-1] == "Entity"
+                for annotation in java_parser.annotations_of(declaration)
+            ):
+                continue
+            name = java_parser.declaration_name(declaration, source)
+            if name:
+                entities.add(JpaEntity(
+                    qualified_name=f"{package}.{name}" if package else name,
+                    path=java_file.relative_to(repo_root).as_posix(),
+                    line=declaration.start_point.row + 1,
+                ))
+    return tuple(sorted(entities))
+
+
 def _enrich_module(
     module: DiscoveredModule,
     module_roots: set[Path],
+    repo_root: Path,
     *,
     enrich_architecture: bool = True,
 ) -> DiscoveredModule:
@@ -834,6 +879,10 @@ def _enrich_module(
 
     # Détecter les contrôleurs REST
     rest_controllers = discover_rest_controllers(module.path, module_roots)
+    jpa_entities = (
+        discover_jpa_entities(module.path, module_roots, repo_root)
+        if enrich_architecture else ()
+    )
 
     openapi_files = _discover_openapi_files(
         module.path,
@@ -853,6 +902,7 @@ def _enrich_module(
     enriched = DiscoveredModule(
         **{**module.__dict__, "mongo_collections": collections, "mongo_methods": methods,
            "mongo_persistence_classes": persistence_classes,
+           "jpa_entities": jpa_entities,
            "openapi_files": openapi_files,
            "kafka_methods": kafka_methods, "blocking_points": blocking_points,
            "rest_controllers": rest_controllers, "openapi_generated_clients": openapi_generated_clients}
@@ -982,6 +1032,7 @@ def discover_modules(
             _enrich_module(
                 module,
                 module_roots,
+                root,
                 enrich_architecture=enrich_architecture and use_tree_sitter,
             )
             for module in modules

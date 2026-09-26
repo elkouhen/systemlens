@@ -603,6 +603,11 @@ def build_graph_view_model(
                     else {}
                 ),
                 "resources": resources,
+                "jpa_entities": [
+                    {"name": entity.qualified_name,
+                     "location": f"{entity.path}:{entity.line}"}
+                    for entity in module.jpa_entities
+                ] if module else [],
                 "kubernetes_workloads": [workload.__dict__ for workload in module.kubernetes_workloads] if module else [],
                 "openapi_files": openapi_files,
                 "openapi_contracts": [

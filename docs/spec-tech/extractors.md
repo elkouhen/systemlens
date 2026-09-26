@@ -67,6 +67,12 @@ key is scheduled once, so the closure costs `O(V + E)` for `V` persisted types
 and `E` resolved field references, apart from the cost of resolving field type
 names.
 
+JPA entity discovery scans eligible production Java files in each owning
+module. It requires an import or qualified annotation from
+`jakarta.persistence` or `javax.persistence` and an `@Entity` class annotation. It persists the class
+name and source location without deriving a table name or operation. The pass
+costs `O(B + N)` for scanned source bytes `B` and syntax nodes `N`.
+
 With `--strategy strategy1`, every method whose name starts with
 `envoyerMessageKafka` is an additional producer convention, including
 `envoyerMessageKafkaRequest(topic, payload)` and

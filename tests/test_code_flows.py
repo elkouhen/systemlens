@@ -164,6 +164,37 @@ class ScheduledPublisher {
     assert {flow.steps[0].name for flow in flows} == {"0 * * * * *"}
 
 
+def test_same_method_kafka_join_explains_multiple_inputs(tmp_path: Path) -> None:
+    path = "orders/src/main/java/example/OrderApp.java"
+    source = tmp_path / path
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "class OrderApp {\n"
+        "  void stream(StreamsBuilder builder) {\n"
+        "    builder.stream(\"payment\").join(builder.stream(\"stock\"), merger)\n"
+        "      .to(\"orders\");\n"
+        "  }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven",
+        version=None, kind="library", starts_application=True,
+        configuration_example="",
+    )
+    endpoints = [
+        _endpoint("payment", "consume", "kafka", "payment", path, 3),
+        _endpoint("stock", "consume", "kafka", "stock", path, 3),
+        _endpoint("orders", "produce", "kafka", "orders", path, 4),
+    ]
+
+    flows = materialize_code_flows(tmp_path, endpoints, [module])
+
+    assert len(flows) == 2
+    assert all("joins multiple indexed Kafka inputs" in flow.reason for flow in flows)
+    assert all(flow.status == "potential" for flow in flows)
+
+
 def test_materialize_code_flows_does_not_root_on_untriggered_publication(tmp_path: Path) -> None:
     module_root = tmp_path / "orders"
     relative_source = "orders/src/main/java/com/example/Publisher.java"
@@ -331,7 +362,9 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
             "input_java_type": "String",
             "output_flow": "POST /charge",
             "output_java_type": None,
+            "target_modules": [],
             "method": flows[0].method,
+            "root": True,
             "trigger": {"kind": "message_entry", "name": "orders.created"},
             "input_topic": "orders.created",
             "output_topics": [],
@@ -737,6 +770,54 @@ def test_cli_no_codeql_keeps_ast_only_flow_indexing(
         ]
 
 
+def test_no_codeql_resolves_unique_source_declared_helper_call(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    source = repo / "src/main/java/example"
+    source.mkdir(parents=True)
+    (repo / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion>"
+        "<groupId>example</groupId><artifactId>orders</artifactId>"
+        "<version>1.0</version></project>",
+        encoding="utf-8",
+    )
+    (source / "OrderController.java").write_text(
+        """package example;
+import org.springframework.web.bind.annotation.*;
+@RestController
+@RequestMapping("/orders")
+class OrderController {
+  private Generator generator;
+  @PostMapping public void create(String order) {}
+  @PostMapping("/generate") public void create() { generator.generate(); }
+}
+""",
+        encoding="utf-8",
+    )
+    (source / "Generator.java").write_text(
+        """package example;
+import org.springframework.kafka.core.KafkaTemplate;
+class Generator {
+  private KafkaTemplate<Long, String> template;
+  void generate() { template.send("orders", "new"); }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with Store(repo) as store:
+        index_repo(repo, Config(codeql_enabled=False, call_graph_engine="none"), store, full=True)
+        flows = store.all_code_flows()
+
+    assert len(flows) == 1
+    assert [(step.kind, step.name) for step in flows[0].steps] == [
+        ("http_entry", "POST /orders/generate"),
+        ("method_call", "example.Generator.generate"),
+        ("message_publish", "orders"),
+    ]
+    assert flows[0].confidence == "low"
+    assert "source-declared" in flows[0].reason
+
+
 def test_cli_codeql_progress_html_requires_codeql(tmp_path: Path) -> None:
     result = RUNNER.invoke(
         app,
@@ -786,7 +867,7 @@ def test_store_additively_migrates_previous_schema_for_code_flows(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'codeql_call_edges'"
         ).fetchone()
         assert call_edges_table is not None
-        assert store.get_meta("schema_version") == "32"
+        assert store.get_meta("schema_version") == "34"
 
 
 def test_codeql_calls_join_ast_entry_and_output_methods(tmp_path: Path) -> None:

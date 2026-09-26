@@ -782,6 +782,9 @@
         appendRelationList("Données", mongoCollections, id, link => (
           nodeDataById.get(link.target).name
         ), relationsGroup);
+        appendList("Entités JPA déclarées", (node.jpa_entities || []).map(
+          entity => `${entity.name} · ${entity.location}`
+        ), relationsGroup);
         discardEmptyDetailsGroup(relationsGroup);
         const associatedFlowsGroup = createDetailsGroup("Flux associés", false);
         appendAssociatedCodeFlows("Flux associés", associatedFlows, associatedFlowsGroup);

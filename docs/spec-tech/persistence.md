@@ -7,6 +7,9 @@ SQLite schema migration is additive where possible. `files` stores hash state,
 `endpoints` stores source facts, and normalized tables store modules,
 dependencies and relations. Each module has a collision-safe identity used by
 endpoints and relations; its artifact/project name remains a display alias.
+Schema version 34 adds a `jpa_entities` JSON column to module inventory with
+an empty default for existing indexes. Migration runs before indexing begins.
+
 The database filename remains `findings.db` for backward compatibility; new
 AST-only behavior must not infer that it contains security findings.
 

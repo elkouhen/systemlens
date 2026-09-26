@@ -39,9 +39,8 @@ AST endpoint analysis uses no subprocess. For interprocedural flows, the local
 CodeQL executable is used by default once for the repository to create a
 temporary source-only Java projection (Java files only, without Maven/Gradle
 descriptors or build outputs, except Java files below `target/generated-sources`),
-create a database from that projection, query
-it, and decode the result as CSV;
-progress checkpoints group the global result by source-owning project. Each
+create a database from that projection, query it, and decode the result as CSV.
+Progress checkpoints group the global result by source-owning project. Each
 completed project publishes the currently available `code_flows` as an
 explicit partial checkpoint, while the final pass joins all call facts
 together. CodeQL's temporary query pack exports only source-located resolved
@@ -52,6 +51,11 @@ pack cache; indexing never runs `codeql pack install` or downloads analyzer
 dependencies. The configured CodeQL thread count and optional RAM limit are
 passed to database creation and query execution only; they tune performance and
 do not alter or invalidate persisted architecture facts.
+
+When CodeQL is disabled or unavailable, a source symbol pass follows uniquely
+resolved, receiver-typed calls between indexed Java methods. It keeps these
+candidates at low confidence and drops ambiguous types or overloads.
+
 The source projection prevents `build-mode=none` from invoking Maven or Gradle
 for dependency discovery; unresolved external types are accepted as the
 documented accuracy trade-off for offline indexing.

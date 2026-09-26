@@ -167,7 +167,7 @@ def test_microservices_list_uses_the_architecture_catalog_shape(tmp_path: Path) 
             "kafka_topics_consumed": [],
             "kafka_message_types_published": {},
             "kafka_message_types_consumed": {},
-            "databases": {"mongodb_collections": []},
+            "databases": {"mongodb_collections": [], "jpa_entities": []},
             "technologies": ["Java", "Spring Boot"],
             "openapi": False,
             "openapi_files": [],
@@ -390,7 +390,6 @@ class OrderApp {
 """,
         encoding="utf-8",
     )
-
     module = discover_modules(tmp_path)[0]
 
     assert [(item.role, item.mechanism, item.method, item.topic) for item in module.kafka_methods] == [
@@ -952,6 +951,65 @@ def test_modules_are_read_from_the_persisted_index_snapshot(tmp_path: Path) -> N
     assert [(item.name, item.version) for item in persisted] == [("orders-api", "3.1.0")]
 
 
+def test_index_persists_source_evidenced_jpa_entities(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = tmp_path / "payment"
+    module.mkdir()
+    _write_pom(module / "pom.xml", "payment", "1.0.0")
+    source = module / "src/main/java/example/Customer.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "package example;\n"
+        "import jakarta.persistence.Entity;\n"
+        "@Entity public class Customer {}\n",
+        encoding="utf-8",
+    )
+    (source.parent / "PaymentApp.java").write_text(
+        "package example;\n"
+        "class PaymentApp { public static void main(String[] args) { "
+        "SpringApplication.run(PaymentApp.class, args); } }\n",
+        encoding="utf-8",
+    )
+    test_entity = module / "src/test/java/example/TestEntity.java"
+    test_entity.parent.mkdir(parents=True)
+    test_entity.write_text(
+        "package example; import jakarta.persistence.Entity; "
+        "@Entity class TestEntity {}\n",
+        encoding="utf-8",
+    )
+    with Store(tmp_path) as store:
+        index_repo(
+            tmp_path, Config(codeql_enabled=False, call_graph_engine="none"),
+            store, full=True,
+        )
+        entities = store.all_modules()[0].jpa_entities
+        relations = store.all_architecture_relations()
+
+    assert [(entity.qualified_name, entity.path, entity.line) for entity in entities] == [
+        ("example.Customer", "payment/src/main/java/example/Customer.java", 3),
+    ]
+    assert [(relation.relation, relation.target_kind, relation.target_name) for relation in relations] == [
+        ("maps", "jpa_entity", "example.Customer"),
+    ]
+    result = runner.invoke(app, ["microservices", "--root", str(tmp_path), "--json"])
+    assert result.exit_code == 0
+    assert json.loads(result.output)[0]["databases"]["jpa_entities"] == ["example.Customer"]
+    monkeypatch.chdir(tmp_path)
+    graph_path = tmp_path / "architecture.html"
+    exported = runner.invoke(app, ["export", "microservices", "--html", str(graph_path)])
+    assert exported.exit_code == 0
+    graph_data = json.loads(re.search(
+        r'<script id="graph-data"[^>]*>([\s\S]*?)</script>',
+        graph_path.read_text(encoding="utf-8"),
+    ).group(1))
+    service = next(node for node in graph_data["nodes"] if node["kind"] == "microservice")
+    assert service["jpa_entities"] == [{
+        "name": "example.Customer",
+        "location": "payment/src/main/java/example/Customer.java:3",
+    }]
+
+
 def test_store_rejects_unknown_schema_version(tmp_path: Path) -> None:
     with Store(tmp_path) as store:
         store.set_meta("schema_version", "future")
@@ -959,6 +1017,17 @@ def test_store_rejects_unknown_schema_version(tmp_path: Path) -> None:
     with pytest.raises(StoreError, match="version invalide"):
         with Store(tmp_path):
             pass
+
+
+def test_store_adds_jpa_inventory_to_existing_index(tmp_path: Path) -> None:
+    with Store(tmp_path) as store:
+        store.conn.execute("ALTER TABLE modules DROP COLUMN jpa_entities")
+        store.set_meta("schema_version", "33")
+
+    with Store(tmp_path) as store:
+        columns = {row["name"] for row in store.conn.execute("PRAGMA table_info(modules)")}
+        assert "jpa_entities" in columns
+        assert store.get_meta("schema_version") == "34"
 
 
 def test_index_repo_materializes_modules_snapshot(

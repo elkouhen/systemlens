@@ -10,6 +10,11 @@ an inventory of input and output ports. When a persisted code flow links an
 input endpoint to an output endpoint of the same service, it displays only that
 source-evidenced potential internal flow and any CodeQL-resolved intermediate
 method calls. It does not imply that every input reaches every output.
+
+The service inspector lists persisted JPA entity declarations under Relations,
+with each qualified class name and root-relative source line. These entries
+identify mappings only; they do not add a physical database node or imply a
+read/write edge.
 Every HTTP/Kafka input and output receives a deterministic identifier that is
 global to the exported graph: `I1`, `I2`, … for inputs and `O1`, `O2`, … for
 outputs. When a persisted code flow proves that an input reaches an output in
@@ -24,4 +29,3 @@ backed by Kafka, its tooltip explicitly shows `Topic en entrée` for a consumed
 topic or `Topic en sortie` for a published topic. The Flux entry also lists all
 input and output topics carried by the persisted flow; HTTP ports keep their
 method and route presentation.
-

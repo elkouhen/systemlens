@@ -226,6 +226,8 @@ def module_summary(catalog: ArchitectureCatalog, name: str) -> dict[str, object]
         technologies.append("Kafka")
     if module.mongo_collections or module.mongo_methods:
         technologies.append("MongoDB")
+    if module.jpa_entities:
+        technologies.append("JPA")
     if module.openapi_files:
         technologies.append("OpenAPI")
     summary: dict[str, object] = {
@@ -241,7 +243,10 @@ def module_summary(catalog: ArchitectureCatalog, name: str) -> dict[str, object]
         "kafka_topics_consumed": consumed,
         "kafka_message_types_published": produced_types,
         "kafka_message_types_consumed": consumed_types,
-        "databases": {"mongodb_collections": list(module.mongo_collections)},
+        "databases": {
+            "mongodb_collections": list(module.mongo_collections),
+            "jpa_entities": [entity.qualified_name for entity in module.jpa_entities],
+        },
         "technologies": technologies,
         "openapi": bool(module.openapi_files),
         "openapi_files": list(module.openapi_files),

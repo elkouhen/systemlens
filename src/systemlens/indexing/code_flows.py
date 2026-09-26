@@ -24,7 +24,7 @@ from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 from systemlens.indexing.java_symbols import JavaSymbols
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v19-trigger-rooted-fanout"
+CODE_FLOW_SIGNATURE = "code-flow-v21-source-symbol-join-context"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -346,6 +346,14 @@ def materialize_code_flows(
                 for endpoint in local_endpoints
                 if (endpoint.system, endpoint.role) in _EFFECT_ROLES
             ]
+            has_kafka_join = (
+                sum(endpoint.system == "kafka" for endpoint in triggers) > 1
+                and any(
+                    node.type == "method_invocation"
+                    and java_parser.invocation_parts(node, source)[1] == "join"
+                    for node in java_parser.walk(method_node)
+                )
+            )
             scheduled_trigger = _scheduled_trigger_step(method_node, source, path)
             for trigger in triggers:
                 assert trigger.module is not None
@@ -392,6 +400,9 @@ def materialize_code_flows(
                     status="potential",
                     confidence="medium",
                     reason=(
+                        "This method joins multiple indexed Kafka inputs before "
+                        "the publication; the path remains conditional and potential."
+                        if has_kafka_join and trigger.system == "kafka" else
                         "The entry point and external effects occur in the same Java "
                         "method."
                     ),
@@ -567,6 +578,7 @@ def _build_codeql_call_graph(
             caller = locate_caller(call)
             resolved_target = locate(call.callee, call.callee_path, call.callee_line)
             if caller is not None and resolved_target is not None:
+                synthetic_calls.add(call)
                 add_edge(caller, resolved_target[0], call, True)
 
     return CodeQLCallGraph(

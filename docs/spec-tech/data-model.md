@@ -28,6 +28,12 @@ from those persisted relations; adapters may use indexed endpoints only to add
 route, topic, and source presentation details and do not re-resolve targets or
 rescan source.
 
+`JpaEntity` records a qualified Java class name and root-relative source line
+for a class annotated with an imported or qualified JPA `Entity` type. The module snapshot
+stores these declarations, and one high-confidence `maps` relation links each
+owning module to an entity. The fact identifies a Java mapping declaration;
+it does not identify a physical table, database engine, or read/write call.
+
 `GraphFact` is the separate enrichment layer for facts supplied by a user, or
 by an agent operating through the companion SystemLens skill, via MCP. It
 supports typed nodes and edges, origin, namespace, status, confidence,
@@ -95,10 +101,19 @@ the traversed AST nodes for Java files that contain eligible endpoints. Maven
 `target/` and Gradle `build/` output trees are excluded from the inventory, so
 copied resources and generated classes cannot duplicate source facts. A
 same-method relation remains `potential` with medium confidence because static
-lexical order does not prove branch execution. Method-call facts join
+lexical order does not prove branch execution. A method with multiple indexed
+Kafka inputs and a `join` call gets an explanatory join reason; no extra
+dependency or unconditional path is inferred. Method-call facts join
 persisted AST method facts to form interprocedural flows; `method_call` steps keep
 the call-site line. For CodeQL, reachability is computed from indexed output
 methods backwards through their callers until indexed input methods are reached.
+
+Without CodeQL, the source symbol index can add receiver-typed calls only when
+one source method matches the receiver and signature. These paths have low
+confidence and source-located `method_call` steps. Ambiguous types or overloads
+produce no path. The pass parses eligible Java sources once per flow rebuild
+and traverses their method invocations; it adds no runtime or cross-service calls.
+
 The transitive query has no business-level hop or global path limit; the
 configured complete-pass deadline remains the operational safeguard. The legacy
 `analysis.codeql_max_hops` remains for bounded route reconstruction; it does
@@ -122,8 +137,8 @@ path may join one unique qualified indexed method, but is explicitly
 low-confidence and retains signature-join provenance; ambiguous names remain
 unresolved. An
 explicit CLI database remains a global-database override. When the CodeQL executable is
-absent, it records no interprocedural paths and reports that limitation without
-discarding AST-only flows. When CodeQL represents a lambda as a synthetic
+absent, indexing retains only same-method and source-symbol flows and reports
+that limitation. When CodeQL represents a lambda as a synthetic
 anonymous callable, SystemLens attributes its call site to the narrowest
 persisted Java method enclosing that line in the same file. Dynamic dispatch,
 reflection, and runtime-only routing remain outside this deterministic layer.

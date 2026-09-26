@@ -755,3 +755,22 @@ boundary test rejects convention imports from the domain. Existing persisted
 indexes and the legacy `topic` field remain compatible. New code must not use
 `topic` as the vocabulary for an HTTP route, and callers must inject a policy
 when they need repository-specific target resolution.
+
+## ADR-42: Inventory JPA entities without inferring a database
+
+**Status:** Accepted.
+
+**Context:** A service can declare JPA entities while the existing data inventory
+lists only MongoDB collections. An empty database summary then hides source
+evidence of relational persistence, but `@Entity` alone does not establish a
+physical table or a selected database engine.
+
+**Decision:** Persist each imported or qualified JPA `@Entity` declaration with its qualified
+class name and root-relative source location. Add a module-to-entity `maps`
+relation and expose the declarations in the service summary. Do not derive
+tables, JDBC engines, or read/write operations from this annotation.
+
+**Consequences:** Existing indexes gain an additive module column and continue
+to load with an empty JPA inventory until reindexed. Users can see declared
+entities in the CLI. Runtime database identity and repository operations remain
+outside this static fact.

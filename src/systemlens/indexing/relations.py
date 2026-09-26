@@ -133,6 +133,13 @@ def build_architecture_relations(
     for module in modules:
         identity = module_identity(module)
         source_kind = module_kinds[identity]
+        for entity in module.jpa_entities:
+            add(_relation(
+                source_kind, identity, "maps", "jpa_entity", entity.qualified_name,
+                origin="code", confidence="high", module=identity,
+                path=entity.path, start_line=entity.line, end_line=entity.line,
+                qualified_name=entity.qualified_name,
+            ))
         for method in module.mongo_methods:
             if not method.collection:
                 continue
