@@ -132,6 +132,8 @@
     .service-kafka-meta span { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
     .dto-tag { color: var(--ui-accent-text); background: var(--ui-accent-soft); }
     .theme-toggle { width: auto !important; padding: 0 9px !important; font-size: 11px !important; font-weight: 750; }
+    .toolbar-collapse { width: 32px !important; padding: 0 !important; font-size: 22px !important; }
+    .dependency-depth-control select { border-color: var(--widget-border); color: var(--ui-text); background: var(--ui-control); }
     @media (max-width: 1024px) {
       .toolbar { width: min(320px, calc(100vw - 20px)); max-height: min(82vh, 620px); }
       .brand-subtitle { display: none; }

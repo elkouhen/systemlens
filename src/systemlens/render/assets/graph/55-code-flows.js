@@ -13,7 +13,6 @@
     const codeFlowFilterSummary = document.getElementById("code-flow-filter-summary");
     const codeFlowFilterReset = document.getElementById("code-flow-filter-reset");
     const codeFlowsTitle = document.getElementById("code-flows-title");
-    const codeFlowCollapse = document.getElementById("code-flow-collapse");
     function codeFlowStepLabel(kind) {
       return ({
         http_entry: "Entrée HTTP",
@@ -581,12 +580,5 @@
       renderCodeFlows();
     });
     codeFlowFilterReset.addEventListener("click", resetCodeFlowFilters);
-    if (codeFlowCollapse && flowsPanel) {
-      codeFlowCollapse.addEventListener("click", () => {
-        const collapsed = flowsPanel.classList.toggle("is-code-flow-collapsed");
-        codeFlowCollapse.setAttribute("aria-expanded", String(!collapsed));
-        codeFlowCollapse.textContent = collapsed ? "Développer" : "Réduire";
-      });
-    }
     document.getElementById("flows-panel").addEventListener("systemlens:flows-open", renderCodeFlows);
     renderCodeFlows();

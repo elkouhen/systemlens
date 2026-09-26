@@ -34,7 +34,8 @@ tooltip does not add or infer any architecture fact.
 In a selected flow view, clicking a port or an arc enters transient
 analysis mode. The selected arc, its label, and its endpoint ports are
 highlighted; clicking the same port or arc clears the focus, and clicking
-another port or arc moves it. This interaction does not change the view,
+another port or arc moves it. Pressing Escape also clears the selected arc and
+its tooltip. This interaction does not change the view,
 selected flow, camera, or persisted facts.
 The selected call graph displays only its referenced IN and OUT ports by
 default. The analysis context provides an `Afficher tous les ports` control to
@@ -96,6 +97,10 @@ card also displays the ordered microservice names from its persisted call graph
 when available, or resolves them from indexed endpoint identities as a fallback.
 The flow list is ordered by descending number of distinct microservices
 traversed, then by descending number of call-graph arcs, then by flow length.
+Selecting a node highlights the node and its visible dependencies. The
+dependency-depth control limits this highlight to one through five graph
+relations from the selected node; changing it updates the current selection
+without changing the indexed graph.
 This diagnostic text belongs to the widget and does not change graph path
 rendering. The Flux tab
 provides a

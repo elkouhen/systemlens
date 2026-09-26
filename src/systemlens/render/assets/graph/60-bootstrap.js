@@ -38,7 +38,16 @@
     const analysisModeArchitecture = document.getElementById("analysis-mode-architecture");
     const analysisPortsToggle = document.getElementById("analysis-ports-toggle");
     const analysisContextCollapse = document.getElementById("analysis-context-collapse");
+    const toolbar = document.getElementById("architecture-toolbar");
+    const toolbarCollapse = document.getElementById("toolbar-collapse");
     graphCanvas.dataset.renderMode = graphState.renderMode;
+    toolbarCollapse?.addEventListener("click", () => {
+      const collapsed = toolbar?.classList.toggle("is-collapsed") || false;
+      toolbarCollapse.setAttribute("aria-expanded", String(!collapsed));
+      toolbarCollapse.setAttribute("aria-label", collapsed ? "Développer le panneau" : "Réduire le panneau");
+      toolbarCollapse.setAttribute("title", collapsed ? "Développer le panneau" : "Réduire le panneau");
+      toolbarCollapse.textContent = collapsed ? "›" : "‹";
+    });
     analysisModeClear?.addEventListener("click", () => {
       graphState.analysisPortEndpointId = null;
       requestGraphRender();
@@ -163,6 +172,13 @@
     renderCardsButton.addEventListener("click", () => setNodeRenderMode("cards"));
     renderSymbolsButton.addEventListener("click", () => setNodeRenderMode("symbols"));
     resetButton.addEventListener("click", reset);
+    dependencyDepth.addEventListener("change", () => {
+      graphState.dependencyDepth = Number(dependencyDepth.value) || 1;
+      if (!graphState.selectedId || graphState.selectedCodeFlowId) return;
+      updateSelectedNodeDependencyScope(graphState.selectedId);
+      renderer.refresh();
+      requestGraphRender();
+    });
     document.getElementById("inspector-close").addEventListener("click", closeInspector);
     inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });
     window.addEventListener("keydown", event => { if (event.key === "Escape" && !inspectorModal.hidden) closeInspector(); });

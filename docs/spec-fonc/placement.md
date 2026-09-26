@@ -35,3 +35,7 @@ Changing a relation-type filter rebuilds and relayouts the graph from only the
 selected dependency types; excluded relations do not influence the resulting
 graph layout.
 
+The left navigation panel provides a collapse button in its header. Collapsing
+the panel keeps its header controls available, hides the navigation content,
+and leaves the graph workspace unchanged. Expanding the panel restores the
+previous navigation view.

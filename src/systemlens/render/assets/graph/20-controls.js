@@ -14,6 +14,7 @@
     const issuesTab = document.getElementById("issues-tab");
     const flowsTab = document.getElementById("flows-tab");
     const graphLegend = document.getElementById("graph-legend");
+    const dependencyDepth = document.getElementById("dependency-depth");
     const graphPanel = document.getElementById("graph-panel");
     const resourcesPanel = document.getElementById("resources-panel");
     const issuesPanel = document.getElementById("issues-panel");

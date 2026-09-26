@@ -966,13 +966,37 @@
         link.kind === "rest" && targetId === id && restResourceLabel(link, target) === resource
       ));
     }
+    function updateSelectedNodeDependencyScope(id) {
+      const maxDepth = Math.max(1, Math.min(5, Number(graphState.dependencyDepth) || 1));
+      const distances = new Map([[id, 0]]);
+      const relatedEdges = new Set();
+      const adjacency = new Map();
+      network.forEachEdge((edge, attributes, source, target) => {
+        if (!isVisibleRelation(attributes, source, target)) return;
+        adjacency.set(source, [...(adjacency.get(source) || []), { edge, node: target }]);
+        adjacency.set(target, [...(adjacency.get(target) || []), { edge, node: source }]);
+      });
+      const queue = [id];
+      for (let cursor = 0; cursor < queue.length; cursor += 1) {
+        const current = queue[cursor];
+        const currentDepth = distances.get(current) || 0;
+        if (currentDepth >= maxDepth) continue;
+        for (const { edge, node } of adjacency.get(current) || []) {
+          relatedEdges.add(edge);
+          if (distances.has(node)) continue;
+          distances.set(node, currentDepth + 1);
+          queue.push(node);
+        }
+      }
+      graphState.relatedNodes = new Set(distances.keys());
+      graphState.relatedEdges = relatedEdges;
+    }
     function selectNode(id, preservePath = false) {
       if (!preservePath && !pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
       graphState.selectedClusterKey = null;
-      graphState.relatedNodes = new Set([id]);
-      graphState.relatedEdges = new Set();
+      updateSelectedNodeDependencyScope(id);
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
       graphState.viewMode = "architecture";
@@ -980,12 +1004,6 @@
       graphState.codeFlowRootNodeId = null;
       graphState.codeFlowTrigger = null;
       delete graphCanvas.dataset.selectedCodeFlow;
-      network.forEachEdge((edge, attributes, source, target) => {
-        if (!isVisibleRelation(attributes, source, target)) return;
-        if (source === id || target === id) {
-          graphState.relatedEdges.add(edge); graphState.relatedNodes.add(source); graphState.relatedNodes.add(target);
-        }
-      });
       renderer.refresh();
       renderDetails(id);
       persistState();

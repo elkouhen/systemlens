@@ -1311,6 +1311,12 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "legend-resource-mark collection" in document
     assert 'class="brand-mark">SL</span>' in document
     assert "Espace d’architecture" in document
+    assert 'id="toolbar-collapse"' in document
+    assert 'id="dependency-depth"' in document
+    assert 'function updateSelectedNodeDependencyScope(id)' in document
+    assert 'dependencyDepth.addEventListener("change"' in document
+    assert '.toolbar.is-collapsed > :not(.toolbar-header) { display: none; }' in document
+    assert 'toolbarCollapse.setAttribute("aria-expanded", String(!collapsed));' in document
     assert "--type-kicker: 10px" in document
     assert "--type-view-title: 16px" in document
     assert "--type-entity-title: 19px" in document
@@ -1334,7 +1340,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="code-flow-kind"' in document
     assert 'id="code-flow-message-type"' in document
     assert 'id="code-flow-message-types"' in document
-    assert 'id="code-flow-collapse"' in document
+    assert 'id="code-flow-collapse"' not in document
     assert 'id="code-flow-filter-reset"' in document
     assert 'id="code-flow-filter-summary"' in document
     assert 'function activeCodeFlowFilters()' in document
@@ -1346,13 +1352,15 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'applyLayout(graphState.activeLayout);' in document
     assert 'document.getElementById("graph-port-paths")' in document
     assert 'element.hidden = !graphVisible' in document
-    assert 'is-code-flow-collapsed' in document
+    assert 'is-code-flow-collapsed' not in document
     assert 'is-keyboard-selected' in document
     assert 'candidate.path.style.setProperty("stroke", "#dc2626")' in document
     assert 'candidate.path.style.setProperty("stroke-width", "2px")' in document
     assert 'candidate.hitArea.classList.toggle("is-keyboard-selected", active)' in document
     assert 'dataset.selectedCallGraphArc' in document
     assert 'window.__systemlensCallGraphArcKeyboardNavigation' in document
+    assert 'clearSelectedCallGraphArc' in document
+    assert 'event.key === "Escape"' in document
     assert 'event.key.toLowerCase() === "n"' in document
     assert 'event.key.toLowerCase() === "p"' in document
     assert 'input, select, textarea, [contenteditable=\'true\']' in document

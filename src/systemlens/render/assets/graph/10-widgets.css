@@ -1,6 +1,12 @@
     .toolbar { position: fixed; z-index: 10; top: 16px; left: 16px; display: grid; gap: 10px; width: min(390px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 12px; overflow-y: auto; border: 1px solid #d7dee9; border-radius: 10px; background: rgba(255, 255, 255, .96); box-shadow: 0 4px 20px rgba(15, 23, 42, .12); }
     .toolbar { overflow-x: hidden; }
     .toolbar-header { position: sticky; z-index: 20; top: -10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -10px -2px 0; padding: 10px 2px 6px; background: rgba(255, 255, 255, .98); }
+    .toolbar.is-collapsed { width: auto; max-height: none; overflow: visible; }
+    .toolbar.is-collapsed > :not(.toolbar-header) { display: none; }
+    .toolbar.is-collapsed .toolbar-header { margin: 0; padding: 0; }
+    .toolbar.is-collapsed .brand strong,
+    .toolbar.is-collapsed .brand-subtitle { display: none; }
+    .toolbar-collapse { flex: 0 0 auto; }
     .toolbar strong { color: #172033; font-size: 15px; white-space: nowrap; }
     .toolbar input:not([type="checkbox"]) { height: 34px; padding: 0 10px; border: 1px solid #b9c5d6; border-radius: 6px; color: #172033; background: #fff; font: inherit; font-size: 13px; }
     .toolbar-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border-radius: 8px; background: #edf2f7; }
@@ -51,6 +57,9 @@
     }
     .graph-actions { display: grid; gap: 6px; }
     .graph-action-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
+    .dependency-actions { justify-content: flex-end; }
+    .dependency-depth-control { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; color: #52616b; font-size: 10px; font-weight: 750; }
+    .dependency-depth-control select { width: 42px; height: 28px; padding: 0 5px; border: 1px solid #b9c5d6; border-radius: 6px; color: #315f9b; background: #fff; font: inherit; font-size: 11px; font-weight: 800; }
     .toolbar button { width: 34px; height: 34px; border: 1px solid #b9c5d6; border-radius: 6px; color: #315f9b; background: #fff; font-size: 19px; line-height: 1; cursor: pointer; }
     .toolbar button:hover { background: #eaf2ff; }
     .graph-actions .graph-action-label { width: auto; padding: 0 8px; font-size: 11px; font-weight: 700; }
@@ -138,9 +147,6 @@
     .code-flow-filter-summary { margin: 0; padding: 5px 7px; border-left: 3px solid #94a3b8; border-radius: 4px; color: #475569; background: #f8fafc; font-size: 10px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
     .code-flows-summary { margin: 0; color: var(--ui-muted); font-size: 11px; line-height: 1.35; }
     .code-flow-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .code-flow-collapse { flex: 0 0 auto; width: auto !important; min-height: 28px; padding: 4px 10px !important; border: 1px solid #94a3b8 !important; border-radius: var(--control-radius); color: #334155 !important; background: #f8fafc !important; box-shadow: 0 1px 2px rgb(15 23 42 / 12%); font-size: 11px !important; font-weight: 800; }
-    .code-flow-collapse:hover { border-color: #475569 !important; background: #e2e8f0 !important; }
-    #flows-panel.is-code-flow-collapsed .references-section { display: none; }
     .code-flow-summary { margin: 0; color: var(--ui-muted); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
     .code-flow-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
     .code-flow-stat { display: grid; gap: 1px; min-width: 0; padding: 4px 5px; border: 1px solid var(--ui-border); border-radius: 5px; color: var(--ui-muted); background: var(--ui-control); text-align: center; }

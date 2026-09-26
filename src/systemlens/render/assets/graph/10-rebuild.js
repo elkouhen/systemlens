@@ -8,6 +8,21 @@
         + ".graph-local-port-path.is-analysis-selected, .graph-port-path.is-analysis-selected"
       ).forEach(element => element.classList.remove("is-analysis-selected"));
     };
+    const clearSelectedCallGraphArc = () => {
+      graphState.selectedCallGraphEdgeKey = null;
+      callGraphArcNavigator.activeIndex = null;
+      document.getElementById("graph")?.removeAttribute("data-selected-call-graph-arc");
+      document.querySelectorAll(".graph-call-path, .graph-call-label").forEach(element => {
+        element.classList.remove("is-keyboard-selected");
+        if (element.classList.contains("graph-call-path")) {
+          element.style.removeProperty("stroke");
+          element.style.removeProperty("stroke-width");
+          element.style.removeProperty("filter");
+        }
+      });
+      syncSelectedCallGraphArcVisual();
+      flowTooltipOverlay.replaceChildren();
+    };
     const syncSelectedCallGraphArcVisual = () => {
       const edgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc;
       if (!edgeKey) {
@@ -99,7 +114,10 @@
       window.addEventListener("keydown", event => {
         if (!graphState.selectedCodeFlowId) return;
         if (event.target.closest?.("input, select, textarea, [contenteditable='true']")) return;
-        if (event.key.toLowerCase() === "n") {
+        if (event.key === "Escape" && graphState.selectedCallGraphEdgeKey) {
+          event.preventDefault();
+          clearSelectedCallGraphArc();
+        } else if (event.key.toLowerCase() === "n") {
           event.preventDefault();
           navigateVisibleCallGraphArc(1);
         } else if (event.key.toLowerCase() === "p") {
@@ -1901,6 +1919,12 @@
             arcLabel.classList.remove("is-analysis-hovered");
           });
           hitArea.addEventListener("click", event => {
+            if (graphState.selectedCallGraphEdgeKey === resolvedEdgeKey) {
+              clearSelectedCallGraphArc();
+              event?.preventDefault();
+              event?.stopPropagation();
+              return;
+            }
             graphState.selectedCallGraphEdgeKey = resolvedEdgeKey;
             clearCallGraphAnalysisFocus();
             const viewIndex = callGraphArcNavigator.views.findIndex(view => view.edgeKey === resolvedEdgeKey);

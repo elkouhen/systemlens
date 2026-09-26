@@ -950,6 +950,18 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert page.locator(".graph-node-card-label").count() == 5
         assert page.locator(".graph-node-port-reference").count() == 0
         assert page.locator(".graph-port-path").count() == 0
+        toolbar_before_collapse = page.locator(".toolbar").bounding_box()
+        assert toolbar_before_collapse is not None
+        page.locator("#toolbar-collapse").click()
+        assert page.locator(".toolbar").get_attribute("class") == "toolbar is-collapsed"
+        assert page.locator("#toolbar-collapse").get_attribute("aria-expanded") == "false"
+        assert page.locator("#toolbar-collapse").get_attribute("aria-label") == "Développer le panneau"
+        toolbar_after_collapse = page.locator(".toolbar").bounding_box()
+        assert toolbar_after_collapse is not None
+        assert toolbar_after_collapse["width"] < toolbar_before_collapse["width"]
+        page.locator("#toolbar-collapse").click()
+        assert page.locator(".toolbar").get_attribute("class") == "toolbar"
+        assert page.locator("#toolbar-collapse").get_attribute("aria-expanded") == "true"
         page.locator("#flows-tab").click()
         page.locator(".code-flow-item").wait_for(state="visible")
         assert page.locator("#flows-tab").get_attribute("aria-selected") == "true"
@@ -1040,6 +1052,12 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert page.locator(".graph-call-path").count() >= 1
         assert page.locator("#graph-port-paths .graph-arc-hit-area").count() >= 1
         assert page.locator("#graph-port-paths .graph-arc-hit-area").first.get_attribute("title")
+        page.keyboard.press("Escape")
+        assert page.locator("#graph-flow-tooltips .graph-arc-tooltip").count() == 0
+        page.locator("#graph-port-paths .graph-arc-hit-area").first.click()
+        page.locator("#graph-flow-tooltips .graph-arc-tooltip").wait_for(state="visible")
+        page.locator("#graph-port-paths .graph-arc-hit-area").first.click()
+        assert page.locator("#graph-flow-tooltips .graph-arc-tooltip").count() == 0
         assert page.locator(".graph-call-path").evaluate_all(
             "paths => paths.every(path => /^M(?: [0-9.-]+){2}(?: L(?: [0-9.-]+){2})+$/.test(path.getAttribute('d')))"
         )
