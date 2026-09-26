@@ -29,6 +29,7 @@
       search.value = "";
       pathStops.splice(0, pathStops.length);
       graphState.selectedCodeFlowId = null;
+      graphState.viewMode = "architecture";
       graphState.codeFlowRootNodeId = null;
       graphState.codeFlowTrigger = null;
       graphState.codeFlowTreeCoordinates = new Map();
@@ -420,6 +421,7 @@
       )));
       graphState.analysisPortEndpointId = null;
       graphState.selectedCodeFlowId = context.codeFlow?.id || null;
+      graphState.viewMode = context.codeFlow ? "call-graph" : "architecture";
       graphState.selectedCallGraphEdgeKey = null;
       graphCanvas.removeAttribute("data-selected-call-graph-arc");
       graphState.showAllCodeFlowPorts = false;
@@ -924,6 +926,7 @@
         relatedEdges: null,
         relatedLocalPortLinks: new Set(),
         selectedCodeFlowId: null,
+        viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
         codeFlowRootNodeId: null,
         codeFlowTrigger: null,
@@ -944,6 +947,7 @@
       graphState.relatedEdges = new Set();
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
+      graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
       graphState.codeFlowRootNodeId = null;
       graphState.codeFlowTrigger = null;
@@ -971,6 +975,7 @@
       graphState.relatedEdges = new Set();
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
+      graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
       graphState.codeFlowRootNodeId = null;
       graphState.codeFlowTrigger = null;

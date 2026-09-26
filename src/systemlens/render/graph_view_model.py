@@ -28,6 +28,10 @@ from systemlens.render.namespaces import project_namespace, project_namespace_pa
 from systemlens.render.software_layers import software_layer
 from systemlens.render._graph_view_helpers import (
     _endpoint_vscode_uri,
+    canonical_resource_kind,
+    deduplicated_call_port_links,
+    fact_runtime_namespaces,
+    kafka_message_type_status,
     _mongodb_collection_nodes,
     _mongodb_visual_graph_edges,
     _openapi_contract_evidence_path,
@@ -40,75 +44,6 @@ from systemlens.render._graph_view_helpers import (
 )
 from systemlens.render.likec4_export import _complexity_ranking
 from systemlens.render.snapshot import kafka_dto_views
-
-
-def _deduplicated_call_port_links(edges: list[GraphEdge]) -> list[dict[str, str]]:
-    """Return one browser interaction-graph edge per endpoint pair and protocol.
-
-    The architecture snapshot can contain several equivalent evidence rows
-    for one call. A set gives those rows a canonical directed identity before
-    the HTML model is built, preventing duplicate arcs in the Flux view while
-    leaving the aggregated evidence on the architecture links.
-    """
-    links: set[tuple[str, str, str]] = set()
-    for edge in edges:
-        if (
-            edge.to_endpoint is None
-            or edge.from_endpoint.system not in {"rest", "kafka"}
-            or edge.to_endpoint.system not in {"rest", "kafka"}
-            or edge.from_endpoint.role not in {"call", "produce"}
-            or edge.to_endpoint.role not in {"serve", "consume"}
-        ):
-            continue
-        source = edge.from_endpoint.id
-        target = edge.to_endpoint.id
-        links.add((source, target, edge.kind))
-    return [
-        {
-            "source_endpoint_id": source,
-            "target_endpoint_id": target,
-            "kind": str(kind),
-        }
-        for source, target, kind in sorted(links)
-    ]
-
-
-def _fact_runtime_namespaces(fact: GraphFact) -> list[str]:
-    """Return runtime namespaces from an enrichment fact without guessing."""
-    metadata: dict[str, Any] = fact.metadata or {}
-    values = metadata.get("namespaces")
-    if not isinstance(values, list):
-        values = [metadata.get("namespace")]
-    return [str(value) for value in values if value]
-
-
-def _canonical_resource_kind(kind: str | None) -> str:
-    """Map persisted relation vocabulary to the visual resource vocabulary."""
-    return {
-        "topic": "kafka_topic",
-        "collection": "mongodb_collection",
-        "data_schema": "data_schema",
-    }.get(kind or "", kind or "")
-
-
-def _kafka_message_type_status(
-    producer: MessageEndpoint | None, consumer: MessageEndpoint | None,
-) -> tuple[str, str | None]:
-    """Describe type evidence without making the type part of topic identity.
-
-    Kafka topology is keyed by the concrete topic.  Missing or conflicting
-    Java payload declarations therefore annotate a relation but never remove
-    the relation itself.
-    """
-    produced = producer.message_type if producer else None
-    consumed = consumer.message_type if consumer else None
-    if produced and consumed:
-        if produced == consumed:
-            return "consistent", None
-        return "mismatch", "Types Java producteur/consommateur différents ; lien conservé sur le topic."
-    if produced or consumed:
-        return "partial", "Type Java connu d'un seul côté ; lien conservé sur le topic."
-    return "unknown", "Type Java du message non déterminé ; lien conservé sur le topic."
 
 
 def _indexing_issues(
@@ -377,7 +312,7 @@ def build_graph_view_model(
     } | {
         str(namespace)
         for fact in graph_facts or []
-        for namespace in _fact_runtime_namespaces(fact)
+        for namespace in fact_runtime_namespaces(fact)
         if namespace
     })
     fact_namespaces = sorted({fact.namespace for fact in graph_facts or [] if fact.namespace})
@@ -787,7 +722,7 @@ def build_graph_view_model(
             fact_visual_kind = (
                 "microservice"
                 if fact.kind == "service"
-                else _canonical_resource_kind(fact.kind)
+                else canonical_resource_kind(fact.kind)
             )
             node_id = f"{fact_visual_kind}:{fact.name}"
             if node_id not in known_node_ids:
@@ -863,7 +798,7 @@ def build_graph_view_model(
         source_kind = "microservice" if fact.source_kind == "service" else fact.source_kind
         if source_kind != "microservice" or not fact.source_name or not fact.target_name:
             continue
-        target_kind = _canonical_resource_kind(fact.target_kind)
+        target_kind = canonical_resource_kind(fact.target_kind)
         add_resource_owner((target_kind, fact.target_name), fact.source_name)
     # Prefer the canonical persisted relation projection when the caller has
     # one.  The graph edges remain a rendering adapter, while ownership is
@@ -874,7 +809,7 @@ def build_graph_view_model(
         source_kind = "microservice" if relation.source_kind == "service" else relation.source_kind
         if source_kind == "microservice":
             add_resource_owner(
-                (_canonical_resource_kind(relation.target_kind), relation.target_name),
+                (canonical_resource_kind(relation.target_kind), relation.target_name),
                 relation.source_name,
             )
     # Mongo methods are persisted as architecture relations, but older
@@ -902,7 +837,7 @@ def build_graph_view_model(
         for key, owners in resource_owner_candidates.items()
     }
     for node in nodes:
-        owner = resource_owners.get((_canonical_resource_kind(str(node.get("kind"))), str(node.get("name"))))
+        owner = resource_owners.get((canonical_resource_kind(str(node.get("kind"))), str(node.get("name"))))
         if owner is None and node.get("kind") == "mongodb_collection":
             owner = str(node.get("owner") or "") or None
         if owner is None:
@@ -981,24 +916,6 @@ def build_graph_view_model(
             link["published_message_types"] = sorted(
                 published_message_types_by_relation.get((source_name, target_name), set())
             )
-        if kind == "kafka" and source_kind == "microservice" and target_kind == "microservice":
-            link["published_message_types"] = sorted({
-                edge.from_endpoint.message_type
-                for edge in edges
-                if edge.kind == "kafka"
-                and edge.from_service == source_name
-                and edge.to_service == target_name
-                and edge.from_endpoint.message_type
-            })
-            link["consumed_message_types"] = sorted({
-                edge.to_endpoint.message_type
-                for edge in edges
-                if edge.kind == "kafka"
-                and edge.from_service == source_name
-                and edge.to_service == target_name
-                and edge.to_endpoint is not None
-                and edge.to_endpoint.message_type
-            })
         if kind == "kafka" and source_kind == "kafka_topic" and target_kind == "microservice":
             link["consumed_message_types"] = sorted(
                 consumed_message_types_by_relation.get((target_name, source_name), set())
@@ -1022,7 +939,7 @@ def build_graph_view_model(
                 )
             ]
             statuses = {
-                _kafka_message_type_status(edge.from_endpoint, edge.to_endpoint)[0]
+                kafka_message_type_status(edge.from_endpoint, edge.to_endpoint)[0]
                 for edge in kafka_candidates
             }
             status = next(
@@ -1090,12 +1007,12 @@ def build_graph_view_model(
         source_kind = (
             "microservice"
             if fact.source_kind == "service"
-            else _canonical_resource_kind(fact.source_kind)
+            else canonical_resource_kind(fact.source_kind)
         )
         target_kind = (
             "microservice"
             if fact.target_kind == "service"
-            else _canonical_resource_kind(fact.target_kind)
+            else canonical_resource_kind(fact.target_kind)
         )
         source_id = f"{source_kind}:{fact.source_name}"
         target_id = f"{target_kind}:{fact.target_name}"
@@ -1263,7 +1180,7 @@ def build_graph_view_model(
     return {
             "nodes": nodes,
             "links": links,
-            "port_links": _deduplicated_call_port_links(edges),
+            "port_links": deduplicated_call_port_links(edges),
             "internal_port_links": [
                 {
                     "input_endpoint_id": input_id,

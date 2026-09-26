@@ -1165,7 +1165,7 @@ def test_primary_view_selector_opens_each_view_directly() -> None:
         view_controls = page.get_by_role("group", name="Vue principale")
         assert view_controls.is_visible()
         assert view_controls.get_by_role("button").all_text_contents() == [
-            "Graphe", "Vue par couches", "Vue par modules",
+                "Graphe statique", "Vue par couches", "Vue par modules",
         ]
         assert page.locator(".graph-actions").bounding_box() is not None
         widget_metrics = page.evaluate(
@@ -1923,7 +1923,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         view_controls = page.get_by_role("group", name="Vue principale")
         assert view_controls.is_visible()
         assert view_controls.get_by_role("button").all_text_contents() == [
-            "Graphe", "Vue par couches", "Vue par modules",
+                "Graphe statique", "Vue par couches", "Vue par modules",
         ]
         assert page.locator("#layout-forceatlas2-noverlap").get_attribute("aria-pressed") == "true"
         assert page.evaluate(
@@ -2105,7 +2105,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         page.locator("#inspector-close").click()
         _capture_render_snapshot(page, "constrained-after-inspector-close")
 
-        page.get_by_role("tab", name="Graphe").click()
+        page.get_by_role("tab", name="Architecture").click()
         assert page.locator("#graph-context").is_visible()
         _capture_render_snapshot(page, "constrained-after-explorer-tab")
         search = page.locator("#search")

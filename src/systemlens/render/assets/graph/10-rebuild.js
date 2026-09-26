@@ -1,6 +1,13 @@
 // Ordered source module: 10-rebuild.js
     let callGraphArcNavigator = { links: [], views: [], activeIndex: null };
     let selectedCallGraphArcVisualTimer = null;
+    const clearCallGraphAnalysisFocus = () => {
+      graphState.analysisPortEndpointId = null;
+      document.querySelectorAll(
+        ".graph-call-path.is-analysis-selected, .graph-call-label.is-analysis-selected, "
+        + ".graph-local-port-path.is-analysis-selected, .graph-port-path.is-analysis-selected"
+      ).forEach(element => element.classList.remove("is-analysis-selected"));
+    };
     const syncSelectedCallGraphArcVisual = () => {
       const edgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc;
       if (!edgeKey) {
@@ -16,8 +23,8 @@
         if (element.classList.contains("graph-call-path") && !element.classList.contains("graph-arc-hit-area")) {
           if (active) {
             element.style.setProperty("stroke", "#dc2626");
-            element.style.setProperty("stroke-width", "5px");
-            element.style.setProperty("filter", "drop-shadow(0 0 5px #dc2626)");
+            element.style.setProperty("stroke-width", "2px");
+            element.style.removeProperty("filter");
           } else {
             element.style.removeProperty("stroke");
             element.style.removeProperty("stroke-width");
@@ -39,6 +46,7 @@
       const paths = [...document.querySelectorAll(".graph-call-path:not(.graph-arc-hit-area)")];
       const keys = [...new Set(paths.map(path => path.dataset.arcKey).filter(Boolean))];
       if (!keys.length) return;
+      clearCallGraphAnalysisFocus();
       const currentIndex = keys.indexOf(graphState.selectedCallGraphEdgeKey);
       const nextIndex = (currentIndex < 0 ? (direction > 0 ? 0 : keys.length - 1) : currentIndex + direction + keys.length) % keys.length;
       const edgeKey = keys[nextIndex];
@@ -65,6 +73,7 @@
       const normalizedIndex = (index + views.length) % views.length;
       const view = views[normalizedIndex];
       if (!view) return;
+      clearCallGraphAnalysisFocus();
       callGraphArcNavigator.activeIndex = normalizedIndex;
       graphState.selectedCallGraphEdgeKey = view.edgeKey;
       document.getElementById("graph")?.setAttribute("data-selected-call-graph-arc", view.edgeKey);
@@ -75,8 +84,8 @@
         candidate.hitArea.classList.toggle("is-keyboard-selected", active);
         if (active) {
           candidate.path.style.setProperty("stroke", "#dc2626");
-          candidate.path.style.setProperty("stroke-width", "5px");
-          candidate.path.style.setProperty("filter", "drop-shadow(0 0 5px #dc2626)");
+          candidate.path.style.setProperty("stroke-width", "2px");
+          candidate.path.style.removeProperty("filter");
         } else {
           candidate.path.style.removeProperty("stroke");
           candidate.path.style.removeProperty("stroke-width");
@@ -197,7 +206,8 @@
       }));
     }
     function rebuildGraph() {
-      const callGraphOnly = Boolean(graphState.selectedCodeFlowId);
+      const callGraphOnly = graphState.viewMode === "call-graph"
+        && Boolean(graphState.selectedCodeFlowId);
       if (callGraphOnly && !graphState.selectedCallGraphEdgeKey) {
         graphState.selectedCallGraphEdgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc || null;
       }
@@ -448,20 +458,36 @@
       }));
       visibleLinks.forEach((link, index) => {
         network.addEdgeWithKey(`edge-${index}`, link.source, link.target, {
-          size: .85, color: relationColor(link), kind: link.kind, type: "arrow",
+          // Keep architecture arcs visually aligned with the fixed 2px SVG
+          // routes used by the selected call graph.
+          size: 2, color: relationColor(link), kind: link.kind, type: "arrow",
         });
         network.addEdgeWithKey(`edge-hit-${index}`, link.source, link.target, {
           size: 14, color: "rgba(0,0,0,0)", kind: link.kind, hitArea: true, type: "line",
         });
       });
       selectedCallGraphLinks.forEach(({ link, index, edgeKey }) => network.addEdgeWithKey(edgeKey || `edge-${index}`, link.source, link.target, {
-        label: String(link.order ?? index + 1), size: 1.8, color: relationColor(link), kind: link.kind,
+        label: String(link.order ?? index + 1), size: 2, color: relationColor(link), kind: link.kind,
         type: "arrow",
       }));
       initialNodePositions = new Map();
       network.forEachNode((node, attributes) => initialNodePositions.set(node, { x: attributes.x, y: attributes.y }));
       renderer = new Sigma(network, document.getElementById("graph"), {
         labelColor: { color: document.documentElement.dataset.theme === "dark" ? "#dce8f7" : "#172033" },
+        // SVG overlays use fixed screen-pixel strokes. Keep Sigma edges and
+        // the underlying node markers on the same screen-space scale.
+        zoomToSizeRatioFunction: () => 1,
+        edgeReducer: (edge, data) => {
+          if (data.hitArea || !renderer) return data;
+          const screenScale = renderer.scaleSize(1);
+          return {
+            ...data,
+            // Sigma's graph correction varies with the fitted graph extent.
+            // Compensate it so architecture arcs remain 2px on screen, like
+            // the SVG arcs rendered for the selected call graph.
+            size: 2 / Math.max(screenScale, .001),
+          };
+        },
         nodeProgramClasses: {
           microservice: createNodeProgram(MICROSERVICE_FRAGMENT_SHADER),
           external_microservice: createNodeProgram(EXTERNAL_MICROSERVICE_FRAGMENT_SHADER),
@@ -652,6 +678,8 @@
           const help = document.getElementById("graph-mode-context-help");
           const clear = document.getElementById("analysis-mode-clear");
           const portsToggle = document.getElementById("analysis-ports-toggle");
+          const backToFlows = document.getElementById("analysis-mode-back");
+          const backToArchitecture = document.getElementById("analysis-mode-architecture");
           const contextCollapse = document.getElementById("analysis-context-collapse");
           if (!context || !title || !help || !clear) return;
           const active = Boolean(graphState.selectedCodeFlowId);
@@ -670,6 +698,8 @@
               ? "Afficher les ports référencés"
               : "Afficher tous les ports";
           }
+          if (backToFlows) backToFlows.hidden = !active;
+          if (backToArchitecture) backToArchitecture.hidden = !active;
           if (!active) return;
           const flowPath = [...(graphState.pathMicroserviceOrder?.keys() || [])]
             .map(id => nodeDataById.get(id)?.name)
@@ -677,8 +707,8 @@
             .join(" → ");
           const trigger = graphState.codeFlowTrigger?.name;
           title.textContent = flowPath
-            ? `Analyse du flux · ${flowPath}`
-            : trigger ? `Analyse du flux · ${trigger}` : "Analyse du flux";
+            ? `Graphe d’appel · ${flowPath}`
+            : trigger ? `Graphe d’appel · ${trigger}` : "Graphe d’appel";
           if (pathLabel) {
             const selectedFlow = (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId);
             const portsByEndpointId = new Map(
@@ -1101,6 +1131,7 @@
               tooltip.className = "graph-port-tooltip";
               const title = document.createElement("strong");
               title.textContent = `${callGraphPortLabel(port, portDirection)} · ${direction} · ${port.label}`;
+              tooltip.append(title);
               const protocol = document.createElement("span");
               protocol.className = "graph-port-tooltip-meta";
               protocol.textContent = `${port.type || "Endpoint"} · ${port.method || "Méthode inconnue"}`;
@@ -1740,9 +1771,9 @@
         const createArcTooltip = (link, sourcePort, targetPort) => {
             const tooltip = document.createElement("span");
             tooltip.className = "graph-arc-tooltip";
-            const title = document.createElement("strong");
             const sourceName = nodeDataById.get(link.source)?.name;
             const targetName = nodeDataById.get(link.target)?.name;
+            const title = document.createElement("strong");
             title.textContent = [sourceName, targetName].filter(Boolean).join(" → ") || "Relation";
             const relation = document.createElement("span");
             relation.className = "graph-arc-tooltip-relation";
@@ -1806,6 +1837,7 @@
           // the port overlay. Otherwise direct arcs silently disappear.
           const path = document.createElementNS(svgNamespace, "path");
           path.classList.add("graph-call-path");
+          if (link.kind === "rest") path.classList.add("is-rest");
           path.dataset.arcKey = resolvedEdgeKey;
           if (resolvedEdgeKey === currentSelectedCallGraphEdgeKey) {
             path.classList.add("is-keyboard-selected");
@@ -1820,6 +1852,7 @@
           portPathOverlay.append(path);
           const arcLabel = document.createElementNS(svgNamespace, "text");
           arcLabel.classList.add("graph-call-label");
+          if (link.kind === "rest") arcLabel.classList.add("is-rest");
           arcLabel.dataset.arcKey = resolvedEdgeKey;
           if (resolvedEdgeKey === currentSelectedCallGraphEdgeKey) {
             arcLabel.classList.add("is-keyboard-selected");
@@ -1869,9 +1902,11 @@
           });
           hitArea.addEventListener("click", event => {
             graphState.selectedCallGraphEdgeKey = resolvedEdgeKey;
+            clearCallGraphAnalysisFocus();
             const viewIndex = callGraphArcNavigator.views.findIndex(view => view.edgeKey === resolvedEdgeKey);
             if (viewIndex >= 0) focusCallGraphArc(viewIndex);
-            toggleAnalysisEndpoint(sourcePort?.endpoint_id || targetPort?.endpoint_id, event);
+            event?.preventDefault();
+            event?.stopPropagation();
           });
           bindArcTooltip(hitArea, link, sourcePort, targetPort, resolvedEdgeKey);
           callGraphArcNavigator.views.push({
@@ -1986,6 +2021,7 @@
           if (!source?.classList.contains("is-out") || !target?.classList.contains("is-in")) return;
           const path = document.createElementNS(svgNamespace, "path");
           path.classList.add("graph-port-path");
+          if (link.kind === "rest") path.classList.add("is-rest");
           if (link.kind === "kafka") path.classList.add("is-kafka");
           if ([link.source_endpoint_id, link.target_endpoint_id].includes(graphState.analysisPortEndpointId)) {
             path.classList.add("is-analysis-selected");

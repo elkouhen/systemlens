@@ -4,12 +4,12 @@ import os
 import re
 import sys
 import time
-import xml.etree.ElementTree as ET
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+from defusedxml import ElementTree as ET
 
 from systemlens.discovery.java import parser as java_parser
 from systemlens.discovery.build.gradle import discover_gradle_modules, gradle_module_identity

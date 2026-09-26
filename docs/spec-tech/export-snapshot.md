@@ -47,7 +47,10 @@ source paths must wrap instead of widening the panel.
 Selecting a reconciled code flow records its persisted ID only in transient
 graph state. Node and edge reducers, HTML-card overlays, and port overlays use
 the exact endpoint and service sets derived from the flow evidence; selected
-nodes retain flow-specific highlighting. The flow graph builds directed
+nodes retain flow-specific highlighting. The browser keeps an explicit
+transient rendering mode for the architecture projection, an empty Flux de
+code tab, and the selected call-graph projection. The selected flow ID alone
+MUST NOT determine which projection is rebuilt. The flow graph builds directed
 candidate arcs from persisted flow OUT ports, starts at trigger flows with no
 incoming flow arc, and follows those flows breadth-first. It adds reachable
 microservice output-to-input arcs

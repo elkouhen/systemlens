@@ -12,9 +12,10 @@ each output.
 
 When a persisted REST or Kafka topology edge has both a source endpoint and a
 resolved target endpoint, the export draws a directed port-to-port path from
-the source `O<n>` to the target `I<n>`. For an asserted Kafka edge, the graph
-also draws a direct service-to-service arc labelled with the topic, while the
-topic resource path remains visible. Kafka topics remain visible as indexed
+the source `O<n>` to the target `I<n>`. For Kafka, the static architecture graph
+represents the interaction only through the topic resource:
+`microservice → topic → microservice`. It does not add a direct
+microservice-to-microservice arc. Kafka topics remain visible as indexed
 resources; these paths are readable projections of the same evidence, not
 replacements for the topic relation. Several ports on one side are distributed
 deterministically to avoid overlap. Cycles remain visible as directed return
@@ -108,7 +109,9 @@ type. The message-type field offers native autocomplete values from the
 indexed Kafka ports and accepts partial text matching. A compact
 summary reports the number of visible flows and each card summarizes its
 service sequence, effects, confidence, reconciliation status, and alternative
-route count. A selected flow can be recentered from the analysis banner.
+route count. The filter area reports the active filters and provides one
+action to restore the default scope and clear every additional filter. A
+selected flow can be recentered from the analysis banner.
 Equivalent persisted routes that render the same interaction graph are grouped into
 one visible flow, preventing duplicate graph cards while retaining their count
 in the export model.
@@ -136,6 +139,16 @@ When a flow is selected from the Flux de code tab, that tab remains active so
 the user can select another flow directly. The selected flow still updates the
 Explorer graph and its analysis state; opening the Explorer tab remains
 available through the normal tab control.
+The export keeps the architecture graph and the selected call graph as
+explicitly separated view modes. Opening Graphe selects the architecture mode
+and rebuilds only the persisted topology projection. Opening Flux de code
+selects an empty mode until a flow is chosen; selecting a flow activates the
+call-graph mode without changing the selected Flux de code tab. A layout or
+selection change in one mode MUST NOT reuse the node, edge, port, or call-graph
+selection state of the other mode.
+Architecture topology arcs and selected call-graph arcs use the same fixed
+2-pixel screen thickness; graph zoom compensation MUST NOT make one view's
+arcs appear thinner or thicker than the other's.
 When a selected flow occupies less space than the available focus area, its
 specific framing may zoom in (a camera ratio below the overview ratio) so the
 flow remains readable; the ratio is bounded and the cards remain inside the
@@ -191,7 +204,7 @@ RabbitMQ, SQS, and webhook streams are technology-specific evidence, not the
 primary architecture category.
 
 The export uses a responsive workspace layout with grouped navigation rather
-than one flat list: Graphe, Flux de code, and Diagnostics belong to the graph
+than one flat list: Architecture, Flux de code, and Diagnostics belong to the graph
 group; Ressources, OpenAPI, Messages, and Données belong to the resources
 group.
 `Resources` is a filterable inventory of every persisted graph node; selecting
@@ -210,6 +223,12 @@ balanced four-column, two-row grid immediately after the branded header, so
 all seven destinations remain visible without horizontal scrolling. The extended search
 hint is hidden at those widths while its label and example placeholder remain
 visible.
+
+The Architecture tab always opens the static architecture graph. The Flux de
+code tab initially shows only its catalogue; selecting a flow explicitly
+opens its Graphe d’appel while keeping the catalogue visible. The call-graph
+context banner names the current projection and provides direct actions to
+return to the flow catalogue or return to Architecture.
 
 The panel typography uses a stable functional scale: 10 px uppercase kickers,
 11 px compact controls, 12 px body copy, 13 px section prompts, 16 px view

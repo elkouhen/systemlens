@@ -456,7 +456,9 @@
       });
       const label = layoutLabels.get(layout);
       const nextLayeredView = ["elk", "cluster"].includes(layout);
-      const switchingView = graphState.layeredView !== nextLayeredView || graphState.clusteredView !== (layout === "cluster");
+      const switchingView = graphState.layeredView !== nextLayeredView
+        || graphState.clusteredView !== (layout === "cluster")
+        || graphState.viewMode === "call-graph";
       if (switchingView) {
         updateGraphState({
           selectedId: null,
@@ -465,6 +467,7 @@
           relatedNodes: null,
           relatedEdges: null,
           selectedCodeFlowId: null,
+          viewMode: "architecture",
           selectedCallGraphEdgeKey: null,
           pathMicroserviceOrder: new Map(),
           codeFlowTreeCoordinates: new Map(),

@@ -11,6 +11,9 @@
       const showingFlows = tab === "flows";
       const showingFlowGraph = showingFlows && options.showFlowGraph === true;
       const graphVisible = showingGraph || showingFlowGraph;
+      if (showingGraph) graphState.viewMode = "architecture";
+      else if (showingFlowGraph) graphState.viewMode = "call-graph";
+      else if (showingFlows) graphState.viewMode = "empty";
       // The graph canvas and its overlays are fixed-position siblings of the
       // toolbar panels, so hiding graphPanel alone does not hide the rendered
       // architecture behind the Flux de code list.
@@ -40,6 +43,7 @@
         graphState.relatedLocalPortLinks = new Set();
         graphState.codeFlowRootNodeId = null;
         graphState.codeFlowTrigger = null;
+        graphState.viewMode = tab === "graph" ? "architecture" : "empty";
         delete graphCanvas.dataset.selectedCodeFlow;
         delete graphCanvas.dataset.selectedCallGraphArc;
         delete graphCanvas.dataset.flowFocusRatio;
@@ -363,8 +367,8 @@
         const graphAction = document.createElement("button");
         graphAction.type = "button";
         graphAction.className = "reference-action";
-        graphAction.textContent = "Graphe";
-        graphAction.title = "Afficher ce flux dans le graphe";
+        graphAction.textContent = "Graphe d’appel";
+        graphAction.title = "Afficher ce flux dans le graphe d’appel";
         graphAction.addEventListener("click", () => showCodeFlow(flow));
         actions.append(listAction, graphAction);
         if (flow.vscode_uri) {

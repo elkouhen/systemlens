@@ -5,10 +5,8 @@ import re
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
-from typing import Any
 
 from systemlens.domain.models import (
     ArchitectureRelation,
@@ -25,17 +23,23 @@ from systemlens.domain.code_flows import (
     IntegrationMethod,
 )
 from systemlens.domain.module_inventory import (
-    BlockingPoint,
     DiscoveredModule,
-    KafkaMethod,
     ModuleDependency,
-    MongoMethod,
-    MongoField,
-    MongoPersistenceClass,
     SourceEvidence,
 )
-from systemlens.domain.runtime import KubernetesWorkload
 from systemlens.infrastructure.paths import db_path
+from systemlens.storage.serialization import (
+    CodeChunk,
+    blocking_point_from_json as _blocking_point_from_json,
+    kafka_method_from_json as _kafka_method_from_json,
+    kubernetes_workload_from_json as _kubernetes_workload_from_json,
+    method_to_json as _method_to_json,
+    mongo_method_from_json as _mongo_method_from_json,
+    mongo_persistence_class_from_json as _mongo_persistence_class_from_json,
+    row_to_code_chunk as _row_to_code_chunk,
+    row_to_endpoint as _row_to_endpoint,
+    row_to_finding as _row_to_finding,
+)
 
 SCHEMA_VERSION = "33"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
@@ -54,59 +58,6 @@ def _glob_to_sqlite(pattern: str) -> str:
 
 class StoreError(Exception):
     pass
-
-
-@dataclass(frozen=True)
-class CodeChunk:
-    id: str
-    path: str
-    start_line: int
-    end_line: int
-    language: str
-    content: str
-
-
-def _method_to_json(item: object) -> dict[str, object]:
-    data = dict(item.__dict__)
-    evidence = data.get("evidence")
-    if evidence is not None:
-        data["evidence"] = evidence.__dict__
-    return data
-
-
-def _evidence_from_json(data: dict[str, Any]) -> SourceEvidence | None:
-    evidence = data.pop("evidence", None)
-    return SourceEvidence(**evidence) if evidence else None
-
-
-def _mongo_method_from_json(data: dict[str, Any]) -> MongoMethod:
-    data = dict(data)
-    evidence = _evidence_from_json(data)
-    return MongoMethod(**data, evidence=evidence)
-
-
-def _mongo_persistence_class_from_json(data: dict[str, Any]) -> MongoPersistenceClass:
-    data = dict(data)
-    data["fields"] = tuple(MongoField(
-        **{**field, "references": tuple(field.get("references", []))}
-    ) for field in data.get("fields", []))
-    return MongoPersistenceClass(**data)
-
-
-def _kafka_method_from_json(data: dict[str, Any]) -> KafkaMethod:
-    data = dict(data)
-    evidence = _evidence_from_json(data)
-    return KafkaMethod(**data, evidence=evidence)
-
-
-def _blocking_point_from_json(data: dict[str, Any]) -> BlockingPoint:
-    data = dict(data)
-    evidence = _evidence_from_json(data)
-    return BlockingPoint(**data, evidence=evidence)
-
-
-def _kubernetes_workload_from_json(data: dict[str, Any]) -> KubernetesWorkload:
-    return KubernetesWorkload(**data)
 
 
 class Store:
@@ -915,7 +866,8 @@ class Store:
             placeholders = ", ".join("?" for _ in fact_ids)
             params: list[object] = [namespace, *sorted(fact_ids)]
             cur = self.conn.execute(
-                f"DELETE FROM graph_facts WHERE namespace = ? AND id NOT IN ({placeholders})",
+                # The interpolated values are generated placeholders; data remains bound.
+                f"DELETE FROM graph_facts WHERE namespace = ? AND id NOT IN ({placeholders})",  # nosec B608
                 params,
             )
         else:
@@ -929,7 +881,10 @@ class Store:
     ) -> None:
         for chunk in _chunked(paths):
             placeholders = ", ".join("?" for _ in chunk)
-            self.conn.execute(f"DELETE FROM extraction_diagnostics WHERE path IN ({placeholders})", chunk)
+            self.conn.execute(  # nosec B608
+                f"DELETE FROM extraction_diagnostics WHERE path IN ({placeholders})",  # nosec B608
+                chunk,
+            )
         self.conn.executemany(
             "INSERT INTO extraction_diagnostics (path, extractor, category, severity, detail) VALUES (?, ?, ?, ?, ?)",
             [(item.path, item.extractor, item.category, item.severity, item.detail) for item in diagnostics],
@@ -1183,7 +1138,7 @@ class Store:
         if dim not in _COUNTABLE_DIMENSIONS:
             raise ValueError(f"Dimension inconnue : {dim!r}")
         cur = self.conn.execute(
-            f"SELECT {dim} AS d, COUNT(*) AS c FROM findings GROUP BY {dim}"
+            f"SELECT {dim} AS d, COUNT(*) AS c FROM findings GROUP BY {dim}"  # nosec B608
         )
         return {row["d"]: row["c"] for row in cur.fetchall()}
 
@@ -1201,7 +1156,7 @@ class Store:
         for chunk in _chunked(unique_paths):
             placeholders = ",".join("?" for _ in chunk)
             cur = self.conn.execute(
-                f"SELECT {columns} FROM {table} WHERE path IN ({placeholders}) "
+                f"SELECT {columns} FROM {table} WHERE path IN ({placeholders}) "  # nosec B608
                 "ORDER BY path, start_line, end_line, id",
                 chunk,
             )
@@ -1215,7 +1170,8 @@ class Store:
         for chunk in _chunked(list(dict.fromkeys(paths))):
             placeholders = ",".join("?" for _ in chunk)
             row = self.conn.execute(
-                f"SELECT COUNT(*) AS c FROM {table} WHERE path IN ({placeholders})", chunk
+                f"SELECT COUNT(*) AS c FROM {table} WHERE path IN ({placeholders})",  # nosec B608
+                chunk,
             ).fetchone()
             total += int(row["c"])
         return total
@@ -1225,53 +1181,7 @@ class Store:
             return
         for chunk in _chunked(list(dict.fromkeys(paths))):
             placeholders = ",".join("?" for _ in chunk)
-            self.conn.execute(f"DELETE FROM {table} WHERE path IN ({placeholders})", chunk)
-
-
-def _row_to_finding(row: sqlite3.Row) -> Finding:
-    return Finding(
-        id=row["id"],
-        rule_id=row["rule_id"],
-        severity=row["severity"],
-        message=row["message"],
-        path=row["path"],
-        start_line=row["start_line"],
-        end_line=row["end_line"],
-        snippet=row["snippet"],
-        fix=row["fix"],
-        cwe=json.loads(row["cwe"]) if row["cwe"] else [],
-        owasp=json.loads(row["owasp"]) if row["owasp"] else [],
-        module=row["module"],
-        qualified_name=row["qualified_name"],
-    )
-
-
-def _row_to_code_chunk(row: sqlite3.Row) -> CodeChunk:
-    return CodeChunk(
-        id=row["id"],
-        path=row["path"],
-        start_line=row["start_line"],
-        end_line=row["end_line"],
-        language=row["language"],
-        content=row["content"],
-    )
-
-
-def _row_to_endpoint(row: sqlite3.Row) -> MessageEndpoint:
-    return MessageEndpoint(
-        id=row["id"],
-        role=row["role"],
-        system=row["system"],
-        topic=row["topic"],
-        topic_dynamic=bool(row["topic_dynamic"]),
-        source=row["source"],
-        framework=row["framework"],
-        path=row["path"],
-        start_line=row["start_line"],
-        end_line=row["end_line"],
-        snippet=row["snippet"],
-        module=row["module"],
-        qualified_name=row["qualified_name"],
-        message_type=row["message_type"],
-        topic_display=row["topic_display"],
-    )
+            self.conn.execute(  # nosec B608
+                f"DELETE FROM {table} WHERE path IN ({placeholders})",  # nosec B608
+                chunk,
+            )

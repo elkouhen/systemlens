@@ -197,7 +197,6 @@ def render_graph_likec4(
     topics = sorted({edge.from_endpoint.topic for edge in edges if edge.kind == "kafka"})
     collection_nodes = _mongodb_collection_nodes(collections_by_service)
     collection_names = {identity: collection for _service, collection, identity in collection_nodes}
-    collection_services = {identity: service for service, _collection, identity in collection_nodes}
     matched_internal_call_ids = {edge.from_endpoint.id for edge in edges if edge.kind == "rest"}
     external_calls = sorted(
         [
@@ -421,7 +420,6 @@ def render_graph_likec4(
     for identity in sorted(collection_names):
         color, description = complexities[collection_ids[identity]]
         collection = collection_names[identity]
-        service = collection_services[identity]
         lines.extend(
             [
                 f"    {collection_ids[identity]} = mongodb_collection '{_likec4_string(collection)}' {{",

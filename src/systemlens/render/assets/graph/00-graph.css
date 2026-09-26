@@ -33,31 +33,31 @@
     #graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
     #graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
     #graph-port-paths { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; }
-    .graph-port-path { fill: none; stroke: #7c3aed; stroke-width: 2; stroke-linecap: round; opacity: .9; pointer-events: stroke; }
-    .graph-dependency-hit-area { fill: none; stroke: transparent; stroke-width: 24px; stroke-linecap: round; pointer-events: stroke; cursor: help; }
-    .graph-arc-hit-area { fill: none; stroke: transparent !important; stroke-width: 14px !important; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
-    .graph-arc-hit-area.is-keyboard-selected { stroke: #dc2626 !important; stroke-width: 5px !important; opacity: .95; filter: drop-shadow(0 0 5px #dc2626); }
-    .graph-port-path.is-kafka { stroke: #009e73; }
+    .graph-port-path, .graph-call-path { fill: none; stroke: #7c3aed; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .9; pointer-events: stroke; }
+    .graph-dependency-hit-area { fill: none; stroke: transparent; stroke-width: 24px; stroke-linecap: round; pointer-events: stroke; cursor: default; }
+    .graph-arc-hit-area { fill: none; stroke: transparent !important; stroke-width: 14px !important; stroke-linecap: round; pointer-events: stroke; cursor: default; }
+    .graph-arc-hit-area.is-keyboard-selected { stroke: transparent !important; stroke-width: 14px !important; opacity: 1; filter: none; }
+    .graph-port-path.is-rest, .graph-call-path.is-rest { stroke: #d55e00; }
+    .graph-port-path.is-kafka, .graph-call-path.is-kafka { stroke: #009e73; }
     .graph-port-path.is-analysis-selected { stroke-width: 4; opacity: 1; filter: drop-shadow(0 0 3px currentColor); }
-    .graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 1; pointer-events: stroke; }
-    .graph-call-path.is-kafka { stroke: #008f69; }
     .graph-call-path.is-analysis-selected { stroke-width: 4; filter: drop-shadow(0 0 4px currentColor); }
-    .graph-call-path.is-keyboard-selected { stroke: #dc2626; stroke-width: 5; filter: drop-shadow(0 0 5px #dc2626); }
-    .graph-call-label { fill: #6d28d9; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; opacity: .42; transition: opacity .12s ease, font-size .12s ease; }
-    .graph-call-label.is-kafka { fill: #008f69; }
+    .graph-call-path.is-keyboard-selected { stroke: #dc2626; stroke-width: 2; filter: none; }
+    .graph-call-label { fill: #7c3aed; font-size: 11px; font-weight: 700; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; opacity: .55; transition: opacity .12s ease, font-size .12s ease; }
+    .graph-call-label.is-rest { fill: #d55e00; }
+    .graph-call-label.is-kafka { fill: #009e73; }
     .graph-call-label.is-analysis-selected, .graph-call-label.is-analysis-hovered { font-size: 13px; font-weight: 850; opacity: 1; }
     .graph-call-label.is-keyboard-selected { fill: #b91c1c; font-size: 14px; font-weight: 900; opacity: 1; }
     .graph-call-path.is-analysis-hovered { stroke-width: 3; filter: drop-shadow(0 0 3px currentColor); }
+    :root[data-theme="dark"] .graph-port-path, :root[data-theme="dark"] .graph-call-path { stroke: #c4b5fd; }
+    :root[data-theme="dark"] .graph-port-path.is-rest, :root[data-theme="dark"] .graph-call-path.is-rest { stroke: #fbbf24; }
+    :root[data-theme="dark"] .graph-port-path.is-kafka, :root[data-theme="dark"] .graph-call-path.is-kafka { stroke: #5eead4; }
     :root[data-theme="dark"] .graph-call-label { fill: #c4b5fd; stroke: #111827; }
+    :root[data-theme="dark"] .graph-call-label.is-rest { fill: #fbbf24; }
     :root[data-theme="dark"] .graph-call-label.is-kafka { fill: #5eead4; }
     .graph-local-port-path { fill: none; stroke: #d97706; stroke-width: 1.5; stroke-dasharray: 3 2; stroke-linecap: round; opacity: .9; pointer-events: stroke; }
     .graph-local-port-path.is-code-flow-path { stroke: #7c3aed; stroke-width: 3; stroke-dasharray: none; opacity: 1; }
     .graph-local-port-path.is-analysis-selected { stroke-width: 4; opacity: 1; filter: drop-shadow(0 0 3px currentColor); }
     .graph-node-port-reference.is-analysis-selected { outline: 2px solid currentColor; outline-offset: 2px; transform: translateY(-50%) scale(1.08); }
-    :root[data-theme="dark"] .graph-port-path { stroke: #c4b5fd; }
-    :root[data-theme="dark"] .graph-port-path.is-kafka { stroke: #5eead4; }
-    :root[data-theme="dark"] .graph-call-path { stroke: #c4b5fd; }
-    :root[data-theme="dark"] .graph-call-path.is-kafka { stroke: #5eead4; }
     :root[data-theme="dark"] .graph-local-port-path { stroke: #fbbf24; }
     :root[data-theme="dark"] .graph-local-port-path.is-code-flow-path { stroke: #c4b5fd; }
     #graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
@@ -171,12 +171,12 @@
     .graph-node-card-label.is-selected { border-width: 1.5px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 0 22px color-mix(in srgb, var(--card-accent, #64748b) 52%, transparent), 0 8px 20px rgba(15, 23, 42, .18); }
     /* Selection must not change the card geometry: it would make a stable
        layout look as if the selected flow had moved neighbouring nodes. */
-    .graph-node-card-label.is-code-flow-node { z-index: 20; border-width: 2px; border-color: #7c3aed; opacity: 1; box-shadow: 0 0 0 4px rgba(124, 58, 237, .22), 0 0 28px rgba(124, 58, 237, .48), 0 9px 22px rgba(15, 23, 42, .2); }
+    .graph-node-card-label.is-code-flow-node { z-index: 20; border-width: 1px; border-color: var(--card-accent, #64748b); opacity: 1; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); }
     .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 9%, transparent), 0 0 13px color-mix(in srgb, var(--card-accent, #64748b) 27%, transparent), 0 6px 17px rgba(15, 23, 42, .14); }
     .graph-node-card-label.is-dimmed { opacity: 1; }
     :root[data-theme="dark"] .graph-node-card-label { color: #e5edf8; background: #17263d; box-shadow: 0 5px 18px rgba(0, 0, 0, .28); }
     :root[data-theme="dark"] .graph-node-card-label.is-selected { box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #64748b) 22%, transparent), 0 0 24px color-mix(in srgb, var(--card-accent, #64748b) 64%, transparent), 0 8px 22px rgba(0, 0, 0, .35); }
-    :root[data-theme="dark"] .graph-node-card-label.is-code-flow-node { border-color: #c4b5fd; box-shadow: 0 0 0 4px rgba(196, 181, 253, .22), 0 0 30px rgba(167, 139, 250, .62), 0 9px 24px rgba(0, 0, 0, .4); }
+    :root[data-theme="dark"] .graph-node-card-label.is-code-flow-node { border-color: var(--card-accent, #64748b); box-shadow: 0 5px 18px rgba(0, 0, 0, .28); }
     :root[data-theme="dark"] .graph-node-card-label.is-hovered:not(.is-selected) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent, #64748b) 12%, transparent), 0 0 15px color-mix(in srgb, var(--card-accent, #64748b) 36%, transparent), 0 6px 18px rgba(0, 0, 0, .28); }
     :root[data-theme="dark"] .graph-node-card-kind { color: #9aabc2; }
     :root[data-theme="dark"] .graph-node-root-badge { border-color: #fbbf24; color: #fef3c7; background: #78350f; }

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from systemlens import cli
+from systemlens.delivery import cli
 from systemlens.application.code_flows import list_code_flows, render_code_flow_text, show_code_flow
 from systemlens.delivery.cli import app
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod

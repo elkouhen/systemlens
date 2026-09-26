@@ -208,6 +208,7 @@ directly from outside the package.
 | `search.py` | Text/JSON rendering for `search`/`summary` findings output |
 | `graph_json.py` | JSON/text rendering of the endpoint-derived microservice graph |
 | `graph_view_model.py` | Projects a persisted architecture snapshot into the browser-facing graph model; it performs no source discovery |
+| `call_graph.py` | Projects persisted code flows and topology into the browser-facing call-graph model, including flow deduplication and fusion |
 | `html_export.py` | Small standalone-document assembler for `systemlens export microservices --html`; serializes the graph model and injects ordered CSS/JavaScript modules into `assets/graph.html` |
 | `likec4_export.py` | LikeC4 project export (`--c4`) and the request/reply HTML fragment |
 | `module_graph.py` | Endpoint/module/workspace/flow rendering, plus the module-dependency HTML export (`assets/module_graph.html`) |

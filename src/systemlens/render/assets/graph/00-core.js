@@ -136,6 +136,10 @@
       graphPanCleanup: null,
       graphWheelCleanup: null,
       activeLayout: "forceatlas2-noverlap",
+      // The architecture graph and a selected call graph are different
+      // projections of the same snapshot. Keep the projection explicit so a
+      // stale selection cannot silently change the graph being rebuilt.
+      viewMode: "architecture",
       layoutRequest: 0,
       fitMode: "readable",
       fitRequest: 0,

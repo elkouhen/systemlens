@@ -3,10 +3,11 @@ entre `workspace.py` (fédération multi-services, BACKLOG-11 A2) et `scanner.py
 (attribution d'un module à chaque finding/endpoint indexé, BACKLOG-13 M1)."""
 
 import os
-import xml.etree.ElementTree as ET
 from functools import lru_cache
 from pathlib import Path
 import re
+
+from defusedxml import ElementTree as ET
 
 from systemlens.discovery.java import parser as java_parser
 

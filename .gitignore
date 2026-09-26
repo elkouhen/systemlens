@@ -5,6 +5,8 @@ __pycache__/
 apm_modules/
 .playwright-cli/
 output/
+.coverage
+htmlcov/
 .idea/
 .mcp.json
 .agentsroom/handoff-transcript-*.txt

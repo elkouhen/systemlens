@@ -1,0 +1,21 @@
+rules:
+  - id: python-eval
+    languages: [python]
+    message: Avoid evaluating source-controlled expressions with eval().
+    patterns:
+      - pattern: eval(...)
+    severity: WARNING
+  - id: python-exec
+    languages: [python]
+    message: Avoid executing source-controlled statements with exec().
+    patterns:
+      - pattern: exec(...)
+    severity: WARNING
+  - id: subprocess-shell-true
+    languages: [python]
+    message: Review subprocess calls that enable shell interpretation.
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.$FUNC(..., shell=True, ...)
+          - pattern: subprocess.$FUNC(..., shell = True, ...)
+    severity: WARNING

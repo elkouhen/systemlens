@@ -10,6 +10,8 @@
     const codeFlowMessageTypes = document.getElementById("code-flow-message-types");
     const codeFlowCycles = document.getElementById("code-flow-cycles");
     const codeFlowsSummary = document.getElementById("code-flows-summary");
+    const codeFlowFilterSummary = document.getElementById("code-flow-filter-summary");
+    const codeFlowFilterReset = document.getElementById("code-flow-filter-reset");
     const codeFlowsTitle = document.getElementById("code-flows-title");
     const codeFlowCollapse = document.getElementById("code-flow-collapse");
     function codeFlowStepLabel(kind) {
@@ -81,6 +83,35 @@
         || callGraphArcCount(right) - callGraphArcCount(left)
         || (right.steps?.length || 0) - (left.steps?.length || 0)
         || left.id.localeCompare(right.id);
+    }
+
+    function activeCodeFlowFilters() {
+      const filters = [];
+      if (codeFlowFilter.value.trim()) filters.push("recherche");
+      if (codeFlowMessageType.value.trim()) filters.push("type de message");
+      if (codeFlowScope.value !== "inter") filters.push(codeFlowScope.options[codeFlowScope.selectedIndex]?.text || "portée");
+      if (codeFlowConfidence.value !== "all") filters.push(codeFlowConfidence.options[codeFlowConfidence.selectedIndex]?.text || "confiance");
+      if (codeFlowKind.value !== "all") filters.push(codeFlowKind.options[codeFlowKind.selectedIndex]?.text || "protocole");
+      if (codeFlowCycles.getAttribute("aria-pressed") === "true") filters.push("cycles");
+      return filters;
+    }
+
+    function updateCodeFlowFilterSummary() {
+      const filters = activeCodeFlowFilters();
+      codeFlowFilterSummary.textContent = filters.length
+        ? `${filters.length} filtre${filters.length > 1 ? "s" : ""} actif${filters.length > 1 ? "s" : ""} · ${filters.join(" · ")}`
+        : "Aucun filtre additionnel · portée inter-services par défaut";
+      codeFlowFilterReset.disabled = filters.length === 0;
+    }
+
+    function resetCodeFlowFilters() {
+      codeFlowFilter.value = "";
+      codeFlowMessageType.value = "";
+      codeFlowScope.value = "inter";
+      codeFlowConfidence.value = "all";
+      codeFlowKind.value = "all";
+      codeFlowCycles.setAttribute("aria-pressed", "false");
+      renderCodeFlows();
     }
 
     // Build these once: rendering the Flux list must not repeatedly scan the
@@ -530,6 +561,7 @@
       const cycleCount = scopedCodeFlows.filter(flow => flow.status === "cycle").length;
       codeFlowCycles.textContent = `Cycles uniquement (${cycleCount})`;
       codeFlowCycles.disabled = cycleCount === 0;
+      updateCodeFlowFilterSummary();
       codeFlowsTitle.textContent = cyclesOnly
         ? `Cycles détectés (${visible.length})`
         : scope === "all"
@@ -548,6 +580,7 @@
       codeFlowCycles.setAttribute("aria-pressed", String(codeFlowCycles.getAttribute("aria-pressed") !== "true"));
       renderCodeFlows();
     });
+    codeFlowFilterReset.addEventListener("click", resetCodeFlowFilters);
     if (codeFlowCollapse && flowsPanel) {
       codeFlowCollapse.addEventListener("click", () => {
         const collapsed = flowsPanel.classList.toggle("is-code-flow-collapsed");

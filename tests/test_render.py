@@ -207,11 +207,14 @@ def test_global_input_label_references_its_local_output() -> None:
         {"source_endpoint_id": "orders-out", "target_endpoint_id": "payments-in", "kind": "kafka"},
         {"source_endpoint_id": "payments-out", "target_endpoint_id": "inventory-in", "kind": "kafka"},
     ]
+    assert ("microservice:orders", "microservice:payments", ()) not in {
+        (link["source"], link["target"], tuple(link.get("endpoint_ids", [])))
+        for link in data["links"]
+    }
     assert {
         (link["source"], link["target"], tuple(link.get("endpoint_ids", [])))
         for link in data["links"]
     } >= {
-        ("microservice:orders", "microservice:payments", ()),
         ("microservice:orders", "kafka_topic:orders.created", ("orders-out",)),
         ("kafka_topic:orders.created", "microservice:payments", ("payments-in",)),
         ("microservice:payments", "kafka_topic:orders.created", ("payments-out",)),
@@ -538,7 +541,7 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     assert 'createDetailsGroup("Flux associés", false)' in document
     assert 'appendAssociatedCodeFlows("Flux associés", associatedFlows, associatedFlowsGroup);' in document
     assert 'listAction.textContent = "Flux";' in document
-    assert 'graphAction.textContent = "Graphe";' in document
+    assert 'graphAction.textContent = "Graphe d’appel";' in document
     assert 'sourceAction.textContent = "Java";' in document
     assert 'function openCodeFlowInList(flow)' in document
     assert 'port-flow-arrow' in document
@@ -574,7 +577,7 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
 
     assert 'class="graph-control-group view-controls"' in document
     assert 'aria-label="Vue principale"' in document
-    assert '>Graphe</button>' in document
+    assert '>Graphe statique</button>' in document
     assert '>Vue par couches</button>' in document
     assert '>Vue par modules</button>' in document
     assert 'id="layer-view-toggle"' not in document
@@ -1190,6 +1193,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'appendRelationList("Services utilisant cette donnée"' in document
     assert 'appendList("Stockee par", [node.owner], relationsGroup)' not in document
     assert "function rebuildGraph()" in document
+    assert 'const callGraphOnly = graphState.viewMode === "call-graph"' in document
+    assert 'graphState.viewMode = context.codeFlow ? "call-graph" : "architecture";' in document
+    assert 'else if (showingFlowGraph) graphState.viewMode = "call-graph";' in document
+    assert '|| graphState.viewMode === "call-graph";' in document
     assert 'id="display-controls"' in document
     assert 'id="relation-other"' in document
     assert 'id="node-other"' in document
@@ -1201,6 +1208,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "Commit the view mode only after its layout and camera are ready" in document
     assert "const previousLayout = graphState.activeLayout" in document
     assert "const visibleLinks = callGraphOnly" in document
+    assert 'size: 2, color: relationColor(link), kind: link.kind, type: "arrow"' in document
+    assert 'zoomToSizeRatioFunction: () => 1' in document
+    assert 'const screenScale = renderer.scaleSize(1)' in document
+    assert 'size: 2 / Math.max(screenScale, .001)' in document
     assert "graphState.relatedEdges?.has(`edge-${index}`)" in document
     assert "renderer?.refresh();" in document
     assert 'activeLayout: "forceatlas2-noverlap"' in document
@@ -1324,6 +1335,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="code-flow-message-type"' in document
     assert 'id="code-flow-message-types"' in document
     assert 'id="code-flow-collapse"' in document
+    assert 'id="code-flow-filter-reset"' in document
+    assert 'id="code-flow-filter-summary"' in document
+    assert 'function activeCodeFlowFilters()' in document
+    assert 'function resetCodeFlowFilters()' in document
     assert 'id="analysis-context-collapse"' in document
     assert 'id="graph-mode-context-copy"' in document
     assert 'if ((tab === "graph" || tab === "flows") && !showingFlowGraph) {' in document
@@ -1334,6 +1349,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'is-code-flow-collapsed' in document
     assert 'is-keyboard-selected' in document
     assert 'candidate.path.style.setProperty("stroke", "#dc2626")' in document
+    assert 'candidate.path.style.setProperty("stroke-width", "2px")' in document
     assert 'candidate.hitArea.classList.toggle("is-keyboard-selected", active)' in document
     assert 'dataset.selectedCallGraphArc' in document
     assert 'window.__systemlensCallGraphArcKeyboardNavigation' in document
@@ -1341,6 +1357,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'event.key.toLowerCase() === "p"' in document
     assert 'input, select, textarea, [contenteditable=\'true\']' in document
     assert 'const focusCallGraphArc = index =>' in document
+    assert 'const clearCallGraphAnalysisFocus = () =>' in document
+    assert 'clearCallGraphAnalysisFocus();' in document
+    assert 'toggleAnalysisEndpoint(sourcePort?.endpoint_id || targetPort?.endpoint_id, event);' not in document
     assert 'messageTypesForCodeFlow' in document
     assert 'graphFlowStatus.hidden = context.topologyReconciled !== false;' in document
     assert 'Cycles uniquement (${cycleCount})' in document
@@ -1362,14 +1381,14 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "Keeping Sigma's straight edge underneath would draw" in document
     assert 'path.classList.add("graph-call-path")' in document
     assert 'if (link.kind === "kafka") arcLabel.classList.add("is-kafka");' in document
-    assert 'title.textContent = [sourceName, targetName].filter(Boolean).join(" → ") || "Relation";' in document
     assert 'arcLabel.textContent = String(link.order ?? index + 1);' in document
     assert 'path.getPointAtLength(path.getTotalLength() / 2)' in document
     assert 'renderEdgeLabels: true' in document
     assert 'enableEdgeHoverEvents: true' in document
     assert 'const sourceIsTopic = ["kafka_topic", "message_channel"].includes(source?.kind);' in document
-    assert 'title.textContent = service?.name || topic?.name || "Relation";' in document
     assert 'const details = [action, topic?.name].filter(Boolean).join(" · ");' in document
+    assert 'title.textContent = [sourceName, targetName].filter(Boolean).join(" → ") || "Relation";' in document
+    assert 'title.textContent = service?.name || topic?.name || "Relation";' in document
     assert 'const showDependencyTooltip = (link, clientX, clientY) =>' in document
     assert 'graph-dependency-hit-area' in document
     assert 'stroke-width: 24px' in document
@@ -1387,9 +1406,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'const callGraphArcTooltipLabel = (link, sourcePort, targetPort) =>' in document
     assert 'hitArea.setAttribute("title", tooltipLabel);' in document
     assert ".graph-arc-hit-area { fill: none; stroke: transparent !important; stroke-width: 14px !important;" in document
-    assert ".graph-call-path { fill: none; stroke: #6d28d9; stroke-width: 2;" in document
-    assert ".graph-call-label { fill: #6d28d9;" in document
-    assert ".graph-call-label.is-kafka { fill: #008f69; }" in document
+    assert ".graph-port-path, .graph-call-path { fill: none; stroke: #7c3aed; stroke-width: 2;" in document
+    assert ".graph-call-path.is-rest { stroke: #d55e00; }" in document
+    assert ".graph-call-label { fill: #7c3aed;" in document
+    assert ".graph-call-label.is-kafka { fill: #009e73; }" in document
+    assert 'path.classList.add("is-rest")' in document
     assert 'obstacleRouted' in document
     assert 'const occupiedCallGraphSegments = []' in document
     assert 'const viewportMargin = 90' in document
@@ -1433,6 +1454,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="graph-context"' in document
     assert 'id="graph-mode-context"' in document
     assert 'id="analysis-mode-clear"' in document
+    assert 'id="analysis-mode-back"' in document
+    assert 'id="analysis-mode-architecture"' in document
     assert 'const updateAnalysisModeIndicator = () =>' in document
     assert 'toolbar-tab-group-title' in document
     assert 'id="resource-tab-group"' in document

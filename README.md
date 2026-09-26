@@ -41,9 +41,12 @@ For the common development checks, use the repository `Makefile`:
 ```bash
 make setup       # install development dependencies
 make lint        # run Ruff
+make architecture # enforce package dependency boundaries
 make test        # run the default test suite
 make typecheck   # run mypy
-make check       # run lint, typecheck, and tests
+make security    # run Bandit and Semgrep
+make coverage    # run tests and report branch coverage
+make check       # run lint, typecheck, security, tests, and coverage
 make help        # list all available tasks
 ```
 

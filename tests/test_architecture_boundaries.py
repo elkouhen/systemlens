@@ -83,7 +83,6 @@ def test_module_types_do_not_depend_on_discovery_or_parsing() -> None:
         "systemlens.discovery.build.gradle",
         "systemlens.discovery.java.parser",
         "systemlens.discovery.build.maven",
-        "systemlens.modules",
         "systemlens.scanner",
     }
 
@@ -92,4 +91,3 @@ def test_store_depends_on_module_facts_not_module_discovery() -> None:
     imported = _imported_modules(SOURCE_ROOT / "storage" / "sqlite.py")
 
     assert "systemlens.domain.module_inventory" in imported
-    assert "systemlens.modules" not in imported

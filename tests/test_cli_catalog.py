@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from systemlens import cli
+from systemlens.delivery import cli
 from systemlens.delivery.cli import app
 
 

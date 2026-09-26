@@ -1,12 +1,9 @@
 import json
 import os
-import sys
-import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal, Optional, cast
 
-import click
 import typer
 
 from systemlens import __version__
@@ -21,7 +18,6 @@ from systemlens.application.architecture import (
     inventory_coverage,
     list_objects as list_architecture_objects,
     neighbors as architecture_neighbors,
-    render_text as render_architecture_text,
     show_object as show_architecture_object,
     trace_topic_flows,
 )
@@ -50,7 +46,6 @@ from systemlens.domain.graph import (
 from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.indexing.service import CallGraphProgress, index_repo
-from systemlens.indexing.freshness import endpoint_inventory_warning
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.models import ExtractionDiagnostic
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
@@ -84,6 +79,14 @@ from systemlens.application.workspace import (
 )
 from systemlens.delivery.web import SystemLensWebApplication, create_web_server
 from systemlens.application.doctor import has_errors, run_doctor
+from systemlens.delivery.cli_support import (
+    echo_index_progress as _echo_index_progress,
+    emit_architecture as _emit_architecture,
+    manifest_rel_paths as _manifest_rel_paths,
+    option_json as _option_json,
+    option_root as _option_root,
+    trace_index as _trace_index,
+)
 
 app = typer.Typer(
     help=(
@@ -144,61 +147,9 @@ app.add_typer(analyze_app, name="analyze")
 analyze_app.add_typer(analyze_microservices_app, name="microservices")
 
 
-def _current_repo_endpoint_warning(store: Store) -> str | None:
-    return endpoint_inventory_warning(
-        store.get_meta("endpoint_inventory_signature"),
-        scope="ce projet",
-        inventory_indexed=store.get_meta("endpoint_inventory_indexed") == "1",
-    )
-
-
-def _echo_index_progress(message: str) -> None:
-    typer.echo(message)
-
-
-def _trace_index(stage: str, **fields: object) -> None:
-    if os.environ.get("SYSTEMLENS_TRACE") != "1":
-        return
-    details = " ".join(f"{name}={value}" for name, value in fields.items())
-    print(
-        f"SYSTEMLENS_TRACE ts={time.monotonic():.6f} stage={stage} {details}".rstrip(),
-        file=sys.stderr,
-        flush=True,
-    )
-
-
-def _manifest_rel_paths(repo_root: Path, paths: list[Path]) -> list[str]:
-    manifests: list[str] = []
-    seen: set[str] = set()
-    for raw_path in paths:
-        path = raw_path.expanduser()
-        if not path.is_absolute():
-            path = repo_root / path
-        try:
-            rel_path = path.resolve().relative_to(repo_root.resolve()).as_posix()
-        except ValueError as exc:
-            raise typer.BadParameter(
-                f"Le manifeste doit être dans le dépôt indexé : {raw_path}"
-            ) from exc
-        if not path.is_file():
-            raise typer.BadParameter(f"Manifeste introuvable : {raw_path}")
-        if path.suffix.lower() not in {".md", ".json"}:
-            raise typer.BadParameter(
-                f"Le manifeste doit être un fichier Markdown (.md) ou un flux de Topics JSON (.json) : {raw_path}"
-            )
-        if rel_path not in seen:
-            seen.add(rel_path)
-            manifests.append(rel_path)
-    return manifests
-
-
 @app.callback()
 def main() -> None:
     """systemlens: indexe les signaux d'architecture extraits par AST."""
-
-
-def _emit_architecture(result: object, json_output: bool) -> None:
-    typer.echo(json.dumps(result) if json_output else render_architecture_text(result))
 
 
 @dataclass(frozen=True)
@@ -582,25 +533,6 @@ def analyze_cmd(
         err=True,
     )
     raise typer.Exit(code=2)
-
-
-def _option_root(root: Path | None) -> Path:
-    """Resolve --root from a command or its parent Typer group."""
-    if root is not None:
-        return root.resolve()
-    context = click.get_current_context(silent=True)
-    parent_root = (
-        context.parent.params.get("root") if context and context.parent else None
-    )
-    return (parent_root or Path.cwd()).resolve()
-
-
-def _option_json(json_output: bool) -> bool:
-    """Resolve --json from a command or its parent Typer group."""
-    if json_output:
-        return True
-    context = click.get_current_context(silent=True)
-    return bool(context and context.parent and context.parent.params.get("json_output"))
 
 
 @topics_app.callback(invoke_without_command=True)
@@ -1455,13 +1387,6 @@ def _write_call_graph_progress_html(
     temporary = destination.with_name(f".{destination.name}.tmp")
     temporary.write_text(html, encoding="utf-8")
     temporary.replace(destination)
-
-
-def _require_index(repo_root: Path) -> None:
-    index_path = db_path(repo_root)
-    if not index_path.is_file():
-        typer.echo("Index absent. Lancez d'abord: systemlens index", err=True)
-        raise typer.Exit(code=2)
 
 
 @dataclass(frozen=True)

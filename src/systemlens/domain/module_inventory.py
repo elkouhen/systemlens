@@ -1,9 +1,8 @@
 """Domain types shared by build discovery, persistence, and projections.
 
 This module deliberately has no dependency on Java parsing or build-system
-discovery.  Consumers that only exchange module inventory facts should import
-from here instead of depending on the former compatibility module
-:mod:`systemlens.modules`.
+discovery. Consumers that only exchange module inventory facts should import
+from here.
 """
 
 from dataclasses import dataclass

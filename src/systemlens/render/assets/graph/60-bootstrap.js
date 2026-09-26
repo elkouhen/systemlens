@@ -7,6 +7,7 @@
         relatedEdges: null,
         analysisPortEndpointId: null,
         selectedCodeFlowId: null,
+        viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
         showAllCodeFlowPorts: false,
         pathMicroserviceOrder: new Map(),
@@ -33,6 +34,8 @@
     const renderSymbolsButton = document.getElementById("render-symbols");
     const analysisModeClear = document.getElementById("analysis-mode-clear");
     const analysisModeCenter = document.getElementById("analysis-mode-center");
+    const analysisModeBack = document.getElementById("analysis-mode-back");
+    const analysisModeArchitecture = document.getElementById("analysis-mode-architecture");
     const analysisPortsToggle = document.getElementById("analysis-ports-toggle");
     const analysisContextCollapse = document.getElementById("analysis-context-collapse");
     graphCanvas.dataset.renderMode = graphState.renderMode;
@@ -45,6 +48,12 @@
       const orderedNodes = [...(graphState.pathMicroserviceOrder?.keys() || [])];
       const remainingNodes = [...graphState.relatedNodes].filter(id => !orderedNodes.includes(id));
       scheduleFlowCameraFit({ nodes: [...orderedNodes, ...remainingNodes] });
+    });
+    analysisModeBack?.addEventListener("click", () => {
+      setToolbarTab("flows");
+    });
+    analysisModeArchitecture?.addEventListener("click", () => {
+      setToolbarTab("graph");
     });
     analysisPortsToggle?.addEventListener("click", () => {
       if (!graphState.selectedCodeFlowId) return;

@@ -35,14 +35,16 @@ architecture relations from modules, endpoints and build dependencies.
 promotion and `indexing/materializers.py` owns persisted contract projections.
 `indexing/dto_inventory.py` materializes the conservative Java
 DTO closure referenced by Kafka endpoints before that closure is persisted.
-`storage/sqlite.py` owns SQLite persistence; the `store/` compatibility package
-retains the former Python import.
+`storage/sqlite.py` owns SQLite connections, schema, transactions, and queries;
+`storage/serialization.py` owns SQLite row and JSON conversions. The `store/`
+compatibility package retains the former Python import.
 
-Within `render/`, `graph_view_model.py` owns the projection from persisted
-facts to the browser data model. `html_export.py` only serializes that model
-and assembles the standalone document from the HTML template and ordered
-browser assets. Rendering code must not be imported by indexing or discovery
-code.
+Within `render/`, `graph_view_model.py` owns the architecture projection from
+persisted facts to the browser data model, and `call_graph.py` owns the
+call-graph projection and its flow-level transformations. `html_export.py`
+only serializes those models and assembles the standalone document from the
+HTML template and ordered browser assets. Rendering code must not be imported
+by indexing or discovery code.
 
 Impact analysis uses the persisted topology edges without re-parsing source
 files. Its directed projection reverses REST edges, so a provider change
@@ -59,7 +61,11 @@ lookups for modules, endpoints, collections, and relations so catalog queries
 do not rescan the complete inventory for every object.
 
 `delivery/cli.py`, `delivery/mcp.py`, and the standard-library local HTTP server
-in `delivery/web.py` are thin delivery layers over the domain modules. The CLI export and
+in `delivery/web.py` are delivery layers over the domain modules. Shared CLI
+option resolution, manifest validation, progress reporting, and architecture
+output formatting live in `delivery/cli_support.py`. REST route normalization
+lives in `scanner/rest_paths.py`, separate from framework-specific extraction.
+The CLI export and
 `systemlens web` both use `application/architecture_projection.py` to select the same
 deployable, exportable service topology before choosing their output format.
 The web command serves only an in-memory landing page and the existing

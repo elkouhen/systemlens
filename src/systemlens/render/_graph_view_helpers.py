@@ -10,8 +10,60 @@ from pathlib import Path
 from urllib.parse import quote
 
 from systemlens.domain.graph import GraphEdge, graph_edge_rest_resource
-from systemlens.domain.models import Finding, MessageEndpoint
+from systemlens.domain.models import Finding, GraphFact, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule
+
+
+def deduplicated_call_port_links(edges: list[GraphEdge]) -> list[dict[str, str]]:
+    """Return one browser interaction edge per endpoint pair and protocol."""
+    links: set[tuple[str, str, str]] = set()
+    for edge in edges:
+        if (
+            edge.to_endpoint is None
+            or edge.from_endpoint.system not in {"rest", "kafka"}
+            or edge.to_endpoint.system not in {"rest", "kafka"}
+            or edge.from_endpoint.role not in {"call", "produce"}
+            or edge.to_endpoint.role not in {"serve", "consume"}
+        ):
+            continue
+        links.add((edge.from_endpoint.id, edge.to_endpoint.id, edge.kind))
+    return [
+        {"source_endpoint_id": source, "target_endpoint_id": target, "kind": kind}
+        for source, target, kind in sorted(links)
+    ]
+
+
+def fact_runtime_namespaces(fact: GraphFact) -> list[str]:
+    """Return runtime namespaces from an enrichment fact without guessing."""
+    metadata = fact.metadata or {}
+    values = metadata.get("namespaces")
+    if not isinstance(values, list):
+        values = [metadata.get("namespace")]
+    return [str(value) for value in values if value]
+
+
+def canonical_resource_kind(kind: str | None) -> str:
+    """Map persisted relation vocabulary to the visual resource vocabulary."""
+    return {
+        "topic": "kafka_topic",
+        "collection": "mongodb_collection",
+        "data_schema": "data_schema",
+    }.get(kind or "", kind or "")
+
+
+def kafka_message_type_status(
+    producer: MessageEndpoint | None, consumer: MessageEndpoint | None,
+) -> tuple[str, str | None]:
+    """Describe Kafka payload evidence without changing topic identity."""
+    produced = producer.message_type if producer else None
+    consumed = consumer.message_type if consumer else None
+    if produced and consumed:
+        if produced == consumed:
+            return "consistent", None
+        return "mismatch", "Types Java producteur/consommateur différents ; lien conservé sur le topic."
+    if produced or consumed:
+        return "partial", "Type Java connu d'un seul côté ; lien conservé sur le topic."
+    return "unknown", "Type Java du message non déterminé ; lien conservé sur le topic."
 
 
 def _rest_resources_served(endpoints: list[MessageEndpoint]) -> list[str]:
@@ -180,9 +232,8 @@ def _visual_graph_edges(
             )
         else:
             topic = edge.from_endpoint.topic
-            # Index-time Kafka matching requires the same concrete topic and
-            # message type, so this is an asserted service-to-service arc.
-            visual_edges.append(("microservice", edge.from_service, "microservice", edge.to_service, topic))
+            # Kafka communication is mediated by the concrete topic. The
+            # static graph must not imply a direct service-to-service call.
             visual_edges.append(("microservice", edge.from_service, "kafka_topic", topic, topic))
             visual_edges.append(("kafka_topic", topic, "microservice", edge.to_service, topic))
 

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from typer.testing import CliRunner
 
-from systemlens import cli
+from systemlens.delivery import cli
 from systemlens.application.architecture_inventory import is_deployable_service
 from systemlens.delivery.cli import app
 from systemlens.infrastructure.config import Config

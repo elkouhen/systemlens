@@ -132,6 +132,10 @@
     .code-flow-scope-filter { width: auto !important; height: 30px !important; padding: 0 8px !important; border: 1px solid #c4b5fd !important; border-radius: var(--control-radius); color: #5b21b6 !important; background: #faf5ff; font-size: 10px !important; font-weight: 800; white-space: nowrap; }
     .code-flow-cycle-filter { width: auto !important; height: 30px !important; padding: 0 8px !important; border-color: #fecaca !important; color: #991b1b !important; background: #fff7f7 !important; font-size: 10px !important; font-weight: 800; white-space: nowrap; }
     .code-flow-cycle-filter[aria-pressed="true"] { border-color: #dc2626 !important; color: #fff !important; background: #dc2626 !important; }
+    .code-flow-filter-reset { width: auto !important; height: 30px !important; padding: 0 8px !important; border-color: #cbd5e1 !important; color: #475569 !important; background: #f8fafc !important; font-size: 10px !important; font-weight: 800; white-space: nowrap; }
+    .code-flow-filter-reset:not(:disabled):hover { border-color: #64748b !important; color: #1e293b !important; background: #e2e8f0 !important; }
+    .code-flow-filter-reset:disabled { opacity: .55; cursor: not-allowed; }
+    .code-flow-filter-summary { margin: 0; padding: 5px 7px; border-left: 3px solid #94a3b8; border-radius: 4px; color: #475569; background: #f8fafc; font-size: 10px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
     .code-flows-summary { margin: 0; color: var(--ui-muted); font-size: 11px; line-height: 1.35; }
     .code-flow-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .code-flow-collapse { flex: 0 0 auto; width: auto !important; min-height: 28px; padding: 4px 10px !important; border: 1px solid #94a3b8 !important; border-radius: var(--control-radius); color: #334155 !important; background: #f8fafc !important; box-shadow: 0 1px 2px rgb(15 23 42 / 12%); font-size: 11px !important; font-weight: 800; }

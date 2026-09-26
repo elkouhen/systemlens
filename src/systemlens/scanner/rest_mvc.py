@@ -11,7 +11,6 @@ import re
 from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import urlsplit
 
 import yaml
 
@@ -39,23 +38,20 @@ from systemlens.scanner.rest_client_config import (
     _rest_configuration_external_services,
     _trace_rest_client,
 )
+from systemlens.scanner.rest_paths import join_paths, normalize_path, with_query_params
 
 _PROPERTY_PLACEHOLDER_RE = re.compile(r"^\$\{([^}]+)\}$")
-_MULTI_SLASH_RE = re.compile(r"/{2,}")
 
 # BACKLOG-10 K2 (reliquat) : `@KafkaListener(topics = someVar)` ou
 # `kafkaTemplate.send(someVar, ...)` où `someVar` n'est pas un littéral mais
 # une variable alimentée ailleurs dans la classe par `@Value("${...}")` —
 # retrouver le nom de variable en jeu (pas son contenu, absent du snippet)
 # avant de la résoudre contre les champs `@Value` du fichier source.
-_MAPPING_ANNOTATION_RE = re.compile(r"@\w+Mapping\s*(?:\(([^)]*)\))?")
 _MAPPING_ANNOTATION_BLOCK_RE = re.compile(r"@\w+Mapping\s*(?:\((.*?)\))?", re.DOTALL)
-_REQUEST_MAPPING_BLOCK_RE = re.compile(r"@RequestMapping\s*(?:\((.*?)\))?", re.DOTALL)
 _REQUEST_PARAM_RE = re.compile(
     r"@RequestParam\s*(?:\((.*?)\))?\s+[\w<>\[\], ?]+\s+(\w+)", re.DOTALL
 )
 _NON_PATH_MAPPING_ATTRS = {"method", "produces", "consumes", "headers", "params", "name"}
-_FEIGN_CLIENT_RE = re.compile(r"@FeignClient\s*\((.*?)\)", re.DOTALL)
 _NAMED_STRING_ARG_RE = re.compile(r'(\w+)\s*=\s*"([^"]*)"')
 _OPENAPI_HTTP_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "options"})
 _REST_TEMPLATE_CALL_RE = re.compile(
@@ -67,17 +63,6 @@ _REST_TEMPLATE_EXCHANGE_RE = re.compile(
     re.DOTALL,
 )
 _URI_CALL_RE = re.compile(r"\.uri\s*\(")
-_GATEWAY_ROUTE_PATH_RE = re.compile(r'\.path\(\s*"([^"]+)"\s*\)')
-_GATEWAY_ROUTE_METHOD_RE = re.compile(r'\.method\(\s*(?:"([A-Z]+)"|HttpMethod\.([A-Z]+))\s*\)')
-_GATEWAY_ROUTE_URI_RE = re.compile(r"\.uri\(\s*([^)]+?)\s*\)", re.DOTALL)
-_ROUTER_FUNCTION_ROUTE_RE = re.compile(
-    r"(?:RouterFunctions\.)?route\(\s*(?:RequestPredicates\.)?([A-Z]+)\(\s*\"([^\"]+)\"\s*\)",
-    re.DOTALL,
-)
-_ROUTER_FUNCTION_AND_ROUTE_RE = re.compile(
-    r"\.andRoute\(\s*(?:RequestPredicates\.)?([A-Z]+)\(\s*\"([^\"]+)\"\s*\)",
-    re.DOTALL,
-)
 def _mapping_args_have_only_non_path_attrs(args: str) -> bool:
     """`True` si les arguments d'une annotation `@XMapping(...)` ne portent
     aucun chemin explicite (vide, ou uniquement `method=`/`produces=`/...) —
@@ -234,7 +219,7 @@ def _resolve_rest_path_expression(
     )
     if raw == "<dynamic>":
         return raw, True
-    return _normalize_rest_path(raw), dynamic
+    return normalize_path(raw), dynamic
 
 
 def _resolved_http_host(expr: str, repo_root: Path, source_path: str) -> str | None:
@@ -254,7 +239,7 @@ def _resolve_rest_ast_expression(
     """
     resolved = local_string(source, expression)
     if resolved is not None:
-        return _normalize_rest_path(resolved), False
+        return normalize_path(resolved), False
     return _resolve_rest_path_expression(
         java_parser.node_text(source, expression), repo_root, source_path,
         preserve_dynamic_segments=True,
@@ -299,7 +284,7 @@ def _infer_http_interface_endpoints(repo_root: Path, rel_path: str) -> list[Mess
                 continue
             suffix, suffix_dynamic = _ast_mapping_value(annotation, source, repo_root, rel_path)
             dynamic = prefix_dynamic or suffix_dynamic
-            route = _join_rest_paths(_normalize_rest_path(prefix), _normalize_rest_path(suffix))
+            route = join_paths(normalize_path(prefix), normalize_path(suffix))
             if dynamic and (prefix_dynamic or suffix_dynamic):
                 route = "<dynamic>"
             snippet = java_parser.node_text(source, method)
@@ -391,11 +376,11 @@ def _extract_rest_path(
     if prefix_dynamic:
         return "<dynamic>", True
 
-    method_path = _normalize_rest_path(literal) if literal else "/"
-    route = method_path if not prefix else _join_rest_paths(_normalize_rest_path(prefix), method_path)
+    method_path = normalize_path(literal) if literal else "/"
+    route = method_path if not prefix else join_paths(normalize_path(prefix), method_path)
     query_params = _extract_request_param_names(snippet)
     if query_params:
-        route = _with_query_params(route, query_params)
+        route = with_query_params(route, query_params)
     return route, method_dynamic
 def _extract_request_param_names(snippet: str) -> list[str]:
     names: list[str] = []
@@ -413,31 +398,6 @@ def _extract_request_param_names(snippet: str) -> list[str]:
         seen.add(name)
         names.append(name)
     return names
-def _with_query_params(route: str, params: list[str]) -> str:
-    if not params or route == "<dynamic>":
-        return route
-    return f"{route}?{'&'.join(params)}"
-def _join_rest_paths(prefix: str, suffix: str) -> str:
-    """Assemble deux chemins déjà normalisés (slash de tête unique) sans
-    jamais repasser par l'heuristique d'URL protocole-relatif de
-    `_normalize_rest_path` : une simple concaténation `"" + "/" +
-    "/orders/{id}"` produit `"//orders/{id}"`, que `urlsplit` interprète à
-    tort comme `http://orders/{id}` (`orders` avalé comme nom d'hôte)."""
-    segments = [s for s in (prefix.strip("/"), suffix.strip("/")) if s]
-    return "/" + "/".join(segments) if segments else "/"
-def _normalize_rest_path(literal: str) -> str:
-    normalized = literal.strip()
-    if not normalized:
-        return "/"
-    if normalized.startswith("//"):
-        normalized = urlsplit(f"http:{normalized}").path or "/"
-    elif "://" in normalized:
-        normalized = urlsplit(normalized).path or "/"
-    normalized = normalized.split("?", 1)[0].split("#", 1)[0]
-    normalized = _MULTI_SLASH_RE.sub("/", normalized)
-    if not normalized.startswith("/"):
-        normalized = f"/{normalized}"
-    return normalized or "/"
 def _infer_generic_request_mapping_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
     """Infère les annotations de routes Spring et Feign depuis l'AST Java.
 
@@ -549,9 +509,9 @@ def _ast_mapping_route(
             prefix, prefix_dynamic = _ast_feign_base(feign, source, repo_root, rel_path)
     if dynamic or prefix_dynamic:
         return "<dynamic>", True
-    route = _join_rest_paths(_normalize_rest_path(prefix), _normalize_rest_path(path))
+    route = join_paths(normalize_path(prefix), normalize_path(path))
     params = _ast_request_param_names(method, source)
-    return _with_query_params(route, params), False
+    return with_query_params(route, params), False
 def _ast_feign_base(annotation, source: bytes, repo_root: Path, rel_path: str) -> tuple[str, bool]:
     """Resolve Feign's optional URL/path base without treating ``name`` as a route."""
     value = (
@@ -671,7 +631,7 @@ def _infer_spring_data_rest_endpoints(repo_root: Path, rel_path: str) -> list[Me
         )
         if rest_path is not None:
             assert annotation is not None
-            base_path = _normalize_rest_path(rest_path)
+            base_path = normalize_path(rest_path)
             snippet = java_parser.node_text(source, annotation)
             decl_line = annotation.start_point.row + 1
         else:
@@ -914,7 +874,7 @@ def _infer_openapi_endpoints(
     for raw_route, operations in document["paths"].items():
         if not isinstance(raw_route, str) or not isinstance(operations, dict):
             continue
-        route = _normalize_rest_path(raw_route)
+        route = normalize_path(raw_route)
         route_line = next(
             (
                 index + 1
@@ -1331,7 +1291,7 @@ def _infer_spring_cloud_gateway_routes(repo_root: Path, rel_path: str) -> list[M
                 has_uri = True
         if path_value is None or http_method is None or not has_uri:
             continue
-        route = _normalize_rest_path(path_value)
+        route = normalize_path(path_value)
         for role in ("serve", "call"):
             inferred.append(
                 _build_endpoint(
@@ -1387,7 +1347,7 @@ def _gateway_strip_prefix(route: dict[str, object]) -> int:
     return 0
 def _strip_gateway_path(route: str, prefix_count: int) -> str:
     if prefix_count <= 0:
-        return _normalize_rest_path(route)
+        return normalize_path(route)
     parts = [part for part in route.split("/") if part]
     remaining = parts[prefix_count:]
     return "/" + "/".join(remaining) if remaining else "/"
@@ -1416,7 +1376,7 @@ def _infer_spring_cloud_gateway_yaml_routes(repo_root: Path, rel_path: str) -> l
             except (OSError, StopIteration):
                 pass
             for public_path in _gateway_paths(route):
-                public_route = _normalize_rest_path(public_path)
+                public_route = normalize_path(public_path)
                 target_path = _strip_gateway_path(public_route, strip_prefix)
                 snippet = f"Path={public_route}; StripPrefix={strip_prefix}; uri={uri}"
                 inferred.append(
@@ -1470,7 +1430,7 @@ def _infer_spring_webflux_routes(repo_root: Path, rel_path: str) -> list[Message
             _build_endpoint(
                 repo_root, rel_path, invocation.start_point.row + 1,
                 invocation.end_point.row + 1, "serve", "rest",
-                f"{predicate} {_normalize_rest_path(path)}", "spring-webflux",
+                f"{predicate} {normalize_path(path)}", "spring-webflux",
                 java_parser.node_text(source, invocation),
             )
         )
