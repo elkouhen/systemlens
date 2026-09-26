@@ -6,6 +6,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 import re
+from xml.etree.ElementTree import Element
 
 from defusedxml import ElementTree as ET
 
@@ -15,18 +16,18 @@ _MAVEN_NS = "{http://maven.apache.org/POM/4.0.0}"
 _MAVEN_PROPERTY_RE = re.compile(r"\$\{([^}]+)\}")
 
 
-def _pom_child_text(root: ET.Element, tag: str) -> str | None:
+def _pom_child_text(root: Element, tag: str) -> str | None:
     element = root.find(f"{_MAVEN_NS}{tag}")
     if element is None:
         element = root.find(tag)  # pom sans espace de noms déclaré (rare)
     return element.text.strip() if element is not None and element.text else None
 
 
-def _pom_findall(root: ET.Element, path: str) -> list[ET.Element]:
+def _pom_findall(root: Element, path: str) -> list[Element]:
     namespaced = root.findall(path)
     plain = root.findall(path.replace(_MAVEN_NS, ""))
     seen: set[int] = set()
-    merged: list[ET.Element] = []
+    merged: list[Element] = []
     for element in [*namespaced, *plain]:
         marker = id(element)
         if marker in seen:
@@ -36,7 +37,7 @@ def _pom_findall(root: ET.Element, path: str) -> list[ET.Element]:
     return merged
 
 
-def _parse_pom_root(pom_path: Path) -> ET.Element | None:
+def _parse_pom_root(pom_path: Path) -> Element | None:
     try:
         return ET.fromstring(pom_path.read_text(encoding="utf-8", errors="replace"))
     except (ET.ParseError, OSError):
@@ -56,7 +57,7 @@ def _resolve_maven_value(value: str, properties: dict[str, str]) -> str:
     return resolved
 
 
-def _pom_properties(root: ET.Element, pom_path: Path) -> dict[str, str]:
+def _pom_properties(root: Element, pom_path: Path) -> dict[str, str]:
     module_dir = pom_path.parent.resolve()
     properties = {
         "basedir": str(module_dir),
@@ -87,20 +88,20 @@ def _pom_properties(root: ET.Element, pom_path: Path) -> dict[str, str]:
     return properties
 
 
-def _plugin_config_value(plugin: ET.Element, tag: str) -> str | None:
+def _plugin_config_value(plugin: Element, tag: str) -> str | None:
     config = plugin.find(f"{_MAVEN_NS}configuration")
     if config is None:
         config = plugin.find("configuration")
     return _pom_child_text(config, tag) if config is not None else None
 
 
-def _execution_configurations(plugin: ET.Element) -> list[ET.Element]:
+def _execution_configurations(plugin: Element) -> list[Element]:
     executions = plugin.find(f"{_MAVEN_NS}executions")
     if executions is None:
         executions = plugin.find("executions")
     if executions is None:
         return []
-    configurations: list[ET.Element] = []
+    configurations: list[Element] = []
     for execution in list(executions):
         config = execution.find(f"{_MAVEN_NS}configuration")
         if config is None:
@@ -110,8 +111,8 @@ def _execution_configurations(plugin: ET.Element) -> list[ET.Element]:
     return configurations
 
 
-def _iter_openapi_generator_plugins(root: ET.Element) -> list[ET.Element]:
-    plugins: list[ET.Element] = []
+def _iter_openapi_generator_plugins(root: Element) -> list[Element]:
+    plugins: list[Element] = []
     for plugin in _pom_findall(root, f".//{_MAVEN_NS}plugin"):
         artifact_id = _pom_child_text(plugin, "artifactId")
         if artifact_id and artifact_id.strip().casefold() == "openapi-generator-maven-plugin":

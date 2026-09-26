@@ -7,7 +7,7 @@ on:
       - "docs/**"
       - "examples/supermarket/**"
       - "scripts/generate_supermarket_demo.py"
-      - "src/systemlens/render/**"
+      - "src/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/pages.yml"
