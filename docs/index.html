@@ -142,12 +142,17 @@ systemlens export microservices --html architecture.html</code></pre>
     </section>
 
     <section aria-labelledby="codeql" style="margin-top: 48px">
-      <h2 id="codeql">Reuse a CodeQL database for method-call analysis</h2>
-      <p>SystemLens uses CodeQL for Java method-call analysis when it is installed. If you have already created a CodeQL database for the repository, pass it to <code>systemlens index</code> instead of creating another one:</p>
-      <pre><code>systemlens index --full \
+      <h2 id="codeql">Create and reuse a CodeQL database</h2>
+      <p>From the Java repository root, use the installed CodeQL CLI to create one database for the full repository. Then pass that database to SystemLens for method-call analysis:</p>
+      <pre><code>codeql database create .codeql/systemlens-java \
+  --language=java \
+  --source-root=. \
+  --build-mode=none
+
+systemlens index --full \
   --call-graph-engine codeql \
   --codeql-database .codeql/systemlens-java</code></pre>
-      <p>The database must match the repository's source revision and root layout. SystemLens still extracts architecture facts with its AST analyser and stores the combined snapshot locally. <a href="https://github.com/elkouhen/systemlens#reuse-a-codeql-database">See how to create the database →</a></p>
+      <p>The database must match the indexed source revision and root layout. Recreate it after source changes that affect the call graph. SystemLens also extracts architecture facts with its AST analyser and stores the combined snapshot locally. <a href="https://github.com/elkouhen/systemlens#reuse-a-codeql-database">Read the full CodeQL instructions →</a></p>
     </section>
 
     <section aria-labelledby="documentation" style="margin-top: 48px">
