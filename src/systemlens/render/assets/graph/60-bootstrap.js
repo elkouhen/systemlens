@@ -20,6 +20,8 @@
       renderer.refresh();
       setDetailsEmpty("Sélectionnez un nœud ou un module pour afficher ses informations.");
       search.value = "";
+      dependencyAnalysisControls.disabled = true;
+      dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
       dependencyFocusOnly.checked = false;
       dependencyFocusOnly.disabled = true;
       clearPathControls();
@@ -246,6 +248,8 @@
     renderReferences();
     renderResources();
     restoreState();
+    dependencyAnalysisControls.disabled = true;
+    dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
     dependencyFocusOnly.disabled = true;
     setToolbarTab("graph");
     function updateWorkspaceViewport(refit = false) {

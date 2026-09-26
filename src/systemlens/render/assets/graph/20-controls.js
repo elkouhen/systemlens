@@ -16,6 +16,8 @@
     const graphLegend = document.getElementById("graph-legend");
     const dependencyDepth = document.getElementById("dependency-depth");
     const dependencyFocusOnly = document.getElementById("dependency-focus-only");
+    const dependencyAnalysisControls = document.getElementById("dependency-analysis-controls");
+    const dependencyAnalysisHelp = document.getElementById("dependency-analysis-help");
     const graphPanel = document.getElementById("graph-panel");
     const resourcesPanel = document.getElementById("resources-panel");
     const issuesPanel = document.getElementById("issues-panel");

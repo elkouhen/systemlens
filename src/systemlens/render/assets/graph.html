@@ -78,17 +78,24 @@
             </div>
           </div>
           <div class="graph-action-row dependency-actions">
-            <label class="dependency-focus-control" title="Afficher uniquement le sous-graphe jusqu’à l’ordre choisi">
-              <input id="dependency-focus-only" type="checkbox" aria-label="Afficher uniquement les dépendances sélectionnées" disabled>
-              <span>Dépendances uniquement</span>
-              <select id="dependency-depth" aria-label="Ordre des dépendances">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-              </select>
-            </label>
+            <fieldset id="dependency-analysis-controls" class="dependency-analysis-controls" disabled>
+              <legend>Analyse du nœud sélectionné</legend>
+              <label class="dependency-focus-control" title="Masquer les nœuds et relations hors de la portée choisie">
+                <input id="dependency-focus-only" type="checkbox" aria-label="Afficher uniquement le sous-graphe sélectionné">
+                <span>Sous-graphe uniquement</span>
+              </label>
+              <label class="dependency-depth-control" for="dependency-depth">
+                <span>Ordre</span>
+                <select id="dependency-depth" aria-label="Ordre des dépendances">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+              </label>
+              <span id="dependency-analysis-help" class="dependency-analysis-help">Sélectionnez un nœud pour activer cette analyse.</span>
+            </fieldset>
           </div>
         </div>
         <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>

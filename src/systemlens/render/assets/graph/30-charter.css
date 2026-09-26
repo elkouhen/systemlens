@@ -134,7 +134,10 @@
     .theme-toggle { width: auto !important; padding: 0 9px !important; font-size: 11px !important; font-weight: 750; }
     .toolbar-collapse { width: 32px !important; padding: 0 !important; font-size: 22px !important; }
     .dependency-focus-control { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
-    .dependency-focus-control select { border-color: var(--widget-border); color: var(--ui-text); background: var(--ui-control); }
+    .dependency-analysis-controls { border-color: var(--ui-border); background: var(--ui-widget); }
+    .dependency-analysis-controls legend { color: var(--ui-accent-text); }
+    .dependency-depth-control select { border-color: var(--widget-border); color: var(--ui-text); background: var(--ui-control); }
+    .dependency-analysis-help { color: var(--ui-muted); }
     @media (max-width: 1024px) {
       .toolbar { width: min(320px, calc(100vw - 20px)); max-height: min(82vh, 620px); }
       .brand-subtitle { display: none; }

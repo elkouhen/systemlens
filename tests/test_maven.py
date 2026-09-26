@@ -62,3 +62,14 @@ def test_module_name_for_path_never_escapes_repo_root(tmp_path: Path) -> None:
     (repo_root / "app" / "Foo.java").write_text("class Foo {}")
 
     assert module_name_for_path(repo_root, "app/Foo.java") is None
+
+
+def test_duplicate_root_artifact_uses_explicit_root_identity(tmp_path: Path) -> None:
+    (tmp_path / "pom.xml").write_text("<project><artifactId>platform</artifactId></project>")
+    child = tmp_path / "child"
+    child.mkdir()
+    (child / "pom.xml").write_text("<project><artifactId>platform</artifactId></project>")
+    source = tmp_path / "App.java"
+    source.write_text("class App {}")
+
+    assert module_name_for_path(tmp_path, "App.java") == "platform@racine"

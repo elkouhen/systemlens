@@ -593,13 +593,16 @@
         link => isVisibleRelation(link) && (link.source === id || link.target === id)
       );
       const isMicroservice = node.kind === "microservice";
-      const publishedApiCount = isMicroservice ? (node.resources || []).length : 0;
-      const publishedTopicCount = isMicroservice ? new Set(
-        indexedEdges.filter(link => relationCategory(link) === "kafka" && link.source === id).map(link => link.target)
-      ).size : 0;
-      const collectionCount = isMicroservice ? new Set(
-        indexedEdges.filter(link => relationCategory(link) === "mongodb" && link.source === id).map(link => link.target)
-      ).size : 0;
+      const topicProducerCount = node.kind === "kafka_topic"
+        ? new Set(indexedEdges.filter(link => link.kind === "kafka" && link.target === id).map(link => link.source)).size
+        : 0;
+      const topicConsumerCount = node.kind === "kafka_topic"
+        ? new Set(indexedEdges.filter(link => link.kind === "kafka" && link.source === id).map(link => link.target)).size
+        : 0;
+      const dataServiceCount = node.kind === "mongodb_collection"
+        ? new Set(indexedEdges.filter(link => link.kind === "mongodb" && link.target === id).map(link => link.source)).size
+        : 0;
+      const dataClassCount = node.kind === "mongodb_collection" ? (node.persistence_classes || []).length : 0;
       revealDetails();
       details.replaceChildren();
       const kindLabel = nodeKindLabel(node);
@@ -627,12 +630,17 @@
         visibleBadge.textContent = `Affichées : ${edges.length}`;
         meta.append(visibleBadge);
       }
-      if (isMicroservice) {
-        [
-          `${publishedApiCount} API${publishedApiCount > 1 ? "s" : ""} exposée${publishedApiCount > 1 ? "s" : ""}`,
-          `${publishedTopicCount} topic${publishedTopicCount > 1 ? "s" : ""} publié${publishedTopicCount > 1 ? "s" : ""}`,
-          `${collectionCount} donnée${collectionCount > 1 ? "s" : ""} utilisée${collectionCount > 1 ? "s" : ""}`,
-        ].forEach(label => { const badge = document.createElement("span"); badge.className = "detail-badge"; badge.textContent = label; meta.append(badge); });
+      if (node.kind === "kafka_topic") {
+        const topicBadge = document.createElement("span");
+        topicBadge.className = "detail-badge";
+        topicBadge.textContent = `${topicProducerCount} producteur${topicProducerCount > 1 ? "s" : ""} · ${topicConsumerCount} consommateur${topicConsumerCount > 1 ? "s" : ""}`;
+        meta.append(topicBadge);
+      }
+      if (node.kind === "mongodb_collection") {
+        const dataBadge = document.createElement("span");
+        dataBadge.className = "detail-badge";
+        dataBadge.textContent = `${dataServiceCount} service${dataServiceCount > 1 ? "s" : ""} · ${dataClassCount} classe${dataClassCount > 1 ? "s" : ""}`;
+        meta.append(dataBadge);
       }
       const confidenceLabels = { proved: "prouvée", inferred: "inférée", conventional: "conventionnelle" };
       ["proved", "inferred", "conventional"].forEach(confidence => {
@@ -686,6 +694,7 @@
         const clusterPath = clusterPathForNode(id);
         const architectureGroup = createDetailsGroup("Architecture");
         appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
+        if (node.technology) appendList("Technologie", [node.technology], architectureGroup);
         appendActionList("Module", clusterPath ? [{
           label: clusterPath,
           title: `Naviguer vers le module ${clusterPath}`,
@@ -942,6 +951,8 @@
       if (!pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
+      dependencyAnalysisControls.disabled = false;
+      dependencyAnalysisHelp.textContent = "Le sous-graphe suit les dépendances jusqu’à l’ordre choisi.";
       dependencyFocusOnly.disabled = false;
       graphState.selectedClusterKey = null;
       graphState.relatedNodes = new Set([id]);
@@ -999,6 +1010,8 @@
       if (!preservePath && !pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
+      dependencyAnalysisControls.disabled = false;
+      dependencyAnalysisHelp.textContent = "Le sous-graphe suit les dépendances jusqu’à l’ordre choisi.";
       dependencyFocusOnly.disabled = false;
       graphState.selectedClusterKey = null;
       updateSelectedNodeDependencyScope(id);

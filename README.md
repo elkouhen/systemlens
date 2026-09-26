@@ -137,6 +137,34 @@ systemlens index --codeql-progress-html codeql-progress.html
 The progress graph is explicitly incomplete; generate the authoritative HTML
 export after indexing finishes.
 
+### Reuse a CodeQL database
+
+You can create the Java CodeQL database first, then give its path to
+SystemLens. Create one global database from the repository root so that
+cross-module calls remain available:
+
+```bash
+codeql database create .codeql/systemlens-java \
+  --language=java \
+  --source-root=. \
+  --build-mode=none
+
+systemlens index --full \
+  --call-graph-engine codeql \
+  --codeql-database .codeql/systemlens-java
+```
+
+The `--codeql-database` option reuses the supplied database for method-call
+analysis while SystemLens continues to run its own AST extraction and stores
+the combined snapshot in `.systemlens/findings.db`. The database must describe
+the same repository revision and source-root layout as the SystemLens index.
+Recreate it after source changes that must be reflected in the call graph.
+
+This option is mutually exclusive with `--generate-sources`, because source
+generation must happen before the external database is created. The supplied
+database is caller-managed; SystemLens reads it and does not create a temporary
+replacement for that run.
+
 ## Agent Package Manager (APM)
 
 This repository includes an `apm.yml` manifest for reproducing its agent setup

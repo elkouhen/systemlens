@@ -44,6 +44,8 @@
         graphState.relatedLocalPortLinks = new Set();
         graphState.codeFlowRootNodeId = null;
         dependencyFocusOnly.checked = false;
+        dependencyAnalysisControls.disabled = true;
+        dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
         dependencyFocusOnly.disabled = true;
         graphState.codeFlowTrigger = null;
         graphState.viewMode = tab === "graph" ? "architecture" : "empty";

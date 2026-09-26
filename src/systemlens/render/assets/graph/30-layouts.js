@@ -474,6 +474,8 @@
           codeFlowTreeCoordinates: new Map(),
         });
         dependencyFocusOnly.checked = false;
+        dependencyAnalysisControls.disabled = true;
+        dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
         dependencyFocusOnly.disabled = true;
         delete graphCanvas.dataset.selectedCodeFlow;
         clearPathControls();

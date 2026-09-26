@@ -213,7 +213,7 @@ def _rest_configuration_module_root(repo_root: Path, source_path: str) -> Path:
     _trace_rest_client(
         "rest_client.search.module_fallback",
         caller=source_path,
-        module=".",
+        module="racine",
         microservice=_rest_client_microservice_name(repo_root),
     )
     return repo_root

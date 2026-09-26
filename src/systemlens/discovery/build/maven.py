@@ -323,7 +323,10 @@ def _cached_module_identity(repo_root_str: str, pom_path_str: str) -> str:
     if len(matching_paths) <= 1:
         return name
     try:
-        relative = pom_path.parent.resolve().relative_to(repo_root.resolve()).as_posix() or "."
+        relative_path = pom_path.parent.resolve().relative_to(repo_root.resolve())
+        relative = relative_path.as_posix()
+        if relative == ".":
+            relative = "racine"
     except ValueError:
         relative = pom_path.parent.name
     return f"{name}@{relative}"

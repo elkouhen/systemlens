@@ -445,7 +445,6 @@
         const title = document.createElement("strong");
         title.textContent = node.name;
         tooltip.append(title);
-        addTooltipLine(tooltip, nodeKindLabel(node), "graph-entity-tooltip-kind");
         if (node.kind === "microservice") {
           const inputs = (node.ports || []).filter(port => port.direction === "in");
           const outputs = (node.ports || []).filter(port => port.direction === "out");
@@ -454,12 +453,20 @@
           if (topics.length) addTooltipLine(tooltip, `Messages : ${topics.slice(0, 4).join(", ")}${topics.length > 4 ? "…" : ""}`, "graph-entity-tooltip-detail");
           if (node.technology || node.build_system) addTooltipLine(tooltip, [node.technology, node.build_system].filter(Boolean).join(" · "), "graph-entity-tooltip-detail");
         } else if (node.kind === "kafka_topic") {
-          addTooltipLine(tooltip, `Producteurs : ${(node.published_message_types || []).length || 0} type(s)`);
-          addTooltipLine(tooltip, `Consommateurs : ${(node.consumed_message_types || []).length || 0} type(s)`);
+          const producers = new Set(graphData.links
+            .filter(link => link.kind === "kafka" && link.target === node.id)
+            .map(link => link.source)).size;
+          const consumers = new Set(graphData.links
+            .filter(link => link.kind === "kafka" && link.source === node.id)
+            .map(link => link.target)).size;
+          addTooltipLine(tooltip, `${producers} producteur${producers > 1 ? "s" : ""} · ${consumers} consommateur${consumers > 1 ? "s" : ""}`);
           const types = [...new Set([...(node.published_message_types || []), ...(node.consumed_message_types || [])])];
           if (types.length) addTooltipLine(tooltip, `Types : ${types.slice(0, 3).join(", ")}${types.length > 3 ? "…" : ""}`, "graph-entity-tooltip-detail");
         } else if (node.kind === "mongodb_collection") {
-          addTooltipLine(tooltip, `Propriétaire : ${node.owner || "inconnu"}`);
+          const services = new Set(graphData.links
+            .filter(link => link.kind === "mongodb" && link.target === node.id)
+            .map(link => link.source)).size;
+          addTooltipLine(tooltip, `${services} service${services > 1 ? "s" : ""} utilisateur${services > 1 ? "s" : ""}`);
           const classes = (node.persistence_classes || []).map(item => item.name).filter(Boolean);
           if (classes.length) addTooltipLine(tooltip, `Accès : ${classes.slice(0, 3).join(", ")}${classes.length > 3 ? "…" : ""}`, "graph-entity-tooltip-detail");
         }
@@ -1103,7 +1110,7 @@
           name.title = node.name;
           const kind = document.createElement("span");
           kind.className = "graph-node-card-kind";
-          const kindLabel = node.technology || nodeKindLabel(node);
+          const kindLabel = nodeKindLabel(node);
           kind.textContent = isCodeFlowRoot ? `${kindLabel} · Racine` : kindLabel;
           label.append(icon);
           label.append(name, kind);

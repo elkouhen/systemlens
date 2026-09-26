@@ -223,9 +223,10 @@ all workspaces or across independently indexed federated repositories.
 
 **Decision:** Persist a collision-safe module identity. It equals the build
 name when unique and is qualified with the relative module path when a
-collision exists. Endpoint, relation, dependency, and federation keys use the
-identity; the build name remains a display alias. Direct service indexes are
-namespaced at the federation boundary.
+collision exists. The repository root uses the explicit `racine` segment rather
+than the ambiguous `.` path marker. Endpoint, relation, dependency, and
+federation keys use the identity; the build name remains a display alias.
+Direct service indexes are namespaced at the federation boundary.
 
 **Consequences:** Ambiguous aliases are not resolved implicitly, and two
 services with the same display name coexist without data loss. Existing SQLite

@@ -51,6 +51,34 @@ hint towards the interactive microservice HTML export. Its result line is:
 scanned=<N> skipped=<N> +integrations=<N> -integrations=<N>
 ```
 
+### Reuse an externally created CodeQL database
+
+Create the CodeQL database from the repository root, then pass that global
+database to SystemLens:
+
+```bash
+codeql database create .codeql/systemlens-java \
+  --language=java \
+  --source-root=. \
+  --build-mode=none
+
+systemlens index --full \
+  --call-graph-engine codeql \
+  --codeql-database .codeql/systemlens-java
+```
+
+SystemLens reuses the database for method-call extraction and still performs
+its own AST extraction, inventory refresh, relation materialization and
+persistence. The database must be global for the indexed repository, use the
+same source-root layout, and represent the source revision being indexed.
+The caller owns its lifecycle and must recreate it when relevant source files
+change.
+
+`--codeql-database` requires the `codeql` call-graph engine and cannot be
+combined with `--generate-sources`. Source generation, when needed, must finish
+before the external database is created. SystemLens does not replace the
+supplied database with its automatic temporary source-only database.
+
 The first AST-only run removes stale results from the retired analyzer.
 
 When `--generate-sources` is enabled for a Maven project, SystemLens runs only

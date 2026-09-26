@@ -318,8 +318,12 @@ Topic, message channel,
 Data resource, data schema, and equivalent resource cards share the same
 rendered width, height, and scale. Their semantic differences are conveyed by
 compact icons aligned with the name, plus border and color. The secondary kind
-label uses the full inner card width instead of reserving a permanent icon
-column.
+label always identifies the resource category and uses the full inner card
+width instead of reserving a permanent icon column. Technology is shown in the
+selected microservice details rather than replacing that shared category label.
+Hover tooltips keep the resource name as their anchor and show only
+supplementary metrics. The selected details header keeps summary counts, while
+the detail sections remain the single place for complete relation lists.
 
 Users can switch node rendering between `Cards` and `Symbols` without changing
 the active graph, filters, layout, selection, node positions, or current camera

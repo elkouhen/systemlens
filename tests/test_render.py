@@ -1314,6 +1314,14 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="toolbar-collapse"' in document
     assert 'id="dependency-depth"' in document
     assert 'id="dependency-focus-only"' in document
+    assert 'id="dependency-analysis-controls"' in document
+    assert 'id="dependency-analysis-help"' in document
+    assert 'const kindLabel = nodeKindLabel(node);' in document
+    assert 'publishedApiCount' not in document
+    assert 'if (node.technology) appendList("Technologie", [node.technology], architectureGroup);' in document
+    assert 'addTooltipLine(tooltip, nodeKindLabel(node)' not in document
+    assert 'topicProducerCount' in document
+    assert 'dataServiceCount' in document
     assert 'function updateSelectedNodeDependencyScope(id)' in document
     assert 'dependencyDepth.addEventListener("change"' in document
     assert 'updateSelectedNodeDependencyScope(graphState.selectedId);' in document
