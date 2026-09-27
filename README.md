@@ -16,6 +16,14 @@ The companion `systemlens-skill` is optional: it lets an agent perform a
 focused, evidence-based analysis to enrich the separate graph-fact layer. Its
 findings remain reviewable and never replace source-derived facts.
 
+## Related projects
+
+- [systemlens-skill](https://github.com/elkouhen/systemlens-skill) provides
+  agent guidance for focused, evidence-based architecture enrichment.
+- [SystemLens observability lab](https://github.com/elkouhen/systemlens-observability-lab)
+  provides the Java, Kubernetes, Elastic, OpenTelemetry, Kafka, and database
+  fixture used for architecture and observability workflows.
+
 ## Install
 
 ```bash
