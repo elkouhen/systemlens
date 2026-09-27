@@ -870,6 +870,9 @@
         appendList("Entités JPA déclarées", (node.jpa_entities || []).map(
           entity => `${entity.name} · ${entity.location}`
         ), relationsGroup);
+        appendList("DTOs JPA et REST", (node.jpa_dtos || []).map(
+          dto => `${dto.name} · ${dto.roles.join(", ")} · ${dto.location}`
+        ), relationsGroup);
         discardEmptyDetailsGroup(relationsGroup);
         const associatedFlowsGroup = createDetailsGroup("Flux associés", false);
         appendAssociatedCodeFlows("Flux associés", associatedFlows, associatedFlowsGroup);
@@ -970,6 +973,12 @@
         const entityGroup = createDetailsGroup("Entité JPA");
         appendList("Service propriétaire", node.owner ? [node.owner] : [], entityGroup);
         appendList("Source", node.source_path && node.source_line ? [`${node.source_path}:${node.source_line}`] : [], entityGroup);
+        const jpaDtos = (node.jpa_dtos || []).map(dto => (
+          `${dto.display_name || dto.name} · ${(dto.roles || []).join(", ")} · ${dto.location}`
+        ));
+        appendList("DTOs associés", jpaDtos.length ? jpaDtos : [
+          "Aucun DTO associé dans l’index.",
+        ], entityGroup);
         discardEmptyDetailsGroup(entityGroup);
       }
     }

@@ -16,6 +16,10 @@ resource nodes owned by their microservice. Each node displays only its Java
 class name while retaining its qualified class name and root-relative source
 location in the exported model; the `maps` relation identifies the mapping
 without implying a database read/write edge.
+The service inspector also lists persisted Java DTOs associated with those
+entities and DTOs used by REST controller signatures when no OpenAPI contract
+is indexed. The list includes the DTO role and source location; it does not
+claim a runtime mapper or serialization path.
 
 The exported Explorer presents the graph as a layered workspace: a compact
 control surface, a searchable graph context, summary counters, and a separate

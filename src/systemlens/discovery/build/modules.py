@@ -19,6 +19,7 @@ from systemlens.domain.module_inventory import (
     BlockingPoint,
     DiscoveredModule,
     JpaEntity,
+    JpaDto,
     JavaArchitectureExtension,
     KafkaMethod,
     ModuleDependency,
@@ -881,6 +882,126 @@ def discover_jpa_entities(
     return tuple(sorted(entities))
 
 
+def discover_jpa_dtos(
+    module_dir: Path,
+    module_roots: set[Path],
+    repo_root: Path,
+    entities: tuple[JpaEntity, ...],
+    rest_controllers: tuple[str, ...],
+    openapi_files: tuple[str, ...],
+) -> tuple[JpaDto, ...]:
+    """Inventory DTOs tied to JPA entities or undocumented REST controllers.
+
+    A DTO is accepted only when its name uses a conventional DTO suffix. An
+    entity association requires an imported, same-package, or qualified entity
+    type reference. Controller DTOs are collected from method signatures only
+    when the module has no OpenAPI contract, preserving the contract boundary.
+    """
+    parser = _java_parser("jpa_dtos")
+    entity_by_simple = {entity.qualified_name.rsplit(".", 1)[-1]: entity for entity in entities}
+    candidates: dict[str, tuple[Path, object, bytes, str, set[str]]] = {}
+    dto_suffixes = ("DTO", "Dto", "Request", "Response", "Command", "Query", "Payload")
+    controller_names = {item.split(" (", 1)[0] for item in rest_controllers}
+    for java_file in _module_files(module_dir, module_roots, "*.java"):
+        relative_parts = java_file.relative_to(module_dir).parts
+        if any(part in {"test", "tests"} for part in relative_parts):
+            continue
+        try:
+            source = java_file.read_bytes()
+        except OSError:
+            continue
+        root = parser.parse(source).root_node
+        if root.has_error:
+            continue
+        package = next((
+            java_parser.node_text(source, node).removeprefix("package").removesuffix(";").strip()
+            for node in root.named_children if node.type == "package_declaration"
+        ), "")
+        imports = {
+            java_parser.node_text(source, node).strip().removeprefix("import ").removesuffix(";")
+            for node in root.named_children if node.type == "import_declaration"
+        }
+        for declaration in java_parser.type_declarations(root):
+            if declaration.parent != root:
+                continue
+            name = java_parser.declaration_name(declaration, source)
+            if not name or not name.endswith(dto_suffixes):
+                continue
+            qualified = f"{package}.{name}" if package else name
+            candidates[qualified] = (java_file, declaration, source, package, imports)
+
+    def referenced_entity_names(source: bytes, package: str, imports: set[str]) -> tuple[str, ...]:
+        text = source.decode("utf-8", errors="replace")
+        matches: list[str] = []
+        for simple, entity in entity_by_simple.items():
+            qualified = entity.qualified_name
+            visible = (
+                qualified in imports
+                or f"{package}.{simple}" == qualified
+                or qualified in text
+            )
+            if visible and re.search(rf"\b{re.escape(simple)}\b", text):
+                matches.append(qualified)
+        return tuple(sorted(matches))
+
+    def referenced_dtos(type_text: str) -> set[str]:
+        return {
+            qualified
+            for qualified in candidates
+            if re.search(rf"\b{re.escape(qualified.rsplit('.', 1)[-1])}\b", type_text)
+        }
+
+    results: dict[str, set[str]] = {qualified: set() for qualified in candidates}
+    entity_links: dict[str, set[str]] = {qualified: set() for qualified in candidates}
+    for qualified, (_path, declaration, source, package, imports) in candidates.items():
+        linked_entities = referenced_entity_names(source, package, imports)
+        entity_links[qualified].update(linked_entities)
+        if linked_entities:
+            results[qualified].add("jpa_entity")
+
+    if not openapi_files and controller_names:
+        for java_file in _module_files(module_dir, module_roots, "*.java"):
+            try:
+                source = java_file.read_bytes()
+            except OSError:
+                continue
+            root = parser.parse(source).root_node
+            if root.has_error:
+                continue
+            for declaration in java_parser.type_declarations(root):
+                name = java_parser.declaration_name(declaration, source)
+                if name not in controller_names:
+                    continue
+                if not any(java_parser.annotation_name(annotation, source) == "RestController"
+                           for annotation in java_parser.annotations_of(declaration)):
+                    continue
+                for method in java_parser.walk(declaration):
+                    if method.type != "method_declaration":
+                        continue
+                    type_node = method.child_by_field_name("type")
+                    signature_parts = [java_parser.node_text(source, type_node)] if type_node else []
+                    parameters = java_parser.child_by_type(method, "formal_parameters")
+                    if parameters:
+                        signature_parts.extend(
+                            java_parser.node_text(source, parameter)
+                            for parameter in parameters.named_children
+                        )
+                    for dto in set().union(*(referenced_dtos(part) for part in signature_parts)):
+                        results[dto].add("rest_controller")
+
+    return tuple(
+        JpaDto(
+            qualified_name=qualified,
+            path=candidates[qualified][0].relative_to(repo_root).as_posix(),
+            line=declaration.start_point.row + 1,
+            roles=tuple(sorted(roles)),
+            entities=tuple(sorted(entity_links[qualified])),
+        )
+        for qualified, roles in sorted(results.items())
+        if roles
+    )
+
+
 def _enrich_module(
     module: DiscoveredModule,
     module_roots: set[Path],
@@ -912,6 +1033,13 @@ def _enrich_module(
         rest_controllers=rest_controllers,
         build_system=module.build_system,
     )
+    jpa_dtos = (
+        discover_jpa_dtos(
+            module.path, module_roots, repo_root, jpa_entities,
+            rest_controllers, openapi_files,
+        )
+        if enrich_architecture else ()
+    )
 
     # Détecter les clients OpenAPI générés (Maven uniquement)
     openapi_generated_clients: tuple[str, ...] = ()
@@ -925,6 +1053,7 @@ def _enrich_module(
         **{**module.__dict__, "mongo_collections": collections, "mongo_methods": methods,
            "mongo_persistence_classes": persistence_classes,
            "jpa_entities": jpa_entities,
+           "jpa_dtos": jpa_dtos,
            "openapi_files": openapi_files,
            "kafka_methods": kafka_methods, "blocking_points": blocking_points,
            "rest_controllers": rest_controllers, "openapi_generated_clients": openapi_generated_clients}

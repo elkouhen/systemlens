@@ -246,6 +246,15 @@ def module_summary(catalog: ArchitectureCatalog, name: str) -> dict[str, object]
         "databases": {
             "mongodb_collections": list(module.mongo_collections),
             "jpa_entities": [entity.qualified_name for entity in module.jpa_entities],
+            "jpa_dtos": [
+                {
+                    "name": dto.qualified_name,
+                    "location": f"{dto.path}:{dto.line}",
+                    "roles": list(dto.roles),
+                    "entities": list(dto.entities),
+                }
+                for dto in module.jpa_dtos
+            ],
         },
         "technologies": technologies,
         "openapi": bool(module.openapi_files),

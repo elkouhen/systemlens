@@ -867,7 +867,7 @@ def test_store_additively_migrates_previous_schema_for_code_flows(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'codeql_call_edges'"
         ).fetchone()
         assert call_edges_table is not None
-        assert store.get_meta("schema_version") == "34"
+        assert store.get_meta("schema_version") == "35"
 
 
 def test_codeql_calls_join_ast_entry_and_output_methods(tmp_path: Path) -> None:

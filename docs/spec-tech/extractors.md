@@ -74,6 +74,13 @@ module. It requires an import or qualified annotation from
 name and source location without deriving a table name or operation. The pass
 costs `O(B + N)` for scanned source bytes `B` and syntax nodes `N`.
 
+The JPA DTO pass scans production Java declarations once more for conventional
+DTO names ending in `DTO`, `Dto`, `Request`, `Response`, `Command`, `Query` or
+`Payload`. It associates a DTO with an entity only when an imported,
+same-package or qualified entity type is referenced. When no OpenAPI file is
+indexed for the module, it also records DTO types found in REST controller
+method parameters or return types. Ambiguous type names remain unassociated.
+
 With `--strategy strategy1`, every method whose name starts with
 `envoyerMessageKafka` is an additional producer convention, including
 `envoyerMessageKafkaRequest(topic, payload)` and

@@ -608,6 +608,15 @@ def build_graph_view_model(
                      "location": f"{entity.path}:{entity.line}"}
                     for entity in module.jpa_entities
                 ] if module else [],
+                "jpa_dtos": [
+                    {
+                        "name": dto.qualified_name,
+                        "location": f"{dto.path}:{dto.line}",
+                        "roles": list(dto.roles),
+                        "entities": list(dto.entities),
+                    }
+                    for dto in module.jpa_dtos
+                ] if module else [],
                 "kubernetes_workloads": [workload.__dict__ for workload in module.kubernetes_workloads] if module else [],
                 "openapi_files": openapi_files,
                 "openapi_contracts": [
@@ -738,6 +747,16 @@ def build_graph_view_model(
                 "label": entity.qualified_name,
                 "owner": service_name,
                 "technology": "JPA",
+                "jpa_dtos": [
+                    {
+                        "name": dto.qualified_name,
+                        "display_name": dto.qualified_name.rsplit(".", 1)[-1],
+                        "location": f"{dto.path}:{dto.line}",
+                        "roles": list(dto.roles),
+                    }
+                    for dto in module.jpa_dtos
+                    if entity.qualified_name in dto.entities
+                ],
                 "source_path": entity.path,
                 "source_line": entity.line,
                 "width": 190,

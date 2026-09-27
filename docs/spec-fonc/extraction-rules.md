@@ -20,6 +20,12 @@ summary lists their qualified Java names, and the persisted relation set has a `
 relation with source evidence. It does not infer a table name, JDBC driver,
 database engine, or read/write operation from the annotation.
 
+The same module inventory records conventional Java DTOs associated with JPA
+entities through imported, same-package or qualified entity references. If the
+module has no OpenAPI file, it also records DTO types used in REST controller
+method parameters or return types. The index preserves source locations and
+does not infer a mapper or a runtime serialization path.
+
 For REST clients, a literal URL or a unique, never-reassigned local string
 base URL is normalized to its route and retains its HTTP host as target
 evidence. A private, uniquely named helper with a single unconditional String

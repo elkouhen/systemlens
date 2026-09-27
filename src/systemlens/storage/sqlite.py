@@ -24,6 +24,7 @@ from systemlens.domain.code_flows import (
 )
 from systemlens.domain.module_inventory import (
     DiscoveredModule,
+    JpaDto,
     JpaEntity,
     ModuleDependency,
     SourceEvidence,
@@ -42,7 +43,7 @@ from systemlens.storage.serialization import (
     row_to_finding as _row_to_finding,
 )
 
-SCHEMA_VERSION = "34"
+SCHEMA_VERSION = "35"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
@@ -243,6 +244,7 @@ class Store:
                 mongo_methods TEXT NOT NULL DEFAULT '[]',
                 mongo_persistence_classes TEXT NOT NULL DEFAULT '[]',
                 jpa_entities TEXT NOT NULL DEFAULT '[]',
+                jpa_dtos TEXT NOT NULL DEFAULT '[]',
                 openapi_files TEXT NOT NULL DEFAULT '[]',
                 kafka_methods TEXT NOT NULL DEFAULT '[]',
                 blocking_points TEXT NOT NULL DEFAULT '[]',
@@ -393,6 +395,7 @@ class Store:
             "starts_application", "application_entrypoint", "mongo_collections",
             "mongo_methods", "mongo_persistence_classes", "openapi_files",
             "jpa_entities",
+            "jpa_dtos",
             "kafka_methods", "blocking_points", "rest_controllers",
             "openapi_generated_clients",
             "kubernetes_workloads",
@@ -548,8 +551,8 @@ class Store:
             self.conn.execute(
                 """
                 INSERT INTO modules (path, name, identity, build_system, version, kind, starts_application, configuration_example, application_entrypoint,
-                                     mongo_collections, mongo_methods, mongo_persistence_classes, jpa_entities, openapi_files, kafka_methods, blocking_points, rest_controllers, openapi_generated_clients, kubernetes_workloads)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     mongo_collections, mongo_methods, mongo_persistence_classes, jpa_entities, jpa_dtos, openapi_files, kafka_methods, blocking_points, rest_controllers, openapi_generated_clients, kubernetes_workloads)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     relative_path,
@@ -568,6 +571,7 @@ class Store:
                         "fields": [field.__dict__ for field in item.fields],
                     } for item in module.mongo_persistence_classes]),
                     json.dumps([entity.__dict__ for entity in module.jpa_entities]),
+                    json.dumps([dto.__dict__ for dto in module.jpa_dtos]),
                     json.dumps(module.openapi_files),
                     json.dumps([_method_to_json(method) for method in module.kafka_methods]),
                     json.dumps([_method_to_json(point) for point in module.blocking_points]),
@@ -579,7 +583,7 @@ class Store:
 
     def all_modules(self) -> list[DiscoveredModule]:
         rows = self.conn.execute(
-            "SELECT path, name, identity, build_system, version, kind, starts_application, configuration_example, application_entrypoint, mongo_collections, mongo_methods, mongo_persistence_classes, jpa_entities, openapi_files, kafka_methods, blocking_points, rest_controllers, openapi_generated_clients, kubernetes_workloads "
+            "SELECT path, name, identity, build_system, version, kind, starts_application, configuration_example, application_entrypoint, mongo_collections, mongo_methods, mongo_persistence_classes, jpa_entities, jpa_dtos, openapi_files, kafka_methods, blocking_points, rest_controllers, openapi_generated_clients, kubernetes_workloads "
             "FROM modules ORDER BY path"
         ).fetchall()
         return [
@@ -597,6 +601,16 @@ class Store:
                 mongo_methods=tuple(_mongo_method_from_json(method) for method in json.loads(row["mongo_methods"])),
                 mongo_persistence_classes=tuple(_mongo_persistence_class_from_json(item) for item in json.loads(row["mongo_persistence_classes"])),
                 jpa_entities=tuple(JpaEntity(**item) for item in json.loads(row["jpa_entities"])),
+                jpa_dtos=tuple(
+                    JpaDto(
+                        qualified_name=item["qualified_name"],
+                        path=item["path"],
+                        line=item["line"],
+                        roles=tuple(item.get("roles", [])),
+                        entities=tuple(item.get("entities", [])),
+                    )
+                    for item in json.loads(row["jpa_dtos"])
+                ),
                 openapi_files=tuple(json.loads(row["openapi_files"])),
                 kafka_methods=tuple(_kafka_method_from_json(method) for method in json.loads(row["kafka_methods"])),
                 blocking_points=tuple(_blocking_point_from_json(point) for point in json.loads(row["blocking_points"])),

@@ -167,7 +167,7 @@ def test_microservices_list_uses_the_architecture_catalog_shape(tmp_path: Path) 
             "kafka_topics_consumed": [],
             "kafka_message_types_published": {},
             "kafka_message_types_consumed": {},
-            "databases": {"mongodb_collections": [], "jpa_entities": []},
+            "databases": {"mongodb_collections": [], "jpa_entities": [], "jpa_dtos": []},
             "technologies": ["Java", "Spring Boot"],
             "openapi": False,
             "openapi_files": [],
@@ -388,6 +388,30 @@ class OrderApp {
   }
 }
 """,
+        encoding="utf-8",
+    )
+    (source.parent / "CustomerDto.java").write_text(
+        "package example;\n"
+        "import java.util.UUID;\n"
+        "public record CustomerDto(Customer customer, UUID id) {}\n",
+        encoding="utf-8",
+    )
+    (source.parent / "CustomerRequest.java").write_text(
+        "package example;\n"
+        "public record CustomerRequest(String name) {}\n",
+        encoding="utf-8",
+    )
+    (source.parent / "CustomerResponse.java").write_text(
+        "package example;\n"
+        "public record CustomerResponse(String name) {}\n",
+        encoding="utf-8",
+    )
+    (source.parent / "CustomerController.java").write_text(
+        "package example;\n"
+        "import org.springframework.web.bind.annotation.RestController;\n"
+        "@RestController class CustomerController {\n"
+        "  CustomerResponse get(CustomerRequest request) { return null; }\n"
+        "}\n",
         encoding="utf-8",
     )
     module = discover_modules(tmp_path)[0]
@@ -965,6 +989,29 @@ def test_index_persists_source_evidenced_jpa_entities(
         "@Entity public class Customer {}\n",
         encoding="utf-8",
     )
+    (source.parent / "CustomerDto.java").write_text(
+        "package example;\n"
+        "public record CustomerDto(Customer customer) {}\n",
+        encoding="utf-8",
+    )
+    (source.parent / "CustomerRequest.java").write_text(
+        "package example;\n"
+        "public record CustomerRequest(String name) {}\n",
+        encoding="utf-8",
+    )
+    (source.parent / "CustomerResponse.java").write_text(
+        "package example;\n"
+        "public record CustomerResponse(String name) {}\n",
+        encoding="utf-8",
+    )
+    (source.parent / "CustomerController.java").write_text(
+        "package example;\n"
+        "import org.springframework.web.bind.annotation.RestController;\n"
+        "@RestController class CustomerController {\n"
+        "  CustomerResponse get(CustomerRequest request) { return null; }\n"
+        "}\n",
+        encoding="utf-8",
+    )
     (source.parent / "PaymentApp.java").write_text(
         "package example;\n"
         "class PaymentApp { public static void main(String[] args) { "
@@ -989,17 +1036,26 @@ def test_index_persists_source_evidenced_jpa_entities(
             store, full=True,
         )
         entities = store.all_modules()[0].jpa_entities
+        dtos = store.all_modules()[0].jpa_dtos
         relations = store.all_architecture_relations()
 
     assert [(entity.qualified_name, entity.path, entity.line) for entity in entities] == [
         ("example.Customer", "payment/src/main/java/example/Customer.java", 3),
     ]
+    dto_by_name = {dto.qualified_name: dto for dto in dtos}
+    assert dto_by_name["example.CustomerDto"].roles == ("jpa_entity",)
+    assert dto_by_name["example.CustomerDto"].entities == ("example.Customer",)
+    assert dto_by_name["example.CustomerRequest"].roles == ("rest_controller",)
+    assert dto_by_name["example.CustomerResponse"].roles == ("rest_controller",)
     assert [(relation.relation, relation.target_kind, relation.target_name) for relation in relations] == [
         ("maps", "jpa_entity", "example.Customer"),
     ]
     result = runner.invoke(app, ["microservices", "--root", str(tmp_path), "--json"])
     assert result.exit_code == 0
     assert json.loads(result.output)[0]["databases"]["jpa_entities"] == ["example.Customer"]
+    assert {dto["name"] for dto in json.loads(result.output)[0]["databases"]["jpa_dtos"]} == {
+        "example.CustomerDto", "example.CustomerRequest", "example.CustomerResponse",
+    }
     monkeypatch.chdir(tmp_path)
     graph_path = tmp_path / "architecture.html"
     exported = runner.invoke(app, ["export", "microservices", "--html", str(graph_path)])
@@ -1032,7 +1088,7 @@ def test_store_adds_jpa_inventory_to_existing_index(tmp_path: Path) -> None:
     with Store(tmp_path) as store:
         columns = {row["name"] for row in store.conn.execute("PRAGMA table_info(modules)")}
         assert "jpa_entities" in columns
-        assert store.get_meta("schema_version") == "34"
+        assert store.get_meta("schema_version") == "35"
 
 
 def test_index_repo_materializes_modules_snapshot(

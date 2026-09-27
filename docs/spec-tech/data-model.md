@@ -34,6 +34,12 @@ stores these declarations, and one high-confidence `maps` relation links each
 owning module to an entity. The fact identifies a Java mapping declaration;
 it does not identify a physical table, database engine, or read/write call.
 
+`JpaDto` records a Java DTO related to one or more indexed JPA entities or used
+in a REST controller signature when the module has no OpenAPI contract. It
+stores the qualified name, root-relative source location, detected roles and
+conservatively resolved entity names. It does not infer a mapper or a runtime
+serialization path.
+
 `GraphFact` is the separate enrichment layer for facts supplied by a user, or
 by an agent operating through the companion SystemLens skill, via MCP. It
 supports typed nodes and edges, origin, namespace, status, confidence,

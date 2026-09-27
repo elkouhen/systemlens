@@ -15,6 +15,7 @@ from systemlens.discovery.kubernetes import KubernetesWorkload
 from systemlens.domain.module_inventory import (
     DiscoveredModule,
     JpaEntity,
+    JpaDto,
     ModuleDependency,
     MongoField,
     MongoPersistenceClass,
@@ -704,6 +705,10 @@ def test_microservice_graph_exposes_jpa_entities_as_owned_nodes() -> None:
         configuration_example="", jpa_entities=(JpaEntity(
             qualified_name="com.example.Order",
             path="src/main/java/com/example/Order.java", line=12,
+        ),), jpa_dtos=(JpaDto(
+            qualified_name="com.example.OrderDto",
+            path="src/main/java/com/example/OrderDto.java", line=8,
+            roles=("jpa_entity",), entities=("com.example.Order",),
         ),),
     )
     graph_data = _html_graph_data(render_graph_html(
@@ -714,6 +719,18 @@ def test_microservice_graph_exposes_jpa_entities_as_owned_nodes() -> None:
     assert entity["display_name"] == "Order"
     assert entity["owner"] == "orders"
     assert entity["technology"] == "JPA"
+    assert entity["jpa_dtos"] == [{
+        "name": "com.example.OrderDto",
+        "display_name": "OrderDto",
+        "location": "src/main/java/com/example/OrderDto.java:8",
+        "roles": ["jpa_entity"],
+    }]
+    assert 'const jpaDtos = (node.jpa_dtos || []).map(dto =>' in render_graph_html(
+        {"orders": []}, [], modules_by_service={"orders": module},
+    )
+    assert "Aucun DTO associé dans l’index." in render_graph_html(
+        {"orders": []}, [], modules_by_service={"orders": module},
+    )
     assert any(
         link["source"] == "microservice:orders"
         and link["target"] == entity["id"]
