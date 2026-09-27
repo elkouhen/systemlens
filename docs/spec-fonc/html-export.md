@@ -38,6 +38,11 @@ available in the opened flow view rather than expanding every list entry.
 Clicking the entry still opens the complete flow view, so the compact layout
 does not remove any indexed information.
 
+Hovering or focusing a flow entry opens a tooltip with its complete description,
+trigger, service route, arc and step counts, effects, protocol, confidence and
+topology status. The tooltip is dismissed when the pointer or keyboard focus
+leaves the entry.
+
 In the side-by-side flow comparison, each arc has a transparent hover target.
 Hovering an arc or its order label highlights only that arc and its label
 inside the current comparison panel. The other compared graph remains

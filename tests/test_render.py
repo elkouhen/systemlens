@@ -834,7 +834,8 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert '<option value="local">Flux internes</option>' in document
     assert "const localCodeFlows = codeFlows.filter(flow =>" in document
     assert 'nodeDataById.get(nodeId)?.kind === "microservice"' in document
-    assert "Flux détecté ; le chemin complet ne peut pas être rapproché" in document
+    assert "function showCodeFlowItemTooltip(flow, item)" in document
+    assert 'className = "graph-edge-tooltip code-flow-item-tooltip"' in document
     assert "const scopedCodeFlows = scope === \"all\"" in document
     assert "const visible = scopedCodeFlows.filter(flow =>" in document
     assert "Flux inter-services (${visible.length}/${interServiceCodeFlows.length})" in document

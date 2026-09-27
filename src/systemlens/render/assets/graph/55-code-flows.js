@@ -692,6 +692,57 @@
         .filter(Boolean);
     }
 
+    function showCodeFlowItemTooltip(flow, item) {
+      const overlay = document.getElementById("graph-flow-tooltips");
+      if (!overlay) return;
+      overlay.hidden = false;
+      const tooltip = document.createElement("span");
+      tooltip.className = "graph-edge-tooltip code-flow-item-tooltip";
+      const trigger = flow.steps?.[0];
+      const title = document.createElement("strong");
+      title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`;
+      tooltip.append(title);
+      const description = document.createElement("span");
+      description.className = "graph-edge-tooltip-detail";
+      description.textContent = codeFlowDescription(flow);
+      tooltip.append(description);
+      const services = servicesForCodeFlow(flow);
+      const stats = codeFlowStats(flow);
+      const protocol = [...codeFlowProtocols(flow)].map(value => value.toUpperCase()).join(" + ") || "inconnu";
+      const status = flow.status === "cycle"
+        ? "Cycle détecté"
+        : flow.reconciliation === "partial" ? "Réconciliation partielle" : "Topologie réconciliée";
+      [
+        `Parcours : ${services.join(" → ") || flow.module || "inconnu"}`,
+        `${stats[0][1]} services · ${stats[1][1]} arcs · ${stats[2][1]} étapes · ${stats[3][1]} effets`,
+        `Protocole : ${protocol} · Confiance : ${flow.confidence || "inconnue"}`,
+        status,
+      ].forEach(text => {
+        const line = document.createElement("span");
+        line.className = "graph-edge-tooltip-detail";
+        line.textContent = text;
+        tooltip.append(line);
+      });
+      overlay.replaceChildren(tooltip);
+      const bounds = item.getBoundingClientRect();
+      const tooltipBounds = tooltip.getBoundingClientRect();
+      const left = Math.max(8, Math.min(window.innerWidth - tooltipBounds.width - 8, bounds.left + bounds.width / 2 - tooltipBounds.width / 2));
+      const below = bounds.bottom + tooltipBounds.height + 10 <= window.innerHeight;
+      tooltip.dataset.placement = below ? "bottom" : "top";
+      tooltip.style.setProperty("--tooltip-arrow-left", `${Math.max(10, Math.min(tooltipBounds.width - 10, bounds.left + bounds.width / 2 - left))}px`);
+      tooltip.style.left = `${left}px`;
+      tooltip.style.top = `${below ? bounds.bottom + 10 : Math.max(8, bounds.top - tooltipBounds.height - 10)}px`;
+    }
+
+    function hideCodeFlowItemTooltip() {
+      const overlay = document.getElementById("graph-flow-tooltips");
+      if (!overlay) return;
+      overlay.replaceChildren();
+      const graphCanvas = document.getElementById("graph");
+      const comparison = document.getElementById("graph-comparison");
+      overlay.hidden = Boolean(graphCanvas?.hidden && comparison?.hidden);
+    }
+
     function codeFlowItem(flow) {
       const item = document.createElement("li");
       const selected = graphState.selectedCodeFlowIds.includes(flow.id);
@@ -739,9 +790,6 @@
       });
       if (path) {
         item.tabIndex = 0;
-        item.title = flow.reconciliation === "partial"
-          ? "Afficher le flux ; sa réconciliation avec la topologie est partielle"
-          : "Afficher ce graphe d’appel dans la vue Graphe";
         item.addEventListener("click", () => showCodeFlow(flow));
         item.addEventListener("keydown", event => {
           if (event.key === "Enter" || event.key === " ") {
@@ -751,10 +799,11 @@
         });
       } else {
         item.classList.add("is-unavailable");
-        item.title = flow.reconciliation === "partial"
-          ? "Flux détecté ; le chemin complet ne peut pas être rapproché de la topologie affichée"
-          : "Flux détecté ; le chemin n’est pas disponible dans la topologie affichée";
       }
+      item.addEventListener("pointerenter", () => showCodeFlowItemTooltip(flow, item));
+      item.addEventListener("pointerleave", hideCodeFlowItemTooltip);
+      item.addEventListener("focus", () => showCodeFlowItemTooltip(flow, item));
+      item.addEventListener("blur", hideCodeFlowItemTooltip);
       item.append(header, meta, description, stats);
       return item;
     }
