@@ -81,10 +81,17 @@ class MongoPersistenceClass:
 
 
 @dataclass(frozen=True, order=True)
+class JpaField:
+    name: str
+    type: str
+
+
+@dataclass(frozen=True, order=True)
 class JpaEntity:
     qualified_name: str
     path: str
     line: int
+    fields: tuple[JpaField, ...] = ()
 
 
 @dataclass(frozen=True, order=True)

@@ -986,7 +986,10 @@ def test_index_persists_source_evidenced_jpa_entities(
     source.write_text(
         "package example;\n"
         "import jakarta.persistence.Entity;\n"
-        "@Entity public class Customer {}\n",
+        "@Entity public class Customer {\n"
+        "  private String name;\n"
+        "  private int age;\n"
+        "}\n",
         encoding="utf-8",
     )
     (source.parent / "CustomerDto.java").write_text(
@@ -1042,6 +1045,9 @@ def test_index_persists_source_evidenced_jpa_entities(
     assert [(entity.qualified_name, entity.path, entity.line) for entity in entities] == [
         ("example.Customer", "payment/src/main/java/example/Customer.java", 3),
     ]
+    assert [(field.name, field.type) for field in entities[0].fields] == [
+        ("name", "String"), ("age", "int"),
+    ]
     dto_by_name = {dto.qualified_name: dto for dto in dtos}
     assert dto_by_name["example.CustomerDto"].roles == ("jpa_entity",)
     assert dto_by_name["example.CustomerDto"].entities == ("example.Customer",)
@@ -1068,6 +1074,10 @@ def test_index_persists_source_evidenced_jpa_entities(
     assert service["jpa_entities"] == [{
         "name": "example.Customer",
         "location": "payment/src/main/java/example/Customer.java:3",
+        "fields": [
+            {"name": "name", "type": "String"},
+            {"name": "age", "type": "int"},
+        ],
     }]
 
 

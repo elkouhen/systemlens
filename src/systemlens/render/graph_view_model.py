@@ -604,8 +604,11 @@ def build_graph_view_model(
                 ),
                 "resources": resources,
                 "jpa_entities": [
-                    {"name": entity.qualified_name,
-                     "location": f"{entity.path}:{entity.line}"}
+                    {
+                        "name": entity.qualified_name,
+                        "location": f"{entity.path}:{entity.line}",
+                        **({"fields": [field.__dict__ for field in entity.fields]} if entity.fields else {}),
+                    }
                     for entity in module.jpa_entities
                 ] if module else [],
                 "jpa_dtos": [
@@ -747,6 +750,7 @@ def build_graph_view_model(
                 "label": entity.qualified_name,
                 "owner": service_name,
                 "technology": "JPA",
+                "fields": [field.__dict__ for field in entity.fields],
                 "jpa_dtos": [
                     {
                         "name": dto.qualified_name,
@@ -759,6 +763,12 @@ def build_graph_view_model(
                 ],
                 "source_path": entity.path,
                 "source_line": entity.line,
+                "vscode_uri": _vscode_file_uri(
+                    module.path.parent / entity.path,
+                    root_path,
+                    source_roots,
+                    entity.line,
+                ),
                 "width": 190,
                 "height": 42,
             })
@@ -1240,6 +1250,89 @@ def build_graph_view_model(
         project_dto_definitions = [
             item for item in kafka_dto_definitions if not item.get("root", True)
         ]
+    resource_descriptions: list[dict[str, object]] = []
+
+    def resource_usage(resource_id: str) -> dict[str, object]:
+        related = [link for link in links if link["source"] == resource_id or link["target"] == resource_id]
+        return {
+            "consumers": sorted({str(link["source"]) for link in related if link["target"] == resource_id}),
+            "producers": sorted({str(link["target"]) for link in related if link["source"] == resource_id}),
+            "relations": [
+                {
+                    "source": link["source"],
+                    "target": link["target"],
+                    "kind": link.get("kind"),
+                    "label": link.get("label"),
+                }
+                for link in related
+            ],
+        }
+
+    for node in nodes:
+        if node.get("kind") != "jpa_entity":
+            continue
+        resource_descriptions.append({
+            "id": node["id"],
+            "identity": node["name"],
+            "name": node.get("display_name") or node["name"],
+            "qualified_name": node["name"],
+            "kind": "jpa_entity",
+            "technology": "JPA",
+            "owner": node.get("owner"),
+            "module": node.get("owner"),
+            "attributes": node.get("fields", []),
+            "source": {
+                "path": node.get("source_path"),
+                "line": node.get("source_line"),
+            },
+            "navigation": {
+                "inspect": node["id"],
+                "open_source": node.get("vscode_uri"),
+            },
+            "usage": resource_usage(str(node["id"])),
+        })
+    for item in mongo_persistence_classes:
+        resource_descriptions.append({
+            "id": item["id"],
+            "identity": item["qualified_name"],
+            "name": item["name"],
+            "qualified_name": item["qualified_name"],
+            "kind": "mongo_persistence_class",
+            "technology": "MongoDB",
+            "owner": item["service"],
+            "module": item["module"],
+            "attributes": item.get("fields", []),
+            "source": {"path": item["source"], "line": item["line"]},
+            "navigation": {"inspect": item["id"], "open_source": item.get("vscode_uri")},
+            "usage": {
+                "consumers": [item["service"]],
+                "producers": [],
+                "relations": [],
+            },
+        })
+    for definition in [*kafka_dtos, *project_dto_definitions]:
+        source = definition.get("source")
+        resource_descriptions.append({
+            "id": definition["id"],
+            "identity": definition.get("qualified_name") or definition["name"],
+            "name": definition["name"],
+            "qualified_name": definition.get("qualified_name"),
+            "kind": "dto",
+            "technology": "Kafka" if definition in kafka_dtos else "Java",
+            "owner": definition.get("module"),
+            "module": definition.get("module"),
+            "attributes": definition.get("fields", []),
+            "source": {"path": source, "line": definition.get("line")},
+            "navigation": {
+                "inspect": definition["id"],
+                "open_source": definition.get("vscode_uri"),
+            },
+            "usage": {
+                "consumers": definition.get("consumers", []),
+                "producers": definition.get("producers", []),
+                "relations": [],
+            },
+        })
     methods_by_id = {method.id: method for method in integration_methods or []}
     return {
             "nodes": nodes,
@@ -1272,6 +1365,7 @@ def build_graph_view_model(
             "kafka_dtos": kafka_dtos,
             "project_dto_definitions": project_dto_definitions,
             "mongo_persistence_classes": mongo_persistence_classes,
+            "resource_descriptions": resource_descriptions,
             "asyncapi_contracts": asyncapi_contracts or [],
             "indexing_issues": _indexing_issues(
                 endpoints_by_service,

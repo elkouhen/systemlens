@@ -26,6 +26,7 @@ from systemlens.domain.module_inventory import (
     DiscoveredModule,
     JpaDto,
     JpaEntity,
+    JpaField,
     ModuleDependency,
     SourceEvidence,
 )
@@ -570,7 +571,10 @@ class Store:
                         **item.__dict__,
                         "fields": [field.__dict__ for field in item.fields],
                     } for item in module.mongo_persistence_classes]),
-                    json.dumps([entity.__dict__ for entity in module.jpa_entities]),
+                    json.dumps([{
+                        **entity.__dict__,
+                        "fields": [field.__dict__ for field in entity.fields],
+                    } for entity in module.jpa_entities]),
                     json.dumps([dto.__dict__ for dto in module.jpa_dtos]),
                     json.dumps(module.openapi_files),
                     json.dumps([_method_to_json(method) for method in module.kafka_methods]),
@@ -600,7 +604,18 @@ class Store:
                 mongo_collections=tuple(json.loads(row["mongo_collections"])),
                 mongo_methods=tuple(_mongo_method_from_json(method) for method in json.loads(row["mongo_methods"])),
                 mongo_persistence_classes=tuple(_mongo_persistence_class_from_json(item) for item in json.loads(row["mongo_persistence_classes"])),
-                jpa_entities=tuple(JpaEntity(**item) for item in json.loads(row["jpa_entities"])),
+                jpa_entities=tuple(
+                    JpaEntity(
+                        qualified_name=item["qualified_name"],
+                        path=item["path"],
+                        line=item["line"],
+                        fields=tuple(
+                            JpaField(field["name"], field["type"])
+                            for field in item.get("fields", [])
+                        ),
+                    )
+                    for item in json.loads(row["jpa_entities"])
+                ),
                 jpa_dtos=tuple(
                     JpaDto(
                         qualified_name=item["qualified_name"],

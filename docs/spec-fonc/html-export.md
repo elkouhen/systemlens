@@ -12,14 +12,25 @@ source-evidenced potential internal flow and any CodeQL-resolved intermediate
 method calls. It does not imply that every input reaches every output.
 
 The Architecture graph renders persisted JPA entity declarations as `Entité JPA`
-resource nodes owned by their microservice. Each node displays only its Java
-class name while retaining its qualified class name and root-relative source
-location in the exported model; the `maps` relation identifies the mapping
-without implying a database read/write edge.
-The service inspector also lists persisted Java DTOs associated with those
+resource nodes owned by their microservice. Selecting a resource displays its
+owner, usages and class name in the main inspector. A separate class action
+opens the indexed attributes, qualified name, source location and source
+navigation. The `maps` relation identifies the mapping without implying a
+database read/write edge. Mongo persistence classes and indexed DTOs use the
+same resource description and two-level inspection model.
+
+The service inspector lists persisted Java DTOs associated with indexed JPA
 entities and DTOs used by REST controller signatures when no OpenAPI contract
 is indexed. The list includes the DTO role and source location; it does not
 claim a runtime mapper or serialization path.
+
+The exported `call_graphs` map describes service-level propagation for one flow
+or flow group. Each graph contains participating nodes, deterministic order,
+traversal levels, a compact call tree, complete directed edges with display
+orders and endpoint identifiers, and service triggers. The first traversal
+level is the root set. Selecting a call graph keeps the root, arc order and
+trigger metadata visible; the export does not merge distinct flows into one
+undifferentiated edge.
 
 The exported Explorer presents the graph as a layered workspace: a compact
 control surface, a searchable graph context, summary counters, and a separate

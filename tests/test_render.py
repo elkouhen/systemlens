@@ -16,6 +16,7 @@ from systemlens.domain.module_inventory import (
     DiscoveredModule,
     JpaEntity,
     JpaDto,
+    JpaField,
     ModuleDependency,
     MongoField,
     MongoPersistenceClass,
@@ -705,6 +706,7 @@ def test_microservice_graph_exposes_jpa_entities_as_owned_nodes() -> None:
         configuration_example="", jpa_entities=(JpaEntity(
             qualified_name="com.example.Order",
             path="src/main/java/com/example/Order.java", line=12,
+            fields=(JpaField("id", "UUID"), JpaField("status", "String")),
         ),), jpa_dtos=(JpaDto(
             qualified_name="com.example.OrderDto",
             path="src/main/java/com/example/OrderDto.java", line=8,
@@ -719,18 +721,27 @@ def test_microservice_graph_exposes_jpa_entities_as_owned_nodes() -> None:
     assert entity["display_name"] == "Order"
     assert entity["owner"] == "orders"
     assert entity["technology"] == "JPA"
+    assert entity["fields"] == [
+        {"name": "id", "type": "UUID"},
+        {"name": "status", "type": "String"},
+    ]
     assert entity["jpa_dtos"] == [{
         "name": "com.example.OrderDto",
         "display_name": "OrderDto",
         "location": "src/main/java/com/example/OrderDto.java:8",
         "roles": ["jpa_entity"],
     }]
-    assert 'const jpaDtos = (node.jpa_dtos || []).map(dto =>' in render_graph_html(
+    resource = next(item for item in graph_data["resource_descriptions"] if item["id"] == entity["id"])
+    assert resource["kind"] == "jpa_entity"
+    assert resource["technology"] == "JPA"
+    assert resource["attributes"] == entity["fields"]
+    assert resource["navigation"]["inspect"] == entity["id"]
+    rendered = render_graph_html(
         {"orders": []}, [], modules_by_service={"orders": module},
     )
-    assert "Aucun DTO associé dans l’index." in render_graph_html(
-        {"orders": []}, [], modules_by_service={"orders": module},
-    )
+    assert "openJpaEntityInspector" in rendered
+    assert 'appendActionList("Entités JPA déclarées"' in rendered
+    assert 'appendActionList("Classe Java"' in rendered
     assert any(
         link["source"] == "microservice:orders"
         and link["target"] == entity["id"]

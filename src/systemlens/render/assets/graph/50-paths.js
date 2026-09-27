@@ -867,9 +867,18 @@
         appendRelationList("Données", mongoCollections, id, link => (
           nodeDataById.get(link.target).name
         ), relationsGroup);
-        appendList("Entités JPA déclarées", (node.jpa_entities || []).map(
-          entity => `${entity.name} · ${entity.location}`
-        ), relationsGroup);
+        appendActionList("Entités JPA déclarées", (node.jpa_entities || []).map(entity => {
+          const entityNode = [...nodeDataById.values()].find(candidate => (
+            candidate.kind === "jpa_entity"
+            && candidate.owner === node.name
+            && candidate.name === entity.name
+          ));
+          return {
+            label: entity.name,
+            title: "Afficher les attributs et la source de cette entité",
+            action: () => entityNode && openJpaEntityInspector(entityNode.id),
+          };
+        }), relationsGroup);
         appendList("DTOs JPA et REST", (node.jpa_dtos || []).map(
           dto => `${dto.name} · ${dto.roles.join(", ")} · ${dto.location}`
         ), relationsGroup);
@@ -970,16 +979,23 @@
         discardEmptyDetailsGroup(factsGroup);
       }
       if (node.kind === "jpa_entity") {
-        const entityGroup = createDetailsGroup("Entité JPA");
-        appendList("Service propriétaire", node.owner ? [node.owner] : [], entityGroup);
-        appendList("Source", node.source_path && node.source_line ? [`${node.source_path}:${node.source_line}`] : [], entityGroup);
-        const jpaDtos = (node.jpa_dtos || []).map(dto => (
-          `${dto.display_name || dto.name} · ${(dto.roles || []).join(", ")} · ${dto.location}`
-        ));
-        appendList("DTOs associés", jpaDtos.length ? jpaDtos : [
-          "Aucun DTO associé dans l’index.",
-        ], entityGroup);
-        discardEmptyDetailsGroup(entityGroup);
+        const resourceGroup = createDetailsGroup("Ressource JPA");
+        appendList("Entité", [node.display_name || node.name], resourceGroup);
+        appendList("Technologie", [node.technology || "JPA"], resourceGroup);
+        appendRelationList(
+          "Services utilisant cette entité",
+          edges.filter(link => link.target === id || link.source === id),
+          id,
+          link => nodeDataById.get(link.source === id ? link.target : link.source)?.name || "service",
+          resourceGroup,
+        );
+        appendActionList("Classe Java", [{
+          label: node.display_name || node.name,
+          title: "Afficher les attributs et la source de cette classe",
+          action: () => openJpaEntityInspector(id),
+        }], resourceGroup);
+        discardEmptyDetailsGroup(resourceGroup);
+        return;
       }
     }
     function renderClusterDetails(cluster) {

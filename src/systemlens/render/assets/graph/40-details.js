@@ -229,22 +229,23 @@
       )));
       asyncApiReferencesTitle.textContent = `Contrats AsyncAPI (${asyncContracts.length})`;
       mongoClassReferencesList.replaceChildren();
-      const persistenceClasses = (graphData.mongo_persistence_classes || []).filter(
-        item => item.root !== false
-      );
+      const persistenceClasses = (graphData.resource_descriptions || [])
+        .filter(item => ["mongo_persistence_class", "jpa_entity"].includes(item.kind));
       const mongoQuery = mongoClassReferencesFilter.value.trim().toLocaleLowerCase();
       const visiblePersistenceClasses = persistenceClasses.filter(item => (
-        !mongoQuery || `${item.qualified_name} ${item.collection} ${item.service}`.toLocaleLowerCase().includes(mongoQuery)
+        !mongoQuery || `${item.qualified_name} ${item.owner} ${item.technology}`.toLocaleLowerCase().includes(mongoQuery)
       ));
       mongoClassReferencesEmpty.hidden = visiblePersistenceClasses.length > 0;
       mongoClassReferencesEmpty.textContent = mongoQuery && !visiblePersistenceClasses.length
         ? "Aucune classe de persistance ne correspond à ce filtre."
-        : "Aucune classe de données persistées détectée.";
+        : "Aucune classe de persistance détectée.";
       visiblePersistenceClasses.forEach(item => mongoClassReferencesList.append(referenceItem(
         item.qualified_name,
-        `${item.collection} · ${item.service} / ${item.module} · ${item.fields?.length || 0} champ(s)`,
+        `${item.technology} · ${item.owner} · ${item.attributes?.length || 0} champ(s)`,
         "Inspecter",
-        () => openMongoPersistenceInspector(item.id),
+        () => item.kind === "jpa_entity"
+          ? openJpaEntityInspector(item.navigation?.inspect)
+          : openMongoPersistenceInspector(item.navigation?.inspect),
       )));
       mongoClassReferencesTitle.textContent = `Classes de persistance (${visiblePersistenceClasses.length}/${persistenceClasses.length})`;
     }
@@ -605,6 +606,51 @@
     function openMongoPersistenceInspector(classId) {
       mongoNavigation.splice(0);
       renderMongoPersistenceInspector(classId);
+    }
+    function openJpaEntityInspector(entityId) {
+      const entity = nodeDataById.get(entityId);
+      if (!entity || entity.kind !== "jpa_entity") return;
+      openInspector(`Classe · ${entity.display_name || entity.name}`);
+      inspectorBody.classList.add("dto-inspector");
+      const summary = document.createElement("p");
+      summary.className = "dto-summary";
+      summary.textContent = `${entity.name} · ${entity.source_path}:${entity.source_line}`;
+      inspectorBody.append(summary);
+      if (entity.vscode_uri) {
+        const sourceLink = document.createElement("a");
+        sourceLink.href = entity.vscode_uri;
+        sourceLink.className = "dto-summary";
+        sourceLink.textContent = "Ouvrir la classe dans VS Code";
+        inspectorBody.append(sourceLink);
+      }
+      const fields = entity.fields || [];
+      const section = document.createElement("section");
+      section.className = "dto-section";
+      const heading = document.createElement("h2");
+      heading.textContent = "Attributs déclarés";
+      const list = document.createElement("ul");
+      list.className = "dto-fields";
+      if (fields.length) {
+        fields.forEach(field => {
+          const row = document.createElement("li");
+          row.className = "dto-field";
+          const type = document.createElement("span");
+          type.className = "dto-field-type";
+          type.textContent = field.type;
+          const name = document.createElement("span");
+          name.className = "dto-field-name";
+          name.textContent = field.name;
+          row.append(type, name);
+          list.append(row);
+        });
+      } else {
+        const empty = document.createElement("li");
+        empty.className = "dto-field";
+        empty.textContent = "Aucun attribut indexé.";
+        list.append(empty);
+      }
+      section.append(heading, list);
+      inspectorBody.append(section);
     }
     function openNestedMongoPersistenceInspector(classId, parentClassId) {
       mongoNavigation.push(parentClassId);

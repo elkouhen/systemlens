@@ -20,6 +20,7 @@ from systemlens.domain.module_inventory import (
     DiscoveredModule,
     JpaEntity,
     JpaDto,
+    JpaField,
     JavaArchitectureExtension,
     KafkaMethod,
     ModuleDependency,
@@ -874,10 +875,29 @@ def discover_jpa_entities(
                 continue
             name = java_parser.declaration_name(declaration, source)
             if name:
+                fields: list[JpaField] = []
+                for field_node in _walk(declaration):
+                    if field_node.type != "field_declaration" or java_parser.enclosing(
+                        field_node, "class_declaration", "record_declaration", "enum_declaration"
+                    ) != declaration:
+                        continue
+                    type_node = field_node.child_by_field_name("type")
+                    if type_node is None:
+                        continue
+                    for declarator in field_node.children:
+                        if declarator.type != "variable_declarator":
+                            continue
+                        name_node = declarator.child_by_field_name("name")
+                        if name_node is not None:
+                            fields.append(JpaField(
+                                java_parser.node_text(source, name_node),
+                                java_parser.node_text(source, type_node).strip(),
+                            ))
                 entities.add(JpaEntity(
                     qualified_name=f"{package}.{name}" if package else name,
                     path=java_file.relative_to(repo_root).as_posix(),
                     line=declaration.start_point.row + 1,
+                    fields=tuple(fields),
                 ))
     return tuple(sorted(entities))
 

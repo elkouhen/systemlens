@@ -65,6 +65,161 @@ retains source profiles and rejects a mixture of incompatible topic strategies.
 
 ### Materialised contracts
 
+The HTML graph exposes every indexed data resource through the common
+`ResourceDescription` shape. The shape is presentation-neutral and applies to
+JPA entities, Mongo persistence classes, and indexed DTOs:
+
+```json
+{
+  "id": "stable resource identifier",
+  "identity": "qualified identity",
+  "name": "display name",
+  "qualified_name": "qualified identity or null",
+  "kind": "jpa_entity | mongo_persistence_class | dto",
+  "technology": "JPA | MongoDB | Kafka | Java",
+  "owner": "owning service or null",
+  "module": "owning build module or null",
+  "attributes": [{"name": "field", "type": "String"}],
+  "source": {"path": "relative/path.java", "line": 1},
+  "navigation": {"inspect": "resource identifier", "open_source": "VS Code URI"},
+  "usage": {
+    "consumers": ["resource identifiers"],
+    "producers": ["resource identifiers"],
+    "relations": [{"source": "id", "target": "id", "kind": "maps", "label": "maps"}]
+  }
+}
+```
+
+`id` and `identity` identify the resource; `name` is display-only. `kind` and
+`technology` describe what was indexed without inferring a storage engine or a
+runtime mapping. `attributes` contains only fields extracted from the indexed
+source or persisted contract. `source.path` remains relative to the indexed
+project root. `navigation.inspect` selects the resource inspector, while
+`navigation.open_source` is an explicit source action. `usage` contains only
+persisted or deterministically derived relationships.
+
+The HTML resource widget consumes this common shape. A resource click displays
+its description and usages in the main details panel. The class name is a
+separate inspect action that opens the attribute view, so resource description
+and class structure remain distinct.
+
+### HTML graph object descriptions
+
+The HTML graph keeps service and topic descriptions separate from the
+`ResourceDescription` contract because they represent runtime architecture
+objects rather than data classes. Their stable fields are:
+
+```json
+{
+  "id": "microservice:inventory-service",
+  "name": "inventory-service",
+  "kind": "microservice",
+  "layer": "application",
+  "layer_label": "Application",
+  "architecture_layer": "application",
+  "project_namespace": "root",
+  "project_namespace_path": ".",
+  "build_system": "maven",
+  "resources": ["GET /api/products/{productId}"],
+  "ports": [],
+  "vscode_uri": "VS Code URI"
+}
+```
+
+`MicroserviceDescription` identifies one deployable application and groups its
+runtime layer, project namespace, build system, served resources and integration
+ports. `ports` is the source of truth for HTTP, Kafka and database boundary
+details. `resources` contains served API resources and is not a dependency
+edge. `vscode_uri` points to the service directory when source navigation is
+available.
+
+```json
+{
+  "id": "kafka_topic:supermarket.order.placed",
+  "name": "supermarket.order.placed",
+  "kind": "kafka_topic",
+  "owner_service": "order-service",
+  "published_message_types": ["OrderPlaced"],
+  "consumed_message_types": ["OrderPlaced"],
+  "message_type_status": "known",
+  "architecture_layer": "application",
+  "architecture_namespace": "root",
+  "architecture_namespace_path": ".",
+  "namespace_source": "writer"
+}
+```
+
+`TopicDescription` identifies one normalized topic and records its owning
+service, message types and resolution status. Producer and consumer services
+are represented by the persisted graph links attached to the topic node, not
+by guessed lists in the topic description. A known message type is retained
+only when the index provides type evidence; unresolved or dynamic topics keep
+their status instead of receiving an inferred name.
+
+The three contracts serve different navigation purposes. A microservice click
+opens service architecture and integration details. A topic click opens its
+producers, consumers and message DTO references. A data resource click opens
+its owner, usages and class or schema inspection action. This separation keeps
+runtime objects, persisted data classes and message contracts distinct while
+giving them the same identity, source and navigation vocabulary.
+
+### Call graph descriptions
+
+The HTML export stores call graphs under `call_graphs`, keyed by a stable graph
+identifier. A `CallGraphDescription` describes service-level propagation for
+one selected flow or flow group. It does not replace the persisted method call
+facts or the individual `CodeFlow` records.
+
+```json
+{
+  "nodes": ["order-service", "inventory-service", "restock-service"],
+  "node_order": ["order-service", "inventory-service", "restock-service"],
+  "traversal_levels": [
+    ["order-service"],
+    ["inventory-service"],
+    ["restock-service"]
+  ],
+  "call_tree": {
+    "levels": [["order-service"], ["inventory-service"]],
+    "edges": [{"source": "order-service", "target": "inventory-service", "order": 1}]
+  },
+  "edges": [{
+    "source": "order-service",
+    "target": "inventory-service",
+    "kind": "rest",
+    "label": "POST /api/reservations",
+    "order": 1,
+    "endpoint_ids": ["out-endpoint-id", "in-endpoint-id"]
+  }],
+  "triggers": {
+    "order-service": [{
+      "flow_id": "flow-id",
+      "kind": "http_entry",
+      "name": "POST /api/orders",
+      "endpoint_id": "in-endpoint-id"
+    }]
+  }
+}
+```
+
+`nodes` is the unique set of participating microservices. `node_order` is the
+deterministic display order. `traversal_levels` groups services by directed
+reachability; its first level is the graph root set. `call_tree` is the
+compact tree projection used for hierarchical layout and may omit an arc when
+the full graph contains a fan-out, fan-in or cycle. `edges` is the complete
+service-level graph. Each edge is directed from caller or publisher to callee
+or consumer, and `order` is the one-based display order within that graph.
+`endpoint_ids` preserves the concrete input and output endpoint evidence used
+to render ports and arc labels.
+
+`triggers` maps each participating service to the flow entries that can start
+the propagation. A trigger kind is one of `http_entry`, `message_entry` or
+`cron_entry`. The `flow_id` links back to the exported `code_flows` collection;
+`endpoint_id` may be null for a scheduled trigger without an endpoint fact.
+The graph description retains cycles and fan-out without merging distinct
+flows. A graph with no zero-indegree service uses all participating services as
+the deterministic root set.
+
 MongoDB persistence-class metadata is extracted at index time from Java
 `@Document` declarations, entity generic types of Mongo repositories, and
 unambiguous `Type.class` arguments of `MongoTemplate` operations. Repository
