@@ -45,6 +45,13 @@ relations remain owned by the indexer and cannot be removed through MCP.
 `architecture_graph` merges both layers using the generic dependency node/edge
 shape, preserving API and MongoDB associations.
 
+The `export facts` command serializes a `graph_facts` namespace as the
+`systemlens-ai-graph-v1` manifest. It preserves the stored ID, evidence,
+status, confidence, pass and revision metadata, and arbitrary metadata. A
+reference node is emitted when an enrichment edge targets an object that has no
+node fact in the same namespace. This export is round-trippable through
+`import_graph_facts`; source-derived facts remain outside this contract.
+
 `AnalysisProfile` carries persisted extraction choices with the loaded
 inventory, currently the `default` or `strategy1` topic convention. CLI, MCP,
 export, graph, and audit adapters consume this profile. A workspace federation

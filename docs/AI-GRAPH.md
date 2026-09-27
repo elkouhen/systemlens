@@ -24,6 +24,7 @@ the SQLite source inventory.
   "nodes": [
     {
       "id": "stable-id",
+      "storage_id": "optional-persisted-id",
       "kind": "service | external_service | topic | collection | data_schema | message_channel",
       "name": "display name",
       "owner": "service-id or service name, required for collection",
@@ -54,6 +55,12 @@ the SQLite source inventory.
 the AI must not invent a concrete value for a dynamic expression. Evidence
 paths are relative to the analyzed project root and must not contain secrets or
 absolute machine paths.
+
+`storage_id` is emitted only by `export facts`. It preserves the identifier of
+an existing enrichment fact, including facts created through MCP. Agents may
+omit it; the importer then derives the identifier from the namespace, fact
+type, and manifest ID. Exported reference nodes identify source objects used by
+an enrichment edge so the edge can be imported without losing its endpoints.
 
 SystemLens renders `confirmed` and `proposed` relations. It does not render
 `ambiguous` or `unresolved` relations as dependencies; it reports them in the
@@ -92,3 +99,15 @@ revised fact replaces its evidence, status, confidence and metadata. Use
 `--complete` only for a full snapshot of that namespace; partial passes leave
 unmentioned facts untouched. The equivalent MCP tool is
 `import_graph_facts(manifest_path, namespace, complete)`.
+
+To export persisted enrichment facts as a manifest that can be reviewed,
+completed, and imported again, use:
+
+```bash
+systemlens export facts architecture.ai-graph.export.json \
+  --namespace ai-architecture
+```
+
+The export is complete by default. Use `--partial` for an incremental pass.
+Source-derived facts remain owned by the indexer and are not converted into
+enrichment facts by this command.

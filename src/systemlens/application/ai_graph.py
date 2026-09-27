@@ -29,6 +29,92 @@ class AiGraphError(ValueError):
     """A safe, user-actionable AI graph manifest validation error."""
 
 
+def graph_facts_manifest(
+    facts: list[GraphFact], *, namespace: str, complete: bool = True,
+) -> dict[str, Any]:
+    """Serialize persisted enrichment facts as a re-importable manifest.
+
+    The manifest keeps the database identity in ``storage_id``. This is an
+    export-only compatibility field for facts created through MCP, whose IDs
+    are hashes rather than the stable IDs supplied by an AI manifest.
+    """
+    selected = [fact for fact in facts if fact.namespace == namespace]
+    node_facts = [fact for fact in selected if fact.fact_type == "node"]
+    node_ids: dict[tuple[str, str], str] = {
+        (fact.kind, fact.name or ""): fact.id for fact in node_facts
+    }
+    nodes: list[dict[str, Any]] = []
+    for fact in node_facts:
+        node: dict[str, Any] = {
+            "id": fact.id,
+            "storage_id": fact.id,
+            "kind": fact.kind,
+            "name": fact.name,
+            "status": fact.status,
+            "confidence": fact.confidence,
+            "evidence": ([{"path": fact.evidence_path, "start_line": fact.evidence_line}]
+                         if fact.evidence_path else []),
+            "metadata": fact.metadata or {},
+            "pass": fact.pass_id,
+            "source_revision": fact.source_revision,
+        }
+        if fact.note is not None:
+            node["reason"] = fact.note
+        if fact.technology is not None:
+            node["technology"] = fact.technology
+        nodes.append(node)
+
+    synthetic_nodes: dict[tuple[str, str], str] = {}
+    edges: list[dict[str, Any]] = []
+    for fact in selected:
+        if fact.fact_type != "edge":
+            continue
+        source_key = (fact.source_kind or "", fact.source_name or "")
+        target_key = (fact.target_kind or "", fact.target_name or "")
+        for key in (source_key, target_key):
+            if key not in node_ids:
+                synthetic_nodes.setdefault(key, f"ref:{key[0]}:{key[1]}")
+        source_id = node_ids[source_key] if source_key in node_ids else synthetic_nodes[source_key]
+        target_id = node_ids[target_key] if target_key in node_ids else synthetic_nodes[target_key]
+        edge: dict[str, Any] = {
+            "id": fact.id,
+            "storage_id": fact.id,
+            "source": source_id,
+            "target": target_id,
+            "kind": fact.kind,
+            "relation": fact.relation,
+            "status": fact.status,
+            "confidence": fact.confidence,
+            "evidence": ([{"path": fact.evidence_path, "start_line": fact.evidence_line}]
+                         if fact.evidence_path else []),
+            "metadata": fact.metadata or {},
+            "pass": fact.pass_id,
+            "source_revision": fact.source_revision,
+        }
+        if fact.note is not None:
+            edge["reason"] = fact.note
+        if fact.technology is not None:
+            edge["technology"] = fact.technology
+        edges.append(edge)
+
+    for (kind, name), node_id in synthetic_nodes.items():
+        nodes.append({
+            "id": node_id,
+            "kind": kind,
+            "name": name,
+            "status": "confirmed",
+            "confidence": "unknown",
+            "metadata": {"systemlens_export_reference": True},
+        })
+    return {
+        "format": MANIFEST_FORMAT,
+        "generated_by": {"agent": "systemlens", "namespace": namespace},
+        "mode": "complete" if complete else "partial",
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+
 def _required_string(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise AiGraphError(f"{field} doit être une chaîne non vide.")
@@ -106,13 +192,14 @@ def load_fact_manifest(
         raw_id = _required_string(raw.get("id"), f"nodes[{index}].id")
         kind = _required_string(raw.get("kind"), f"nodes[{index}].kind")
         name = _required_string(raw.get("name"), f"nodes[{index}].name")
-        if kind not in _FACT_NODE_KINDS:
-            raise AiGraphError(f"nodes[{index}].kind inconnu: {kind}")
         if raw_id in raw_ids:
             raise AiGraphError(f"identifiant de nœud dupliqué: {raw_id}")
         nodes[raw_id] = raw
         raw_ids.add(raw_id)
-        stored_id = fact_id(raw_id, "node")
+        supplied_storage_id = raw.get("storage_id")
+        if supplied_storage_id is not None and not isinstance(supplied_storage_id, str):
+            raise AiGraphError(f"nodes[{index}].storage_id doit être une chaîne.")
+        stored_id = supplied_storage_id or fact_id(raw_id, "node")
         used_ids.add(stored_id)
         evidence_path, evidence_line = evidence_fields(raw, "evidence")
         status = raw.get("status", "confirmed")
@@ -134,7 +221,8 @@ def load_fact_manifest(
             note=raw.get("reason") if isinstance(raw.get("reason"), str) else None,
             technology=raw.get("technology") if isinstance(raw.get("technology"), str) else None,
             metadata=metadata, namespace=resolved_namespace, status=status,
-            pass_id=resolved_pass, source_revision=resolved_revision,
+            pass_id=raw.get("pass", resolved_pass),
+            source_revision=raw.get("source_revision", resolved_revision),
         ))
 
     for index, raw in enumerate(raw_edges):
@@ -151,8 +239,6 @@ def load_fact_manifest(
         relation = raw.get("relation") or kind
         if not isinstance(relation, str) or not relation.strip():
             raise AiGraphError(f"{raw_id}.relation doit être une chaîne non vide.")
-        if kind not in _FACT_EDGE_KINDS:
-            raise AiGraphError(f"edges[{index}].kind inconnu: {kind}")
         status = raw.get("status", "confirmed")
         confidence = raw.get("confidence", "unknown")
         if status not in _STATUSES or confidence not in _CONFIDENCES:
@@ -164,7 +250,10 @@ def load_fact_manifest(
         if not isinstance(metadata, dict):
             raise AiGraphError(f"{raw_id}.metadata doit être un objet.")
         source, target = nodes[source_id], nodes[target_id]
-        stored_id = fact_id(raw_id, "edge")
+        supplied_storage_id = raw.get("storage_id")
+        if supplied_storage_id is not None and not isinstance(supplied_storage_id, str):
+            raise AiGraphError(f"{raw_id}.storage_id doit être une chaîne.")
+        stored_id = supplied_storage_id or fact_id(raw_id, "edge")
         raw_ids.add(raw_id)
         used_ids.add(stored_id)
         facts.append(GraphFact(
@@ -176,7 +265,8 @@ def load_fact_manifest(
             note=raw.get("reason") if isinstance(raw.get("reason"), str) else None,
             technology=raw.get("technology") if isinstance(raw.get("technology"), str) else None,
             metadata=metadata, namespace=resolved_namespace, status=status,
-            pass_id=resolved_pass, source_revision=resolved_revision,
+            pass_id=raw.get("pass", resolved_pass),
+            source_revision=raw.get("source_revision", resolved_revision),
         ))
     complete = document.get("mode", "partial") == "complete"
     if document.get("mode", "partial") not in {"partial", "complete"}:

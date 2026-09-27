@@ -101,7 +101,14 @@ enrichment layer:
 ```bash
 systemlens import-facts architecture.ai-graph.pass-001.json \
   --namespace ai-architecture
+
+systemlens export facts architecture.ai-graph.export.json \
+  --namespace ai-architecture
 ```
+
+The facts export is a complete, re-importable namespace snapshot by default.
+Use `--partial` for an incremental pass. Source-derived facts are regenerated
+by `systemlens index`; they are not converted into enrichment facts.
 
 For terminal-oriented exploration, use `systemlens microservices`,
 `systemlens topics`, `systemlens apis`, `systemlens projects`, and

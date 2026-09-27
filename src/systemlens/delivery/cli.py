@@ -7,7 +7,12 @@ from typing import Literal, Optional, cast
 import typer
 
 from systemlens import __version__
-from systemlens.application.ai_graph import AiGraphError, load_ai_graph, load_fact_manifest
+from systemlens.application.ai_graph import (
+    AiGraphError,
+    graph_facts_manifest,
+    load_ai_graph,
+    load_fact_manifest,
+)
 from systemlens.application.architecture import (
     ArchitectureCatalog,
     analyze as analyze_architecture,
@@ -1495,6 +1500,49 @@ def _load_ai_graph(path: Path) -> _MicroserviceGraphData:
     return _MicroserviceGraphData(
         services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, None, graph_facts, [], [], [], []
     )
+
+
+@export_app.command(name="facts")
+def export_facts_cmd(
+    destination: Path = typer.Argument(..., help="Fichier manifeste JSON à produire."),
+    namespace: Optional[str] = typer.Option(
+        None, "--namespace", help="Namespace d'enrichissement à exporter."
+    ),
+    partial: bool = typer.Option(
+        False, "--partial", help="Produire un manifeste partiel réimportable."
+    ),
+) -> None:
+    """Exporter les faits d'enrichissement dans un manifeste réimportable."""
+    repo_root = Path.cwd()
+    try:
+        with Store(repo_root, readonly=True) as store:
+            facts = store.all_graph_facts()
+    except StoreError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    namespaces = sorted({fact.namespace for fact in facts})
+    if namespace is None:
+        if len(namespaces) != 1:
+            typer.echo(
+                "Précisez --namespace lorsqu'il existe plusieurs namespaces."
+                if namespaces else "Aucun fait d'enrichissement à exporter.",
+                err=True,
+            )
+            raise typer.Exit(code=2)
+        namespace = namespaces[0]
+    if namespace not in namespaces:
+        typer.echo(f"Namespace introuvable : {namespace}", err=True)
+        raise typer.Exit(code=2)
+    selected_facts = [fact for fact in facts if fact.namespace == namespace]
+    manifest = graph_facts_manifest(selected_facts, namespace=namespace, complete=not partial)
+    try:
+        destination.write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+    except OSError as exc:
+        typer.echo(f"Impossible d'écrire {destination} : {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json.dumps({"namespace": namespace, "facts": len(selected_facts), "path": str(destination)}))
 
 
 def _write_likec4_project(destination: Path, model: str) -> None:

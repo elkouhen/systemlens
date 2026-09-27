@@ -98,3 +98,38 @@ def test_import_graph_facts_upserts_generic_nodes_and_edges(tmp_path: Path, monk
     third = import_graph_facts("facts.json")
     assert third["removed"] == 4
     assert len(list_graph_facts()) == 1
+
+
+def test_export_facts_round_trips_mcp_ids_and_source_endpoints(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURE, repo)
+    monkeypatch.chdir(repo)
+    assert RUNNER.invoke(app, ["init"]).exit_code == 0
+    index_repository()
+    node = add_graph_fact(
+        "node", "data_schema", name="fraud_events", confidence="low",
+        technology="sql", metadata={"table": "fraud_events"},
+        namespace="manual",
+    )
+    assert node["namespace"] == "manual"
+    edge = add_graph_fact(
+        "edge", "writes", source_kind="microservice", source_name="app",
+        target_kind="data_schema", target_name="fraud_events", relation="writes",
+        namespace="manual",
+    )
+
+    destination = repo / "review-export.json"
+    result = RUNNER.invoke(app, ["export", "facts", str(destination), "--namespace", "manual"])
+    assert result.exit_code == 0, f"{result.output}\n{result.exception!r}"
+    manifest = json.loads(destination.read_text(encoding="utf-8"))
+    assert manifest["format"] == "systemlens-ai-graph-v1"
+    exported_ids = {item["storage_id"] for item in manifest["nodes"] + manifest["edges"]
+                    if "storage_id" in item}
+    assert exported_ids == {node["id"], edge["id"]}
+
+    imported = import_graph_facts("review-export.json")
+    assert imported["inserted"] == 1
+    assert imported["updated"] == len(manifest["nodes"]) + len(manifest["edges"]) - 1
+    assert {fact["id"] for fact in list_graph_facts()} >= {node["id"], edge["id"]}

@@ -14,6 +14,14 @@ visual relations; ambiguous and unresolved claims are quality issues. This
 keeps AI-generated convention analysis separate from persisted source evidence
 while still making its reasoning inspectable.
 
+`export facts FILE --namespace NAME` serializes one persisted enrichment
+namespace back to the same manifest format. It preserves the stored fact ID in
+the optional `storage_id` field, so MCP-created facts remain stable across an
+export and re-import. Edges whose endpoints are source-derived receive
+reference nodes in the manifest; this keeps the edge importable without
+claiming that the reference node was extracted from the source. The command
+does not export source-derived facts as enrichment facts.
+
 HTML and JSON graph exports only consume the loaded architecture snapshot.
 They do not reopen OpenAPI documents or recursively parse Java DTO sources at
 render time. The export can show indexed Kafka payload-type identities and
