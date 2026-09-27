@@ -5,6 +5,34 @@
         || flow?.call_graph
         || graphData.all_flows_call_graph;
     }
+    function callGraphForFlows(flows) {
+      const graphs = flows.map(callGraphForFlow).filter(Boolean);
+      if (graphs.length < 2) return graphs[0] || null;
+      const nodes = [];
+      const nodeSet = new Set();
+      const edges = [];
+      const edgeSet = new Set();
+      graphs.forEach(graph => {
+        (graph.node_order || graph.nodes || []).forEach(node => {
+          if (nodeSet.has(node)) return;
+          nodeSet.add(node);
+          nodes.push(node);
+        });
+        (graph.edges || []).forEach(edge => {
+          const key = JSON.stringify([
+            edge.source,
+            edge.target,
+            edge.kind,
+            edge.label,
+            ...(edge.endpoint_ids || []),
+          ]);
+          if (edgeSet.has(key)) return;
+          edgeSet.add(key);
+          edges.push(edge);
+        });
+      });
+      return { nodes, node_order: nodes, edges };
+    }
     // HTML cards are rendered in screen space. Layouts and collision envelopes
     // must use the same dimensions in every view; only their graph positions
     // change when the camera zooms or pans.
@@ -53,21 +81,34 @@
     const graphFlowStatus = document.getElementById("graph-flow-status");
     const showProjectGroups = document.getElementById("show-project-groups");
     const nodeKindLabel = node => {
-      if (node.kind === "kafka_topic") return "Topic";
-      if (node.kind === "mongodb_collection") return "Donnée";
-      if (node.kind === "data_schema") return "Donnée";
-      if (node.kind === "message_channel") return "Message";
-      return node.external ? "Service externe" : "Microservice";
+      const genericLabel = node.kind === "kafka_topic"
+        ? "Topic"
+        : ["mongodb_collection", "data_schema"].includes(node.kind)
+          ? "Donnée"
+          : node.kind === "jpa_entity"
+            ? "Entité JPA"
+          : node.kind === "message_channel"
+            ? "Message"
+            : node.external ? "Service externe" : "Microservice";
+      if (!["kafka_topic", "mongodb_collection", "data_schema", "message_channel", "jpa_entity"].includes(node.kind)) {
+        return genericLabel;
+      }
+      const technology = node.technology
+        || (node.kind === "kafka_topic" || node.kind === "message_channel" ? "Kafka" : null)
+        || (node.kind === "mongodb_collection" ? "MongoDB" : null)
+        || (node.kind === "jpa_entity" ? "JPA" : null);
+      return technology ? `${genericLabel} · ${technology}` : genericLabel;
     };
     const nodeKindSuggestion = node => (
       nodeKindLabel(node)
     );
+    const nodeDisplayName = node => node.display_name || node.name;
     graphData.nodes
       .slice()
-      .sort((left, right) => left.name.localeCompare(right.name))
+      .sort((left, right) => nodeDisplayName(left).localeCompare(nodeDisplayName(right)))
       .forEach(node => {
         const option = document.createElement("option");
-        option.value = node.name;
+        option.value = nodeDisplayName(node);
         option.label = nodeKindSuggestion(node);
         nodeSuggestions.append(option);
       });
@@ -81,6 +122,10 @@
       `${summaryCounts.microservices} service${summaryCounts.microservices > 1 ? "s" : ""}`,
       `${summaryCounts.channels} message${summaryCounts.channels > 1 ? "s" : ""}`,
       `${summaryCounts.dataResources} donnée${summaryCounts.dataResources > 1 ? "s" : ""}`,
+      ...(() => {
+        const count = graphData.nodes.filter(node => node.kind === "jpa_entity").length;
+        return count ? [`${count} entité${count > 1 ? "s" : ""} JPA`] : [];
+      })(),
       `${graphData.links.length} relation${graphData.links.length > 1 ? "s" : ""}`,
       ...(isolatedNodeIds.size
         ? [`${isolatedNodeIds.size} ressource${isolatedNodeIds.size > 1 ? "s" : ""} isolée${isolatedNodeIds.size > 1 ? "s" : ""}`]
@@ -97,11 +142,13 @@
       kafkaPublish: "#009E73",
       kafkaConsume: "#0072B2",
       mongodb: "#CC79A7",
+      jpa: "#7C3AED",
       build: "#475569",
     });
     function relationColor(link) {
       if (link.kind === "rest") return RELATION_COLORS.http;
       if (link.kind === "build") return RELATION_COLORS.build;
+      if (link.kind === "jpa") return RELATION_COLORS.jpa;
       if (link.direction === "incoming") return RELATION_COLORS.kafkaConsume;
       if (link.direction === "data_access") return RELATION_COLORS.mongodb;
       if (link.kind.startsWith("mcp_") && ["reads", "writes", "uses"].includes(link.label)) return RELATION_COLORS.mongodb;
@@ -122,6 +169,8 @@
       relatedLocalPortLinks: new Set(),
       analysisPortEndpointId: null,
       selectedCodeFlowId: null,
+      selectedCodeFlowIds: [],
+      comparisonMode: false,
       selectedCallGraphEdgeKey: null,
       analysisContextCollapsed: false,
       showAllCodeFlowPorts: false,

@@ -162,3 +162,56 @@ def changes_require_dependent_rescan(paths: set[str]) -> bool:
         or Path(path).suffix.casefold() in {".properties", ".yml", ".yaml"}
         for path in paths
     )
+
+
+def dependent_rescan_paths(
+    changed_paths: set[str],
+    current_paths: set[str],
+    repo_root: Path,
+    modules: list[DiscoveredModule],
+) -> set[str] | None:
+    """Return the module-local paths invalidated by configuration changes.
+
+    ``None`` means that a safe module boundary could not be established and a
+    global rescan remains required.  The deepest owning module is selected so
+    nested build roots do not cause sibling modules to be rescanned.
+    """
+    invalidated = {
+        path for path in changed_paths
+        if Path(path).name in {
+            "pom.xml", "build.gradle", "build.gradle.kts",
+            "settings.gradle", "settings.gradle.kts",
+        }
+        or Path(path).suffix.casefold() in {".properties", ".yml", ".yaml"}
+    }
+    if not invalidated:
+        return set()
+
+    module_roots = sorted(
+        {module.path.resolve() for module in modules},
+        key=lambda path: len(path.parts),
+        reverse=True,
+    )
+    affected_roots: set[Path] = set()
+    for relative_path in invalidated:
+        absolute_path = (repo_root / relative_path).resolve()
+        owner = next(
+            (
+                root for root in module_roots
+                if root == absolute_path.parent or root in absolute_path.parents
+            ),
+            None,
+        )
+        if owner is None or owner == repo_root.resolve():
+            return None
+        affected_roots.add(owner)
+
+    return {
+        relative_path
+        for relative_path in current_paths
+        if any(
+            root == (repo_root / relative_path).resolve().parent
+            or root in (repo_root / relative_path).resolve().parents
+            for root in affected_roots
+        )
+    }

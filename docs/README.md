@@ -15,6 +15,7 @@ owns the question, then follow its links to implementation evidence.
 | How should maintainers navigate the code? | [Architecture map](ARCHITECTURE.md) |
 | What does the AI graph manifest contain? | [AI graph manifest](AI-GRAPH.md) |
 | How are internal flows diagnosed? | [Internal flow diagnosis](DIAGNOSE-INTERNAL-FLOWS.md) |
+| How do I run a full CodeQL index and describe flows? | [Full CodeQL indexing and flow descriptions](prompts/full-index-codeql-flow-descriptions.md) |
 
 ## Source ownership
 

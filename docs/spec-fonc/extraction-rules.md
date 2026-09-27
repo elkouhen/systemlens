@@ -10,13 +10,13 @@ resolved statically is flagged `topic_dynamic=true`; it is never fabricated.
 
 The Java AST extractor covers Spring MVC/WebFlux, Feign, Spring HTTP interfaces
 (`@HttpExchange` with `@GetExchange`/`@PostExchange` and related annotations),
-RestTemplate, WebClient, Spring Cloud Gateway, Spring Data REST, Spring Kafka and Spring
+RestTemplate, RestClient, WebClient, Spring Cloud Gateway, Spring Data REST, Spring Kafka and Spring
 Cloud Stream. Markdown and JSON Kafka manifests are supported as explicit
 sources and are labelled `source=manifest`.
 
 Module discovery records JPA entity classes only when source imports or fully
 qualifies the `jakarta.persistence` or `javax.persistence` `Entity` annotation. The service
-summary lists their qualified Java names, and the persisted graph has a `maps`
+summary lists their qualified Java names, and the persisted relation set has a `maps`
 relation with source evidence. It does not infer a table name, JDBC driver,
 database engine, or read/write operation from the annotation.
 

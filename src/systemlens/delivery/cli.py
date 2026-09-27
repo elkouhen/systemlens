@@ -1410,6 +1410,24 @@ class _MicroserviceGraphData:
     integration_methods: list[IntegrationMethod] | None = None
     architecture_relations: list[ArchitectureRelation] | None = None
     codeql_call_edges: list[CodeQLCallGraphEdge] | None = None
+    flow_descriptions: dict[str, str] | None = None
+
+
+def _load_flow_descriptions(repo_root: Path) -> dict[str, str]:
+    path = repo_root / ".systemlens" / "flow-descriptions.json"
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        typer.echo(f"Descriptions de flux ignorées : {path} ({exc})", err=True)
+        return {}
+    flows = payload.get("flows", []) if isinstance(payload, dict) else []
+    return {
+        str(item["id"]): str(item["description"])
+        for item in flows
+        if isinstance(item, dict) and item.get("id") and item.get("description")
+    }
 
 
 def _load_microservice_graph(
@@ -1454,6 +1472,7 @@ def _load_microservice_graph(
         projection.integration_methods,
         architecture_relations,
         inventory.codeql_call_edges,
+        _load_flow_descriptions(repo_root),
     )
 
 
@@ -1633,6 +1652,7 @@ def export_microservices_cmd(
                 code_flows=getattr(graph_data, "code_flows", []),
                 integration_methods=getattr(graph_data, "integration_methods", []),
                 codeql_call_edges=getattr(graph_data, "codeql_call_edges", []),
+                flow_descriptions=getattr(graph_data, "flow_descriptions", {}),
             ),
             encoding="utf-8",
         )

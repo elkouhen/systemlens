@@ -146,6 +146,13 @@ When a flow is selected from the Flux de code tab, that tab remains active so
 the user can select another flow directly. The selected flow still updates the
 Explorer graph and its analysis state; opening the Explorer tab remains
 available through the normal tab control.
+The Flux de code catalogue provides a checkbox for each available flow. Checking
+one or more flows immediately opens their call graphs simultaneously in one
+Explorer workspace, with one independent graph panel per selected flow. The
+comparison action remains available when at least two flows are selected.
+Each panel owns its services, ports, and arcs, so the selected flows are not
+merged into one graph. Unchecking a flow removes its panel, and clearing the
+view or returning to Architecture clears the comparison selection.
 The export keeps the architecture graph and the selected call graph as
 explicitly separated view modes. Opening Graphe selects the architecture mode
 and rebuilds only the persisted topology projection. Opening Flux de code
@@ -205,6 +212,10 @@ is selected.
 The architecture vocabulary is extensible: `Donnée` represents a persisted
 data resource or contract, while `Message` represents a messaging channel.
 The persisted model keeps the technical kinds `data_schema` and `message_channel`.
+Architecture cards retain the generic category and append the known technology,
+for example `Donnée · MongoDB`, `Donnée · Postgres`, or `Topic · Kafka`.
+Microservice details omit `Layer` and `Module` when those values are missing,
+unknown, or only resolve to the root namespace.
 MongoDB
 collections, SQL tables, Redis keyspaces, object-store datasets, Kafka,
 RabbitMQ, SQS, and webhook streams are technology-specific evidence, not the

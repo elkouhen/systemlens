@@ -14,6 +14,7 @@ from systemlens.domain.code_flows import (
 from systemlens.discovery.kubernetes import KubernetesWorkload
 from systemlens.domain.module_inventory import (
     DiscoveredModule,
+    JpaEntity,
     ModuleDependency,
     MongoField,
     MongoPersistenceClass,
@@ -633,6 +634,11 @@ def test_graph_uses_persisted_mongodb_relation_evidence_when_available() -> None
     assert "--ui-title: #24355f;" in document
     assert "--ui-title: #bac7ff;" in document
     assert "/* One visual charter for every widget." in document
+    assert "/* Ergonomic shell: make the first reading path obvious" in document
+    assert "background-size: 32px 32px, 32px 32px" in document
+    assert ".toolbar {\n      top: 18px;" in document
+    assert "/* Secondary widgets share one rhythm" in document
+    assert ".details-group { border: 1px solid var(--ui-divider);" in document
     assert ".toolbar-tabs, .graph-control-group {" in document
     assert ".display-controls, .advanced-controls, .advanced-tools {" in document
 
@@ -689,6 +695,31 @@ def test_microservice_graph_exposes_software_layers_and_namespaces() -> None:
     assert "Namespaces Kubernetes" not in document
     assert "Namespaces de faits" not in document
     assert "${workload.namespace}/${workload.name}" not in document
+
+
+def test_microservice_graph_exposes_jpa_entities_as_owned_nodes() -> None:
+    module = DiscoveredModule(
+        name="orders", path=Path("/workspace/orders"), build_system="maven",
+        version=None, kind="application", starts_application=True,
+        configuration_example="", jpa_entities=(JpaEntity(
+            qualified_name="com.example.Order",
+            path="src/main/java/com/example/Order.java", line=12,
+        ),),
+    )
+    graph_data = _html_graph_data(render_graph_html(
+        {"orders": []}, [], modules_by_service={"orders": module},
+    ))
+    entity = next(node for node in graph_data["nodes"] if node["kind"] == "jpa_entity")
+    assert entity["name"] == "com.example.Order"
+    assert entity["display_name"] == "Order"
+    assert entity["owner"] == "orders"
+    assert entity["technology"] == "JPA"
+    assert any(
+        link["source"] == "microservice:orders"
+        and link["target"] == entity["id"]
+        and link["label"] == "maps"
+        for link in graph_data["links"]
+    )
 
 
 def test_graph_fact_topic_reuses_the_canonical_kafka_topic_node() -> None:
@@ -765,6 +796,9 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "serviceIdsForCodeFlow(right).size - serviceIdsForCodeFlow(left).size" in document
     assert "callGraphArcCount(right) - callGraphArcCount(left)" in document
     assert 'function codeFlowStats(flow)' in document
+    assert 'function codeFlowDescription(flow)' in document
+    assert 'const aiDescription = graphData.flow_descriptions?.[flow.id];' in document
+    assert 'description.className = "code-flow-reason"' in document
     assert 'className = "code-flow-stats"' in document
     assert "return serviceIdsForCodeFlow(flow).size >= 2;" in document
     assert "Keep a partially reconciled interprocedural flow selectable" in document
@@ -1208,6 +1242,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "Commit the view mode only after its layout and camera are ready" in document
     assert "const previousLayout = graphState.activeLayout" in document
     assert "const visibleLinks = callGraphOnly" in document
+    assert "function callGraphForFlows(flows)" in document
+    assert 'id="code-flow-compare"' in document
+    assert 'className = "code-flow-select"' in document
     assert 'size: 2, color: relationColor(link), kind: link.kind, type: "arrow"' in document
     assert 'zoomToSizeRatioFunction: () => 1' in document
     assert 'const screenScale = renderer.scaleSize(1)' in document
@@ -1297,7 +1334,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "function clusterDescriptorForPath(path)" in document
     assert "function clusterPathForNode(node)" in document
     assert "function architectureLayerForNode(node)" in document
-    assert document.count('appendActionList("Module", clusterPath ? [{') == 2
+    assert 'if (layer && layer.toLowerCase() !== "unknown") appendList("Layer", [layer], architectureGroup);' in document
+    assert 'const modulePath = clusterPath && !["root", "ROOT"].includes(clusterPath) ? clusterPath : null;' in document
+    assert document.count('appendActionList("Module", clusterPath ? [{') == 1
     assert 'if (!graphState.layeredView && !graphState.clusteredView) await applyLayout("cluster")' in document
     assert "Chemin des clusters : ${clusterPath}" not in document
     assert "Chemin des clusters : ${clusterPathForNode(id)}" not in document
@@ -1317,6 +1356,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="dependency-analysis-controls"' in document
     assert 'id="dependency-analysis-help"' in document
     assert 'const kindLabel = nodeKindLabel(node);' in document
+    assert 'return technology ? `${genericLabel} · ${technology}` : genericLabel;' in document
     assert 'publishedApiCount' not in document
     assert 'if (node.technology) appendList("Technologie", [node.technology], architectureGroup);' in document
     assert 'addTooltipLine(tooltip, nodeKindLabel(node)' not in document
@@ -1345,7 +1385,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'function codeFlowStats(flow)' in document
     assert 'className = "code-flow-stats"' in document
     assert 'className = "code-flow-stat"' in document
-    assert 'item.append(header, meta, stats, badges);' in document
+    assert 'item.append(header, meta, description, stats, badges);' in document
     assert 'id="code-flow-confidence"' in document
     assert 'id="code-flow-kind"' in document
     assert 'id="code-flow-message-type"' in document

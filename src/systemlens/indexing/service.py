@@ -13,6 +13,7 @@ from systemlens.indexing.freshness import current_endpoint_inventory_signature
 from systemlens.indexing.file_inventory import (
     analysis_inputs_signature as _analysis_inputs_signature,
     changes_require_dependent_rescan as _changes_require_dependent_rescan,
+    dependent_rescan_paths as _dependent_rescan_paths,
     is_in_excluded_module as _is_in_excluded_module,
     list_repo_files as _list_repo_files,
     sha256_file as _sha256_file,
@@ -385,9 +386,19 @@ def _index_repo(
     # Java file can resolve to a different topic, URL, application name, or
     # module identity after one of these files changes or disappears.
     if not full and _changes_require_dependent_rescan(set(changed) | set(deleted)):
-        full = True
-        changed = sorted(current_paths)
-        unchanged = set()
+        dependent_paths = _dependent_rescan_paths(
+            set(changed) | set(deleted),
+            current_paths,
+            repo_root,
+            discovered_modules,
+        )
+        if dependent_paths is None:
+            full = True
+            changed = sorted(current_paths)
+            unchanged = set()
+        else:
+            changed = sorted(set(changed) | dependent_paths)
+            unchanged = current_paths - set(changed)
     _report_progress(
         progress,
         "→ Indexation : delta calculé "

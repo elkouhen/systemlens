@@ -722,6 +722,28 @@ def build_graph_view_model(
         for service, collection, identity in _mongodb_collection_nodes(collections_by_service)
     ]
     known_node_ids = {str(node["id"]) for node in nodes}
+    for module in all_modules:
+        service_name = module_identity(module)
+        if f"microservice:{service_name}" not in known_node_ids:
+            continue
+        for entity in module.jpa_entities:
+            entity_id = f"jpa_entity:{service_name}:{entity.qualified_name}"
+            if entity_id in known_node_ids:
+                continue
+            nodes.append({
+                "id": entity_id,
+                "kind": "jpa_entity",
+                "name": entity.qualified_name,
+                "display_name": entity.qualified_name.rsplit(".", 1)[-1],
+                "label": entity.qualified_name,
+                "owner": service_name,
+                "technology": "JPA",
+                "source_path": entity.path,
+                "source_line": entity.line,
+                "width": 190,
+                "height": 42,
+            })
+            known_node_ids.add(entity_id)
     for fact in graph_facts or []:
         if fact.fact_type == "node" and fact.name is not None:
             fact_visual_kind = (
@@ -960,6 +982,24 @@ def build_graph_view_model(
             if kafka_candidates:
                 link["label"] = topic_display(kafka_candidates[0].from_endpoint)
         links.append(link)
+    for module in all_modules:
+        service_name = module_identity(module)
+        service_id = f"microservice:{service_name}"
+        if service_id not in known_node_ids:
+            continue
+        for entity in module.jpa_entities:
+            entity_id = f"jpa_entity:{service_name}:{entity.qualified_name}"
+            if entity_id not in known_node_ids:
+                continue
+            links.append({
+                "source": service_id,
+                "target": entity_id,
+                "kind": "jpa",
+                "direction": "outgoing",
+                "label": "maps",
+                "confidence": "proved",
+                "provenance": "code",
+            })
 
     # Preserve unmatched endpoint evidence in the topology. These links stop
     # at a topic node and deliberately never connect one service to another.

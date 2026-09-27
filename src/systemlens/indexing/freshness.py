@@ -1,4 +1,4 @@
-ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v24-http-interfaces-helper-strings"
+ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v25-restclient"
 
 
 def current_endpoint_inventory_signature() -> str:

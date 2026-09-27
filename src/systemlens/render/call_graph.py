@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import cast
 
 import networkx as nx
@@ -11,19 +12,26 @@ from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 
 
-def _networkx_call_graph(
+@dataclass(frozen=True)
+class _CallGraphIndex:
+    endpoint_by_id: dict[str, MessageEndpoint]
+    service_by_endpoint: dict[str, str]
+    service_order: dict[str, int]
+    ordered_flows: list[CodeFlow]
+    flow_by_id: dict[str, CodeFlow]
+    output_endpoint_ids_by_flow: dict[str, set[str]]
+    output_order_by_endpoint: dict[str, tuple[int, int]]
+    edges_by_output: dict[str, list[GraphEdge]]
+    trigger_flow_ids_by_endpoint: dict[str, list[str]]
+    trigger_flow_ids: set[str]
+
+
+def _index_call_graph_inputs(
     flows: list[CodeFlow],
     endpoints_by_service: dict[str, list[MessageEndpoint]],
     edges: list[GraphEdge],
-    root_flow_ids: set[str] | None = None,
-) -> dict[str, object]:
-    """Build the port graph by following internal flow outputs.
-
-    Candidate arcs are built from flow-associated OUT ports. Traversal starts
-    at trigger flows and follows each OUT-to-IN arc to the flow triggered by
-    its target IN port. This keeps fan-in, fan-out and cycles while avoiding
-    unrelated flows.
-    """
+) -> _CallGraphIndex:
+    """Build immutable lookup indexes shared by every exported flow graph."""
     endpoint_by_id = {
         endpoint.id: endpoint
         for service_endpoints in endpoints_by_service.values()
@@ -37,11 +45,6 @@ def _networkx_call_graph(
     service_order = {
         service: index for index, service in enumerate(sorted(endpoints_by_service))
     }
-    graph = nx.MultiDiGraph()
-    traversal_tree = nx.MultiDiGraph()
-    seen_relation_keys: set[tuple[str, str, str, str | None]] = set()
-    relation_discovery_order = 0
-    trigger_kinds = {"http_entry", "message_entry", "cron_entry"}
     ordered_flows = sorted(
         flows,
         key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id),
@@ -58,34 +61,7 @@ def _networkx_call_graph(
             endpoint = endpoint_by_id.get(step.endpoint_id)
             if endpoint and endpoint.role in {"call", "produce"}:
                 output_endpoint_ids_by_flow.setdefault(flow.id, set()).add(endpoint.id)
-                output_order_by_endpoint.setdefault(
-                    endpoint.id, (flow_index, step.order)
-                )
-
-    def add_relation(edge: GraphEdge) -> tuple[str, str, str, str | None] | None:
-        nonlocal relation_discovery_order
-        source_id = edge.from_endpoint.id
-        target_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
-        source_service = service_by_endpoint.get(source_id)
-        target_service = service_by_endpoint.get(target_id) if target_id else None
-        if not source_service or not target_service or source_service == target_service:
-            return None
-        label = edge.from_endpoint.topic_display or edge.from_endpoint.topic
-        key = (edge.kind, edge.from_endpoint.topic, source_id, target_id)
-        if key in seen_relation_keys:
-            return None
-        seen_relation_keys.add(key)
-        graph.add_edge(
-            source_service,
-            target_service,
-            key=key,
-            kind=edge.kind,
-            label=label,
-            endpoint_ids=[source_id, target_id],
-            discovery_order=relation_discovery_order,
-        )
-        relation_discovery_order += 1
-        return key
+                output_order_by_endpoint.setdefault(endpoint.id, (flow_index, step.order))
 
     edges_by_output: dict[str, list[GraphEdge]] = {}
     for edge in edges:
@@ -114,6 +90,7 @@ def _networkx_call_graph(
     for output_id in edges_by_output:
         edges_by_output[output_id].sort(key=edge_sort_key)
 
+    trigger_kinds = {"http_entry", "message_entry", "cron_entry"}
     trigger_flow_ids_by_endpoint: dict[str, list[str]] = {}
     trigger_flow_ids: set[str] = set()
     for flow in ordered_flows:
@@ -123,6 +100,68 @@ def _networkx_call_graph(
         endpoint_id = flow.steps[0].endpoint_id
         if endpoint_id:
             trigger_flow_ids_by_endpoint.setdefault(endpoint_id, []).append(flow.id)
+
+    return _CallGraphIndex(
+        endpoint_by_id, service_by_endpoint, service_order, ordered_flows, flow_by_id,
+        output_endpoint_ids_by_flow, output_order_by_endpoint, edges_by_output,
+        trigger_flow_ids_by_endpoint, trigger_flow_ids,
+    )
+
+
+def _networkx_call_graph(
+    flows: list[CodeFlow],
+    endpoints_by_service: dict[str, list[MessageEndpoint]],
+    edges: list[GraphEdge],
+    root_flow_ids: set[str] | None = None,
+    index: _CallGraphIndex | None = None,
+) -> dict[str, object]:
+    """Build the port graph by following internal flow outputs.
+
+    Candidate arcs are built from flow-associated OUT ports. Traversal starts
+    at trigger flows and follows each OUT-to-IN arc to the flow triggered by
+    its target IN port. This keeps fan-in, fan-out and cycles while avoiding
+    unrelated flows.
+    """
+    index = index or _index_call_graph_inputs(flows, endpoints_by_service, edges)
+    service_by_endpoint = index.service_by_endpoint
+    graph = nx.MultiDiGraph()
+    traversal_tree = nx.MultiDiGraph()
+    seen_relation_keys: set[tuple[str, str, str, str | None]] = set()
+    relation_discovery_order = 0
+    ordered_flows = index.ordered_flows
+    flow_by_id = index.flow_by_id
+    output_endpoint_ids_by_flow = index.output_endpoint_ids_by_flow
+    output_order_by_endpoint = index.output_order_by_endpoint
+    trigger_kinds = {"http_entry", "message_entry", "cron_entry"}
+
+    def add_relation(edge: GraphEdge) -> tuple[str, str, str, str | None] | None:
+        nonlocal relation_discovery_order
+        source_id = edge.from_endpoint.id
+        target_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
+        source_service = service_by_endpoint.get(source_id)
+        target_service = service_by_endpoint.get(target_id) if target_id else None
+        if not source_service or not target_service or source_service == target_service:
+            return None
+        label = edge.from_endpoint.topic_display or edge.from_endpoint.topic
+        key = (edge.kind, edge.from_endpoint.topic, source_id, target_id)
+        if key in seen_relation_keys:
+            return None
+        seen_relation_keys.add(key)
+        graph.add_edge(
+            source_service,
+            target_service,
+            key=key,
+            kind=edge.kind,
+            label=label,
+            endpoint_ids=[source_id, target_id],
+            discovery_order=relation_discovery_order,
+        )
+        relation_discovery_order += 1
+        return key
+
+    edges_by_output = index.edges_by_output
+    trigger_flow_ids_by_endpoint = index.trigger_flow_ids_by_endpoint
+    trigger_flow_ids = index.trigger_flow_ids
 
     incoming_flow_ids = {
         target_flow_id
@@ -546,18 +585,21 @@ def _all_export_flows(
     flows: list[CodeFlow],
     endpoints_by_service: dict[str, list[MessageEndpoint]],
     edges: list[GraphEdge],
+    index: _CallGraphIndex | None = None,
 ) -> list[tuple[CodeFlow, dict[str, object], int]]:
     """Build one HTML entry for every persisted flow.
 
     The CLI exposes persisted flows individually. The HTML picker follows the
     same contract; graph-arc deduplication remains inside each call graph.
     """
+    index = index or _index_call_graph_inputs(flows, endpoints_by_service, edges)
     return sorted(
         [
             (
                 flow,
                 _networkx_call_graph(
-                    flows, endpoints_by_service, edges, root_flow_ids={flow.id}
+                    flows, endpoints_by_service, edges,
+                    root_flow_ids={flow.id}, index=index,
                 ),
                 1,
             )

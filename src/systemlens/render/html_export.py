@@ -21,6 +21,7 @@ from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependenc
 from systemlens.render.graph_view_model import build_graph_view_model
 from systemlens.render.call_graph import (
     _all_export_flows,
+    _index_call_graph_inputs,
     _networkx_call_graph,
 )
 from systemlens.render._graph_view_helpers import _vscode_file_uri
@@ -69,6 +70,7 @@ def render_graph_html(
     code_flows: list[CodeFlow] | None = None,
     integration_methods: list[IntegrationMethod] | None = None,
     codeql_call_edges: list[CodeQLCallGraphEdge] | None = None,
+    flow_descriptions: dict[str, str] | None = None,
     progress_notice: str | None = None,
 ) -> str:
     """Render a graph view model as one self-contained HTML document."""
@@ -95,8 +97,10 @@ def render_graph_html(
         code_flows=code_flows,
         codeql_call_edges=codeql_call_edges,
     )
+    export_flows = list(code_flows or [])
+    call_graph_index = _index_call_graph_inputs(export_flows, endpoints_by_service, edges)
     view_model["all_flows_call_graph"] = _networkx_call_graph(
-        list(code_flows or []), endpoints_by_service, edges
+        export_flows, endpoints_by_service, edges, index=call_graph_index
     )
     port_labels = {
         str(port["endpoint_id"]): str(port["label"])
@@ -120,7 +124,7 @@ def render_graph_html(
     graph_ids_by_json: dict[str, str] = {}
     export_flow_items: list[tuple[CodeFlow, dict[str, object], int, str]] = []
     for flow, call_graph, equivalent_count in _all_export_flows(
-        list(code_flows or []), endpoints_by_service, edges
+        export_flows, endpoints_by_service, edges, index=call_graph_index
     ):
         graph_json = json.dumps(call_graph, sort_keys=True, separators=(",", ":"))
         call_graph_id = graph_ids_by_json.get(graph_json)
@@ -169,6 +173,11 @@ def render_graph_html(
         for flow, _call_graph, equivalent_count, call_graph_id in export_flow_items
     ]
     view_model["code_flows"] = serialized_code_flows
+    view_model["flow_descriptions"] = {
+        str(flow_id): str(description)
+        for flow_id, description in (flow_descriptions or {}).items()
+        if description
+    }
     view_model["call_graphs"] = call_graphs
     view_model["progress_notice"] = progress_notice
     flow_counts = Counter(flow["module"] for flow in serialized_code_flows)
@@ -180,6 +189,7 @@ def render_graph_html(
     graph_data = json.dumps(
         view_model,
         ensure_ascii=False,
+        separators=(",", ":"),
     ).replace("<", "\\u003c")
     asyncapi_assets = ""
     if asyncapi_contracts:

@@ -11,9 +11,9 @@ Parent: [Technical specification](../SPEC-TECH.md).
    test-source exclusion, Maven test/archetype module exclusion and nested-build
    boundaries.
 4. Compare hashes with the stored inventory and purge removed files. A changed
-   or deleted Spring configuration file or Maven/Gradle descriptor promotes the
-   delta to a full endpoint refresh because these files are dependencies of
-   otherwise unchanged Java facts.
+   or deleted Spring configuration file or Maven/Gradle descriptor expands the
+   delta to the owning module when the module boundary is known. Root-level or
+   otherwise ambiguous inputs still promote the delta to a full endpoint refresh.
 5. Force a full refresh when extractor/configuration/strategy signatures differ.
 6. Run AST extractors for the changed files and atomically replace their
    endpoints.
@@ -55,6 +55,9 @@ do not alter or invalidate persisted architecture facts.
 When CodeQL is disabled or unavailable, a source symbol pass follows uniquely
 resolved, receiver-typed calls between indexed Java methods. It keeps these
 candidates at low confidence and drops ambiguous types or overloads.
+Symbol collection scans source bytes and syntax nodes once per flow rebuild.
+Route traversal has the existing bounded `O(I × (V + E))` worst case for `I`
+indexed input methods, `V` source methods and `E` resolved call edges.
 
 The source projection prevents `build-mode=none` from invoking Maven or Gradle
 for dependency discovery; unresolved external types are accepted as the

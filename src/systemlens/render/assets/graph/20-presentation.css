@@ -130,6 +130,7 @@
     }
     .graph-node-card-label.is-topic { border-style: dashed; }
     .graph-node-card-label.is-collection { border-radius: 5px; }
+    .graph-node-card-label.is-jpa-entity { border-style: dotted; }
     .graph-summary {
       gap: 5px;
       margin: -2px 0 0;

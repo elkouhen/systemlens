@@ -70,6 +70,10 @@ For a human-readable topology, generate an interactive export:
 systemlens export microservices --html architecture.html
 ```
 
+In the `Flux de code` tab, check several flows to view their call graphs
+together in independent side-by-side panels. The comparison button can also
+open the current selection explicitly.
+
 To inspect the structural hierarchy of modules, child modules, and indexed
 projects, use the dedicated module view. Kubernetes namespaces do not define
 this hierarchy:

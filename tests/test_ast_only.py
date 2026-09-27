@@ -169,6 +169,54 @@ class VetsClient {
     assert "systemlens-api-domain:vets-service" in endpoint.snippet
 
 
+def test_restclient_literal_url_is_indexed_as_http_call(tmp_path: Path) -> None:
+    source = tmp_path / "src/main/java/com/example/InventoryClient.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """
+import org.springframework.web.client.RestClient;
+class InventoryClient {
+  RestClient restClient;
+  void load() {
+    restClient.get().uri("http://inventory-service/api/items").retrieve();
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    endpoint = next(item for item in infer_framework_endpoints(tmp_path) if item.role == "call")
+
+    assert endpoint.framework == "restclient"
+    assert endpoint.topic == "GET /api/items"
+    assert endpoint.topic_dynamic is False
+    assert "systemlens-api-domain:inventory-service" in endpoint.snippet
+
+
+def test_restclient_unique_base_url_resolves_relative_uri_target(tmp_path: Path) -> None:
+    source = tmp_path / "src/main/java/com/example/InventoryClient.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """
+import org.springframework.web.client.RestClient;
+class InventoryClient {
+  RestClient restClient = RestClient.builder()
+      .baseUrl("http://inventory-service")
+      .build();
+  void load() {
+    restClient.get().uri("/api/items").retrieve();
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    endpoint = next(item for item in infer_framework_endpoints(tmp_path) if item.role == "call")
+
+    assert endpoint.topic == "GET /api/items"
+    assert "systemlens-api-domain:inventory-service" in endpoint.snippet
+
+
 def test_http_exchange_interface_preserves_registration_target(tmp_path: Path) -> None:
     source = tmp_path / "src/main/java/com/example/OrdersClient.java"
     source.parent.mkdir(parents=True)

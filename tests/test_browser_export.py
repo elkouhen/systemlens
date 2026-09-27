@@ -15,11 +15,43 @@ from playwright.sync_api import Playwright, sync_playwright
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
-from systemlens.domain.module_inventory import DiscoveredModule, MongoField, MongoPersistenceClass
+from systemlens.domain.module_inventory import DiscoveredModule, JpaEntity, MongoField, MongoPersistenceClass
 from systemlens.render import render_graph_html
 
 
 pytestmark = pytest.mark.integration
+
+
+@pytest.mark.slow
+def test_service_inspector_shows_persisted_jpa_entity() -> None:
+    module = DiscoveredModule(
+        name="payment", path=Path("/project/payment"), build_system="maven",
+        version="1.0", kind="library", starts_application=True,
+        configuration_example="",
+        jpa_entities=(JpaEntity(
+            "example.Customer", "payment/src/main/java/example/Customer.java", 3,
+        ),),
+    )
+    document = render_graph_html(
+        {"payment": []}, [], modules_by_service={"payment": module},
+        build_modules=[module],
+    )
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 800, "height": 600})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator(".graph-node-card-label").filter(has_text="payment").click()
+        assert page.get_by_text("Entités JPA déclarées").is_visible()
+        assert page.get_by_text(
+            "example.Customer · payment/src/main/java/example/Customer.java:3"
+        ).is_visible()
+        context.close()
+        browser.close()
 
 
 _COMPLEX_DATASET_EXPORT = (

@@ -224,15 +224,19 @@
       }));
     }
     function rebuildGraph() {
+      const selectedCodeFlowIds = graphState.selectedCodeFlowIds?.length
+        ? graphState.selectedCodeFlowIds
+        : (graphState.selectedCodeFlowId ? [graphState.selectedCodeFlowId] : []);
       const callGraphOnly = graphState.viewMode === "call-graph"
-        && Boolean(graphState.selectedCodeFlowId);
+        && selectedCodeFlowIds.length > 0;
       if (callGraphOnly && !graphState.selectedCallGraphEdgeKey) {
         graphState.selectedCallGraphEdgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc || null;
       }
-      const selectedFlow = callGraphOnly
-        ? (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)
-        : null;
-      const selectedCallGraph = callGraphForFlow(selectedFlow);
+      const selectedFlows = callGraphOnly
+        ? (graphData.code_flows || []).filter(flow => selectedCodeFlowIds.includes(flow.id))
+        : [];
+      const selectedFlow = selectedFlows[0] || null;
+      const selectedCallGraph = callGraphForFlows(selectedFlows);
       const dependencyFocusOnly = graphState.dependencyFocusOnly && graphState.selectedId && !callGraphOnly;
       const visibleLinks = callGraphOnly
         ? []
@@ -711,34 +715,41 @@
           const contextCollapse = document.getElementById("analysis-context-collapse");
           if (!context || !title || !help || !clear) return;
           const active = Boolean(graphState.selectedCodeFlowId);
-          context.hidden = !active;
+          const showContext = active && !graphState.comparisonMode;
+          context.hidden = !showContext;
           context.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
           if (contextCopy) contextCopy.id = "graph-mode-context-copy";
           if (contextCollapse) {
-            contextCollapse.hidden = !active;
+            contextCollapse.hidden = !showContext;
             contextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
             contextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
           }
           if (portsToggle) {
-            portsToggle.hidden = !active;
+            portsToggle.hidden = !showContext;
             portsToggle.setAttribute("aria-pressed", String(Boolean(graphState.showAllCodeFlowPorts)));
             portsToggle.textContent = graphState.showAllCodeFlowPorts
               ? "Afficher les ports référencés"
               : "Afficher tous les ports";
           }
-          if (backToFlows) backToFlows.hidden = !active;
-          if (backToArchitecture) backToArchitecture.hidden = !active;
+          if (backToFlows) backToFlows.hidden = !showContext;
+          if (backToArchitecture) backToArchitecture.hidden = !showContext;
           if (!active) return;
           const flowPath = [...(graphState.pathMicroserviceOrder?.keys() || [])]
             .map(id => nodeDataById.get(id)?.name)
             .filter(Boolean)
             .join(" → ");
           const trigger = graphState.codeFlowTrigger?.name;
-          title.textContent = flowPath
-            ? `Graphe d’appel · ${flowPath}`
-            : trigger ? `Graphe d’appel · ${trigger}` : "Graphe d’appel";
+          const selectedFlowCount = graphState.selectedCodeFlowIds?.length || 1;
+          title.textContent = selectedFlowCount > 1
+            ? `Graphes d’appel · ${selectedFlowCount} flux`
+            : flowPath
+              ? `Graphe d’appel · ${flowPath}`
+              : trigger ? `Graphe d’appel · ${trigger}` : "Graphe d’appel";
           if (pathLabel) {
-            const selectedFlow = (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId);
+          const selectedFlows = (graphData.code_flows || []).filter(flow => (
+            (graphState.selectedCodeFlowIds?.length ? graphState.selectedCodeFlowIds : [graphState.selectedCodeFlowId])
+              .includes(flow.id)
+          ));
             const portsByEndpointId = new Map(
               graphData.nodes.flatMap(node => (node.ports || []).map(port => [port.endpoint_id, port]))
             );
@@ -832,11 +843,12 @@
           requestGraphRender();
         };
         updateAnalysisModeIndicator();
-        const selectedFlow = graphState.selectedCodeFlowId
-          ? (graphData.code_flows || []).find(flow => flow.id === graphState.selectedCodeFlowId)
-          : null;
+        const selectedFlows = (graphData.code_flows || []).filter(flow => (
+          (graphState.selectedCodeFlowIds?.length ? graphState.selectedCodeFlowIds : [graphState.selectedCodeFlowId])
+            .includes(flow.id)
+        ));
         const referencedCodeFlowPortIds = new Set([
-          ...(selectedFlow?.steps || []).map(step => step.endpoint_id),
+          ...selectedFlows.flatMap(flow => (flow.steps || []).map(step => step.endpoint_id)),
           ...(selectedCallGraph?.edges || []).flatMap(edge => edge.endpoint_ids || []),
         ].filter(Boolean));
         network.forEachNode((id, attributes) => {
@@ -1087,12 +1099,13 @@
           const label = document.createElement("span");
           const isTopic = node.kind === "message_channel" || node.kind === "kafka_topic";
           const isDatabase = node.kind === "data_schema" || node.kind === "mongodb_collection";
-          const isResource = isTopic || isDatabase;
+          const isJpaEntity = node.kind === "jpa_entity";
+          const isResource = isTopic || isDatabase || isJpaEntity;
           const adaptiveLabelSide = adaptiveLabels.get(id);
           const isCodeFlowNode = graphState.selectedCodeFlowId && graphState.relatedNodes?.has(id);
           const isCodeFlowRoot = graphState.selectedCodeFlowId && graphState.codeFlowRootNodeId === id;
           const trigger = isCodeFlowRoot ? graphState.codeFlowTrigger : null;
-          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${isCodeFlowRoot ? " is-graph-root" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}${isCodeFlowNode ? " is-code-flow-node" : ""}`;
+          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${isJpaEntity ? " is-jpa-entity" : ""}${isCodeFlowRoot ? " is-graph-root" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}${isCodeFlowNode ? " is-code-flow-node" : ""}`;
           label.dataset.nodeKind = node.kind;
           label.dataset.nodeId = id;
           const cardScale = GRAPH_CARD_SCALE;
@@ -1103,11 +1116,11 @@
           label.style.transform = `translate(-50%, -50%) scale(${cardScale})`;
           label.style.setProperty("--card-accent", node.color || "#64748b");
           const icon = document.createElement("span");
-          icon.className = `graph-node-card-icon ${isTopic ? "is-topic" : isDatabase ? "is-database" : "is-service"}`;
+          icon.className = `graph-node-card-icon ${isTopic ? "is-topic" : isDatabase || isJpaEntity ? "is-database" : "is-service"}`;
           const name = document.createElement("span");
           name.className = "graph-node-card-name";
-          name.textContent = node.name;
-          name.title = node.name;
+          name.textContent = nodeDisplayName(node);
+          name.title = nodeDisplayName(node);
           const kind = document.createElement("span");
           kind.className = "graph-node-card-kind";
           const kindLabel = nodeKindLabel(node);

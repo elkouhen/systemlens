@@ -3,10 +3,11 @@
 Parent: [Technical specification](../SPEC-TECH.md).
 
 
-`infer_framework_endpoints` walks Java declarations, annotations and method
+`infer_framework_endpoints` applies an ordered registry of Java endpoint
+extractors. The registry walks declarations, annotations and method
 invocations to discover Spring MVC/WebFlux routes, Feign clients, Spring HTTP
 interfaces (`@HttpExchange` and method-level exchange annotations), RestTemplate,
-WebClient, Spring Data REST and gateway routes. It resolves literals, known
+RestClient, WebClient, Spring Data REST and gateway routes. It resolves literals, known
 Spring property expressions, unique never-reassigned local string base URLs,
 and bounded private String helpers with one unconditional return. Multi-document Spring YAML is read document by document;
 base-document values take precedence where no active-profile selection exists.

@@ -824,7 +824,11 @@ def discover_jpa_entities(
     entities: set[JpaEntity] = set()
     for java_file in _module_files(module_dir, module_roots, "*.java"):
         source_parts = java_file.relative_to(module_dir).parts
-        if source_parts[:2] == ("src", "test") or source_parts[0] in {"test", "tests"}:
+        if source_parts[0] in {"test", "tests"} or any(
+            part == "src" and index + 1 < len(source_parts)
+            and (source_parts[index + 1] == "test" or source_parts[index + 1].endswith("Test"))
+            for index, part in enumerate(source_parts)
+        ):
             continue
         try:
             source = java_file.read_bytes()
@@ -839,13 +843,31 @@ def discover_jpa_entities(
         root = parser.parse(source).root_node
         if root.has_error:
             continue
+        imports = {
+            java_parser.node_text(source, node).strip()
+            for node in root.named_children if node.type == "import_declaration"
+        }
+        imported_entity = bool(imports & {
+            "import jakarta.persistence.Entity;", "import javax.persistence.Entity;",
+            "import jakarta.persistence.*;", "import javax.persistence.*;",
+        })
+
+        def is_jpa_annotation(annotation) -> bool:
+            name_node = annotation.child_by_field_name("name")
+            if name_node is None:
+                return False
+            raw_name = java_parser.node_text(source, name_node)
+            return raw_name in {
+                "jakarta.persistence.Entity", "javax.persistence.Entity",
+            } or (raw_name == "Entity" and imported_entity)
+
         package = next((
             java_parser.node_text(source, node).removeprefix("package").removesuffix(";").strip()
             for node in root.named_children if node.type == "package_declaration"
         ), "")
         for declaration in java_parser.type_declarations(root):
             if declaration.parent != root or declaration.type != "class_declaration" or not any(
-                java_parser.annotation_name(annotation, source).rsplit(".", 1)[-1] == "Entity"
+                is_jpa_annotation(annotation)
                 for annotation in java_parser.annotations_of(declaration)
             ):
                 continue

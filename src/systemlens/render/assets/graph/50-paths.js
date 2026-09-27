@@ -29,6 +29,8 @@
       search.value = "";
       pathStops.splice(0, pathStops.length);
       graphState.selectedCodeFlowId = null;
+      graphState.selectedCodeFlowIds = [];
+      graphState.comparisonMode = false;
       graphState.viewMode = "architecture";
       graphState.codeFlowRootNodeId = null;
       graphState.codeFlowTrigger = null;
@@ -211,16 +213,81 @@
       search.value = query;
       searchStatus.textContent = "";
     }
-    function setPathMicroserviceOrder(path, codeFlow = null) {
+    function setPathMicroserviceOrder(path, codeFlow = null, codeFlows = []) {
       graphState.pathMicroserviceOrder = new Map();
       graphState.codeFlowTreeCoordinates = new Map();
+      if (codeFlows.length > 1) {
+        let laneOffset = 0;
+        const placed = new Set();
+        codeFlows.forEach(flow => {
+          const graph = callGraphForFlow(flow);
+          const names = graph?.node_order || graph?.nodes || [];
+          const serviceIds = names
+            .map(name => nodeIdForCodeFlowResource(name, "microservice"))
+            .filter(Boolean)
+            .filter(id => path.nodes.includes(id));
+          if (!serviceIds.length) return;
+          const serviceNames = new Map(serviceIds.map(id => [nodeDataById.get(id).name, id]));
+          const levels = new Map();
+          const children = new Map();
+          (graph?.edges || []).forEach(edge => {
+            const source = serviceNames.get(edge.source);
+            const target = serviceNames.get(edge.target);
+            if (!source || !target || source === target) return;
+            children.set(source, [...(children.get(source) || []), target]);
+          });
+          const targets = new Set([...children.values()].flat());
+          const roots = serviceIds.filter(id => !targets.has(id));
+          const queue = roots.length ? roots : [serviceIds[0]];
+          queue.forEach(id => levels.set(id, 0));
+          for (let index = 0; index < queue.length; index += 1) {
+            const source = queue[index];
+            (children.get(source) || []).forEach(target => {
+              if (levels.has(target)) return;
+              levels.set(target, (levels.get(source) || 0) + 1);
+              queue.push(target);
+            });
+          }
+          serviceIds.forEach((id, index) => {
+            if (!levels.has(id)) levels.set(id, index);
+          });
+          const byLevel = new Map();
+          serviceIds.forEach(id => {
+            const level = levels.get(id) || 0;
+            byLevel.set(level, [...(byLevel.get(level) || []), id]);
+          });
+          byLevel.forEach((ids, level) => {
+            ids.sort((left, right) => nodeDataById.get(left).name.localeCompare(nodeDataById.get(right).name));
+            const offset = (ids.length - 1) / 2;
+            ids.forEach((id, index) => {
+              if (!placed.has(id)) {
+                graphState.codeFlowTreeCoordinates.set(id, {
+                  x: laneOffset + level * 4.8,
+                  y: (index - offset) * 3.2,
+                });
+                placed.add(id);
+              }
+              graphState.pathMicroserviceOrder.set(id, graphState.pathMicroserviceOrder.size + 1);
+            });
+          });
+          const maxLevel = Math.max(...levels.values(), 0);
+          laneOffset += Math.max(10, (maxLevel + 1) * 4.8 + 5);
+        });
+        path.nodes.forEach(id => {
+          if (nodeDataById.get(id)?.kind !== "microservice") return;
+          if (!graphState.pathMicroserviceOrder.has(id)) {
+            graphState.pathMicroserviceOrder.set(id, graphState.pathMicroserviceOrder.size + 1);
+          }
+        });
+        return;
+      }
       let order = 1;
       path.nodes.forEach(id => {
         if (nodeDataById.get(id).kind !== "microservice") return;
         graphState.pathMicroserviceOrder.set(id, order);
         order += 1;
       });
-      const callGraphEdges = callGraphForFlow(codeFlow)?.edges || [];
+      const callGraphEdges = callGraphForFlows(codeFlows.length ? codeFlows : (codeFlow ? [codeFlow] : []))?.edges || [];
       if (!callGraphEdges.length) return;
       const serviceIdsByName = new Map(
         [...graphState.pathMicroserviceOrder.keys()].map(id => [nodeDataById.get(id).name, id])
@@ -341,6 +408,13 @@
       } else if (roomBelowToolbar >= 180) {
         focusArea.top = toolbarRect.bottom - viewport.top + margin;
       }
+      const modeContext = document.getElementById("graph-mode-context");
+      if (modeContext && !modeContext.hidden) {
+        const contextRect = modeContext.getBoundingClientRect();
+        if (contextRect.bottom > focusArea.top && contextRect.top < focusArea.bottom) {
+          focusArea.top = Math.max(focusArea.top, contextRect.bottom + margin);
+        }
+      }
       const cardWidth = graphState.renderMode === "symbols" ? 34 : GRAPH_CARD_WIDTH;
       const cardHeight = graphState.renderMode === "symbols" ? 34 : GRAPH_CARD_HEIGHT;
       const availableWidth = Math.max(1, focusArea.right - focusArea.left - cardWidth - 2 * margin);
@@ -421,6 +495,9 @@
       )));
       graphState.analysisPortEndpointId = null;
       graphState.selectedCodeFlowId = context.codeFlow?.id || null;
+      graphState.selectedCodeFlowIds = (context.codeFlows || (context.codeFlow ? [context.codeFlow] : []))
+        .map(flow => flow.id);
+      graphState.comparisonMode = graphState.selectedCodeFlowIds.length > 1;
       graphState.viewMode = context.codeFlow ? "call-graph" : "architecture";
       graphState.selectedCallGraphEdgeKey = null;
       graphCanvas.removeAttribute("data-selected-call-graph-arc");
@@ -433,7 +510,7 @@
       }
       if (graphState.selectedCodeFlowId) graphCanvas.dataset.selectedCodeFlow = graphState.selectedCodeFlowId;
       else delete graphCanvas.dataset.selectedCodeFlow;
-      setPathMicroserviceOrder(path, context.codeFlow);
+      setPathMicroserviceOrder(path, context.codeFlow || (context.codeFlows || [])[0], context.codeFlows || []);
       if (graphState.selectedCodeFlowId) rebuildGraph();
       else renderer.refresh();
       // The normal Explorer deliberately has no port overlays. Rebuild them
@@ -452,7 +529,13 @@
         // value synchronously, then compute the exact camera fit on the next
         // frame once Sigma has projected the new node set.
         graphCanvas.dataset.flowFocusRatio = "1";
-        scheduleFlowCameraFit(path);
+        // Reset to the complete visible graph before centering the selected
+        // flow. This is important for a comparison: its horizontal lanes can
+        // be wider than the first flow's local camera envelope.
+        fitCameraToVisibleGraph(renderer, "overview")
+          .then(() => requestAnimationFrame(() => requestAnimationFrame(() => (
+            scheduleFlowCameraFit({ nodes: [...graphState.relatedNodes] })
+          ))));
       }
       else {
         delete graphCanvas.dataset.flowFocusRatio;
@@ -615,7 +698,7 @@
       kicker.textContent = kindLabel;
       const title = document.createElement("h1");
       title.className = "details-title";
-      title.textContent = node.name;
+      title.textContent = nodeDisplayName(node);
       const meta = document.createElement("div");
       meta.className = "details-meta";
       const relationBadge = document.createElement("span");
@@ -693,12 +776,14 @@
         const kubernetesWorkloads = node.kubernetes_workloads || [];
         const clusterPath = clusterPathForNode(id);
         const architectureGroup = createDetailsGroup("Architecture");
-        appendList("Layer", [node.layer_label || "Unknown"], architectureGroup);
+        const layer = node.layer_label || node.layer;
+        if (layer && layer.toLowerCase() !== "unknown") appendList("Layer", [layer], architectureGroup);
         if (node.technology) appendList("Technologie", [node.technology], architectureGroup);
-        appendActionList("Module", clusterPath ? [{
-          label: clusterPath,
-          title: `Naviguer vers le module ${clusterPath}`,
-          action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
+        const modulePath = clusterPath && !["root", "ROOT"].includes(clusterPath) ? clusterPath : null;
+        appendActionList("Module", modulePath ? [{
+          label: modulePath,
+          title: `Naviguer vers le module ${modulePath}`,
+          action: () => selectCluster(clusterDescriptorForPath(modulePath)),
         }] : [], architectureGroup);
         discardEmptyDetailsGroup(architectureGroup);
       const ports = node.ports || [];
@@ -881,6 +966,12 @@
           factsGroup);
         discardEmptyDetailsGroup(factsGroup);
       }
+      if (node.kind === "jpa_entity") {
+        const entityGroup = createDetailsGroup("Entité JPA");
+        appendList("Service propriétaire", node.owner ? [node.owner] : [], entityGroup);
+        appendList("Source", node.source_path && node.source_line ? [`${node.source_path}:${node.source_line}`] : [], entityGroup);
+        discardEmptyDetailsGroup(entityGroup);
+      }
     }
     function renderClusterDetails(cluster) {
       const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);
@@ -921,8 +1012,8 @@
         action: () => selectCluster(clusterDescriptorForPath(childPath)),
       })));
       appendActionList("Ressources contenues", members.map(member => ({
-        label: `${member.name} · ${nodeKindLabel(member)}`,
-        title: `Afficher les détails de ${member.name}`,
+        label: `${nodeDisplayName(member)} · ${nodeKindLabel(member)}`,
+        title: `Afficher les détails de ${nodeDisplayName(member)}`,
         action: () => selectNode(member.id),
       })));
       if (!members.length) appendList("Ressources contenues", ["Aucune ressource directe"]);
@@ -938,6 +1029,7 @@
         relatedEdges: null,
         relatedLocalPortLinks: new Set(),
         selectedCodeFlowId: null,
+        selectedCodeFlowIds: [],
         viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
         codeFlowRootNodeId: null,
@@ -962,6 +1054,7 @@
       graphState.relatedEdges = new Set();
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
+      graphState.selectedCodeFlowIds = [];
       graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
       graphState.codeFlowRootNodeId = null;
@@ -1020,6 +1113,7 @@
       updateSelectedNodeDependencyScope(id);
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
+      graphState.selectedCodeFlowIds = [];
       graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
       graphState.codeFlowRootNodeId = null;

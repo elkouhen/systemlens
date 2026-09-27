@@ -11,6 +11,7 @@ import re
 from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
+from collections.abc import Callable
 
 import yaml
 
@@ -1190,6 +1191,65 @@ def _infer_webclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageEn
             )
         )
     return endpoints
+def _infer_restclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
+    """Infer Spring ``RestClient`` fluent calls from ``.uri(...)`` invocations."""
+    if not _file_uses_restclient(str(repo_root), rel_path):
+        return []
+    parsed = java_parser.parse_java(str(repo_root), rel_path)
+    if parsed is None:
+        return []
+    source, root = parsed
+    base_hosts = {
+        host
+        for candidate in java_parser.walk(root)
+        if candidate.type == "method_invocation"
+        for _receiver, candidate_name, candidate_args in [
+            java_parser.invocation_parts(candidate, source)
+        ]
+        if candidate_name == "baseUrl" and candidate_args
+        and (host := _resolved_http_host_ast(
+            candidate_args[0], source, repo_root, rel_path
+        )) is not None
+    }
+    base_host = next(iter(base_hosts)) if len(base_hosts) == 1 else None
+    endpoints: list[MessageEndpoint] = []
+    for invocation in java_parser.walk(root):
+        if invocation.type != "method_invocation":
+            continue
+        receiver, name, args = java_parser.invocation_parts(invocation, source)
+        if name != "uri" or receiver is None or not args:
+            continue
+        verb_call = _restclient_verb_invocation(receiver, source)
+        if verb_call is None:
+            continue
+        http_method, anchor = verb_call
+        route, dynamic = _resolve_rest_ast_expression(args[0], source, repo_root, rel_path)
+        snippet = java_parser.node_text(source, invocation)
+        host = _resolved_http_host_ast(args[0], source, repo_root, rel_path) or base_host
+        if host is not None:
+            snippet = f"{snippet}\n// systemlens-api-domain:{host}"
+        endpoints.append(
+            _build_endpoint(
+                repo_root, rel_path, anchor.start_point.row + 1,
+                invocation.end_point.row + 1, "call", "rest",
+                f"{http_method} {route}", "restclient", snippet,
+                topic_dynamic=dynamic,
+            )
+        )
+    return endpoints
+
+
+def _restclient_verb_invocation(node, source: bytes):
+    """Find a Spring ``RestClient`` request verb in a fluent receiver chain."""
+    if node.type != "method_invocation":
+        return None
+    receiver, name, _args = java_parser.invocation_parts(node, source)
+    verbs = {"get", "post", "put", "delete", "patch", "head", "options"}
+    if name in verbs:
+        return name.upper(), node
+    return _restclient_verb_invocation(receiver, source) if receiver is not None else None
+
+
 def _webclient_verb_invocation(node, source: bytes):
     """Nearest request verb in a fluent receiver chain, with its AST node."""
     if node.type != "method_invocation":
@@ -1260,6 +1320,31 @@ def _infer_configured_api_client_endpoints(
                 service=service,
             )
     return list(endpoints.values())
+
+
+RestEndpointExtractor = Callable[[Path, str], list[MessageEndpoint]]
+
+
+def _rest_endpoint_extractors(
+    *, configured_api_client_strategy1: bool,
+) -> tuple[RestEndpointExtractor, ...]:
+    """Return the ordered REST extractor registry for one indexing profile."""
+    extractors: list[RestEndpointExtractor] = [
+        _infer_generic_request_mapping_endpoints,
+        _infer_http_interface_endpoints,
+        _infer_spring_data_rest_endpoints,
+        _infer_swagger_endpoint,
+        _infer_resttemplate_exchange_endpoints,
+        _infer_restclient_endpoints,
+        _infer_webclient_endpoints,
+        _infer_spring_cloud_gateway_routes,
+        _infer_spring_webflux_routes,
+    ]
+    if configured_api_client_strategy1:
+        extractors.append(_infer_configured_api_client_endpoints)
+    return tuple(extractors)
+
+
 def _infer_spring_cloud_gateway_routes(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
     parsed = java_parser.parse_java(str(repo_root), rel_path)
     if parsed is None:
@@ -1455,24 +1540,14 @@ def infer_framework_endpoints(
         candidate_files = sorted(files)
 
     inferred: dict[str, MessageEndpoint] = {}
+    extractors = _rest_endpoint_extractors(
+        configured_api_client_strategy1=configured_api_client_strategy1,
+    )
     for rel_path in candidate_files:
         if rel_path.endswith(".java"):
-            for endpoint in (
-                _infer_generic_request_mapping_endpoints(repo_root, rel_path)
-                + _infer_http_interface_endpoints(repo_root, rel_path)
-                + _infer_spring_data_rest_endpoints(repo_root, rel_path)
-                + _infer_swagger_endpoint(repo_root, rel_path)
-                + _infer_resttemplate_exchange_endpoints(repo_root, rel_path)
-                + _infer_webclient_endpoints(repo_root, rel_path)
-                + _infer_spring_cloud_gateway_routes(repo_root, rel_path)
-                + _infer_spring_webflux_routes(repo_root, rel_path)
-                + (
-                    _infer_configured_api_client_endpoints(repo_root, rel_path)
-                    if configured_api_client_strategy1
-                    else []
-                )
-            ):
-                inferred[endpoint.id] = endpoint
+            for extractor in extractors:
+                for endpoint in extractor(repo_root, rel_path):
+                    inferred[endpoint.id] = endpoint
         elif rel_path.endswith("pom.xml"):
             for endpoint in _infer_openapi_generator_endpoints(repo_root, rel_path):
                 inferred[endpoint.id] = endpoint

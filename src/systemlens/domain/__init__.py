@@ -4,6 +4,7 @@ from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMeth
 from systemlens.domain.module_inventory import (
     BlockingPoint,
     DiscoveredModule,
+    JpaEntity,
     JavaArchitectureExtension,
     KafkaMethod,
     ModuleDependency,
@@ -21,6 +22,7 @@ __all__ = [
     "CodeFlowStep",
     "IntegrationMethod",
     "DiscoveredModule",
+    "JpaEntity",
     "JavaArchitectureExtension",
     "KafkaMethod",
     "ModuleDependency",

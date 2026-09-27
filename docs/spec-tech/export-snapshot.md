@@ -21,8 +21,12 @@ OpenAPI evidence paths; richer DTO/OpenAPI content requires an explicit future
 indexed contract rather than a live source read. This keeps an export
 reproducible when repository files change after `systemlens index`.
 Persisted JPA entity declarations are serialized on their owning service node
-as qualified names and root-relative source locations. The service inspector
-shows those entries without creating physical database nodes or access edges.
+as qualified names and root-relative source locations. The HTML projection also
+creates one `jpa_entity` node per declaration and a `maps` relation from its
+owning service; this is a mapping relation, not a database access edge.
+When `.systemlens/flow-descriptions.json` is present, the HTML export loads its
+descriptions by flow ID as a separate enrichment layer. Missing descriptions do
+not alter the persisted flow facts or prevent the export.
 
 The HTML renderer keeps its graph-detail section inside the left toolbar and
 hides it while empty. Selecting a resource or itinerary applies a panel state
@@ -107,7 +111,8 @@ tooltip and the persisted flow details. It must not infer a message
 type when the indexed port does not provide one.
 The export also includes `all_flows_call_graph`, built by scanning every
 persisted flow before adding module nodes, valid output-to-input service arcs,
-and trigger events.
+and trigger events. The exporter builds shared endpoint, flow and edge indexes
+once and reuses them for each flow graph.
 The port gesture is isolated from the card drag and node-selection handlers, so
 analysis never changes the graph view or camera and does not persist data.
 Every visible SVG arc has a transparent, wider hit-area path layered above it;

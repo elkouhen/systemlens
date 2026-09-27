@@ -11,10 +11,20 @@ input endpoint to an output endpoint of the same service, it displays only that
 source-evidenced potential internal flow and any CodeQL-resolved intermediate
 method calls. It does not imply that every input reaches every output.
 
-The service inspector lists persisted JPA entity declarations under Relations,
-with each qualified class name and root-relative source line. These entries
-identify mappings only; they do not add a physical database node or imply a
-read/write edge.
+The Architecture graph renders persisted JPA entity declarations as `Entité JPA`
+resource nodes owned by their microservice. Each node displays only its Java
+class name while retaining its qualified class name and root-relative source
+location in the exported model; the `maps` relation identifies the mapping
+without implying a database read/write edge.
+
+The exported Explorer presents the graph as a layered workspace: a compact
+control surface, a searchable graph context, summary counters, and a separate
+legend and inspector. The visual treatment adapts to light and dark themes and
+constrained viewports without changing graph data, selection state, or the
+meaning of the existing controls. Secondary widgets use the same surface,
+spacing, status, and interactive-row treatment for details, filters, code
+flows, references, and indexing issues.
+
 Every HTTP/Kafka input and output receives a deterministic identifier that is
 global to the exported graph: `I1`, `I2`, … for inputs and `O1`, `O2`, … for
 outputs. When a persisted code flow proves that an input reaches an output in

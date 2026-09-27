@@ -13,6 +13,7 @@
     const codeFlowFilterSummary = document.getElementById("code-flow-filter-summary");
     const codeFlowFilterReset = document.getElementById("code-flow-filter-reset");
     const codeFlowsTitle = document.getElementById("code-flows-title");
+    const codeFlowCompare = document.getElementById("code-flow-compare");
     function codeFlowStepLabel(kind) {
       return ({
         http_entry: "Entrée HTTP",
@@ -74,6 +75,42 @@
         ["Étapes", steps.length],
         ["Effets", steps.filter(step => ["message_publish", "http_call", "data_write"].includes(step.kind)).length],
       ];
+    }
+
+    function codeFlowMethodLabel(name) {
+      const parts = String(name || "").split(".").filter(Boolean);
+      return parts.length > 1 ? parts.slice(-2).join(".") : (name || "méthode inconnue");
+    }
+
+    function codeFlowDescription(flow) {
+      const aiDescription = graphData.flow_descriptions?.[flow.id];
+      if (aiDescription) return aiDescription;
+      const steps = flow.steps || [];
+      const trigger = steps[0];
+      const effect = [...steps].reverse().find(step => (
+        ["http_call", "message_publish", "data_read", "data_write"].includes(step.kind)
+      ));
+      if (!trigger || !effect) return flow.reason || "Flux potentiel détecté à partir des preuves indexées.";
+      const triggerVerb = trigger.kind === "message_entry"
+        ? "consomme"
+        : trigger.kind === "cron_entry"
+          ? "est déclenché par"
+          : "reçoit";
+      const effectVerb = effect.kind === "http_call"
+        ? "appeler"
+        : effect.kind === "message_publish"
+          ? "publier"
+          : effect.kind === "data_write"
+            ? "écrire dans"
+            : "lire";
+      const methodChain = [
+        flow.method,
+        ...steps.filter(step => step.kind === "method_call").map(step => step.name),
+      ].map(codeFlowMethodLabel).filter((name, index, values) => values.indexOf(name) === index);
+      const chainText = methodChain.length > 1
+        ? `, puis enchaîne ${methodChain.slice(1).join(" puis ")}`
+        : "";
+      return `Dans ${flow.module}, le flux potentiel ${triggerVerb} ${trigger.name} et démarre ${methodChain[0]}${chainText}, avant de ${effectVerb} ${effect.name}.`;
     }
 
     function compareCodeFlows(left, right) {
@@ -305,17 +342,27 @@
       return endpointIds.length >= 2 && services.size === 1;
     });
 
-    function showCodeFlow(flow) {
-      const globalCallGraph = callGraphForFlow(flow);
-      const globalNodes = (globalCallGraph?.node_order || globalCallGraph?.nodes || [])
-        .map(service => nodeIdForCodeFlowResource(service, "microservice"))
-        .filter(Boolean);
-      const globalPath = globalNodes.length
-        ? { nodes: globalNodes, edges: [], localLinks: [] }
-        : null;
-      const exactPath = globalPath || callGraphPathForCodeFlow(flow) || pathForCodeFlow(flow);
-      const path = exactPath || nodePathForCodeFlow(flow);
-      if (!path) return;
+    function showCodeFlows(flows) {
+      const pathResults = flows.map(flow => {
+        const globalCallGraph = callGraphForFlow(flow);
+        const globalNodes = (globalCallGraph?.node_order || globalCallGraph?.nodes || [])
+          .map(service => nodeIdForCodeFlowResource(service, "microservice"))
+          .filter(Boolean);
+        const globalPath = globalNodes.length
+          ? { nodes: globalNodes, edges: [], localLinks: [] }
+          : null;
+        const exactPath = globalPath || callGraphPathForCodeFlow(flow) || pathForCodeFlow(flow);
+        return { path: exactPath || nodePathForCodeFlow(flow), reconciled: Boolean(exactPath) };
+      }).filter(result => result.path);
+      const paths = pathResults.map(result => result.path);
+      if (!paths.length) return;
+      const path = {
+        nodes: [...new Set(paths.flatMap(candidate => candidate.nodes))],
+        edges: [...new Map(paths.flatMap(candidate => candidate.edges || []).map(edge => [edge.edge, edge])).values()],
+        localLinks: [...new Map(paths.flatMap(candidate => candidate.localLinks || [])
+          .map(link => [`${link.input_endpoint_id}:${link.output_endpoint_id}`, link])).values()],
+      };
+      const flow = flows[0];
       // The owning module is the consumer for an input-triggered flow. The
       // visual root must follow the exported call-graph path instead: it is
       // the upstream producer when a single Kafka source is proven, and the
@@ -331,12 +378,207 @@
       }
       showPath(path, path.nodes, {
         codeFlow: flow,
+        codeFlows: flows,
         codeFlowRootNodeId: rootNodeId,
         codeFlowTrigger: flow.steps?.[0] || null,
         showDetails: false,
-        topologyReconciled: Boolean(exactPath),
+        topologyReconciled: pathResults.every(result => result.reconciled),
       });
+      renderComparisonGraphs(flows);
       syncCodeFlowSelection();
+    }
+
+    function showCodeFlow(flow) {
+      showCodeFlows([flow]);
+    }
+
+    function renderComparisonGraphs(flows) {
+      const comparison = document.getElementById("graph-comparison");
+      if (!comparison) return;
+      const graphElements = [
+        graphCanvas,
+        document.getElementById("graph-layers"),
+        document.getElementById("graph-groups"),
+        document.getElementById("graph-port-paths"),
+        document.getElementById("graph-node-labels"),
+        document.getElementById("graph-flow-tooltips"),
+      ];
+      graphElements.forEach(element => { if (element) element.hidden = flows.length > 1; });
+      comparison.replaceChildren();
+      comparison.hidden = flows.length < 2;
+      if (flows.length < 2) return;
+      const serviceCounts = new Map();
+      flows.forEach(flow => {
+        const graph = callGraphForFlow(flow) || {};
+        [...new Set(graph.node_order || graph.nodes || [])].forEach(name => {
+          serviceCounts.set(name, (serviceCounts.get(name) || 0) + 1);
+        });
+      });
+      flows.forEach((flow, flowIndex) => {
+        const graph = callGraphForFlow(flow) || {};
+        const names = [...new Set(graph.node_order || graph.nodes || [])];
+        const edges = (graph.edges || []).filter(edge => names.includes(edge.source) && names.includes(edge.target));
+        const portForEndpoint = endpointId => [...nodeDataById.values()]
+          .flatMap(candidate => candidate.ports || [])
+          .find(candidate => candidate.endpoint_id === endpointId);
+        const portCode = (endpointId, direction) => {
+          const port = portForEndpoint(endpointId);
+          return port?.label?.match(direction === "out" ? /O\d+/ : /I\d+/)?.[0]
+            || (direction === "out" ? "OUT" : "IN");
+        };
+        const children = new Map();
+        const incoming = new Set();
+        edges.forEach(edge => {
+          children.set(edge.source, [...(children.get(edge.source) || []), edge.target]);
+          incoming.add(edge.target);
+        });
+        const roots = names.filter(name => !incoming.has(name));
+        const levels = new Map((roots.length ? roots : names.slice(0, 1)).map(name => [name, 0]));
+        const queue = [...levels.keys()];
+        for (let index = 0; index < queue.length; index += 1) {
+          const source = queue[index];
+          (children.get(source) || []).forEach(target => {
+            if (levels.has(target)) return;
+            levels.set(target, (levels.get(source) || 0) + 1);
+            queue.push(target);
+          });
+        }
+        names.forEach((name, index) => { if (!levels.has(name)) levels.set(name, index); });
+        const byLevel = new Map();
+        names.forEach(name => {
+          const level = levels.get(name) || 0;
+          byLevel.set(level, [...(byLevel.get(level) || []), name]);
+        });
+        const positions = new Map();
+        const portsByNode = new Map();
+        const addPort = (name, endpointId, direction) => {
+          if (!endpointId) return;
+          const list = portsByNode.get(name) || [];
+          if (!list.some(port => port.endpointId === endpointId)) list.push({ endpointId, direction });
+          portsByNode.set(name, list);
+        };
+        edges.forEach(edge => {
+          addPort(edge.source, edge.endpoint_ids?.[0], "out");
+          addPort(edge.target, edge.endpoint_ids?.[1], "in");
+        });
+        byLevel.forEach((levelNames, level) => {
+          levelNames.sort((left, right) => left.localeCompare(right));
+          levelNames.forEach((name, row) => positions.set(name, {
+            x: 28 + level * 180,
+            y: 28 + row * 82,
+          }));
+        });
+        const width = Math.max(360, (Math.max(...levels.values(), 0) + 1) * 180 + 80);
+        const height = Math.max(280, Math.max(...[...byLevel.values()].map(items => items.length), 1) * 82 + 70);
+        const panel = document.createElement("section");
+        panel.className = "comparison-flow-panel";
+        panel.setAttribute("aria-label", `Graphe d’appel ${flowIndex + 1}`);
+        const header = document.createElement("header");
+        header.className = "comparison-flow-header";
+        const title = document.createElement("strong");
+        const trigger = flow.steps?.[0];
+        const triggerName = trigger?.kind === "http_entry"
+          ? `${flow.module} · ${trigger.name}`
+          : trigger?.name || "Déclencheur inconnu";
+        title.textContent = `${flowIndex + 1}. ${codeFlowStepLabel(trigger?.kind)} · ${triggerName}`;
+        const meta = document.createElement("span");
+        const protocol = [...codeFlowProtocols(flow)].map(value => value.toUpperCase()).join(" + ") || "Protocole inconnu";
+        meta.textContent = `${flow.module} · ${names.length} services · ${edges.length} arcs · ${protocol}`;
+        header.append(title, meta);
+        const canvas = document.createElement("div");
+        canvas.className = "comparison-flow-canvas";
+        canvas.style.minWidth = `${width}px`;
+        canvas.style.minHeight = `${height}px`;
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.classList.add("comparison-flow-svg");
+        svg.style.width = `${width}px`;
+        svg.style.height = `${height}px`;
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        const markerId = `comparison-arrow-${flowIndex}`;
+        svg.innerHTML = `<defs><marker id="${markerId}" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#7182d4"></path></marker></defs>`;
+        edges.forEach((edge, edgeIndex) => {
+          const source = positions.get(edge.source);
+          const target = positions.get(edge.target);
+          if (!source || !target) return;
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          line.setAttribute("x1", String(source.x + 112));
+          line.setAttribute("y1", String(source.y + 24));
+          line.setAttribute("x2", String(target.x));
+          line.setAttribute("y2", String(target.y + 24));
+          line.setAttribute("stroke", "#7182d4");
+          line.setAttribute("stroke-width", "2");
+          line.setAttribute("marker-end", `url(#${markerId})`);
+          svg.append(line);
+          const label = document.createElement("span");
+          label.className = "comparison-flow-edge-label";
+          const sourcePort = portForEndpoint(edge.endpoint_ids?.[0]);
+          const targetPort = portForEndpoint(edge.endpoint_ids?.[1]);
+          const protocol = edge.kind === "kafka" ? "Kafka" : edge.kind === "rest" ? "HTTP" : edge.kind || "Relation";
+          const detail = sourcePort?.message_type?.split(".").at(-1)
+            || targetPort?.message_type?.split(".").at(-1)
+            || sourcePort?.name
+            || targetPort?.name
+            || "relation";
+          const portMapping = `${portCode(edge.endpoint_ids?.[0], "out")} → ${portCode(edge.endpoint_ids?.[1], "in")}`;
+          label.textContent = String(edge.order ?? edgeIndex + 1);
+          label.title = `${portMapping} · ${detail} · ${protocol}`;
+          label.style.left = `${Math.min(source.x + 112, target.x) + 12}px`;
+          label.style.top = `${(source.y + target.y) / 2 + 17}px`;
+          canvas.append(label);
+        });
+        canvas.append(svg);
+        positions.forEach((position, name) => {
+          const node = document.createElement("div");
+          node.className = "comparison-flow-node graph-node-card-label is-code-flow-node";
+          node.style.left = `${position.x}px`;
+          node.style.top = `${position.y}px`;
+          const icon = document.createElement("span");
+          icon.className = "graph-node-card-icon is-service";
+          const nodeName = document.createElement("span");
+          nodeName.className = "graph-node-card-name";
+          nodeName.textContent = name;
+          const kind = document.createElement("span");
+          kind.className = "graph-node-card-kind";
+          kind.textContent = "Microservice";
+          node.append(icon, nodeName, kind);
+          if (name === flow.module) {
+            const rootBadge = document.createElement("span");
+            rootBadge.className = "graph-node-root-badge";
+            rootBadge.textContent = "Racine";
+            node.append(rootBadge);
+            const trigger = flow.steps?.[0];
+            if (trigger?.name) {
+              const triggerBadge = document.createElement("span");
+              const protocol = trigger.kind === "http_entry" ? "HTTP" : trigger.kind === "cron_entry" ? "Cron" : "Kafka";
+              triggerBadge.className = `graph-node-trigger-badge is-${protocol.toLowerCase()}`;
+              triggerBadge.textContent = `${protocol} · ${trigger.name}`;
+              triggerBadge.title = `Déclencheur ${protocol} · ${trigger.name}`;
+              node.append(triggerBadge);
+            }
+          }
+          if ((serviceCounts.get(name) || 0) > 1) {
+            const shared = document.createElement("span");
+            shared.className = "comparison-flow-shared-badge";
+            shared.textContent = "Commun";
+            shared.title = "Service présent dans plusieurs graphes comparés";
+            node.append(shared);
+          }
+          (portsByNode.get(name) || []).forEach((port, index, ports) => {
+            const anchor = document.createElement("span");
+            const endpoint = [...nodeDataById.values()]
+              .flatMap(candidate => candidate.ports || [])
+              .find(candidate => candidate.endpoint_id === port.endpointId);
+            const protocol = endpoint?.system === "kafka" ? "kafka" : endpoint?.system === "rest" ? "http" : "unknown";
+            anchor.className = `graph-node-port-reference is-${port.direction} is-${protocol}`;
+            anchor.textContent = portCode(port.endpointId, port.direction);
+            anchor.style.setProperty("--port-offset", `${((index + 1) / (ports.length + 1)) * 100}%`);
+            node.append(anchor);
+          });
+          canvas.append(node);
+        });
+        panel.append(header, canvas);
+        comparison.append(panel);
+      });
     }
 
     function callGraphPathForCodeFlow(flow) {
@@ -415,9 +657,16 @@
 
     function syncCodeFlowSelection() {
       codeFlowsList.querySelectorAll(".code-flow-item").forEach(item => {
-        const selected = item.dataset.flowId === graphState.selectedCodeFlowId;
+        const selected = graphState.selectedCodeFlowIds.includes(item.dataset.flowId);
         item.classList.toggle("is-selected", selected);
+        const checkbox = item.querySelector(".code-flow-select");
+        if (checkbox) checkbox.checked = selected;
       });
+      const count = graphState.selectedCodeFlowIds.length;
+      codeFlowCompare.disabled = count < 2;
+      codeFlowCompare.textContent = count >= 2
+        ? `Comparer ${count} flux`
+        : "Comparer les flux sélectionnés";
     }
 
     function servicesForCodeFlow(flow) {
@@ -435,21 +684,41 @@
 
     function codeFlowItem(flow) {
       const item = document.createElement("li");
-      const selected = graphState.selectedCodeFlowId === flow.id;
+      const selected = graphState.selectedCodeFlowIds.includes(flow.id);
       item.className = `code-flow-item${flow.status === "cycle" ? " is-cycle" : ""}${flow.reconciliation === "partial" ? " is-partial" : ""}${selected ? " is-selected" : ""}`;
       item.dataset.flowId = flow.id;
       const header = document.createElement("div");
       header.className = "code-flow-header";
+      const select = document.createElement("input");
+      select.type = "checkbox";
+      select.className = "code-flow-select";
+      select.checked = selected;
+      select.title = "Ajouter ce flux à la comparaison";
+      select.setAttribute("aria-label", `Ajouter le flux ${flow.id} à la comparaison`);
+      select.addEventListener("click", event => event.stopPropagation());
+      select.addEventListener("change", event => {
+        const selectedIds = new Set(graphState.selectedCodeFlowIds);
+        if (event.target.checked) selectedIds.add(flow.id);
+        else selectedIds.delete(flow.id);
+        graphState.selectedCodeFlowIds = [...selectedIds];
+        syncCodeFlowSelection();
+        const selectedFlows = codeFlows.filter(candidate => selectedIds.has(candidate.id));
+        if (selectedFlows.length) showCodeFlows(selectedFlows);
+        else setToolbarTab("flows");
+      });
       const trigger = flow.steps?.[0];
       const title = document.createElement("div");
       title.className = "reference-title code-flow-title";
       title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`;
-      header.append(title);
+      header.append(select, title);
       const exactPath = pathForCodeFlow(flow);
       const path = exactPath || nodePathForCodeFlow(flow);
       const meta = document.createElement("div");
       meta.className = "reference-meta";
       meta.textContent = flow.module;
+      const description = document.createElement("p");
+      description.className = "code-flow-reason";
+      description.textContent = codeFlowDescription(flow);
       const stats = document.createElement("div");
       stats.className = "code-flow-stats";
       codeFlowStats(flow).forEach(([label, value]) => {
@@ -487,7 +756,7 @@
           ? "Flux détecté ; le chemin complet ne peut pas être rapproché de la topologie affichée"
           : "Flux détecté ; le chemin n’est pas disponible dans la topologie affichée";
       }
-      item.append(header, meta, stats, badges);
+      item.append(header, meta, description, stats, badges);
       return item;
     }
 
@@ -525,35 +794,7 @@
           && kindMatches
           && messageTypeMatches;
       });
-      const byTriggerType = new Map();
-      visible.forEach(flow => {
-        const trigger = flow.steps?.[0];
-        const triggerKey = codeFlowStepLabel(trigger?.kind || "unknown");
-        const group = byTriggerType.get(triggerKey) || [];
-        group.push(flow);
-        byTriggerType.set(triggerKey, group);
-      });
-      const triggerGroups = [...byTriggerType.entries()]
-        .sort(([leftName, leftFlows], [rightName, rightFlows]) => (
-          Math.max(...rightFlows.map(codeFlowPriority))
-          - Math.max(...leftFlows.map(codeFlowPriority))
-          || leftName.localeCompare(rightName)
-        ))
-        .map(([triggerType, flows]) => {
-          const group = document.createElement("li");
-          group.className = "code-flow-trigger-group";
-          const triggerDetails = document.createElement("details");
-          triggerDetails.open = true;
-          const summary = document.createElement("summary");
-          summary.textContent = `${triggerType} · ${flows.length} flux · cliquer pour afficher`;
-          const list = document.createElement("ul");
-          list.className = "references-list code-flow-group-list";
-          list.append(...flows.sort(compareCodeFlows).map(codeFlowItem));
-          triggerDetails.append(summary, list);
-          group.append(triggerDetails);
-          return group;
-        });
-      codeFlowsList.replaceChildren(...triggerGroups);
+      codeFlowsList.replaceChildren(...visible.sort(compareCodeFlows).map(codeFlowItem));
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
       codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} · ${scopedCodeFlows.length} dans cette portée · sélectionnez un flux pour ouvrir son graphe d’appel.`;
@@ -580,5 +821,9 @@
       renderCodeFlows();
     });
     codeFlowFilterReset.addEventListener("click", resetCodeFlowFilters);
+    codeFlowCompare.addEventListener("click", () => {
+      const selected = codeFlows.filter(flow => graphState.selectedCodeFlowIds.includes(flow.id));
+      if (selected.length >= 2) showCodeFlows(selected);
+    });
     document.getElementById("flows-panel").addEventListener("systemlens:flows-open", renderCodeFlows);
     renderCodeFlows();

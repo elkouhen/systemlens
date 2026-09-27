@@ -11,6 +11,7 @@
       const showingFlows = tab === "flows";
       const showingFlowGraph = showingFlows && options.showFlowGraph === true;
       const graphVisible = showingGraph || showingFlowGraph;
+      const graphComparison = document.getElementById("graph-comparison");
       if (showingGraph) graphState.viewMode = "architecture";
       else if (showingFlowGraph) graphState.viewMode = "call-graph";
       else if (showingFlows) graphState.viewMode = "empty";
@@ -25,6 +26,9 @@
         document.getElementById("graph-node-labels"),
         document.getElementById("graph-flow-tooltips"),
       ].forEach(element => { if (element) element.hidden = !graphVisible; });
+      if (graphComparison) {
+        graphComparison.hidden = !graphVisible || !graphState.comparisonMode;
+      }
       if (!graphVisible && graphFlowStatus) graphFlowStatus.hidden = true;
       // The two navigation surfaces have different meanings: Graphe is the
       // static architecture view, while Flux de code only becomes a graph
@@ -37,6 +41,8 @@
         graphState.dependencyFocusOnly = false;
         graphState.analysisPortEndpointId = null;
         graphState.selectedCodeFlowId = null;
+        graphState.selectedCodeFlowIds = [];
+        graphState.comparisonMode = false;
         graphState.selectedCallGraphEdgeKey = null;
         graphState.showAllCodeFlowPorts = false;
         graphState.pathMicroserviceOrder = new Map();
@@ -52,6 +58,7 @@
         delete graphCanvas.dataset.selectedCodeFlow;
         delete graphCanvas.dataset.selectedCallGraphArc;
         delete graphCanvas.dataset.flowFocusRatio;
+        graphComparison?.replaceChildren();
         // The Flux de code panel is hidden behind the toolbar and does not
         // need a graph rebuild. Rebuild only when returning to Graphe, after
         // the static view has become visible again.
@@ -256,7 +263,7 @@
         const incoming = graphData.links.filter(link => link.target === node.id).length;
         const outgoing = graphData.links.filter(link => link.source === node.id).length;
         resourcesList.append(referenceItem(
-          node.name,
+          nodeDisplayName(node),
           `${nodeKindLabel(node)} · ${incoming} entrée${incoming > 1 ? "s" : ""} · ${outgoing} sortie${outgoing > 1 ? "s" : ""}`,
           "Voir",
           () => {

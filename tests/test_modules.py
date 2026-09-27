@@ -978,6 +978,11 @@ def test_index_persists_source_evidenced_jpa_entities(
         "@Entity class TestEntity {}\n",
         encoding="utf-8",
     )
+    (source.parent / "Unrelated.java").write_text(
+        "package example; import jakarta.persistence.Entity; "
+        "@other.Entity class Unrelated {}\n",
+        encoding="utf-8",
+    )
     with Store(tmp_path) as store:
         index_repo(
             tmp_path, Config(codeql_enabled=False, call_graph_engine="none"),
