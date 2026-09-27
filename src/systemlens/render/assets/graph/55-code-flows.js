@@ -27,12 +27,6 @@
       })[kind] || String(kind || "Étape").replaceAll("_", " ");
     }
 
-    function codeFlowConfidenceLabel(confidence) {
-      return ({ low: "faible", medium: "moyenne", high: "élevée" })[confidence]
-        || confidence
-        || "inconnue";
-    }
-
     function codeFlowPriority(flow) {
       return flow.status === "cycle" ? 1 : 0;
     }
@@ -505,10 +499,16 @@
           line.setAttribute("y1", String(source.y + 24));
           line.setAttribute("x2", String(target.x));
           line.setAttribute("y2", String(target.y + 24));
+          line.classList.add("comparison-flow-edge");
           line.setAttribute("stroke", "#7182d4");
           line.setAttribute("stroke-width", "2");
           line.setAttribute("marker-end", `url(#${markerId})`);
-          svg.append(line);
+          const hitLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          hitLine.classList.add("comparison-flow-edge-hit");
+          hitLine.setAttribute("x1", line.getAttribute("x1"));
+          hitLine.setAttribute("y1", line.getAttribute("y1"));
+          hitLine.setAttribute("x2", line.getAttribute("x2"));
+          hitLine.setAttribute("y2", line.getAttribute("y2"));
           const label = document.createElement("span");
           label.className = "comparison-flow-edge-label";
           const sourcePort = portForEndpoint(edge.endpoint_ids?.[0]);
@@ -525,6 +525,16 @@
           label.style.left = `${Math.min(source.x + 112, target.x) + 12}px`;
           label.style.top = `${(source.y + target.y) / 2 + 17}px`;
           canvas.append(label);
+          const setHighlighted = highlighted => {
+            line.classList.toggle("is-highlighted", highlighted);
+            hitLine.classList.toggle("is-highlighted", highlighted);
+            label.classList.toggle("is-highlighted", highlighted);
+          };
+          hitLine.addEventListener("mouseenter", () => setHighlighted(true));
+          hitLine.addEventListener("mouseleave", () => setHighlighted(false));
+          label.addEventListener("mouseenter", () => setHighlighted(true));
+          label.addEventListener("mouseleave", () => setHighlighted(false));
+          svg.append(line, hitLine);
         });
         canvas.append(svg);
         positions.forEach((position, name) => {
@@ -727,17 +737,6 @@
         stat.innerHTML = `<strong>${value}</strong><small>${label}</small>`;
         stats.append(stat);
       });
-      const badges = document.createElement("div");
-      badges.className = "code-flow-badges";
-      [[`Confiance ${codeFlowConfidenceLabel(flow.confidence)}`, `is-confidence-${flow.confidence || "unknown"}`],
-        [flow.reconciliation === "partial" ? "Réconciliation partielle" : "Topologie réconciliée", flow.reconciliation === "partial" ? "is-warning" : "is-complete"],
-        [codeFlowProtocols(flow).size ? [...codeFlowProtocols(flow)].map(value => value.toUpperCase()).join(" + ") : "Protocole inconnu", "is-protocol"],
-        [Math.max(1, Number(flow.alternative_count || 1)) > 1 ? `${flow.alternative_count} alternatives` : "Une route", "is-alternatives"]].forEach(([text, className]) => {
-        const badge = document.createElement("span");
-        badge.className = `detail-badge ${className}`;
-        badge.textContent = text;
-        badges.append(badge);
-      });
       if (path) {
         item.tabIndex = 0;
         item.title = flow.reconciliation === "partial"
@@ -756,7 +755,7 @@
           ? "Flux détecté ; le chemin complet ne peut pas être rapproché de la topologie affichée"
           : "Flux détecté ; le chemin n’est pas disponible dans la topologie affichée";
       }
-      item.append(header, meta, description, stats, badges);
+      item.append(header, meta, description, stats);
       return item;
     }
 

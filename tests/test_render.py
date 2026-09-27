@@ -1413,7 +1413,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'function codeFlowStats(flow)' in document
     assert 'className = "code-flow-stats"' in document
     assert 'className = "code-flow-stat"' in document
-    assert 'item.append(header, meta, description, stats, badges);' in document
+    assert 'item.append(header, meta, description, stats);' in document
+    assert 'code-flow-badges' not in document
     assert 'id="code-flow-confidence"' in document
     assert 'id="code-flow-kind"' in document
     assert 'id="code-flow-message-type"' in document
