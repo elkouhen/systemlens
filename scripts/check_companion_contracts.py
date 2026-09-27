@@ -19,14 +19,26 @@ LOCAL_LINK = re.compile(r"\[[^]]+\]\((?!https?://|#)([^)]+)\)")
 JSON_BLOCK = re.compile(r"```json\n(.*?)\n```", re.DOTALL)
 
 
-def _run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        command,
-        cwd=cwd,
-        check=True,
-        text=True,
-        capture_output=True,
-    )
+def _run(
+    command: list[str],
+    *,
+    cwd: Path,
+    timeout_seconds: int = 900,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            command,
+            cwd=cwd,
+            check=True,
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as error:
+        rendered = " ".join(command)
+        raise TimeoutError(
+            f"Command timed out after {timeout_seconds}s: {rendered}"
+        ) from error
 
 
 def _validate_skill(skill_root: Path) -> None:

@@ -1,0 +1,44 @@
+name: Companion contract
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out SystemLens
+        uses: actions/checkout@v6
+
+      - name: Check out the companion skill
+        uses: actions/checkout@v6
+        with:
+          repository: elkouhen/systemlens-skill
+          path: systemlens-skill
+
+      - name: Check out the observability laboratory
+        uses: actions/checkout@v6
+        with:
+          repository: elkouhen/systemlens-observability-lab
+          path: systemlens-observability-lab
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install SystemLens dependencies
+        run: uv sync --group dev --locked
+
+      - name: Run the companion contract
+        run: >-
+          uv run python scripts/check_companion_contracts.py
+          --skill-root "$GITHUB_WORKSPACE/systemlens-skill"
+          --lab-root "$GITHUB_WORKSPACE/systemlens-observability-lab"
+          --systemlens "$GITHUB_WORKSPACE/.venv/bin/systemlens"
