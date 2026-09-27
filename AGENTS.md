@@ -125,11 +125,12 @@ If the prescribed environment or command is unavailable, do not substitute an
 unverified setup silently: report the missing prerequisite and the validation
 that could not be performed.
 
-When regenerating the observability-lab supermarket HTML graph, first write the
-export in `../systemlens-observability-lab/apps/supermarket-demo/architecture.html`,
-then copy that generated file to `docs/models/simple-supermarket.html` in this
-repository. The latter is the documentation site's checked-in live model and
-must stay synchronized with the POC export.
+When regenerating the observability-lab supermarket HTML graph, use
+`../systemlens-observability-lab/apps/supermarket-demo/architecture-ia.html` as
+the POC source, then copy that generated file to
+`docs/models/simple-supermarket.html` in this repository. The latter is the
+documentation site's checked-in live model and must stay synchronized with the
+`architecture-ia.html` POC export.
 
 ## AI operating practices
 
