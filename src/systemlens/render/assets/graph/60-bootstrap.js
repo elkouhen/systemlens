@@ -205,6 +205,7 @@
     resourcesTab.addEventListener("click", () => setToolbarTab("resources"));
     openApiTab.addEventListener("click", () => setToolbarTab("openapi"));
     routesTab.addEventListener("click", () => setToolbarTab("routes"));
+    asyncApiTab.addEventListener("click", () => setToolbarTab("asyncapi"));
     kafkaTab.addEventListener("click", () => setToolbarTab("kafka"));
     persistenceTab.addEventListener("click", () => setToolbarTab("persistence"));
     issuesTab.addEventListener("click", () => setToolbarTab("issues"));
@@ -243,6 +244,7 @@
     }));
     openApiReferencesFilter.addEventListener("input", renderReferences);
     routesFilter.addEventListener("input", renderReferences);
+    asyncApiPanelFilter.addEventListener("input", renderReferences);
     dtoReferencesFilter.addEventListener("input", renderReferences);
     mongoClassReferencesFilter.addEventListener("input", renderReferences);
     resourcesFilter.addEventListener("input", renderResources);

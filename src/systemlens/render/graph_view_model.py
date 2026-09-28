@@ -648,6 +648,15 @@ def build_graph_view_model(
                 ),
                 "resources": resources,
                 "http_routes": http_routes,
+                "rest_dtos": [
+                    {
+                        "name": dto.qualified_name,
+                        "location": f"{dto.path}:{dto.line}",
+                        "roles": list(dto.roles),
+                    }
+                    for dto in (module.jpa_dtos if module else ())
+                    if any("rest" in role.casefold() for role in dto.roles)
+                ],
                 "jpa_entities": [
                     {
                         "name": entity.qualified_name,

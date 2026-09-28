@@ -1160,6 +1160,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="routes-tab"' in document
     assert 'id="routes-panel"' in document
     assert 'id="routes-filter"' in document
+    assert 'id="asyncapi-tab"' in document
+    assert 'id="asyncapi-panel"' in document
     assert 'className = "route-provider-group"' in document
     assert 'function appendExpandedHttpRoute' in document
     assert 'id="resources-tab"' in document
@@ -1174,6 +1176,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
         document.index('id="resources-tab"'),
         document.index('id="openapi-tab"'),
         document.index('id="routes-tab"'),
+        document.index('id="asyncapi-tab"'),
         document.index('id="kafka-tab"'),
         document.index('id="persistence-tab"'),
     ]

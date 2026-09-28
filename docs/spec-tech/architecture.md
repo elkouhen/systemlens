@@ -53,6 +53,12 @@ endpoint identity. Route details derive consumers from the persisted HTTP
 edges, so the export does not re-parse source files or infer consumers from
 route text alone.
 
+The browser model keeps resource descriptions close to their owning resource:
+Kafka topic nodes expose associated Kafka DTOs, Mongo collection nodes expose
+persistence classes, and selected HTTP routes expose REST DTO evidence from
+their provider microservice. AsyncAPI contracts are exported as a dedicated
+catalogue alongside OpenAPI contracts.
+
 Impact analysis uses the persisted topology edges without re-parsing source
 files. Its directed projection reverses REST edges, so a provider change
 reaches its callers, and preserves Kafka edges, so a producer change reaches

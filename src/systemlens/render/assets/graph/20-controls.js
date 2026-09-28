@@ -10,6 +10,7 @@
     const resourcesTab = document.getElementById("resources-tab");
     const openApiTab = document.getElementById("openapi-tab");
     const routesTab = document.getElementById("routes-tab");
+    const asyncApiTab = document.getElementById("asyncapi-tab");
     const kafkaTab = document.getElementById("kafka-tab");
     const persistenceTab = document.getElementById("persistence-tab");
     const issuesTab = document.getElementById("issues-tab");
@@ -25,6 +26,7 @@
     const flowsPanel = document.getElementById("flows-panel");
     const openApiPanel = document.getElementById("openapi-panel");
     const routesPanel = document.getElementById("routes-panel");
+    const asyncApiPanel = document.getElementById("asyncapi-panel");
     const kafkaPanel = document.getElementById("kafka-panel");
     const persistencePanel = document.getElementById("persistence-panel");
     const graphCanvas = document.getElementById("graph");
@@ -50,9 +52,10 @@
     const routesFilter = document.getElementById("routes-filter");
     const routesTitle = document.getElementById("routes-title");
     const dtoReferencesTitle = document.getElementById("dto-references-title");
-    const asyncApiReferencesList = document.getElementById("asyncapi-references");
-    const asyncApiReferencesEmpty = document.getElementById("asyncapi-references-empty");
-    const asyncApiReferencesTitle = document.getElementById("asyncapi-references-title");
+    const asyncApiReferencesList = document.getElementById("asyncapi-panel-references");
+    const asyncApiReferencesEmpty = document.getElementById("asyncapi-panel-empty");
+    const asyncApiReferencesTitle = document.getElementById("asyncapi-panel-title");
+    const asyncApiPanelFilter = document.getElementById("asyncapi-reference-filter");
     const mongoClassReferencesList = document.getElementById("mongo-class-references");
     const mongoClassReferencesEmpty = document.getElementById("mongo-class-references-empty");
     const mongoClassReferencesFilter = document.getElementById("mongo-class-reference-filter");

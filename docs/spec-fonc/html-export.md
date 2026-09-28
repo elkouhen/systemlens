@@ -32,9 +32,16 @@ remains visible and is reported as such; the architecture graph does not add a
 separate visual node for every route.
 
 The architecture resources navigation includes a Routes tab alongside
-Resources, OpenAPI, Messages, and Data. The tab lists exposed routes grouped
-by their provider microservice, supports filtering by route or service, and
-opens the same consumer inspector as the microservice widget.
+Resources, OpenAPI, AsyncAPI, Messages, and Data. The Routes tab lists exposed
+routes grouped by provider microservice and route path, supports filtering by
+route or service, and opens the same consumer inspector as the microservice
+widget. The AsyncAPI tab lists indexed contracts and supports filtering by
+contract path or provider service.
+
+When a selected HTTP route has REST DTO evidence on its provider microservice,
+the route details list the DTO names, roles, and source locations. Topic
+details list associated Kafka DTOs, and Mongo collection details list their
+associated persistence classes.
 
 The exported `call_graphs` map describes service-level propagation for one flow
 or flow group. Each graph contains participating nodes, deterministic order,

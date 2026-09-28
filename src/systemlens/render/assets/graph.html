@@ -39,6 +39,7 @@
           <button id="resources-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="resources-panel">Ressources</button>
           <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
           <button id="routes-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="routes-panel">Routes</button>
+          <button id="asyncapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="asyncapi-panel">AsyncAPI</button>
           <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Messages</button>
           <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Données</button>
         </div>
@@ -190,6 +191,14 @@
       </div>
       <section class="references-section"><input id="routes-filter" class="reference-filter-input" type="search" placeholder="Filtrer par route ou microservice" autocomplete="off" aria-label="Filtrer les routes HTTP"><ul id="routes-list" class="references-list"></ul><p id="routes-empty" class="references-empty">Aucune route HTTP détectée.</p></section>
     </div>
+    <div id="asyncapi-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="asyncapi-tab" hidden>
+      <div class="references-header">
+        <p class="references-kicker">Documentation de messages</p>
+        <h2 id="asyncapi-panel-title" class="references-title">Contrats AsyncAPI</h2>
+        <p class="references-description">Inspectez les contrats AsyncAPI publiés par les microservices.</p>
+      </div>
+      <section class="references-section"><input id="asyncapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats AsyncAPI"><ul id="asyncapi-panel-references" class="references-list"></ul><p id="asyncapi-panel-empty" class="references-empty">Aucun contrat AsyncAPI détecté.</p></section>
+    </div>
     <div id="kafka-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="kafka-tab" hidden>
       <div class="references-header">
         <p class="references-kicker">Schémas de données d’événements</p>
@@ -197,7 +206,6 @@
         <p class="references-description">Inspectez les classes Java qui définissent les données échangées par messages.</p>
       </div>
       <section class="references-section"><input id="dto-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTO par nom ou package" autocomplete="off" aria-label="Filtrer les DTO de messages"><ul id="dto-references" class="references-list"></ul><p id="dto-references-empty" class="references-empty">Aucun DTO de messages détecté.</p></section>
-      <section class="references-section"><h3 id="asyncapi-references-title">Contrats AsyncAPI</h3><ul id="asyncapi-references" class="references-list"></ul><p id="asyncapi-references-empty" class="references-empty">Aucun contrat AsyncAPI détecté.</p></section>
     </div>
     <div id="persistence-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="persistence-tab" hidden>
       <div class="references-header">

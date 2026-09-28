@@ -693,6 +693,9 @@
         title: `Ouvrir ${route.location} dans VS Code`,
         action: () => { window.location.href = route.vscode_uri; },
       }] : [], sourceGroup);
+      appendList("DTO REST", (node.rest_dtos || []).map(dto => (
+        `${dto.name} · ${dto.roles.join(", ")} · ${dto.location}`
+      )), sourceGroup);
       const consumers = httpRouteConsumers(node, route);
       const relationsGroup = createDetailsGroup("Consommation");
       appendActionList("Microservices consommateurs", consumers.map(item => ({

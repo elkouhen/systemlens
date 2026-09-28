@@ -74,6 +74,7 @@
       const showingIssues = tab === "issues";
       const showingOpenApi = tab === "openapi";
       const showingRoutes = tab === "routes";
+      const showingAsyncApi = tab === "asyncapi";
       const showingKafka = tab === "kafka";
       const showingPersistence = tab === "persistence";
       const resourceTabGroup = document.getElementById("resource-tab-group");
@@ -86,6 +87,8 @@
       openApiTab.setAttribute("aria-selected", String(showingOpenApi));
       routesTab.classList.toggle("is-active", showingRoutes);
       routesTab.setAttribute("aria-selected", String(showingRoutes));
+      asyncApiTab.classList.toggle("is-active", showingAsyncApi);
+      asyncApiTab.setAttribute("aria-selected", String(showingAsyncApi));
       kafkaTab.classList.toggle("is-active", showingKafka);
       kafkaTab.setAttribute("aria-selected", String(showingKafka));
       persistenceTab.classList.toggle("is-active", showingPersistence);
@@ -101,6 +104,7 @@
       issuesPanel.hidden = !showingIssues;
       openApiPanel.hidden = !showingOpenApi;
       routesPanel.hidden = !showingRoutes;
+      asyncApiPanel.hidden = !showingAsyncApi;
       kafkaPanel.hidden = !showingKafka;
       persistencePanel.hidden = !showingPersistence;
       flowsPanel.hidden = !showingFlows;
@@ -309,15 +313,24 @@
           ? (node.asyncapi_contracts || []).map(contract => ({ ...contract, module: node.name }))
           : []
       ));
+      const asyncApiQuery = asyncApiPanelFilter.value.trim().toLocaleLowerCase();
+      const visibleAsyncContracts = asyncContracts.filter(contract => (
+        !asyncApiQuery
+        || contract.module.toLocaleLowerCase().includes(asyncApiQuery)
+        || contract.path.toLocaleLowerCase().includes(asyncApiQuery)
+      ));
       asyncApiReferencesList.replaceChildren();
-      asyncApiReferencesEmpty.hidden = asyncContracts.length > 0;
-      asyncContracts.forEach(contract => asyncApiReferencesList.append(referenceItem(
+      asyncApiReferencesEmpty.hidden = visibleAsyncContracts.length > 0;
+      asyncApiReferencesEmpty.textContent = asyncApiQuery && !visibleAsyncContracts.length
+        ? "Aucun contrat ne correspond à ce filtre."
+        : "Aucun contrat AsyncAPI détecté.";
+      visibleAsyncContracts.forEach(contract => asyncApiReferencesList.append(referenceItem(
         contract.path,
         `${contract.module} · AsyncAPI ${contract.spec?.asyncapi || ""}`,
         "Inspecter",
         () => openAsyncApiContract(contract),
       )));
-      asyncApiReferencesTitle.textContent = `Contrats AsyncAPI (${asyncContracts.length})`;
+      asyncApiReferencesTitle.textContent = `Contrats AsyncAPI (${visibleAsyncContracts.length}/${asyncContracts.length})`;
       mongoClassReferencesList.replaceChildren();
       const persistenceClasses = (graphData.resource_descriptions || [])
         .filter(item => ["mongo_persistence_class", "jpa_entity"].includes(item.kind));
