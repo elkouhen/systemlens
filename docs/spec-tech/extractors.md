@@ -38,6 +38,13 @@ argument is unresolved, a unique `XxxApi.class` argument in the same bean may
 provide an inferred match to one enum key. The scanner excludes beans returning
 `WebClient` or `ExchangeFilterFunction` from this configured-client pass.
 
+For adapter calls, Strategy1 indexes `operationId` values from OpenAPI files
+under an `openapi` directory. A Java invocation is accepted only when its
+receiver type is a generated `*Api` type, its method name maps to one
+operation, and that type maps to one `HubRestApi` domain key. The endpoint
+retains both the contract path and domain marker. Operation IDs appearing in
+several contracts remain unresolved.
+
 REST graph construction first resolves an explicit target identity from an HTTP
 host, `lb://` URI, configured client domain, or an opt-in Strategy1 convention.
 For a URL expression that concatenates a local `@Value`-annotated field, a

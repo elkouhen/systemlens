@@ -233,6 +233,46 @@ class RestConfiguration {
     assert _rest_configuration_client_domains_in_module(str(tmp_path), ".") == ()
 
 
+def test_strategy1_links_adapter_operation_to_openapi_route(tmp_path: Path) -> None:
+    (tmp_path / "pom.xml").write_text(
+        "<project><artifactId>gateway</artifactId><version>1</version></project>"
+    )
+    contract = tmp_path / "src/main/resources/openapi/facture.yaml"
+    contract.parent.mkdir(parents=True)
+    contract.write_text(
+        """openapi: 3.0.0
+paths:
+  /routings/{schemeId}/{adresseFacturation}:
+    get:
+      operationId: getRoutings
+""",
+        encoding="utf-8",
+    )
+    enum = tmp_path / "src/main/java/HubRestApi.java"
+    enum.parent.mkdir(parents=True)
+    enum.write_text("enum HubRestApi { DOMAIN_CLIENT(\"domain-client\") }", encoding="utf-8")
+    adapter = tmp_path / "src/main/java/ClientAdapter.java"
+    adapter.write_text(
+        """class ClientAdapter {
+  ClientDoxalliaApi client;
+  void route() { client.getRoutings("scheme", "address"); }
+}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_framework_endpoints(
+        tmp_path,
+        files=["src/main/java/ClientAdapter.java"],
+        configured_api_client_strategy1=True,
+    )
+
+    endpoint = next(item for item in endpoints if item.framework == "strategy1-openapi-operation")
+    assert endpoint.topic == "GET /routings/{schemeId}/{adresseFacturation}"
+    assert "systemlens-api-domain:domain-client" in endpoint.snippet
+    assert "systemlens-openapi-contract:src/main/resources/openapi/facture.yaml" in endpoint.snippet
+
+
 def test_configured_client_relation_when_host_known_via_modules_only() -> None:
     caller = make_endpoint(
         "call",

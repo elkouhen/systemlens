@@ -191,6 +191,11 @@ def _domain_from_api_type_literal(node, source: bytes, known_domains: dict[str, 
     if node.type not in {"type_literal", "class_literal"}:
         return None
     type_name = java_parser.node_text(source, node).removesuffix(".class").rsplit(".", 1)[-1]
+    return _domain_from_api_type_name(type_name, known_domains)
+
+
+def _domain_from_api_type_name(type_name: str, known_domains: dict[str, str]) -> str | None:
+    """Match one generated ``*Api`` type to one HubRestApi enum key."""
     words = {
         word.upper()
         for word in re.findall(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+|[0-9]+", type_name)

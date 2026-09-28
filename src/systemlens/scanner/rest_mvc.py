@@ -35,6 +35,7 @@ from systemlens.scanner._spring_properties import (
 from systemlens.scanner.java_strings import local_string
 from systemlens.scanner.rest_client_config import (
     _bean_api_domain,
+    _domain_from_api_type_name,
     _hub_rest_api_domains,
     _is_rest_client_configuration,
     _rest_configuration_domains,
@@ -815,6 +816,8 @@ def _is_strategy1_openapi_declaration_path(rel_path: str) -> bool:
     return is_openapi_declaration_path(rel_path)
 def _is_openapi_contract_path(repo_root: Path, rel_path: str) -> bool:
     path = repo_root / rel_path
+    if "openapi" in {part.casefold() for part in path.parts}:
+        return True
     return path.name in {
         "openapi.yaml", "openapi.yml", "openapi.json",
         "swagger.yaml", "swagger.yml", "swagger.json",
@@ -1270,6 +1273,103 @@ def _infer_openapi_generated_client_endpoints(
     return endpoints
 
 
+@lru_cache(maxsize=64)
+def _strategy1_openapi_operations(
+    repo_root_str: str,
+) -> dict[str, tuple[tuple[str, str, str], ...]]:
+    """Index unambiguous ``operationId`` routes from Strategy1 contracts."""
+    repo_root = Path(repo_root_str)
+    operations: dict[str, list[tuple[str, str, str]]] = {}
+    for path in repo_root.rglob("*"):
+        relative = path.relative_to(repo_root)
+        if (
+            not path.is_file()
+            or path.suffix.casefold() not in {".json", ".yaml", ".yml"}
+            or {"target", "build"}.intersection(relative.parts)
+            or "openapi" not in {part.casefold() for part in relative.parts}
+        ):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            document = json.loads(text) if path.suffix.casefold() == ".json" else yaml.safe_load(text)
+        except (OSError, ValueError, yaml.YAMLError):
+            continue
+        if not isinstance(document, dict) or not isinstance(document.get("paths"), dict):
+            continue
+        contract = relative.as_posix()
+        for raw_route, route_operations in document["paths"].items():
+            if not isinstance(raw_route, str) or not isinstance(route_operations, dict):
+                continue
+            for raw_method, operation in route_operations.items():
+                if (
+                    str(raw_method).casefold() not in _OPENAPI_HTTP_METHODS
+                    or not isinstance(operation, dict)
+                    or not isinstance(operation.get("operationId"), str)
+                ):
+                    continue
+                operations.setdefault(operation["operationId"], []).append(
+                    (contract, str(raw_method).upper(), normalize_path(raw_route))
+                )
+    return {name: tuple(values) for name, values in operations.items()}
+
+
+def _infer_strategy1_openapi_operation_endpoints(
+    repo_root: Path, rel_path: str
+) -> list[MessageEndpoint]:
+    """Resolve Strategy1 adapter calls by generated API type and operationId."""
+    parsed = java_parser.parse_java(str(repo_root), rel_path)
+    if parsed is None:
+        return []
+    source, root = parsed
+    known_domains = _hub_rest_api_domains(str(repo_root.resolve()))
+    operations = _strategy1_openapi_operations(str(repo_root.resolve()))
+    if not known_domains or not operations:
+        return []
+    source_text = source.decode("utf-8", errors="replace")
+    api_variables = {
+        match.group("name"): match.group("type").rsplit(".", 1)[-1]
+        for match in re.finditer(
+            r"\b(?P<type>[A-Za-z_$][\w$.]*Api)\s+(?P<name>[A-Za-z_$][\w$]*)\b",
+            source_text,
+        )
+    }
+    endpoints: list[MessageEndpoint] = []
+    for invocation in java_parser.walk(root):
+        if invocation.type != "method_invocation":
+            continue
+        receiver, method_name, _args = java_parser.invocation_parts(invocation, source)
+        if receiver is None or method_name not in operations:
+            continue
+        receiver_name = java_parser.node_text(source, receiver)
+        api_type = api_variables.get(receiver_name)
+        if api_type is None:
+            continue
+        domain = _domain_from_api_type_name(api_type, known_domains)
+        candidates = operations[method_name]
+        if domain is None or len(candidates) != 1:
+            continue
+        contract, http_method, route = candidates[0]
+        snippet = java_parser.node_text(source, invocation)
+        snippet = (
+            f"{snippet}\n// systemlens-api-domain:{domain}"
+            f"\n// systemlens-openapi-contract:{contract}"
+        )
+        endpoints.append(
+            _build_endpoint(
+                repo_root,
+                rel_path,
+                invocation.start_point.row + 1,
+                invocation.end_point.row + 1,
+                "call",
+                "rest",
+                f"{http_method} {route}",
+                "strategy1-openapi-operation",
+                snippet,
+            )
+        )
+    return endpoints
+
+
 def _infer_restclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
     """Infer Spring ``RestClient`` fluent calls from ``.uri(...)`` invocations."""
     if not _file_uses_restclient(str(repo_root), rel_path):
@@ -1463,6 +1563,7 @@ def _rest_endpoint_extractors(
         extractors.extend((
             _infer_configured_api_client_endpoints,
             _infer_openapi_generated_client_endpoints,
+            _infer_strategy1_openapi_operation_endpoints,
         ))
     return tuple(extractors)
 

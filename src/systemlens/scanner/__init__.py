@@ -54,6 +54,7 @@ from systemlens.scanner.rest_mvc import (
     _file_uses_restclient,
     _file_uses_resttemplate,
     _openapi_generator_contract_for_source,
+    _strategy1_openapi_operations,
     _openapi_generator_contract_owners,
     _strategy1_openapi_contracts,
     infer_framework_endpoints,
@@ -107,6 +108,7 @@ def clear_analysis_caches() -> None:
     _load_value_annotated_fields.cache_clear()
     _load_unique_value_annotated_fields.cache_clear()
     _openapi_generator_contract_for_source.cache_clear()
+    _strategy1_openapi_operations.cache_clear()
     _class_base_path.cache_clear()
     _rest_configuration_client_domains_in_module.cache_clear()
     _hub_rest_api_domains.cache_clear()
