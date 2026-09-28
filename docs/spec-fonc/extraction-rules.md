@@ -8,7 +8,7 @@ a system, a topic (`METHOD /path` for REST), source location, framework and
 optional module, qualified name and Java message type. A value that cannot be
 resolved statically is flagged `topic_dynamic=true`; it is never fabricated.
 
-The extractor recognizes generated OpenAPI client calls when an `ApiClient`
+With `--strategy strategy1`, the extractor recognizes generated OpenAPI client calls when an `ApiClient`
 receiver invokes `invokeAPI` with a literal route and an `HttpMethod` enum. It
 retains the exact route, method, source invocation and uniquely resolved Maven
 input contract path. A client call may link to a served operation only through
@@ -16,6 +16,13 @@ that exact contract path, with one unique target module and a compatible route.
 Route similarity alone never identifies a service. A `@Value` field declared in
 another Java file is usable only when its name has one unambiguous property key
 across the indexed repository; conflicting declarations stay unresolved.
+
+Strategy1 configured API clients may resolve a domain from a `HubRestApi` enum
+constant, including statically imported constants and redundant parentheses. If
+the factory argument remains unresolved, the scanner may use a unique matching
+`XxxApi.class` argument from the same bean method. This fallback is retained as
+inferred evidence. Beans returning `WebClient` or
+`ExchangeFilterFunction` are excluded from configured API client relations.
 
 The Java AST extractor covers Spring MVC/WebFlux, Feign, Spring HTTP interfaces
 (`@HttpExchange` with `@GetExchange`/`@PostExchange` and related annotations),

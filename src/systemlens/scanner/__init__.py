@@ -35,6 +35,7 @@ from systemlens.domain.models import MessageEndpoint
 from systemlens.scanner._spring_properties import (
     _load_flat_spring_properties,
     _load_value_annotated_fields,
+    _load_unique_value_annotated_fields,
     _local_spring_application_names,
 )
 from systemlens.scanner.kafka_ast import infer_kafka_endpoints as _infer_kafka_endpoints
@@ -45,12 +46,14 @@ from systemlens.scanner.kafka_conventions import (
     infer_markdown_topic_manifest_endpoints,
 )
 from systemlens.scanner.rest_client_config import (
+    _hub_rest_api_domains,
     _rest_configuration_client_domains_in_module,
 )
 from systemlens.scanner.rest_mvc import (
     _class_base_path,
     _file_uses_restclient,
     _file_uses_resttemplate,
+    _openapi_generator_contract_for_source,
     _openapi_generator_contract_owners,
     _strategy1_openapi_contracts,
     infer_framework_endpoints,
@@ -102,8 +105,11 @@ def clear_analysis_caches() -> None:
     _java_source.cache_clear()
     _load_flat_spring_properties.cache_clear()
     _load_value_annotated_fields.cache_clear()
+    _load_unique_value_annotated_fields.cache_clear()
+    _openapi_generator_contract_for_source.cache_clear()
     _class_base_path.cache_clear()
     _rest_configuration_client_domains_in_module.cache_clear()
+    _hub_rest_api_domains.cache_clear()
     _file_uses_resttemplate.cache_clear()
     _file_uses_restclient.cache_clear()
     java_parser.clear_caches()

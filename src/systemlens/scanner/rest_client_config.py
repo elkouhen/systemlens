@@ -14,6 +14,7 @@ import sys
 import time
 from functools import lru_cache
 from pathlib import Path
+import re
 
 from systemlens.discovery.java import parser as java_parser
 from systemlens.discovery.build import maven as maven_module
@@ -107,6 +108,40 @@ def _normalize_api_domain(value: str) -> str | None:
     ):
         return None
     return value.lower().replace("_", "-")
+
+
+@lru_cache(maxsize=64)
+def _hub_rest_api_domains(repo_root_str: str) -> dict[str, str]:
+    """Index ``HubRestApi`` enum constants as explicit Strategy1 domains."""
+    repo_root = Path(repo_root_str)
+    domains: dict[str, str] = {}
+    for path in repo_root.rglob("*.java"):
+        relative = path.relative_to(repo_root)
+        if {"target", "build"}.intersection(relative.parts):
+            continue
+        parsed = java_parser.parse_java(repo_root_str, relative.as_posix())
+        if parsed is None:
+            continue
+        source, root = parsed
+        for type_node in java_parser.type_declarations(root):
+            if java_parser.declaration_name(type_node, source) != "HubRestApi":
+                continue
+            if type_node.type != "enum_declaration":
+                continue
+            for constant, value in re.findall(
+                r"\b([A-Z][A-Z0-9_]*)\s*\(\s*\"([^\"]+)\"",
+                java_parser.node_text(source, type_node),
+            ):
+                normalized = _normalize_api_domain(value)
+                if normalized is not None:
+                    domains[constant] = normalized
+    return domains
+
+
+def _unwrap_parenthesized(node):
+    while node.type == "parenthesized_expression" and len(node.named_children) == 1:
+        node = node.named_children[0]
+    return node
 def _api_domain_from_key_invocation(node, source: bytes) -> str | None:
     """Extrait ``DOMAIN_FOO`` de l'expression ``DOMAIN_FOO.getKey()``."""
     if node.type != "method_invocation":
@@ -116,13 +151,16 @@ def _api_domain_from_key_invocation(node, source: bytes) -> str | None:
         return None
     receiver_text = java_parser.node_text(source, receiver)
     return _normalize_api_domain(receiver_text.rsplit(".", 1)[-1])
-def _api_domain_argument(node, source: bytes) -> str | None:
+def _api_domain_argument(
+    node, source: bytes, known_domains: dict[str, str] | None = None
+) -> str | None:
     """Extrait le domaine logique donné à un factory de client HTTP.
 
     Outre un littéral et la constante terminale de ``XXX.NAME``, la
     convention ``getUriPath(..., DOMAIN_FOO.getKey())`` est acceptée. Les URLs
     et chemins restent exclus : ils ne désignent pas le microservice cible.
     """
+    node = _unwrap_parenthesized(node)
     literal = java_parser.string_value(node, source)
     if literal is not None:
         return _normalize_api_domain(literal)
@@ -144,8 +182,29 @@ def _api_domain_argument(node, source: bytes) -> str | None:
         return None
     text = java_parser.node_text(source, node)
     name = text.rsplit(".", 1)[-1]
-    return _normalize_api_domain(name)
-def _bean_api_domain(method_node, source: bytes, microservice: str) -> str | None:
+    if known_domains and name in known_domains:
+        return known_domains[name]
+    return _normalize_api_domain(name) if _is_uppercase_underscore_constant(name) else None
+
+
+def _domain_from_api_type_literal(node, source: bytes, known_domains: dict[str, str]) -> str | None:
+    if node.type not in {"type_literal", "class_literal"}:
+        return None
+    type_name = java_parser.node_text(source, node).removesuffix(".class").rsplit(".", 1)[-1]
+    words = {
+        word.upper()
+        for word in re.findall(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+|[0-9]+", type_name)
+    }
+    candidates = [key for key in known_domains if key.removeprefix("DOMAIN_") in words]
+    return known_domains[candidates[0]] if len(candidates) == 1 else None
+
+
+def _bean_api_domain(
+    method_node,
+    source: bytes,
+    microservice: str,
+    known_domains: dict[str, str] | None = None,
+) -> str | None:
     """Domaine d'un appel `create*ClientApi(...)` dans un bean.
 
     La convention applicative est précise : le premier argument est une
@@ -167,7 +226,16 @@ def _bean_api_domain(method_node, source: bytes, microservice: str) -> str | Non
             first_argument=java_parser.node_text(source, args[0]),
             argument_count=len(args),
         )
-        domain = _api_domain_argument(args[0], source)
+        domain = _api_domain_argument(args[0], source, known_domains)
+        if domain is None and len(args) >= 2 and known_domains:
+            domain = _domain_from_api_type_literal(args[1], source, known_domains)
+            if domain is not None:
+                _trace_rest_client(
+                    "rest_client.search.domain_inferred_from_api_type",
+                    microservice=microservice,
+                    domain=domain,
+                    api_type=java_parser.node_text(source, args[1]),
+                )
         if domain is not None:
             domains.add(domain)
             _trace_rest_client(
@@ -232,6 +300,7 @@ def _rest_configuration_client_domains_in_module(
     repo_root = Path(repo_root_str)
     module_root = repo_root / module_root_rel
     service_name = _rest_client_microservice_name(module_root)
+    known_domains = _hub_rest_api_domains(repo_root_str)
 
     _trace(
         "rest_client.configuration.scan.begin",
@@ -298,7 +367,17 @@ def _rest_configuration_client_domains_in_module(
                         reason="missing_type_or_name",
                     )
                     continue
-                domain = _bean_api_domain(method_node, source, service_name)
+                return_type = _simple_java_type(java_parser.node_text(source, type_node_return))
+                if return_type in {"WebClient", "ExchangeFilterFunction"}:
+                    _trace_rest_client(
+                        "rest_client.search.bean_ignored",
+                        microservice=service_name,
+                        path=candidate_rel,
+                        bean=method_name,
+                        reason="non_api_client_return_type",
+                    )
+                    continue
+                domain = _bean_api_domain(method_node, source, service_name, known_domains)
                 if domain is None:
                     _trace_rest_client(
                         "rest_client.search.bean_ignored",
@@ -310,7 +389,7 @@ def _rest_configuration_client_domains_in_module(
                     continue
                 clients.append(
                     (
-                        _simple_java_type(java_parser.node_text(source, type_node_return)),
+                        return_type,
                         java_parser.node_text(source, name_node),
                         domain,
                     )

@@ -4,6 +4,7 @@ from systemlens.application.dependency_analysis import build_dependency_graph
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.domain.module_inventory import DiscoveredModule
 from systemlens.scanner import infer_framework_endpoints
+from systemlens.scanner.rest_client_config import _rest_configuration_client_domains_in_module
 
 
 def make_endpoint(
@@ -177,6 +178,59 @@ def test_rest_configuration_bean_resolves_domain_key_in_uri_path(tmp_path: Path)
     assert [(edge["source"], edge["target"], edge["label"]) for edge in _client_calls(result["edges"])] == [
         ("microservice:caller-service", "microservice:domain-annuaire", "domain-annuaire: API")
     ]
+
+
+def test_strategy1_resolves_domain_from_hub_enum_and_api_type(tmp_path: Path) -> None:
+    (tmp_path / "pom.xml").write_text(
+        "<project><artifactId>caller-service</artifactId><version>1</version></project>"
+    )
+    source_dir = tmp_path / "src" / "main" / "java"
+    source_dir.mkdir(parents=True)
+    (source_dir / "HubRestApi.java").write_text(
+        """enum HubRestApi { DOMAIN_CLIENT("domain-client") }
+""",
+        encoding="utf-8",
+    )
+    config = source_dir / "RestConfiguration.java"
+    config.write_text(
+        """import org.springframework.context.annotation.Bean;
+class RestConfiguration {
+  @Bean ClientDoxalliaApi client() {
+    return helper.createClientApi(unresolvedDomain, ClientDoxalliaApi.class);
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_framework_endpoints(
+        tmp_path,
+        files=["src/main/java/RestConfiguration.java"],
+        configured_api_client_strategy1=True,
+    )
+
+    assert len(endpoints) == 1
+    assert "systemlens-api-domain:domain-client" in endpoints[0].snippet
+
+
+def test_strategy1_ignores_non_api_client_beans(tmp_path: Path) -> None:
+    (tmp_path / "pom.xml").write_text(
+        "<project><artifactId>caller-service</artifactId><version>1</version></project>"
+    )
+    source = tmp_path / "src/main/java/RestConfiguration.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """import org.springframework.context.annotation.Bean;
+class RestConfiguration {
+  @Bean WebClient webClient() {
+    return helper.createClientApi(ApiDomains.DOMAIN_CLIENT, ClientDoxalliaApi.class);
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    assert _rest_configuration_client_domains_in_module(str(tmp_path), ".") == ()
 
 
 def test_configured_client_relation_when_host_known_via_modules_only() -> None:

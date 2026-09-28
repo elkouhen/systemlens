@@ -19,6 +19,20 @@ def test_inventory_excludes_maven_and_gradle_build_outputs(tmp_path: Path) -> No
     assert set(files) == {"service/src/main/java/App.java"}
 
 
+def test_strategy1_can_index_openapi_generated_java_sources(tmp_path: Path) -> None:
+    generated = tmp_path / "service/target/generated-sources/openapi/OrdersApi.java"
+    generated.parent.mkdir(parents=True)
+    generated.write_text("class OrdersApi {}", encoding="utf-8")
+
+    files = list_repo_files(
+        tmp_path,
+        Config(),
+        include_strategy1_generated_sources=True,
+    )
+
+    assert set(files) == {"service/target/generated-sources/openapi/OrdersApi.java"}
+
+
 def test_inventory_keeps_source_packages_named_build(tmp_path: Path) -> None:
     source = tmp_path / "service/src/main/java/com/example/build/Order.java"
     source.parent.mkdir(parents=True)

@@ -7,6 +7,7 @@ from pathlib import Path
 from systemlens.infrastructure.config import Config
 from systemlens.domain.module_inventory import DiscoveredModule
 from systemlens.conventions.strategy1.indexing import (
+    is_generated_openapi_source_path,
     is_openapi_declaration_path,
     requires_full_reindex,
 )
@@ -116,6 +117,7 @@ def list_repo_files(
     config: Config,
     *,
     excluded_module_paths: tuple[Path, ...] = (),
+    include_strategy1_generated_sources: bool = False,
 ) -> dict[str, str]:
     """Build the eligible relative-path to content-hash inventory."""
     repo_root = repo_root.resolve()
@@ -129,7 +131,11 @@ def list_repo_files(
         if nested_roots and not any(root == path.parent or root in path.parents for root in nested_roots):
             continue
         rel_path = path.relative_to(repo_root).as_posix()
-        if is_git_metadata(rel_path) or is_build_output(rel_path) or is_test_source(rel_path):
+        if is_git_metadata(rel_path) or is_test_source(rel_path):
+            continue
+        if is_build_output(rel_path) and not (
+            include_strategy1_generated_sources and is_generated_openapi_source_path(rel_path)
+        ):
             continue
         if config.exclude and _matches_any(rel_path, config.exclude):
             continue

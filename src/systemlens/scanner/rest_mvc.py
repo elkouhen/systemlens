@@ -34,6 +34,8 @@ from systemlens.scanner._spring_properties import (
 )
 from systemlens.scanner.java_strings import local_string
 from systemlens.scanner.rest_client_config import (
+    _bean_api_domain,
+    _hub_rest_api_domains,
     _is_rest_client_configuration,
     _rest_configuration_domains,
     _rest_configuration_external_services,
@@ -1356,6 +1358,10 @@ def _infer_configured_api_client_endpoints(
         ):
             continue
         configuration = java_parser.node_text(source, type_node)
+        known_domains = _hub_rest_api_domains(str(repo_root.resolve()))
+        declared_domains = {
+            domain for domain, _line in _rest_configuration_domains(type_node, source)
+        }
         for domain, line in _rest_configuration_domains(type_node, source):
             endpoint = _build_endpoint(
                 repo_root,
@@ -1375,6 +1381,42 @@ def _infer_configured_api_client_endpoints(
                 path=rel_path,
                 line=line,
                 domain=domain,
+            )
+        for method_node in java_parser.walk(type_node):
+            if method_node.type != "method_declaration":
+                continue
+            if not any(
+                java_parser.annotation_name(annotation, source) == "Bean"
+                for annotation in java_parser.annotations_of(method_node)
+            ):
+                continue
+            return_node = method_node.child_by_field_name("type")
+            if return_node is None:
+                continue
+            return_type = java_parser.node_text(source, return_node).rsplit(".", 1)[-1]
+            if return_type in {"WebClient", "ExchangeFilterFunction"}:
+                continue
+            bean_domain = _bean_api_domain(method_node, source, "<strategy1>", known_domains)
+            if bean_domain is None or bean_domain in declared_domains:
+                continue
+            endpoint = _build_endpoint(
+                repo_root,
+                rel_path,
+                method_node.start_point.row + 1,
+                method_node.end_point.row + 1,
+                "call",
+                "rest",
+                "ANY <dynamic>",
+                "configured-api-client-configuration",
+                f"{configuration}\nsystemlens-api-domain:{bean_domain}",
+                topic_dynamic=True,
+            )
+            endpoints[endpoint.id] = endpoint
+            _trace_rest_client(
+                "rest_client.search.configuration_dependency",
+                path=rel_path,
+                line=method_node.start_point.row + 1,
+                domain=bean_domain,
             )
         for service, line in _rest_configuration_external_services(type_node, source):
             endpoint = _build_endpoint(
@@ -1414,12 +1456,14 @@ def _rest_endpoint_extractors(
         _infer_resttemplate_exchange_endpoints,
         _infer_restclient_endpoints,
         _infer_webclient_endpoints,
-        _infer_openapi_generated_client_endpoints,
         _infer_spring_cloud_gateway_routes,
         _infer_spring_webflux_routes,
     ]
     if configured_api_client_strategy1:
-        extractors.append(_infer_configured_api_client_endpoints)
+        extractors.extend((
+            _infer_configured_api_client_endpoints,
+            _infer_openapi_generated_client_endpoints,
+        ))
     return tuple(extractors)
 
 

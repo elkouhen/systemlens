@@ -230,8 +230,12 @@ def test_generated_openapi_client_invocation_keeps_contract_evidence(tmp_path: P
         encoding="utf-8",
     )
 
+    assert not any(
+        item.framework == "openapi-generated-client"
+        for item in infer_framework_endpoints(tmp_path)
+    )
     endpoint = next(
-        item for item in infer_framework_endpoints(tmp_path)
+        item for item in infer_framework_endpoints(tmp_path, configured_api_client_strategy1=True)
         if item.framework == "openapi-generated-client"
     )
 

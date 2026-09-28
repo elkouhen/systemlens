@@ -15,6 +15,18 @@ def is_openapi_declaration_path(rel_path: str) -> bool:
     )
 
 
+def is_generated_openapi_source_path(rel_path: str) -> bool:
+    """Recognize Strategy1's opt-in Maven OpenAPI generated Java sources."""
+    parts = Path(rel_path).parts
+    return (
+        Path(rel_path).suffix.casefold() == ".java"
+        and any(
+            parts[index:index + 3] == ("target", "generated-sources", "openapi")
+            for index in range(max(0, len(parts) - 2))
+        )
+    )
+
+
 def requires_full_reindex(
     changed_or_deleted: set[str], repo_root: Path, modules: list[DiscoveredModule]
 ) -> bool:

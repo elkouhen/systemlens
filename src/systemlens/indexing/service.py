@@ -287,6 +287,7 @@ def _index_repo(
         repo_root,
         config,
         excluded_module_paths=excluded_module_paths,
+        include_strategy1_generated_sources=strategy1_enabled,
     )
     if kubernetes:
         _report_progress(progress, "→ Indexation : découverte des workloads Kubernetes...")

@@ -14,12 +14,14 @@ base-document values take precedence where no active-profile selection exists.
 YAML parse failures, including unrendered Helm Go-template expressions, leave
 that file without Spring-property facts and never abort the repository index.
 
-The REST registry also recognizes generated OpenAPI client calls shaped as
+The Strategy1 REST registry also recognizes generated OpenAPI client calls shaped as
 `apiClient.invokeAPI("/path", HttpMethod.GET, ...)`. It requires a literal
 route, a supported HTTP method, and an `ApiClient` receiver. The endpoint keeps
 the exact source invocation and, when Maven resolves one local generator input
 spec for the source module, records that contract path as evidence. Calls with
-dynamic routes or ambiguous generator inputs remain unresolved.
+dynamic routes or ambiguous generator inputs remain unresolved. Under
+Strategy1, Java files in `target/generated-sources/openapi/` are included in the
+source inventory for this extractor; other build outputs remain excluded.
 
 An OpenAPI client call may be matched to served operations from the same exact
 indexed contract path. This is an explicit contract relation, not route-based
@@ -28,6 +30,13 @@ remains after HTTP method and route checks; otherwise the call remains
 unresolved. A `@Value` field used by a REST client may be resolved across Java
 files when its field name maps to one property key across the repository.
 Conflicting declarations remain dynamic.
+
+Strategy1 configured-client extraction indexes `HubRestApi` enum pairs such as
+`DOMAIN_CLIENT("domain-client")`. It accepts the corresponding static constant
+in a factory argument, including a parenthesized expression. When the domain
+argument is unresolved, a unique `XxxApi.class` argument in the same bean may
+provide an inferred match to one enum key. The scanner excludes beans returning
+`WebClient` or `ExchangeFilterFunction` from this configured-client pass.
 
 REST graph construction first resolves an explicit target identity from an HTTP
 host, `lb://` URI, configured client domain, or an opt-in Strategy1 convention.

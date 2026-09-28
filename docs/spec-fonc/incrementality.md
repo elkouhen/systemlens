@@ -12,9 +12,11 @@ The endpoint extractor signature, analysis configuration signature and selected
 topic strategy always force a full refresh. Explicit manifests are included even
 when otherwise excluded.
 
-Maven `target/` and Gradle `build/` directories are never eligible source input:
-their generated code, copied contracts, nested build descriptors, and derived
-manifests cannot create or refresh indexed facts.
+Maven `target/` and Gradle `build/` directories are excluded from normal source
+input. With `--strategy strategy1`, Java files under
+`target/generated-sources/openapi/` are the deliberate exception: they are
+eligible as generated OpenAPI client evidence. Other build outputs, copied
+contracts, nested descriptors and derived manifests remain excluded.
 
 The index is `.systemlens/findings.db` for compatibility with prior releases. It is a
 local implementation detail, not a contract for direct SQL writes.
