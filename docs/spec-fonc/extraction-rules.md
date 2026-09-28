@@ -28,7 +28,10 @@ Strategy1 also resolves a call such as `client.getRoutings(...)` when the
 receiver has a generated `*Api` type, the method name is a unique OpenAPI
 `operationId`, and the matching contract is under an indexed OpenAPI directory.
 The resulting endpoint keeps the contract path and the inferred domain as
-evidence. If the operation or contract is ambiguous, no route is fabricated.
+evidence. When the same module and route are also observed inside the generated
+`ApiClient.invokeAPI` implementation, the typed adapter operation is retained
+as the single endpoint; `invokeAPI` remains the fallback when no operation can
+be correlated. If the operation or contract is ambiguous, no route is fabricated.
 
 The Java AST extractor covers Spring MVC/WebFlux, Feign, Spring HTTP interfaces
 (`@HttpExchange` with `@GetExchange`/`@PostExchange` and related annotations),

@@ -42,8 +42,10 @@ For adapter calls, Strategy1 indexes `operationId` values from OpenAPI files
 under an `openapi` directory. A Java invocation is accepted only when its
 receiver type is a generated `*Api` type, its method name maps to one
 operation, and that type maps to one `HubRestApi` domain key. The endpoint
-retains both the contract path and domain marker. Operation IDs appearing in
-several contracts remain unresolved.
+retains both the contract path and domain marker. If an equivalent
+`openapi-generated-client` endpoint exists for the same module and route, the
+typed adapter endpoint takes precedence so one HTTP interaction produces one
+port label. Operation IDs appearing in several contracts remain unresolved.
 
 REST graph construction first resolves an explicit target identity from an HTTP
 host, `lb://` URI, configured client domain, or an opt-in Strategy1 convention.

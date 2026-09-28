@@ -1787,4 +1787,22 @@ def infer_framework_endpoints(
         elif configured_api_client_strategy1 and _is_strategy1_openapi_declaration_path(rel_path):
             for endpoint in _infer_strategy1_declared_openapi_publications(repo_root, rel_path):
                 inferred[endpoint.id] = endpoint
-    return list(inferred.values())
+    endpoints = list(inferred.values())
+    # A generated OpenAPI client exposes the same interaction twice: once at
+    # the adapter's typed operation call and once inside the generated
+    # ``ApiClient.invokeAPI`` implementation. Prefer the adapter evidence when
+    # both describe the same module and route; otherwise one HTTP interaction
+    # would produce two output ports and corrupt the O/I label sequence.
+    strategy1_operation_routes = {
+        (endpoint.module, endpoint.topic)
+        for endpoint in endpoints
+        if endpoint.framework == "strategy1-openapi-operation"
+    }
+    return [
+        endpoint
+        for endpoint in endpoints
+        if not (
+            endpoint.framework == "openapi-generated-client"
+            and (endpoint.module, endpoint.topic) in strategy1_operation_routes
+        )
+    ]

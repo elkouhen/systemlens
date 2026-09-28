@@ -244,6 +244,47 @@ def test_generated_openapi_client_invocation_keeps_contract_evidence(tmp_path: P
     assert "systemlens-openapi-contract:src/main/openapi/orders.yaml" in endpoint.snippet
 
 
+def test_strategy1_prefers_typed_openapi_operation_over_generated_invoke_api(tmp_path: Path) -> None:
+    (tmp_path / "pom.xml").write_text(
+        "<project><artifactId>orders-client</artifactId><version>1</version></project>",
+        encoding="utf-8",
+    )
+    contract = tmp_path / "src/main/openapi/orders.yaml"
+    contract.parent.mkdir(parents=True)
+    contract.write_text(
+        "openapi: 3.0.0\npaths:\n  /orders:\n    get:\n      operationId: getOrders\n",
+        encoding="utf-8",
+    )
+    source_dir = tmp_path / "src/main/java"
+    source_dir.mkdir(parents=True)
+    (source_dir / "HubRestApi.java").write_text(
+        "enum HubRestApi { DOMAIN_CLIENT(\"domain-client\") }\n",
+        encoding="utf-8",
+    )
+    (source_dir / "OrdersAdapter.java").write_text(
+        "class OrdersAdapter {\n"
+        "  DomainClientApi client;\n"
+        "  void load() { client.getOrders(); }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    (source_dir / "DomainClientApi.java").write_text(
+        "class DomainClientApi {\n"
+        "  ApiClient apiClient;\n"
+        "  void getOrders() { apiClient.invokeAPI(\"/orders\", HttpMethod.GET, null); }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_framework_endpoints(
+        tmp_path, configured_api_client_strategy1=True
+    )
+
+    assert [endpoint.framework for endpoint in endpoints if endpoint.role == "call"] == [
+        "strategy1-openapi-operation"
+    ]
+
+
 def test_restclient_literal_url_is_indexed_as_http_call(tmp_path: Path) -> None:
     source = tmp_path / "src/main/java/com/example/InventoryClient.java"
     source.parent.mkdir(parents=True)
