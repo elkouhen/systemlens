@@ -39,13 +39,43 @@ OpenAPI, AsyncAPI, indexed DTOs, JPA entities, and Mongo persistence classes.
 Routes are grouped by
 provider microservice and route path, and each entry displays its HTTP verb,
 resource path, and count of unique calling microservices found. Selecting a
-route expands that entry in place to list its calling microservices. This
-interaction stays in the Routes widget and does not change the graph view.
+route opens the common inspector component with its provider, client count,
+calling microservices, source evidence, and REST DTOs. Provider and client
+microservices are interactive: they open the corresponding model inspector and
+keep the route inspector available through the common back action. A
+microservice’s called routes use the same route links and open the target
+provider route in that inspector.
 
 When a selected HTTP route has REST DTO evidence on its provider microservice,
 the route details list the DTO names, roles, and source locations. Topic
 details list associated Kafka DTOs, and Mongo collection details list their
 associated persistence classes.
+
+Selecting a microservice, topic, or Mongo collection from its Architecture
+catalogue switches the graph to the selected node and opens the graphical
+inspector component with that node's description widget. The inspector can be
+closed without clearing the graph focus. Relations to other graph nodes are
+interactive and reopen the same inspector on the target model element, so the
+architecture catalogue supports multi-step navigation through the model. The
+inspector displays the visited path and provides a back action to return to the
+previous model element without closing the component.
+
+Nested DTO and Mongo persistence-class inspections use the same header back
+action as all other inspector navigation; they do not add a second in-body
+return control.
+
+Non-architecture inspectors clear the previous architecture breadcrumb before
+rendering their content. Their header back action returns to the inspector that
+opened them, while nested DTO and Mongo inspections keep their containing-class
+history. DTO titles identify message, REST, JPA, or project context when the
+indexed roles provide it. JPA, DTO, and Mongo inspectors always expose an
+explicit empty-field state when no fields were indexed, and source navigation
+is rendered as a distinct secondary action.
+
+The architecture inspector reuses the selected resource details while keeping
+the modal title as the single identity header. Actions rendered in the details
+widget, including modules, code flows, source evidence, and resource focus,
+remain available after the details are displayed in the modal.
 
 The exported `call_graphs` map describes service-level propagation for one flow
 or flow group. Each graph contains participating nodes, deterministic order,

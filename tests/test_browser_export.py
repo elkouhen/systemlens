@@ -54,6 +54,104 @@ def test_service_inspector_shows_persisted_jpa_entity() -> None:
         browser.close()
 
 
+@pytest.mark.slow
+def test_architecture_catalogue_opens_node_inspector_widget() -> None:
+    document = _SIMPLE_DATASET_EXPORT.read_text(encoding="utf-8")
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1200, "height": 800})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator("#microservices-tab").click()
+        page.locator("#microservices-list .reference-title").first.click()
+        assert page.locator("#inspector-modal").is_visible()
+        assert page.locator("#inspector-title").inner_text().startswith("Microservice ·")
+        assert page.locator("#inspector-body .architecture-node-inspector").is_visible()
+        relation = page.locator("#inspector-body .architecture-node-inspector [data-model-node-id]").first
+        assert relation.is_visible()
+        relation.click()
+        assert page.locator("#inspector-title").inner_text().startswith(("Topic ·", "Collection ·", "Microservice ·"))
+        page.locator("#inspector-back").click()
+        assert page.locator("#inspector-title").inner_text().startswith("Microservice ·")
+        called_route = page.locator("#inspector-body .architecture-node-inspector [data-inspector-kind='route']").first
+        assert called_route.is_visible()
+        called_route.click()
+        assert page.locator("#inspector-title").inner_text().startswith("Route HTTP ·")
+        page.locator("#inspector-back").click()
+        assert page.locator("#inspector-title").inner_text().startswith("Microservice ·")
+        route_page = context.new_page()
+        route_page.set_default_timeout(5_000)
+        route_page.set_content(document, wait_until="load")
+        route_page.locator("#routes-tab").click()
+        route_page.locator("#routes-panel").wait_for(state="visible")
+        route = route_page.locator("#routes-list .route-reference-toggle").first
+        route.wait_for(state="visible")
+        route.click()
+        assert route_page.locator("#inspector-title").inner_text().startswith("Route HTTP ·")
+        assert route_page.locator("#inspector-body .route-inspector-summary").is_visible()
+        clients = route_page.get_by_role("heading", name="Microservices clients").locator("..")
+        clients.get_by_role("button", name=re.compile("order-service")).click()
+        assert route_page.locator("#inspector-title").inner_text().startswith("Microservice · order-service")
+        route_page.locator("#inspector-back").click()
+        assert route_page.locator("#inspector-title").inner_text().startswith("Route HTTP ·")
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_microservice_called_route_opens_target_route_inspector() -> None:
+    document = _SIMPLE_DATASET_EXPORT.read_text(encoding="utf-8")
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1200, "height": 800})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator("#microservices-tab").click()
+        page.locator("#microservices-list .reference-title").filter(has_text="order-service").click()
+        called_routes = page.locator(
+            "#inspector-body .architecture-node-inspector "
+            "[data-inspector-kind='route'][data-inspector-route='POST /api/reservations']"
+        )
+        assert called_routes.count() >= 1
+        called_routes.first.click()
+        assert page.locator("#inspector-title").inner_text().startswith("Route HTTP · POST /api/reservations")
+        page.locator("#inspector-back").click()
+        assert page.locator("#inspector-title").inner_text().startswith("Microservice · order-service")
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_graph_node_widget_exposes_called_route_navigation() -> None:
+    document = _SIMPLE_DATASET_EXPORT.read_text(encoding="utf-8")
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1400, "height": 900})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator(".graph-node-card-label").filter(has_text="order-service").click()
+        called_route = page.locator(
+            "#details [data-inspector-kind='route'][data-inspector-route='POST /api/reservations']"
+        )
+        assert called_route.count() >= 1
+        called_route.first.click()
+        assert page.locator("#inspector-title").inner_text().startswith("Route HTTP · POST /api/reservations")
+        context.close()
+        browser.close()
+
+
 _COMPLEX_DATASET_EXPORT = (
     Path(__file__).parents[1] / "examples" / "supermarket" / "supermarket.html"
 )

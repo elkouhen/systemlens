@@ -40,6 +40,7 @@
     .route-caller-chip { color: var(--ui-text, #172033); }
     .route-caller-chip::before { content: "↳ "; color: var(--ui-muted, #94a3b8); }
     .route-callers p { margin: 3px 0 0; }
+    .architecture-resource-reference { cursor: pointer; }
     .toolbar-tab-groups { display: grid; gap: 6px; }
     .toolbar-tab-group { display: grid; gap: 3px; }
     .toolbar-tab-group[hidden] { display: none; }
@@ -336,6 +337,7 @@
     .inspector-title { margin: 0; color: #172033; font-size: var(--type-entity-title); line-height: 1.2; overflow-wrap: anywhere; }
     .inspector-close { flex: 0 0 auto; width: 32px; height: 32px; border: 1px solid #cbd5e1; border-radius: 6px; color: #475569; background: #fff; font-size: 20px; cursor: pointer; }
     .inspector-body { min-height: 0; overflow: auto; padding: 18px; }
+    .architecture-node-inspector { max-width: 760px; margin: 0 auto; border: 1px solid var(--ui-border, #d8e0eb); border-radius: var(--widget-radius, 12px); background: var(--ui-panel, #fff); box-shadow: 0 10px 28px rgba(15, 23, 42, .08); }
     .inspector-body.swagger-ui { padding: 0; }
     .inspector-body.asyncapi-inspector { padding: 0; }
     .asyncapi-shell { min-height: 100%; background: #f6f8fc; }
@@ -349,8 +351,6 @@
     .asyncapi-source-link { display: inline-block; margin: 12px 22px 0; color: #315f9b; font-size: 13px; font-weight: 700; }
     .asyncapi-shell > asyncapi-component { display: block; min-height: 100%; }
     .dto-inspector { display: grid; gap: 16px; max-width: 720px; }
-    .dto-navigation { display: flex; align-items: center; gap: 8px; }
-    .dto-back { width: fit-content; padding: 6px 9px; border: 1px solid #bfdbfe; border-radius: 6px; color: #1d4f91; background: #eff6ff; font-size: 12px; font-weight: 700; cursor: pointer; }
     .dto-summary { margin: 0; color: #64748b; font-size: 13px; }
     .dto-section { padding: 14px; border: 1px solid #e2e8f0; border-radius: 9px; background: #f8fafc; }
     .dto-section h2 { margin: 0 0 9px; color: #475569; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }

@@ -327,6 +327,7 @@
     .route-caller-chip { color: var(--ui-text, #172033); }
     .route-caller-chip::before { content: "↳ "; color: var(--ui-muted, #94a3b8); }
     .route-callers p { margin: 3px 0 0; }
+    .architecture-resource-reference { cursor: pointer; }
     .toolbar-tab-groups { display: grid; gap: 6px; }
     .toolbar-tab-group { display: grid; gap: 3px; }
     .toolbar-tab-group[hidden] { display: none; }
@@ -623,6 +624,7 @@
     .inspector-title { margin: 0; color: #172033; font-size: var(--type-entity-title); line-height: 1.2; overflow-wrap: anywhere; }
     .inspector-close { flex: 0 0 auto; width: 32px; height: 32px; border: 1px solid #cbd5e1; border-radius: 6px; color: #475569; background: #fff; font-size: 20px; cursor: pointer; }
     .inspector-body { min-height: 0; overflow: auto; padding: 18px; }
+    .architecture-node-inspector { max-width: 760px; margin: 0 auto; border: 1px solid var(--ui-border, #d8e0eb); border-radius: var(--widget-radius, 12px); background: var(--ui-panel, #fff); box-shadow: 0 10px 28px rgba(15, 23, 42, .08); }
     .inspector-body.swagger-ui { padding: 0; }
     .inspector-body.asyncapi-inspector { padding: 0; }
     .asyncapi-shell { min-height: 100%; background: #f6f8fc; }
@@ -636,8 +638,6 @@
     .asyncapi-source-link { display: inline-block; margin: 12px 22px 0; color: #315f9b; font-size: 13px; font-weight: 700; }
     .asyncapi-shell > asyncapi-component { display: block; min-height: 100%; }
     .dto-inspector { display: grid; gap: 16px; max-width: 720px; }
-    .dto-navigation { display: flex; align-items: center; gap: 8px; }
-    .dto-back { width: fit-content; padding: 6px 9px; border: 1px solid #bfdbfe; border-radius: 6px; color: #1d4f91; background: #eff6ff; font-size: 12px; font-weight: 700; cursor: pointer; }
     .dto-summary { margin: 0; color: #64748b; font-size: 13px; }
     .dto-section { padding: 14px; border: 1px solid #e2e8f0; border-radius: 9px; background: #f8fafc; }
     .dto-section h2 { margin: 0 0 9px; color: #475569; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
@@ -1061,8 +1061,7 @@
     .simple-path-choice,
     #show-simple-paths,
     .service-kafka-meta button,
-    .module-open-action,
-    .dto-back {
+    .module-open-action {
       border-color: var(--ui-accent-border) !important;
       color: var(--ui-accent-text) !important;
       background: var(--ui-accent-soft) !important;
@@ -1071,8 +1070,7 @@
     .simple-path-choice:hover,
     #show-simple-paths:hover,
     .service-kafka-meta button:hover,
-    .module-open-action:hover,
-    .dto-back:hover { background: var(--ui-accent-soft-hover) !important; }
+    .module-open-action:hover { background: var(--ui-accent-soft-hover) !important; }
     .reference-action:disabled {
       border-color: var(--ui-border) !important;
       color: var(--ui-muted) !important;
@@ -1192,6 +1190,48 @@
     .inspector-dialog { max-height: min(820px, calc(100vh - 48px)); border-radius: 26px; }
     .inspector-header { padding: 16px 22px; }
     .inspector-body { padding: 24px; }
+    .inspector-heading { display: grid; grid-template-columns: auto minmax(0, auto) minmax(0, 1fr); align-items: center; gap: 10px; min-width: 0; }
+    .inspector-back { width: auto; min-width: 32px; height: 32px; padding: 0 9px; border: 1px solid var(--ui-border); border-radius: var(--control-radius); color: var(--ui-accent-text); background: var(--ui-control); font-size: 16px; cursor: pointer; }
+    .inspector-back:hover, .inspector-back:focus-visible { border-color: var(--ui-accent-border); background: var(--ui-accent-soft); outline: none; }
+    .inspector-breadcrumb { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; color: var(--ui-muted); font-size: 11px; white-space: nowrap; }
+    .inspector-breadcrumb span { overflow: hidden; text-overflow: ellipsis; }
+    .inspector-breadcrumb-separator { color: var(--ui-accent-text); font-size: 16px; }
+    .inspector-body {
+      display: grid;
+      align-content: start;
+      gap: 16px;
+      background: var(--ui-panel);
+    }
+    .inspector-body.swagger-ui,
+    .inspector-body.asyncapi-inspector {
+      padding: 18px;
+      background: var(--ui-widget);
+    }
+    .inspector-body.swagger-ui > .swagger-ui,
+    .asyncapi-shell {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--ui-border);
+      border-radius: var(--widget-radius);
+      background: var(--ui-panel);
+    }
+    .inspector-body.swagger-ui > .swagger-ui { padding: 18px 20px 24px; }
+    .asyncapi-shell { overflow: hidden; }
+    .dto-inspector,
+    .architecture-node-inspector {
+      width: min(760px, 100%);
+      box-sizing: border-box;
+      margin: 0 auto;
+      border: 1px solid var(--ui-border);
+      border-radius: var(--widget-radius);
+      background: var(--ui-panel);
+      box-shadow: 0 8px 24px rgba(36, 50, 83, .06);
+    }
+    .dto-inspector { padding: 16px; }
+    .route-inspector-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; width: min(760px, 100%); box-sizing: border-box; margin: 0 auto; padding: 14px 16px; border: 1px solid var(--ui-border); border-radius: var(--widget-radius); background: linear-gradient(145deg, var(--ui-widget), var(--ui-control)); }
+    .route-inspector-method { padding: 4px 8px; border-radius: 8px; color: var(--ui-on-accent); background: var(--ui-selected); font-size: 11px; font-weight: 850; letter-spacing: .06em; }
+    .route-inspector-path { min-width: 0; color: var(--ui-text); font-size: 14px; font-weight: 750; overflow-wrap: anywhere; }
+    .route-inspector-summary .route-client-count { margin-left: auto; }
 
     :root[data-theme="dark"] #graph {
       background-image:
@@ -1258,8 +1298,7 @@
     .detail-badge,
     .asyncapi-summary-badge { border-radius: 8px; }
     .reference-action,
-    .module-open-action,
-    .dto-back { min-height: 32px; border-radius: 9px; }
+    .module-open-action { min-height: 32px; border-radius: 9px; }
     .reference-action { padding: 0 10px !important; }
 
     .display-filter-groups,
@@ -1627,7 +1666,7 @@
   <p id="graph-flow-status" hidden></p>
   <div id="inspector-modal" class="inspector-modal" role="dialog" aria-modal="true" aria-labelledby="inspector-title" hidden>
     <div class="inspector-dialog">
-      <header class="inspector-header"><h1 id="inspector-title" class="inspector-title"></h1><button id="inspector-close" class="inspector-close" type="button" aria-label="Fermer">×</button></header>
+      <header class="inspector-header"><div class="inspector-heading"><button id="inspector-back" class="inspector-back" type="button" aria-label="Revenir à l’élément précédent" hidden>←</button><h1 id="inspector-title" class="inspector-title"></h1><nav id="inspector-breadcrumb" class="inspector-breadcrumb" aria-label="Chemin de navigation"></nav></div><button id="inspector-close" class="inspector-close" type="button" aria-label="Fermer">×</button></header>
       <div id="inspector-body" class="inspector-body"></div>
     </div>
   </div>
@@ -5564,10 +5603,9 @@
               .map(item => item.service))].sort((left, right) => left.localeCompare(right));
             const item = document.createElement("li");
             item.className = "reference-item route-reference-item";
-            const disclosure = document.createElement("details");
-            disclosure.className = "route-disclosure";
-            const toggle = document.createElement("summary");
+            const toggle = document.createElement("button");
             toggle.className = "route-reference-toggle";
+            toggle.type = "button";
             const label = document.createElement("span");
             label.className = "route-reference-label";
             label.textContent = `${parts.method} ${parts.path}`;
@@ -5575,28 +5613,8 @@
             clientCount.className = "route-client-count";
             clientCount.textContent = `${callers.length} client${callers.length > 1 ? "s" : ""}`;
             toggle.append(label, clientCount);
-            const callersPanel = document.createElement("div");
-            callersPanel.className = "route-callers";
-            const callersTitle = document.createElement("strong");
-            callersTitle.textContent = "Microservices appelants";
-            callersPanel.append(callersTitle);
-            if (callers.length) {
-              const callersList = document.createElement("div");
-              callersList.className = "route-callers-list";
-              callers.forEach(service => {
-                const caller = document.createElement("span");
-                caller.className = "route-caller-chip";
-                caller.textContent = service;
-                callersList.append(caller);
-              });
-              callersPanel.append(callersList);
-            } else {
-              const emptyCallers = document.createElement("p");
-              emptyCallers.textContent = "Aucun microservice appelant identifié.";
-              callersPanel.append(emptyCallers);
-            }
-            disclosure.append(toggle, callersPanel);
-            item.append(disclosure);
+            toggle.addEventListener("click", () => openHttpRouteInspector(node, route));
+            item.append(toggle);
             methodList.append(item);
           });
           pathItem.append(methodList);
@@ -5682,14 +5700,9 @@
       visibleMicroservices.forEach(node => {
         const incoming = graphData.links.filter(link => link.target === node.id).length;
         const outgoing = graphData.links.filter(link => link.source === node.id).length;
-        microservicesList.append(referenceItem(
-          nodeDisplayName(node),
+        microservicesList.append(architectureNodeReference(
+          node,
           `${nodeKindLabel(node)} · ${incoming} entrée${incoming > 1 ? "s" : ""} · ${outgoing} sortie${outgoing > 1 ? "s" : ""}`,
-          "Voir",
-          () => {
-            setToolbarTab("graph");
-            selectNode(node.id);
-          },
         ));
       });
     }
@@ -5708,14 +5721,9 @@
       visibleCollections.forEach(node => {
         const incoming = graphData.links.filter(link => link.target === node.id).length;
         const outgoing = graphData.links.filter(link => link.source === node.id).length;
-        collectionsList.append(referenceItem(
-          nodeDisplayName(node),
+        collectionsList.append(architectureNodeReference(
+          node,
           `Mongo · ${incoming} lecture${incoming > 1 ? "s" : ""} · ${outgoing} écriture${outgoing > 1 ? "s" : ""}`,
-          "Voir",
-          () => {
-            setToolbarTab("graph");
-            selectNode(node.id);
-          },
         ));
       });
     }
@@ -5732,16 +5740,23 @@
       visibleTopics.forEach(node => {
         const incoming = graphData.links.filter(link => link.target === node.id).length;
         const outgoing = graphData.links.filter(link => link.source === node.id).length;
-        topicsList.append(referenceItem(
-          nodeDisplayName(node),
+        topicsList.append(architectureNodeReference(
+          node,
           `${incoming} producteur${incoming > 1 ? "s" : ""} · ${outgoing} consommateur${outgoing > 1 ? "s" : ""}`,
-          "Voir",
-          () => {
-            setToolbarTab("graph");
-            selectNode(node.id);
-          },
         ));
       });
+    }
+    function architectureNodeReference(node, meta) {
+      const item = referenceItem(nodeDisplayName(node), meta, "Voir", () => {
+        setToolbarTab("graph");
+        selectNode(node.id);
+        openArchitectureNodeInspector(node, { reset: true });
+      });
+      item.classList.add("architecture-resource-reference");
+      item.addEventListener("click", event => {
+        if (!event.target.closest("button, a")) item.querySelector("button")?.click();
+      });
+      return item;
     }
     function createDetailsGroup(title, open = true) {
       const group = document.createElement("details");
@@ -5874,12 +5889,27 @@
       const heading = document.createElement("h2");
       heading.textContent = title;
       const list = document.createElement("ul");
-      entries.forEach(({ label, title: actionTitle, action }) => {
+      entries.forEach(({ label, title: actionTitle, action, modelNodeId, inspectorKind, inspectorId, inspectorService, inspectorPath, inspectorRoute }) => {
         const item = document.createElement("li");
         item.className = "relation-item";
         const button = document.createElement("button");
         button.className = "relation-link";
         button.type = "button";
+        if (modelNodeId) button.dataset.modelNodeId = modelNodeId;
+        if (inspectorKind && inspectorId) {
+          button.dataset.inspectorKind = inspectorKind;
+          button.dataset.inspectorId = inspectorId;
+        }
+        if (inspectorKind && inspectorService && inspectorPath) {
+          button.dataset.inspectorKind = inspectorKind;
+          button.dataset.inspectorService = inspectorService;
+          button.dataset.inspectorPath = inspectorPath;
+        }
+        if (["route", "http-call"].includes(inspectorKind) && inspectorService && inspectorRoute) {
+          button.dataset.inspectorKind = inspectorKind;
+          button.dataset.inspectorService = inspectorService;
+          button.dataset.inspectorRoute = inspectorRoute;
+        }
         button.textContent = label;
         button.title = actionTitle || "Afficher cet élément dans le graphe";
         button.addEventListener("click", action);
@@ -5932,6 +5962,7 @@
         const button = document.createElement("button");
         button.className = "relation-link";
         button.type = "button";
+        button.dataset.modelNodeId = targetId;
         button.textContent = label;
         button.title = "Sélectionner ce nœud dans le graphe";
         button.addEventListener("click", () => selectNode(targetId));
@@ -5943,21 +5974,138 @@
     }
     const inspectorModal = document.getElementById("inspector-modal");
     const inspectorTitle = document.getElementById("inspector-title");
+    const inspectorBack = document.getElementById("inspector-back");
+    const inspectorBreadcrumb = document.getElementById("inspector-breadcrumb");
     const inspectorBody = document.getElementById("inspector-body");
     const dtoNavigation = [];
     const mongoNavigation = [];
+    const architectureInspectorHistory = [];
+    let inspectorBackAction = null;
+    let architectureInspectorNode = null;
+    function renderArchitectureInspectorNavigation() {
+      inspectorBack.hidden = architectureInspectorHistory.length === 0
+        && !inspectorBackAction
+        && !dtoNavigation.length
+        && !mongoNavigation.length;
+      inspectorBreadcrumb.replaceChildren();
+      if (!architectureInspectorNode) return;
+      const path = [...architectureInspectorHistory, architectureInspectorNode];
+      path.forEach((node, index) => {
+        if (index) {
+          const separator = document.createElement("span");
+          separator.className = "inspector-breadcrumb-separator";
+          separator.textContent = "›";
+          inspectorBreadcrumb.append(separator);
+        }
+        const item = document.createElement("span");
+        item.textContent = nodeDisplayName(node);
+        inspectorBreadcrumb.append(item);
+      });
+    }
     function closeInspector() {
       inspectorModal.hidden = true;
       inspectorBody.replaceChildren();
       inspectorBody.className = "inspector-body";
       dtoNavigation.splice(0);
       mongoNavigation.splice(0);
+      architectureInspectorHistory.splice(0);
+      inspectorBackAction = null;
+      architectureInspectorNode = null;
+      inspectorBack.hidden = true;
+      inspectorBreadcrumb.replaceChildren();
     }
     function openInspector(title) {
       inspectorTitle.textContent = title;
       inspectorBody.replaceChildren();
       inspectorBody.className = "inspector-body";
       inspectorModal.hidden = false;
+      renderArchitectureInspectorNavigation();
+    }
+    function openArchitectureNodeInspector(node, options = {}) {
+      if (options.reset) architectureInspectorHistory.splice(0);
+      if (options.push && architectureInspectorNode && architectureInspectorNode.id !== node.id) {
+        architectureInspectorHistory.push(architectureInspectorNode);
+      }
+      inspectorBackAction = options.backAction || null;
+      architectureInspectorNode = node;
+      openInspector(`${nodeKindLabel(node)} · ${nodeDisplayName(node)}`);
+      renderArchitectureInspectorNavigation();
+      const widget = details.cloneNode(true);
+      widget.removeAttribute("id");
+      widget.classList.remove("is-empty");
+      widget.classList.add("architecture-node-inspector");
+      widget.addEventListener("click", event => {
+        const button = event.target.closest("[data-model-node-id]");
+        if (button) {
+          const target = nodeDataById.get(button.dataset.modelNodeId);
+          if (!target) return;
+          selectNode(target.id);
+          openArchitectureNodeInspector(target, { push: true });
+          return;
+        }
+        const inspectorButton = event.target.closest("[data-inspector-kind]");
+        if (!inspectorButton) return;
+        const id = inspectorButton.dataset.inspectorId;
+        const parentNode = architectureInspectorNode;
+        if (inspectorButton.dataset.inspectorKind === "dto") openDtoInspector(id);
+        if (inspectorButton.dataset.inspectorKind === "jpa") openJpaEntityInspector(id);
+        if (inspectorButton.dataset.inspectorKind === "mongo") openMongoPersistenceInspector(id);
+        if (["openapi", "asyncapi"].includes(inspectorButton.dataset.inspectorKind)) {
+          const owner = graphData.nodes.find(node => node.name === inspectorButton.dataset.inspectorService);
+          const contract = owner?.[inspectorButton.dataset.inspectorKind === "openapi" ? "openapi_contracts" : "asyncapi_contracts"]
+            ?.find(item => item.path === inspectorButton.dataset.inspectorPath);
+          if (contract) {
+            if (inspectorButton.dataset.inspectorKind === "openapi") openOpenApiContract(contract);
+            else openAsyncApiContract(contract);
+          }
+        }
+        if (inspectorButton.dataset.inspectorKind === "route") {
+          const owner = graphData.nodes.find(node => node.name === inspectorButton.dataset.inspectorService);
+          const route = owner?.http_routes?.find(item => item.route === inspectorButton.dataset.inspectorRoute);
+          if (owner && route) openHttpRouteInspector(owner, route);
+        }
+        if (inspectorButton.dataset.inspectorKind === "http-call") {
+          const owner = graphData.nodes.find(node => node.name === inspectorButton.dataset.inspectorService);
+          const route = owner?.http_routes?.find(item => (
+            item.role === "call" && item.route === inspectorButton.dataset.inspectorRoute
+          ));
+          const call = owner?.http_calls?.find(item => item.route === inspectorButton.dataset.inspectorRoute);
+          if (owner && route) openHttpCallInspector(owner, route, call);
+        }
+        if (parentNode) {
+          inspectorBackAction = () => {
+            selectNode(parentNode.id);
+            openArchitectureNodeInspector(parentNode, { push: false });
+          };
+          renderArchitectureInspectorNavigation();
+        }
+      });
+      inspectorBody.append(widget);
+    }
+    function goBackArchitectureInspector() {
+      const previous = architectureInspectorHistory.pop();
+      if (!previous) return;
+      selectNode(previous.id);
+      openArchitectureNodeInspector(previous, { push: false });
+    }
+    function goBackInspector() {
+      if (dtoNavigation.length) {
+        returnToContainingDto();
+        renderArchitectureInspectorNavigation();
+        return;
+      }
+      if (mongoNavigation.length) {
+        returnToContainingMongoClass();
+        renderArchitectureInspectorNavigation();
+        return;
+      }
+      if (inspectorBackAction) {
+        const action = inspectorBackAction;
+        inspectorBackAction = null;
+        action();
+        return;
+      }
+      goBackArchitectureInspector();
     }
     function openOpenApiContract(contract) {
       openInspector(`OpenAPI · ${contract.path}`);
@@ -6134,17 +6282,6 @@
       if (!item) return;
       openInspector(`Données persistées · ${item.name}`);
       inspectorBody.classList.add("dto-inspector");
-      if (mongoNavigation.length) {
-        const navigation = document.createElement("div");
-        navigation.className = "dto-navigation";
-        const back = document.createElement("button");
-        back.className = "dto-back";
-        back.type = "button";
-        back.textContent = "← Retour";
-        back.addEventListener("click", returnToContainingMongoClass);
-        navigation.append(back);
-        inspectorBody.append(navigation);
-      }
       const summary = document.createElement("p");
       summary.className = "dto-summary";
       summary.textContent = `${item.qualified_name} · ${item.source}:${item.line}`;
@@ -6204,18 +6341,6 @@
       if (!dto) return;
       openInspector(`DTO de Topic · ${dto.name}`);
       inspectorBody.classList.add("dto-inspector");
-      if (dtoNavigation.length) {
-        const navigation = document.createElement("div");
-        navigation.className = "dto-navigation";
-        const back = document.createElement("button");
-        back.className = "dto-back";
-        back.type = "button";
-        back.textContent = "← Retour";
-        back.title = `Retour vers ${dtoNavigation.at(-1)}`;
-        back.addEventListener("click", returnToContainingDto);
-        navigation.append(back);
-        inspectorBody.append(navigation);
-      }
       const summary = document.createElement("p");
       summary.className = "dto-summary";
       summary.textContent = dto.source
@@ -6904,6 +7029,7 @@
         const topicButton = document.createElement("button");
         topicButton.type = "button";
         topicButton.className = "service-kafka-topic";
+        topicButton.dataset.modelNodeId = topicId;
         topicButton.textContent = topic.name;
         topicButton.title = `Afficher le detail du topic ${topic.name}`;
         topicButton.addEventListener("click", () => selectNode(topicId));
@@ -6921,6 +7047,8 @@
           dtos.forEach(dto => {
             const dtoButton = document.createElement("button");
             dtoButton.type = "button";
+            dtoButton.dataset.inspectorKind = "dto";
+            dtoButton.dataset.inspectorId = dto.id;
             dtoButton.textContent = `DTO · ${dtoLabel(dto)}`;
             dtoButton.title = `Afficher la structure de ${dtoLabel(dto)}`;
             dtoButton.addEventListener("click", () => openDtoInspector(dto.id));
@@ -6951,7 +7079,94 @@
     function openHttpRouteInspector(providerNode, route) {
       if (!providerNode || !route) return;
       expandedHttpRoute = { service: providerNode.name, route: route.route };
+      inspectorBackAction = null;
+      const parts = httpRouteParts(route);
+      const consumers = httpRouteConsumers(providerNode, route);
+      openInspector(`Route HTTP · ${parts.method} ${parts.path}`);
+      inspectorBody.classList.add("route-inspector");
+      const summary = document.createElement("section");
+      summary.className = "route-inspector-summary";
+      const method = document.createElement("span");
+      method.className = "route-inspector-method";
+      method.textContent = parts.method;
+      const path = document.createElement("code");
+      path.className = "route-inspector-path";
+      path.textContent = parts.path;
+      const count = document.createElement("span");
+      count.className = "route-client-count";
+      count.textContent = `${consumers.length} client${consumers.length > 1 ? "s" : ""}`;
+      summary.append(method, path, count);
+      inspectorBody.append(summary);
+      const openRelatedNode = node => {
+        if (!node) return;
+        selectNode(node.id);
+        openArchitectureNodeInspector(node, {
+          reset: true,
+          backAction: () => openHttpRouteInspector(providerNode, route),
+        });
+      };
+      appendActionList("Microservice exposant", [{
+        label: providerNode.name,
+        title: `Afficher le microservice ${providerNode.name}`,
+        modelNodeId: providerNode.id,
+        action: () => openRelatedNode(providerNode),
+      }], inspectorBody);
+      appendActionList("Microservices clients", consumers.map(item => ({
+        label: `${item.service} · ${item.route}`,
+        title: `Afficher le microservice ${item.service}`,
+        modelNodeId: `microservice:${item.service}`,
+        action: () => openRelatedNode(
+          graphData.nodes.find(node => node.kind === "microservice" && node.name === item.service),
+        ),
+      })), inspectorBody);
+      appendList("DTO REST", (providerNode.rest_dtos || []).map(dto => (
+        `${dto.name} · ${dto.roles.join(", ")} · ${dto.location}`
+      )), inspectorBody);
+      appendList("Preuves d'appel", consumers.length
+        ? consumers.map(item => `${item.service} · ${item.location}`)
+        : ["Aucun microservice appelant identifié."], inspectorBody);
+      appendActionList("Code source", route.vscode_uri ? [{
+        label: route.location,
+        title: `Ouvrir ${route.location} dans VS Code`,
+        action: () => { window.location.href = route.vscode_uri; },
+      }] : [], inspectorBody);
       selectNode(providerNode.id);
+    }
+    function openHttpCallInspector(callerNode, route, call) {
+      if (!callerNode || !route) return;
+      inspectorBackAction = null;
+      const parts = httpRouteParts(route);
+      openInspector(`Appel HTTP · ${parts.method} ${parts.path}`);
+      inspectorBody.classList.add("route-inspector");
+      const summary = document.createElement("section");
+      summary.className = "route-inspector-summary";
+      const method = document.createElement("span");
+      method.className = "route-inspector-method";
+      method.textContent = parts.method;
+      const path = document.createElement("code");
+      path.className = "route-inspector-path";
+      path.textContent = parts.path;
+      const status = document.createElement("span");
+      status.className = "route-client-count";
+      status.textContent = "Cible non rapprochée";
+      summary.append(method, path, status);
+      inspectorBody.append(summary);
+      const openRelatedNode = node => {
+        if (!node) return;
+        selectNode(node.id);
+        openArchitectureNodeInspector(node, {
+          reset: true,
+          backAction: () => openHttpCallInspector(callerNode, route, call),
+        });
+      };
+      appendActionList("Microservice appelant", [{
+        label: callerNode.name,
+        title: `Afficher le microservice ${callerNode.name}`,
+        modelNodeId: callerNode.id,
+        action: () => openRelatedNode(callerNode),
+      }], inspectorBody);
+      appendList("Cible déclarée", [call?.service || "Aucun service cible rapproché"], inspectorBody);
+      appendList("Preuve source", [route.location], inspectorBody);
     }
     function appendExpandedHttpRoute(node, route, container) {
       const sourceGroup = createDetailsGroup(`Route sélectionnée · ${route.route}`);
@@ -6968,6 +7183,7 @@
       appendActionList("Microservices consommateurs", consumers.map(item => ({
         label: `${item.service} · ${item.route}`,
         title: `Afficher le microservice consommateur ${item.service}`,
+        modelNodeId: `microservice:${item.service}`,
         action: () => selectNode(`microservice:${item.service}`),
       })), relationsGroup);
       if (consumers.length) {
@@ -7152,6 +7368,9 @@
           ...openApiContracts.map(contract => ({
             label: `${contract.spec ? "Contrat OpenAPI" : "Contrat OpenAPI indisponible"} · ${contract.path}`,
             title: `Ouvrir le contrat OpenAPI ${contract.path}`,
+            inspectorKind: "openapi",
+            inspectorService: node.name,
+            inspectorPath: contract.path,
             action: () => openOpenApiContract(contract),
           })),
           ...(node.resources || [])
@@ -7169,21 +7388,61 @@
           .map(route => ({
             label: route.route,
             title: `Afficher les consommateurs de ${route.route}`,
+            inspectorKind: "route",
+            inspectorService: node.name,
+            inspectorRoute: route.route,
             action: () => openHttpRouteInspector(node, route),
           })), relationsGroup);
-        appendList("Routes appelées", httpRoutes
-          .filter(route => route.role === "call")
-          .map(route => `${route.route} · ${route.location}`), relationsGroup);
+        const calledRoutes = httpRoutes.filter(route => route.role === "call").map(route => {
+          const call = httpCalls.find(item => (
+            item.route === route.route && item.location === route.location
+          )) || httpCalls.find(item => item.route === route.route);
+          const targetNode = call && graphData.nodes.find(candidate => (
+            candidate.kind === "microservice" && candidate.name === call.service
+          ));
+          const targetRoute = targetNode?.http_routes?.find(target => (
+            target.role === "serve" && target.route === route.route
+          ));
+          return { call: call || { service: "Service inconnu", route: route.route, location: route.location }, targetNode, targetRoute };
+        });
+        appendActionList("Routes appelées", calledRoutes.map(({ call, targetNode, targetRoute }) => (
+          targetNode && targetRoute
+            ? {
+              label: `${call.service} · ${call.route}`,
+              title: `Ouvrir la route ${call.route} de ${call.service}`,
+              inspectorKind: "route",
+              inspectorService: targetNode.name,
+              inspectorRoute: targetRoute.route,
+              action: () => openHttpRouteInspector(targetNode, targetRoute),
+            }
+            : {
+              label: `${call.service} · ${call.route}`,
+              title: "Ouvrir le détail de l'appel HTTP non rapproché",
+              inspectorKind: "http-call",
+              inspectorService: node.name,
+              inspectorRoute: call.route,
+              action: () => openHttpCallInspector(node, {
+                route: call.route,
+                location: call.location,
+              }, call),
+            }
+        )), relationsGroup);
         appendList("APIs consommées", httpCalls.map(item => (
           `${item.service} · ${item.route}`
         )), relationsGroup);
-        appendList("Appelants HTTP", httpCallers.map(item => (
-          `${item.service} · ${item.route}`
-        )), relationsGroup);
+        appendActionList("Appelants HTTP", httpCallers.map(item => ({
+          label: `${item.service} · ${item.route}`,
+          title: `Afficher le microservice appelant ${item.service}`,
+          modelNodeId: `microservice:${item.service}`,
+          action: () => selectNode(`microservice:${item.service}`),
+        })), relationsGroup);
         appendActionList("APIs publiées", publishedApis, relationsGroup);
         appendActionList("Contrats AsyncAPI", asyncApiContracts.map(contract => ({
           label: `AsyncAPI · ${contract.path}`,
           title: `Inspecter le contrat AsyncAPI ${contract.path}`,
+          inspectorKind: "asyncapi",
+          inspectorService: node.name,
+          inspectorPath: contract.path,
           action: () => openAsyncApiContract(contract),
         })), relationsGroup);
         const selectedRoute = expandedHttpRoute
@@ -7207,6 +7466,8 @@
           return {
             label: entity.name,
             title: "Afficher les attributs et la source de cette entité",
+            inspectorKind: "jpa",
+            inspectorId: entityNode?.id,
             action: () => entityNode && openJpaEntityInspector(entityNode.id),
           };
         }), relationsGroup);
@@ -7235,7 +7496,7 @@
         const qualityGroup = createDetailsGroup("Diagnostics", false);
         appendFindings(node.findings || [], qualityGroup);
         discardEmptyDetailsGroup(qualityGroup);
-        const groupOrder = ["Architecture", "Ports d'intégration", "Relations", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Diagnostics"];
+        const groupOrder = ["Relations", "Architecture", "Ports d'intégration", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Diagnostics"];
         [...details.querySelectorAll(":scope > .details-group")]
           .sort((left, right) => {
             const leftRank = groupOrder.indexOf(left.querySelector("summary")?.textContent);
@@ -7257,6 +7518,8 @@
         appendActionList("DTO de topic", dtos.map(dto => ({
           label: dtoLabel(dto),
           title: "Afficher les champs et les relations de topic de ce DTO",
+          inspectorKind: "dto",
+          inspectorId: dto.id,
           action: () => openDtoInspector(dto.id),
         })), relationsGroup);
         const indexedDtoTypes = new Set(dtos.flatMap(dto => [dto.id, dto.name, dto.qualified_name].filter(Boolean)));
@@ -7284,6 +7547,8 @@
         appendActionList("Classes Java de persistance", persistenceClasses.map(item => ({
           label: item.qualified_name,
           title: "Afficher les champs et la source de cette classe",
+          inspectorKind: "mongo",
+          inspectorId: item.id,
           action: () => openMongoPersistenceInspector(item.id),
         })), relationsGroup);
         if (!persistenceClasses.length) {
@@ -7323,6 +7588,8 @@
         appendActionList("Classe Java", [{
           label: node.display_name || node.name,
           title: "Afficher les attributs et la source de cette classe",
+          inspectorKind: "jpa",
+          inspectorId: id,
           action: () => openJpaEntityInspector(id),
         }], resourceGroup);
         discardEmptyDetailsGroup(resourceGroup);
@@ -7370,6 +7637,7 @@
       appendActionList("Ressources contenues", members.map(member => ({
         label: `${nodeDisplayName(member)} · ${nodeKindLabel(member)}`,
         title: `Afficher les détails de ${nodeDisplayName(member)}`,
+        modelNodeId: member.id,
         action: () => selectNode(member.id),
       })));
       if (!members.length) appendList("Ressources contenues", ["Aucune ressource directe"]);
@@ -8571,6 +8839,7 @@
       applyLayout(graphState.activeLayout);
     });
     document.getElementById("inspector-close").addEventListener("click", closeInspector);
+    inspectorBack.addEventListener("click", goBackInspector);
     inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });
     window.addEventListener("keydown", event => { if (event.key === "Escape" && !inspectorModal.hidden) closeInspector(); });
     document.getElementById("show-simple-paths").addEventListener("click", showSimplePaths);

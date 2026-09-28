@@ -197,6 +197,7 @@
       applyLayout(graphState.activeLayout);
     });
     document.getElementById("inspector-close").addEventListener("click", closeInspector);
+    inspectorBack.addEventListener("click", goBackInspector);
     inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });
     window.addEventListener("keydown", event => { if (event.key === "Escape" && !inspectorModal.hidden) closeInspector(); });
     document.getElementById("show-simple-paths").addEventListener("click", showSimplePaths);

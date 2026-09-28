@@ -742,6 +742,7 @@ def test_microservice_graph_exposes_jpa_entities_as_owned_nodes() -> None:
         {"orders": []}, [], modules_by_service={"orders": module},
     )
     assert "openJpaEntityInspector" in rendered
+    assert "Entité JPA · ${entity.display_name || entity.name}" in rendered
     assert 'appendActionList("Entités JPA déclarées"' in rendered
     assert 'appendActionList("Classe Java"' in rendered
     assert any(
@@ -1152,6 +1153,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert kafka_dtos["OrderCreated"]["fields"] == []
     assert graph_data["project_dto_definitions"] == []
     assert 'appendDtoInspectorSection("Valeurs enum", dto.enum_values || [])' in document
+    assert 'dtoInspectorKindLabel(dto)' in document
+    assert 'textContent = "Aucun champ indexé."' in document
+    assert 'className = "inspector-source-link"' in document
     assert "Que voulez-vous comprendre ?" not in document
     assert 'class="exploration-start"' not in document
     assert "Qui produit ou consomme un topic Kafka ?" not in document
@@ -1168,8 +1172,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'toggle.className = "route-reference-toggle"' in document
     assert 'clientCount.className = "route-client-count"' in document
     assert 'clientCount.textContent = `${callers.length} client${callers.length > 1 ? "s" : ""}`' in document
+    assert "registerDetailsAction" in document
+    assert "data-details-action-id" in document
+    assert 'clonedHeader?.querySelector(".details-title")?.remove()' in document
     assert 'label.textContent = `${parts.method} ${parts.path}`' in document
-    assert 'Microservices appelants' in document
+    assert 'Microservices clients' in document
     assert 'Aucun microservice appelant identifié.' in document
     assert 'function appendExpandedHttpRoute' in document
     assert 'id="kafka-tab"' in document
@@ -1195,6 +1202,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="collections-panel"' in document
     assert 'id="collections-filter"' in document
     assert 'function renderCollections()' in document
+    assert 'function architectureNodeReference(node, meta)' in document
     assert 'id="routes-tab"' in document
     assert '>OpenAPI</button>' in document
     assert '>AsyncAPI</button>' in document
@@ -1290,7 +1298,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "function appendServiceKafkaActivities" in document
     assert document.count('createDetailsGroup("Relations")') == 3
     assert 'appendList("APIs consommées"' in document
-    assert 'appendList("Appelants HTTP"' in document
+    assert 'appendActionList("Appelants HTTP"' in document
     assert 'appendServiceKafkaActivities(node, "produce", "Messages publiés"' in document
     assert 'appendRelationList("Services utilisant cette donnée"' in document
     assert 'appendList("Stockee par", [node.owner], relationsGroup)' not in document

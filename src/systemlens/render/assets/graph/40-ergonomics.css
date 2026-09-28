@@ -86,6 +86,69 @@
     .inspector-dialog { max-height: min(820px, calc(100vh - 48px)); border-radius: 26px; }
     .inspector-header { padding: 16px 22px; }
     .inspector-body { padding: 24px; }
+    .inspector-heading { display: grid; grid-template-columns: auto minmax(0, auto) minmax(0, 1fr); align-items: center; gap: 10px; min-width: 0; }
+    .inspector-back { width: auto; min-width: 32px; height: 32px; padding: 0 9px; border: 1px solid var(--ui-border); border-radius: var(--control-radius); color: var(--ui-accent-text); background: var(--ui-control); font-size: 16px; cursor: pointer; }
+    .inspector-back:hover, .inspector-back:focus-visible { border-color: var(--ui-accent-border); background: var(--ui-accent-soft); outline: none; }
+    .inspector-breadcrumb { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; color: var(--ui-muted); font-size: 11px; white-space: nowrap; }
+    .inspector-breadcrumb span { overflow: hidden; text-overflow: ellipsis; }
+    .inspector-breadcrumb-separator { color: var(--ui-accent-text); font-size: 16px; }
+    .inspector-source-link {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      min-height: 32px;
+      box-sizing: border-box;
+      padding: 6px 10px;
+      border: 1px solid var(--ui-accent-border);
+      border-radius: var(--control-radius);
+      color: var(--ui-accent-text);
+      background: var(--ui-accent-soft);
+      font-size: 12px;
+      font-weight: 750;
+      text-decoration: none;
+    }
+    .inspector-source-link:hover,
+    .inspector-source-link:focus-visible {
+      border-color: var(--ui-selected);
+      background: var(--ui-accent-soft-hover);
+      outline: none;
+    }
+    .inspector-body {
+      display: grid;
+      align-content: start;
+      gap: 16px;
+      background: var(--ui-panel);
+    }
+    .inspector-body.swagger-ui,
+    .inspector-body.asyncapi-inspector {
+      padding: 18px;
+      background: var(--ui-widget);
+    }
+    .inspector-body.swagger-ui > .swagger-ui,
+    .asyncapi-shell {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--ui-border);
+      border-radius: var(--widget-radius);
+      background: var(--ui-panel);
+    }
+    .inspector-body.swagger-ui > .swagger-ui { padding: 18px 20px 24px; }
+    .asyncapi-shell { overflow: hidden; }
+    .dto-inspector,
+    .architecture-node-inspector {
+      width: min(760px, 100%);
+      box-sizing: border-box;
+      margin: 0 auto;
+      border: 1px solid var(--ui-border);
+      border-radius: var(--widget-radius);
+      background: var(--ui-panel);
+      box-shadow: 0 8px 24px rgba(36, 50, 83, .06);
+    }
+    .dto-inspector { padding: 16px; }
+    .route-inspector-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; width: min(760px, 100%); box-sizing: border-box; margin: 0 auto; padding: 14px 16px; border: 1px solid var(--ui-border); border-radius: var(--widget-radius); background: linear-gradient(145deg, var(--ui-widget), var(--ui-control)); }
+    .route-inspector-method { padding: 4px 8px; border-radius: 8px; color: var(--ui-on-accent); background: var(--ui-selected); font-size: 11px; font-weight: 850; letter-spacing: .06em; }
+    .route-inspector-path { min-width: 0; color: var(--ui-text); font-size: 14px; font-weight: 750; overflow-wrap: anywhere; }
+    .route-inspector-summary .route-client-count { margin-left: auto; }
 
     :root[data-theme="dark"] #graph {
       background-image:
@@ -152,8 +215,7 @@
     .detail-badge,
     .asyncapi-summary-badge { border-radius: 8px; }
     .reference-action,
-    .module-open-action,
-    .dto-back { min-height: 32px; border-radius: 9px; }
+    .module-open-action { min-height: 32px; border-radius: 9px; }
     .reference-action { padding: 0 10px !important; }
 
     .display-filter-groups,

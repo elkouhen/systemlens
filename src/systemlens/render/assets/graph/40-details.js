@@ -179,6 +179,18 @@
         indexingIssuesList.append(item);
       });
     }
+    const detailsActionRegistry = new Map();
+    let detailsActionSequence = 0;
+    function registerDetailsAction(element, action) {
+      if (typeof action !== "function") return;
+      const actionId = `details-action-${detailsActionSequence += 1}`;
+      detailsActionRegistry.set(actionId, action);
+      element.dataset.detailsActionId = actionId;
+    }
+    function resetDetailsActionRegistry() {
+      detailsActionRegistry.clear();
+      detailsActionSequence = 0;
+    }
     function referenceItem(title, meta, actionLabel, action, disabled = false) {
       const item = document.createElement("li");
       item.className = "reference-item";
@@ -317,10 +329,9 @@
               .map(item => item.service))].sort((left, right) => left.localeCompare(right));
             const item = document.createElement("li");
             item.className = "reference-item route-reference-item";
-            const disclosure = document.createElement("details");
-            disclosure.className = "route-disclosure";
-            const toggle = document.createElement("summary");
+            const toggle = document.createElement("button");
             toggle.className = "route-reference-toggle";
+            toggle.type = "button";
             const label = document.createElement("span");
             label.className = "route-reference-label";
             label.textContent = `${parts.method} ${parts.path}`;
@@ -328,28 +339,8 @@
             clientCount.className = "route-client-count";
             clientCount.textContent = `${callers.length} client${callers.length > 1 ? "s" : ""}`;
             toggle.append(label, clientCount);
-            const callersPanel = document.createElement("div");
-            callersPanel.className = "route-callers";
-            const callersTitle = document.createElement("strong");
-            callersTitle.textContent = "Microservices appelants";
-            callersPanel.append(callersTitle);
-            if (callers.length) {
-              const callersList = document.createElement("div");
-              callersList.className = "route-callers-list";
-              callers.forEach(service => {
-                const caller = document.createElement("span");
-                caller.className = "route-caller-chip";
-                caller.textContent = service;
-                callersList.append(caller);
-              });
-              callersPanel.append(callersList);
-            } else {
-              const emptyCallers = document.createElement("p");
-              emptyCallers.textContent = "Aucun microservice appelant identifié.";
-              callersPanel.append(emptyCallers);
-            }
-            disclosure.append(toggle, callersPanel);
-            item.append(disclosure);
+            toggle.addEventListener("click", () => openHttpRouteInspector(node, route));
+            item.append(toggle);
             methodList.append(item);
           });
           pathItem.append(methodList);
@@ -435,14 +426,9 @@
       visibleMicroservices.forEach(node => {
         const incoming = graphData.links.filter(link => link.target === node.id).length;
         const outgoing = graphData.links.filter(link => link.source === node.id).length;
-        microservicesList.append(referenceItem(
-          nodeDisplayName(node),
+        microservicesList.append(architectureNodeReference(
+          node,
           `${nodeKindLabel(node)} · ${incoming} entrée${incoming > 1 ? "s" : ""} · ${outgoing} sortie${outgoing > 1 ? "s" : ""}`,
-          "Voir",
-          () => {
-            setToolbarTab("graph");
-            selectNode(node.id);
-          },
         ));
       });
     }
@@ -461,14 +447,9 @@
       visibleCollections.forEach(node => {
         const incoming = graphData.links.filter(link => link.target === node.id).length;
         const outgoing = graphData.links.filter(link => link.source === node.id).length;
-        collectionsList.append(referenceItem(
-          nodeDisplayName(node),
+        collectionsList.append(architectureNodeReference(
+          node,
           `Mongo · ${incoming} lecture${incoming > 1 ? "s" : ""} · ${outgoing} écriture${outgoing > 1 ? "s" : ""}`,
-          "Voir",
-          () => {
-            setToolbarTab("graph");
-            selectNode(node.id);
-          },
         ));
       });
     }
@@ -485,16 +466,23 @@
       visibleTopics.forEach(node => {
         const incoming = graphData.links.filter(link => link.target === node.id).length;
         const outgoing = graphData.links.filter(link => link.source === node.id).length;
-        topicsList.append(referenceItem(
-          nodeDisplayName(node),
+        topicsList.append(architectureNodeReference(
+          node,
           `${incoming} producteur${incoming > 1 ? "s" : ""} · ${outgoing} consommateur${outgoing > 1 ? "s" : ""}`,
-          "Voir",
-          () => {
-            setToolbarTab("graph");
-            selectNode(node.id);
-          },
         ));
       });
+    }
+    function architectureNodeReference(node, meta) {
+      const item = referenceItem(nodeDisplayName(node), meta, "Voir", () => {
+        setToolbarTab("graph");
+        selectNode(node.id);
+        openArchitectureNodeInspector(node, { reset: true });
+      });
+      item.classList.add("architecture-resource-reference");
+      item.addEventListener("click", event => {
+        if (!event.target.closest("button, a")) item.querySelector("button")?.click();
+      });
+      return item;
     }
     function createDetailsGroup(title, open = true) {
       const group = document.createElement("details");
@@ -598,13 +586,17 @@
         listAction.className = "reference-action";
         listAction.textContent = "Flux";
         listAction.title = "Ouvrir ce flux dans l’onglet Flux";
-        listAction.addEventListener("click", () => openCodeFlowInList(flow));
+        const openInList = () => openCodeFlowInList(flow);
+        listAction.addEventListener("click", openInList);
+        registerDetailsAction(listAction, openInList);
         const graphAction = document.createElement("button");
         graphAction.type = "button";
         graphAction.className = "reference-action";
         graphAction.textContent = "Graphe d’appel";
         graphAction.title = "Afficher ce flux dans le graphe d’appel";
-        graphAction.addEventListener("click", () => showCodeFlow(flow));
+        const openInGraph = () => showCodeFlow(flow);
+        graphAction.addEventListener("click", openInGraph);
+        registerDetailsAction(graphAction, openInGraph);
         actions.append(listAction, graphAction);
         if (flow.vscode_uri) {
           const sourceAction = document.createElement("a");
@@ -627,15 +619,31 @@
       const heading = document.createElement("h2");
       heading.textContent = title;
       const list = document.createElement("ul");
-      entries.forEach(({ label, title: actionTitle, action }) => {
+      entries.forEach(({ label, title: actionTitle, action, modelNodeId, inspectorKind, inspectorId, inspectorService, inspectorPath, inspectorRoute }) => {
         const item = document.createElement("li");
         item.className = "relation-item";
         const button = document.createElement("button");
         button.className = "relation-link";
         button.type = "button";
+        if (modelNodeId) button.dataset.modelNodeId = modelNodeId;
+        if (inspectorKind && inspectorId) {
+          button.dataset.inspectorKind = inspectorKind;
+          button.dataset.inspectorId = inspectorId;
+        }
+        if (inspectorKind && inspectorService && inspectorPath) {
+          button.dataset.inspectorKind = inspectorKind;
+          button.dataset.inspectorService = inspectorService;
+          button.dataset.inspectorPath = inspectorPath;
+        }
+        if (["route", "http-call"].includes(inspectorKind) && inspectorService && inspectorRoute) {
+          button.dataset.inspectorKind = inspectorKind;
+          button.dataset.inspectorService = inspectorService;
+          button.dataset.inspectorRoute = inspectorRoute;
+        }
         button.textContent = label;
         button.title = actionTitle || "Afficher cet élément dans le graphe";
         button.addEventListener("click", action);
+        registerDetailsAction(button, action);
         item.append(button);
         list.append(item);
       });
@@ -685,6 +693,7 @@
         const button = document.createElement("button");
         button.className = "relation-link";
         button.type = "button";
+        button.dataset.modelNodeId = targetId;
         button.textContent = label;
         button.title = "Sélectionner ce nœud dans le graphe";
         button.addEventListener("click", () => selectNode(targetId));
@@ -696,21 +705,154 @@
     }
     const inspectorModal = document.getElementById("inspector-modal");
     const inspectorTitle = document.getElementById("inspector-title");
+    const inspectorBack = document.getElementById("inspector-back");
+    const inspectorBreadcrumb = document.getElementById("inspector-breadcrumb");
     const inspectorBody = document.getElementById("inspector-body");
     const dtoNavigation = [];
     const mongoNavigation = [];
+    const architectureInspectorHistory = [];
+    let inspectorBackAction = null;
+    let architectureInspectorNode = null;
+    function renderArchitectureInspectorNavigation() {
+      inspectorBack.hidden = architectureInspectorHistory.length === 0
+        && !inspectorBackAction
+        && !dtoNavigation.length
+        && !mongoNavigation.length;
+      inspectorBreadcrumb.replaceChildren();
+      if (!architectureInspectorNode) return;
+      const path = [...architectureInspectorHistory, architectureInspectorNode];
+      path.forEach((node, index) => {
+        if (index) {
+          const separator = document.createElement("span");
+          separator.className = "inspector-breadcrumb-separator";
+          separator.textContent = "›";
+          inspectorBreadcrumb.append(separator);
+        }
+        const item = document.createElement("span");
+        item.textContent = nodeDisplayName(node);
+        inspectorBreadcrumb.append(item);
+      });
+    }
     function closeInspector() {
       inspectorModal.hidden = true;
       inspectorBody.replaceChildren();
       inspectorBody.className = "inspector-body";
       dtoNavigation.splice(0);
       mongoNavigation.splice(0);
+      architectureInspectorHistory.splice(0);
+      inspectorBackAction = null;
+      architectureInspectorNode = null;
+      inspectorBack.hidden = true;
+      inspectorBreadcrumb.replaceChildren();
     }
-    function openInspector(title) {
+    function openInspector(title, options = {}) {
+      if (options.preserveArchitectureNavigation !== true) {
+        architectureInspectorHistory.splice(0);
+        architectureInspectorNode = null;
+      }
+      inspectorBackAction = null;
       inspectorTitle.textContent = title;
       inspectorBody.replaceChildren();
       inspectorBody.className = "inspector-body";
       inspectorModal.hidden = false;
+      renderArchitectureInspectorNavigation();
+    }
+    function openArchitectureNodeInspector(node, options = {}) {
+      if (options.reset) architectureInspectorHistory.splice(0);
+      if (options.push && architectureInspectorNode && architectureInspectorNode.id !== node.id) {
+        architectureInspectorHistory.push(architectureInspectorNode);
+      }
+      inspectorBackAction = options.backAction || null;
+      architectureInspectorNode = node;
+      openInspector(`${nodeKindLabel(node)} · ${nodeDisplayName(node)}`, {
+        preserveArchitectureNavigation: true,
+      });
+      renderArchitectureInspectorNavigation();
+      const widget = details.cloneNode(true);
+      widget.removeAttribute("id");
+      widget.classList.remove("is-empty");
+      widget.classList.add("architecture-node-inspector");
+      const clonedHeader = widget.querySelector(".details-header");
+      clonedHeader?.querySelector(".details-kicker")?.remove();
+      clonedHeader?.querySelector(".details-title")?.remove();
+      clonedHeader?.classList.add("inspector-details-summary");
+      widget.addEventListener("click", event => {
+        const button = event.target.closest("[data-model-node-id]");
+        if (button) {
+          const target = nodeDataById.get(button.dataset.modelNodeId);
+          if (!target) return;
+          selectNode(target.id);
+          openArchitectureNodeInspector(target, { push: true });
+          return;
+        }
+        const inspectorButton = event.target.closest("[data-inspector-kind]");
+        if (!inspectorButton) {
+          const actionId = event.target.closest("[data-details-action-id]")?.dataset.detailsActionId;
+          const action = actionId && detailsActionRegistry.get(actionId);
+          if (action) action();
+          return;
+        }
+        const id = inspectorButton.dataset.inspectorId;
+        const parentNode = architectureInspectorNode;
+        if (inspectorButton.dataset.inspectorKind === "dto") openDtoInspector(id);
+        if (inspectorButton.dataset.inspectorKind === "jpa") openJpaEntityInspector(id);
+        if (inspectorButton.dataset.inspectorKind === "mongo") openMongoPersistenceInspector(id);
+        if (["openapi", "asyncapi"].includes(inspectorButton.dataset.inspectorKind)) {
+          const owner = graphData.nodes.find(node => node.name === inspectorButton.dataset.inspectorService);
+          const contract = owner?.[inspectorButton.dataset.inspectorKind === "openapi" ? "openapi_contracts" : "asyncapi_contracts"]
+            ?.find(item => item.path === inspectorButton.dataset.inspectorPath);
+          if (contract) {
+            if (inspectorButton.dataset.inspectorKind === "openapi") openOpenApiContract(contract);
+            else openAsyncApiContract(contract);
+          }
+        }
+        if (inspectorButton.dataset.inspectorKind === "route") {
+          const owner = graphData.nodes.find(node => node.name === inspectorButton.dataset.inspectorService);
+          const route = owner?.http_routes?.find(item => item.route === inspectorButton.dataset.inspectorRoute);
+          if (owner && route) openHttpRouteInspector(owner, route);
+        }
+        if (inspectorButton.dataset.inspectorKind === "http-call") {
+          const owner = graphData.nodes.find(node => node.name === inspectorButton.dataset.inspectorService);
+          const route = owner?.http_routes?.find(item => (
+            item.role === "call" && item.route === inspectorButton.dataset.inspectorRoute
+          ));
+          const call = owner?.http_calls?.find(item => item.route === inspectorButton.dataset.inspectorRoute);
+          if (owner && route) openHttpCallInspector(owner, route, call);
+        }
+        if (parentNode) {
+          inspectorBackAction = () => {
+            selectNode(parentNode.id);
+            openArchitectureNodeInspector(parentNode, { push: false });
+          };
+          renderArchitectureInspectorNavigation();
+        }
+      });
+      inspectorBody.append(widget);
+    }
+    function goBackArchitectureInspector() {
+      const previous = architectureInspectorHistory.pop();
+      if (!previous) return;
+      selectNode(previous.id);
+      openArchitectureNodeInspector(previous, { push: false });
+    }
+    function goBackInspector() {
+      if (dtoNavigation.length) {
+        returnToContainingDto();
+        renderArchitectureInspectorNavigation();
+        return;
+      }
+      if (mongoNavigation.length) {
+        returnToContainingMongoClass();
+        renderArchitectureInspectorNavigation();
+        return;
+      }
+      if (inspectorBackAction) {
+        const action = inspectorBackAction;
+        inspectorBackAction = null;
+        action();
+        return;
+      }
+      goBackArchitectureInspector();
     }
     function openOpenApiContract(contract) {
       openInspector(`OpenAPI · ${contract.path}`);
@@ -718,13 +860,13 @@
         const link = document.createElement("a");
         link.href = contract.vscode_uri;
         link.textContent = "Ouvrir le fichier dans VS Code";
-        link.className = "dto-summary";
+        link.className = "inspector-source-link";
         inspectorBody.append(link);
       }
       if (!contract.spec || !window.SwaggerUIBundle) {
         const message = document.createElement("p");
         message.className = "dto-summary";
-        message.textContent = "La specification locale ou Swagger UI n'est pas disponible dans cet export.";
+        message.textContent = "La spécification locale ou Swagger UI n'est pas disponible dans cet export.";
         inspectorBody.append(message);
         return;
       }
@@ -771,7 +913,7 @@
       meta.className = "asyncapi-summary-meta";
       [
         `v${spec.info?.version || "?"}`,
-        `${Object.keys(spec.channels || {}).length} channel${Object.keys(spec.channels || {}).length > 1 ? "s" : ""}`,
+        `${Object.keys(spec.channels || {}).length} canal${Object.keys(spec.channels || {}).length > 1 ? "s" : ""}`,
         `${Object.keys(spec.operations || {}).length} opération${Object.keys(spec.operations || {}).length > 1 ? "s" : ""}`,
       ].forEach(label => {
         const badge = document.createElement("span");
@@ -785,7 +927,7 @@
         const link = document.createElement("a");
         link.href = contract.vscode_uri;
         link.textContent = "Ouvrir le fichier dans VS Code";
-        link.className = "asyncapi-source-link";
+        link.className = "inspector-source-link asyncapi-source-link";
         shell.append(link);
       }
       const component = document.createElement("asyncapi-component");
@@ -821,6 +963,13 @@
       const duplicate = definitions.filter(item => item.name === dto.name).length > 1;
       return duplicate && dto.qualified_name ? `${dto.name} · ${dto.qualified_name}` : dto.name;
     }
+    function dtoInspectorKindLabel(dto) {
+      const roles = (dto.roles || []).map(role => role.toLowerCase());
+      if (roles.some(role => role.includes("rest"))) return "DTO REST";
+      if (roles.some(role => role.includes("jpa"))) return "DTO d'entité JPA";
+      if (dto.root === false) return "DTO projet";
+      return "DTO de message";
+    }
     function openDtoInspector(dtoName) {
       dtoNavigation.splice(0);
       renderDtoInspector(dtoName);
@@ -832,7 +981,7 @@
     function openJpaEntityInspector(entityId) {
       const entity = nodeDataById.get(entityId);
       if (!entity || entity.kind !== "jpa_entity") return;
-      openInspector(`Classe · ${entity.display_name || entity.name}`);
+      openInspector(`Entité JPA · ${entity.display_name || entity.name}`);
       inspectorBody.classList.add("dto-inspector");
       const summary = document.createElement("p");
       summary.className = "dto-summary";
@@ -841,7 +990,7 @@
       if (entity.vscode_uri) {
         const sourceLink = document.createElement("a");
         sourceLink.href = entity.vscode_uri;
-        sourceLink.className = "dto-summary";
+        sourceLink.className = "inspector-source-link";
         sourceLink.textContent = "Ouvrir la classe dans VS Code";
         inspectorBody.append(sourceLink);
       }
@@ -887,17 +1036,6 @@
       if (!item) return;
       openInspector(`Données persistées · ${item.name}`);
       inspectorBody.classList.add("dto-inspector");
-      if (mongoNavigation.length) {
-        const navigation = document.createElement("div");
-        navigation.className = "dto-navigation";
-        const back = document.createElement("button");
-        back.className = "dto-back";
-        back.type = "button";
-        back.textContent = "← Retour";
-        back.addEventListener("click", returnToContainingMongoClass);
-        navigation.append(back);
-        inspectorBody.append(navigation);
-      }
       const summary = document.createElement("p");
       summary.className = "dto-summary";
       summary.textContent = `${item.qualified_name} · ${item.source}:${item.line}`;
@@ -905,12 +1043,12 @@
       if (item.vscode_uri) {
         const sourceLink = document.createElement("a");
         sourceLink.href = item.vscode_uri;
-        sourceLink.className = "dto-summary";
+        sourceLink.className = "inspector-source-link";
         sourceLink.textContent = "Ouvrir la classe dans VS Code";
         inspectorBody.append(sourceLink);
       }
       const fields = item.fields || [];
-      if (fields.length) {
+      {
         const section = document.createElement("section");
         section.className = "dto-section";
         const heading = document.createElement("h2");
@@ -937,6 +1075,12 @@
           row.append(type, name);
           list.append(row);
         });
+        if (!fields.length) {
+          const empty = document.createElement("li");
+          empty.className = "dto-field dto-empty-state";
+          empty.textContent = "Aucun champ indexé.";
+          list.append(empty);
+        }
         section.append(heading, list);
         inspectorBody.append(section);
       }
@@ -955,20 +1099,8 @@
     function renderDtoInspector(dtoName) {
       const dto = dtoDefinition(dtoName);
       if (!dto) return;
-      openInspector(`DTO de Topic · ${dto.name}`);
+      openInspector(`${dtoInspectorKindLabel(dto)} · ${dto.name}`);
       inspectorBody.classList.add("dto-inspector");
-      if (dtoNavigation.length) {
-        const navigation = document.createElement("div");
-        navigation.className = "dto-navigation";
-        const back = document.createElement("button");
-        back.className = "dto-back";
-        back.type = "button";
-        back.textContent = "← Retour";
-        back.title = `Retour vers ${dtoNavigation.at(-1)}`;
-        back.addEventListener("click", returnToContainingDto);
-        navigation.append(back);
-        inspectorBody.append(navigation);
-      }
       const summary = document.createElement("p");
       summary.className = "dto-summary";
       summary.textContent = dto.source
@@ -978,16 +1110,16 @@
       if (dto.vscode_uri) {
         const sourceLink = document.createElement("a");
         sourceLink.href = dto.vscode_uri;
-        sourceLink.className = "dto-summary";
+        sourceLink.className = "inspector-source-link";
         sourceLink.textContent = "Ouvrir la classe dans VS Code";
         inspectorBody.append(sourceLink);
       }
       const fields = dto.fields || [];
-      if (fields.length) {
+      {
         const section = document.createElement("section");
         section.className = "dto-section";
         const heading = document.createElement("h2");
-        heading.textContent = "Champs declares";
+        heading.textContent = "Champs déclarés";
         const list = document.createElement("ul");
         list.className = "dto-fields";
         fields.forEach(field => {
@@ -1009,6 +1141,12 @@
           item.append(type, name);
           list.append(item);
         });
+        if (!fields.length) {
+          const empty = document.createElement("li");
+          empty.className = "dto-field dto-empty-state";
+          empty.textContent = "Aucun champ indexé.";
+          list.append(empty);
+        }
         section.append(heading, list);
         inspectorBody.append(section);
       }

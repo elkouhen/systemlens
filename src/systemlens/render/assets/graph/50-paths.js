@@ -637,6 +637,7 @@
         const topicButton = document.createElement("button");
         topicButton.type = "button";
         topicButton.className = "service-kafka-topic";
+        topicButton.dataset.modelNodeId = topicId;
         topicButton.textContent = topic.name;
         topicButton.title = `Afficher le detail du topic ${topic.name}`;
         topicButton.addEventListener("click", () => selectNode(topicId));
@@ -654,6 +655,8 @@
           dtos.forEach(dto => {
             const dtoButton = document.createElement("button");
             dtoButton.type = "button";
+            dtoButton.dataset.inspectorKind = "dto";
+            dtoButton.dataset.inspectorId = dto.id;
             dtoButton.textContent = `DTO · ${dtoLabel(dto)}`;
             dtoButton.title = `Afficher la structure de ${dtoLabel(dto)}`;
             dtoButton.addEventListener("click", () => openDtoInspector(dto.id));
@@ -684,7 +687,94 @@
     function openHttpRouteInspector(providerNode, route) {
       if (!providerNode || !route) return;
       expandedHttpRoute = { service: providerNode.name, route: route.route };
+      inspectorBackAction = null;
+      const parts = httpRouteParts(route);
+      const consumers = httpRouteConsumers(providerNode, route);
+      openInspector(`Route HTTP · ${parts.method} ${parts.path}`);
+      inspectorBody.classList.add("route-inspector");
+      const summary = document.createElement("section");
+      summary.className = "route-inspector-summary";
+      const method = document.createElement("span");
+      method.className = "route-inspector-method";
+      method.textContent = parts.method;
+      const path = document.createElement("code");
+      path.className = "route-inspector-path";
+      path.textContent = parts.path;
+      const count = document.createElement("span");
+      count.className = "route-client-count";
+      count.textContent = `${consumers.length} client${consumers.length > 1 ? "s" : ""}`;
+      summary.append(method, path, count);
+      inspectorBody.append(summary);
+      const openRelatedNode = node => {
+        if (!node) return;
+        selectNode(node.id);
+        openArchitectureNodeInspector(node, {
+          reset: true,
+          backAction: () => openHttpRouteInspector(providerNode, route),
+        });
+      };
+      appendActionList("Microservice exposant", [{
+        label: providerNode.name,
+        title: `Afficher le microservice ${providerNode.name}`,
+        modelNodeId: providerNode.id,
+        action: () => openRelatedNode(providerNode),
+      }], inspectorBody);
+      appendActionList("Microservices clients", consumers.map(item => ({
+        label: `${item.service} · ${item.route}`,
+        title: `Afficher le microservice ${item.service}`,
+        modelNodeId: `microservice:${item.service}`,
+        action: () => openRelatedNode(
+          graphData.nodes.find(node => node.kind === "microservice" && node.name === item.service),
+        ),
+      })), inspectorBody);
+      appendList("DTO REST", (providerNode.rest_dtos || []).map(dto => (
+        `${dto.name} · ${dto.roles.join(", ")} · ${dto.location}`
+      )), inspectorBody);
+      appendList("Preuves d'appel", consumers.length
+        ? consumers.map(item => `${item.service} · ${item.location}`)
+        : ["Aucun microservice appelant identifié."], inspectorBody);
+      appendActionList("Code source", route.vscode_uri ? [{
+        label: route.location,
+        title: `Ouvrir ${route.location} dans VS Code`,
+        action: () => { window.location.href = route.vscode_uri; },
+      }] : [], inspectorBody);
       selectNode(providerNode.id);
+    }
+    function openHttpCallInspector(callerNode, route, call) {
+      if (!callerNode || !route) return;
+      inspectorBackAction = null;
+      const parts = httpRouteParts(route);
+      openInspector(`Appel HTTP · ${parts.method} ${parts.path}`);
+      inspectorBody.classList.add("route-inspector");
+      const summary = document.createElement("section");
+      summary.className = "route-inspector-summary";
+      const method = document.createElement("span");
+      method.className = "route-inspector-method";
+      method.textContent = parts.method;
+      const path = document.createElement("code");
+      path.className = "route-inspector-path";
+      path.textContent = parts.path;
+      const status = document.createElement("span");
+      status.className = "route-client-count";
+      status.textContent = "Cible non rapprochée";
+      summary.append(method, path, status);
+      inspectorBody.append(summary);
+      const openRelatedNode = node => {
+        if (!node) return;
+        selectNode(node.id);
+        openArchitectureNodeInspector(node, {
+          reset: true,
+          backAction: () => openHttpCallInspector(callerNode, route, call),
+        });
+      };
+      appendActionList("Microservice appelant", [{
+        label: callerNode.name,
+        title: `Afficher le microservice ${callerNode.name}`,
+        modelNodeId: callerNode.id,
+        action: () => openRelatedNode(callerNode),
+      }], inspectorBody);
+      appendList("Cible déclarée", [call?.service || "Aucun service cible rapproché"], inspectorBody);
+      appendList("Preuve source", [route.location], inspectorBody);
     }
     function appendExpandedHttpRoute(node, route, container) {
       const sourceGroup = createDetailsGroup(`Route sélectionnée · ${route.route}`);
@@ -701,6 +791,7 @@
       appendActionList("Microservices consommateurs", consumers.map(item => ({
         label: `${item.service} · ${item.route}`,
         title: `Afficher le microservice consommateur ${item.service}`,
+        modelNodeId: `microservice:${item.service}`,
         action: () => selectNode(`microservice:${item.service}`),
       })), relationsGroup);
       if (consumers.length) {
@@ -728,6 +819,7 @@
         : 0;
       const dataClassCount = node.kind === "mongodb_collection" ? (node.persistence_classes || []).length : 0;
       revealDetails();
+      resetDetailsActionRegistry();
       details.replaceChildren();
       const kindLabel = nodeKindLabel(node);
       const complexity = node.complexity;
@@ -885,6 +977,9 @@
           ...openApiContracts.map(contract => ({
             label: `${contract.spec ? "Contrat OpenAPI" : "Contrat OpenAPI indisponible"} · ${contract.path}`,
             title: `Ouvrir le contrat OpenAPI ${contract.path}`,
+            inspectorKind: "openapi",
+            inspectorService: node.name,
+            inspectorPath: contract.path,
             action: () => openOpenApiContract(contract),
           })),
           ...(node.resources || [])
@@ -902,21 +997,61 @@
           .map(route => ({
             label: route.route,
             title: `Afficher les consommateurs de ${route.route}`,
+            inspectorKind: "route",
+            inspectorService: node.name,
+            inspectorRoute: route.route,
             action: () => openHttpRouteInspector(node, route),
           })), relationsGroup);
-        appendList("Routes appelées", httpRoutes
-          .filter(route => route.role === "call")
-          .map(route => `${route.route} · ${route.location}`), relationsGroup);
+        const calledRoutes = httpRoutes.filter(route => route.role === "call").map(route => {
+          const call = httpCalls.find(item => (
+            item.route === route.route && item.location === route.location
+          )) || httpCalls.find(item => item.route === route.route);
+          const targetNode = call && graphData.nodes.find(candidate => (
+            candidate.kind === "microservice" && candidate.name === call.service
+          ));
+          const targetRoute = targetNode?.http_routes?.find(target => (
+            target.role === "serve" && target.route === route.route
+          ));
+          return { call: call || { service: "Service inconnu", route: route.route, location: route.location }, targetNode, targetRoute };
+        });
+        appendActionList("Routes appelées", calledRoutes.map(({ call, targetNode, targetRoute }) => (
+          targetNode && targetRoute
+            ? {
+              label: `${call.service} · ${call.route}`,
+              title: `Ouvrir la route ${call.route} de ${call.service}`,
+              inspectorKind: "route",
+              inspectorService: targetNode.name,
+              inspectorRoute: targetRoute.route,
+              action: () => openHttpRouteInspector(targetNode, targetRoute),
+            }
+            : {
+              label: `${call.service} · ${call.route}`,
+              title: "Ouvrir le détail de l'appel HTTP non rapproché",
+              inspectorKind: "http-call",
+              inspectorService: node.name,
+              inspectorRoute: call.route,
+              action: () => openHttpCallInspector(node, {
+                route: call.route,
+                location: call.location,
+              }, call),
+            }
+        )), relationsGroup);
         appendList("APIs consommées", httpCalls.map(item => (
           `${item.service} · ${item.route}`
         )), relationsGroup);
-        appendList("Appelants HTTP", httpCallers.map(item => (
-          `${item.service} · ${item.route}`
-        )), relationsGroup);
+        appendActionList("Appelants HTTP", httpCallers.map(item => ({
+          label: `${item.service} · ${item.route}`,
+          title: `Afficher le microservice appelant ${item.service}`,
+          modelNodeId: `microservice:${item.service}`,
+          action: () => selectNode(`microservice:${item.service}`),
+        })), relationsGroup);
         appendActionList("APIs publiées", publishedApis, relationsGroup);
         appendActionList("Contrats AsyncAPI", asyncApiContracts.map(contract => ({
           label: `AsyncAPI · ${contract.path}`,
           title: `Inspecter le contrat AsyncAPI ${contract.path}`,
+          inspectorKind: "asyncapi",
+          inspectorService: node.name,
+          inspectorPath: contract.path,
           action: () => openAsyncApiContract(contract),
         })), relationsGroup);
         const selectedRoute = expandedHttpRoute
@@ -940,6 +1075,8 @@
           return {
             label: entity.name,
             title: "Afficher les attributs et la source de cette entité",
+            inspectorKind: "jpa",
+            inspectorId: entityNode?.id,
             action: () => entityNode && openJpaEntityInspector(entityNode.id),
           };
         }), relationsGroup);
@@ -968,7 +1105,7 @@
         const qualityGroup = createDetailsGroup("Diagnostics", false);
         appendFindings(node.findings || [], qualityGroup);
         discardEmptyDetailsGroup(qualityGroup);
-        const groupOrder = ["Architecture", "Ports d'intégration", "Relations", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Diagnostics"];
+        const groupOrder = ["Relations", "Architecture", "Ports d'intégration", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Diagnostics"];
         [...details.querySelectorAll(":scope > .details-group")]
           .sort((left, right) => {
             const leftRank = groupOrder.indexOf(left.querySelector("summary")?.textContent);
@@ -990,6 +1127,8 @@
         appendActionList("DTO de topic", dtos.map(dto => ({
           label: dtoLabel(dto),
           title: "Afficher les champs et les relations de topic de ce DTO",
+          inspectorKind: "dto",
+          inspectorId: dto.id,
           action: () => openDtoInspector(dto.id),
         })), relationsGroup);
         const indexedDtoTypes = new Set(dtos.flatMap(dto => [dto.id, dto.name, dto.qualified_name].filter(Boolean)));
@@ -1017,6 +1156,8 @@
         appendActionList("Classes Java de persistance", persistenceClasses.map(item => ({
           label: item.qualified_name,
           title: "Afficher les champs et la source de cette classe",
+          inspectorKind: "mongo",
+          inspectorId: item.id,
           action: () => openMongoPersistenceInspector(item.id),
         })), relationsGroup);
         if (!persistenceClasses.length) {
@@ -1056,6 +1197,8 @@
         appendActionList("Classe Java", [{
           label: node.display_name || node.name,
           title: "Afficher les attributs et la source de cette classe",
+          inspectorKind: "jpa",
+          inspectorId: id,
           action: () => openJpaEntityInspector(id),
         }], resourceGroup);
         discardEmptyDetailsGroup(resourceGroup);
@@ -1069,6 +1212,7 @@
         .filter(Boolean)
         .sort((left, right) => left.name.localeCompare(right.name));
       revealDetails();
+      resetDetailsActionRegistry();
       details.replaceChildren();
       const header = document.createElement("header");
       header.className = "details-header";
@@ -1103,6 +1247,7 @@
       appendActionList("Ressources contenues", members.map(member => ({
         label: `${nodeDisplayName(member)} · ${nodeKindLabel(member)}`,
         title: `Afficher les détails de ${nodeDisplayName(member)}`,
+        modelNodeId: member.id,
         action: () => selectNode(member.id),
       })));
       if (!members.length) appendList("Ressources contenues", ["Aucune ressource directe"]);

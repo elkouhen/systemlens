@@ -111,8 +111,7 @@
     .simple-path-choice,
     #show-simple-paths,
     .service-kafka-meta button,
-    .module-open-action,
-    .dto-back {
+    .module-open-action {
       border-color: var(--ui-accent-border) !important;
       color: var(--ui-accent-text) !important;
       background: var(--ui-accent-soft) !important;
@@ -121,8 +120,7 @@
     .simple-path-choice:hover,
     #show-simple-paths:hover,
     .service-kafka-meta button:hover,
-    .module-open-action:hover,
-    .dto-back:hover { background: var(--ui-accent-soft-hover) !important; }
+    .module-open-action:hover { background: var(--ui-accent-soft-hover) !important; }
     .reference-action:disabled {
       border-color: var(--ui-border) !important;
       color: var(--ui-muted) !important;
