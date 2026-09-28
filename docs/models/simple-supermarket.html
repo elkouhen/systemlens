@@ -766,6 +766,12 @@
       background: rgba(248, 250, 252, .9);
       font-size: 10px;
     }
+    .code-flow-selection-help {
+      margin: 4px 0 0;
+      color: var(--ui-muted);
+      font-size: 11px;
+      line-height: 1.4;
+    }
     .toolbar input:not([type="checkbox"]) {
       height: 34px;
       border-color: #cbd5e1;
@@ -1475,6 +1481,7 @@
         <p class="references-kicker">Parcours potentiels du code</p>
         <div class="code-flow-title-row"><h2 id="code-flows-title" class="references-title">Flux de code</h2><button id="code-flow-compare" class="graph-action-label code-flow-compare" type="button" disabled>Comparer les flux sélectionnés</button></div>
         <p class="references-description">Parcours ordonnés issus du code source. Ils décrivent un comportement potentiel, pas une trace runtime.</p>
+        <p id="code-flow-selection-help" class="code-flow-selection-help">Cochez au moins deux flux pour les comparer côte à côte. Cliquez sur le titre d’un flux pour ouvrir son graphe d’appel.</p>
       </div>
     <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Filtrer par service, méthode ou déclencheur" autocomplete="off" aria-label="Filtrer les flux de code"><input id="code-flow-message-type" class="code-flow-message-type-filter" type="search" placeholder="Type de message Kafka" list="code-flow-message-types" autocomplete="off" aria-label="Filtrer par type de message Kafka"><datalist id="code-flow-message-types"></datalist><select id="code-flow-scope" class="code-flow-scope-filter" aria-label="Portée des flux"><option value="inter">Inter-services</option><option value="all">Tous les flux</option><option value="local">Flux internes</option></select><select id="code-flow-confidence" class="code-flow-scope-filter" aria-label="Niveau de confiance"><option value="all">Toutes confiances</option><option value="high">Confiance élevée</option><option value="medium">Confiance moyenne</option><option value="low">Confiance faible</option></select><select id="code-flow-kind" class="code-flow-scope-filter" aria-label="Type de flux"><option value="all">Tous protocoles</option><option value="http">HTTP</option><option value="kafka">Kafka</option><option value="mixed">Mixte</option></select><button id="code-flow-cycles" class="code-flow-cycle-filter" type="button" aria-pressed="false">Cycles uniquement</button><button id="code-flow-filter-reset" class="code-flow-filter-reset" type="button">Effacer les filtres</button></div><p id="code-flow-filter-summary" class="code-flow-filter-summary"></p><p id="code-flows-summary" class="code-flows-summary"></p><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux de code indexé.</p></section>
     </div>
@@ -1673,6 +1680,9 @@
       channels: graphData.nodes.filter(node => ["kafka_topic", "message_channel"].includes(node.kind)).length,
       dataResources: graphData.nodes.filter(node => ["mongodb_collection", "data_schema"].includes(node.kind)).length,
     };
+    const indexingIssueCount = Array.isArray(graphData.indexing_issues)
+      ? graphData.indexing_issues.length
+      : 0;
     const summaryItems = [
       `${summaryCounts.microservices} service${summaryCounts.microservices > 1 ? "s" : ""}`,
       `${summaryCounts.channels} message${summaryCounts.channels > 1 ? "s" : ""}`,
@@ -1685,6 +1695,9 @@
       ...(isolatedNodeIds.size
         ? [`${isolatedNodeIds.size} ressource${isolatedNodeIds.size > 1 ? "s" : ""} isolée${isolatedNodeIds.size > 1 ? "s" : ""}`]
         : []),
+      indexingIssueCount
+        ? `Qualité : ${indexingIssueCount} signal${indexingIssueCount > 1 ? "s" : ""} d’indexation`
+        : "Qualité : aucun signal d’indexation",
     ];
     summaryItems.forEach(text => {
       const item = document.createElement("span");
@@ -7919,7 +7932,7 @@
       codeFlowsList.replaceChildren(...visible.sort(compareCodeFlows).map(codeFlowItem));
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
-      codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} · ${scopedCodeFlows.length} dans cette portée · sélectionnez un flux pour ouvrir son graphe d’appel.`;
+      codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} · ${scopedCodeFlows.length} dans cette portée · cochez au moins deux flux pour les comparer côte à côte.`;
       const cycleCount = scopedCodeFlows.filter(flow => flow.status === "cycle").length;
       codeFlowCycles.textContent = `Cycles uniquement (${cycleCount})`;
       codeFlowCycles.disabled = cycleCount === 0;

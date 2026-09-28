@@ -38,6 +38,13 @@ available in the opened flow view rather than expanding every list entry.
 Clicking the entry still opens the complete flow view, so the compact layout
 does not remove any indexed information.
 
+The Flux tab explains the two selection actions directly above the catalogue:
+clicking a flow title opens its call graph, while checking at least two flow
+boxes displays independent call-graph panels side by side. The Architecture
+summary also reports the number of persisted indexing signals, or explicitly
+states that no signal was found; this is a navigation aid, not a completeness
+claim beyond the persisted diagnostics.
+
 Hovering or focusing a flow entry opens a tooltip with its complete description,
 trigger, service route, arc and step counts, effects, protocol, confidence and
 topology status. The tooltip is dismissed when the pointer or keyboard focus

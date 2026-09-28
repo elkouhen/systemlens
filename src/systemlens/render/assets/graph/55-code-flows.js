@@ -845,7 +845,7 @@
       codeFlowsList.replaceChildren(...visible.sort(compareCodeFlows).map(codeFlowItem));
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
-      codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} · ${scopedCodeFlows.length} dans cette portée · sélectionnez un flux pour ouvrir son graphe d’appel.`;
+      codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} · ${scopedCodeFlows.length} dans cette portée · cochez au moins deux flux pour les comparer côte à côte.`;
       const cycleCount = scopedCodeFlows.filter(flow => flow.status === "cycle").length;
       codeFlowCycles.textContent = `Cycles uniquement (${cycleCount})`;
       codeFlowCycles.disabled = cycleCount === 0;

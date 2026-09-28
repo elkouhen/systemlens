@@ -831,6 +831,8 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "return serviceIdsForCodeFlow(flow).size >= 2;" in document
     assert "Keep a partially reconciled interprocedural flow selectable" in document
     assert 'id="code-flow-scope"' in document
+    assert 'id="code-flow-selection-help"' in document
+    assert "Cochez au moins deux flux pour les comparer côte à côte" in document
     assert '<option value="local">Flux internes</option>' in document
     assert "const localCodeFlows = codeFlows.filter(flow =>" in document
     assert 'nodeDataById.get(nodeId)?.kind === "microservice"' in document
@@ -841,6 +843,8 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "Flux inter-services (${visible.length}/${interServiceCodeFlows.length})" in document
     assert "Tous les flux (${visible.length}/${codeFlows.length})" in document
     assert "Flux internes (${visible.length}/${localCodeFlows.length})" in document
+    assert "indexingIssueCount" in document
+    assert "Qualité : aucun signal d’indexation" in document
 
 
 def test_export_builds_one_call_graph_from_all_flows() -> None:

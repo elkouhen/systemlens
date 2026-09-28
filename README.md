@@ -29,6 +29,23 @@ findings remain reviewable and never replace source-derived facts.
 - [SystemLens observability lab](https://github.com/elkouhen/systemlens-observability-lab)
   owns the runnable observability environment.
 
+## Three-repository workflow
+
+The three repositories form one architecture-analysis workflow with distinct
+responsibilities:
+
+| Repository | Responsibility | Main output |
+|---|---|---|
+| `systemlens` | Index Java/Spring source evidence and visualize the persisted model. | SQLite index, CLI/MCP results, interactive HTML graphs |
+| `systemlens-skill` | Enrich an indexed model with reviewable AI explanations, flow descriptions, and complementary facts. | Reports, flow descriptions, versioned AI fact manifests |
+| `systemlens-observability-lab` | Run test applications, deploy the complete Kubernetes/Elastic environment, and validate instrumentation and observability. | Deployed workloads, telemetry checks, reproducible integration fixtures |
+
+Use them in this order: create the deterministic SystemLens index, ask the
+skill to perform a bounded enrichment or audit, then use the observability lab
+to validate the application and its telemetry in a complete Kubernetes
+environment. The lab is also the reference fixture for cross-repository
+SystemLens compatibility checks.
+
 ## Install
 
 ```bash
@@ -77,6 +94,10 @@ systemlens doctor
 systemlens index
 ```
 
+`systemlens index` uses CodeQL when an available database can provide richer
+call-graph evidence. Use `systemlens index --no-codeql` for a faster AST-only
+inventory when you only need the structural baseline.
+
 For a human-readable topology, generate an interactive export:
 
 ```bash
@@ -86,6 +107,18 @@ systemlens export microservices --html architecture.html
 In the `Flux de code` tab, check several flows to view their call graphs
 together in independent side-by-side panels. The comparison button can also
 open the current selection explicitly.
+
+For the recommended end-to-end workflow, first establish this deterministic
+baseline, then add the optional companion skill for bounded AI enrichment:
+
+```bash
+npx skills add elkouhen/systemlens-skill
+```
+
+Ask the agent to explain selected persisted flows, audit dependency and call
+graphs for complexity, or complete one of the focused topology passes. The
+skill keeps its reviewable AI facts separate from the SystemLens index; it
+does not replace or silently rewrite source-derived evidence.
 
 To inspect the structural hierarchy of modules, child modules, and indexed
 projects, use the dedicated module view. Kubernetes namespaces do not define

@@ -118,6 +118,9 @@
       channels: graphData.nodes.filter(node => ["kafka_topic", "message_channel"].includes(node.kind)).length,
       dataResources: graphData.nodes.filter(node => ["mongodb_collection", "data_schema"].includes(node.kind)).length,
     };
+    const indexingIssueCount = Array.isArray(graphData.indexing_issues)
+      ? graphData.indexing_issues.length
+      : 0;
     const summaryItems = [
       `${summaryCounts.microservices} service${summaryCounts.microservices > 1 ? "s" : ""}`,
       `${summaryCounts.channels} message${summaryCounts.channels > 1 ? "s" : ""}`,
@@ -130,6 +133,9 @@
       ...(isolatedNodeIds.size
         ? [`${isolatedNodeIds.size} ressource${isolatedNodeIds.size > 1 ? "s" : ""} isolée${isolatedNodeIds.size > 1 ? "s" : ""}`]
         : []),
+      indexingIssueCount
+        ? `Qualité : ${indexingIssueCount} signal${indexingIssueCount > 1 ? "s" : ""} d’indexation`
+        : "Qualité : aucun signal d’indexation",
     ];
     summaryItems.forEach(text => {
       const item = document.createElement("span");
