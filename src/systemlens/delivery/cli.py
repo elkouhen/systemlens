@@ -32,9 +32,11 @@ from systemlens.application.architecture_inventory import (
     load_architecture_inventory,
 )
 from systemlens.application.code_flows import (
+    internal_flow_stats,
     list_code_flows,
     render_code_flow_text,
     render_code_flows_text,
+    render_internal_flow_stats_text,
     show_code_flow,
 )
 from systemlens.application.flow_diagnostic import diagnose_flows, render_flow_diagnostic_text
@@ -46,6 +48,7 @@ from systemlens.application.flow import resolve_topic
 from systemlens.domain.graph import (
     GraphEdge,
     find_outbound_calls_in_consumers,
+    graph_edges_from_relations,
     group_endpoints_by_module,
 )
 from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge
@@ -906,6 +909,25 @@ def flows_show(
         json.dumps(item)
         if _option_json(json_output)
         else render_code_flow_text(item)
+    )
+
+
+@flows_app.command("stats")
+def flows_stats(
+    root: Path | None = typer.Option(None, "--root"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """List HTTP and Kafka connections between indexed modules."""
+    inventory = _load_flow_inventory(root)
+    edges = graph_edges_from_relations(
+        inventory.relations,
+        inventory.endpoints_by_service,
+    )
+    stats = internal_flow_stats(edges)
+    typer.echo(
+        json.dumps(stats)
+        if _option_json(json_output)
+        else render_internal_flow_stats_text(stats)
     )
 
 

@@ -8,7 +8,12 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from systemlens.delivery import cli
-from systemlens.application.code_flows import list_code_flows, render_code_flow_text, show_code_flow
+from systemlens.application.code_flows import (
+    internal_flow_stats,
+    list_code_flows,
+    render_code_flow_text,
+    show_code_flow,
+)
 from systemlens.delivery.cli import app
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.domain.graph import GraphEdge
@@ -465,6 +470,24 @@ def test_flows_list_can_filter_kafka_publications_and_exposes_flow_types() -> No
     assert all_items[0]["root"] is True
     assert all_items[1]["root"] is True
     assert [item["id"] for item in kafka_items] == ["kafka-flow"]
+
+
+def test_internal_flow_stats_count_only_cross_module_indexed_connections() -> None:
+    http_call = _endpoint("http-call", "call", "rest", "GET /payments", "Orders.java", 12)
+    http_serve = replace(http_call, id="http-serve", role="serve", module="payments")
+    kafka_publish = _endpoint("kafka-publish", "produce", "kafka", "orders.created", "Orders.java", 20)
+    kafka_consume = replace(kafka_publish, id="kafka-consume", role="consume", module="payments")
+    edges = [
+        GraphEdge("rest", "orders", "payments", http_call, http_serve),
+        GraphEdge("kafka", "orders", "payments", kafka_publish, kafka_consume),
+        GraphEdge("rest", "orders", "external", http_call, None),
+    ]
+
+    assert internal_flow_stats(edges) == {
+        "http_internal_connections": 1,
+        "kafka_internal_connections": 1,
+        "internal_connections": 2,
+    }
 
 
 def test_flow_show_renders_downstream_tree() -> None:

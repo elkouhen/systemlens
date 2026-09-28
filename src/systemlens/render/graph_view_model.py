@@ -1172,6 +1172,12 @@ def build_graph_view_model(
         for node in nodes
     }
     for source, target, kind in complexity_relations:
+        # A persisted or enriched relation can outlive the node projection
+        # (for example when a referenced client module is not exported in the
+        # current view). It remains a visual link, but cannot contribute to a
+        # node score that is not represented in this snapshot.
+        if source not in relation_counts or target not in relation_counts:
+            continue
         relation_counts[source] += 1
         relation_counts[target] += 1
         bucket = "http" if kind == "rest" else kind

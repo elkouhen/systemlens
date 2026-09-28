@@ -3,6 +3,7 @@
 from dataclasses import asdict
 
 from systemlens.domain.code_flows import CodeFlow
+from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 
 
@@ -103,6 +104,41 @@ def list_code_flows(
     if publishes_to_topic:
         items = [item for item in items if item["output_topics"]]
     return items
+
+
+def internal_flow_stats(edges: list[GraphEdge]) -> dict[str, int]:
+    """Count persisted cross-module HTTP and Kafka connections.
+
+    An edge is counted only when both endpoint sides are indexed. Dynamic or
+    targetless configured integrations remain outside these internal totals.
+    """
+    http = sum(
+        1
+        for edge in edges
+        if edge.kind == "rest"
+        and edge.to_endpoint is not None
+        and edge.from_service != edge.to_service
+    )
+    kafka = sum(
+        1
+        for edge in edges
+        if edge.kind == "kafka"
+        and edge.to_endpoint is not None
+        and edge.from_service != edge.to_service
+    )
+    return {
+        "http_internal_connections": http,
+        "kafka_internal_connections": kafka,
+        "internal_connections": http + kafka,
+    }
+
+
+def render_internal_flow_stats_text(stats: dict[str, int]) -> str:
+    return (
+        f"HTTP internal connections: {stats['http_internal_connections']}\n"
+        f"Kafka internal connections: {stats['kafka_internal_connections']}\n"
+        f"Total internal connections: {stats['internal_connections']}"
+    )
 
 
 def _flow_children(

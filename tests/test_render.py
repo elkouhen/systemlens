@@ -2,6 +2,7 @@ import json
 import re
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint, compute_endpoint_id
 from systemlens.domain.graph import GraphEdge
@@ -24,6 +25,7 @@ from systemlens.domain.module_inventory import (
 )
 from systemlens.discovery.build.modules import discover_modules
 from systemlens.render import _vscode_file_uri, render_graph_html
+from systemlens.render.graph_view_model import build_graph_view_model
 from systemlens.storage.sqlite import Store
 
 
@@ -2087,6 +2089,20 @@ def test_graph_html_microservice_complexity_counts_distinct_direct_clients() -> 
     assert nodes["microservice:payments"]["complexity"]["breakdown"] == {
         "http": 1, "kafka": 1, "mongodb": 0
     }
+
+
+def test_graph_view_model_ignores_complexity_links_without_a_projected_node() -> None:
+    with patch(
+        "systemlens.render.graph_view_model._visual_graph_edges",
+        return_value=[(
+            "microservice", "orders", "microservice", "model-client",
+            "GET /models", "rest",
+        )],
+    ):
+        graph_data = build_graph_view_model({"orders": []}, [])
+
+    nodes = {node["id"]: node for node in graph_data["nodes"]}
+    assert nodes["microservice:orders"]["complexity"]["score"] == 0
 
 
 def test_graph_html_keeps_kafka_topic_in_producer_namespace_cluster() -> None:
