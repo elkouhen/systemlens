@@ -1158,27 +1158,28 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="advanced-controls"' in document
     assert 'id="contracts-tab"' in document
     assert 'id="contracts-panel"' in document
-    assert 'id="routes-tab"' in document
     assert 'id="routes-panel"' in document
     assert 'id="routes-filter"' in document
-    assert 'id="asyncapi-panel-title"' in document
+    assert 'id="asyncapi-tab"' in document
+    assert 'id="dto-contract-tab"' in document
+    assert 'id="jpa-tab"' in document
     assert 'className = "route-provider-group"' in document
     assert 'item.className = "reference-item route-reference-item"' in document
     assert 'toggle.className = "route-reference-toggle"' in document
+    assert 'clientCount.className = "route-client-count"' in document
+    assert 'clientCount.textContent = `${callers.length} client${callers.length > 1 ? "s" : ""}`' in document
     assert 'label.textContent = `${parts.method} ${parts.path}`' in document
     assert 'Microservices appelants' in document
     assert 'Aucun microservice appelant identifié.' in document
     assert 'function appendExpandedHttpRoute' in document
-    assert 'id="resources-tab"' in document
-    assert 'id="resources-panel"' in document
-    assert 'id="resources-filter"' in document
     assert 'id="kafka-tab"' in document
+    assert 'id="collections-tab"' in document
     assert 'id="persistence-tab"' in document
     tab_order = [
         document.index('id="graph-tab"'),
-        document.index('id="resources-tab"'),
+        document.index('id="microservices-tab"'),
         document.index('id="kafka-tab"'),
-        document.index('id="persistence-tab"'),
+        document.index('id="collections-tab"'),
         document.index('id="routes-tab"'),
         document.index('id="flows-tab"'),
         document.index('id="contracts-tab"'),
@@ -1188,8 +1189,19 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert '>Topics</button>' in document
     assert '>Collections</button>' in document
     assert '>Microservices</button>' in document
-    assert 'OpenAPI · AsyncAPI · DTOs' in document
-    assert 'Schémas de données d’événements' in document
+    assert 'id="microservices-panel"' in document
+    assert 'id="microservices-filter"' in document
+    assert 'function renderMicroservices()' in document
+    assert 'id="collections-panel"' in document
+    assert 'id="collections-filter"' in document
+    assert 'function renderCollections()' in document
+    assert 'id="routes-tab"' in document
+    assert '>OpenAPI</button>' in document
+    assert '>AsyncAPI</button>' in document
+    assert '>DTOs</button>' in document
+    assert '>Entités JPA</button>' in document
+    assert '>Mongo</button>' in document
+    assert 'Canaux de messages' in document
     assert 'Schémas de données persistées' in document
     assert 'id="request-reply-tab"' not in document
     assert 'id="build-tab"' not in document
@@ -1241,9 +1253,14 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "if (renderFrameScheduled) return renderFramePromise" in document
     assert "await requestGraphRender()" in document
     assert '>Réinitialiser</button>' in document
-    assert 'id="dto-reference-filter"' in document
+    assert 'id="topics-filter"' in document
+    assert 'id="topics-list"' in document
+    assert 'function renderTopics()' in document
     assert 'id="openapi-reference-filter"' in document
     assert 'id="contracts-panel"' in document
+    assert 'id="asyncapi-contract-panel"' in document
+    assert 'id="dto-contract-panel"' in document
+    assert 'id="jpa-panel"' in document
     assert 'id="kafka-panel"' in document
     assert 'id="persistence-panel"' in document
     assert 'id="request-reply-panel"' not in document
@@ -1577,6 +1594,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="contracts-mode-tab"' in document
     assert 'id="diagnostics-mode-tab"' in document
     assert 'Object.entries(modeGroups)' in document
+    assert 'id="persistence-tab" class="toolbar-tab"' in document
     assert "graphContext.hidden = !showingGraph" in document
     assert 'id="graph-tab" class="toolbar-tab is-active"' in document
     assert 'id="flows-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="flows-tab" hidden' in document

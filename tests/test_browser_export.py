@@ -2107,28 +2107,28 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _assert_architecture_clusters_do_not_overlap(page)
         assert page.locator("#graph").get_attribute("data-invalid-coordinates") == "false"
 
-        page.get_by_role("tab", name="Messages").click()
+        page.get_by_role("tab", name="Topics").click()
         page.locator("#kafka-panel").wait_for(state="visible")
         assert page.locator("#graph-context").is_hidden()
         _capture_render_snapshot(page, "constrained-after-kafka-tab")
-        dto_filter = page.locator("#dto-reference-filter")
-        dto_filter.fill("OrderCreated")
-        dto = page.locator("#dto-references li")
-        dto.wait_for(state="visible")
+        topic_filter = page.locator("#topics-filter")
+        topic_filter.fill("orders.created")
+        topic = page.locator("#topics-list li")
+        topic.wait_for(state="visible")
         _capture_render_snapshot(page, "constrained-after-dto-filter")
-        assert dto.count() == 1
+        assert topic.count() == 1
 
-        dto_filter.fill("absent")
-        page.locator("#dto-references-empty").wait_for(state="visible")
+        topic_filter.fill("absent")
+        page.locator("#topics-empty").wait_for(state="visible")
         _capture_render_snapshot(page, "constrained-after-dto-empty")
-        assert page.locator("#dto-references-empty").inner_text() == "Aucun DTO ne correspond à ce filtre."
+        assert page.locator("#topics-empty").inner_text() == "Aucun topic ne correspond à ce filtre."
 
-        dto_filter.fill("")
-        dto.scroll_into_view_if_needed()
+        topic_filter.fill("")
+        topic.scroll_into_view_if_needed()
         toolbar = page.locator(".toolbar").bounding_box()
-        dto_box = dto.bounding_box()
+        topic_box = topic.bounding_box()
         assert toolbar is not None and toolbar["y"] + toolbar["height"] <= 450
-        assert dto_box is not None and dto_box["y"] + dto_box["height"] <= 450
+        assert topic_box is not None and topic_box["y"] + topic_box["height"] <= 450
 
         page.get_by_role("tab", name="Données").click()
         page.locator("#persistence-panel").wait_for(state="visible")

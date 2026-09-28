@@ -264,6 +264,9 @@
     :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .view-controls .view-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: var(--ui-on-accent); background: var(--ui-selected); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: rgba(15, 27, 46, .84); }
     :root[data-theme="dark"] .toolbar-tab { color: var(--ui-text) !important; }
+    :root[data-theme="dark"] .toolbar .toolbar-mode-tab { color: var(--ui-muted); background: transparent; }
+    :root[data-theme="dark"] .toolbar .toolbar-mode-tab:hover { color: var(--ui-accent-text); background: var(--ui-control) !important; }
+    :root[data-theme="dark"] .toolbar .toolbar-mode-tab.is-active { color: var(--ui-on-accent); background: var(--ui-selected) !important; }
     :root[data-theme="dark"] .graph-mode-flow-step { border-color: var(--ui-border); background: var(--ui-control); }
     :root[data-theme="dark"] .graph-mode-flow-step b { color: var(--ui-accent-text); }
     :root[data-theme="dark"] .graph-mode-flow-step strong { color: var(--ui-title); }

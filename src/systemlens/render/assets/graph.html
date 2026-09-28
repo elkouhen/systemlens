@@ -34,10 +34,10 @@
       <section id="architecture-tabs-group" class="toolbar-tab-group" aria-labelledby="architecture-tabs-title">
         <span id="architecture-tabs-title" class="toolbar-tab-group-title">Vues d’architecture</span>
         <div class="toolbar-tabs" role="tablist" aria-label="Vues d'architecture">
-          <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel" title="Afficher les microservices et leurs relations">Microservices</button>
-          <button id="resources-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="resources-panel">Inventaire</button>
+          <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel" title="Configurer et afficher le graphe">Graphe</button>
+          <button id="microservices-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="microservices-panel">Microservices</button>
           <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Topics</button>
-          <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Collections</button>
+          <button id="collections-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="collections-panel">Collections</button>
           <button id="routes-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="routes-panel">Routes</button>
         </div>
       </section>
@@ -50,7 +50,11 @@
       <section id="contracts-tabs-group" class="toolbar-tab-group" aria-labelledby="contracts-tabs-title" hidden>
         <span id="contracts-tabs-title" class="toolbar-tab-group-title">Vues des contrats</span>
         <div class="toolbar-tabs" role="tablist" aria-label="Contrats d’API et DTOs">
-          <button id="contracts-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="contracts-panel">OpenAPI · AsyncAPI · DTOs</button>
+          <button id="contracts-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="contracts-panel">OpenAPI</button>
+          <button id="asyncapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="asyncapi-contract-panel">AsyncAPI</button>
+          <button id="dto-contract-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="dto-contract-panel">DTOs</button>
+          <button id="jpa-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="jpa-panel">Entités JPA</button>
+          <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Mongo</button>
         </div>
       </section>
       <section id="diagnostics-tabs-group" class="toolbar-tab-group" aria-labelledby="diagnostics-tabs-title" hidden>
@@ -164,13 +168,13 @@
       </details>
       <p id="layout-status" class="layout-status" role="status">Chargement du graphe…</p>
     </div>
-    <div id="resources-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="resources-tab" hidden>
+    <div id="microservices-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="microservices-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker">Ressources indexées</p>
-        <h2 id="resources-title" class="references-title">Ressources</h2>
-        <p class="references-description">Recherchez un microservice, un message, une donnée ou toute autre ressource par son nom.</p>
+        <p class="references-kicker">Architecture déployée</p>
+        <h2 id="microservices-title" class="references-title">Microservices</h2>
+        <p class="references-description">Recherchez un microservice indexé et ouvrez-le dans le graphe.</p>
       </div>
-      <section class="references-section"><input id="resources-filter" class="reference-filter-input" type="search" placeholder="Rechercher une ressource par nom" autocomplete="off" aria-label="Rechercher une ressource par nom"><ul id="resources-list" class="references-list"></ul><p id="resources-empty" class="references-empty">Aucune ressource ne correspond à ce filtre.</p></section>
+      <section class="references-section"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher un microservice par nom" autocomplete="off" aria-label="Rechercher un microservice par nom"><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucun microservice ne correspond à ce filtre.</p></section>
     </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
       <div class="indexing-issues-header">
@@ -192,13 +196,23 @@
     </div>
     <div id="contracts-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="contracts-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker">Contrats d'interface</p>
-        <h2 id="openapi-references-title" class="references-title">OpenAPI, AsyncAPI et DTOs</h2>
-        <p class="references-description">Consultez les contrats HTTP, les contrats de messages et les DTOs indexés.</p>
+        <p class="references-kicker">Contrats HTTP</p>
+        <h2 id="openapi-references-title" class="references-title">Contrats OpenAPI</h2>
+        <p class="references-description">Consultez les contrats HTTP indexés.</p>
       </div>
       <section class="references-section"><input id="openapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les contrats par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats OpenAPI"><ul id="openapi-references" class="references-list"></ul><p id="openapi-references-empty" class="references-empty">Aucun contrat OpenAPI détecté.</p></section>
-      <section class="references-section"><h3 id="asyncapi-panel-title" class="references-title">Contrats AsyncAPI</h3><input id="asyncapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats AsyncAPI"><ul id="asyncapi-panel-references" class="references-list"></ul><p id="asyncapi-panel-empty" class="references-empty">Aucun contrat AsyncAPI détecté.</p></section>
-      <section class="references-section"><h3 id="dto-contract-references-title" class="references-title">DTOs de messages</h3><input id="dto-contract-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTOs par nom ou package" autocomplete="off" aria-label="Filtrer les DTOs des contrats"><ul id="dto-contract-references" class="references-list"></ul><p id="dto-contract-references-empty" class="references-empty">Aucun DTO de messages détecté.</p></section>
+    </div>
+    <div id="asyncapi-contract-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="asyncapi-tab" hidden>
+      <div class="references-header"><p class="references-kicker">Contrats de messages</p><h2 id="asyncapi-panel-title" class="references-title">Contrats AsyncAPI</h2><p class="references-description">Consultez les contrats de messages indexés.</p></div>
+      <section class="references-section"><input id="asyncapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats AsyncAPI"><ul id="asyncapi-panel-references" class="references-list"></ul><p id="asyncapi-panel-empty" class="references-empty">Aucun contrat AsyncAPI détecté.</p></section>
+    </div>
+    <div id="dto-contract-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="dto-contract-tab" hidden>
+      <div class="references-header"><p class="references-kicker">Modèles de données</p><h2 id="dto-contract-references-title" class="references-title">DTOs</h2><p class="references-description">Consultez les DTOs indexés dans les contrats de messages.</p></div>
+      <section class="references-section"><input id="dto-contract-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTOs par nom ou package" autocomplete="off" aria-label="Filtrer les DTOs des contrats"><ul id="dto-contract-references" class="references-list"></ul><p id="dto-contract-references-empty" class="references-empty">Aucun DTO de messages détecté.</p></section>
+    </div>
+    <div id="jpa-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="jpa-tab" hidden>
+      <div class="references-header"><p class="references-kicker">Persistance relationnelle</p><h2 id="jpa-references-title" class="references-title">Entités JPA</h2><p class="references-description">Consultez les entités JPA indexées.</p></div>
+      <section class="references-section"><input id="jpa-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou service" autocomplete="off" aria-label="Filtrer les entités JPA"><ul id="jpa-references" class="references-list"></ul><p id="jpa-references-empty" class="references-empty">Aucune entité JPA détectée.</p></section>
     </div>
     <div id="routes-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="routes-tab" hidden>
       <div class="references-header">
@@ -209,18 +223,18 @@
       <section class="references-section"><input id="routes-filter" class="reference-filter-input" type="search" placeholder="Filtrer par route ou microservice" autocomplete="off" aria-label="Filtrer les routes HTTP"><ul id="routes-list" class="references-list"></ul><p id="routes-empty" class="references-empty">Aucune route HTTP détectée.</p></section>
     </div>
     <div id="kafka-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="kafka-tab" hidden>
-      <div class="references-header">
-        <p class="references-kicker">Schémas de données d’événements</p>
-        <h2 id="dto-references-title" class="references-title">Schémas de données Messages</h2>
-        <p class="references-description">Inspectez les classes Java qui définissent les données échangées par messages.</p>
-      </div>
-      <section class="references-section"><input id="dto-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTO par nom ou package" autocomplete="off" aria-label="Filtrer les DTO de messages"><ul id="dto-references" class="references-list"></ul><p id="dto-references-empty" class="references-empty">Aucun DTO de messages détecté.</p></section>
+      <div class="references-header"><p class="references-kicker">Canaux de messages</p><h2 id="topics-title" class="references-title">Topics</h2><p class="references-description">Consultez les topics Kafka indexés et leurs services producteurs et consommateurs.</p></div>
+      <section class="references-section"><input id="topics-filter" class="reference-filter-input" type="search" placeholder="Filtrer les topics par nom" autocomplete="off" aria-label="Filtrer les topics Kafka"><ul id="topics-list" class="references-list"></ul><p id="topics-empty" class="references-empty">Aucun topic ne correspond à ce filtre.</p></section>
+    </div>
+    <div id="collections-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="collections-tab" hidden>
+      <div class="references-header"><p class="references-kicker">Données persistées</p><h2 id="collections-title" class="references-title">Collections</h2><p class="references-description">Consultez les collections Mongo indexées et leurs relations.</p></div>
+      <section class="references-section"><input id="collections-filter" class="reference-filter-input" type="search" placeholder="Filtrer les collections par nom" autocomplete="off" aria-label="Filtrer les collections Mongo"><ul id="collections-list" class="references-list"></ul><p id="collections-empty" class="references-empty">Aucune collection ne correspond à ce filtre.</p></section>
     </div>
     <div id="persistence-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="persistence-tab" hidden>
       <div class="references-header">
         <p class="references-kicker">Schémas de données persistées</p>
-        <h2 id="mongo-class-references-title" class="references-title">Schémas de données persistées</h2>
-        <p class="references-description">Inspectez les classes Java qui définissent les données persistées.</p>
+        <h2 id="mongo-class-references-title" class="references-title">Classes Mongo</h2>
+        <p class="references-description">Consultez les classes Mongo indexées.</p>
       </div>
       <section class="references-section"><input id="mongo-class-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou donnée" autocomplete="off" aria-label="Filtrer les classes de données persistées"><ul id="mongo-class-references" class="references-list"></ul><p id="mongo-class-references-empty" class="references-empty">Aucune classe de données persistées détectée.</p></section>
     </div>

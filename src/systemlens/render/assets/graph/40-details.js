@@ -70,15 +70,20 @@
       if (document.querySelector(".toolbar")?.classList.contains("has-details")) {
         setDetailsEmpty("Sélectionnez un nœud pour afficher ses détails.");
       }
-      const showingResources = tab === "resources";
+      const showingMicroservices = tab === "microservices";
       const showingIssues = tab === "issues";
       const showingContracts = tab === "contracts";
+      const showingAsyncApi = tab === "asyncapi";
+      const showingDtoContracts = tab === "dto-contracts";
+      const showingJpa = tab === "jpa";
       const showingRoutes = tab === "routes";
       const showingKafka = tab === "kafka";
+      const showingCollections = tab === "collections";
       const showingPersistence = tab === "persistence";
+      const showingContractView = showingContracts || showingAsyncApi || showingDtoContracts || showingJpa || showingPersistence;
       const mode = showingFlows
         ? "flows"
-        : showingContracts
+        : showingContractView
           ? "contracts"
           : showingIssues
             ? "diagnostics"
@@ -91,14 +96,22 @@
       Object.entries(modeGroups).forEach(([name, group]) => { group.hidden = name !== mode; });
       graphTab.classList.toggle("is-active", showingGraph);
       graphTab.setAttribute("aria-selected", String(showingGraph));
-      resourcesTab.classList.toggle("is-active", showingResources);
-      resourcesTab.setAttribute("aria-selected", String(showingResources));
-      contractsTab.classList.toggle("is-active", showingContracts);
-      contractsTab.setAttribute("aria-selected", String(showingContracts));
+      microservicesTab.classList.toggle("is-active", showingMicroservices);
+      microservicesTab.setAttribute("aria-selected", String(showingMicroservices));
       routesTab.classList.toggle("is-active", showingRoutes);
       routesTab.setAttribute("aria-selected", String(showingRoutes));
+      contractsTab.classList.toggle("is-active", showingContracts);
+      contractsTab.setAttribute("aria-selected", String(showingContracts));
+      asyncApiTab.classList.toggle("is-active", showingAsyncApi);
+      asyncApiTab.setAttribute("aria-selected", String(showingAsyncApi));
+      dtoContractTab.classList.toggle("is-active", showingDtoContracts);
+      dtoContractTab.setAttribute("aria-selected", String(showingDtoContracts));
+      jpaTab.classList.toggle("is-active", showingJpa);
+      jpaTab.setAttribute("aria-selected", String(showingJpa));
       kafkaTab.classList.toggle("is-active", showingKafka);
       kafkaTab.setAttribute("aria-selected", String(showingKafka));
+      collectionsTab.classList.toggle("is-active", showingCollections);
+      collectionsTab.setAttribute("aria-selected", String(showingCollections));
       persistenceTab.classList.toggle("is-active", showingPersistence);
       persistenceTab.setAttribute("aria-selected", String(showingPersistence));
       issuesTab.classList.toggle("is-active", showingIssues);
@@ -106,13 +119,17 @@
       flowsTab.classList.toggle("is-active", showingFlows);
       flowsTab.setAttribute("aria-selected", String(showingFlows));
       graphPanel.hidden = !showingGraph;
-      resourcesPanel.hidden = !showingResources;
+      microservicesPanel.hidden = !showingMicroservices;
       quickSearch.hidden = !showingGraph;
       graphContext.hidden = !showingGraph;
       issuesPanel.hidden = !showingIssues;
       contractsPanel.hidden = !showingContracts;
+      asyncApiContractPanel.hidden = !showingAsyncApi;
+      dtoContractPanel.hidden = !showingDtoContracts;
+      jpaPanel.hidden = !showingJpa;
       routesPanel.hidden = !showingRoutes;
       kafkaPanel.hidden = !showingKafka;
+      collectionsPanel.hidden = !showingCollections;
       persistencePanel.hidden = !showingPersistence;
       flowsPanel.hidden = !showingFlows;
       graphLegend.hidden = !graphVisible;
@@ -225,17 +242,12 @@
           !contract.spec,
         ));
       });
-      dtoReferencesList.replaceChildren();
-      dtoContractReferencesList.replaceChildren();
       const dtos = graphData.kafka_dtos || [];
-      const query = dtoReferencesFilter.value.trim().toLocaleLowerCase();
+      dtoContractReferencesList.replaceChildren();
+      const query = dtoContractReferencesFilter.value.trim().toLocaleLowerCase();
       const visibleDtos = dtos.filter(dto => (
         !query || dtoLabel(dto).toLocaleLowerCase().includes(query)
       ));
-      dtoReferencesEmpty.hidden = visibleDtos.length > 0;
-      dtoReferencesEmpty.textContent = query && !visibleDtos.length
-        ? "Aucun DTO ne correspond à ce filtre."
-        : "Aucun DTO de messages détecté.";
       visibleDtos.forEach(dto => {
         const exchangeCount = (dto.producers?.length || 0) + (dto.consumers?.length || 0);
         const reference = () => referenceItem(
@@ -244,11 +256,9 @@
           "Inspecter",
           () => openDtoInspector(dto.id),
         );
-        dtoReferencesList.append(reference());
         dtoContractReferencesList.append(reference());
       });
       openapiReferencesTitle.textContent = `Contrats OpenAPI (${visibleContracts.length}/${contracts.length})`;
-      dtoReferencesTitle.textContent = `DTO de messages (${visibleDtos.length}/${dtos.length})`;
       dtoContractReferencesTitle.textContent = `DTOs de messages (${visibleDtos.length}/${dtos.length})`;
       dtoContractReferencesEmpty.hidden = visibleDtos.length > 0;
       dtoContractReferencesEmpty.textContent = query && !visibleDtos.length
@@ -314,7 +324,10 @@
             const label = document.createElement("span");
             label.className = "route-reference-label";
             label.textContent = `${parts.method} ${parts.path}`;
-            toggle.append(label);
+            const clientCount = document.createElement("span");
+            clientCount.className = "route-client-count";
+            clientCount.textContent = `${callers.length} client${callers.length > 1 ? "s" : ""}`;
+            toggle.append(label, clientCount);
             const callersPanel = document.createElement("div");
             callersPanel.className = "route-callers";
             const callersTitle = document.createElement("strong");
@@ -370,44 +383,111 @@
         () => openAsyncApiContract(contract),
       )));
       asyncApiReferencesTitle.textContent = `Contrats AsyncAPI (${visibleAsyncContracts.length}/${asyncContracts.length})`;
+      jpaReferencesList.replaceChildren();
       mongoClassReferencesList.replaceChildren();
       const persistenceClasses = (graphData.resource_descriptions || [])
         .filter(item => ["mongo_persistence_class", "jpa_entity"].includes(item.kind));
-      const mongoQuery = mongoClassReferencesFilter.value.trim().toLocaleLowerCase();
-      const visiblePersistenceClasses = persistenceClasses.filter(item => (
-        !mongoQuery || `${item.qualified_name} ${item.owner} ${item.technology}`.toLocaleLowerCase().includes(mongoQuery)
+      const jpaQuery = jpaReferencesFilter.value.trim().toLocaleLowerCase();
+      const jpaClasses = persistenceClasses.filter(item => item.kind === "jpa_entity");
+      const visibleJpaClasses = jpaClasses.filter(item => (
+        !jpaQuery || `${item.qualified_name} ${item.owner} ${item.technology}`.toLocaleLowerCase().includes(jpaQuery)
       ));
-      mongoClassReferencesEmpty.hidden = visiblePersistenceClasses.length > 0;
-      mongoClassReferencesEmpty.textContent = mongoQuery && !visiblePersistenceClasses.length
-        ? "Aucune classe de persistance ne correspond à ce filtre."
-        : "Aucune classe de persistance détectée.";
-      visiblePersistenceClasses.forEach(item => mongoClassReferencesList.append(referenceItem(
+      jpaReferencesEmpty.hidden = visibleJpaClasses.length > 0;
+      jpaReferencesEmpty.textContent = jpaQuery && !visibleJpaClasses.length
+        ? "Aucune entité JPA ne correspond à ce filtre."
+        : "Aucune entité JPA détectée.";
+      visibleJpaClasses.forEach(item => jpaReferencesList.append(referenceItem(
         item.qualified_name,
         `${item.technology} · ${item.owner} · ${item.attributes?.length || 0} champ(s)`,
         "Inspecter",
-        () => item.kind === "jpa_entity"
-          ? openJpaEntityInspector(item.navigation?.inspect)
-          : openMongoPersistenceInspector(item.navigation?.inspect),
+        () => openJpaEntityInspector(item.navigation?.inspect),
       )));
-      mongoClassReferencesTitle.textContent = `Classes de persistance (${visiblePersistenceClasses.length}/${persistenceClasses.length})`;
+      jpaReferencesTitle.textContent = `Entités JPA (${visibleJpaClasses.length}/${jpaClasses.length})`;
+      const mongoQuery = mongoClassReferencesFilter.value.trim().toLocaleLowerCase();
+      const mongoClasses = persistenceClasses.filter(item => item.kind === "mongo_persistence_class");
+      const visibleMongoClasses = mongoClasses.filter(item => (
+        !mongoQuery || `${item.qualified_name} ${item.owner} ${item.technology}`.toLocaleLowerCase().includes(mongoQuery)
+      ));
+      mongoClassReferencesEmpty.hidden = visibleMongoClasses.length > 0;
+      mongoClassReferencesEmpty.textContent = mongoQuery && !visibleMongoClasses.length
+        ? "Aucune classe Mongo ne correspond à ce filtre."
+        : "Aucune classe Mongo détectée.";
+      visibleMongoClasses.forEach(item => mongoClassReferencesList.append(referenceItem(
+        item.qualified_name,
+        `${item.technology} · ${item.owner} · ${item.attributes?.length || 0} champ(s)`,
+        "Inspecter",
+        () => openMongoPersistenceInspector(item.navigation?.inspect),
+      )));
+      mongoClassReferencesTitle.textContent = `Classes Mongo (${visibleMongoClasses.length}/${mongoClasses.length})`;
     }
-    function renderResources() {
-      resourcesList.replaceChildren();
-      const query = resourcesFilter.value.trim().toLocaleLowerCase();
-      const resources = graphData.nodes
+    function renderMicroservices() {
+      microservicesList.replaceChildren();
+      const query = microservicesFilter.value.trim().toLocaleLowerCase();
+      const microservices = graphData.nodes
+        .filter(node => node.kind === "microservice")
         .slice()
         .sort((left, right) => left.name.localeCompare(right.name));
-      const visibleResources = resources.filter(node => (
+      const visibleMicroservices = microservices.filter(node => (
         !query || `${node.name} ${nodeKindLabel(node)}`.toLocaleLowerCase().includes(query)
       ));
-      resourcesTitle.textContent = `Ressources (${visibleResources.length}/${resources.length})`;
-      resourcesEmpty.hidden = visibleResources.length > 0;
-      visibleResources.forEach(node => {
+      microservicesTitle.textContent = `Microservices (${visibleMicroservices.length}/${microservices.length})`;
+      microservicesEmpty.hidden = visibleMicroservices.length > 0;
+      visibleMicroservices.forEach(node => {
         const incoming = graphData.links.filter(link => link.target === node.id).length;
         const outgoing = graphData.links.filter(link => link.source === node.id).length;
-        resourcesList.append(referenceItem(
+        microservicesList.append(referenceItem(
           nodeDisplayName(node),
           `${nodeKindLabel(node)} · ${incoming} entrée${incoming > 1 ? "s" : ""} · ${outgoing} sortie${outgoing > 1 ? "s" : ""}`,
+          "Voir",
+          () => {
+            setToolbarTab("graph");
+            selectNode(node.id);
+          },
+        ));
+      });
+    }
+    function renderCollections() {
+      collectionsList.replaceChildren();
+      const query = collectionsFilter.value.trim().toLocaleLowerCase();
+      const collections = graphData.nodes
+        .filter(node => node.kind === "mongodb_collection")
+        .slice()
+        .sort((left, right) => left.name.localeCompare(right.name));
+      const visibleCollections = collections.filter(node => (
+        !query || node.name.toLocaleLowerCase().includes(query)
+      ));
+      collectionsTitle.textContent = `Collections (${visibleCollections.length}/${collections.length})`;
+      collectionsEmpty.hidden = visibleCollections.length > 0;
+      visibleCollections.forEach(node => {
+        const incoming = graphData.links.filter(link => link.target === node.id).length;
+        const outgoing = graphData.links.filter(link => link.source === node.id).length;
+        collectionsList.append(referenceItem(
+          nodeDisplayName(node),
+          `Mongo · ${incoming} lecture${incoming > 1 ? "s" : ""} · ${outgoing} écriture${outgoing > 1 ? "s" : ""}`,
+          "Voir",
+          () => {
+            setToolbarTab("graph");
+            selectNode(node.id);
+          },
+        ));
+      });
+    }
+    function renderTopics() {
+      topicsList.replaceChildren();
+      const query = topicsFilter.value.trim().toLocaleLowerCase();
+      const topics = graphData.nodes
+        .filter(node => node.kind === "kafka_topic")
+        .slice()
+        .sort((left, right) => left.name.localeCompare(right.name));
+      const visibleTopics = topics.filter(node => !query || node.name.toLocaleLowerCase().includes(query));
+      topicsTitle.textContent = `Topics (${visibleTopics.length}/${topics.length})`;
+      topicsEmpty.hidden = visibleTopics.length > 0;
+      visibleTopics.forEach(node => {
+        const incoming = graphData.links.filter(link => link.target === node.id).length;
+        const outgoing = graphData.links.filter(link => link.source === node.id).length;
+        topicsList.append(referenceItem(
+          nodeDisplayName(node),
+          `${incoming} producteur${incoming > 1 ? "s" : ""} · ${outgoing} consommateur${outgoing > 1 ? "s" : ""}`,
           "Voir",
           () => {
             setToolbarTab("graph");

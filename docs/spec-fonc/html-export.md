@@ -32,13 +32,15 @@ remains visible and is reported as such; the architecture graph does not add a
 separate visual node for every route.
 
 The architecture navigation exposes four top-level areas: Architecture, Flux
-de code, Contrats, and Diagnostics. Architecture groups the microservice graph,
-the topic catalogue, the collection catalogue, and HTTP routes. Contrats groups
-the OpenAPI, AsyncAPI, and indexed DTO catalogues. Routes are grouped by
-provider microservice and route path, and each entry displays only its HTTP
-verb and resource path. Selecting a route expands that entry in place to list
-its calling microservices. This interaction stays in the Routes widget and
-does not change the graph view.
+de code, Contrats, and Diagnostics. Architecture provides separate views for
+the graph, the microservice list, the topic catalogue, and the collection
+catalogue, plus the HTTP route list. Contrats provides separate views for
+OpenAPI, AsyncAPI, indexed DTOs, JPA entities, and Mongo persistence classes.
+Routes are grouped by
+provider microservice and route path, and each entry displays its HTTP verb,
+resource path, and count of unique calling microservices found. Selecting a
+route expands that entry in place to list its calling microservices. This
+interaction stays in the Routes widget and does not change the graph view.
 
 When a selected HTTP route has REST DTO evidence on its provider microservice,
 the route details list the DTO names, roles, and source locations. Topic

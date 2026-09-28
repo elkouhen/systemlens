@@ -296,15 +296,16 @@
     .toolbar-collapse { flex: 0 0 auto; }
     .toolbar strong { color: #172033; font-size: 15px; white-space: nowrap; }
     .toolbar input:not([type="checkbox"]) { height: 34px; padding: 0 10px; border: 1px solid #b9c5d6; border-radius: 6px; color: #172033; background: #fff; font: inherit; font-size: 13px; }
-    .toolbar-mode-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 3px; border: 1px solid #d8e0eb; border-radius: 9px; background: #edf2f7; }
-    .toolbar .toolbar-mode-tab { width: auto; min-width: 0; height: 30px; padding: 0 6px; border: 0; border-radius: 6px; color: #64748b; background: transparent; font-size: 11px; font-weight: 800; cursor: pointer; }
-    .toolbar .toolbar-mode-tab:hover { color: #1d4f91; background: rgba(255, 255, 255, .7); }
-    .toolbar .toolbar-mode-tab.is-active { color: #1d4f91; background: #fff; box-shadow: 0 1px 3px rgba(15, 23, 42, .14); }
+    .toolbar-mode-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 3px; border: 1px solid var(--ui-border, #d8e0eb); border-radius: 9px; background: var(--ui-widget, #edf2f7); }
+    .toolbar .toolbar-mode-tab { width: auto; min-width: 0; height: 30px; padding: 0 6px; border: 0; border-radius: 6px; color: var(--ui-muted, #64748b); background: transparent; font-size: 11px; font-weight: 800; cursor: pointer; }
+    .toolbar .toolbar-mode-tab:hover { color: var(--ui-accent-text, #1d4f91); background: var(--ui-control, #fff); }
+    .toolbar .toolbar-mode-tab.is-active { color: var(--ui-accent-text, #1d4f91); background: var(--ui-control, #fff); box-shadow: 0 1px 3px rgba(15, 23, 42, .14); }
     .toolbar .toolbar-mode-tab:focus-visible { outline: 2px solid #93c5fd; outline-offset: -1px; }
     .toolbar-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border-radius: 8px; background: #edf2f7; }
     .toolbar > .toolbar-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     #resource-tab-group .toolbar-tabs,
     #architecture-tabs-group .toolbar-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    #contracts-tabs-group .toolbar-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
     .route-provider-group { margin: 0; padding: 8px; border: 1px solid var(--ui-border, #d8e0eb); border-radius: 8px; background: var(--ui-control, #f8fafc); list-style: none; }
     .route-provider-group + .route-provider-group { margin-top: 7px; }
     .route-provider-group > details > summary { color: var(--ui-heading, #315f9b); font-size: 12px; font-weight: 800; cursor: pointer; }
@@ -315,10 +316,11 @@
     .route-methods { margin-top: 4px; }
     .route-reference-item { display: block; padding: 0; overflow: hidden; border: 0; background: transparent; }
     .route-disclosure { width: 100%; }
-    .route-reference-toggle { display: block; width: 100% !important; padding: 4px 2px; border: 0 !important; border-radius: 0 !important; color: var(--ui-text, #172033) !important; background: transparent !important; text-align: left; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; list-style: none; }
+    .route-reference-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100% !important; padding: 4px 2px; border: 0 !important; border-radius: 0 !important; color: var(--ui-text, #172033) !important; background: transparent !important; text-align: left; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; list-style: none; }
     .route-reference-toggle::-webkit-details-marker { display: none; }
     .route-reference-toggle:hover, .route-reference-toggle:focus-visible { color: var(--ui-accent-text, #1d4f91) !important; text-decoration: underline; }
     .route-reference-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .route-client-count { flex: 0 0 auto; padding: 2px 5px; border: 1px solid var(--ui-border, #d8e0eb); border-radius: 999px; color: var(--ui-muted, #64748b); background: var(--ui-control, #fff); font: 10px ui-sans-serif, system-ui, sans-serif; white-space: nowrap; }
     .route-callers { margin: 2px 0 5px 18px; padding: 2px 0 2px 10px; border-left: 1px solid var(--ui-border, #d8e0eb); color: var(--ui-muted, #64748b); font-size: 11px; }
     .route-callers strong { display: block; margin-bottom: 3px; color: var(--ui-muted, #64748b); font-size: 10px; font-weight: 700; }
     .route-callers-list { display: grid; gap: 2px; margin: 0; }
@@ -911,6 +913,9 @@
     :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .view-controls .view-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: var(--ui-on-accent); background: var(--ui-selected); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: rgba(15, 27, 46, .84); }
     :root[data-theme="dark"] .toolbar-tab { color: var(--ui-text) !important; }
+    :root[data-theme="dark"] .toolbar .toolbar-mode-tab { color: var(--ui-muted); background: transparent; }
+    :root[data-theme="dark"] .toolbar .toolbar-mode-tab:hover { color: var(--ui-accent-text); background: var(--ui-control) !important; }
+    :root[data-theme="dark"] .toolbar .toolbar-mode-tab.is-active { color: var(--ui-on-accent); background: var(--ui-selected) !important; }
     :root[data-theme="dark"] .graph-mode-flow-step { border-color: var(--ui-border); background: var(--ui-control); }
     :root[data-theme="dark"] .graph-mode-flow-step b { color: var(--ui-accent-text); }
     :root[data-theme="dark"] .graph-mode-flow-step strong { color: var(--ui-title); }
@@ -1373,10 +1378,10 @@
       <section id="architecture-tabs-group" class="toolbar-tab-group" aria-labelledby="architecture-tabs-title">
         <span id="architecture-tabs-title" class="toolbar-tab-group-title">Vues d’architecture</span>
         <div class="toolbar-tabs" role="tablist" aria-label="Vues d'architecture">
-          <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel" title="Afficher les microservices et leurs relations">Microservices</button>
-          <button id="resources-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="resources-panel">Inventaire</button>
+          <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel" title="Configurer et afficher le graphe">Graphe</button>
+          <button id="microservices-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="microservices-panel">Microservices</button>
           <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Topics</button>
-          <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Collections</button>
+          <button id="collections-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="collections-panel">Collections</button>
           <button id="routes-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="routes-panel">Routes</button>
         </div>
       </section>
@@ -1389,7 +1394,11 @@
       <section id="contracts-tabs-group" class="toolbar-tab-group" aria-labelledby="contracts-tabs-title" hidden>
         <span id="contracts-tabs-title" class="toolbar-tab-group-title">Vues des contrats</span>
         <div class="toolbar-tabs" role="tablist" aria-label="Contrats d’API et DTOs">
-          <button id="contracts-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="contracts-panel">OpenAPI · AsyncAPI · DTOs</button>
+          <button id="contracts-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="contracts-panel">OpenAPI</button>
+          <button id="asyncapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="asyncapi-contract-panel">AsyncAPI</button>
+          <button id="dto-contract-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="dto-contract-panel">DTOs</button>
+          <button id="jpa-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="jpa-panel">Entités JPA</button>
+          <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Mongo</button>
         </div>
       </section>
       <section id="diagnostics-tabs-group" class="toolbar-tab-group" aria-labelledby="diagnostics-tabs-title" hidden>
@@ -1503,13 +1512,13 @@
       </details>
       <p id="layout-status" class="layout-status" role="status">Chargement du graphe…</p>
     </div>
-    <div id="resources-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="resources-tab" hidden>
+    <div id="microservices-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="microservices-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker">Ressources indexées</p>
-        <h2 id="resources-title" class="references-title">Ressources</h2>
-        <p class="references-description">Recherchez un microservice, un message, une donnée ou toute autre ressource par son nom.</p>
+        <p class="references-kicker">Architecture déployée</p>
+        <h2 id="microservices-title" class="references-title">Microservices</h2>
+        <p class="references-description">Recherchez un microservice indexé et ouvrez-le dans le graphe.</p>
       </div>
-      <section class="references-section"><input id="resources-filter" class="reference-filter-input" type="search" placeholder="Rechercher une ressource par nom" autocomplete="off" aria-label="Rechercher une ressource par nom"><ul id="resources-list" class="references-list"></ul><p id="resources-empty" class="references-empty">Aucune ressource ne correspond à ce filtre.</p></section>
+      <section class="references-section"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher un microservice par nom" autocomplete="off" aria-label="Rechercher un microservice par nom"><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucun microservice ne correspond à ce filtre.</p></section>
     </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
       <div class="indexing-issues-header">
@@ -1531,13 +1540,23 @@
     </div>
     <div id="contracts-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="contracts-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker">Contrats d'interface</p>
-        <h2 id="openapi-references-title" class="references-title">OpenAPI, AsyncAPI et DTOs</h2>
-        <p class="references-description">Consultez les contrats HTTP, les contrats de messages et les DTOs indexés.</p>
+        <p class="references-kicker">Contrats HTTP</p>
+        <h2 id="openapi-references-title" class="references-title">Contrats OpenAPI</h2>
+        <p class="references-description">Consultez les contrats HTTP indexés.</p>
       </div>
       <section class="references-section"><input id="openapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les contrats par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats OpenAPI"><ul id="openapi-references" class="references-list"></ul><p id="openapi-references-empty" class="references-empty">Aucun contrat OpenAPI détecté.</p></section>
-      <section class="references-section"><h3 id="asyncapi-panel-title" class="references-title">Contrats AsyncAPI</h3><input id="asyncapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats AsyncAPI"><ul id="asyncapi-panel-references" class="references-list"></ul><p id="asyncapi-panel-empty" class="references-empty">Aucun contrat AsyncAPI détecté.</p></section>
-      <section class="references-section"><h3 id="dto-contract-references-title" class="references-title">DTOs de messages</h3><input id="dto-contract-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTOs par nom ou package" autocomplete="off" aria-label="Filtrer les DTOs des contrats"><ul id="dto-contract-references" class="references-list"></ul><p id="dto-contract-references-empty" class="references-empty">Aucun DTO de messages détecté.</p></section>
+    </div>
+    <div id="asyncapi-contract-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="asyncapi-tab" hidden>
+      <div class="references-header"><p class="references-kicker">Contrats de messages</p><h2 id="asyncapi-panel-title" class="references-title">Contrats AsyncAPI</h2><p class="references-description">Consultez les contrats de messages indexés.</p></div>
+      <section class="references-section"><input id="asyncapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats AsyncAPI"><ul id="asyncapi-panel-references" class="references-list"></ul><p id="asyncapi-panel-empty" class="references-empty">Aucun contrat AsyncAPI détecté.</p></section>
+    </div>
+    <div id="dto-contract-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="dto-contract-tab" hidden>
+      <div class="references-header"><p class="references-kicker">Modèles de données</p><h2 id="dto-contract-references-title" class="references-title">DTOs</h2><p class="references-description">Consultez les DTOs indexés dans les contrats de messages.</p></div>
+      <section class="references-section"><input id="dto-contract-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTOs par nom ou package" autocomplete="off" aria-label="Filtrer les DTOs des contrats"><ul id="dto-contract-references" class="references-list"></ul><p id="dto-contract-references-empty" class="references-empty">Aucun DTO de messages détecté.</p></section>
+    </div>
+    <div id="jpa-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="jpa-tab" hidden>
+      <div class="references-header"><p class="references-kicker">Persistance relationnelle</p><h2 id="jpa-references-title" class="references-title">Entités JPA</h2><p class="references-description">Consultez les entités JPA indexées.</p></div>
+      <section class="references-section"><input id="jpa-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou service" autocomplete="off" aria-label="Filtrer les entités JPA"><ul id="jpa-references" class="references-list"></ul><p id="jpa-references-empty" class="references-empty">Aucune entité JPA détectée.</p></section>
     </div>
     <div id="routes-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="routes-tab" hidden>
       <div class="references-header">
@@ -1548,18 +1567,18 @@
       <section class="references-section"><input id="routes-filter" class="reference-filter-input" type="search" placeholder="Filtrer par route ou microservice" autocomplete="off" aria-label="Filtrer les routes HTTP"><ul id="routes-list" class="references-list"></ul><p id="routes-empty" class="references-empty">Aucune route HTTP détectée.</p></section>
     </div>
     <div id="kafka-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="kafka-tab" hidden>
-      <div class="references-header">
-        <p class="references-kicker">Schémas de données d’événements</p>
-        <h2 id="dto-references-title" class="references-title">Schémas de données Messages</h2>
-        <p class="references-description">Inspectez les classes Java qui définissent les données échangées par messages.</p>
-      </div>
-      <section class="references-section"><input id="dto-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTO par nom ou package" autocomplete="off" aria-label="Filtrer les DTO de messages"><ul id="dto-references" class="references-list"></ul><p id="dto-references-empty" class="references-empty">Aucun DTO de messages détecté.</p></section>
+      <div class="references-header"><p class="references-kicker">Canaux de messages</p><h2 id="topics-title" class="references-title">Topics</h2><p class="references-description">Consultez les topics Kafka indexés et leurs services producteurs et consommateurs.</p></div>
+      <section class="references-section"><input id="topics-filter" class="reference-filter-input" type="search" placeholder="Filtrer les topics par nom" autocomplete="off" aria-label="Filtrer les topics Kafka"><ul id="topics-list" class="references-list"></ul><p id="topics-empty" class="references-empty">Aucun topic ne correspond à ce filtre.</p></section>
+    </div>
+    <div id="collections-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="collections-tab" hidden>
+      <div class="references-header"><p class="references-kicker">Données persistées</p><h2 id="collections-title" class="references-title">Collections</h2><p class="references-description">Consultez les collections Mongo indexées et leurs relations.</p></div>
+      <section class="references-section"><input id="collections-filter" class="reference-filter-input" type="search" placeholder="Filtrer les collections par nom" autocomplete="off" aria-label="Filtrer les collections Mongo"><ul id="collections-list" class="references-list"></ul><p id="collections-empty" class="references-empty">Aucune collection ne correspond à ce filtre.</p></section>
     </div>
     <div id="persistence-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="persistence-tab" hidden>
       <div class="references-header">
         <p class="references-kicker">Schémas de données persistées</p>
-        <h2 id="mongo-class-references-title" class="references-title">Schémas de données persistées</h2>
-        <p class="references-description">Inspectez les classes Java qui définissent les données persistées.</p>
+        <h2 id="mongo-class-references-title" class="references-title">Classes Mongo</h2>
+        <p class="references-description">Consultez les classes Mongo indexées.</p>
       </div>
       <section class="references-section"><input id="mongo-class-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou donnée" autocomplete="off" aria-label="Filtrer les classes de données persistées"><ul id="mongo-class-references" class="references-list"></ul><p id="mongo-class-references-empty" class="references-empty">Aucune classe de données persistées détectée.</p></section>
     </div>
@@ -4405,10 +4424,14 @@
     const searchStatus = document.getElementById("search-status");
     const pathLock = document.getElementById("path-lock");
     const graphTab = document.getElementById("graph-tab");
-    const resourcesTab = document.getElementById("resources-tab");
+    const microservicesTab = document.getElementById("microservices-tab");
     const contractsTab = document.getElementById("contracts-tab");
+    const asyncApiTab = document.getElementById("asyncapi-tab");
+    const dtoContractTab = document.getElementById("dto-contract-tab");
+    const jpaTab = document.getElementById("jpa-tab");
     const routesTab = document.getElementById("routes-tab");
     const kafkaTab = document.getElementById("kafka-tab");
+    const collectionsTab = document.getElementById("collections-tab");
     const persistenceTab = document.getElementById("persistence-tab");
     const issuesTab = document.getElementById("issues-tab");
     const flowsTab = document.getElementById("flows-tab");
@@ -4430,12 +4453,16 @@
     const dependencyAnalysisControls = document.getElementById("dependency-analysis-controls");
     const dependencyAnalysisHelp = document.getElementById("dependency-analysis-help");
     const graphPanel = document.getElementById("graph-panel");
-    const resourcesPanel = document.getElementById("resources-panel");
+    const microservicesPanel = document.getElementById("microservices-panel");
     const issuesPanel = document.getElementById("issues-panel");
     const flowsPanel = document.getElementById("flows-panel");
     const contractsPanel = document.getElementById("contracts-panel");
+    const asyncApiContractPanel = document.getElementById("asyncapi-contract-panel");
+    const dtoContractPanel = document.getElementById("dto-contract-panel");
+    const jpaPanel = document.getElementById("jpa-panel");
     const routesPanel = document.getElementById("routes-panel");
     const kafkaPanel = document.getElementById("kafka-panel");
+    const collectionsPanel = document.getElementById("collections-panel");
     const persistencePanel = document.getElementById("persistence-panel");
     const graphCanvas = document.getElementById("graph");
     const indexingIssuesList = document.getElementById("indexing-issues");
@@ -4444,16 +4471,17 @@
     const indexingIssues = graphData.indexing_issues || [];
     const inventoryStatus = document.getElementById("inventory-status");
     const progressNotice = document.getElementById("progress-notice");
-    const resourcesList = document.getElementById("resources-list");
-    const resourcesEmpty = document.getElementById("resources-empty");
-    const resourcesFilter = document.getElementById("resources-filter");
-    const resourcesTitle = document.getElementById("resources-title");
+    const microservicesList = document.getElementById("microservices-list");
+    const microservicesEmpty = document.getElementById("microservices-empty");
+    const microservicesFilter = document.getElementById("microservices-filter");
+    const microservicesTitle = document.getElementById("microservices-title");
+    const collectionsList = document.getElementById("collections-list");
+    const collectionsEmpty = document.getElementById("collections-empty");
+    const collectionsFilter = document.getElementById("collections-filter");
+    const collectionsTitle = document.getElementById("collections-title");
     const openApiReferencesList = document.getElementById("openapi-references");
     const openApiReferencesEmpty = document.getElementById("openapi-references-empty");
     const openApiReferencesFilter = document.getElementById("openapi-reference-filter");
-    const dtoReferencesList = document.getElementById("dto-references");
-    const dtoReferencesEmpty = document.getElementById("dto-references-empty");
-    const dtoReferencesFilter = document.getElementById("dto-reference-filter");
     const dtoContractReferencesList = document.getElementById("dto-contract-references");
     const dtoContractReferencesEmpty = document.getElementById("dto-contract-references-empty");
     const dtoContractReferencesFilter = document.getElementById("dto-contract-reference-filter");
@@ -4463,7 +4491,10 @@
     const routesEmpty = document.getElementById("routes-empty");
     const routesFilter = document.getElementById("routes-filter");
     const routesTitle = document.getElementById("routes-title");
-    const dtoReferencesTitle = document.getElementById("dto-references-title");
+    const topicsList = document.getElementById("topics-list");
+    const topicsEmpty = document.getElementById("topics-empty");
+    const topicsFilter = document.getElementById("topics-filter");
+    const topicsTitle = document.getElementById("topics-title");
     const asyncApiReferencesList = document.getElementById("asyncapi-panel-references");
     const asyncApiReferencesEmpty = document.getElementById("asyncapi-panel-empty");
     const asyncApiReferencesTitle = document.getElementById("asyncapi-panel-title");
@@ -4472,6 +4503,10 @@
     const mongoClassReferencesEmpty = document.getElementById("mongo-class-references-empty");
     const mongoClassReferencesFilter = document.getElementById("mongo-class-reference-filter");
     const mongoClassReferencesTitle = document.getElementById("mongo-class-references-title");
+    const jpaReferencesList = document.getElementById("jpa-references");
+    const jpaReferencesEmpty = document.getElementById("jpa-references-empty");
+    const jpaReferencesFilter = document.getElementById("jpa-reference-filter");
+    const jpaReferencesTitle = document.getElementById("jpa-references-title");
     const layoutStatus = document.getElementById("layout-status");
     const layoutButtons = new Map([
       ["forceatlas2", document.getElementById("layout-forceatlas2")],
@@ -5282,15 +5317,20 @@
       if (document.querySelector(".toolbar")?.classList.contains("has-details")) {
         setDetailsEmpty("Sélectionnez un nœud pour afficher ses détails.");
       }
-      const showingResources = tab === "resources";
+      const showingMicroservices = tab === "microservices";
       const showingIssues = tab === "issues";
       const showingContracts = tab === "contracts";
+      const showingAsyncApi = tab === "asyncapi";
+      const showingDtoContracts = tab === "dto-contracts";
+      const showingJpa = tab === "jpa";
       const showingRoutes = tab === "routes";
       const showingKafka = tab === "kafka";
+      const showingCollections = tab === "collections";
       const showingPersistence = tab === "persistence";
+      const showingContractView = showingContracts || showingAsyncApi || showingDtoContracts || showingJpa || showingPersistence;
       const mode = showingFlows
         ? "flows"
-        : showingContracts
+        : showingContractView
           ? "contracts"
           : showingIssues
             ? "diagnostics"
@@ -5303,14 +5343,22 @@
       Object.entries(modeGroups).forEach(([name, group]) => { group.hidden = name !== mode; });
       graphTab.classList.toggle("is-active", showingGraph);
       graphTab.setAttribute("aria-selected", String(showingGraph));
-      resourcesTab.classList.toggle("is-active", showingResources);
-      resourcesTab.setAttribute("aria-selected", String(showingResources));
-      contractsTab.classList.toggle("is-active", showingContracts);
-      contractsTab.setAttribute("aria-selected", String(showingContracts));
+      microservicesTab.classList.toggle("is-active", showingMicroservices);
+      microservicesTab.setAttribute("aria-selected", String(showingMicroservices));
       routesTab.classList.toggle("is-active", showingRoutes);
       routesTab.setAttribute("aria-selected", String(showingRoutes));
+      contractsTab.classList.toggle("is-active", showingContracts);
+      contractsTab.setAttribute("aria-selected", String(showingContracts));
+      asyncApiTab.classList.toggle("is-active", showingAsyncApi);
+      asyncApiTab.setAttribute("aria-selected", String(showingAsyncApi));
+      dtoContractTab.classList.toggle("is-active", showingDtoContracts);
+      dtoContractTab.setAttribute("aria-selected", String(showingDtoContracts));
+      jpaTab.classList.toggle("is-active", showingJpa);
+      jpaTab.setAttribute("aria-selected", String(showingJpa));
       kafkaTab.classList.toggle("is-active", showingKafka);
       kafkaTab.setAttribute("aria-selected", String(showingKafka));
+      collectionsTab.classList.toggle("is-active", showingCollections);
+      collectionsTab.setAttribute("aria-selected", String(showingCollections));
       persistenceTab.classList.toggle("is-active", showingPersistence);
       persistenceTab.setAttribute("aria-selected", String(showingPersistence));
       issuesTab.classList.toggle("is-active", showingIssues);
@@ -5318,13 +5366,17 @@
       flowsTab.classList.toggle("is-active", showingFlows);
       flowsTab.setAttribute("aria-selected", String(showingFlows));
       graphPanel.hidden = !showingGraph;
-      resourcesPanel.hidden = !showingResources;
+      microservicesPanel.hidden = !showingMicroservices;
       quickSearch.hidden = !showingGraph;
       graphContext.hidden = !showingGraph;
       issuesPanel.hidden = !showingIssues;
       contractsPanel.hidden = !showingContracts;
+      asyncApiContractPanel.hidden = !showingAsyncApi;
+      dtoContractPanel.hidden = !showingDtoContracts;
+      jpaPanel.hidden = !showingJpa;
       routesPanel.hidden = !showingRoutes;
       kafkaPanel.hidden = !showingKafka;
+      collectionsPanel.hidden = !showingCollections;
       persistencePanel.hidden = !showingPersistence;
       flowsPanel.hidden = !showingFlows;
       graphLegend.hidden = !graphVisible;
@@ -5437,17 +5489,12 @@
           !contract.spec,
         ));
       });
-      dtoReferencesList.replaceChildren();
-      dtoContractReferencesList.replaceChildren();
       const dtos = graphData.kafka_dtos || [];
-      const query = dtoReferencesFilter.value.trim().toLocaleLowerCase();
+      dtoContractReferencesList.replaceChildren();
+      const query = dtoContractReferencesFilter.value.trim().toLocaleLowerCase();
       const visibleDtos = dtos.filter(dto => (
         !query || dtoLabel(dto).toLocaleLowerCase().includes(query)
       ));
-      dtoReferencesEmpty.hidden = visibleDtos.length > 0;
-      dtoReferencesEmpty.textContent = query && !visibleDtos.length
-        ? "Aucun DTO ne correspond à ce filtre."
-        : "Aucun DTO de messages détecté.";
       visibleDtos.forEach(dto => {
         const exchangeCount = (dto.producers?.length || 0) + (dto.consumers?.length || 0);
         const reference = () => referenceItem(
@@ -5456,11 +5503,9 @@
           "Inspecter",
           () => openDtoInspector(dto.id),
         );
-        dtoReferencesList.append(reference());
         dtoContractReferencesList.append(reference());
       });
       openapiReferencesTitle.textContent = `Contrats OpenAPI (${visibleContracts.length}/${contracts.length})`;
-      dtoReferencesTitle.textContent = `DTO de messages (${visibleDtos.length}/${dtos.length})`;
       dtoContractReferencesTitle.textContent = `DTOs de messages (${visibleDtos.length}/${dtos.length})`;
       dtoContractReferencesEmpty.hidden = visibleDtos.length > 0;
       dtoContractReferencesEmpty.textContent = query && !visibleDtos.length
@@ -5526,7 +5571,10 @@
             const label = document.createElement("span");
             label.className = "route-reference-label";
             label.textContent = `${parts.method} ${parts.path}`;
-            toggle.append(label);
+            const clientCount = document.createElement("span");
+            clientCount.className = "route-client-count";
+            clientCount.textContent = `${callers.length} client${callers.length > 1 ? "s" : ""}`;
+            toggle.append(label, clientCount);
             const callersPanel = document.createElement("div");
             callersPanel.className = "route-callers";
             const callersTitle = document.createElement("strong");
@@ -5582,44 +5630,111 @@
         () => openAsyncApiContract(contract),
       )));
       asyncApiReferencesTitle.textContent = `Contrats AsyncAPI (${visibleAsyncContracts.length}/${asyncContracts.length})`;
+      jpaReferencesList.replaceChildren();
       mongoClassReferencesList.replaceChildren();
       const persistenceClasses = (graphData.resource_descriptions || [])
         .filter(item => ["mongo_persistence_class", "jpa_entity"].includes(item.kind));
-      const mongoQuery = mongoClassReferencesFilter.value.trim().toLocaleLowerCase();
-      const visiblePersistenceClasses = persistenceClasses.filter(item => (
-        !mongoQuery || `${item.qualified_name} ${item.owner} ${item.technology}`.toLocaleLowerCase().includes(mongoQuery)
+      const jpaQuery = jpaReferencesFilter.value.trim().toLocaleLowerCase();
+      const jpaClasses = persistenceClasses.filter(item => item.kind === "jpa_entity");
+      const visibleJpaClasses = jpaClasses.filter(item => (
+        !jpaQuery || `${item.qualified_name} ${item.owner} ${item.technology}`.toLocaleLowerCase().includes(jpaQuery)
       ));
-      mongoClassReferencesEmpty.hidden = visiblePersistenceClasses.length > 0;
-      mongoClassReferencesEmpty.textContent = mongoQuery && !visiblePersistenceClasses.length
-        ? "Aucune classe de persistance ne correspond à ce filtre."
-        : "Aucune classe de persistance détectée.";
-      visiblePersistenceClasses.forEach(item => mongoClassReferencesList.append(referenceItem(
+      jpaReferencesEmpty.hidden = visibleJpaClasses.length > 0;
+      jpaReferencesEmpty.textContent = jpaQuery && !visibleJpaClasses.length
+        ? "Aucune entité JPA ne correspond à ce filtre."
+        : "Aucune entité JPA détectée.";
+      visibleJpaClasses.forEach(item => jpaReferencesList.append(referenceItem(
         item.qualified_name,
         `${item.technology} · ${item.owner} · ${item.attributes?.length || 0} champ(s)`,
         "Inspecter",
-        () => item.kind === "jpa_entity"
-          ? openJpaEntityInspector(item.navigation?.inspect)
-          : openMongoPersistenceInspector(item.navigation?.inspect),
+        () => openJpaEntityInspector(item.navigation?.inspect),
       )));
-      mongoClassReferencesTitle.textContent = `Classes de persistance (${visiblePersistenceClasses.length}/${persistenceClasses.length})`;
+      jpaReferencesTitle.textContent = `Entités JPA (${visibleJpaClasses.length}/${jpaClasses.length})`;
+      const mongoQuery = mongoClassReferencesFilter.value.trim().toLocaleLowerCase();
+      const mongoClasses = persistenceClasses.filter(item => item.kind === "mongo_persistence_class");
+      const visibleMongoClasses = mongoClasses.filter(item => (
+        !mongoQuery || `${item.qualified_name} ${item.owner} ${item.technology}`.toLocaleLowerCase().includes(mongoQuery)
+      ));
+      mongoClassReferencesEmpty.hidden = visibleMongoClasses.length > 0;
+      mongoClassReferencesEmpty.textContent = mongoQuery && !visibleMongoClasses.length
+        ? "Aucune classe Mongo ne correspond à ce filtre."
+        : "Aucune classe Mongo détectée.";
+      visibleMongoClasses.forEach(item => mongoClassReferencesList.append(referenceItem(
+        item.qualified_name,
+        `${item.technology} · ${item.owner} · ${item.attributes?.length || 0} champ(s)`,
+        "Inspecter",
+        () => openMongoPersistenceInspector(item.navigation?.inspect),
+      )));
+      mongoClassReferencesTitle.textContent = `Classes Mongo (${visibleMongoClasses.length}/${mongoClasses.length})`;
     }
-    function renderResources() {
-      resourcesList.replaceChildren();
-      const query = resourcesFilter.value.trim().toLocaleLowerCase();
-      const resources = graphData.nodes
+    function renderMicroservices() {
+      microservicesList.replaceChildren();
+      const query = microservicesFilter.value.trim().toLocaleLowerCase();
+      const microservices = graphData.nodes
+        .filter(node => node.kind === "microservice")
         .slice()
         .sort((left, right) => left.name.localeCompare(right.name));
-      const visibleResources = resources.filter(node => (
+      const visibleMicroservices = microservices.filter(node => (
         !query || `${node.name} ${nodeKindLabel(node)}`.toLocaleLowerCase().includes(query)
       ));
-      resourcesTitle.textContent = `Ressources (${visibleResources.length}/${resources.length})`;
-      resourcesEmpty.hidden = visibleResources.length > 0;
-      visibleResources.forEach(node => {
+      microservicesTitle.textContent = `Microservices (${visibleMicroservices.length}/${microservices.length})`;
+      microservicesEmpty.hidden = visibleMicroservices.length > 0;
+      visibleMicroservices.forEach(node => {
         const incoming = graphData.links.filter(link => link.target === node.id).length;
         const outgoing = graphData.links.filter(link => link.source === node.id).length;
-        resourcesList.append(referenceItem(
+        microservicesList.append(referenceItem(
           nodeDisplayName(node),
           `${nodeKindLabel(node)} · ${incoming} entrée${incoming > 1 ? "s" : ""} · ${outgoing} sortie${outgoing > 1 ? "s" : ""}`,
+          "Voir",
+          () => {
+            setToolbarTab("graph");
+            selectNode(node.id);
+          },
+        ));
+      });
+    }
+    function renderCollections() {
+      collectionsList.replaceChildren();
+      const query = collectionsFilter.value.trim().toLocaleLowerCase();
+      const collections = graphData.nodes
+        .filter(node => node.kind === "mongodb_collection")
+        .slice()
+        .sort((left, right) => left.name.localeCompare(right.name));
+      const visibleCollections = collections.filter(node => (
+        !query || node.name.toLocaleLowerCase().includes(query)
+      ));
+      collectionsTitle.textContent = `Collections (${visibleCollections.length}/${collections.length})`;
+      collectionsEmpty.hidden = visibleCollections.length > 0;
+      visibleCollections.forEach(node => {
+        const incoming = graphData.links.filter(link => link.target === node.id).length;
+        const outgoing = graphData.links.filter(link => link.source === node.id).length;
+        collectionsList.append(referenceItem(
+          nodeDisplayName(node),
+          `Mongo · ${incoming} lecture${incoming > 1 ? "s" : ""} · ${outgoing} écriture${outgoing > 1 ? "s" : ""}`,
+          "Voir",
+          () => {
+            setToolbarTab("graph");
+            selectNode(node.id);
+          },
+        ));
+      });
+    }
+    function renderTopics() {
+      topicsList.replaceChildren();
+      const query = topicsFilter.value.trim().toLocaleLowerCase();
+      const topics = graphData.nodes
+        .filter(node => node.kind === "kafka_topic")
+        .slice()
+        .sort((left, right) => left.name.localeCompare(right.name));
+      const visibleTopics = topics.filter(node => !query || node.name.toLocaleLowerCase().includes(query));
+      topicsTitle.textContent = `Topics (${visibleTopics.length}/${topics.length})`;
+      topicsEmpty.hidden = visibleTopics.length > 0;
+      visibleTopics.forEach(node => {
+        const incoming = graphData.links.filter(link => link.target === node.id).length;
+        const outgoing = graphData.links.filter(link => link.source === node.id).length;
+        topicsList.append(referenceItem(
+          nodeDisplayName(node),
+          `${incoming} producteur${incoming > 1 ? "s" : ""} · ${outgoing} consommateur${outgoing > 1 ? "s" : ""}`,
           "Voir",
           () => {
             setToolbarTab("graph");
@@ -8461,10 +8576,14 @@
     document.getElementById("show-simple-paths").addEventListener("click", showSimplePaths);
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
-    resourcesTab.addEventListener("click", () => setToolbarTab("resources"));
-    contractsTab.addEventListener("click", () => setToolbarTab("contracts"));
+    microservicesTab.addEventListener("click", () => setToolbarTab("microservices"));
     routesTab.addEventListener("click", () => setToolbarTab("routes"));
+    contractsTab.addEventListener("click", () => setToolbarTab("contracts"));
+    asyncApiTab.addEventListener("click", () => setToolbarTab("asyncapi"));
+    dtoContractTab.addEventListener("click", () => setToolbarTab("dto-contracts"));
+    jpaTab.addEventListener("click", () => setToolbarTab("jpa"));
     kafkaTab.addEventListener("click", () => setToolbarTab("kafka"));
+    collectionsTab.addEventListener("click", () => setToolbarTab("collections"));
     persistenceTab.addEventListener("click", () => setToolbarTab("persistence"));
     issuesTab.addEventListener("click", () => setToolbarTab("issues"));
     flowsTab.addEventListener("click", () => setToolbarTab("flows"));
@@ -8507,17 +8626,20 @@
     openApiReferencesFilter.addEventListener("input", renderReferences);
     routesFilter.addEventListener("input", renderReferences);
     asyncApiPanelFilter.addEventListener("input", renderReferences);
-    dtoReferencesFilter.addEventListener("input", renderReferences);
+    topicsFilter.addEventListener("input", renderTopics);
     dtoContractReferencesFilter.addEventListener("input", () => {
-      dtoReferencesFilter.value = dtoContractReferencesFilter.value;
       renderReferences();
     });
+    jpaReferencesFilter.addEventListener("input", renderReferences);
     mongoClassReferencesFilter.addEventListener("input", renderReferences);
-    resourcesFilter.addEventListener("input", renderResources);
+    microservicesFilter.addEventListener("input", renderMicroservices);
+    collectionsFilter.addEventListener("input", renderCollections);
     pathLock.addEventListener("change", persistState);
     renderIndexingIssues();
     renderReferences();
-    renderResources();
+    renderMicroservices();
+    renderTopics();
+    renderCollections();
     restoreState();
     dependencyAnalysisControls.disabled = true;
     dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
