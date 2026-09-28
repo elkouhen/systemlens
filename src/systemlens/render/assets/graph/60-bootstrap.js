@@ -203,9 +203,8 @@
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
     resourcesTab.addEventListener("click", () => setToolbarTab("resources"));
-    openApiTab.addEventListener("click", () => setToolbarTab("openapi"));
+    contractsTab.addEventListener("click", () => setToolbarTab("contracts"));
     routesTab.addEventListener("click", () => setToolbarTab("routes"));
-    asyncApiTab.addEventListener("click", () => setToolbarTab("asyncapi"));
     kafkaTab.addEventListener("click", () => setToolbarTab("kafka"));
     persistenceTab.addEventListener("click", () => setToolbarTab("persistence"));
     issuesTab.addEventListener("click", () => setToolbarTab("issues"));

@@ -8,9 +8,8 @@
     const pathLock = document.getElementById("path-lock");
     const graphTab = document.getElementById("graph-tab");
     const resourcesTab = document.getElementById("resources-tab");
-    const openApiTab = document.getElementById("openapi-tab");
+    const contractsTab = document.getElementById("contracts-tab");
     const routesTab = document.getElementById("routes-tab");
-    const asyncApiTab = document.getElementById("asyncapi-tab");
     const kafkaTab = document.getElementById("kafka-tab");
     const persistenceTab = document.getElementById("persistence-tab");
     const issuesTab = document.getElementById("issues-tab");
@@ -24,9 +23,8 @@
     const resourcesPanel = document.getElementById("resources-panel");
     const issuesPanel = document.getElementById("issues-panel");
     const flowsPanel = document.getElementById("flows-panel");
-    const openApiPanel = document.getElementById("openapi-panel");
+    const contractsPanel = document.getElementById("contracts-panel");
     const routesPanel = document.getElementById("routes-panel");
-    const asyncApiPanel = document.getElementById("asyncapi-panel");
     const kafkaPanel = document.getElementById("kafka-panel");
     const persistencePanel = document.getElementById("persistence-panel");
     const graphCanvas = document.getElementById("graph");

@@ -33,13 +33,17 @@
           <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problèmes d’indexation">Diagnostics</button>
         </div>
       </section>
+      <section class="toolbar-tab-group" aria-labelledby="contracts-tabs-title">
+        <span id="contracts-tabs-title" class="toolbar-tab-group-title">Contrats</span>
+        <div class="toolbar-tabs" role="tablist" aria-label="Contrats d’API">
+          <button id="contracts-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="contracts-panel">Contrats</button>
+        </div>
+      </section>
       <section id="resource-tab-group" class="toolbar-tab-group" aria-labelledby="resources-tabs-title">
         <span id="resources-tabs-title" class="toolbar-tab-group-title">Ressources</span>
-        <div class="toolbar-tabs" role="tablist" aria-label="Ressources et contrats">
+        <div class="toolbar-tabs" role="tablist" aria-label="Ressources techniques">
           <button id="resources-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="resources-panel">Ressources</button>
-          <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
           <button id="routes-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="routes-panel">Routes</button>
-          <button id="asyncapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="asyncapi-panel">AsyncAPI</button>
           <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Messages</button>
           <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Données</button>
         </div>
@@ -175,13 +179,14 @@
       </div>
     <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Filtrer par service, méthode ou déclencheur" autocomplete="off" aria-label="Filtrer les flux de code"><input id="code-flow-message-type" class="code-flow-message-type-filter" type="search" placeholder="Type de message Kafka" list="code-flow-message-types" autocomplete="off" aria-label="Filtrer par type de message Kafka"><datalist id="code-flow-message-types"></datalist><select id="code-flow-scope" class="code-flow-scope-filter" aria-label="Portée des flux"><option value="inter">Inter-services</option><option value="all">Tous les flux</option><option value="local">Flux internes</option></select><select id="code-flow-confidence" class="code-flow-scope-filter" aria-label="Niveau de confiance"><option value="all">Toutes confiances</option><option value="high">Confiance élevée</option><option value="medium">Confiance moyenne</option><option value="low">Confiance faible</option></select><select id="code-flow-kind" class="code-flow-scope-filter" aria-label="Type de flux"><option value="all">Tous protocoles</option><option value="http">HTTP</option><option value="kafka">Kafka</option><option value="mixed">Mixte</option></select><button id="code-flow-cycles" class="code-flow-cycle-filter" type="button" aria-pressed="false">Cycles uniquement</button><button id="code-flow-filter-reset" class="code-flow-filter-reset" type="button">Effacer les filtres</button></div><p id="code-flow-filter-summary" class="code-flow-filter-summary"></p><p id="code-flows-summary" class="code-flows-summary"></p><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux de code indexé.</p></section>
     </div>
-    <div id="openapi-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="openapi-tab" hidden>
+    <div id="contracts-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="contracts-tab" hidden>
       <div class="references-header">
         <p class="references-kicker">Documentation d'API</p>
         <h2 id="openapi-references-title" class="references-title">Contrats OpenAPI</h2>
         <p class="references-description">Ouvrez une spécification locale dans Swagger UI.</p>
       </div>
       <section class="references-section"><input id="openapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les contrats par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats OpenAPI"><ul id="openapi-references" class="references-list"></ul><p id="openapi-references-empty" class="references-empty">Aucun contrat OpenAPI détecté.</p></section>
+      <section class="references-section"><h3 id="asyncapi-panel-title" class="references-title">Contrats AsyncAPI</h3><input id="asyncapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats AsyncAPI"><ul id="asyncapi-panel-references" class="references-list"></ul><p id="asyncapi-panel-empty" class="references-empty">Aucun contrat AsyncAPI détecté.</p></section>
     </div>
     <div id="routes-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="routes-tab" hidden>
       <div class="references-header">
@@ -190,14 +195,6 @@
         <p class="references-description">Consultez les routes exposées par chaque microservice et leurs consommateurs.</p>
       </div>
       <section class="references-section"><input id="routes-filter" class="reference-filter-input" type="search" placeholder="Filtrer par route ou microservice" autocomplete="off" aria-label="Filtrer les routes HTTP"><ul id="routes-list" class="references-list"></ul><p id="routes-empty" class="references-empty">Aucune route HTTP détectée.</p></section>
-    </div>
-    <div id="asyncapi-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="asyncapi-tab" hidden>
-      <div class="references-header">
-        <p class="references-kicker">Documentation de messages</p>
-        <h2 id="asyncapi-panel-title" class="references-title">Contrats AsyncAPI</h2>
-        <p class="references-description">Inspectez les contrats AsyncAPI publiés par les microservices.</p>
-      </div>
-      <section class="references-section"><input id="asyncapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats AsyncAPI"><ul id="asyncapi-panel-references" class="references-list"></ul><p id="asyncapi-panel-empty" class="references-empty">Aucun contrat AsyncAPI détecté.</p></section>
     </div>
     <div id="kafka-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="kafka-tab" hidden>
       <div class="references-header">

@@ -11,7 +11,7 @@
     .toolbar input:not([type="checkbox"]) { height: 34px; padding: 0 10px; border: 1px solid #b9c5d6; border-radius: 6px; color: #172033; background: #fff; font: inherit; font-size: 13px; }
     .toolbar-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border-radius: 8px; background: #edf2f7; }
     .toolbar > .toolbar-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    #resource-tab-group .toolbar-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    #resource-tab-group .toolbar-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .route-provider-group { margin: 0; padding: 8px; border: 1px solid var(--ui-border, #d8e0eb); border-radius: 8px; background: var(--ui-control, #f8fafc); list-style: none; }
     .route-provider-group + .route-provider-group { margin-top: 7px; }
     .route-provider-group > details > summary { color: var(--ui-heading, #315f9b); font-size: 12px; font-weight: 800; cursor: pointer; }

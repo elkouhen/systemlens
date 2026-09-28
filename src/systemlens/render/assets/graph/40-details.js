@@ -72,9 +72,8 @@
       }
       const showingResources = tab === "resources";
       const showingIssues = tab === "issues";
-      const showingOpenApi = tab === "openapi";
+      const showingContracts = tab === "contracts";
       const showingRoutes = tab === "routes";
-      const showingAsyncApi = tab === "asyncapi";
       const showingKafka = tab === "kafka";
       const showingPersistence = tab === "persistence";
       const resourceTabGroup = document.getElementById("resource-tab-group");
@@ -83,12 +82,10 @@
       graphTab.setAttribute("aria-selected", String(showingGraph));
       resourcesTab.classList.toggle("is-active", showingResources);
       resourcesTab.setAttribute("aria-selected", String(showingResources));
-      openApiTab.classList.toggle("is-active", showingOpenApi);
-      openApiTab.setAttribute("aria-selected", String(showingOpenApi));
+      contractsTab.classList.toggle("is-active", showingContracts);
+      contractsTab.setAttribute("aria-selected", String(showingContracts));
       routesTab.classList.toggle("is-active", showingRoutes);
       routesTab.setAttribute("aria-selected", String(showingRoutes));
-      asyncApiTab.classList.toggle("is-active", showingAsyncApi);
-      asyncApiTab.setAttribute("aria-selected", String(showingAsyncApi));
       kafkaTab.classList.toggle("is-active", showingKafka);
       kafkaTab.setAttribute("aria-selected", String(showingKafka));
       persistenceTab.classList.toggle("is-active", showingPersistence);
@@ -102,9 +99,8 @@
       quickSearch.hidden = !showingGraph;
       graphContext.hidden = !showingGraph;
       issuesPanel.hidden = !showingIssues;
-      openApiPanel.hidden = !showingOpenApi;
+      contractsPanel.hidden = !showingContracts;
       routesPanel.hidden = !showingRoutes;
-      asyncApiPanel.hidden = !showingAsyncApi;
       kafkaPanel.hidden = !showingKafka;
       persistencePanel.hidden = !showingPersistence;
       flowsPanel.hidden = !showingFlows;
