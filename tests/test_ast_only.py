@@ -535,6 +535,28 @@ record OrderCreated(String id) {}
     ]
 
 
+def test_strategy1_resolves_flux_enum_topic_convention(tmp_path: Path) -> None:
+    source = tmp_path / "src/main/java/Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class Publisher {
+  void publish(OrderCreated event) {
+    kafkaService.envoyerMessageKafka(Flux.CONVERSION_UNITAIRE, event);
+  }
+}
+enum Flux { CONVERSION_UNITAIRE }
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_topic_strategy1_endpoints(tmp_path, ["src/main/java/Publisher.java"])
+
+    assert [(endpoint.topic, endpoint.topic_dynamic) for endpoint in endpoints] == [
+        ("conversionunitaire", False)
+    ]
+
+
 def test_index_is_incremental_without_embeddings(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     shutil.copytree(FIXTURES / "endpoint_index_repo", repo)

@@ -21,7 +21,12 @@ Strategy1 configured API clients may resolve a domain from a `HubRestApi` enum
 constant, including statically imported constants and redundant parentheses. If
 the factory argument remains unresolved, the scanner may use a unique matching
 `XxxApi.class` argument from the same bean method. This fallback is retained as
-inferred evidence. Beans returning `WebClient` or
+inferred evidence. Configuration constants alone do not create HTTP call
+endpoints. A matched `@Bean` is retained as `configured-api-client-factory`
+evidence so dependency analysis can establish the service-level relation
+without presenting the factory as a route call. When the domain or client type
+identifies a local `model-*` OpenAPI module, its contract path is retained as
+additional evidence. Beans returning `WebClient` or
 `ExchangeFilterFunction` are excluded from configured API client relations.
 
 Strategy1 also resolves a call such as `client.getRoutings(...)` when the
@@ -128,6 +133,9 @@ Strategy1 topic keys are compared after `casefold()` and removal of `_`; dots
 and other physical separators remain unchanged. Dynamic topic expressions are
 not normalized or paired with concrete topics. A conditional topic expression
 creates one producer fact for each statically resolved branch.
+An uppercase `Flux` enum constant is also normalized as a logical topic name
+after removing a leading `FLUX_` prefix. Other variable topic expressions stay
+dynamic.
 When the publishing method is annotated with `@Scheduled(cron = "...")`, the
 flow starts with an explicit `Déclencheur Cron` step, followed by the Kafka
 publication owned by that method. The cron expression is retained as source

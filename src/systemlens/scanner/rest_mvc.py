@@ -38,7 +38,6 @@ from systemlens.scanner.rest_client_config import (
     _domain_from_api_type_name,
     _hub_rest_api_domains,
     _is_rest_client_configuration,
-    _rest_configuration_domains,
     _rest_configuration_external_services,
     _trace_rest_client,
 )
@@ -1452,6 +1451,20 @@ def _infer_configured_api_client_endpoints(
         return []
     source, root = parsed
     endpoints: dict[str, MessageEndpoint] = {}
+
+    def client_contract_markers(return_type: str, domain: str) -> str:
+        api_names = {
+            return_type.removesuffix("Api").casefold().replace("_", "-"),
+            domain.removeprefix("domain-").casefold().replace("_", "-"),
+        }
+        contracts = sorted({
+            contract
+            for api_name in api_names
+            if api_name
+            for contract in _strategy1_openapi_contracts(str(repo_root.resolve()), api_name)
+        })
+        return "".join(f"\nsystemlens-openapi-contract:{contract}" for contract in contracts)
+
     for type_node in java_parser.type_declarations(root):
         if not _is_rest_client_configuration(
             java_parser.declaration_name(type_node, source)
@@ -1459,29 +1472,6 @@ def _infer_configured_api_client_endpoints(
             continue
         configuration = java_parser.node_text(source, type_node)
         known_domains = _hub_rest_api_domains(str(repo_root.resolve()))
-        declared_domains = {
-            domain for domain, _line in _rest_configuration_domains(type_node, source)
-        }
-        for domain, line in _rest_configuration_domains(type_node, source):
-            endpoint = _build_endpoint(
-                repo_root,
-                rel_path,
-                line,
-                line,
-                "call",
-                "rest",
-                "ANY <dynamic>",
-                "configured-api-client-configuration",
-                f"{configuration}\nsystemlens-api-domain:{domain}",
-                topic_dynamic=True,
-            )
-            endpoints[endpoint.id] = endpoint
-            _trace_rest_client(
-                "rest_client.search.configuration_dependency",
-                path=rel_path,
-                line=line,
-                domain=domain,
-            )
         for method_node in java_parser.walk(type_node):
             if method_node.type != "method_declaration":
                 continue
@@ -1497,7 +1487,7 @@ def _infer_configured_api_client_endpoints(
             if return_type in {"WebClient", "ExchangeFilterFunction"}:
                 continue
             bean_domain = _bean_api_domain(method_node, source, "<strategy1>", known_domains)
-            if bean_domain is None or bean_domain in declared_domains:
+            if bean_domain is None:
                 continue
             endpoint = _build_endpoint(
                 repo_root,
@@ -1507,8 +1497,11 @@ def _infer_configured_api_client_endpoints(
                 "call",
                 "rest",
                 "ANY <dynamic>",
-                "configured-api-client-configuration",
-                f"{configuration}\nsystemlens-api-domain:{bean_domain}",
+                "configured-api-client-factory",
+                (
+                    f"{configuration}\nsystemlens-api-domain:{bean_domain}"
+                    f"{client_contract_markers(return_type, bean_domain)}"
+                ),
                 topic_dynamic=True,
             )
             endpoints[endpoint.id] = endpoint
@@ -1527,7 +1520,7 @@ def _infer_configured_api_client_endpoints(
                 "call",
                 "rest",
                 "ANY <dynamic>",
-                "configured-external-rest-api-properties",
+                "configured-api-client-domain",
                 f"{configuration}\nsystemlens-external-microservice:{service}",
                 topic_dynamic=True,
             )

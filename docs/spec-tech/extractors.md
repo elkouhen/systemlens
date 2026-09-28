@@ -35,8 +35,11 @@ Strategy1 configured-client extraction indexes `HubRestApi` enum pairs such as
 `DOMAIN_CLIENT("domain-client")`. It accepts the corresponding static constant
 in a factory argument, including a parenthesized expression. When the domain
 argument is unresolved, a unique `XxxApi.class` argument in the same bean may
-provide an inferred match to one enum key. The scanner excludes beans returning
-`WebClient` or `ExchangeFilterFunction` from this configured-client pass.
+provide an inferred match to one enum key. Configuration constants are not
+emitted as call endpoints. A matched bean is emitted as
+`configured-api-client-factory` evidence, and the scanner excludes beans
+returning `WebClient` or `ExchangeFilterFunction` from this pass. A matching
+local `model-*` OpenAPI contract path is added to the same evidence snippet.
 
 For adapter calls, Strategy1 indexes `operationId` values from OpenAPI files
 under an `openapi` directory. A Java invocation is accepted only when its
@@ -46,6 +49,10 @@ retains both the contract path and domain marker. If an equivalent
 `openapi-generated-client` endpoint exists for the same module and route, the
 typed adapter endpoint takes precedence so one HTTP interaction produces one
 port label. Operation IDs appearing in several contracts remain unresolved.
+
+Strategy1 also normalizes uppercase `Flux` enum constants as topic conventions,
+removing a leading `FLUX_` prefix. Arbitrary variable topics remain dynamic
+unless another source-backed resolver proves their value.
 
 REST graph construction first resolves an explicit target identity from an HTTP
 host, `lb://` URI, configured client domain, or an opt-in Strategy1 convention.

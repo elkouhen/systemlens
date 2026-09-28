@@ -93,8 +93,11 @@ def _rest_configuration_external_services(type_node, source: bytes) -> list[tupl
         services.add((service, invocation.start_point.row + 1))
     return sorted(services)
 def _is_configured_api_client_factory(method_name: str) -> bool:
-    """Whether a helper name follows the ``create*ClientApi`` convention."""
-    return method_name.startswith("create") and method_name.endswith("ClientApi")
+    """Whether a helper name follows a Strategy1 client-factory convention."""
+    return (
+        (method_name.startswith(("create", "build")) and method_name.endswith("ClientApi"))
+        or method_name in {"createApiClient", "buildApiClient"}
+    )
 def _simple_java_type(value: str) -> str:
     """Nom simple d'un type Java, sans génériques ni tableau."""
     value = value.strip().rsplit(".", 1)[-1]

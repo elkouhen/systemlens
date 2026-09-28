@@ -47,6 +47,13 @@ def _strategy1_topic_from_value(
         if match := _STRATEGY1_PRODUCER_RE.search(value):
             return _strategy1_topic_name(match.group(1)), False, match.group(1)
     topic, dynamic = _kafka_topic_from_value(value_node, source, repo_root, rel_path)
+    if dynamic and value_node is not None:
+        expression = java_parser.node_text(source, value_node)
+        enum_constant = expression.rsplit(".", 1)[-1]
+        if re.fullmatch(r"(?:FLUX[_A-Z0-9]*_)?[A-Z][A-Z0-9_]*", enum_constant):
+            logical_name = re.sub(r"^FLUX_", "", enum_constant)
+            if logical_name not in {"TOPIC", "NULL", "EMPTY"}:
+                return _strategy1_topic_name(logical_name), False, logical_name
     return (_strategy1_topic_name(topic) if not dynamic else topic), dynamic, topic if not dynamic else None
 
 

@@ -233,6 +233,55 @@ class RestConfiguration {
     assert _rest_configuration_client_domains_in_module(str(tmp_path), ".") == ()
 
 
+def test_strategy1_does_not_turn_configuration_constants_into_http_calls(tmp_path: Path) -> None:
+    source = tmp_path / "src/main/java/RestConfiguration.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class RestConfiguration {
+  static final String DOMAIN_CLIENT = "domain-client";
+}
+""",
+        encoding="utf-8",
+    )
+
+    assert infer_framework_endpoints(
+        tmp_path,
+        files=["src/main/java/RestConfiguration.java"],
+        configured_api_client_strategy1=True,
+    ) == []
+
+
+def test_strategy1_marks_a_client_factory_as_configuration_evidence(tmp_path: Path) -> None:
+    contract = tmp_path / "model-client/src/main/resources/openapi/client.yaml"
+    contract.parent.mkdir(parents=True)
+    contract.write_text(
+        "openapi: 3.0.0\npaths:\n  /clients:\n    get: {}\n",
+        encoding="utf-8",
+    )
+    source = tmp_path / "src/main/java/RestConfiguration.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """import org.springframework.context.annotation.Bean;
+class RestConfiguration {
+  @Bean ClientApi client() {
+    return helper.createApiClient(ApiDomains.DOMAIN_CLIENT, ClientApi.class);
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_framework_endpoints(
+        tmp_path,
+        files=["src/main/java/RestConfiguration.java"],
+        configured_api_client_strategy1=True,
+    )
+
+    assert len(endpoints) == 1
+    assert endpoints[0].framework == "configured-api-client-factory"
+    assert "systemlens-openapi-contract:model-client/src/main/resources/openapi/client.yaml" in endpoints[0].snippet
+
+
 def test_strategy1_links_adapter_operation_to_openapi_route(tmp_path: Path) -> None:
     (tmp_path / "pom.xml").write_text(
         "<project><artifactId>gateway</artifactId><version>1</version></project>"
