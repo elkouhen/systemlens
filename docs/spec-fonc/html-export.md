@@ -57,7 +57,8 @@ inspector component with that node's description widget. The inspector can be
 closed without clearing the graph focus. Relations to other graph nodes are
 interactive and reopen the same inspector on the target model element, so the
 architecture catalogue supports multi-step navigation through the model. The
-inspector displays the visited path and provides a back action to return to the
+inspector displays the visited path, makes previous architecture elements
+selectable in the breadcrumb, and provides a back action to return to the
 previous model element without closing the component.
 
 Nested DTO and Mongo persistence-class inspections use the same header back
@@ -75,7 +76,12 @@ is rendered as a distinct secondary action.
 The architecture inspector reuses the selected resource details while keeping
 the modal title as the single identity header. Actions rendered in the details
 widget, including modules, code flows, source evidence, and resource focus,
-remain available after the details are displayed in the modal.
+remain available after the details are displayed in the modal. Actions that
+switch to another workspace view close the inspector before changing the view.
+Known target microservices, topics, collections, and persistence owners are
+selectable from their corresponding specialized inspectors. When extraction
+retains several candidate field types, each candidate is exposed as a separate
+navigation action.
 
 The exported `call_graphs` map describes service-level propagation for one flow
 or flow group. Each graph contains participating nodes, deterministic order,

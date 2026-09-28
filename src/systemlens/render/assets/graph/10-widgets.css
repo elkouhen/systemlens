@@ -356,6 +356,7 @@
     .dto-section h2 { margin: 0 0 9px; color: #475569; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
     .dto-fields, .dto-tags { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
     .dto-field { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 1.4fr); gap: 12px; padding: 8px 10px; border-radius: 6px; background: #fff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .dto-field-types { display: grid; gap: 4px; min-width: 0; }
     .dto-field-type { color: #1d4f91; overflow-wrap: anywhere; }
     button.dto-field-type { border: 0; padding: 0; background: transparent; color: #1d4f91; text-align: left; text-decoration: underline; cursor: pointer; font: inherit; }
     .dto-field-name { color: #334155; font-weight: 700; overflow-wrap: anywhere; }

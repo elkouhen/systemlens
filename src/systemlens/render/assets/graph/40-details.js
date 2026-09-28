@@ -728,8 +728,18 @@
           separator.textContent = "›";
           inspectorBreadcrumb.append(separator);
         }
-        const item = document.createElement("span");
+        const item = document.createElement(index === path.length - 1 ? "span" : "button");
         item.textContent = nodeDisplayName(node);
+        if (item.tagName === "BUTTON") {
+          item.type = "button";
+          item.className = "inspector-breadcrumb-link";
+          item.title = `Revenir à ${nodeDisplayName(node)}`;
+          item.addEventListener("click", () => {
+            architectureInspectorHistory.splice(index);
+            selectNode(node.id);
+            openArchitectureNodeInspector(node, { push: false });
+          });
+        }
         inspectorBreadcrumb.append(item);
       });
     }
@@ -789,7 +799,10 @@
         if (!inspectorButton) {
           const actionId = event.target.closest("[data-details-action-id]")?.dataset.detailsActionId;
           const action = actionId && detailsActionRegistry.get(actionId);
-          if (action) action();
+          if (action) {
+            closeInspector();
+            action();
+          }
           return;
         }
         const id = inspectorButton.dataset.inspectorId;
@@ -954,6 +967,52 @@
       section.append(heading, list);
       inspectorBody.append(section);
     }
+    function findArchitectureNode(kinds, name, owner) {
+      return graphData.nodes.find(node => (
+        kinds.includes(node.kind)
+        && node.name === name
+        && (!owner || node.owner === owner)
+      ));
+    }
+    function openArchitectureReference(node, backAction) {
+      if (!node) return;
+      selectNode(node.id);
+      openArchitectureNodeInspector(node, { reset: true, backAction });
+    }
+    function architectureReferenceEntry(node, label, title, backAction) {
+      return node ? {
+        label,
+        title,
+        modelNodeId: node.id,
+        action: () => openArchitectureReference(node, backAction),
+      } : null;
+    }
+    function appendInspectorNodeOrValue(title, node, label, titleText, backAction) {
+      const entry = architectureReferenceEntry(node, label, titleText, backAction);
+      if (entry) appendActionList(title, [entry], inspectorBody);
+      else appendDtoInspectorSection(title, [label]);
+    }
+    function appendFieldTypeControls(row, fieldType, references, targetLabel, openReference) {
+      const typeControls = document.createElement("div");
+      typeControls.className = "dto-field-types";
+      if (!references.length) {
+        const type = document.createElement("span");
+        type.className = "dto-field-type";
+        type.textContent = fieldType;
+        typeControls.append(type);
+      } else {
+        references.forEach((reference, index) => {
+          const type = document.createElement("button");
+          type.type = "button";
+          type.className = "dto-field-type";
+          type.textContent = index === 0 ? fieldType : `Voir ${targetLabel(reference)}`;
+          type.title = `Ouvrir le type projet ${targetLabel(reference)}`;
+          type.addEventListener("click", () => openReference(reference));
+          typeControls.append(type);
+        });
+      }
+      row.append(typeControls);
+    }
     function dtoDefinition(dtoName) {
       return [...(graphData.kafka_dtos || []), ...(graphData.project_dto_definitions || [])]
         .find(item => item.id === dtoName);
@@ -994,6 +1053,14 @@
         sourceLink.textContent = "Ouvrir la classe dans VS Code";
         inspectorBody.append(sourceLink);
       }
+      const ownerNode = findArchitectureNode(["microservice"], entity.owner);
+      appendInspectorNodeOrValue(
+        "Microservice",
+        ownerNode,
+        entity.owner || "Microservice non identifié",
+        `Afficher le microservice ${entity.owner || "propriétaire"}`,
+        () => openJpaEntityInspector(entity.id),
+      );
       const fields = entity.fields || [];
       const section = document.createElement("section");
       section.className = "dto-section";
@@ -1047,6 +1114,36 @@
         sourceLink.textContent = "Ouvrir la classe dans VS Code";
         inspectorBody.append(sourceLink);
       }
+      const collectionNode = findArchitectureNode(
+        ["mongodb_collection"],
+        item.collection,
+        item.service,
+      );
+      const serviceNode = findArchitectureNode(["microservice"], item.service);
+      appendInspectorNodeOrValue(
+        "Data",
+        collectionNode,
+        item.collection || "Collection non identifiée",
+        `Afficher la donnée ${item.collection || "associée"}`,
+        () => renderMongoPersistenceInspector(item.id),
+      );
+      appendInspectorNodeOrValue(
+        "Microservice",
+        serviceNode,
+        item.service || "Microservice non identifié",
+        `Afficher le microservice ${item.service || "associé"}`,
+        () => renderMongoPersistenceInspector(item.id),
+      );
+      if (item.module) {
+        appendActionList("Projet de persistance", [{
+          label: item.module,
+          title: `Naviguer vers le projet ${item.module}`,
+          action: () => {
+            closeInspector();
+            selectCluster(clusterDescriptorForPath(item.module));
+          },
+        }], inspectorBody);
+      }
       const fields = item.fields || [];
       {
         const section = document.createElement("section");
@@ -1059,20 +1156,18 @@
           const row = document.createElement("li");
           row.className = "dto-field";
           const references = field.references || [];
-          const type = document.createElement(references.length ? "button" : "span");
-          type.className = "dto-field-type";
-          type.textContent = field.type;
-          if (references.length) {
-            type.type = "button";
-            type.title = "Ouvrir le type projet référencé";
-            type.addEventListener("click", () => (
-              openNestedMongoPersistenceInspector(references[0], item.id)
-            ));
-          }
           const name = document.createElement("span");
           name.className = "dto-field-name";
           name.textContent = field.name;
-          row.append(type, name);
+          appendFieldTypeControls(
+            row,
+            field.type,
+            references,
+            reference => (graphData.mongo_persistence_classes || [])
+              .find(candidate => candidate.id === reference)?.name || reference,
+            reference => openNestedMongoPersistenceInspector(reference, item.id),
+          );
+          row.append(name);
           list.append(row);
         });
         if (!fields.length) {
@@ -1084,9 +1179,6 @@
         section.append(heading, list);
         inspectorBody.append(section);
       }
-      appendDtoInspectorSection("Data", [item.collection]);
-      appendDtoInspectorSection("Microservice", [item.service]);
-      appendDtoInspectorSection("Projet de persistance", [item.module]);
     }
     function openNestedDtoInspector(dtoName, parentDtoName) {
       dtoNavigation.push(parentDtoName);
@@ -1126,19 +1218,20 @@
           const item = document.createElement("li");
           item.className = "dto-field";
           const references = field.dto_references || [];
-          const type = document.createElement(references.length ? "button" : "span");
-          type.className = "dto-field-type";
-          type.textContent = field.type;
-          if (references.length) {
-            type.type = "button";
-            const referencedDto = dtoDefinition(references[0]);
-            type.title = `Ouvrir le type projet ${referencedDto ? dtoLabel(referencedDto) : references[0]}`;
-            type.addEventListener("click", () => openNestedDtoInspector(references[0], dto.id));
-          }
           const name = document.createElement("span");
           name.className = "dto-field-name";
           name.textContent = field.name;
-          item.append(type, name);
+          appendFieldTypeControls(
+            item,
+            field.type,
+            references,
+            reference => {
+              const referencedDto = dtoDefinition(reference);
+              return referencedDto ? dtoLabel(referencedDto) : reference;
+            },
+            reference => openNestedDtoInspector(reference, dto.id),
+          );
+          item.append(name);
           list.append(item);
         });
         if (!fields.length) {
@@ -1150,8 +1243,45 @@
         section.append(heading, list);
         inspectorBody.append(section);
       }
-      appendDtoInspectorSection("Messages", dto.topics || []);
+      const returnToDto = () => renderDtoInspector(dto.id);
+      const messageEntries = (dto.topics || [])
+        .map(topic => architectureReferenceEntry(
+          findArchitectureNode(["kafka_topic", "message_channel"], topic),
+          topic,
+          `Afficher le topic ${topic}`,
+          returnToDto,
+        ))
+        .filter(Boolean);
+      if (messageEntries.length) appendActionList("Messages", messageEntries, inspectorBody);
+      const unresolvedMessages = (dto.topics || []).filter(topic => (
+        !findArchitectureNode(["kafka_topic", "message_channel"], topic)
+      ));
+      appendDtoInspectorSection("Messages non résolus", unresolvedMessages);
       appendDtoInspectorSection("Valeurs enum", dto.enum_values || []);
-      appendDtoInspectorSection("Producteurs", dto.producers || []);
-      appendDtoInspectorSection("Consommateurs", dto.consumers || []);
+      const producerEntries = (dto.producers || [])
+        .map(service => architectureReferenceEntry(
+          findArchitectureNode(["microservice"], service),
+          service,
+          `Afficher le producteur ${service}`,
+          returnToDto,
+        ))
+        .filter(Boolean);
+      if (producerEntries.length) appendActionList("Producteurs", producerEntries, inspectorBody);
+      const unresolvedProducers = (dto.producers || []).filter(service => (
+        !findArchitectureNode(["microservice"], service)
+      ));
+      appendDtoInspectorSection("Producteurs non résolus", unresolvedProducers);
+      const consumerEntries = (dto.consumers || [])
+        .map(service => architectureReferenceEntry(
+          findArchitectureNode(["microservice"], service),
+          service,
+          `Afficher le consommateur ${service}`,
+          returnToDto,
+        ))
+        .filter(Boolean);
+      if (consumerEntries.length) appendActionList("Consommateurs", consumerEntries, inspectorBody);
+      const unresolvedConsumers = (dto.consumers || []).filter(service => (
+        !findArchitectureNode(["microservice"], service)
+      ));
+      appendDtoInspectorSection("Consommateurs non résolus", unresolvedConsumers);
     }

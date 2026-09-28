@@ -91,6 +91,8 @@
     .inspector-back:hover, .inspector-back:focus-visible { border-color: var(--ui-accent-border); background: var(--ui-accent-soft); outline: none; }
     .inspector-breadcrumb { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; color: var(--ui-muted); font-size: 11px; white-space: nowrap; }
     .inspector-breadcrumb span { overflow: hidden; text-overflow: ellipsis; }
+    .inspector-breadcrumb-link { max-width: 180px; overflow: hidden; padding: 0; border: 0; color: var(--ui-accent-text); background: transparent; font: inherit; text-overflow: ellipsis; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; white-space: nowrap; cursor: pointer; }
+    .inspector-breadcrumb-link:hover, .inspector-breadcrumb-link:focus-visible { color: var(--ui-title); outline: none; }
     .inspector-breadcrumb-separator { color: var(--ui-accent-text); font-size: 16px; }
     .inspector-source-link {
       display: inline-flex;

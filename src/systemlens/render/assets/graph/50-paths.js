@@ -767,13 +767,25 @@
           backAction: () => openHttpCallInspector(callerNode, route, call),
         });
       };
+      const targetNode = call?.service
+        ? graphData.nodes.find(node => node.kind === "microservice" && node.name === call.service)
+        : null;
       appendActionList("Microservice appelant", [{
         label: callerNode.name,
         title: `Afficher le microservice ${callerNode.name}`,
         modelNodeId: callerNode.id,
         action: () => openRelatedNode(callerNode),
       }], inspectorBody);
-      appendList("Cible déclarée", [call?.service || "Aucun service cible rapproché"], inspectorBody);
+      if (targetNode) {
+        appendActionList("Microservice cible", [{
+          label: targetNode.name,
+          title: `Afficher le microservice cible ${targetNode.name}`,
+          modelNodeId: targetNode.id,
+          action: () => openRelatedNode(targetNode),
+        }], inspectorBody);
+      } else {
+        appendList("Cible déclarée", [call?.service || "Aucun service cible rapproché"], inspectorBody);
+      }
       appendList("Preuve source", [route.location], inspectorBody);
     }
     function appendExpandedHttpRoute(node, route, container) {

@@ -1175,6 +1175,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "registerDetailsAction" in document
     assert "data-details-action-id" in document
     assert 'clonedHeader?.querySelector(".details-title")?.remove()' in document
+    assert 'inspector-breadcrumb-link' in document
+    assert 'Microservice cible' in document
+    assert 'appendFieldTypeControls' in document
     assert 'label.textContent = `${parts.method} ${parts.path}`' in document
     assert 'Microservices clients' in document
     assert 'Aucun microservice appelant identifié.' in document
