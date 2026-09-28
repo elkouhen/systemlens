@@ -415,8 +415,22 @@
         const portForEndpoint = endpointId => [...nodeDataById.values()]
           .flatMap(candidate => candidate.ports || [])
           .find(candidate => candidate.endpoint_id === endpointId);
+        const flowPortLabels = new Map();
+        const flowPortCounters = new Map();
+        edges
+          .slice()
+          .sort((left, right) => Number(left.order || 0) - Number(right.order || 0))
+          .forEach(edge => {
+            [[edge.endpoint_ids?.[0], "out"], [edge.endpoint_ids?.[1], "in"]].forEach(([endpointId, direction]) => {
+              if (!endpointId || flowPortLabels.has(endpointId)) return;
+              const next = (flowPortCounters.get(direction) || 0) + 1;
+              flowPortCounters.set(direction, next);
+              flowPortLabels.set(endpointId, `${direction === "out" ? "O" : "I"}${next}`);
+            });
+          });
         const portCode = (endpointId, direction) => {
           const port = portForEndpoint(endpointId);
+          if (flowPortLabels.has(endpointId)) return flowPortLabels.get(endpointId);
           return port?.label?.match(direction === "out" ? /O\d+/ : /I\d+/)?.[0]
             || (direction === "out" ? "OUT" : "IN");
         };

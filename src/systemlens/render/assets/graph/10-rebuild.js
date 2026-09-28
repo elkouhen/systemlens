@@ -355,16 +355,14 @@
       }
       const callGraphPortLabels = new Map();
       const callGraphPortCounters = new Map();
-      const portNodeIdByEndpoint = new Map(
-        [...nodeDataById.values()].flatMap(node => (
-          (node.ports || []).map(port => [port.endpoint_id, node.id])
-        ))
-      );
       const callGraphPortLabel = (port, direction) => {
         const globalLabel = String(port?.label || "").match(direction === "out" ? /O\d+/ : /I\d+/)?.[0];
         if (!callGraphOnly || !port?.endpoint_id) return globalLabel || (direction === "out" ? "OUT" : "IN");
         if (!callGraphPortLabels.has(port.endpoint_id)) {
-          const counterKey = `${portNodeIdByEndpoint.get(port.endpoint_id) || "unknown"}:${direction}`;
+          // Port labels follow the call-graph traversal globally. Resetting
+          // the counter per service makes every node start at O1/I1 and no
+          // longer matches the numbered arcs.
+          const counterKey = direction;
           const next = (callGraphPortCounters.get(counterKey) || 0) + 1;
           callGraphPortCounters.set(counterKey, next);
           callGraphPortLabels.set(port.endpoint_id, `${direction === "out" ? "O" : "I"}${next}`);

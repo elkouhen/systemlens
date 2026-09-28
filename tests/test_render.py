@@ -1471,6 +1471,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'callGraphPortLabels.set(port.endpoint_id' in document
     assert 'callGraphPortLabel(port, port.direction)' in document
     assert 'callGraphPortLabel(port, portDirection)' in document
+    assert 'const counterKey = direction;' in document
+    assert 'const flowPortLabels = new Map();' in document
+    assert 'flowPortLabels.set(endpointId' in document
     assert 'const directKafkaLink = (topic, source, target)' in document
     assert "Keeping Sigma's straight edge underneath would draw" in document
     assert 'path.classList.add("graph-call-path")' in document
