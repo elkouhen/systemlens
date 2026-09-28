@@ -171,6 +171,23 @@
       item.append(text, button);
       return item;
     }
+    const httpMethodOrder = new Map([
+      ["GET", 0], ["POST", 1], ["PUT", 2], ["DELETE", 3],
+      ["PATCH", 4], ["HEAD", 5], ["OPTIONS", 6], ["TRACE", 7], ["ANY", 8],
+    ]);
+    function httpRouteParts(route) {
+      const value = typeof route === "string" ? route : route.route || "";
+      const [method, ...pathParts] = String(value).split(" ");
+      return { method: method || "ANY", path: pathParts.join(" ") || value };
+    }
+    function httpRouteComparator(left, right) {
+      const leftParts = httpRouteParts(left.route || left);
+      const rightParts = httpRouteParts(right.route || right);
+      return leftParts.path.localeCompare(rightParts.path)
+        || (httpMethodOrder.get(leftParts.method) ?? 99) - (httpMethodOrder.get(rightParts.method) ?? 99)
+        || leftParts.method.localeCompare(rightParts.method)
+        || String(left.service || "").localeCompare(String(right.service || ""));
+    }
     function renderReferences() {
       openApiReferencesList.replaceChildren();
       const contracts = graphData.nodes.flatMap(node => (
@@ -232,26 +249,59 @@
           !routesQuery
           || `${service} ${route.route}`.toLocaleLowerCase().includes(routesQuery)
         ))
-        .sort((left, right) => (
-          `${left.route.route} ${left.service}`.localeCompare(`${right.route.route} ${right.service}`)
-        ));
+        .sort(httpRouteComparator);
       routesEmpty.hidden = visibleRoutes.length > 0;
       routesEmpty.textContent = routesQuery && !visibleRoutes.length
         ? "Aucune route ne correspond à ce filtre."
         : "Aucune route HTTP détectée.";
-      visibleRoutes.forEach(({ service, node, route }) => {
-        const consumerCount = new Set((node.http_callers || [])
-          .filter(item => item.route === route.route)
-          .map(item => item.service)).size;
-        routesList.append(referenceItem(
-          route.route,
-          `${service} · ${consumerCount} consommateur${consumerCount > 1 ? "s" : ""} · ${route.location}`,
-          "Inspecter",
-          () => {
-            setToolbarTab("graph");
-            openHttpRouteInspector(node, route);
-          },
-        ));
+      const routesByService = new Map();
+      visibleRoutes.forEach(item => {
+        routesByService.set(item.service, [...(routesByService.get(item.service) || []), item]);
+      });
+      routesByService.forEach((serviceRoutes, service) => {
+        const groupItem = document.createElement("li");
+        groupItem.className = "route-provider-group";
+        const group = document.createElement("details");
+        group.open = true;
+        const summary = document.createElement("summary");
+        summary.textContent = `${service} · ${serviceRoutes.length} route${serviceRoutes.length > 1 ? "s" : ""}`;
+        group.append(summary);
+        const routeList = document.createElement("ul");
+        routeList.className = "references-list route-provider-routes";
+        const routesByPath = new Map();
+        serviceRoutes.forEach(item => {
+          const path = httpRouteParts(item.route).path;
+          routesByPath.set(path, [...(routesByPath.get(path) || []), item]);
+        });
+        [...routesByPath.entries()].sort(([left], [right]) => left.localeCompare(right)).forEach(([path, pathRoutes]) => {
+          const pathItem = document.createElement("li");
+          pathItem.className = "route-path-group";
+          const pathTitle = document.createElement("strong");
+          pathTitle.textContent = path;
+          pathItem.append(pathTitle);
+          const methodList = document.createElement("ul");
+          methodList.className = "references-list route-methods";
+          pathRoutes.sort(httpRouteComparator).forEach(({ node, route }) => {
+            const parts = httpRouteParts(route);
+            const consumerCount = new Set((node.http_callers || [])
+              .filter(item => item.route === route.route)
+              .map(item => item.service)).size;
+            methodList.append(referenceItem(
+              parts.method,
+              `${consumerCount} consommateur${consumerCount > 1 ? "s" : ""} · ${route.location}`,
+              "Inspecter",
+              () => {
+                setToolbarTab("graph");
+                openHttpRouteInspector(node, route);
+              },
+            ));
+          });
+          pathItem.append(methodList);
+          routeList.append(pathItem);
+        });
+        group.append(routeList);
+        groupItem.append(group);
+        routesList.append(groupItem);
       });
       routesTitle.textContent = `Routes (${visibleRoutes.length}/${routes.length})`;
       const asyncContracts = graphData.nodes.flatMap(node => (

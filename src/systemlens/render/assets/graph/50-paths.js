@@ -1,4 +1,5 @@
 // Ordered source module: 50-paths.js
+    let expandedHttpRoute = null;
     function revealDetails() {
       details.classList.remove("is-empty");
       const toolbar = document.querySelector(".toolbar");
@@ -669,40 +670,7 @@
       section.append(heading, list);
       container.append(section);
     }
-    function openHttpRouteInspector(providerNode, route) {
-      if (!providerNode || !route) return;
-      revealDetails();
-      details.replaceChildren();
-      const header = document.createElement("header");
-      header.className = "details-header";
-      const kicker = document.createElement("p");
-      kicker.className = "details-kicker";
-      kicker.textContent = "Route HTTP";
-      const title = document.createElement("h1");
-      title.className = "details-title";
-      title.textContent = route.route;
-      const meta = document.createElement("div");
-      meta.className = "details-meta";
-      const providerBadge = document.createElement("span");
-      providerBadge.className = "detail-badge";
-      providerBadge.textContent = `Publiée par ${providerNode.name}`;
-      meta.append(providerBadge);
-      header.append(kicker, title, meta);
-      details.append(header);
-
-      const sourceGroup = createDetailsGroup("Preuve de publication");
-      appendActionList("Microservice", [{
-        label: providerNode.name,
-        title: `Afficher le microservice ${providerNode.name}`,
-        action: () => selectNode(providerNode.id),
-      }], sourceGroup);
-      appendActionList("Code", route.vscode_uri ? [{
-        label: route.location,
-        title: `Ouvrir ${route.location} dans VS Code`,
-        action: () => { window.location.href = route.vscode_uri; },
-      }] : [], sourceGroup);
-      discardEmptyDetailsGroup(sourceGroup);
-
+    function httpRouteConsumers(providerNode, route) {
       const consumers = [...new Map(
         (providerNode.http_callers || [])
           .filter(item => item.route === route.route)
@@ -711,6 +679,21 @@
         `${left.service} ${left.route} ${left.location}`
           .localeCompare(`${right.service} ${right.route} ${right.location}`)
       ));
+      return consumers;
+    }
+    function openHttpRouteInspector(providerNode, route) {
+      if (!providerNode || !route) return;
+      expandedHttpRoute = { service: providerNode.name, route: route.route };
+      selectNode(providerNode.id);
+    }
+    function appendExpandedHttpRoute(node, route, container) {
+      const sourceGroup = createDetailsGroup(`Route sélectionnée · ${route.route}`);
+      appendActionList("Code", route.vscode_uri ? [{
+        label: route.location,
+        title: `Ouvrir ${route.location} dans VS Code`,
+        action: () => { window.location.href = route.vscode_uri; },
+      }] : [], sourceGroup);
+      const consumers = httpRouteConsumers(node, route);
       const relationsGroup = createDetailsGroup("Consommation");
       appendActionList("Microservices consommateurs", consumers.map(item => ({
         label: `${item.service} · ${item.route}`,
@@ -912,6 +895,7 @@
         const relationsGroup = createDetailsGroup("Relations");
         appendActionList("Routes exposées", httpRoutes
           .filter(route => route.role === "serve")
+          .sort(httpRouteComparator)
           .map(route => ({
             label: route.route,
             title: `Afficher les consommateurs de ${route.route}`,
@@ -932,6 +916,13 @@
           title: `Inspecter le contrat AsyncAPI ${contract.path}`,
           action: () => openAsyncApiContract(contract),
         })), relationsGroup);
+        const selectedRoute = expandedHttpRoute
+          && expandedHttpRoute.service === node.name
+          ? httpRoutes.find(route => (
+            route.role === "serve" && route.route === expandedHttpRoute.route
+          ))
+          : null;
+        if (selectedRoute) appendExpandedHttpRoute(node, selectedRoute, relationsGroup);
         appendServiceKafkaActivities(node, "consume", "Messages consommés", kafkaConsumptions, relationsGroup);
         appendServiceKafkaActivities(node, "produce", "Messages publiés", kafkaPublications, relationsGroup);
         appendRelationList("Données", mongoCollections, id, link => (

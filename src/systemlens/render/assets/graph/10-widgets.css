@@ -12,6 +12,14 @@
     .toolbar-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border-radius: 8px; background: #edf2f7; }
     .toolbar > .toolbar-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     #resource-tab-group .toolbar-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .route-provider-group { margin: 0; padding: 8px; border: 1px solid var(--ui-border, #d8e0eb); border-radius: 8px; background: var(--ui-control, #f8fafc); list-style: none; }
+    .route-provider-group + .route-provider-group { margin-top: 7px; }
+    .route-provider-group > details > summary { color: var(--ui-heading, #315f9b); font-size: 12px; font-weight: 800; cursor: pointer; }
+    .route-provider-routes { margin-top: 7px; }
+    .route-path-group { margin: 0; padding: 6px; border: 1px solid var(--ui-border, #d8e0eb); border-radius: 6px; background: var(--ui-widget, #fff); list-style: none; }
+    .route-path-group + .route-path-group { margin-top: 5px; }
+    .route-path-group > strong { color: var(--ui-heading, #315f9b); font-size: 11px; }
+    .route-methods { margin-top: 4px; }
     .toolbar-tab-groups { display: grid; gap: 6px; }
     .toolbar-tab-group { display: grid; gap: 3px; }
     .toolbar-tab-group[hidden] { display: none; }

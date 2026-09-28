@@ -1160,6 +1160,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="routes-tab"' in document
     assert 'id="routes-panel"' in document
     assert 'id="routes-filter"' in document
+    assert 'className = "route-provider-group"' in document
+    assert 'function appendExpandedHttpRoute' in document
     assert 'id="resources-tab"' in document
     assert 'id="resources-panel"' in document
     assert 'id="resources-filter"' in document
