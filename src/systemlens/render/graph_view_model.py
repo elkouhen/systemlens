@@ -1,13 +1,11 @@
 """Build the browser-facing graph model from an architecture snapshot."""
 
-import re
 from pathlib import Path
 from typing import Any
 
 from systemlens.domain.graph import (
     GraphEdge,
     external_microservice_names,
-    graph_edge_rest_resource,
     resolve_rest_target_service,
 )
 from systemlens.domain.models import (
@@ -326,6 +324,35 @@ def build_graph_view_model(
         for edge in edges
         if edge.kind == "rest" and edge.to_endpoint is not None
     }
+    http_calls_by_service: dict[str, list[dict[str, object]]] = {}
+    http_callers_by_service: dict[str, list[dict[str, object]]] = {}
+    for edge in edges:
+        if edge.kind != "rest":
+            continue
+        call: dict[str, object] = {
+            "service": edge.to_service,
+            "route": edge.from_endpoint.topic,
+            "location": f"{edge.from_endpoint.path}:{edge.from_endpoint.start_line}",
+            "endpoint_id": edge.from_endpoint.id,
+        }
+        caller: dict[str, object] = {
+            "service": edge.from_service,
+            "route": edge.from_endpoint.topic,
+            "location": f"{edge.from_endpoint.path}:{edge.from_endpoint.start_line}",
+            "endpoint_id": edge.from_endpoint.id,
+        }
+        http_calls_by_service.setdefault(edge.from_service, []).append(call)
+        http_callers_by_service.setdefault(edge.to_service, []).append(caller)
+
+    def sorted_http_relations(
+        relations: dict[str, list[dict[str, object]]], service: str
+    ) -> list[dict[str, object]]:
+        return sorted(
+            relations.get(service, []),
+            key=lambda item: (
+                str(item["service"]), str(item["route"]), str(item["location"]),
+            ),
+        )
     port_label_by_endpoint_id: dict[str, str] = {}
     service_order = {service: index for index, service in enumerate(ordered_services)}
     service_successors: dict[str, set[str]] = {service: set() for service in ordered_services}
@@ -583,6 +610,8 @@ def build_graph_view_model(
                 **({"cluster_path": project_namespace_path(module, root_path)} if module else {}),
                 "architecture_layer": module_layer,
                 "ports": ports,
+                "http_calls": sorted_http_relations(http_calls_by_service, name),
+                "http_callers": sorted_http_relations(http_callers_by_service, name),
                 "kafka_endpoints": [
                     {
                         "role": endpoint.role,
@@ -910,15 +939,6 @@ def build_graph_view_model(
         node["namespace_source"] = "writer"
     links: list[dict[str, object]] = []
 
-    def visual_rest_label(edge: GraphEdge) -> str:
-        """Return the REST label used by the visual-edge projection."""
-        label = graph_edge_rest_resource(edge)
-        if edge.from_endpoint.framework == "spring-cloud-gateway":
-            match = re.search(r"Path=([^;]+)", edge.from_endpoint.snippet)
-            if match is not None:
-                label = f"ANY {match.group(1)}"
-        return label.replace("<br/>", "\\n")
-
     for source_kind, source_name, target_kind, target_name, label, kind in _visual_graph_edges(edges):
         confidence, provenance = _visual_link_evidence(
             kind, source_kind, source_name, target_kind, target_name, edges
@@ -944,7 +964,6 @@ def build_graph_view_model(
                     edge.kind == "rest"
                     and edge.from_service == source_name
                     and edge.to_service == target_name
-                    and visual_rest_label(edge) == link["label"]
                 )
             })
         elif source_kind == "microservice" and target_kind == "kafka_topic":

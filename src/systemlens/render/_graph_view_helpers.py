@@ -5,11 +5,10 @@ Deep-link URI building and MongoDB/REST evidence lookups are common to both
 avoids duplicating this logic across the two large renderers.
 """
 
-import re
 from pathlib import Path
 from urllib.parse import quote
 
-from systemlens.domain.graph import GraphEdge, graph_edge_rest_resource
+from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import Finding, GraphFact, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule
 
@@ -211,8 +210,11 @@ def _mongodb_visual_graph_edges(
 def _visual_graph_edges(
     edges: list[GraphEdge],
 ) -> list[tuple[str, str, str, str, str, str]]:
-    """Projette les `GraphEdge` vers les arêtes réellement dessinées, en
-    supprimant les doublons ayant la même source, destination et label.
+    """Projette les `GraphEdge` vers les arêtes réellement dessinées.
+
+    HTTP relations are intentionally aggregated by source and destination:
+    route-level evidence is kept on the service nodes and in the call-graph
+    view, while the architecture view remains a service topology.
 
     Retourne `(source_kind, source, target_kind, target, label, kind)`, où les
     types de nœuds évitent toute ambiguïté quand un service porte le même nom
@@ -222,13 +224,8 @@ def _visual_graph_edges(
     for edge in edges:
         visual_edges: list[tuple[str, str, str, str, str]] = []
         if edge.kind == "rest":
-            label = graph_edge_rest_resource(edge)
-            if edge.from_endpoint.framework == "spring-cloud-gateway":
-                match = re.search(r"Path=([^;]+)", edge.from_endpoint.snippet)
-                if match is not None:
-                    label = f"ANY {match.group(1)}"
             visual_edges.append(
-                ("microservice", edge.from_service, "microservice", edge.to_service, label)
+                ("microservice", edge.from_service, "microservice", edge.to_service, "HTTP")
             )
         else:
             topic = edge.from_endpoint.topic

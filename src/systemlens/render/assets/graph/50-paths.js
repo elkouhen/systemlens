@@ -767,7 +767,8 @@
           moduleAction.title = `Ouvrir le repertoire racine du projet ${node.name}`;
           details.append(moduleAction);
         }
-        const httpCalls = edges.filter(link => link.kind === "rest" && link.source === id);
+        const httpCalls = node.http_calls || [];
+        const httpCallers = node.http_callers || [];
         const kafkaPublications = edges.filter(link => link.kind === "kafka" && link.source === id);
         const kafkaConsumptions = edges.filter(link => link.kind === "kafka" && link.target === id);
         const mongoCollections = edges.filter(link => link.kind === "mongodb" && link.source === id);
@@ -853,9 +854,12 @@
             })),
         ];
         const relationsGroup = createDetailsGroup("Relations");
-        appendRelationList("APIs consommées", httpCalls, id, link => (
-          `API de ${nodeDataById.get(link.target).name}`
-        ), relationsGroup);
+        appendList("APIs consommées", httpCalls.map(item => (
+          `${item.service} · ${item.route}`
+        )), relationsGroup);
+        appendList("Appelants HTTP", httpCallers.map(item => (
+          `${item.service} · ${item.route}`
+        )), relationsGroup);
         appendActionList("APIs publiées", publishedApis, relationsGroup);
         appendActionList("Contrats AsyncAPI", asyncApiContracts.map(contract => ({
           label: `AsyncAPI · ${contract.path}`,

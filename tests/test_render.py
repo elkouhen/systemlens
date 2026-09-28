@@ -1257,7 +1257,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "${nodeKindLabel(node)}${dtoSuffix}" in document
     assert "function appendServiceKafkaActivities" in document
     assert document.count('createDetailsGroup("Relations")') == 3
-    assert 'appendRelationList("APIs consommées"' in document
+    assert 'appendList("APIs consommées"' in document
+    assert 'appendList("Appelants HTTP"' in document
     assert 'appendServiceKafkaActivities(node, "produce", "Messages publiés"' in document
     assert 'appendRelationList("Services utilisant cette donnée"' in document
     assert 'appendList("Stockee par", [node.owner], relationsGroup)' not in document
@@ -2092,6 +2093,33 @@ def test_graph_html_microservice_complexity_counts_distinct_direct_clients() -> 
     assert nodes["microservice:payments"]["complexity"]["breakdown"] == {
         "http": 1, "kafka": 1, "mongodb": 0
     }
+
+
+def test_architecture_graph_aggregates_http_routes_and_keeps_service_route_lists() -> None:
+    first_call = _rest_endpoint("call", "GET /orders", "Client.java")
+    first_serve = _rest_endpoint("serve", "GET /orders", "Controller.java")
+    second_call = _rest_endpoint("call", "POST /orders", "Client.java")
+    second_serve = _rest_endpoint("serve", "POST /orders", "Controller.java")
+
+    graph_data = _html_graph_data(render_graph_html(
+        {"caller": [first_call, second_call], "orders": [first_serve, second_serve]},
+        [
+            GraphEdge("rest", "caller", "orders", first_call, first_serve),
+            GraphEdge("rest", "caller", "orders", second_call, second_serve),
+        ],
+    ))
+
+    http_links = [link for link in graph_data["links"] if link["kind"] == "rest"]
+    assert len(http_links) == 1
+    assert http_links[0]["label"] == "HTTP"
+    assert set(http_links[0]["endpoint_ids"]) == {first_call.id, second_call.id}
+    nodes = {node["name"]: node for node in graph_data["nodes"]}
+    assert [(item["service"], item["route"]) for item in nodes["caller"]["http_calls"]] == [
+        ("orders", "GET /orders"), ("orders", "POST /orders")
+    ]
+    assert [(item["service"], item["route"]) for item in nodes["orders"]["http_callers"]] == [
+        ("caller", "GET /orders"), ("caller", "POST /orders")
+    ]
 
 
 def test_graph_view_model_ignores_complexity_links_without_a_projected_node() -> None:
