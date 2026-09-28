@@ -76,8 +76,19 @@
       const showingRoutes = tab === "routes";
       const showingKafka = tab === "kafka";
       const showingPersistence = tab === "persistence";
-      const resourceTabGroup = document.getElementById("resource-tab-group");
-      if (resourceTabGroup) resourceTabGroup.hidden = showingFlows || showingIssues;
+      const mode = showingFlows
+        ? "flows"
+        : showingContracts
+          ? "contracts"
+          : showingIssues
+            ? "diagnostics"
+            : "architecture";
+      Object.entries(modeTabs).forEach(([name, button]) => {
+        const active = name === mode;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", String(active));
+      });
+      Object.entries(modeGroups).forEach(([name, group]) => { group.hidden = name !== mode; });
       graphTab.classList.toggle("is-active", showingGraph);
       graphTab.setAttribute("aria-selected", String(showingGraph));
       resourcesTab.classList.toggle("is-active", showingResources);
@@ -291,18 +302,42 @@
           methodList.className = "references-list route-methods";
           pathRoutes.sort(httpRouteComparator).forEach(({ node, route }) => {
             const parts = httpRouteParts(route);
-            const consumerCount = new Set((node.http_callers || [])
+            const callers = [...new Set((node.http_callers || [])
               .filter(item => item.route === route.route)
-              .map(item => item.service)).size;
-            methodList.append(referenceItem(
-              parts.method,
-              `${consumerCount} consommateur${consumerCount > 1 ? "s" : ""} · ${route.location}`,
-              "Inspecter",
-              () => {
-                setToolbarTab("graph");
-                openHttpRouteInspector(node, route);
-              },
-            ));
+              .map(item => item.service))].sort((left, right) => left.localeCompare(right));
+            const item = document.createElement("li");
+            item.className = "reference-item route-reference-item";
+            const disclosure = document.createElement("details");
+            disclosure.className = "route-disclosure";
+            const toggle = document.createElement("summary");
+            toggle.className = "route-reference-toggle";
+            const label = document.createElement("span");
+            label.className = "route-reference-label";
+            label.textContent = `${parts.method} ${parts.path}`;
+            toggle.append(label);
+            const callersPanel = document.createElement("div");
+            callersPanel.className = "route-callers";
+            const callersTitle = document.createElement("strong");
+            callersTitle.textContent = "Microservices appelants";
+            callersPanel.append(callersTitle);
+            if (callers.length) {
+              const callersList = document.createElement("div");
+              callersList.className = "route-callers-list";
+              callers.forEach(service => {
+                const caller = document.createElement("span");
+                caller.className = "route-caller-chip";
+                caller.textContent = service;
+                callersList.append(caller);
+              });
+              callersPanel.append(callersList);
+            } else {
+              const emptyCallers = document.createElement("p");
+              emptyCallers.textContent = "Aucun microservice appelant identifié.";
+              callersPanel.append(emptyCallers);
+            }
+            disclosure.append(toggle, callersPanel);
+            item.append(disclosure);
+            methodList.append(item);
           });
           pathItem.append(methodList);
           routeList.append(pathItem);

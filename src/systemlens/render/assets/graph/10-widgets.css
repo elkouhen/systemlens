@@ -9,6 +9,11 @@
     .toolbar-collapse { flex: 0 0 auto; }
     .toolbar strong { color: #172033; font-size: 15px; white-space: nowrap; }
     .toolbar input:not([type="checkbox"]) { height: 34px; padding: 0 10px; border: 1px solid #b9c5d6; border-radius: 6px; color: #172033; background: #fff; font: inherit; font-size: 13px; }
+    .toolbar-mode-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 3px; border: 1px solid #d8e0eb; border-radius: 9px; background: #edf2f7; }
+    .toolbar .toolbar-mode-tab { width: auto; min-width: 0; height: 30px; padding: 0 6px; border: 0; border-radius: 6px; color: #64748b; background: transparent; font-size: 11px; font-weight: 800; cursor: pointer; }
+    .toolbar .toolbar-mode-tab:hover { color: #1d4f91; background: rgba(255, 255, 255, .7); }
+    .toolbar .toolbar-mode-tab.is-active { color: #1d4f91; background: #fff; box-shadow: 0 1px 3px rgba(15, 23, 42, .14); }
+    .toolbar .toolbar-mode-tab:focus-visible { outline: 2px solid #93c5fd; outline-offset: -1px; }
     .toolbar-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border-radius: 8px; background: #edf2f7; }
     .toolbar > .toolbar-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     #resource-tab-group .toolbar-tabs,
@@ -21,6 +26,18 @@
     .route-path-group + .route-path-group { margin-top: 5px; }
     .route-path-group > strong { color: var(--ui-heading, #315f9b); font-size: 11px; }
     .route-methods { margin-top: 4px; }
+    .route-reference-item { display: block; padding: 0; overflow: hidden; border: 0; background: transparent; }
+    .route-disclosure { width: 100%; }
+    .route-reference-toggle { display: block; width: 100% !important; padding: 4px 2px; border: 0 !important; border-radius: 0 !important; color: var(--ui-text, #172033) !important; background: transparent !important; text-align: left; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; list-style: none; }
+    .route-reference-toggle::-webkit-details-marker { display: none; }
+    .route-reference-toggle:hover, .route-reference-toggle:focus-visible { color: var(--ui-accent-text, #1d4f91) !important; text-decoration: underline; }
+    .route-reference-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .route-callers { margin: 2px 0 5px 18px; padding: 2px 0 2px 10px; border-left: 1px solid var(--ui-border, #d8e0eb); color: var(--ui-muted, #64748b); font-size: 11px; }
+    .route-callers strong { display: block; margin-bottom: 3px; color: var(--ui-muted, #64748b); font-size: 10px; font-weight: 700; }
+    .route-callers-list { display: grid; gap: 2px; margin: 0; }
+    .route-caller-chip { color: var(--ui-text, #172033); }
+    .route-caller-chip::before { content: "↳ "; color: var(--ui-muted, #94a3b8); }
+    .route-callers p { margin: 3px 0 0; }
     .toolbar-tab-groups { display: grid; gap: 6px; }
     .toolbar-tab-group { display: grid; gap: 3px; }
     .toolbar-tab-group[hidden] { display: none; }

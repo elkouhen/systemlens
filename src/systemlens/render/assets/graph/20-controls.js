@@ -14,6 +14,18 @@
     const persistenceTab = document.getElementById("persistence-tab");
     const issuesTab = document.getElementById("issues-tab");
     const flowsTab = document.getElementById("flows-tab");
+    const modeTabs = {
+      architecture: document.getElementById("architecture-mode-tab"),
+      flows: document.getElementById("flows-mode-tab"),
+      contracts: document.getElementById("contracts-mode-tab"),
+      diagnostics: document.getElementById("diagnostics-mode-tab"),
+    };
+    const modeGroups = {
+      architecture: document.getElementById("architecture-tabs-group"),
+      flows: document.getElementById("flows-tabs-group"),
+      contracts: document.getElementById("contracts-tabs-group"),
+      diagnostics: document.getElementById("diagnostics-tabs-group"),
+    };
     const graphLegend = document.getElementById("graph-legend");
     const dependencyDepth = document.getElementById("dependency-depth");
     const dependencyFocusOnly = document.getElementById("dependency-focus-only");

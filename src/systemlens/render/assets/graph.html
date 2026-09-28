@@ -24,9 +24,15 @@
       <button id="toolbar-collapse" class="graph-action-label toolbar-collapse" type="button" aria-expanded="true" aria-controls="architecture-toolbar" aria-label="Réduire le panneau" title="Réduire le panneau">‹</button>
       <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
     </div>
-    <div class="toolbar-tab-groups" aria-label="Navigation de l'architecture">
+    <div class="toolbar-mode-tabs" role="tablist" aria-label="Modes de navigation">
+      <button id="architecture-mode-tab" class="toolbar-mode-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="architecture-tabs-group">Architecture</button>
+      <button id="flows-mode-tab" class="toolbar-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-tabs-group">Flux</button>
+      <button id="contracts-mode-tab" class="toolbar-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="contracts-tabs-group">Contrats</button>
+      <button id="diagnostics-mode-tab" class="toolbar-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="diagnostics-tabs-group">Diagnostics</button>
+    </div>
+    <div class="toolbar-tab-groups" aria-label="Navigation du mode sélectionné">
       <section id="architecture-tabs-group" class="toolbar-tab-group" aria-labelledby="architecture-tabs-title">
-        <span id="architecture-tabs-title" class="toolbar-tab-group-title">Architecture</span>
+        <span id="architecture-tabs-title" class="toolbar-tab-group-title">Vues d’architecture</span>
         <div class="toolbar-tabs" role="tablist" aria-label="Vues d'architecture">
           <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel" title="Afficher les microservices et leurs relations">Microservices</button>
           <button id="resources-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="resources-panel">Inventaire</button>
@@ -35,20 +41,20 @@
           <button id="routes-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="routes-panel">Routes</button>
         </div>
       </section>
-      <section class="toolbar-tab-group" aria-labelledby="flows-tabs-title">
-        <span id="flows-tabs-title" class="toolbar-tab-group-title">Flux de code</span>
+      <section id="flows-tabs-group" class="toolbar-tab-group" aria-labelledby="flows-tabs-title" hidden>
+        <span id="flows-tabs-title" class="toolbar-tab-group-title">Vues des flux</span>
         <div class="toolbar-tabs" role="tablist" aria-label="Flux de code">
           <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux de code</button>
         </div>
       </section>
-      <section class="toolbar-tab-group" aria-labelledby="contracts-tabs-title">
-        <span id="contracts-tabs-title" class="toolbar-tab-group-title">Contrats</span>
+      <section id="contracts-tabs-group" class="toolbar-tab-group" aria-labelledby="contracts-tabs-title" hidden>
+        <span id="contracts-tabs-title" class="toolbar-tab-group-title">Vues des contrats</span>
         <div class="toolbar-tabs" role="tablist" aria-label="Contrats d’API et DTOs">
           <button id="contracts-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="contracts-panel">OpenAPI · AsyncAPI · DTOs</button>
         </div>
       </section>
-      <section class="toolbar-tab-group" aria-labelledby="diagnostics-tabs-title">
-        <span id="diagnostics-tabs-title" class="toolbar-tab-group-title">Diagnostics</span>
+      <section id="diagnostics-tabs-group" class="toolbar-tab-group" aria-labelledby="diagnostics-tabs-title" hidden>
+        <span id="diagnostics-tabs-title" class="toolbar-tab-group-title">Vues des diagnostics</span>
         <div class="toolbar-tabs" role="tablist" aria-label="Diagnostics">
           <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problèmes d’indexation">Diagnostics</button>
         </div>

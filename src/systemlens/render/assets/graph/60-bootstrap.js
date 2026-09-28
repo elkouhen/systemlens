@@ -209,6 +209,10 @@
     persistenceTab.addEventListener("click", () => setToolbarTab("persistence"));
     issuesTab.addEventListener("click", () => setToolbarTab("issues"));
     flowsTab.addEventListener("click", () => setToolbarTab("flows"));
+    modeTabs.architecture.addEventListener("click", () => setToolbarTab("graph"));
+    modeTabs.flows.addEventListener("click", () => setToolbarTab("flows"));
+    modeTabs.contracts.addEventListener("click", () => setToolbarTab("contracts"));
+    modeTabs.diagnostics.addEventListener("click", () => setToolbarTab("issues"));
     inventoryStatus.addEventListener("click", () => setToolbarTab("issues"));
     [
       relationHttp,

@@ -1163,6 +1163,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="routes-filter"' in document
     assert 'id="asyncapi-panel-title"' in document
     assert 'className = "route-provider-group"' in document
+    assert 'item.className = "reference-item route-reference-item"' in document
+    assert 'toggle.className = "route-reference-toggle"' in document
+    assert 'label.textContent = `${parts.method} ${parts.path}`' in document
+    assert 'Microservices appelants' in document
+    assert 'Aucun microservice appelant identifié.' in document
     assert 'function appendExpandedHttpRoute' in document
     assert 'id="resources-tab"' in document
     assert 'id="resources-panel"' in document
@@ -1567,7 +1572,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'const updateAnalysisModeIndicator = () =>' in document
     assert 'toolbar-tab-group-title' in document
     assert 'id="architecture-tabs-group"' in document
-    assert 'resourceTabGroup.hidden = showingFlows || showingIssues' in document
+    assert 'id="architecture-mode-tab"' in document
+    assert 'id="flows-mode-tab"' in document
+    assert 'id="contracts-mode-tab"' in document
+    assert 'id="diagnostics-mode-tab"' in document
+    assert 'Object.entries(modeGroups)' in document
     assert "graphContext.hidden = !showingGraph" in document
     assert 'id="graph-tab" class="toolbar-tab is-active"' in document
     assert 'id="flows-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="flows-tab" hidden' in document

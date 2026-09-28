@@ -35,8 +35,10 @@ The architecture navigation exposes four top-level areas: Architecture, Flux
 de code, Contrats, and Diagnostics. Architecture groups the microservice graph,
 the topic catalogue, the collection catalogue, and HTTP routes. Contrats groups
 the OpenAPI, AsyncAPI, and indexed DTO catalogues. Routes are grouped by
-provider microservice and route path, support filtering by route or service,
-and open the same consumer inspector as the microservice widget.
+provider microservice and route path, and each entry displays only its HTTP
+verb and resource path. Selecting a route expands that entry in place to list
+its calling microservices. This interaction stays in the Routes widget and
+does not change the graph view.
 
 When a selected HTTP route has REST DTO evidence on its provider microservice,
 the route details list the DTO names, roles, and source locations. Topic
