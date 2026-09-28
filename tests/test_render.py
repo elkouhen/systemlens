@@ -1171,17 +1171,19 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="persistence-tab"' in document
     tab_order = [
         document.index('id="graph-tab"'),
-        document.index('id="flows-tab"'),
-        document.index('id="issues-tab"'),
-        document.index('id="contracts-tab"'),
         document.index('id="resources-tab"'),
-        document.index('id="routes-tab"'),
         document.index('id="kafka-tab"'),
         document.index('id="persistence-tab"'),
+        document.index('id="routes-tab"'),
+        document.index('id="flows-tab"'),
+        document.index('id="contracts-tab"'),
+        document.index('id="issues-tab"'),
     ]
     assert tab_order == sorted(tab_order)
-    assert '>Messages</button>' in document
-    assert '>Données</button>' in document
+    assert '>Topics</button>' in document
+    assert '>Collections</button>' in document
+    assert '>Microservices</button>' in document
+    assert 'OpenAPI · AsyncAPI · DTOs' in document
     assert 'Schémas de données d’événements' in document
     assert 'Schémas de données persistées' in document
     assert 'id="request-reply-tab"' not in document
@@ -1564,7 +1566,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="analysis-mode-architecture"' in document
     assert 'const updateAnalysisModeIndicator = () =>' in document
     assert 'toolbar-tab-group-title' in document
-    assert 'id="resource-tab-group"' in document
+    assert 'id="architecture-tabs-group"' in document
     assert 'resourceTabGroup.hidden = showingFlows || showingIssues' in document
     assert "graphContext.hidden = !showingGraph" in document
     assert 'id="graph-tab" class="toolbar-tab is-active"' in document

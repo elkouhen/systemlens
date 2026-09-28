@@ -31,11 +31,12 @@ source locations of their matched HTTP calls. A route with no matched consumer
 remains visible and is reported as such; the architecture graph does not add a
 separate visual node for every route.
 
-The architecture navigation exposes a Contrats tab alongside Architecture and
-Flux de code. The Contrats tab groups the OpenAPI and AsyncAPI catalogues. The
-Routes tab remains under Resources and lists exposed routes grouped by provider
-microservice and route path, supports filtering by route or service, and opens
-the same consumer inspector as the microservice widget.
+The architecture navigation exposes four top-level areas: Architecture, Flux
+de code, Contrats, and Diagnostics. Architecture groups the microservice graph,
+the topic catalogue, the collection catalogue, and HTTP routes. Contrats groups
+the OpenAPI, AsyncAPI, and indexed DTO catalogues. Routes are grouped by
+provider microservice and route path, support filtering by route or service,
+and open the same consumer inspector as the microservice widget.
 
 When a selected HTTP route has REST DTO evidence on its provider microservice,
 the route details list the DTO names, roles, and source locations. Topic

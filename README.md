@@ -104,9 +104,12 @@ For a human-readable topology, generate an interactive export:
 systemlens export microservices --html architecture.html
 ```
 
-In the `Flux de code` tab, check several flows to view their call graphs
-together in independent side-by-side panels. The comparison button can also
-open the current selection explicitly.
+The HTML export is organized into four top-level areas: `Architecture`, `Flux
+de code`, `Contrats`, and `Diagnostics`. `Architecture` contains the
+microservice graph, topics, collections, and routes. `Contrats` groups the
+OpenAPI, AsyncAPI, and indexed DTO views. In `Flux de code`, check several
+flows to view their call graphs together in independent side-by-side panels.
+The comparison button can also open the current selection explicitly.
 
 For the recommended end-to-end workflow, first establish this deterministic
 baseline, then add the optional companion skill for bounded AI enrichment:
@@ -119,6 +122,11 @@ Ask the agent to explain selected persisted flows, audit dependency and call
 graphs for complexity, or complete one of the focused topology passes. The
 skill keeps its reviewable AI facts separate from the SystemLens index; it
 does not replace or silently rewrite source-derived evidence.
+
+For a repeatable targeted analysis, create `.systemlens/analysis-scope.json`
+in the analyzed repository. The skill can reuse the same exact service, flow,
+protocol, Topic, and Data selectors across its prompts. See the
+[analysis scope contract](https://github.com/elkouhen/systemlens-skill/blob/main/references/analysis-scope.md).
 
 To inspect the structural hierarchy of modules, child modules, and indexed
 projects, use the dedicated module view. Kubernetes namespaces do not define

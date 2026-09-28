@@ -25,27 +25,32 @@
       <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
     </div>
     <div class="toolbar-tab-groups" aria-label="Navigation de l'architecture">
-      <section class="toolbar-tab-group" aria-labelledby="explore-tabs-title">
-        <span id="explore-tabs-title" class="toolbar-tab-group-title">Graphe</span>
-        <div class="toolbar-tabs" role="tablist" aria-label="Vues d'exploration">
-          <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel" title="Afficher le graphe d’architecture statique">Architecture</button>
+      <section id="architecture-tabs-group" class="toolbar-tab-group" aria-labelledby="architecture-tabs-title">
+        <span id="architecture-tabs-title" class="toolbar-tab-group-title">Architecture</span>
+        <div class="toolbar-tabs" role="tablist" aria-label="Vues d'architecture">
+          <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel" title="Afficher les microservices et leurs relations">Microservices</button>
+          <button id="resources-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="resources-panel">Inventaire</button>
+          <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Topics</button>
+          <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Collections</button>
+          <button id="routes-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="routes-panel">Routes</button>
+        </div>
+      </section>
+      <section class="toolbar-tab-group" aria-labelledby="flows-tabs-title">
+        <span id="flows-tabs-title" class="toolbar-tab-group-title">Flux de code</span>
+        <div class="toolbar-tabs" role="tablist" aria-label="Flux de code">
           <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux de code</button>
-          <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problèmes d’indexation">Diagnostics</button>
         </div>
       </section>
       <section class="toolbar-tab-group" aria-labelledby="contracts-tabs-title">
         <span id="contracts-tabs-title" class="toolbar-tab-group-title">Contrats</span>
-        <div class="toolbar-tabs" role="tablist" aria-label="Contrats d’API">
-          <button id="contracts-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="contracts-panel">Contrats</button>
+        <div class="toolbar-tabs" role="tablist" aria-label="Contrats d’API et DTOs">
+          <button id="contracts-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="contracts-panel">OpenAPI · AsyncAPI · DTOs</button>
         </div>
       </section>
-      <section id="resource-tab-group" class="toolbar-tab-group" aria-labelledby="resources-tabs-title">
-        <span id="resources-tabs-title" class="toolbar-tab-group-title">Ressources</span>
-        <div class="toolbar-tabs" role="tablist" aria-label="Ressources techniques">
-          <button id="resources-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="resources-panel">Ressources</button>
-          <button id="routes-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="routes-panel">Routes</button>
-          <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Messages</button>
-          <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Données</button>
+      <section class="toolbar-tab-group" aria-labelledby="diagnostics-tabs-title">
+        <span id="diagnostics-tabs-title" class="toolbar-tab-group-title">Diagnostics</span>
+        <div class="toolbar-tabs" role="tablist" aria-label="Diagnostics">
+          <button id="issues-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="issues-panel" title="Problèmes d’indexation">Diagnostics</button>
         </div>
       </section>
     </div>
@@ -181,12 +186,13 @@
     </div>
     <div id="contracts-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="contracts-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker">Documentation d'API</p>
-        <h2 id="openapi-references-title" class="references-title">Contrats OpenAPI</h2>
-        <p class="references-description">Ouvrez une spécification locale dans Swagger UI.</p>
+        <p class="references-kicker">Contrats d'interface</p>
+        <h2 id="openapi-references-title" class="references-title">OpenAPI, AsyncAPI et DTOs</h2>
+        <p class="references-description">Consultez les contrats HTTP, les contrats de messages et les DTOs indexés.</p>
       </div>
       <section class="references-section"><input id="openapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les contrats par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats OpenAPI"><ul id="openapi-references" class="references-list"></ul><p id="openapi-references-empty" class="references-empty">Aucun contrat OpenAPI détecté.</p></section>
       <section class="references-section"><h3 id="asyncapi-panel-title" class="references-title">Contrats AsyncAPI</h3><input id="asyncapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats AsyncAPI"><ul id="asyncapi-panel-references" class="references-list"></ul><p id="asyncapi-panel-empty" class="references-empty">Aucun contrat AsyncAPI détecté.</p></section>
+      <section class="references-section"><h3 id="dto-contract-references-title" class="references-title">DTOs de messages</h3><input id="dto-contract-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les DTOs par nom ou package" autocomplete="off" aria-label="Filtrer les DTOs des contrats"><ul id="dto-contract-references" class="references-list"></ul><p id="dto-contract-references-empty" class="references-empty">Aucun DTO de messages détecté.</p></section>
     </div>
     <div id="routes-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="routes-tab" hidden>
       <div class="references-header">

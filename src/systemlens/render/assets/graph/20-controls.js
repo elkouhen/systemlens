@@ -44,6 +44,10 @@
     const dtoReferencesList = document.getElementById("dto-references");
     const dtoReferencesEmpty = document.getElementById("dto-references-empty");
     const dtoReferencesFilter = document.getElementById("dto-reference-filter");
+    const dtoContractReferencesList = document.getElementById("dto-contract-references");
+    const dtoContractReferencesEmpty = document.getElementById("dto-contract-references-empty");
+    const dtoContractReferencesFilter = document.getElementById("dto-contract-reference-filter");
+    const dtoContractReferencesTitle = document.getElementById("dto-contract-references-title");
     const openapiReferencesTitle = document.getElementById("openapi-references-title");
     const routesList = document.getElementById("routes-list");
     const routesEmpty = document.getElementById("routes-empty");

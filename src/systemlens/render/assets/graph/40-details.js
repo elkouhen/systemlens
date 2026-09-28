@@ -215,6 +215,7 @@
         ));
       });
       dtoReferencesList.replaceChildren();
+      dtoContractReferencesList.replaceChildren();
       const dtos = graphData.kafka_dtos || [];
       const query = dtoReferencesFilter.value.trim().toLocaleLowerCase();
       const visibleDtos = dtos.filter(dto => (
@@ -226,15 +227,22 @@
         : "Aucun DTO de messages détecté.";
       visibleDtos.forEach(dto => {
         const exchangeCount = (dto.producers?.length || 0) + (dto.consumers?.length || 0);
-        dtoReferencesList.append(referenceItem(
+        const reference = () => referenceItem(
           dtoLabel(dto),
           `${dto.fields?.length || 0} champ(s) · ${dto.topics?.length || 0} topic(s) · ${exchangeCount} liaison(s)`,
           "Inspecter",
           () => openDtoInspector(dto.id),
-        ));
+        );
+        dtoReferencesList.append(reference());
+        dtoContractReferencesList.append(reference());
       });
       openapiReferencesTitle.textContent = `Contrats OpenAPI (${visibleContracts.length}/${contracts.length})`;
       dtoReferencesTitle.textContent = `DTO de messages (${visibleDtos.length}/${dtos.length})`;
+      dtoContractReferencesTitle.textContent = `DTOs de messages (${visibleDtos.length}/${dtos.length})`;
+      dtoContractReferencesEmpty.hidden = visibleDtos.length > 0;
+      dtoContractReferencesEmpty.textContent = query && !visibleDtos.length
+        ? "Aucun DTO ne correspond à ce filtre."
+        : "Aucun DTO de messages détecté.";
       routesList.replaceChildren();
       const routes = graphData.nodes.flatMap(node => (
         node.kind === "microservice"

@@ -245,6 +245,10 @@
     routesFilter.addEventListener("input", renderReferences);
     asyncApiPanelFilter.addEventListener("input", renderReferences);
     dtoReferencesFilter.addEventListener("input", renderReferences);
+    dtoContractReferencesFilter.addEventListener("input", () => {
+      dtoReferencesFilter.value = dtoContractReferencesFilter.value;
+      renderReferences();
+    });
     mongoClassReferencesFilter.addEventListener("input", renderReferences);
     resourcesFilter.addEventListener("input", renderResources);
     pathLock.addEventListener("change", persistState);
