@@ -144,6 +144,7 @@ def _segment_matches(call_segment: str, serve_segment: str) -> bool:
 _SERVICE_URL_HOST_RE = re.compile(r"https?://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", re.IGNORECASE)
 _LOAD_BALANCED_URI_RE = re.compile(r"lb://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", re.IGNORECASE)
 _CONFIGURED_API_DOMAIN_RE = re.compile(r"\bsystemlens-api-domain:([a-z0-9][a-z0-9-]*)\b", re.IGNORECASE)
+_OPENAPI_CONTRACT_RE = re.compile(r"systemlens-openapi-contract:([^\s]+)", re.IGNORECASE)
 
 
 def configured_api_client_domain(endpoint: MessageEndpoint) -> str | None:
@@ -157,6 +158,12 @@ def configured_api_client_domain(endpoint: MessageEndpoint) -> str | None:
     """
     match = _CONFIGURED_API_DOMAIN_RE.search(endpoint.snippet)
     return match.group(1).lower() if match is not None else None
+
+
+def openapi_contract_evidence(endpoint: MessageEndpoint) -> str | None:
+    """Return an exact indexed OpenAPI contract path carried by an endpoint."""
+    match = _OPENAPI_CONTRACT_RE.search(endpoint.snippet)
+    return match.group(1) if match is not None else None
 
 
 def external_microservice_name(
@@ -351,6 +358,12 @@ def build_graph(
     for service, endpoint in all_endpoints:
         if endpoint.system == "rest" and endpoint.role == "serve":
             serves_by_service.setdefault(service, []).append(endpoint)
+    serves_by_contract: dict[str, list[tuple[str, MessageEndpoint]]] = {}
+    for service, endpoint in all_endpoints:
+        if endpoint.system == "rest" and endpoint.role == "serve":
+            contract = endpoint.path if endpoint.framework == "openapi" else None
+            if contract is not None:
+                serves_by_contract.setdefault(contract, []).append((service, endpoint))
     manifest_services = {
         service
         for service, endpoint in all_endpoints
@@ -373,6 +386,23 @@ def build_graph(
     gateway_proxy_targets: set[tuple[str, str]] = set()
     service_names = sorted(endpoints_by_service)
     for call_service, call in calls:
+        contract = openapi_contract_evidence(call)
+        if contract is not None:
+            contract_targets = [
+                (service, serve)
+                for service, serve in serves_by_contract.get(contract, ())
+                if service != call_service and paths_match(call.topic, serve.topic)
+            ]
+            if len({service for service, _serve in contract_targets}) == 1:
+                target_service = contract_targets[0][0]
+                serve = next(
+                    serve for service, serve in contract_targets if service == target_service
+                )
+                key = ("rest", call_service, target_service, call.id, serve.id)
+                if key not in seen:
+                    seen.add(key)
+                    edges.append(GraphEdge("rest", call_service, target_service, call, serve))
+                continue
         resolution = resolve_rest_target_service(
             call, service_names, rest_policy=rest_policy, service_aliases=service_aliases
         )

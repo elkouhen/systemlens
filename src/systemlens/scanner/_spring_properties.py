@@ -219,11 +219,42 @@ def _load_value_annotated_fields(path_str: str) -> dict[str, str]:
                 continue
             fields[java_parser.node_text(source, name_node)] = property_key
     return fields
+
+
+@lru_cache(maxsize=64)
+def _load_unique_value_annotated_fields(repo_root_str: str) -> dict[str, str | None]:
+    """Index globally unique ``@Value`` field names for cross-file lookup.
+
+    A field reference may be used from a class different from the one that
+    declares the injected value, especially when a WebClient is configured in
+    one bean and consumed in another.  A name is usable only when every source
+    declaration found for it resolves to the same property key.  Conflicting
+    declarations remain unresolved rather than selecting one by filename.
+    """
+    repo_root = Path(repo_root_str)
+    candidates: dict[str, set[str]] = {}
+    for path in repo_root.rglob("*.java"):
+        try:
+            relative = path.relative_to(repo_root)
+        except ValueError:
+            continue
+        if {"target", "build"}.intersection(relative.parts):
+            continue
+        for name, property_key in _load_value_annotated_fields(str(path)).items():
+            candidates.setdefault(name, set()).add(property_key)
+    return {
+        name: next(iter(keys)) if len(keys) == 1 else None
+        for name, keys in candidates.items()
+    }
+
+
 def _resolve_value_annotated_variable(
     repo_root: Path, source_path: str, var_name: str
 ) -> str | None:
     fields = _load_value_annotated_fields(str(repo_root / source_path))
     property_key = fields.get(var_name)
+    if property_key is None:
+        property_key = _load_unique_value_annotated_fields(str(repo_root.resolve())).get(var_name)
     if property_key is None:
         return None
     return resolve_spring_property(repo_root, property_key, source_path)

@@ -14,6 +14,21 @@ base-document values take precedence where no active-profile selection exists.
 YAML parse failures, including unrendered Helm Go-template expressions, leave
 that file without Spring-property facts and never abort the repository index.
 
+The REST registry also recognizes generated OpenAPI client calls shaped as
+`apiClient.invokeAPI("/path", HttpMethod.GET, ...)`. It requires a literal
+route, a supported HTTP method, and an `ApiClient` receiver. The endpoint keeps
+the exact source invocation and, when Maven resolves one local generator input
+spec for the source module, records that contract path as evidence. Calls with
+dynamic routes or ambiguous generator inputs remain unresolved.
+
+An OpenAPI client call may be matched to served operations from the same exact
+indexed contract path. This is an explicit contract relation, not route-based
+service discovery. The match is accepted only when one distinct target module
+remains after HTTP method and route checks; otherwise the call remains
+unresolved. A `@Value` field used by a REST client may be resolved across Java
+files when its field name maps to one property key across the repository.
+Conflicting declarations remain dynamic.
+
 REST graph construction first resolves an explicit target identity from an HTTP
 host, `lb://` URI, configured client domain, or an opt-in Strategy1 convention.
 For a URL expression that concatenates a local `@Value`-annotated field, a

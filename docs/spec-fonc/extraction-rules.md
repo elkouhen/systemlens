@@ -8,6 +8,15 @@ a system, a topic (`METHOD /path` for REST), source location, framework and
 optional module, qualified name and Java message type. A value that cannot be
 resolved statically is flagged `topic_dynamic=true`; it is never fabricated.
 
+The extractor recognizes generated OpenAPI client calls when an `ApiClient`
+receiver invokes `invokeAPI` with a literal route and an `HttpMethod` enum. It
+retains the exact route, method, source invocation and uniquely resolved Maven
+input contract path. A client call may link to a served operation only through
+that exact contract path, with one unique target module and a compatible route.
+Route similarity alone never identifies a service. A `@Value` field declared in
+another Java file is usable only when its name has one unambiguous property key
+across the indexed repository; conflicting declarations stay unresolved.
+
 The Java AST extractor covers Spring MVC/WebFlux, Feign, Spring HTTP interfaces
 (`@HttpExchange` with `@GetExchange`/`@PostExchange` and related annotations),
 RestTemplate, RestClient, WebClient, Spring Cloud Gateway, Spring Data REST, Spring Kafka and Spring

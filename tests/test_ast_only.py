@@ -169,6 +169,77 @@ class VetsClient {
     assert "systemlens-api-domain:vets-service" in endpoint.snippet
 
 
+def test_webclient_resolves_unique_value_field_declared_in_another_file(tmp_path: Path) -> None:
+    config = tmp_path / "src/main/java/com/example/ClientConfig.java"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        """import org.springframework.beans.factory.annotation.Value;
+class ClientConfig {
+  @Value("${inventory.url}") String inventoryUrl;
+}
+""",
+        encoding="utf-8",
+    )
+    client = tmp_path / "src/main/java/com/example/InventoryClient.java"
+    client.write_text(
+        """import org.springframework.web.reactive.function.client.WebClient;
+class InventoryClient {
+  WebClient webClient;
+  void load() { webClient.get().uri(inventoryUrl + "/items").retrieve(); }
+}
+""",
+        encoding="utf-8",
+    )
+    properties = tmp_path / "src/main/resources/application.yml"
+    properties.parent.mkdir(parents=True)
+    properties.write_text("inventory:\n  url: http://inventory-service\n", encoding="utf-8")
+
+    endpoint = next(item for item in infer_framework_endpoints(tmp_path) if item.role == "call")
+
+    assert endpoint.topic == "GET /items"
+    assert endpoint.topic_dynamic is False
+    assert "systemlens-api-domain:inventory-service" in endpoint.snippet
+
+
+def test_generated_openapi_client_invocation_keeps_contract_evidence(tmp_path: Path) -> None:
+    pom = tmp_path / "pom.xml"
+    pom.write_text(
+        """<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion><artifactId>client</artifactId>
+  <build><plugins><plugin>
+    <groupId>org.openapitools</groupId><artifactId>openapi-generator-maven-plugin</artifactId>
+    <executions><execution><goals><goal>generate</goal></goals><configuration>
+      <inputSpec>${project.basedir}/src/main/openapi/orders.yaml</inputSpec>
+    </configuration></execution></executions>
+  </plugin></plugins></build>
+</project>
+""",
+        encoding="utf-8",
+    )
+    contract = tmp_path / "src/main/openapi/orders.yaml"
+    contract.parent.mkdir(parents=True)
+    contract.write_text("openapi: 3.0.0\npaths:\n  /orders:\n    get: {}\n", encoding="utf-8")
+    source = tmp_path / "src/main/java/com/example/OrdersApi.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class OrdersApi {
+  ApiClient apiClient;
+  void load() { apiClient.invokeAPI("/orders", HttpMethod.GET, null); }
+}
+""",
+        encoding="utf-8",
+    )
+
+    endpoint = next(
+        item for item in infer_framework_endpoints(tmp_path)
+        if item.framework == "openapi-generated-client"
+    )
+
+    assert endpoint.topic == "GET /orders"
+    assert endpoint.topic_dynamic is False
+    assert "systemlens-openapi-contract:src/main/openapi/orders.yaml" in endpoint.snippet
+
+
 def test_restclient_literal_url_is_indexed_as_http_call(tmp_path: Path) -> None:
     source = tmp_path / "src/main/java/com/example/InventoryClient.java"
     source.parent.mkdir(parents=True)

@@ -163,6 +163,33 @@ def test_build_graph_keeps_targetless_compatible_rest_routes_unresolved() -> Non
     assert edges == []
 
 
+def test_build_graph_links_generated_client_to_the_same_openapi_contract() -> None:
+    call = make_endpoint(
+        "call",
+        "GET /orders",
+        "client/OrdersApi.java",
+        module="client-service",
+        framework="openapi-generated-client",
+        snippet=(
+            'apiClient.invokeAPI("/orders", HttpMethod.GET, null)\n'
+            "// systemlens-openapi-contract:shared/orders.yaml"
+        ),
+    )
+    serve = make_endpoint(
+        "serve",
+        "GET /orders",
+        "shared/orders.yaml",
+        module="orders-service",
+        framework="openapi",
+    )
+
+    edges = build_graph({"client-service": [call], "orders-service": [serve]})
+
+    assert [(edge.from_service, edge.to_service) for edge in edges] == [
+        ("client-service", "orders-service")
+    ]
+
+
 def test_build_graph_requires_an_exact_service_target_hint() -> None:
     call = make_endpoint(
         "call", "GET /orders", "gateway/Client.java", snippet="http://order-service"

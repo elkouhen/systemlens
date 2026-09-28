@@ -1191,6 +1191,83 @@ def _infer_webclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageEn
             )
         )
     return endpoints
+
+
+@lru_cache(maxsize=2048)
+def _openapi_generator_contract_for_source(repo_root: Path, rel_path: str) -> str | None:
+    """Return the exact generator input contract for a Java source file."""
+    source_path = (repo_root / rel_path).resolve()
+    try:
+        source_path.relative_to(repo_root.resolve())
+    except ValueError:
+        return None
+    for directory in (source_path.parent, *source_path.parents):
+        if directory != repo_root.resolve() and repo_root.resolve() not in directory.parents:
+            continue
+        pom_path = directory / "pom.xml"
+        if not pom_path.is_file():
+            continue
+        specs = maven_module.detect_openapi_generator_input_specs(pom_path)
+        if not specs:
+            continue
+        if len(specs) != 1:
+            return None
+        try:
+            return (pom_path.parent / specs[0]).resolve().relative_to(repo_root.resolve()).as_posix()
+        except ValueError:
+            return None
+    return None
+
+
+def _infer_openapi_generated_client_endpoints(
+    repo_root: Path, rel_path: str
+) -> list[MessageEndpoint]:
+    """Extract literal operations from generated OpenAPI ``ApiClient`` calls.
+
+    Generated clients commonly centralize the HTTP call as
+    ``apiClient.invokeAPI("/route", HttpMethod.GET, ...)``.  Only that
+    receiver shape and literal route/method pair are accepted.  The generator
+    input contract is retained as evidence when Maven identifies exactly one
+    local contract for the source module.
+    """
+    parsed = java_parser.parse_java(str(repo_root), rel_path)
+    if parsed is None:
+        return []
+    source, root = parsed
+    contract = _openapi_generator_contract_for_source(repo_root, rel_path)
+    endpoints: list[MessageEndpoint] = []
+    for invocation in java_parser.walk(root):
+        if invocation.type != "method_invocation":
+            continue
+        receiver, name, args = java_parser.invocation_parts(invocation, source)
+        if name != "invokeAPI" or receiver is None or len(args) < 2:
+            continue
+        receiver_text = java_parser.node_text(source, receiver)
+        if "apiclient" not in receiver_text.casefold():
+            continue
+        route = java_parser.string_value(args[0], source)
+        method = java_parser.node_text(source, args[1]).rsplit(".", 1)[-1].upper()
+        if route is None or method.casefold() not in _OPENAPI_HTTP_METHODS:
+            continue
+        snippet = java_parser.node_text(source, invocation)
+        if contract is not None:
+            snippet = f"{snippet}\n// systemlens-openapi-contract:{contract}"
+        endpoints.append(
+            _build_endpoint(
+                repo_root,
+                rel_path,
+                invocation.start_point.row + 1,
+                invocation.end_point.row + 1,
+                "call",
+                "rest",
+                f"{method} {normalize_path(route)}",
+                "openapi-generated-client",
+                snippet,
+            )
+        )
+    return endpoints
+
+
 def _infer_restclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
     """Infer Spring ``RestClient`` fluent calls from ``.uri(...)`` invocations."""
     if not _file_uses_restclient(str(repo_root), rel_path):
@@ -1337,6 +1414,7 @@ def _rest_endpoint_extractors(
         _infer_resttemplate_exchange_endpoints,
         _infer_restclient_endpoints,
         _infer_webclient_endpoints,
+        _infer_openapi_generated_client_endpoints,
         _infer_spring_cloud_gateway_routes,
         _infer_spring_webflux_routes,
     ]
