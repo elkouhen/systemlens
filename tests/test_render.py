@@ -2120,6 +2120,19 @@ def test_architecture_graph_aggregates_http_routes_and_keeps_service_route_lists
     assert [(item["service"], item["route"]) for item in nodes["orders"]["http_callers"]] == [
         ("caller", "GET /orders"), ("caller", "POST /orders")
     ]
+    assert [(item["role"], item["route"]) for item in nodes["orders"]["http_routes"]] == [
+        ("serve", "GET /orders"), ("serve", "POST /orders")
+    ]
+    assert [(item["role"], item["route"]) for item in nodes["caller"]["http_routes"]] == [
+        ("call", "GET /orders"), ("call", "POST /orders")
+    ]
+    assert "Routes exposées" in render_graph_html(
+        {"caller": [first_call, second_call], "orders": [first_serve, second_serve]},
+        [
+            GraphEdge("rest", "caller", "orders", first_call, first_serve),
+            GraphEdge("rest", "caller", "orders", second_call, second_serve),
+        ],
+    )
 
 
 def test_graph_view_model_ignores_complexity_links_without_a_projected_node() -> None:

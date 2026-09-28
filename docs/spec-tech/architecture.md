@@ -46,6 +46,13 @@ only serializes those models and assembles the standalone document from the
 HTML template and ordered browser assets. Rendering code must not be imported
 by indexing or discovery code.
 
+The architecture view keeps HTTP topology at microservice level. The browser
+model also carries every indexed REST endpoint on its owning microservice as
+`http_routes`, including its role, normalized route, source location, and
+endpoint identity. Route details derive consumers from the persisted HTTP
+edges, so the export does not re-parse source files or infer consumers from
+route text alone.
+
 Impact analysis uses the persisted topology edges without re-parsing source
 files. Its directed projection reverses REST edges, so a provider change
 reaches its callers, and preserves Kafka edges, so a producer change reaches

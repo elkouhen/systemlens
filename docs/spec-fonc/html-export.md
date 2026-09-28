@@ -24,6 +24,13 @@ entities and DTOs used by REST controller signatures when no OpenAPI contract
 is indexed. The list includes the DTO role and source location; it does not
 claim a runtime mapper or serialization path.
 
+Each microservice inspector lists all indexed HTTP routes found in that
+microservice, separating exposed routes from called routes. An exposed route is
+selectable. Its route inspector lists the consuming microservices and the
+source locations of their matched HTTP calls. A route with no matched consumer
+remains visible and is reported as such; the architecture graph does not add a
+separate visual node for every route.
+
 The exported `call_graphs` map describes service-level propagation for one flow
 or flow group. Each graph contains participating nodes, deterministic order,
 traversal levels, a compact call tree, complete directed edges with display

@@ -669,6 +669,61 @@
       section.append(heading, list);
       container.append(section);
     }
+    function openHttpRouteInspector(providerNode, route) {
+      if (!providerNode || !route) return;
+      revealDetails();
+      details.replaceChildren();
+      const header = document.createElement("header");
+      header.className = "details-header";
+      const kicker = document.createElement("p");
+      kicker.className = "details-kicker";
+      kicker.textContent = "Route HTTP";
+      const title = document.createElement("h1");
+      title.className = "details-title";
+      title.textContent = route.route;
+      const meta = document.createElement("div");
+      meta.className = "details-meta";
+      const providerBadge = document.createElement("span");
+      providerBadge.className = "detail-badge";
+      providerBadge.textContent = `Publiée par ${providerNode.name}`;
+      meta.append(providerBadge);
+      header.append(kicker, title, meta);
+      details.append(header);
+
+      const sourceGroup = createDetailsGroup("Preuve de publication");
+      appendActionList("Microservice", [{
+        label: providerNode.name,
+        title: `Afficher le microservice ${providerNode.name}`,
+        action: () => selectNode(providerNode.id),
+      }], sourceGroup);
+      appendActionList("Code", route.vscode_uri ? [{
+        label: route.location,
+        title: `Ouvrir ${route.location} dans VS Code`,
+        action: () => { window.location.href = route.vscode_uri; },
+      }] : [], sourceGroup);
+      discardEmptyDetailsGroup(sourceGroup);
+
+      const consumers = [...new Map(
+        (providerNode.http_callers || [])
+          .filter(item => item.route === route.route)
+          .map(item => [`${item.service}\u0000${item.route}\u0000${item.location}`, item]),
+      ).values()].sort((left, right) => (
+        `${left.service} ${left.route} ${left.location}`
+          .localeCompare(`${right.service} ${right.route} ${right.location}`)
+      ));
+      const relationsGroup = createDetailsGroup("Consommation");
+      appendActionList("Microservices consommateurs", consumers.map(item => ({
+        label: `${item.service} · ${item.route}`,
+        title: `Afficher le microservice consommateur ${item.service}`,
+        action: () => selectNode(`microservice:${item.service}`),
+      })), relationsGroup);
+      if (consumers.length) {
+        appendList("Preuves d'appel", consumers.map(item => `${item.service} · ${item.location}`), relationsGroup);
+      } else {
+        appendList("Microservices consommateurs", ["Aucun consommateur HTTP rapproché"], relationsGroup);
+      }
+      discardEmptyDetailsGroup(relationsGroup);
+    }
     function renderDetails(id) {
       const node = nodeDataById.get(id);
       const indexedEdges = graphData.links.filter(link => link.source === id || link.target === id);
@@ -769,6 +824,7 @@
         }
         const httpCalls = node.http_calls || [];
         const httpCallers = node.http_callers || [];
+        const httpRoutes = node.http_routes || [];
         const kafkaPublications = edges.filter(link => link.kind === "kafka" && link.source === id);
         const kafkaConsumptions = edges.filter(link => link.kind === "kafka" && link.target === id);
         const mongoCollections = edges.filter(link => link.kind === "mongodb" && link.source === id);
@@ -854,6 +910,16 @@
             })),
         ];
         const relationsGroup = createDetailsGroup("Relations");
+        appendActionList("Routes exposées", httpRoutes
+          .filter(route => route.role === "serve")
+          .map(route => ({
+            label: route.route,
+            title: `Afficher les consommateurs de ${route.route}`,
+            action: () => openHttpRouteInspector(node, route),
+          })), relationsGroup);
+        appendList("Routes appelées", httpRoutes
+          .filter(route => route.role === "call")
+          .map(route => `${route.route} · ${route.location}`), relationsGroup);
         appendList("APIs consommées", httpCalls.map(item => (
           `${item.service} · ${item.route}`
         )), relationsGroup);

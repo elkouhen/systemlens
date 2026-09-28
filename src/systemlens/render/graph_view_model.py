@@ -535,6 +535,21 @@ def build_graph_view_model(
                 **({"target": resolved_port_target(endpoint)} if resolved_port_target(endpoint) else {}),
             })
         resources = _rest_resources_served(endpoints)
+        http_routes = [
+            {
+                "role": endpoint.role,
+                "route": endpoint.topic,
+                "location": f"{endpoint.path}:{endpoint.start_line}",
+                "endpoint_id": endpoint.id,
+                **(
+                    {"vscode_uri": _endpoint_vscode_uri(endpoint, all_modules, source_roots, root_path)}
+                    if endpoint.system == "rest"
+                    else {}
+                ),
+            }
+            for endpoint in endpoints
+            if endpoint.system == "rest"
+        ]
         contract_resources: dict[str, set[str]] = {}
         contract_owner_identity: dict[str, str] = {}
         module = module_details.get(name)
@@ -632,6 +647,7 @@ def build_graph_view_model(
                     else {}
                 ),
                 "resources": resources,
+                "http_routes": http_routes,
                 "jpa_entities": [
                     {
                         "name": entity.qualified_name,
