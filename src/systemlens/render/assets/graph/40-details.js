@@ -73,6 +73,7 @@
       const showingResources = tab === "resources";
       const showingIssues = tab === "issues";
       const showingOpenApi = tab === "openapi";
+      const showingRoutes = tab === "routes";
       const showingKafka = tab === "kafka";
       const showingPersistence = tab === "persistence";
       const resourceTabGroup = document.getElementById("resource-tab-group");
@@ -83,6 +84,8 @@
       resourcesTab.setAttribute("aria-selected", String(showingResources));
       openApiTab.classList.toggle("is-active", showingOpenApi);
       openApiTab.setAttribute("aria-selected", String(showingOpenApi));
+      routesTab.classList.toggle("is-active", showingRoutes);
+      routesTab.setAttribute("aria-selected", String(showingRoutes));
       kafkaTab.classList.toggle("is-active", showingKafka);
       kafkaTab.setAttribute("aria-selected", String(showingKafka));
       persistenceTab.classList.toggle("is-active", showingPersistence);
@@ -97,6 +100,7 @@
       graphContext.hidden = !showingGraph;
       issuesPanel.hidden = !showingIssues;
       openApiPanel.hidden = !showingOpenApi;
+      routesPanel.hidden = !showingRoutes;
       kafkaPanel.hidden = !showingKafka;
       persistencePanel.hidden = !showingPersistence;
       flowsPanel.hidden = !showingFlows;
@@ -214,6 +218,42 @@
       });
       openapiReferencesTitle.textContent = `Contrats OpenAPI (${visibleContracts.length}/${contracts.length})`;
       dtoReferencesTitle.textContent = `DTO de messages (${visibleDtos.length}/${dtos.length})`;
+      routesList.replaceChildren();
+      const routes = graphData.nodes.flatMap(node => (
+        node.kind === "microservice"
+          ? (node.http_routes || [])
+            .filter(route => route.role === "serve")
+            .map(route => ({ service: node.name, node, route }))
+          : []
+      ));
+      const routesQuery = routesFilter.value.trim().toLocaleLowerCase();
+      const visibleRoutes = routes
+        .filter(({ service, route }) => (
+          !routesQuery
+          || `${service} ${route.route}`.toLocaleLowerCase().includes(routesQuery)
+        ))
+        .sort((left, right) => (
+          `${left.route.route} ${left.service}`.localeCompare(`${right.route.route} ${right.service}`)
+        ));
+      routesEmpty.hidden = visibleRoutes.length > 0;
+      routesEmpty.textContent = routesQuery && !visibleRoutes.length
+        ? "Aucune route ne correspond à ce filtre."
+        : "Aucune route HTTP détectée.";
+      visibleRoutes.forEach(({ service, node, route }) => {
+        const consumerCount = new Set((node.http_callers || [])
+          .filter(item => item.route === route.route)
+          .map(item => item.service)).size;
+        routesList.append(referenceItem(
+          route.route,
+          `${service} · ${consumerCount} consommateur${consumerCount > 1 ? "s" : ""} · ${route.location}`,
+          "Inspecter",
+          () => {
+            setToolbarTab("graph");
+            openHttpRouteInspector(node, route);
+          },
+        ));
+      });
+      routesTitle.textContent = `Routes (${visibleRoutes.length}/${routes.length})`;
       const asyncContracts = graphData.nodes.flatMap(node => (
         node.kind === "microservice"
           ? (node.asyncapi_contracts || []).map(contract => ({ ...contract, module: node.name }))

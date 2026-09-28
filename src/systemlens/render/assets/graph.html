@@ -38,6 +38,7 @@
         <div class="toolbar-tabs" role="tablist" aria-label="Ressources et contrats">
           <button id="resources-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="resources-panel">Ressources</button>
           <button id="openapi-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="openapi-panel">OpenAPI</button>
+          <button id="routes-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="routes-panel">Routes</button>
           <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Messages</button>
           <button id="persistence-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="persistence-panel">Données</button>
         </div>
@@ -180,6 +181,14 @@
         <p class="references-description">Ouvrez une spécification locale dans Swagger UI.</p>
       </div>
       <section class="references-section"><input id="openapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les contrats par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats OpenAPI"><ul id="openapi-references" class="references-list"></ul><p id="openapi-references-empty" class="references-empty">Aucun contrat OpenAPI détecté.</p></section>
+    </div>
+    <div id="routes-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="routes-tab" hidden>
+      <div class="references-header">
+        <p class="references-kicker">Routes HTTP indexées</p>
+        <h2 id="routes-title" class="references-title">Routes</h2>
+        <p class="references-description">Consultez les routes exposées par chaque microservice et leurs consommateurs.</p>
+      </div>
+      <section class="references-section"><input id="routes-filter" class="reference-filter-input" type="search" placeholder="Filtrer par route ou microservice" autocomplete="off" aria-label="Filtrer les routes HTTP"><ul id="routes-list" class="references-list"></ul><p id="routes-empty" class="references-empty">Aucune route HTTP détectée.</p></section>
     </div>
     <div id="kafka-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="kafka-tab" hidden>
       <div class="references-header">

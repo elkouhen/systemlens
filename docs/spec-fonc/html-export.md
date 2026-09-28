@@ -31,6 +31,11 @@ source locations of their matched HTTP calls. A route with no matched consumer
 remains visible and is reported as such; the architecture graph does not add a
 separate visual node for every route.
 
+The architecture resources navigation includes a Routes tab alongside
+Resources, OpenAPI, Messages, and Data. The tab lists exposed routes grouped
+by their provider microservice, supports filtering by route or service, and
+opens the same consumer inspector as the microservice widget.
+
 The exported `call_graphs` map describes service-level propagation for one flow
 or flow group. Each graph contains participating nodes, deterministic order,
 traversal levels, a compact call tree, complete directed edges with display

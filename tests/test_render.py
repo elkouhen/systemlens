@@ -1157,6 +1157,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "Qui produit ou consomme un topic Kafka ?" not in document
     assert 'id="advanced-controls"' in document
     assert 'id="openapi-tab"' in document
+    assert 'id="routes-tab"' in document
+    assert 'id="routes-panel"' in document
+    assert 'id="routes-filter"' in document
     assert 'id="resources-tab"' in document
     assert 'id="resources-panel"' in document
     assert 'id="resources-filter"' in document
@@ -1168,6 +1171,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
         document.index('id="issues-tab"'),
         document.index('id="resources-tab"'),
         document.index('id="openapi-tab"'),
+        document.index('id="routes-tab"'),
         document.index('id="kafka-tab"'),
         document.index('id="persistence-tab"'),
     ]

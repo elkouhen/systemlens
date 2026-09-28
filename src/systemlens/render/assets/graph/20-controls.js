@@ -9,6 +9,7 @@
     const graphTab = document.getElementById("graph-tab");
     const resourcesTab = document.getElementById("resources-tab");
     const openApiTab = document.getElementById("openapi-tab");
+    const routesTab = document.getElementById("routes-tab");
     const kafkaTab = document.getElementById("kafka-tab");
     const persistenceTab = document.getElementById("persistence-tab");
     const issuesTab = document.getElementById("issues-tab");
@@ -23,6 +24,7 @@
     const issuesPanel = document.getElementById("issues-panel");
     const flowsPanel = document.getElementById("flows-panel");
     const openApiPanel = document.getElementById("openapi-panel");
+    const routesPanel = document.getElementById("routes-panel");
     const kafkaPanel = document.getElementById("kafka-panel");
     const persistencePanel = document.getElementById("persistence-panel");
     const graphCanvas = document.getElementById("graph");
@@ -43,6 +45,10 @@
     const dtoReferencesEmpty = document.getElementById("dto-references-empty");
     const dtoReferencesFilter = document.getElementById("dto-reference-filter");
     const openapiReferencesTitle = document.getElementById("openapi-references-title");
+    const routesList = document.getElementById("routes-list");
+    const routesEmpty = document.getElementById("routes-empty");
+    const routesFilter = document.getElementById("routes-filter");
+    const routesTitle = document.getElementById("routes-title");
     const dtoReferencesTitle = document.getElementById("dto-references-title");
     const asyncApiReferencesList = document.getElementById("asyncapi-references");
     const asyncApiReferencesEmpty = document.getElementById("asyncapi-references-empty");
