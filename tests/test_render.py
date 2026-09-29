@@ -1167,6 +1167,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="asyncapi-tab"' in document
     assert 'id="dto-contract-tab"' in document
     assert 'id="jpa-tab"' in document
+    assert document.index('id="routes-tab"') < document.index('id="collections-tab"')
     assert 'className = "route-provider-group"' in document
     assert 'item.className = "reference-item route-reference-item"' in document
     assert 'toggle.className = "route-reference-toggle"' in document
@@ -1187,11 +1188,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="collections-tab"' in document
     assert 'id="persistence-tab"' in document
     tab_order = [
-        document.index('id="graph-tab"'),
-        document.index('id="microservices-tab"'),
-        document.index('id="kafka-tab"'),
-        document.index('id="collections-tab"'),
-        document.index('id="routes-tab"'),
+            document.index('id="graph-tab"'),
+            document.index('id="microservices-tab"'),
+            document.index('id="kafka-tab"'),
+            document.index('id="routes-tab"'),
+            document.index('id="collections-tab"'),
         document.index('id="flows-tab"'),
         document.index('id="contracts-tab"'),
         document.index('id="issues-tab"'),
