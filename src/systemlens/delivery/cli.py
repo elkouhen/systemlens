@@ -893,6 +893,52 @@ def flows_list(
     )
 
 
+@flows_app.command("calculate")
+def flows_calculate(
+    root: Path | None = typer.Option(None, "--root"),
+    json_output: bool = typer.Option(False, "--json"),
+    no_codeql: bool = typer.Option(
+        False,
+        "--no-codeql",
+        help="Recalculer les flux avec le parcours AST local uniquement.",
+    ),
+) -> None:
+    """Recalculer les flux à partir du snapshot indexé courant."""
+    repo_root = _option_root(root)
+    if not db_path(repo_root).is_file():
+        typer.echo(
+            "Index absent : lancez d'abord `systemlens index` dans ce répertoire.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    try:
+        config = load_config(repo_root)
+        if no_codeql:
+            config = replace(config, codeql_enabled=False, call_graph_engine="none")
+        with Store(repo_root) as store:
+            report = index_repo(
+                repo_root,
+                config,
+                store,
+                progress=None if _option_json(json_output) else _echo_index_progress,
+                recalculate_flows=True,
+            )
+            flow_count = len(store.all_code_flows())
+    except (ConfigError, StoreError, RuntimeError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    result = {
+        "flows": flow_count,
+        "codeql_timed_out": report.codeql_timed_out,
+        "source_snapshot_reused": True,
+    }
+    typer.echo(
+        json.dumps(result)
+        if _option_json(json_output)
+        else f"{flow_count} flux de code potentiel(s) recalculé(s)."
+    )
+
+
 @flows_app.command("show")
 def flows_show(
     flow: str,

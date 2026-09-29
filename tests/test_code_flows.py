@@ -404,6 +404,59 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
         assert store.all_code_flows() == []
 
 
+def test_flows_calculate_reuses_index_after_ai_fact_import(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
+    (repo / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion>"
+        "<groupId>com.example</groupId><artifactId>orders</artifactId>"
+        "<version>1.0.0</version></project>",
+        encoding="utf-8",
+    )
+    with Store(repo) as store:
+        index_repo(
+            repo,
+            Config(codeql_enabled=False, call_graph_engine="none"),
+            store,
+        )
+        initial_flows = store.all_code_flows()
+
+    (repo / "facts.json").write_text(
+        json.dumps({
+            "format": "systemlens-ai-graph-v1",
+            "generated_by": {"namespace": "ai-boundaries"},
+            "mode": "complete",
+            "nodes": [{
+                "id": "orders",
+                "kind": "service",
+                "name": "orders",
+                "status": "confirmed",
+                "confidence": "high",
+            }],
+            "edges": [],
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(repo)
+    imported = RUNNER.invoke(app, [
+        "import-facts", "facts.json", "--namespace", "ai-boundaries"
+    ])
+    assert imported.exit_code == 0
+    assert RUNNER.invoke(app, ["init"]).exit_code == 0
+
+    result = RUNNER.invoke(app, ["flows", "calculate", "--no-codeql", "--json"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.output) == {
+        "flows": len(initial_flows),
+        "codeql_timed_out": False,
+        "source_snapshot_reused": True,
+    }
+    with Store(repo, readonly=True) as store:
+        assert len(store.all_code_flows()) == len(initial_flows)
+        assert len(store.graph_facts_by_namespace("ai-boundaries")) == 1
+
+
 def test_flows_list_can_filter_kafka_publications_and_exposes_flow_types() -> None:
     flows = [
         CodeFlow(

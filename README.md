@@ -150,6 +150,9 @@ systemlens export facts architecture.ai-graph.export.json \
 The facts export is a complete, re-importable namespace snapshot by default.
 Use `--partial` for an incremental pass. Source-derived facts are regenerated
 by `systemlens index`; they are not converted into enrichment facts.
+After importing facts, use `systemlens flows calculate` to refresh the persisted
+source-backed flow snapshot while reusing the indexed endpoints. The optional
+`--no-codeql` flag selects the local AST and source-symbol flow path.
 
 For terminal-oriented exploration, use `systemlens microservices`,
 `systemlens topics`, `systemlens apis`, `systemlens projects`, and
