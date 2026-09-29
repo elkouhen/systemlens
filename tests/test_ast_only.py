@@ -450,6 +450,53 @@ record StockDepleted(String productId) {}
     ]
 
 
+def test_kafka_topic_resolves_static_constants_and_literal_concatenation(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """package com.example;
+import org.springframework.kafka.core.KafkaTemplate;
+class Publisher {
+  private static final String PREFIX = "orders.";
+  private KafkaTemplate<String, Object> template;
+  void publish(Object event) {
+    template.send(PREFIX + "created", event);
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_endpoints(tmp_path)
+
+    assert [(endpoint.topic, endpoint.topic_dynamic) for endpoint in endpoints] == [
+        ("orders.created", False)
+    ]
+
+
+def test_kafka_topic_keeps_partially_dynamic_concatenation_unresolved(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """package com.example;
+import org.springframework.kafka.core.KafkaTemplate;
+class Publisher {
+  private KafkaTemplate<String, Object> template;
+  void publish(String suffix, Object event) {
+    template.send("orders." + suffix, event);
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_endpoints(tmp_path)
+
+    assert [(endpoint.topic, endpoint.topic_dynamic) for endpoint in endpoints] == [
+        ("<dynamic>", True)
+    ]
+
+
 def test_strategy1_recognizes_envoyer_message_kafka_method_family_as_producers(tmp_path: Path) -> None:
     source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
     source.parent.mkdir(parents=True)
@@ -830,6 +877,30 @@ def test_index_persists_a_safe_java_parse_diagnostic(tmp_path: Path) -> None:
         "Java source contains syntax errors; partial facts may have been "
         "extracted, but coverage is incomplete."
     )
+
+
+def test_index_persists_unresolved_endpoint_diagnostic_without_source_values(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "main" / "java" / "Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """import org.springframework.kafka.core.KafkaTemplate;
+class Publisher {
+  private KafkaTemplate<String, Object> template;
+  void publish(String topic, Object event) { template.send(topic, event); }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with Store(tmp_path) as store:
+        index_repo(tmp_path, Config(), store)
+        diagnostics = store.all_extraction_diagnostics()
+
+    assert [(item.extractor, item.category, item.severity) for item in diagnostics] == [
+        ("spring-kafka", "dynamic_endpoint", "info")
+    ]
+    assert "line 4" in diagnostics[0].detail
+    assert "topic" not in diagnostics[0].detail
 
 
 def test_index_keeps_valid_facts_from_a_partially_parsed_java_file(tmp_path: Path) -> None:

@@ -1,4 +1,4 @@
-ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v25-restclient"
+ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v26-kafka-expression-diagnostics"
 
 
 def current_endpoint_inventory_signature() -> str:

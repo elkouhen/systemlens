@@ -249,6 +249,10 @@ actual persistence roots while inspectors can navigate the complete closure.
 path, extractor, category, severity and a non-source-code detail. The initial
 implementation records Tree-sitter Java parse failures; `analyze
 indexing-issues` exposes them alongside unresolved architecture facts.
+Indexing also records `dynamic_endpoint` diagnostics for unresolved endpoint
+expressions. One row groups entries by relative source path and extractor, and
+its detail contains only roles, source lines and bounded reason labels. It does
+not persist the unresolved source expression or a resolved configuration value.
 
 MongoDB extraction keeps structurally valid declarations and invocations from
 a partially parsed Java file while ignoring subtrees that contain an error or

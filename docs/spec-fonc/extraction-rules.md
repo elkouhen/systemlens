@@ -133,6 +133,11 @@ Strategy1 topic keys are compared after `casefold()` and removal of `_`; dots
 and other physical separators remain unchanged. Dynamic topic expressions are
 not normalized or paired with concrete topics. A conditional topic expression
 creates one producer fact for each statically resolved branch.
+Kafka topic expressions also resolve source-local conventionally named uppercase
+`static final` string constants and concatenations whose operands are all
+statically resolvable.
+When one operand remains unresolved, the complete expression stays dynamic;
+SystemLens does not keep its first literal as a concrete topic.
 An uppercase `Flux` enum constant is also normalized as a logical topic name
 after removing a leading `FLUX_` prefix. Other variable topic expressions stay
 dynamic.
@@ -164,3 +169,8 @@ method and route only refines a resource within that already identified
 service; it never identifies a service by itself. Calls without a unique target
 remain indexed as unresolved evidence and are reported by coverage and indexing
 issues rather than being linked to a coincidentally similar route.
+
+Each unresolved dynamic endpoint contributes an informational indexing diagnostic
+grouped by source path and extractor. The diagnostic records the endpoint role,
+source line and a bounded reason such as `unresolved-expression` or
+`topic-pattern`; it does not persist the source expression or its value.

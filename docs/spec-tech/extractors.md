@@ -93,7 +93,13 @@ arc. An unmatched endpoint is exported as partial evidence, and a dynamic
 topic receives an endpoint-specific unresolved topic node; dynamic topics do
 not create a producer/consumer pairing. The HTML payload includes a warning
 status (`unknown`, `partial`, or `mismatch`) so consumers can distinguish
-evidence from a complete typed match. For topic-based
+evidence from a complete typed match. The Kafka AST resolver evaluates
+source-local conventionally named uppercase `static final` string constants
+and binary string concatenations through the bounded Java string evaluator. It
+returns a concrete topic only when every operand resolves; a partially dynamic
+concatenation remains `<dynamic>` with `topic_dynamic=true`. This rule prevents
+the first literal in an expression from becoming a false topic identity. For
+topic-based
 `KafkaTemplate.send` overloads, the final argument is the payload: preceding
 arguments are a partition and/or key and are never reported as a message type.
 
@@ -101,6 +107,11 @@ Kafka consumers are indexed by concrete topic before producer matching. With
 `P` producers and `K` consumers, relation construction costs `O(P + K + M)`,
 where `M` is the number of producer and consumer pairs sharing a topic. Dynamic
 topics are excluded from this index and remain unresolved evidence.
+After endpoint extraction, indexing groups dynamic endpoint diagnostics by
+relative source path and extractor. Each detail lists the endpoint role, source
+line and bounded unresolved-expression reason. The diagnostic excludes source
+expressions and resolved values, and dynamic facts remain excluded from graph
+matching.
 
 Mongo persistence classes use a queue to compute the transitive closure of
 statically resolved project-type references. Each `(collection, qualified type)`

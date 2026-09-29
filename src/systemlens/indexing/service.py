@@ -2,7 +2,7 @@ import os
 import subprocess
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Sequence
@@ -453,6 +453,27 @@ def _index_repo(
         timer.end("endpoints", "écriture des endpoints")
         _trace("store.endpoints_written", endpoints=len(endpoints))
         endpoints_added = len(endpoints)
+
+        dynamic_endpoints: dict[tuple[str, str], list[str]] = defaultdict(list)
+        for endpoint in endpoints:
+            if not endpoint.topic_dynamic:
+                continue
+            extractor = endpoint.framework or endpoint.system
+            reason = "topic-pattern" if "topicPattern" in endpoint.snippet else "unresolved-expression"
+            dynamic_endpoints[(endpoint.path, extractor)].append(
+                f"{endpoint.role} line {endpoint.start_line}: {reason}"
+            )
+        for (path, extractor), entries in sorted(dynamic_endpoints.items()):
+            diagnostics.append(ExtractionDiagnostic(
+                path=path,
+                extractor=extractor,
+                category="dynamic_endpoint",
+                severity="info",
+                detail=(
+                    "Static endpoint expression remains unresolved; no relation was inferred. "
+                    + "; ".join(sorted(set(entries)))
+                ),
+            ))
 
         for path in changed:
             if not path.endswith(".java"):

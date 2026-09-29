@@ -24,6 +24,7 @@ from systemlens.scanner._spring_properties import (
     _resolve_value_annotated_variable,
     resolve_spring_property,
 )
+from systemlens.scanner.java_strings import local_string
 from systemlens.domain.topic_expressions import spring_topic_reference
 
 _BARE_TOPIC_VAR_RE = re.compile(
@@ -77,6 +78,18 @@ def _kafka_topic_from_value(value_node, source: bytes, repo_root: Path, rel_path
     if value_node is None:
         return "<dynamic>", True
     node_type = value_node.type
+    if node_type in {"binary_expression", "parenthesized_expression"}:
+        resolved_local = local_string(source, value_node)
+        if resolved_local is not None:
+            reference = spring_topic_reference(resolved_local)
+            if reference is not None:
+                resolved = resolve_spring_property(repo_root, reference.property_key, rel_path)
+                if resolved is not None:
+                    return resolved, False
+                return reference.display_name, True
+            return resolved_local, False
+        if node_type in {"binary_expression", "parenthesized_expression"}:
+            return "<dynamic>", True
     if node_type == "string_literal":
         literal = java_parser.string_value(value_node, source)
         if literal is None:
@@ -89,11 +102,16 @@ def _kafka_topic_from_value(value_node, source: bytes, repo_root: Path, rel_path
             return reference.display_name, True
         return literal, False
     if node_type == "identifier":
+        identifier = java_parser.node_text(source, value_node)
         resolved = _resolve_value_annotated_variable(
-            repo_root, rel_path, java_parser.node_text(source, value_node)
+            repo_root, rel_path, identifier
         )
         if resolved is not None:
             return resolved, False
+        if identifier.isupper():
+            resolved_local = local_string(source, value_node)
+            if resolved_local is not None:
+                return resolved_local, False
         return "<dynamic>", True
     for descendant in java_parser.walk(value_node):
         if descendant.type == "string_literal":
