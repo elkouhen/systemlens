@@ -442,15 +442,14 @@ def test_flows_calculate_reuses_index_after_ai_fact_import(tmp_path: Path, monke
         "import-facts", "facts.json", "--namespace", "ai-boundaries"
     ])
     assert imported.exit_code == 0
-    assert RUNNER.invoke(app, ["init"]).exit_code == 0
 
-    result = RUNNER.invoke(app, ["flows", "calculate", "--no-codeql", "--json"])
+    result = RUNNER.invoke(app, ["flows", "calculate", "--json"])
 
     assert result.exit_code == 0
     assert json.loads(result.output) == {
         "flows": len(initial_flows),
-        "codeql_timed_out": False,
-        "source_snapshot_reused": True,
+        "facts_loaded": 1,
+        "indexed_snapshot_reused": True,
     }
     with Store(repo, readonly=True) as store:
         assert len(store.all_code_flows()) == len(initial_flows)

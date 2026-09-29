@@ -3,6 +3,7 @@ from pathlib import Path
 from systemlens.domain.graph import (
     build_graph,
     find_outbound_calls_in_consumers,
+    graph_edges_from_facts,
     graph_edge_rest_resource,
     group_endpoints_by_module,
     paths_match,
@@ -11,7 +12,7 @@ from systemlens.domain.graph import (
 from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
 from dataclasses import replace
 
-from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
+from systemlens.domain.models import GraphFact, MessageEndpoint, compute_endpoint_id
 from systemlens.storage.sqlite import Store
 
 
@@ -242,6 +243,32 @@ def test_build_graph_creates_kafka_edges_on_matching_topic_only() -> None:
     assert len(edges) == 1
     assert edges[0].kind == "kafka"
     assert edges[0].to_endpoint.path == "app/consumer.py"
+
+
+def test_graph_edges_from_confirmed_ai_event_fact_match_indexed_endpoints() -> None:
+    producer = make_endpoint(
+        "produce", "orders.created", "app/producer.java", system="kafka",
+        module="orders", message_type="OrderCreated",
+    )
+    consumer = make_endpoint(
+        "consume", "orders.created", "app/consumer.java", system="kafka",
+        module="billing", message_type="OrderCreated",
+    )
+    fact = GraphFact(
+        id="ai-1", fact_type="edge", kind="event", name=None,
+        source_kind="service", source_name="orders",
+        target_kind="service", target_name="billing",
+        relation="publishes", origin="ai", confidence="high",
+        metadata={"channel": "orders.created"}, namespace="ai-messaging",
+    )
+
+    edges = graph_edges_from_facts(
+        [fact], {"orders": [producer], "billing": [consumer]}
+    )
+
+    assert [(edge.from_service, edge.to_service) for edge in edges] == [
+        ("orders", "billing")
+    ]
 
 
 def test_build_graph_does_not_assert_kafka_arc_with_conflicting_payload_types() -> None:

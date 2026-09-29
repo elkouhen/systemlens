@@ -228,7 +228,6 @@ def _index_repo(
     codeql_progress: bool = False,
     generate_sources: bool = False,
     resume_codeql_join: bool = False,
-    recalculate_flows: bool = False,
 ) -> IndexReport:
     timer = _IndexStageTimer(progress)
     # CodeQL diagnostics are opt-in.  Do not inherit the verbosity from older
@@ -548,7 +547,6 @@ def _index_repo(
         or changed
         or deleted
         or codeql_database is not None
-        or recalculate_flows
         or store.get_meta("code_flow_signature") != flow_signature
     ):
         timer.begin("flows", "→ Indexation : matérialisation des flux de code...")
@@ -1135,7 +1133,6 @@ def index_repo(
     codeql_progress: bool = False,
     generate_sources: bool = False,
     resume_codeql_join: bool = False,
-    recalculate_flows: bool = False,
 ) -> IndexReport:
     """Index one repository, publishing explicit CodeQL checkpoints when needed."""
     with store.transaction():
@@ -1155,5 +1152,4 @@ def index_repo(
             codeql_progress=codeql_progress,
             generate_sources=generate_sources,
             resume_codeql_join=resume_codeql_join,
-            recalculate_flows=recalculate_flows,
         )

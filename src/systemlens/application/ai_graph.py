@@ -249,6 +249,9 @@ def load_fact_manifest(
         metadata = raw.get("metadata", {})
         if not isinstance(metadata, dict):
             raise AiGraphError(f"{raw_id}.metadata doit être un objet.")
+        for key in ("channel", "topic", "route", "message_type"):
+            if key in raw and key not in metadata:
+                metadata[key] = raw[key]
         source, target = nodes[source_id], nodes[target_id]
         supplied_storage_id = raw.get("storage_id")
         if supplied_storage_id is not None and not isinstance(supplied_storage_id, str):

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from systemlens.application.ai_graph import AiGraphError, load_ai_graph
+from systemlens.application.ai_graph import AiGraphError, load_ai_graph, load_fact_manifest
 
 
 def test_load_ai_graph_projects_events_and_keeps_unresolved_claims(tmp_path):
@@ -41,3 +41,29 @@ def test_load_ai_graph_rejects_absolute_evidence_paths(tmp_path):
 
     with pytest.raises(AiGraphError, match="doit être relatif"):
         load_ai_graph(path)
+
+
+def test_load_fact_manifest_preserves_top_level_event_channel_in_metadata(tmp_path):
+    path = tmp_path / "facts.json"
+    path.write_text(json.dumps({
+        "format": "systemlens-ai-graph-v1",
+        "generated_by": {"namespace": "ai-messaging"},
+        "mode": "complete",
+        "nodes": [
+            {"id": "orders", "kind": "service", "name": "orders"},
+            {"id": "billing", "kind": "service", "name": "billing"},
+        ],
+        "edges": [{
+            "id": "orders-billing",
+            "source": "orders",
+            "target": "billing",
+            "kind": "event",
+            "channel": "orders.created",
+            "confidence": "high",
+        }],
+    }), encoding="utf-8")
+
+    facts, _namespace, _complete = load_fact_manifest(path)
+
+    edge = next(fact for fact in facts if fact.fact_type == "edge")
+    assert edge.metadata == {"channel": "orders.created"}

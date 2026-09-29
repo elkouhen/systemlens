@@ -152,7 +152,7 @@ Use `--partial` for an incremental pass. Source-derived facts are regenerated
 by `systemlens index`; they are not converted into enrichment facts.
 After importing facts, use `systemlens flows calculate` to refresh the persisted
 source-backed flow snapshot while reusing the indexed endpoints. The optional
-`--no-codeql` flag selects the local AST and source-symbol flow path.
+command reads the stored AST and CodeQL results; it does not rerun indexation.
 
 For terminal-oriented exploration, use `systemlens microservices`,
 `systemlens topics`, `systemlens apis`, `systemlens projects`, and

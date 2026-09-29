@@ -19,13 +19,11 @@ Parent: [Technical specification](../SPEC-TECH.md).
    endpoints.
 7. Persist hashes, modules, dependencies and derived relations.
 
-The `systemlens flows calculate` command invokes the same flow materialization
-stage with `recalculate_flows=true`. With a current index, it reuses persisted
-endpoints, discovered modules and the repository configuration. If source files
-changed after the last index, normal incremental endpoint extraction still
-applies. Imported AI facts remain in `graph_facts` and are not converted into
-source-backed ordered flow steps. The command is useful after an enrichment
-import when the caller needs a fresh flow snapshot without changing source facts.
+The `systemlens flows calculate` command reconstructs the persisted flow
+snapshot from stored endpoints, modules, CodeQL call results, existing flow
+candidates and `graph_facts`. It does not invoke source extraction or CodeQL.
+AI facts are projected into a transient topology view for reconciliation; the
+facts remain independent rows and are never copied into source-derived tables.
 
 The file inventory scans all eligible paths and hashes their contents on each
 index run. With `F` eligible files, `B` total bytes and `P` configured path

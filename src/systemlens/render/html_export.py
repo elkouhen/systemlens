@@ -8,7 +8,7 @@ from collections import Counter
 from pathlib import Path
 from typing import cast
 
-from systemlens.domain.graph import GraphEdge
+from systemlens.domain.graph import GraphEdge, graph_edges_from_facts
 from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
 from systemlens.domain.models import (
     ArchitectureRelation,
@@ -98,9 +98,13 @@ def render_graph_html(
         codeql_call_edges=codeql_call_edges,
     )
     export_flows = list(code_flows or [])
-    call_graph_index = _index_call_graph_inputs(export_flows, endpoints_by_service, edges)
+    flow_edges = [
+        *edges,
+        *graph_edges_from_facts(graph_facts or [], endpoints_by_service),
+    ]
+    call_graph_index = _index_call_graph_inputs(export_flows, endpoints_by_service, flow_edges)
     view_model["all_flows_call_graph"] = _networkx_call_graph(
-        export_flows, endpoints_by_service, edges, index=call_graph_index
+        export_flows, endpoints_by_service, flow_edges, index=call_graph_index
     )
     port_labels = {
         str(port["endpoint_id"]): str(port["label"])

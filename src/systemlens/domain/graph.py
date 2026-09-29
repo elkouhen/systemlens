@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable
 from typing import Literal
 
-from systemlens.domain.models import ArchitectureRelation, MessageEndpoint
+from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 
 
 @dataclass(frozen=True)
@@ -493,6 +493,102 @@ def build_graph(
                 seen.add(key)
                 edges.append(GraphEdge("kafka", produce_service, consume_service, produce, consume))
 
+    return edges
+
+
+def graph_edges_from_facts(
+    facts: list[GraphFact],
+    endpoints_by_service: dict[str, list[MessageEndpoint]],
+) -> list[GraphEdge]:
+    """Project accepted AI messaging facts onto indexed endpoint pairs.
+
+    Facts remain independent persisted evidence. This adapter only creates a
+    transient topology view for flow reconstruction; it never writes facts
+    into source-derived tables. Only confirmed or proposed event facts with a
+    concrete channel are eligible. Ambiguous and unresolved facts stay out of
+    the executable flow graph.
+    """
+    service_names = {
+        service
+        for service, endpoints in endpoints_by_service.items()
+        if endpoints
+    }
+    published: dict[str, set[str]] = {}
+    consumed: dict[str, set[str]] = {}
+    direct: list[tuple[str, str, str]] = []
+
+    def service_name(kind: str | None, name: str | None) -> str | None:
+        if name is None or kind not in {"service", "microservice"}:
+            return None
+        return name if name in service_names else None
+
+    def channel(fact: GraphFact) -> str | None:
+        metadata = fact.metadata or {}
+        value = metadata.get("channel") or metadata.get("topic")
+        if value is None:
+            if fact.target_kind in {"topic", "message_channel"}:
+                value = fact.target_name
+            elif fact.source_kind in {"topic", "message_channel"}:
+                value = fact.source_name
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    for fact in facts:
+        if (
+            fact.fact_type != "edge"
+            or fact.status not in {"confirmed", "proposed"}
+            or fact.kind != "event"
+        ):
+            continue
+        source_service = service_name(fact.source_kind, fact.source_name)
+        target_service = service_name(fact.target_kind, fact.target_name)
+        fact_channel = channel(fact)
+        if fact_channel is None:
+            continue
+        if source_service and target_service:
+            direct.append((source_service, target_service, fact_channel))
+            continue
+        source_channel = fact.source_name if fact.source_kind in {"topic", "message_channel"} else None
+        target_channel = fact.target_name if fact.target_kind in {"topic", "message_channel"} else None
+        if source_service and target_channel:
+            published.setdefault(target_channel, set()).add(source_service)
+        elif source_channel and target_service:
+            consumed.setdefault(source_channel, set()).add(target_service)
+
+    for fact_channel, source_services in published.items():
+        for source_service in source_services:
+            for target_service in consumed.get(fact_channel, set()):
+                direct.append((source_service, target_service, fact_channel))
+
+    edges: list[GraphEdge] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+    for source_service, target_service, fact_channel in direct:
+        producers = [
+            endpoint for endpoint in endpoints_by_service.get(source_service, [])
+            if endpoint.system == "kafka"
+            and endpoint.role == "produce"
+            and endpoint.topic == fact_channel
+        ]
+        consumers = [
+            endpoint for endpoint in endpoints_by_service.get(target_service, [])
+            if endpoint.system == "kafka"
+            and endpoint.role == "consume"
+            and endpoint.topic == fact_channel
+        ]
+        for producer in producers:
+            for consumer in consumers:
+                if (
+                    producer.message_type is not None
+                    and consumer.message_type is not None
+                    and producer.message_type != consumer.message_type
+                ):
+                    continue
+                key = ("kafka", source_service, target_service, producer.id, consumer.id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                edges.append(GraphEdge(
+                    "kafka", source_service, target_service, producer, consumer
+                ))
     return edges
 
 

@@ -39,6 +39,7 @@ from systemlens.application.code_flows import (
     render_internal_flow_stats_text,
     show_code_flow,
 )
+from systemlens.application.flow_calculation import calculate_persisted_flows
 from systemlens.application.flow_diagnostic import diagnose_flows, render_flow_diagnostic_text
 from systemlens.application.indexing_audit import audit_indexing
 from systemlens.application.architecture_projection import project_architecture_graph
@@ -897,11 +898,6 @@ def flows_list(
 def flows_calculate(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
-    no_codeql: bool = typer.Option(
-        False,
-        "--no-codeql",
-        help="Recalculer les flux avec le parcours AST local uniquement.",
-    ),
 ) -> None:
     """Recalculer les flux à partir du snapshot indexé courant."""
     repo_root = _option_root(root)
@@ -912,25 +908,17 @@ def flows_calculate(
         )
         raise typer.Exit(code=2)
     try:
-        config = load_config(repo_root)
-        if no_codeql:
-            config = replace(config, codeql_enabled=False, call_graph_engine="none")
         with Store(repo_root) as store:
-            report = index_repo(
-                repo_root,
-                config,
-                store,
-                progress=None if _option_json(json_output) else _echo_index_progress,
-                recalculate_flows=True,
-            )
-            flow_count = len(store.all_code_flows())
+            with store.transaction():
+                flow_count = calculate_persisted_flows(store)
+            fact_count = len(store.all_graph_facts())
     except (ConfigError, StoreError, RuntimeError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     result = {
         "flows": flow_count,
-        "codeql_timed_out": report.codeql_timed_out,
-        "source_snapshot_reused": True,
+        "facts_loaded": fact_count,
+        "indexed_snapshot_reused": True,
     }
     typer.echo(
         json.dumps(result)
