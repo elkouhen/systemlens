@@ -450,6 +450,36 @@ record StockDepleted(String productId) {}
     ]
 
 
+def test_kafka_template_send_creates_one_endpoint_per_ternary_topic_branch(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """package com.example;
+import org.springframework.kafka.core.KafkaTemplate;
+class Publisher {
+  private KafkaTemplate<String, OrderCreated> template;
+  void publish(OrderCreated event, boolean retry) {
+    template.send(retry ? "orders.created" : "orders.retry", event);
+  }
+}
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_endpoints(tmp_path)
+
+    assert sorted(
+        (endpoint.role, endpoint.topic, endpoint.message_type)
+        for endpoint in endpoints
+    ) == [
+        ("produce", "orders.created", "OrderCreated"),
+        ("produce", "orders.retry", "OrderCreated"),
+    ]
+
+
 def test_kafka_topic_resolves_static_constants_and_literal_concatenation(tmp_path: Path) -> None:
     source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
     source.parent.mkdir(parents=True)

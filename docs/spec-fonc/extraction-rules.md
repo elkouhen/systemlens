@@ -7,6 +7,9 @@ An endpoint has a role (`serve`/`call` for REST, `produce`/`consume` for a topic
 a system, a topic (`METHOD /path` for REST), source location, framework and
 optional module, qualified name and Java message type. A value that cannot be
 resolved statically is flagged `topic_dynamic=true`; it is never fabricated.
+When a Kafka send uses a Java ternary topic expression, extraction keeps both
+branches as separate topic endpoints. The call graph can therefore point to
+both statically resolved topics.
 
 With `--strategy strategy1`, the extractor recognizes generated OpenAPI client calls when an `ApiClient`
 receiver invokes `invokeAPI` with a literal route and an `HttpMethod` enum. It

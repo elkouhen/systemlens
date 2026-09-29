@@ -94,6 +94,8 @@ topic receives an endpoint-specific unresolved topic node; dynamic topics do
 not create a producer/consumer pairing. The HTML payload includes a warning
 status (`unknown`, `partial`, or `mismatch`) so consumers can distinguish
 evidence from a complete typed match. The Kafka AST resolver evaluates
+ternary topic expressions branch by branch, preserving one endpoint per
+statically resolved branch so the call graph can retain every possible topic.
 source-local conventionally named uppercase `static final` string constants
 and binary string concatenations through the bounded Java string evaluator. It
 returns a concrete topic only when every operand resolves; a partially dynamic

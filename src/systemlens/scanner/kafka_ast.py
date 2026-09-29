@@ -123,8 +123,15 @@ def _kafka_topics_from_value(value_node, source: bytes, repo_root: Path, rel_pat
     Spring's ``@KafkaListener(topics = {"a", "b"})`` is a single annotation
     but represents a dependency on every listed topic.  The generic resolver
     deliberately returns one value for invocation arguments; this companion
-    keeps that behaviour while expanding only a Java array initializer.
+    keeps that behaviour while expanding Java array initializers and ternary
+    expressions.  Every ternary branch is retained as a separate endpoint.
     """
+    if value_node is not None and value_node.type == "ternary_expression":
+        topics: list[tuple[str, bool]] = []
+        for field in ("consequence", "alternative"):
+            branch = value_node.child_by_field_name(field)
+            topics.extend(_kafka_topics_from_value(branch, source, repo_root, rel_path))
+        return list(dict.fromkeys(topics))
     if value_node is not None and value_node.type in {
         "array_initializer", "element_value_array_initializer"
     }:
@@ -449,9 +456,11 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
                     )
                 ):
                     if len(args) >= 2:
-                        topic, dynamic = _kafka_topic_from_value(args[0], source, repo_root, rel_path)
-                        add(node, "produce", "spring-kafka", topic, dynamic,
-                            _producer_send_payload_type(source, node))
+                        for topic, dynamic in _kafka_topics_from_value(
+                            args[0], source, repo_root, rel_path
+                        ):
+                            add(node, "produce", "spring-kafka", topic, dynamic,
+                                _producer_send_payload_type(source, node))
                     elif len(args) == 1 and args[0].type == "identifier":
                         built = _message_builder_topic_for(
                             source, node, java_parser.node_text(source, args[0]), repo_root, rel_path
@@ -460,17 +469,23 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
                             topic, dynamic = built
                             add(node, "produce", "spring-kafka", topic, dynamic, None)
                 elif method_name == "send" and receiver and receiver.lower().endswith("streambridge") and has_stream_bridge and args:
-                    topic, dynamic = _kafka_topic_from_value(args[0], source, repo_root, rel_path)
-                    add(node, "produce", "spring-cloud-stream", topic, dynamic,
-                        _producer_send_payload_type(source, node))
+                    for topic, dynamic in _kafka_topics_from_value(
+                        args[0], source, repo_root, rel_path
+                    ):
+                        add(node, "produce", "spring-cloud-stream", topic, dynamic,
+                            _producer_send_payload_type(source, node))
                 elif method_name == "to" and has_kafka_streams and args:
-                    topic, dynamic = _kafka_topic_from_value(args[0], source, repo_root, rel_path)
-                    add(node, "produce", "kafka-streams", topic, dynamic,
-                        _method_return_payload_type(source, java_parser.enclosing(node, "method_declaration")))
+                    for topic, dynamic in _kafka_topics_from_value(
+                        args[0], source, repo_root, rel_path
+                    ):
+                        add(node, "produce", "kafka-streams", topic, dynamic,
+                            _method_return_payload_type(source, java_parser.enclosing(node, "method_declaration")))
                 elif method_name == "stream" and receiver == "builder" and has_kafka_streams and args:
-                    topic, dynamic = _kafka_topic_from_value(args[0], source, repo_root, rel_path)
-                    add(_declaration_anchor(node), "consume", "kafka-streams", topic, dynamic,
-                        _method_return_payload_type(source, java_parser.enclosing(node, "method_declaration")))
+                    for topic, dynamic in _kafka_topics_from_value(
+                        args[0], source, repo_root, rel_path
+                    ):
+                        add(_declaration_anchor(node), "consume", "kafka-streams", topic, dynamic,
+                            _method_return_payload_type(source, java_parser.enclosing(node, "method_declaration")))
                 elif (
                     method_name == "subscribe"
                     and receiver
@@ -478,15 +493,19 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
                     and has_kafka_consumer
                     and args
                 ):
-                    topic, dynamic = _kafka_topic_from_value(args[0], source, repo_root, rel_path)
-                    add(node, "consume", "kafka-clients", topic, dynamic, None)
+                    for topic, dynamic in _kafka_topics_from_value(
+                        args[0], source, repo_root, rel_path
+                    ):
+                        add(node, "consume", "kafka-clients", topic, dynamic, None)
             elif node.type == "object_creation_expression":
                 type_node = node.child_by_field_name("type")
                 if _type_simple_name(source, type_node) == "ProducerRecord":
                     first_arg = next(iter(java_parser.argument_nodes(node)), None)
-                    topic, dynamic = _kafka_topic_from_value(first_arg, source, repo_root, rel_path)
-                    add(node, "produce", "kafka-clients", topic, dynamic,
-                        _message_payload_type(_object_creation_type(source, node)))
+                    for topic, dynamic in _kafka_topics_from_value(
+                        first_arg, source, repo_root, rel_path
+                    ):
+                        add(node, "produce", "kafka-clients", topic, dynamic,
+                            _message_payload_type(_object_creation_type(source, node)))
     return list(endpoints.values())
 def _extract_kafka_topic(
     snippet: str, repo_root: Path, source_path: str | None = None
