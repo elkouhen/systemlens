@@ -1170,6 +1170,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'className = "route-provider-group"' in document
     assert 'item.className = "reference-item route-reference-item"' in document
     assert 'toggle.className = "route-reference-toggle"' in document
+    assert 'method.className = "route-reference-method"' in document
+    assert 'routePath.className = "route-reference-path"' in document
     assert 'clientCount.className = "route-client-count"' in document
     assert 'clientCount.textContent = `${callers.length} client${callers.length > 1 ? "s" : ""}`' in document
     assert "registerDetailsAction" in document
@@ -1178,7 +1180,6 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'inspector-breadcrumb-link' in document
     assert 'Microservice cible' in document
     assert 'appendFieldTypeControls' in document
-    assert 'label.textContent = `${parts.method} ${parts.path}`' in document
     assert 'Microservices clients' in document
     assert 'Aucun microservice appelant identifié.' in document
     assert 'function appendExpandedHttpRoute' in document

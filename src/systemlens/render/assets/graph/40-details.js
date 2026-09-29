@@ -334,7 +334,13 @@
             toggle.type = "button";
             const label = document.createElement("span");
             label.className = "route-reference-label";
-            label.textContent = `${parts.method} ${parts.path}`;
+            const method = document.createElement("span");
+            method.className = "route-reference-method";
+            method.textContent = parts.method;
+            const routePath = document.createElement("span");
+            routePath.className = "route-reference-path";
+            routePath.textContent = parts.path;
+            label.append(method, routePath);
             const clientCount = document.createElement("span");
             clientCount.className = "route-client-count";
             clientCount.textContent = `${callers.length} client${callers.length > 1 ? "s" : ""}`;

@@ -29,10 +29,13 @@
     .route-methods { margin-top: 4px; }
     .route-reference-item { display: block; padding: 0; overflow: hidden; border: 0; background: transparent; }
     .route-disclosure { width: 100%; }
-    .route-reference-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100% !important; padding: 4px 2px; border: 0 !important; border-radius: 0 !important; color: var(--ui-text, #172033) !important; background: transparent !important; text-align: left; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; list-style: none; }
+    .route-reference-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100% !important; padding: 5px 6px; border: 0 !important; border-radius: var(--control-radius, 8px) !important; color: var(--ui-text, #172033) !important; background: transparent !important; text-align: left; font: 12px ui-sans-serif, system-ui, sans-serif; cursor: pointer; list-style: none; }
     .route-reference-toggle::-webkit-details-marker { display: none; }
-    .route-reference-toggle:hover, .route-reference-toggle:focus-visible { color: var(--ui-accent-text, #3156d3) !important; text-decoration: underline; }
-    .route-reference-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .route-reference-toggle:hover, .route-reference-toggle:focus-visible { color: var(--ui-accent-text, #3156d3) !important; background: var(--ui-accent-soft, #ebefff) !important; text-decoration: none; outline: none; }
+    .route-reference-label { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
+    .route-reference-method { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; min-width: 42px; padding: 3px 6px; border: 1px solid var(--ui-accent-border, #bcc8ff); border-radius: 5px; color: var(--ui-accent-text, #3156d3); background: var(--ui-accent-soft, #ebefff); font-size: 10px; font-weight: 850; letter-spacing: .04em; line-height: 1.1; }
+    .route-reference-path { min-width: 0; overflow: hidden; color: var(--ui-title, #24355f); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+    .route-reference-toggle:hover .route-reference-path, .route-reference-toggle:focus-visible .route-reference-path { color: var(--ui-accent-text, #3156d3); }
     .route-client-count { flex: 0 0 auto; padding: 2px 5px; border: 1px solid var(--ui-border, #d8e0eb); border-radius: 999px; color: var(--ui-muted, #64748b); background: var(--ui-control, #fff); font: 10px ui-sans-serif, system-ui, sans-serif; white-space: nowrap; }
     .route-callers { margin: 2px 0 5px 18px; padding: 2px 0 2px 10px; border-left: 1px solid var(--ui-border, #d8e0eb); color: var(--ui-muted, #64748b); font-size: 11px; }
     .route-callers strong { display: block; margin-bottom: 3px; color: var(--ui-muted, #64748b); font-size: 10px; font-weight: 700; }
