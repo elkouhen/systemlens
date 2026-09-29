@@ -27,9 +27,11 @@
     .route-path-group + .route-path-group { margin-top: 5px; }
     .route-path-group > strong { display: block; min-width: 0; overflow-wrap: anywhere; color: var(--ui-heading, #315f9b); font-size: 11px; line-height: 1.35; }
     .route-methods { margin-top: 4px; }
+    #routes-panel, #routes-panel .references-header, #routes-panel .references-section, #routes-list, #routes-list > .route-provider-group, .route-provider-group > details, .route-provider-routes, .route-path-group, .route-methods, .route-reference-item { min-width: 0; max-width: 100%; box-sizing: border-box; }
+    #routes-list { width: 100%; }
     .route-reference-item { display: block; padding: 0; overflow: hidden; border: 0; background: transparent; }
     .route-disclosure { width: 100%; }
-    .route-reference-toggle { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; width: 100% !important; min-width: 0; box-sizing: border-box; padding: 5px 6px; border: 0 !important; border-radius: var(--control-radius, 8px) !important; color: var(--ui-text, #172033) !important; background: transparent !important; text-align: left; font: 12px ui-sans-serif, system-ui, sans-serif; cursor: pointer; list-style: none; }
+    .route-reference-toggle { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; width: 100% !important; min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; padding: 5px 6px; border: 0 !important; border-radius: var(--control-radius, 8px) !important; color: var(--ui-text, #172033) !important; background: transparent !important; text-align: left; font: 12px ui-sans-serif, system-ui, sans-serif; cursor: pointer; list-style: none; }
     .route-reference-toggle::-webkit-details-marker { display: none; }
     .route-reference-toggle:hover, .route-reference-toggle:focus-visible { color: var(--ui-accent-text, #3156d3) !important; background: var(--ui-accent-soft, #ebefff) !important; text-decoration: none; outline: none; }
     .route-reference-label { display: flex; align-items: flex-start; gap: 8px; min-width: 0; flex: 1 1 auto; overflow: visible; }
