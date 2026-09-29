@@ -998,6 +998,13 @@ class OrderPublisher {
         (methods[0].id, methods[1].id, 3),
         (methods[1].id, methods[2].id, 4),
     ]
+    reconstructed = materialize_codeql_code_flows(
+        methods, endpoints, [], persisted_edges=persisted_edges,
+    )
+    assert len(reconstructed) == 1
+    assert [step.kind for step in reconstructed[0].steps] == [
+        "message_entry", "method_call", "method_call", "message_publish",
+    ]
 
 
 def test_codeql_join_resume_skips_completed_input_methods(tmp_path: Path) -> None:

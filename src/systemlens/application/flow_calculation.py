@@ -7,22 +7,29 @@ from systemlens.domain.graph import (
     graph_edges_from_facts,
     group_endpoints_by_module,
 )
-from systemlens.indexing.code_flows import reconcile_code_flows
+from systemlens.indexing.code_flows import (
+    _deduplicate_code_flows,
+    materialize_codeql_code_flows,
+    reconcile_code_flows,
+)
 from systemlens.domain.module_inventory import module_identity
 from systemlens.scanner import local_spring_application_names
 from systemlens.storage.sqlite import Store
 
 
 def calculate_persisted_flows(store: Store) -> int:
-    """Reconcile stored flow candidates with source and AI topology evidence.
+    """Reconstruct all persisted call-graph flows with source and AI topology.
 
     This function deliberately does not index source files or invoke CodeQL.
-    It reads the endpoint, flow, module and enrichment snapshots already stored
-    in SQLite and persists only the derived flow reconciliation result.
+    It reads the endpoint, integration-method, CodeQL-edge, module and
+    enrichment snapshots already stored in SQLite, rebuilds the derived flow
+    set in memory, and persists only that derived result.
     """
     endpoints = store.all_endpoints()
     modules = store.all_modules()
-    flows = store.all_code_flows()
+    persisted_flows = store.all_code_flows()
+    methods = store.all_integration_methods()
+    persisted_call_edges = store.all_codeql_call_edges()
     facts = store.all_graph_facts()
     endpoints_by_service = group_endpoints_by_module(endpoints)
     strategy = store.get_meta("topic_strategy") or "default"
@@ -40,6 +47,19 @@ def calculate_persisted_flows(store: Store) -> int:
         service_aliases=service_aliases,
     )
     fact_edges = graph_edges_from_facts(facts, endpoints_by_service)
+    reconstructed_flows = (
+        materialize_codeql_code_flows(
+            methods,
+            endpoints,
+            [],
+            persisted_edges=persisted_call_edges,
+        )
+        if methods
+        else []
+    )
+    flows = _deduplicate_code_flows(
+        [*persisted_flows, *reconstructed_flows], endpoints,
+    )
     reconciled = reconcile_code_flows(
         flows,
         endpoints,

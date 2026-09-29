@@ -454,6 +454,7 @@ def _build_codeql_call_graph(
     repo_root: Path | None,
     source_paths: Sequence[str],
     progress: Callable[[str], None] | None,
+    persisted_edges: Sequence[CodeQLCallGraphEdge] | None = None,
 ) -> CodeQLCallGraph:
     """Resolve CodeQL rows into the internal graph consumed by reconstruction."""
     def report(message: str) -> None:
@@ -537,6 +538,35 @@ def _build_codeql_call_graph(
             seen_edges.add(key)
             adjacency[caller.id].append((callee, call, inferred))
 
+    if persisted_edges is not None:
+        methods_by_id = {method.id: method for method in methods}
+        for edge in persisted_edges:
+            caller = methods_by_id.get(edge.caller_id)
+            callee = methods_by_id.get(edge.callee_id)
+            if caller is None or callee is None:
+                continue
+            add_edge(
+                caller,
+                callee,
+                CodeQLCall(
+                    caller=caller.qualified_method,
+                    caller_path=caller.path,
+                    caller_line=caller.start_line,
+                    callee=callee.qualified_method,
+                    callee_path=callee.path,
+                    callee_line=callee.start_line,
+                    call_line=edge.line,
+                    dispatch_confidence=edge.dispatch_confidence,
+                ),
+                edge.inferred,
+            )
+        return CodeQLCallGraph(
+            adjacency=adjacency,
+            synthetic_calls=synthetic_calls,
+            call_count=len(persisted_edges),
+            locate=lambda name, path, line: locate(name, path, line),
+        )
+
     started_at = time.monotonic()
     last_report_at = started_at
     for call_number, call in enumerate(calls, start=1):
@@ -601,6 +631,7 @@ def materialize_codeql_code_flows(
     initial_flows: Sequence[CodeFlow] = (),
     call_graph_sink: Callable[[CodeQLCallGraph], None] | None = None,
     codeql_edge_confidence: str = "possible",
+    persisted_edges: Sequence[CodeQLCallGraphEdge] | None = None,
 ) -> list[CodeFlow]:
     """Reconstruct endpoint flows from the internal CodeQL call graph.
 
@@ -682,6 +713,7 @@ def materialize_codeql_code_flows(
         repo_root=repo_root,
         source_paths=source_paths,
         progress=progress,
+        persisted_edges=persisted_edges,
     )
     if call_graph_sink is not None:
         call_graph_sink(call_graph)

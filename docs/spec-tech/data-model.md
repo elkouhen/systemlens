@@ -268,9 +268,10 @@ same Tree-sitter `method_declaration`. Steps retain relative evidence paths and
 line ranges. Flow identity uses the module, relative path, qualified method,
 and trigger semantics rather than line numbers, so ordinary line movement does
 not replace the logical flow. The materializer runs during indexing, while
-`systemlens flows calculate` reconstructs the stored candidates with the
-independent enrichment topology; neither export nor query runs it. The flow
-reconstruction is linear in the indexed endpoint and Mongo-operation inventory plus
+`systemlens flows calculate` rebuilds all persisted endpoint flows from the
+stored integration-method and CodeQL-edge snapshots with the independent
+enrichment topology; neither export nor query runs it. The flow reconstruction
+is linear in the indexed endpoint and Mongo-operation inventory plus
 the traversed AST nodes for Java files that contain eligible endpoints. Maven
 `target/` and Gradle `build/` output trees are excluded from the inventory, so
 copied resources and generated classes cannot duplicate source facts. A

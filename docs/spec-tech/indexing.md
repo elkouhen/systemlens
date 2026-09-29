@@ -19,11 +19,15 @@ Parent: [Technical specification](../SPEC-TECH.md).
    endpoints.
 7. Persist hashes, modules, dependencies and derived relations.
 
-The `systemlens flows calculate` command reconstructs the persisted flow
-snapshot from stored endpoints, modules, CodeQL call results, existing flow
-candidates and `graph_facts`. It does not invoke source extraction or CodeQL.
-AI facts are projected into a transient topology view for reconciliation; the
-facts remain independent rows and are never copied into source-derived tables.
+The `systemlens flows calculate` command reconstructs the complete persisted
+flow snapshot from stored endpoints, integration methods, CodeQL call edges,
+modules, existing source-flow candidates and `graph_facts`. It does not invoke
+source extraction or CodeQL. The persisted method graph is rebuilt in memory
+and all endpoint-to-endpoint paths are traversed again; existing `code_flows`
+are retained as the persisted AST/source-flow snapshot and deduplicated with
+the reconstructed interprocedural flows. AI facts are projected into a
+transient topology view for reconciliation; the facts remain independent rows
+and are never copied into source-derived tables.
 
 The file inventory scans all eligible paths and hashes their contents on each
 index run. With `F` eligible files, `B` total bytes and `P` configured path
