@@ -132,6 +132,35 @@ def test_materialize_code_flows_orders_same_method_effects(tmp_path: Path) -> No
     assert shifted_flows[0].id == flows[0].id
 
 
+def test_materialize_code_flows_disambiguates_overload_ids(tmp_path: Path) -> None:
+    relative_source = "orders/src/main/java/com/example/OrderController.java"
+    source = tmp_path / relative_source
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class OrderController {
+  void process(String value) { kafka.send(); }
+  void process(Integer value) { kafka.send(); }
+}
+""",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        _endpoint("in-string", "consume", "kafka", "orders.in", relative_source, 2),
+        _endpoint("out-string", "produce", "kafka", "orders.out", relative_source, 2),
+        _endpoint("in-integer", "consume", "kafka", "orders.in", relative_source, 3),
+        _endpoint("out-integer", "produce", "kafka", "orders.out", relative_source, 3),
+    ]
+
+    flows = materialize_code_flows(tmp_path, endpoints, [module])
+
+    assert len(flows) == 2
+    assert len({flow.id for flow in flows}) == 2
+
+
 def test_materialize_code_flows_keeps_scheduled_kafka_publication_local(tmp_path: Path) -> None:
     module_root = tmp_path / "orders"
     relative_source = "orders/src/main/java/com/example/ScheduledPublisher.java"

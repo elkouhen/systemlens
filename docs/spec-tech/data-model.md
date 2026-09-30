@@ -267,7 +267,9 @@ publications, or MongoDB reads/writes located within the
 same Tree-sitter `method_declaration`. Steps retain relative evidence paths and
 line ranges. Flow identity uses the module, relative path, qualified method,
 and trigger semantics rather than line numbers, so ordinary line movement does
-not replace the logical flow. The materializer runs during indexing, while
+not replace the logical flow. If overloaded or generated declarations still
+produce the same identity, indexing keeps the first historical ID and adds a
+stable route discriminator to later IDs before persistence. The materializer runs during indexing, while
 `systemlens flows calculate` rebuilds all persisted endpoint flows from the
 stored integration-method and CodeQL-edge snapshots with the independent
 enrichment topology; neither export nor query runs it. The flow reconstruction

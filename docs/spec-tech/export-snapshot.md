@@ -29,12 +29,6 @@ OpenAPI evidence paths; richer DTO/OpenAPI content requires an explicit future
 indexed contract rather than a live source read. This keeps an export
 reproducible when repository files change after `systemlens index`.
 
-The GraphML export uses the same snapshot and emits only service nodes and
-directed inter-service edges. It computes weakly connected components with an
-iterative traversal over an undirected adjacency view, then writes
-`component_id` and `component_size` node attributes. The traversal is linear in
-the number of exported services and edges, O(V + E), and does not mutate the
-index.
 Persisted JPA entity declarations are serialized on their owning service node
 as qualified names and root-relative source locations. The HTML projection also
 creates one `jpa_entity` node per declaration and a `maps` relation from its

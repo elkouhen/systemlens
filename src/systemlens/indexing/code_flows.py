@@ -24,7 +24,7 @@ from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 from systemlens.indexing.java_symbols import JavaSymbols
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v21-source-symbol-join-context"
+CODE_FLOW_SIGNATURE = "code-flow-v22-unique-identities"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -214,6 +214,38 @@ def _deduplicate_code_flows(
         selected,
         key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id),
     )
+
+
+def _ensure_unique_code_flow_ids(flows: list[CodeFlow]) -> list[CodeFlow]:
+    """Disambiguate colliding flow IDs without changing unique historical IDs."""
+    used_ids: set[str] = set()
+    unique: list[CodeFlow] = []
+    for flow in flows:
+        if flow.id not in used_ids:
+            used_ids.add(flow.id)
+            unique.append(flow)
+            continue
+        discriminator = repr((
+            flow.module,
+            flow.path,
+            flow.method,
+            flow.status,
+            tuple(
+                (step.kind, step.name, step.path, step.endpoint_id, step.operation)
+                for step in flow.steps
+            ),
+        )).encode("utf-8")
+        candidate = f"{flow.id}-{hashlib.sha256(discriminator).hexdigest()[:8]}"
+        collision = 2
+        while candidate in used_ids:
+            candidate = (
+                f"{flow.id}-{hashlib.sha256(discriminator).hexdigest()[:8]}"
+                f"-{collision}"
+            )
+            collision += 1
+        used_ids.add(candidate)
+        unique.append(replace(flow, id=candidate))
+    return unique
 
 
 def _endpoint_step(endpoint: MessageEndpoint, order: int) -> CodeFlowStep:
@@ -444,7 +476,9 @@ def materialize_code_flows(
                     ),
                     steps=tuple(steps),
                 ))
-    return sorted(flows, key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id))
+    return _ensure_unique_code_flow_ids(sorted(
+        flows, key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id)
+    ))
 
 
 def _build_codeql_call_graph(
@@ -1045,7 +1079,7 @@ def materialize_codeql_code_flows(
         f"→ CodeQL : jointure terminée · {explored} transition(s), "
         f"{len(reachability)} reachability(s), {len(current_flows())} flux dédupliqué(s)."
     )
-    return _deduplicate_code_flows(current_flows(), endpoints)
+    return _ensure_unique_code_flow_ids(_deduplicate_code_flows(current_flows(), endpoints))
 
 
 def reconcile_code_flows(
