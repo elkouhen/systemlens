@@ -15,6 +15,11 @@ is stable for a source location:
 sha256(role | topic | path | start_line:end_line)[:16]
 ```
 
+If two extracted endpoints receive the same base identifier, indexing preserves
+the first identifier and assigns later endpoints a deterministic content-derived
+suffix before persistence. This keeps source evidence distinct when two
+interactions share the same file and line span.
+
 The normalized `topic` remains the identity used for matching and graph
 relations. `topic_display`, when present, is the source spelling shown by UI
 adapters; it never changes topic identity or relation resolution.
@@ -27,6 +32,9 @@ Kafka topology relations. `ArchitectureSnapshot` derives its topology edges
 from those persisted relations; adapters may use indexed endpoints only to add
 route, topic, and source presentation details and do not re-resolve targets or
 rescan source.
+When two distinct evidences share the same base relation identifier, indexing
+retains both by assigning the later relation a deterministic content-derived
+suffix.
 
 `JpaEntity` records a qualified Java class name and root-relative source line
 for a class annotated with an imported or qualified JPA `Entity` type. The module snapshot
@@ -48,6 +56,9 @@ pass/revision metadata, optional relative evidence and a note. The
 and upserts a manifest by `(namespace, fact_type, manifest_id)`; complete
 snapshots can remove stale facts only inside their namespace. Source-derived
 relations remain owned by the indexer and cannot be removed through MCP.
+Manifest storage IDs must be unique across nodes and edges in one import. A
+duplicate storage ID is rejected before any fact is persisted, so one manifest
+entry cannot overwrite another fact through SQLite conflict handling.
 `architecture_graph` merges both layers using the generic dependency node/edge
 shape, preserving API and MongoDB associations.
 

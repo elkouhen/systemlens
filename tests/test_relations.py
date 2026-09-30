@@ -114,6 +114,19 @@ def test_relations_materialize_the_resolved_interservice_topology() -> None:
     assert catalog.relations == tuple(relations)
 
 
+def test_relations_preserve_distinct_same_line_endpoint_evidence() -> None:
+    first = replace(_endpoint("call", "rest", "GET /payments", snippet="client_a"),
+                    qualified_name="com.example.FirstClient")
+    second = replace(_endpoint("call", "rest", "GET /payments", snippet="client_b"),
+                     qualified_name="com.example.SecondClient")
+
+    relations = build_architecture_relations([], [first, second], [])
+
+    calls = [relation for relation in relations if relation.relation == "calls"]
+    assert len(calls) == 2
+    assert len({relation.id for relation in calls}) == 2
+
+
 def test_relations_materialize_kafka_topology_when_consumer_type_is_unknown() -> None:
     producer = replace(
         _endpoint("produce", "kafka", "orders.created", message_type="OrderCreated"),

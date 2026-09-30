@@ -1341,27 +1341,30 @@ def build_graph_view_model(
             },
             "usage": resource_usage(str(node["id"])),
         })
-    for item in mongo_persistence_classes:
+    for mongo_description in mongo_persistence_classes:
         resource_descriptions.append({
-            "id": item["id"],
-            "identity": item["qualified_name"],
-            "name": item["name"],
-            "qualified_name": item["qualified_name"],
+            "id": mongo_description["id"],
+            "identity": mongo_description["qualified_name"],
+            "name": mongo_description["name"],
+            "qualified_name": mongo_description["qualified_name"],
             "kind": "mongo_persistence_class",
             "technology": "MongoDB",
-            "owner": item["service"],
-            "module": item["module"],
-            "attributes": item.get("fields", []),
-            "source": {"path": item["source"], "line": item["line"]},
-            "navigation": {"inspect": item["id"], "open_source": item.get("vscode_uri")},
+            "owner": mongo_description["service"],
+            "module": mongo_description["module"],
+            "attributes": mongo_description.get("fields", []),
+            "source": {"path": mongo_description["source"], "line": mongo_description["line"]},
+            "navigation": {
+                "inspect": mongo_description["id"],
+                "open_source": mongo_description.get("vscode_uri"),
+            },
             "usage": {
-                "consumers": [item["service"]],
+                "consumers": [mongo_description["service"]],
                 "producers": [],
                 "relations": [],
             },
         })
     for definition in [*kafka_dtos, *project_dto_definitions]:
-        source = definition.get("source")
+        source_value = definition.get("source")
         resource_descriptions.append({
             "id": definition["id"],
             "identity": definition.get("qualified_name") or definition["name"],
@@ -1372,7 +1375,7 @@ def build_graph_view_model(
             "owner": definition.get("module"),
             "module": definition.get("module"),
             "attributes": definition.get("fields", []),
-            "source": {"path": source, "line": definition.get("line")},
+            "source": {"path": source_value, "line": definition.get("line")},
             "navigation": {
                 "inspect": definition["id"],
                 "open_source": definition.get("vscode_uri"),

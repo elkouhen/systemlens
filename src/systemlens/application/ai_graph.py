@@ -200,6 +200,8 @@ def load_fact_manifest(
         if supplied_storage_id is not None and not isinstance(supplied_storage_id, str):
             raise AiGraphError(f"nodes[{index}].storage_id doit être une chaîne.")
         stored_id = supplied_storage_id or fact_id(raw_id, "node")
+        if stored_id in used_ids:
+            raise AiGraphError(f"identifiant de stockage dupliqué: {stored_id}")
         used_ids.add(stored_id)
         evidence_path, evidence_line = evidence_fields(raw, "evidence")
         status = raw.get("status", "confirmed")
@@ -257,6 +259,8 @@ def load_fact_manifest(
         if supplied_storage_id is not None and not isinstance(supplied_storage_id, str):
             raise AiGraphError(f"{raw_id}.storage_id doit être une chaîne.")
         stored_id = supplied_storage_id or fact_id(raw_id, "edge")
+        if stored_id in used_ids:
+            raise AiGraphError(f"identifiant de stockage dupliqué: {stored_id}")
         raw_ids.add(raw_id)
         used_ids.add(stored_id)
         facts.append(GraphFact(

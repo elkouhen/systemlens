@@ -1755,6 +1755,23 @@ def infer_framework_endpoints(
     else:
         candidate_files = sorted(files)
 
+    strategy1_contract_paths: set[str] = set()
+    if configured_api_client_strategy1:
+        declaration_paths = [
+            path.relative_to(repo_root).as_posix()
+            for path in repo_root.rglob("*")
+            if path.is_file()
+            and not {"target", "build"}.intersection(path.relative_to(repo_root).parts)
+            and _is_strategy1_openapi_declaration_path(
+                path.relative_to(repo_root).as_posix()
+            )
+        ]
+        for declaration_path in declaration_paths:
+            api_name = Path(declaration_path).stem.casefold().replace("_", "-")
+            strategy1_contract_paths.update(
+                _strategy1_openapi_contracts(str(repo_root.resolve()), api_name)
+            )
+
     inferred: dict[str, MessageEndpoint] = {}
     extractors = _rest_endpoint_extractors(
         configured_api_client_strategy1=configured_api_client_strategy1,
@@ -1768,14 +1785,19 @@ def infer_framework_endpoints(
             for endpoint in _infer_openapi_generator_endpoints(repo_root, rel_path):
                 inferred[endpoint.id] = endpoint
         elif rel_path.endswith((".properties", ".yml", ".yaml")):
-            for endpoint in (
+            endpoints = (
                 _infer_actuator_endpoint(repo_root, rel_path)
                 + _infer_spring_cloud_gateway_yaml_routes(repo_root, rel_path)
-                + _infer_openapi_endpoints_attributed(repo_root, rel_path)
-            ):
+            )
+            if rel_path not in strategy1_contract_paths:
+                endpoints.extend(_infer_openapi_endpoints_attributed(repo_root, rel_path))
+            for endpoint in endpoints:
                 inferred[endpoint.id] = endpoint
         elif rel_path.endswith(".json"):
-            for endpoint in _infer_openapi_endpoints_attributed(repo_root, rel_path):
+            endpoints = []
+            if rel_path not in strategy1_contract_paths:
+                endpoints = _infer_openapi_endpoints_attributed(repo_root, rel_path)
+            for endpoint in endpoints:
                 inferred[endpoint.id] = endpoint
         elif configured_api_client_strategy1 and _is_strategy1_openapi_declaration_path(rel_path):
             for endpoint in _infer_strategy1_declared_openapi_publications(repo_root, rel_path):

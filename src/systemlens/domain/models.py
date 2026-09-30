@@ -127,6 +127,38 @@ class MessageEndpoint:
             )
 
 
+def ensure_unique_endpoint_ids(endpoints: list[MessageEndpoint]) -> list[MessageEndpoint]:
+    """Disambiguate endpoint IDs while preserving unique historical IDs."""
+    used_ids: set[str] = set()
+    unique: list[MessageEndpoint] = []
+    for endpoint in endpoints:
+        if endpoint.id not in used_ids:
+            used_ids.add(endpoint.id)
+            unique.append(endpoint)
+            continue
+        discriminator = repr((
+            endpoint.role,
+            endpoint.system,
+            endpoint.topic,
+            endpoint.path,
+            endpoint.start_line,
+            endpoint.end_line,
+            endpoint.snippet,
+            endpoint.module,
+            endpoint.qualified_name,
+            endpoint.framework,
+        )).encode("utf-8")
+        digest = hashlib.sha256(discriminator).hexdigest()[:8]
+        candidate = f"{endpoint.id}-{digest}"
+        collision = 2
+        while candidate in used_ids:
+            candidate = f"{endpoint.id}-{digest}-{collision}"
+            collision += 1
+        used_ids.add(candidate)
+        unique.append(replace(endpoint, id=candidate))
+    return unique
+
+
 @dataclass(frozen=True)
 class ArchitectureRelation:
     """A typed, evidenced relation between two indexed architecture objects."""

@@ -746,7 +746,7 @@ def test_index_uses_automatic_codeql_database_when_available(
     assert "module Maven : orders" in content
     assert "Méthodes Java cherchées : IN [" in content
     assert 'id="progress-notice"' in content
-    assert '"progress_notice": "INDEXATION CODEQL EN COURS' in content
+    assert '"progress_notice":"INDEXATION CODEQL EN COURS' in content
     join_progress_html = tmp_path / "codeql-join-progress.html"
     cli._write_call_graph_progress_html(repo, join_progress_html, join_checkpoints[-1])
     join_content = join_progress_html.read_text(encoding="utf-8")

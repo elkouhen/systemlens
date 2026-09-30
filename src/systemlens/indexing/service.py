@@ -42,7 +42,12 @@ from systemlens.indexing.codeql import (
     _generate_sources,
 )
 from systemlens.discovery.java import parser as java_parser
-from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, MessageEndpoint
+from systemlens.domain.models import (
+    ArchitectureRelation,
+    ExtractionDiagnostic,
+    MessageEndpoint,
+    ensure_unique_endpoint_ids,
+)
 from systemlens.domain.graph import DEFAULT_REST_TARGET_POLICY, build_graph, group_endpoints_by_module
 from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 from systemlens.discovery.build.modules import (
@@ -466,6 +471,7 @@ def _index_repo(
             "→ Indexation : écriture des résultats "
             f"({len(endpoints)} endpoint(s)).",
         )
+        endpoints = ensure_unique_endpoint_ids(endpoints)
         store.replace_endpoints_for_files(changed, endpoints)
         timer.end("endpoints", "écriture des endpoints")
         _trace("store.endpoints_written", endpoints=len(endpoints))
@@ -612,6 +618,7 @@ def _index_repo(
             completed_count = sum(
                 1 for before, after in zip(all_endpoints, enriched) if before != after
             )
+            enriched = ensure_unique_endpoint_ids(enriched)
             store.replace_endpoints_for_files(
                 sorted({endpoint.path for endpoint in all_endpoints}), enriched
             )
