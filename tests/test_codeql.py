@@ -166,6 +166,37 @@ def test_automatic_codeql_database_is_source_only_and_temporary(
     ], 42)]
 
 
+def test_automatic_codeql_database_includes_generated_java_sources(
+    tmp_path: Path, monkeypatch
+) -> None:
+    generated = tmp_path / "service/target/generated-sources/asyncapi/OrderPlaced.java"
+    generated.parent.mkdir(parents=True)
+    generated.write_text("class OrderPlaced {}", encoding="utf-8")
+    source_roots: list[Path] = []
+
+    def run(command: list[str], **_kwargs: object) -> CompletedProcess[str]:
+        source_root = Path(next(
+            argument.removeprefix("--source-root=")
+            for argument in command
+            if argument.startswith("--source-root=")
+        ))
+        source_roots.append(source_root)
+        Path(command[3]).mkdir()
+        return CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql, "_run_with_progress", run)
+
+    with codeql.automatic_codeql_database(tmp_path) as database:
+        assert database is not None
+        assert len(source_roots) == 1
+        assert (
+            source_roots[0]
+            / "service/target/generated-sources/asyncapi/OrderPlaced.java"
+        ).is_file()
+
+
+
 def test_automatic_codeql_database_skips_when_codeql_is_unavailable(
     tmp_path: Path, monkeypatch
 ) -> None:

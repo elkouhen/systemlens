@@ -72,10 +72,13 @@ indexed input methods, `V` source methods and `E` resolved call edges.
 The source projection prevents `build-mode=none` from invoking Maven or Gradle
 for dependency discovery; unresolved external types are accepted as the
 documented accuracy trade-off for offline indexing.
-With `--generate-sources`, a disposable copy runs only Maven
+With `--generate-sources`, the indexed repository runs only Maven
 `generate-sources` or Gradle `generateSources` before this projection is
-created. The indexed repository is never modified, compiled, or tested; the
-generation command may still require cached or remote plugin dependencies.
+created. Production Java files below `target/generated-sources/` are then
+included in the persisted file inventory and AST analysis. Other build output
+remains excluded. The repository is not compiled or tested; Maven generation
+uses the local cache and can therefore fail when the required plugin or
+dependency is unavailable.
 The call query keeps both caller and callee in source code, folds exact
 dispatch before viable-dispatch expansion, and computes that resolution once
 per call. The Python post-processing has two distinct stages: it first resolves

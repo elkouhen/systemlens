@@ -79,6 +79,8 @@ from systemlens.render import (
     render_modules_list_json,
     render_modules_list_text,
 )
+from systemlens.render.debug_xlsx import write_debug_xlsx
+from systemlens.render.graphml_export import render_graphml
 from systemlens.infrastructure.paths import config_path, db_path
 from systemlens.storage.sqlite import Store, StoreError
 from systemlens.delivery.mcp import import_graph_facts as import_graph_facts_mcp
@@ -110,7 +112,9 @@ export_app = typer.Typer(
         "Exemples : `systemlens export microservices --html graph.html`, "
         "`systemlens export projects --html projects.html`, "
         "`systemlens export modules --html modules.html`, "
-        "`systemlens export layers --html layers.html`."
+        "`systemlens export layers --html layers.html`, "
+        "`systemlens export microservices --xlsx indexing-debug.xlsx`, "
+        "`systemlens export microservices --graphml interservice.graphml`."
     )
 )
 topics_app = typer.Typer(
@@ -1686,6 +1690,12 @@ def export_microservices_cmd(
     html: Optional[Path] = typer.Option(
         None, "--html", help="Fichier HTML Sigma.js à produire."
     ),
+    xlsx: Optional[Path] = typer.Option(
+        None, "--xlsx", help="Classeur XLSX de diagnostic des ports et flux."
+    ),
+    graphml: Optional[Path] = typer.Option(
+        None, "--graphml", help="Graphe GraphML des flux interservices."
+    ),
     c4: Optional[Path] = typer.Option(
         None, "--c4", help="Répertoire du projet LikeC4 à produire."
     ),
@@ -1702,6 +1712,8 @@ def export_microservices_cmd(
 
     Exemples : `systemlens export microservices --html graph.html`,
     `systemlens export microservices --c4 architecture-likec4`,
+    `systemlens export microservices --xlsx indexing-debug.xlsx`,
+    `systemlens export microservices --graphml interservice.graphml`,
     `systemlens export microservices --json`.
     """
     # Direct Python callers (including embedding applications and tests) may
@@ -1709,9 +1721,9 @@ def export_microservices_cmd(
     # object in the function default.
     if not isinstance(graph, Path):
         graph = None
-    outputs = [output for output in (html, c4) if output is not None]
+    outputs = [output for output in (html, c4, xlsx, graphml) if output is not None]
     if len(outputs) + int(json_output) != 1:
-        typer.echo("Choisissez un seul format parmi --html, --c4 ou --json.", err=True)
+        typer.echo("Choisissez un seul format parmi --html, --c4, --xlsx, --graphml ou --json.", err=True)
         raise typer.Exit(code=2)
     if c4 is not None and c4.suffix:
         typer.echo(
@@ -1724,6 +1736,30 @@ def export_microservices_cmd(
     graph_data = _load_ai_graph(graph) if graph is not None else _load_microservice_graph(Path.cwd(), workspace, include_mongodb=True)
     if json_output:
         typer.echo(json.dumps(graph_data.result))
+        return
+    if xlsx is not None:
+        write_debug_xlsx(
+            xlsx,
+            graph_data.services_by_name,
+            graph_data.integration_methods or [],
+            graph_data.code_flows or [],
+        )
+        port_count = sum(len(endpoints) for endpoints in graph_data.services_by_name.values())
+        flow_count = sum(1 for flow in (graph_data.code_flows or []) if flow.steps)
+        typer.echo(
+            f"Export XLSX de diagnostic écrit dans {xlsx} "
+            f"({port_count} endpoints, {flow_count} flux indexés)."
+        )
+        return
+    if graphml is not None:
+        graphml.write_text(
+            render_graphml(list(graph_data.services_by_name), graph_data.edges),
+            encoding="utf-8",
+        )
+        typer.echo(
+            f"Export GraphML écrit dans {graphml} "
+            f"({len(graph_data.services_by_name)} services, {len(graph_data.edges)} flux)."
+        )
         return
     if html is not None:
         try:

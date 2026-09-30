@@ -33,6 +33,18 @@ def test_strategy1_can_index_openapi_generated_java_sources(tmp_path: Path) -> N
     assert set(files) == {"service/target/generated-sources/openapi/OrdersApi.java"}
 
 
+def test_generate_sources_can_index_all_maven_generated_java_sources(tmp_path: Path) -> None:
+    generated = tmp_path / "service/target/generated-sources/asyncapi/OrderPlaced.java"
+    generated.parent.mkdir(parents=True)
+    generated.write_text("class OrderPlaced {}", encoding="utf-8")
+    (tmp_path / "service/target/classes/OrderPlaced.class").parent.mkdir(parents=True)
+    (tmp_path / "service/target/classes/OrderPlaced.class").write_bytes(b"class")
+
+    files = list_repo_files(tmp_path, Config(), include_generated_sources=True)
+
+    assert set(files) == {"service/target/generated-sources/asyncapi/OrderPlaced.java"}
+
+
 def test_inventory_keeps_source_packages_named_build(tmp_path: Path) -> None:
     source = tmp_path / "service/src/main/java/com/example/build/Order.java"
     source.parent.mkdir(parents=True)

@@ -38,6 +38,7 @@ from systemlens.indexing.codeql import (
     codeql_executable,
     extract_codeql_calls,
     extract_codeql_reachability,
+    _generate_sources,
 )
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, MessageEndpoint
@@ -245,6 +246,20 @@ def _index_repo(
     # `reindex_findings` doit voir les fichiers tels qu'ils sont maintenant,
     # pas tels qu'un `systemlens index` précédent les avait mémorisés.
     clear_analysis_caches()
+    if generate_sources:
+        timer.begin(
+            "generation",
+            "→ Indexation : génération des sources Maven/Gradle...",
+        )
+        _generate_sources(
+            repo_root,
+            timeout=config.codeql_timeout_seconds,
+            progress=progress,
+        )
+        timer.end("generation", "génération des sources")
+        # Generated sources are build inputs for this run even when their
+        # plugin output has the same hash as a previous index.
+        full = True
     _trace(
         "index_repo.begin", root=repo_root, full=full, disabled=",".join(sorted(disabled)),
         topic_strategy=topic_strategy,
@@ -288,6 +303,7 @@ def _index_repo(
         config,
         excluded_module_paths=excluded_module_paths,
         include_strategy1_generated_sources=strategy1_enabled,
+        include_generated_sources=generate_sources,
     )
     if kubernetes:
         _report_progress(progress, "→ Indexation : découverte des workloads Kubernetes...")
@@ -864,7 +880,10 @@ def _index_repo(
                                     timeout_seconds=config.codeql_timeout_seconds,
                                     threads=config.codeql_threads,
                                     ram_mb=config.codeql_ram_mb,
-                                    generate_sources=True,
+                                    # Source generation already ran before the
+                                    # repository inventory. Reuse its generated
+                                    # files instead of running Maven twice.
+                                    generate_sources=False,
                                     deadline=codeql_deadline,
                                 )
                             else:
@@ -883,7 +902,10 @@ def _index_repo(
                                 ram_mb=config.codeql_ram_mb,
                                 verbosity=codeql_verbosity,
                                 progress=progress,
-                                generate_sources=True,
+                                # Source generation already ran before the
+                                # repository inventory. Reuse its generated
+                                # files instead of running Maven twice.
+                                generate_sources=False,
                                 deadline=codeql_deadline,
                             )
                         else:
