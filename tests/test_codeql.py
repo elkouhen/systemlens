@@ -139,6 +139,28 @@ def test_generate_sources_runs_only_the_maven_generation_phase(tmp_path: Path, m
     assert observed == [(["mvn", "-B", "-ntp", "-o", "generate-sources"], tmp_path)]
 
 
+def test_generate_sources_runs_independent_nested_maven_projects(
+    tmp_path: Path, monkeypatch
+) -> None:
+    first = tmp_path / "services/orders"
+    second = tmp_path / "services/payments"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+    (first / "pom.xml").write_text("<project />", encoding="utf-8")
+    (second / "pom.xml").write_text("<project />", encoding="utf-8")
+    observed: list[Path | None] = []
+
+    def run(command: list[str], **kwargs: object) -> CompletedProcess[str]:
+        assert command == ["mvn", "-B", "-ntp", "-o", "generate-sources"]
+        observed.append(kwargs.get("cwd"))
+        return CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(codeql, "_run_with_progress", run)
+    codeql._generate_sources(tmp_path, timeout=42, progress=None)
+
+    assert observed == [first, second]
+
+
 def test_automatic_codeql_database_is_source_only_and_temporary(
     tmp_path: Path, monkeypatch
 ) -> None:

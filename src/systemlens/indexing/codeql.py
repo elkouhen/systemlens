@@ -461,20 +461,67 @@ def _prepare_generation_workspace(repo_root: Path, destination: Path) -> None:
     )
 
 
+def _generation_roots(workspace: Path) -> list[Path]:
+    """Return outermost Maven or Gradle projects that can generate sources.
+
+    A workspace-level descriptor owns its nested modules. When it is absent,
+    independent module descriptors are generated from their own directories.
+    This keeps multi-module repositories supported without requiring a synthetic
+    aggregator at the repository root.
+    """
+    if (workspace / "pom.xml").is_file() or (workspace / "gradlew").is_file():
+        return [workspace]
+
+    descriptors = [
+        path.parent
+        for path in workspace.rglob("pom.xml")
+        if not any(part in {".git", ".systemlens", "target", "build", "out"}
+                   for part in path.relative_to(workspace).parts)
+    ]
+    if descriptors:
+        candidates = sorted(set(descriptors), key=lambda path: (len(path.parts), str(path)))
+    else:
+        candidates = sorted(
+            {
+                path.parent
+                for path in workspace.rglob("gradlew")
+                if path.is_file()
+                and not any(
+                    part in {".git", ".systemlens", "target", "build", "out"}
+                    for part in path.relative_to(workspace).parts
+                )
+            },
+            key=lambda path: (len(path.parts), str(path)),
+        )
+    return [
+        candidate
+        for candidate in candidates
+        if not any(parent in candidates for parent in candidate.parents)
+    ]
+
+
 def _generate_sources(
     workspace: Path, *, timeout: float, progress: Callable[[str], None] | None,
 ) -> None:
     """Run build-tool source generation only, never compilation or tests."""
-    if (workspace / "pom.xml").is_file():
-        command = ["mvn", "-B", "-ntp", "-o", "generate-sources"]
-    elif (workspace / "gradlew").is_file():
-        command = ["./gradlew", "--no-daemon", "generateSources"]
-    else:
-        return
-    completed = _run_with_progress(command, timeout=timeout, progress=progress, cwd=workspace)
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout).strip()
-        raise CodeQLError(f"Source generation failed: {detail}")
+    deadline = time.monotonic() + timeout
+    roots = _generation_roots(workspace)
+    for root in roots:
+        if (root / "pom.xml").is_file():
+            command = ["mvn", "-B", "-ntp", "-o", "generate-sources"]
+        elif (root / "gradlew").is_file():
+            command = ["./gradlew", "--no-daemon", "generateSources"]
+        else:
+            continue
+        completed = _run_with_progress(
+            command,
+            timeout=_remaining_timeout(timeout, deadline),
+            progress=progress,
+            cwd=root,
+        )
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout).strip()
+            raise CodeQLError(f"Source generation failed in {root}: {detail}")
 
 
 @contextmanager
