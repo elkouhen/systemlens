@@ -76,9 +76,9 @@ With `--generate-sources`, the indexed repository runs only Maven
 `generate-sources` or Gradle `generateSources` before this projection is
 created. A root build descriptor owns its nested modules. If the repository has
 no root descriptor, generation runs once in each outermost nested Maven or
-Gradle project, so an aggregator is not required. Production Java files below
-`target/generated-sources/` are then included in the persisted file inventory
-and AST analysis. Other build output remains excluded. The repository is not
+Gradle project, so an aggregator is not required. Java files below a Maven
+`target/` directory are then included in the persisted file inventory and AST
+analysis. Other non-Java build output remains excluded. The repository is not
 compiled or tested; Maven generation uses the local cache and can therefore
 fail when the required plugin or dependency is unavailable.
 The call query keeps both caller and callee in source code, folds exact

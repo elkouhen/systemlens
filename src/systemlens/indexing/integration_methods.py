@@ -113,6 +113,7 @@ def materialize_integration_methods(
             by_path[endpoint.path].append(endpoint)
 
     methods: list[IntegrationMethod] = []
+    method_ids: set[str] = set()
     overridden_rest_controller_method_ids: set[str] = set()
     for path in sorted(set(java_paths) | set(by_path)):
         if not path.endswith(".java"):
@@ -174,6 +175,27 @@ def materialize_integration_methods(
                 else "()"
             )
             method_id = _method_id(module, path, qualified_method, parameter_signature)
+            if method_id in method_ids:
+                # Invalid or generated Java can contain two declarations with
+                # the same lexical signature. Keep the historical stable ID
+                # for the first declaration and disambiguate later ones with
+                # their source coordinates instead of failing the transaction.
+                method_id = _method_id(
+                    module,
+                    path,
+                    qualified_method,
+                    f"{parameter_signature}|lines={start_line}:{end_line}",
+                )
+                collision = 2
+                while method_id in method_ids:
+                    method_id = _method_id(
+                        module,
+                        path,
+                        qualified_method,
+                        f"{parameter_signature}|lines={start_line}:{end_line}|collision={collision}",
+                    )
+                    collision += 1
+            method_ids.add(method_id)
             methods.append(IntegrationMethod(
                 id=method_id,
                 module=module,

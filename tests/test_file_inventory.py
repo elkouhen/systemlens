@@ -37,12 +37,18 @@ def test_generate_sources_can_index_all_maven_generated_java_sources(tmp_path: P
     generated = tmp_path / "service/target/generated-sources/asyncapi/OrderPlaced.java"
     generated.parent.mkdir(parents=True)
     generated.write_text("class OrderPlaced {}", encoding="utf-8")
+    other_target_java = tmp_path / "service/target/custom/GeneratedMapper.java"
+    other_target_java.parent.mkdir(parents=True)
+    other_target_java.write_text("class GeneratedMapper {}", encoding="utf-8")
     (tmp_path / "service/target/classes/OrderPlaced.class").parent.mkdir(parents=True)
     (tmp_path / "service/target/classes/OrderPlaced.class").write_bytes(b"class")
 
     files = list_repo_files(tmp_path, Config(), include_generated_sources=True)
 
-    assert set(files) == {"service/target/generated-sources/asyncapi/OrderPlaced.java"}
+    assert set(files) == {
+        "service/target/generated-sources/asyncapi/OrderPlaced.java",
+        "service/target/custom/GeneratedMapper.java",
+    }
 
 
 def test_inventory_keeps_source_packages_named_build(tmp_path: Path) -> None:

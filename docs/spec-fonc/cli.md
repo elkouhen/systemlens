@@ -88,10 +88,10 @@ When `--generate-sources` is enabled, SystemLens runs only the Maven
 `generate-sources` or Gradle `generateSources` phase in the indexed repository,
 with batch, non-interactive and offline options for Maven. A root build
 descriptor generates all of its nested modules; without one, each outermost
-nested Maven or Gradle project is generated independently. The generated
-production Java files below `target/generated-sources/` are included in the
-same AST and method index, while `target/classes` and other build outputs remain
-excluded. The command never compiles the project or runs tests. Maven must find
+nested Maven or Gradle project is generated independently. The generated Java
+files below a Maven `target/` directory are included in the same AST and method
+index, while non-Java build outputs remain excluded. The command never compiles
+the project or runs tests. Maven must find
 its plugins and dependencies in the local cache.
 
 Automatic method-call analysis creates one source-only Java database for the

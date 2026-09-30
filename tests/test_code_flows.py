@@ -1525,6 +1525,42 @@ class OrderController {
     assert len({method.id for method in methods}) == 2
 
 
+def test_integration_method_ids_handle_duplicate_generated_declarations(tmp_path: Path) -> None:
+    relative_source = "orders/target/generated-sources/GeneratedController.java"
+    source = tmp_path / relative_source
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """package com.example;
+class GeneratedController {
+  void publish(String order) { kafka.send(); }
+  void publish(String order) { kafka.send(); }
+}
+""",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        replace(
+            _endpoint("first", "produce", "kafka", "orders.first", relative_source, 3),
+            qualified_name="com.example.GeneratedController",
+        ),
+        replace(
+            _endpoint("second", "produce", "kafka", "orders.second", relative_source, 4),
+            qualified_name="com.example.GeneratedController",
+        ),
+    ]
+
+    methods = materialize_integration_methods(
+        tmp_path, endpoints, [relative_source], [module]
+    )
+
+    assert len(methods) == 2
+    assert len({method.id for method in methods}) == 2
+
+
 def test_integration_methods_keep_lexical_owner_for_portless_helpers(tmp_path: Path) -> None:
     relative_source = "orders/src/main/java/com/example/OrderController.java"
     source = tmp_path / relative_source

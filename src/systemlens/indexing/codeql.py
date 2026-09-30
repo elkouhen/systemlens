@@ -408,13 +408,15 @@ def _run_with_progress(
     return subprocess.CompletedProcess(command, returncode, "".join(output), "")
 
 
-def _prepare_source_only_root(repo_root: Path, destination: Path) -> int:
+def _prepare_source_only_root(
+    repo_root: Path, destination: Path, *, include_target_java_sources: bool = False,
+) -> int:
     """Copy application and generated Java sources without build descriptors.
 
-    Maven projects may keep AsyncAPI/OpenAPI Java sources below
-    ``target/generated-sources``. They are needed to resolve calls whose
-    signatures use generated DTOs, while the rest of ``target`` remains an
-    untrusted build artifact and is intentionally excluded.
+    Maven projects may keep generated Java sources below ``target``. They are
+    needed to resolve calls whose signatures use generated DTOs, while the rest
+    of ``target`` remains an untrusted build artifact and is excluded unless
+    source generation was explicitly requested for this index.
     """
     excluded_directories = {".git", ".systemlens", "target", "out"}
     copied = 0
@@ -427,10 +429,13 @@ def _prepare_source_only_root(repo_root: Path, destination: Path) -> int:
             parts[index:index + 2] == ("target", "generated-sources")
             for index in range(len(parts) - 1)
         )
+        target_java_source = generated_target
+        if include_target_java_sources and "target" in parts and source.suffix == ".java":
+            target_java_source = True
         if (
             any(part in excluded_directories for part in parts)
             or is_build_output(relative.as_posix())
-        ) and not generated_target:
+        ) and not target_java_source:
             continue
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -530,6 +535,7 @@ def automatic_codeql_database(
     ram_mb: int | None = None, verbosity: str | None = None,
     progress: Callable[[str], None] | None = None,
     generate_sources: bool = False,
+    include_target_java_sources: bool = False,
     deadline: float | None = None,
 ) -> Iterator[Path | None]:
     """Create a temporary source-only Java database for one index run.
@@ -555,7 +561,13 @@ def automatic_codeql_database(
                 progress=progress,
             )
             codeql_input = generation_root
-        _prepare_source_only_root(codeql_input, source_root)
+        _prepare_source_only_root(
+            codeql_input,
+            source_root,
+            include_target_java_sources=(
+                include_target_java_sources or generate_sources
+            ),
+        )
         command = [
             executable, "database", "create", str(database), "--language=java",
             f"--source-root={source_root}", "--build-mode=none", f"--threads={threads}",

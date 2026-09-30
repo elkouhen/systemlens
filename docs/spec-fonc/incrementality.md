@@ -16,9 +16,9 @@ Maven `target/` and Gradle `build/` directories are excluded from normal source
 input. With `--strategy strategy1`, Java files under
 `target/generated-sources/openapi/` are the deliberate exception: they are
 eligible as generated OpenAPI client evidence. With `--generate-sources`, all
-production Java files below `target/generated-sources/` are also eligible after
-the Maven or Gradle generation phase completes. Other build outputs, copied
-contracts, nested descriptors and derived manifests remain excluded.
+Java files below a Maven `target/` directory are also eligible after the Maven
+or Gradle generation phase completes. Other build outputs, copied contracts,
+nested descriptors and derived manifests remain excluded.
 
 The index is `.systemlens/findings.db` for compatibility with prior releases. It is a
 local implementation detail, not a contract for direct SQL writes.

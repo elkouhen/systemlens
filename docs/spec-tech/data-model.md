@@ -466,7 +466,11 @@ and input/output endpoint identifiers. Schema version 27 added the
 `code_flows` table and its module/path indexes. The
 migration is additive and occurs when the writable store opens, before the
 index transaction. Stored steps are JSON projections of immutable domain
-facts; source paths remain relative to the indexed root.
+facts; source paths remain relative to the indexed root. Integration-method IDs
+are stable hashes of the module, relative path, qualified method and parameter
+signature. If malformed or generated Java repeats that signature, later
+declarations receive a deterministic source-coordinate suffix so the snapshot
+remains insertable.
 
 For an OpenAPI-derived REST input whose checked-in Java implementation only
 implements a generated interface, the integration-method projection may attach

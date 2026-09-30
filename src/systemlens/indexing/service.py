@@ -884,6 +884,7 @@ def _index_repo(
                                     # repository inventory. Reuse its generated
                                     # files instead of running Maven twice.
                                     generate_sources=False,
+                                    include_target_java_sources=True,
                                     deadline=codeql_deadline,
                                 )
                             else:
@@ -906,6 +907,7 @@ def _index_repo(
                                 # repository inventory. Reuse its generated
                                 # files instead of running Maven twice.
                                 generate_sources=False,
+                                include_target_java_sources=True,
                                 deadline=codeql_deadline,
                             )
                         else:

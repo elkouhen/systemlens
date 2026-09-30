@@ -115,6 +115,19 @@ def test_source_only_root_keeps_generated_sources_but_excludes_build_outputs(tmp
     assert (destination / "service" / "target" / "generated-sources" / "asyncapi" / "OrderPlaced.java").exists()
 
 
+def test_source_only_root_can_include_all_target_java_sources(tmp_path: Path) -> None:
+    generated = tmp_path / "service/target/custom/GeneratedMapper.java"
+    generated.parent.mkdir(parents=True)
+    generated.write_text("class GeneratedMapper {}", encoding="utf-8")
+
+    destination = tmp_path / "source"
+
+    assert codeql._prepare_source_only_root(
+        tmp_path, destination, include_target_java_sources=True
+    ) == 1
+    assert (destination / "service/target/custom/GeneratedMapper.java").exists()
+
+
 def test_source_only_root_keeps_source_packages_named_build(tmp_path: Path) -> None:
     source = tmp_path / "service/src/main/java/com/example/build/Order.java"
     source.parent.mkdir(parents=True)
