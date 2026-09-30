@@ -1,6 +1,8 @@
 """Materialize normalized architecture relations from indexed inventories."""
 
+import hashlib
 import re
+from dataclasses import replace
 from typing import TypedDict
 
 from systemlens.domain.models import ArchitectureRelation, MessageEndpoint, compute_architecture_relation_id
@@ -76,7 +78,31 @@ def build_architecture_relations(
     relations: dict[str, ArchitectureRelation] = {}
 
     def add(relation: ArchitectureRelation) -> None:
-        relations[relation.id] = relation
+        existing = relations.get(relation.id)
+        if existing is None or existing == relation:
+            relations[relation.id] = relation
+            return
+        discriminator = repr((
+            relation.source_kind,
+            relation.source_name,
+            relation.relation,
+            relation.target_kind,
+            relation.target_name,
+            relation.origin,
+            relation.confidence,
+            relation.module,
+            relation.path,
+            relation.start_line,
+            relation.end_line,
+            relation.qualified_name,
+        )).encode("utf-8")
+        digest = hashlib.sha256(discriminator).hexdigest()[:8]
+        candidate = f"{relation.id}-{digest}"
+        collision = 2
+        while candidate in relations:
+            candidate = f"{relation.id}-{digest}-{collision}"
+            collision += 1
+        relations[candidate] = replace(relation, id=candidate)
 
     for dependency in dependencies:
         add(_relation(
