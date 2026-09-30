@@ -22,7 +22,8 @@ from systemlens.conventions.strategy1.indexing import requires_full_reindex
 from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
 from systemlens.indexing.materializers import materialize_asyncapi_contracts, materialize_openapi_contracts
 from systemlens.indexing.code_flows import (
-    CODE_FLOW_SIGNATURE, _deduplicate_code_flows, materialize_code_flows,
+    CODE_FLOW_SIGNATURE, _deduplicate_code_flows, _ensure_unique_code_flow_ids,
+    materialize_code_flows,
     CodeQLCallGraph, codeql_join_methods_signature, materialize_codeql_code_flows,
     reconcile_code_flows,
 )
@@ -705,7 +706,9 @@ def _index_repo(
                     *flows,
                     *progress_flows,
                 ]
-                partial_flows = _deduplicate_code_flows(partial_flows, all_endpoints)
+                partial_flows = _ensure_unique_code_flow_ids(
+                    _deduplicate_code_flows(partial_flows, all_endpoints)
+                )
                 store.replace_code_flows(partial_flows)
                 store.delete_meta("code_flow_signature")
                 store.set_meta("code_flow_snapshot_status", "partial")
@@ -763,8 +766,10 @@ def _index_repo(
                 completed_methods: int,
                 total_methods: int,
             ) -> None:
-                partial_flows = _deduplicate_code_flows(
-                    [*flows, *partial_codeql_flows], all_endpoints
+                partial_flows = _ensure_unique_code_flow_ids(
+                    _deduplicate_code_flows(
+                        [*flows, *partial_codeql_flows], all_endpoints
+                    )
                 )
                 store.replace_code_flows(partial_flows)
                 store.delete_meta("code_flow_signature")
@@ -1012,7 +1017,9 @@ def _index_repo(
             # AST and the interprocedural engine can describe the same
             # endpoint-to-endpoint flow. Keep one representative while the
             # CodeQL call graph remains the source of internal call edges.
-            flows = _deduplicate_code_flows([*flows, *codeql_flows], all_endpoints)
+            flows = _ensure_unique_code_flow_ids(
+                _deduplicate_code_flows([*flows, *codeql_flows], all_endpoints)
+            )
             timer.end("call-graph-join", f"jointure {engine_label} et matérialisation des flux")
             _report_progress(
                 progress,
@@ -1042,13 +1049,15 @@ def _index_repo(
                 flow for flow in source_candidates
                 if any(step.kind == "method_call" for step in flow.steps)
             ]
-            flows = _deduplicate_code_flows([*flows, *source_flows], all_endpoints)
+            flows = _ensure_unique_code_flow_ids(
+                _deduplicate_code_flows([*flows, *source_flows], all_endpoints)
+            )
         service_aliases = {
             module_identity(module): local_spring_application_names(module.path, None)
             for module in relation_modules
         }
         flows = reconcile_code_flows(
-            flows,
+            _ensure_unique_code_flow_ids(flows),
             all_endpoints,
             build_graph(
                 group_endpoints_by_module(all_endpoints),
@@ -1060,7 +1069,7 @@ def _index_repo(
                 service_aliases=service_aliases,
             ),
         )
-        store.replace_code_flows(flows)
+        store.replace_code_flows(_ensure_unique_code_flow_ids(flows))
         if codeql_timed_out:
             # Do not mark an incomplete interprocedural pass as current. The
             # next incremental index must retry CodeQL even when source files

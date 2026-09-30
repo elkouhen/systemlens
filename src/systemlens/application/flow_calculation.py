@@ -9,6 +9,7 @@ from systemlens.domain.graph import (
 )
 from systemlens.indexing.code_flows import (
     _deduplicate_code_flows,
+    _ensure_unique_code_flow_ids,
     materialize_codeql_code_flows,
     reconcile_code_flows,
 )
@@ -57,13 +58,13 @@ def calculate_persisted_flows(store: Store) -> int:
         if methods
         else []
     )
-    flows = _deduplicate_code_flows(
+    flows = _ensure_unique_code_flow_ids(_deduplicate_code_flows(
         [*persisted_flows, *reconstructed_flows], endpoints,
-    )
+    ))
     reconciled = reconcile_code_flows(
         flows,
         endpoints,
         [*source_edges, *fact_edges],
     )
-    store.replace_code_flows(reconciled)
+    store.replace_code_flows(_ensure_unique_code_flow_ids(reconciled))
     return len(reconciled)

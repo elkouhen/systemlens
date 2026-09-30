@@ -22,6 +22,7 @@ from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod
 from systemlens.indexing.code_flows import (
     CodeQLCallGraph,
     _deduplicate_code_flows,
+    _ensure_unique_code_flow_ids,
     codeql_join_methods_signature,
 )
 from systemlens.indexing.code_flows import materialize_code_flows, reconcile_code_flows
@@ -159,6 +160,24 @@ def test_materialize_code_flows_disambiguates_overload_ids(tmp_path: Path) -> No
 
     assert len(flows) == 2
     assert len({flow.id for flow in flows}) == 2
+
+
+def test_ensure_unique_code_flow_ids_is_deterministic() -> None:
+    first = CodeFlow(
+        id="same-id", module="orders", method="receive", path="Orders.java",
+        start_line=2, end_line=2, status="potential", confidence="medium",
+        reason="first", steps=(CodeFlowStep(1, "message_entry", "in", "Orders.java", 2, 2),),
+    )
+    second = replace(first, reason="second", steps=(
+        CodeFlowStep(1, "message_entry", "in", "Orders.java", 2, 2),
+        CodeFlowStep(2, "message_publish", "out", "Orders.java", 2, 2),
+    ))
+
+    result = _ensure_unique_code_flow_ids([first, second])
+    repeated = _ensure_unique_code_flow_ids([first, second])
+
+    assert [flow.id for flow in result] == ["same-id", repeated[1].id]
+    assert len({flow.id for flow in result}) == 2
 
 
 def test_materialize_code_flows_keeps_scheduled_kafka_publication_local(tmp_path: Path) -> None:

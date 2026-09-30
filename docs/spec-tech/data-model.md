@@ -474,6 +474,11 @@ signature. If malformed or generated Java repeats that signature, later
 declarations receive a deterministic source-coordinate suffix so the snapshot
 remains insertable.
 
+Code-flow IDs are unique within every persisted snapshot, including provisional
+CodeQL checkpoints and `flows calculate` results. A collision preserves the
+first stable ID and assigns later candidates a deterministic content-derived
+suffix before SQLite persistence.
+
 For an OpenAPI-derived REST input whose checked-in Java implementation only
 implements a generated interface, the integration-method projection may attach
 the input to exactly one method in the same module when the contract's exact
