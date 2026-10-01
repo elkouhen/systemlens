@@ -33,3 +33,9 @@ Every persisted and provisional `code_flows` snapshot has unique flow IDs.
 Collision handling preserves the first stable ID and adds a deterministic
 content-derived suffix to later colliding candidates. This rule applies before
 checkpoint commits, final indexing persistence, and `flows calculate`.
+
+The SQLite replacement methods apply the same boundary protection to generated
+IDs for endpoints, relations, integration methods, findings, and code chunks.
+Exact duplicates on composite keys are collapsed; conflicting OpenAPI,
+AsyncAPI, dependency, diagnostic, or CodeQL-edge rows are rejected with a
+domain-level `StoreError` before the previous snapshot is deleted.

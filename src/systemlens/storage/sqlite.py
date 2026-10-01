@@ -1,12 +1,15 @@
 """SQLite implementation of the local architecture snapshot store."""
 
+import hashlib
 import json
 import re
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from types import TracebackType
+from typing import Any, TypeVar, cast
 
 from systemlens.domain.models import (
     ArchitectureRelation,
@@ -14,6 +17,7 @@ from systemlens.domain.models import (
     Finding,
     GraphFact,
     MessageEndpoint,
+    ensure_unique_endpoint_ids,
     merge_graph_facts,
 )
 from systemlens.domain.code_flows import (
@@ -49,6 +53,50 @@ SCHEMA_VERSION = "35"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
+
+
+_IdentifiedT = TypeVar("_IdentifiedT")
+
+
+def _ensure_unique_record_ids(records: list[_IdentifiedT]) -> list[_IdentifiedT]:
+    """Keep persisted records addressable even when generated IDs collide."""
+    used: set[str] = set()
+    unique: list[_IdentifiedT] = []
+    for record in records:
+        record_id = cast(str, getattr(record, "id"))
+        if record_id not in used:
+            used.add(record_id)
+            unique.append(record)
+            continue
+        if record in unique:
+            continue
+        digest = hashlib.sha256(repr(record).encode("utf-8")).hexdigest()[:8]
+        candidate = f"{record_id}-{digest}"
+        collision = 2
+        while candidate in used:
+            candidate = f"{record_id}-{digest}-{collision}"
+            collision += 1
+        used.add(candidate)
+        unique.append(cast(_IdentifiedT, replace(cast(Any, record), id=candidate)))
+    return unique
+
+
+def _deduplicate_keyed_rows(
+    rows: list[tuple[object, ...]],
+    *,
+    key_indexes: tuple[int, ...],
+    label: str,
+) -> list[tuple[object, ...]]:
+    """Drop exact duplicate rows and reject conflicting composite-key rows."""
+    seen: dict[tuple[object, ...], tuple[object, ...]] = {}
+    for row in rows:
+        key = tuple(row[index] for index in key_indexes)
+        previous = seen.get(key)
+        if previous is None:
+            seen[key] = row
+        elif previous != row:
+            raise StoreError(f"Conflicting duplicate {label} for key {key!r}.")
+    return list(seen.values())
 
 
 def _chunked(items: list[str], size: int = _SQLITE_BIND_LIMIT) -> Iterator[list[str]]:
@@ -497,13 +545,31 @@ class Store:
         self.conn.execute("DELETE FROM meta WHERE key = ?", (key,))
 
     def replace_kafka_dto_definitions(self, definitions: list[dict[str, object]]) -> None:
+        rows: list[tuple[object, ...]] = []
+        used_ids: set[str] = set()
+        seen_definitions: set[tuple[str, str]] = set()
+        for definition in definitions:
+            definition = dict(definition)
+            base_id = str(definition["id"])
+            payload = json.dumps(definition, sort_keys=True)
+            if (base_id, payload) in seen_definitions:
+                continue
+            seen_definitions.add((base_id, payload))
+            definition_id = base_id
+            if definition_id in used_ids:
+                digest = hashlib.sha256(payload.encode()).hexdigest()[:8]
+                definition_id = f"{base_id}-{digest}"
+                collision = 2
+                while definition_id in used_ids:
+                    definition_id = f"{base_id}-{digest}-{collision}"
+                    collision += 1
+                definition["id"] = definition_id
+            used_ids.add(definition_id)
+            rows.append((definition_id, json.dumps(definition)))
         self.conn.execute("DELETE FROM kafka_dto_definitions")
         self.conn.executemany(
             "INSERT INTO kafka_dto_definitions (id, definition) VALUES (?, ?)",
-            [
-                (str(definition["id"]), json.dumps(definition))
-                for definition in definitions
-            ],
+            rows,
         )
 
     def all_kafka_dto_definitions(self) -> list[dict[str, object]]:
@@ -515,13 +581,18 @@ class Store:
         ]
 
     def replace_openapi_contracts(self, contracts: list[dict[str, object]]) -> None:
-        self.conn.execute("DELETE FROM openapi_contracts")
-        self.conn.executemany(
-            "INSERT INTO openapi_contracts (module, path, spec) VALUES (?, ?, ?)",
+        rows = _deduplicate_keyed_rows(
             [
                 (str(contract["module"]), str(contract["path"]), json.dumps(contract["spec"]))
                 for contract in contracts
             ],
+            key_indexes=(0, 1),
+            label="OpenAPI contract",
+        )
+        self.conn.execute("DELETE FROM openapi_contracts")
+        self.conn.executemany(
+            "INSERT INTO openapi_contracts (module, path, spec) VALUES (?, ?, ?)",
+            rows,
         )
 
     def all_openapi_contracts(self) -> list[dict[str, object]]:
@@ -533,10 +604,18 @@ class Store:
         ]
 
     def replace_asyncapi_contracts(self, contracts: list[dict[str, object]]) -> None:
+        rows = _deduplicate_keyed_rows(
+            [
+                (str(contract["module"]), str(contract["path"]), json.dumps(contract["spec"]))
+                for contract in contracts
+            ],
+            key_indexes=(0, 1),
+            label="AsyncAPI contract",
+        )
         self.conn.execute("DELETE FROM asyncapi_contracts")
-        self.conn.executemany("INSERT INTO asyncapi_contracts (module, path, spec) VALUES (?, ?, ?)", [
-            (str(contract["module"]), str(contract["path"]), json.dumps(contract["spec"])) for contract in contracts
-        ])
+        self.conn.executemany(
+            "INSERT INTO asyncapi_contracts (module, path, spec) VALUES (?, ?, ?)", rows
+        )
 
     def all_asyncapi_contracts(self) -> list[dict[str, object]]:
         return [{"module": row["module"], "path": row["path"], "spec": json.loads(row["spec"])}
@@ -546,10 +625,17 @@ class Store:
 
     def replace_modules(self, modules: list[DiscoveredModule]) -> None:
         """Persist the build inventory produced during `systemlens index`."""
-        self.conn.execute("DELETE FROM modules")
-        self.conn.execute("DELETE FROM module_dependencies")
+        seen_paths: set[str] = set()
+        relative_paths: list[str] = []
         for module in modules:
             relative_path = module.path.resolve().relative_to(self._repo_root).as_posix()
+            if relative_path in seen_paths:
+                raise StoreError(f"Duplicate module path: {relative_path!r}.")
+            seen_paths.add(relative_path)
+            relative_paths.append(relative_path)
+        self.conn.execute("DELETE FROM modules")
+        self.conn.execute("DELETE FROM module_dependencies")
+        for module, relative_path in zip(modules, relative_paths, strict=True):
             self.conn.execute(
                 """
                 INSERT INTO modules (path, name, identity, build_system, version, kind, starts_application, configuration_example, application_entrypoint,
@@ -639,10 +725,15 @@ class Store:
 
     def replace_module_dependencies(self, dependencies: list[ModuleDependency]) -> None:
         """Remplace le graphe des dépendances de build local au workspace."""
+        rows = _deduplicate_keyed_rows(
+            [(dependency.source, dependency.target) for dependency in dependencies],
+            key_indexes=(0, 1),
+            label="module dependency",
+        )
         self.conn.execute("DELETE FROM module_dependencies")
         self.conn.executemany(
             "INSERT INTO module_dependencies (source, target) VALUES (?, ?)",
-            [(dependency.source, dependency.target) for dependency in dependencies],
+            rows,
         )
 
     def all_module_dependencies(self) -> list[ModuleDependency]:
@@ -655,6 +746,7 @@ class Store:
 
     def replace_architecture_relations(self, relations: list[ArchitectureRelation]) -> None:
         """Replace the materialized relation graph after an index run."""
+        relations = _ensure_unique_record_ids(relations)
         self.conn.execute("DELETE FROM architecture_relations")
         self.conn.executemany(
             """
@@ -709,6 +801,7 @@ class Store:
     # -- potential code flows --
 
     def replace_integration_methods(self, methods: list[IntegrationMethod]) -> None:
+        methods = _ensure_unique_record_ids(methods)
         self.conn.execute("DELETE FROM integration_methods")
         self.conn.executemany(
             """INSERT INTO integration_methods
@@ -738,11 +831,7 @@ class Store:
 
     def replace_codeql_call_edges(self, edges: list[CodeQLCallGraphEdge]) -> None:
         """Replace the source-backed CodeQL call graph edges."""
-        self.conn.execute("DELETE FROM codeql_call_edges")
-        self.conn.executemany(
-            """INSERT INTO codeql_call_edges
-            (caller_id, callee_id, path, line, dispatch_confidence, inferred)
-            VALUES (?, ?, ?, ?, ?, ?)""",
+        rows = _deduplicate_keyed_rows(
             [
                 (
                     edge.caller_id,
@@ -754,6 +843,15 @@ class Store:
                 )
                 for edge in edges
             ],
+            key_indexes=(0, 1, 2, 3, 4, 5),
+            label="CodeQL call edge",
+        )
+        self.conn.execute("DELETE FROM codeql_call_edges")
+        self.conn.executemany(
+            """INSERT INTO codeql_call_edges
+            (caller_id, callee_id, path, line, dispatch_confidence, inferred)
+            VALUES (?, ?, ?, ?, ?, ?)""",
+            rows,
         )
 
     def all_codeql_call_edges(self) -> list[CodeQLCallGraphEdge]:
@@ -915,6 +1013,14 @@ class Store:
     def replace_extraction_diagnostics_for_files(
         self, paths: list[str], diagnostics: list[ExtractionDiagnostic]
     ) -> None:
+        rows = _deduplicate_keyed_rows(
+            [
+                (item.path, item.extractor, item.category, item.severity, item.detail)
+                for item in diagnostics
+            ],
+            key_indexes=(0, 1, 2),
+            label="extraction diagnostic",
+        )
         for chunk in _chunked(paths):
             placeholders = ", ".join("?" for _ in chunk)
             self.conn.execute(  # nosec B608
@@ -923,7 +1029,7 @@ class Store:
             )
         self.conn.executemany(
             "INSERT INTO extraction_diagnostics (path, extractor, category, severity, detail) VALUES (?, ?, ?, ?, ?)",
-            [(item.path, item.extractor, item.category, item.severity, item.detail) for item in diagnostics],
+            rows,
         )
 
     def all_extraction_diagnostics(self) -> list[ExtractionDiagnostic]:
@@ -974,6 +1080,7 @@ class Store:
         return len(rows)
 
     def replace_findings_for_files(self, paths: list[str], findings: list[Finding]) -> None:
+        findings = _ensure_unique_record_ids(findings)
         if paths:
             self._delete_rows_for_paths("findings", paths)
         for finding in findings:
@@ -1019,6 +1126,7 @@ class Store:
     def replace_code_chunks_for_files(
         self, paths: list[str], chunks: list[CodeChunk]
     ) -> None:
+        chunks = _ensure_unique_record_ids(chunks)
         if paths:
             self._delete_rows_for_paths("code_chunks", paths)
         for chunk in chunks:
@@ -1093,6 +1201,7 @@ class Store:
     def replace_endpoints_for_files(
         self, paths: list[str], endpoints: list[MessageEndpoint]
     ) -> None:
+        endpoints = ensure_unique_endpoint_ids(endpoints)
         if paths:
             self._delete_rows_for_paths("endpoints", paths)
         for endpoint in endpoints:
