@@ -67,7 +67,10 @@ supplied by the caller. Once the source-backed call graph is constructed, its
 edges are committed as an explicit partial checkpoint before input-to-output
 reconstruction begins. The checkpoint records
 `codeql_call_graph_status` and the persisted edge count; this status does not
-imply that the flow join is complete. The temporary CodeQL query pack pins
+imply that the flow join is complete. After the input-to-output calculation,
+the provisional merged flows are committed before topology reconciliation;
+`codeql_input_output_status` distinguishes a complete join from one based on a
+timed-out partial CodeQL pass. The temporary CodeQL query pack pins
 `codeql/java-all` and resolves it only from the already installed local CodeQL
 pack cache; indexing never runs `codeql pack install` or downloads analyzer
 dependencies. The configured CodeQL thread count and optional RAM limit are

@@ -581,6 +581,8 @@ def _index_repo(
         store.replace_codeql_call_edges([])
         store.delete_meta("codeql_call_graph_status")
         store.delete_meta("codeql_call_graph_edge_count")
+        store.delete_meta("codeql_input_output_status")
+        store.delete_meta("codeql_input_output_flow_count")
 
         def enrich_strategy1_kafka_types(
             database: Path, *, deadline: float | None = None
@@ -1036,6 +1038,22 @@ def _index_repo(
             # CodeQL call graph remains the source of internal call edges.
             flows = _ensure_unique_code_flow_ids(
                 _deduplicate_code_flows([*flows, *codeql_flows], all_endpoints)
+            )
+            store.replace_code_flows(flows)
+            store.delete_meta("code_flow_signature")
+            store.set_meta(
+                "codeql_input_output_status",
+                "partial" if codeql_timed_out else "complete",
+            )
+            store.set_meta("codeql_input_output_flow_count", str(len(codeql_flows)))
+            store.set_meta("codeql_join_completed_entries", str(
+                sum(bool(method.input_endpoint_ids) for method in methods)
+            ))
+            store.commit_checkpoint()
+            _report_progress(
+                progress,
+                f"→ CodeQL : checkpoint input → output persisté · "
+                f"{len(codeql_flows)} flux interprocédural(aux).",
             )
             timer.end("call-graph-join", f"jointure {engine_label} et matérialisation des flux")
             _report_progress(

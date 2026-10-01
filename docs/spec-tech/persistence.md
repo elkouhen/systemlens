@@ -28,6 +28,12 @@ persisted before input-to-output reconstruction starts. The index records
 `codeql_call_graph_edge_count` records the number of persisted edges. This
 checkpoint is independent from the later flow-join cursor.
 
+After the `input → output` calculation completes, the provisional merged flow
+snapshot is committed again before topology reconciliation and final status
+publication. `codeql_input_output_status` is `complete` for a complete CodeQL
+pass or `partial` after a timeout, and `codeql_input_output_flow_count` records
+the interprocedural flow count at that checkpoint.
+
 Long-running CodeQL indexing can publish an explicit partial checkpoint after
 each completed analysis project. The checkpoint persists the currently known
 `code_flows` together with `code_flow_snapshot_status=partial`; the completed

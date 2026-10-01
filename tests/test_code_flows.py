@@ -759,6 +759,8 @@ def test_index_uses_automatic_codeql_database_when_available(
         assert reader.get_meta("code_flow_snapshot_status") == "complete"
         assert reader.get_meta("codeql_call_graph_status") == "complete"
         assert reader.get_meta("codeql_call_graph_edge_count") == "0"
+        assert reader.get_meta("codeql_input_output_status") == "complete"
+        assert int(reader.get_meta("codeql_input_output_flow_count") or "0") >= 1
     progress_html = tmp_path / "codeql-progress.html"
     cli._write_call_graph_progress_html(repo, progress_html, project_checkpoints[0])
     content = progress_html.read_text(encoding="utf-8")
