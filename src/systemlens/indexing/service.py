@@ -579,6 +579,8 @@ def _index_repo(
         )
         store.replace_integration_methods(methods)
         store.replace_codeql_call_edges([])
+        store.delete_meta("codeql_call_graph_status")
+        store.delete_meta("codeql_call_graph_edge_count")
 
         def enrich_strategy1_kafka_types(
             database: Path, *, deadline: float | None = None
@@ -644,7 +646,15 @@ def _index_repo(
             )
 
         def persist_call_graph(call_graph: CodeQLCallGraph) -> None:
-            store.replace_codeql_call_edges(list(call_graph.edges()))
+            edges = list(call_graph.edges())
+            store.replace_codeql_call_edges(edges)
+            store.set_meta("codeql_call_graph_status", "complete")
+            store.set_meta("codeql_call_graph_edge_count", str(len(edges)))
+            store.commit_checkpoint()
+            _report_progress(
+                progress,
+                f"→ CodeQL : checkpoint graphe d'appels persisté · {len(edges)} arête(s).",
+            )
 
         current_join_methods_signature = codeql_join_methods_signature(methods)
         if resume_codeql_join:

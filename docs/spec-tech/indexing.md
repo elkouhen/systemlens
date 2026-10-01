@@ -63,7 +63,11 @@ completed project publishes the currently available `code_flows` as an
 explicit partial checkpoint, while the final pass joins all call facts
 together. CodeQL's temporary query pack exports only source-located resolved
 calls. `--codeql-database` reuses one global database
-supplied by the caller. The temporary CodeQL query pack pins
+supplied by the caller. Once the source-backed call graph is constructed, its
+edges are committed as an explicit partial checkpoint before input-to-output
+reconstruction begins. The checkpoint records
+`codeql_call_graph_status` and the persisted edge count; this status does not
+imply that the flow join is complete. The temporary CodeQL query pack pins
 `codeql/java-all` and resolves it only from the already installed local CodeQL
 pack cache; indexing never runs `codeql pack install` or downloads analyzer
 dependencies. The configured CodeQL thread count and optional RAM limit are

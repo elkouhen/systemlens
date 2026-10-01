@@ -22,6 +22,12 @@ configuration and index namespace remain unambiguous.
 The endpoint-inventory signature in `meta` is bumped whenever extractor
 behaviour changes. This forces a complete refresh before new facts are served.
 
+After the CodeQL method-call graph is built, the indexed call edges are
+persisted before input-to-output reconstruction starts. The index records
+`codeql_call_graph_status=complete` and commits a partial-snapshot checkpoint;
+`codeql_call_graph_edge_count` records the number of persisted edges. This
+checkpoint is independent from the later flow-join cursor.
+
 Long-running CodeQL indexing can publish an explicit partial checkpoint after
 each completed analysis project. The checkpoint persists the currently known
 `code_flows` together with `code_flow_snapshot_status=partial`; the completed
