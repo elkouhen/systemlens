@@ -1,5 +1,6 @@
 """Read models for persisted potential code flows."""
 
+from collections import defaultdict
 from dataclasses import asdict
 
 from systemlens.domain.code_flows import CodeFlow
@@ -19,11 +20,13 @@ def _endpoint_summary(
 
 
 def code_flow_summary(
-    flow: CodeFlow, endpoints: dict[str, MessageEndpoint] | None = None
+    flow: CodeFlow,
+    endpoints: dict[str, MessageEndpoint] | None = None,
+    targets_by_key: dict[tuple[str, str, str], set[str]] | None = None,
 ) -> dict[str, object]:
     endpoint_by_id = endpoints or {}
     input_endpoint, output_endpoint = _endpoint_summary(flow, endpoint_by_id)
-    target_modules = _target_modules(flow, list(endpoint_by_id.values()))
+    target_modules = _target_modules(flow, endpoint_by_id, targets_by_key)
     input_topics = [
         step.name for step in flow.steps if step.kind == "message_entry"
     ]
@@ -62,32 +65,39 @@ def _is_root_flow(flow: CodeFlow) -> bool:
     return bool(flow.steps) and flow.steps[0].kind != "message_entry"
 
 
-def _endpoints_compatible(
-    source: MessageEndpoint, target: MessageEndpoint
-) -> bool:
-    return source.system == target.system and source.topic == target.topic
-
-
 def _target_modules(
-    flow: CodeFlow, endpoints: list[MessageEndpoint]
+    flow: CodeFlow,
+    endpoints: dict[str, MessageEndpoint],
+    targets_by_key: dict[tuple[str, str, str], set[str]] | None = None,
 ) -> list[str]:
     output_endpoints = {
         step.endpoint_id
         for step in flow.steps
         if step.endpoint_id and step.kind in {"http_call", "message_publish"}
     }
-    outputs = [endpoint for endpoint in endpoints if endpoint.id in output_endpoints]
+    outputs = [endpoint for endpoint_id in output_endpoints if (endpoint := endpoints.get(endpoint_id))]
     target_roles = {"call": "serve", "produce": "consume"}
+    if targets_by_key is None:
+        targets_by_key = _target_modules_index(endpoints)
     modules = {
-        endpoint.module
+        module
         for output in outputs
-        for endpoint in endpoints
-        if endpoint.role == target_roles.get(output.role)
-        and _endpoints_compatible(output, endpoint)
-        and endpoint.module
-        and endpoint.module != flow.module
+        for module in targets_by_key.get(
+            (output.system, output.topic, target_roles[output.role]), ()
+        )
+        if module != flow.module
     }
     return sorted(modules)
+
+
+def _target_modules_index(
+    endpoints: dict[str, MessageEndpoint],
+) -> dict[tuple[str, str, str], set[str]]:
+    index: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    for endpoint in endpoints.values():
+        if endpoint.module and endpoint.role in {"serve", "consume"}:
+            index[(endpoint.system, endpoint.topic, endpoint.role)].add(endpoint.module)
+    return index
 
 
 def list_code_flows(
@@ -97,8 +107,13 @@ def list_code_flows(
     publishes_to_topic: bool = False,
 ) -> list[dict[str, object]]:
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints or []}
-    root_ids = _flow_root_ids(flows, endpoint_by_id)
-    items = [code_flow_summary(flow, endpoint_by_id) for flow in flows]
+    flow_index = _build_flow_index(flows, endpoint_by_id)
+    root_ids = _flow_root_ids(flows, endpoint_by_id, flow_index)
+    targets_by_key = _target_modules_index(endpoint_by_id)
+    items = []
+    for flow in flows:
+        item = code_flow_summary(flow, endpoint_by_id, targets_by_key)
+        items.append(item)
     for flow, item in zip(flows, items, strict=True):
         item["root"] = flow.id in root_ids
     if publishes_to_topic:
@@ -145,31 +160,26 @@ def _flow_children(
     flow: CodeFlow,
     flows: list[CodeFlow],
     endpoints: dict[str, MessageEndpoint],
+    flow_index: dict[tuple[str, str], list[CodeFlow]] | None = None,
 ) -> list[CodeFlow]:
     output_ids = {
         step.endpoint_id
         for step in flow.steps
         if step.endpoint_id and step.kind in {"http_call", "message_publish"}
     }
-    output_endpoints = [
-        endpoints[endpoint_id] for endpoint_id in output_ids if endpoint_id in endpoints
-    ]
-    children: list[CodeFlow] = []
-    for candidate in flows:
-        if candidate.id == flow.id or not candidate.steps:
-            continue
-        first_step = candidate.steps[0]
-        if first_step.kind not in {"http_entry", "message_entry"} or not first_step.endpoint_id:
-            continue
-        input_endpoint = endpoints.get(first_step.endpoint_id)
-        if input_endpoint is None:
-            continue
-        if any(
-            _endpoints_compatible(output, input_endpoint)
-            and output.role in {"produce", "call"}
-            for output in output_endpoints
-        ):
-            children.append(candidate)
+    output_endpoints = [endpoints[endpoint_id] for endpoint_id in output_ids if endpoint_id in endpoints]
+    if flow_index is None:
+        flow_index = _build_flow_index(flows, endpoints)
+    target_roles = {"call": "serve", "produce": "consume"}
+    children_by_id: dict[str, CodeFlow] = {}
+    for output in output_endpoints:
+        for candidate in flow_index.get((output.system, output.topic), ()):
+            if candidate.id == flow.id or not candidate.steps:
+                continue
+            first_endpoint = endpoints.get(candidate.steps[0].endpoint_id or "")
+            if first_endpoint is not None and first_endpoint.role == target_roles[output.role]:
+                children_by_id[candidate.id] = candidate
+    children = list(children_by_id.values())
     return sorted(
         children,
         key=lambda item: (item.module, item.path, item.start_line, item.id),
@@ -177,14 +187,29 @@ def _flow_children(
 
 
 def _flow_root_ids(
-    flows: list[CodeFlow], endpoints: dict[str, MessageEndpoint]
+    flows: list[CodeFlow],
+    endpoints: dict[str, MessageEndpoint],
+    flow_index: dict[tuple[str, str], list[CodeFlow]] | None = None,
 ) -> set[str]:
     incoming = {
         child.id
         for flow in flows
-        for child in _flow_children(flow, flows, endpoints)
+        for child in _flow_children(flow, flows, endpoints, flow_index)
     }
     return {flow.id for flow in flows if flow.id not in incoming}
+
+
+def _build_flow_index(
+    flows: list[CodeFlow], endpoints: dict[str, MessageEndpoint]
+) -> dict[tuple[str, str], list[CodeFlow]]:
+    index: dict[tuple[str, str], list[CodeFlow]] = defaultdict(list)
+    for flow in flows:
+        if not flow.steps or flow.steps[0].kind not in {"http_entry", "message_entry"}:
+            continue
+        endpoint = endpoints.get(flow.steps[0].endpoint_id or "")
+        if endpoint is not None:
+            index[(endpoint.system, endpoint.topic)].append(flow)
+    return index
 
 
 def _flow_tree(
@@ -192,15 +217,16 @@ def _flow_tree(
     flows: list[CodeFlow],
     endpoints: dict[str, MessageEndpoint],
     root_ids: set[str],
+    flow_index: dict[tuple[str, str], list[CodeFlow]] | None = None,
     visited: set[str] | None = None,
 ) -> dict[str, object]:
     visited = set() if visited is None else visited
     visited.add(flow.id)
     children = []
-    for child in _flow_children(flow, flows, endpoints):
+    for child in _flow_children(flow, flows, endpoints, flow_index):
         if child.id in visited:
             continue
-        children.append(_flow_tree(child, flows, endpoints, root_ids, visited))
+        children.append(_flow_tree(child, flows, endpoints, root_ids, flow_index, visited))
     return {
         "id": flow.id,
         "module": flow.module,
@@ -235,9 +261,10 @@ def show_code_flow(
         return None
     item = asdict(matches[0])
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints or []}
-    root_ids = _flow_root_ids(flows, endpoint_by_id)
+    flow_index = _build_flow_index(flows, endpoint_by_id)
+    root_ids = _flow_root_ids(flows, endpoint_by_id, flow_index)
     item["root"] = matches[0].id in root_ids
-    item["tree"] = _flow_tree(matches[0], flows, endpoint_by_id, root_ids)
+    item["tree"] = _flow_tree(matches[0], flows, endpoint_by_id, root_ids, flow_index)
     return item
 
 

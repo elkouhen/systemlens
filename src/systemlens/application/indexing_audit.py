@@ -187,9 +187,23 @@ def audit_indexing(inventory: ArchitectureInventory) -> dict[str, object]:
         for endpoint_id in method.output_endpoint_ids:
             methods_by_output[endpoint_id].append(method)
     flows_by_input: dict[str, list[CodeFlow]] = defaultdict(list)
+    flows_by_output: dict[str, list[CodeFlow]] = defaultdict(list)
+    flow_endpoint_ids_by_input: dict[str, set[str]] = defaultdict(set)
+    flow_modules_by_input: dict[str, list[set[str]]] = defaultdict(list)
     for flow in flows:
         if flow.steps and flow.steps[0].endpoint_id:
-            flows_by_input[flow.steps[0].endpoint_id].append(flow)
+            input_id = flow.steps[0].endpoint_id
+            flows_by_input[input_id].append(flow)
+            flow_modules: set[str] = set()
+            for step in flow.steps:
+                if step.endpoint_id:
+                    flow_endpoint_ids_by_input[input_id].add(step.endpoint_id)
+                    step_endpoint = endpoint_by_id.get(step.endpoint_id)
+                    if step_endpoint is not None and step_endpoint.module:
+                        flow_modules.add(step_endpoint.module)
+                if step.endpoint_id and step.kind in {"http_call", "message_publish"}:
+                    flows_by_output[step.endpoint_id].append(flow)
+            flow_modules_by_input[input_id].append(flow_modules)
 
     add_many("entry_without_method_fact", lambda: endpoint_rule(
         "entry_without_method_fact",
@@ -208,9 +222,8 @@ def audit_indexing(inventory: ArchitectureInventory) -> dict[str, object]:
     ))
     add_many("output_without_entry", lambda: endpoint_rule(
         "output_without_entry",
-        lambda endpoint: (endpoint.system, endpoint.role) in _EFFECT_ROLES and not any(
-            flow for flow in flows if any(step.endpoint_id == endpoint.id for step in flow.steps)
-        ),
+        lambda endpoint: (endpoint.system, endpoint.role) in _EFFECT_ROLES
+        and not flows_by_output[endpoint.id],
         "info",
         lambda endpoint: f"La sortie {endpoint.topic!r} n'est atteinte par aucun flux indexé.",
     ))
@@ -260,8 +273,11 @@ def audit_indexing(inventory: ArchitectureInventory) -> dict[str, object]:
         for entry in endpoints
         if (entry.system, entry.role) in _ENTRY_ROLES
         and flows_by_input[entry.id]
-        and not any(len({endpoint_by_id[step.endpoint_id].module for step in flow.steps if step.endpoint_id and step.endpoint_id in endpoint_by_id}) > 1 for flow in flows_by_input[entry.id])
-        and any(edge.from_endpoint.id in {step.endpoint_id for flow in flows_by_input[entry.id] for step in flow.steps if step.endpoint_id} for edge in edges)
+        and not any(len(modules) > 1 for modules in flow_modules_by_input[entry.id])
+        and any(
+            edge.from_endpoint.id in flow_endpoint_ids_by_input[entry.id]
+            for edge in edges
+        )
     ])
 
     method_ids = {method.id for method in methods}

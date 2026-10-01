@@ -61,14 +61,17 @@ _IdentifiedT = TypeVar("_IdentifiedT")
 def _ensure_unique_record_ids(records: list[_IdentifiedT]) -> list[_IdentifiedT]:
     """Keep persisted records addressable even when generated IDs collide."""
     used: set[str] = set()
+    seen_records: set[str] = set()
     unique: list[_IdentifiedT] = []
     for record in records:
         record_id = cast(str, getattr(record, "id"))
+        record_signature = repr(record)
         if record_id not in used:
             used.add(record_id)
+            seen_records.add(record_signature)
             unique.append(record)
             continue
-        if record in unique:
+        if record_signature in seen_records:
             continue
         digest = hashlib.sha256(repr(record).encode("utf-8")).hexdigest()[:8]
         candidate = f"{record_id}-{digest}"
@@ -77,6 +80,7 @@ def _ensure_unique_record_ids(records: list[_IdentifiedT]) -> list[_IdentifiedT]
             candidate = f"{record_id}-{digest}-{collision}"
             collision += 1
         used.add(candidate)
+        seen_records.add(record_signature)
         unique.append(cast(_IdentifiedT, replace(cast(Any, record), id=candidate)))
     return unique
 

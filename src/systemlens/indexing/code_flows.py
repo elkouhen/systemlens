@@ -317,16 +317,17 @@ def materialize_code_flows(
             node for node in java_parser.walk(root)
             if node.type == "method_declaration"
         ]
-        endpoint_owners: dict[str, object] = {}
+        endpoints_by_owner: dict[int, list[MessageEndpoint]] = defaultdict(list)
         for endpoint in path_endpoints:
             candidates = [
                 node for node in method_nodes
                 if node.start_point.row + 1 <= endpoint.start_line <= node.end_point.row + 1
             ]
             if candidates:
-                endpoint_owners[endpoint.id] = min(
+                owner = min(
                     candidates, key=lambda node: node.end_byte - node.start_byte
                 )
+                endpoints_by_owner[id(owner)].append(endpoint)
         for method_node in method_nodes:
             if method_node.type != "method_declaration":
                 continue
@@ -335,11 +336,7 @@ def materialize_code_flows(
                 continue
             start_line = method_node.start_point.row + 1
             end_line = method_node.end_point.row + 1
-            local_endpoints = [
-                endpoint
-                for endpoint in path_endpoints
-                if endpoint_owners.get(endpoint.id) == method_node
-            ]
+            local_endpoints = endpoints_by_owner.get(id(method_node), [])
             triggers = [
                 endpoint
                 for endpoint in local_endpoints

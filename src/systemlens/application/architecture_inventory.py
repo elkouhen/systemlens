@@ -6,6 +6,7 @@ normalisation here prevents graph, audit and MCP tools from each rebuilding a
 slightly different view of modules, endpoints and warnings.
 """
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, cast
@@ -189,10 +190,10 @@ def load_architecture_inventory(
                 identity = module_identity(module)
                 endpoints_by_service.setdefault(identity, [])
                 modules_by_service.setdefault(identity, module)
-    findings_by_service = {
-        service: [finding for finding in findings if finding.module == service]
-        for service in endpoints_by_service
-    }
+    findings_by_service: dict[str, list[Finding]] = defaultdict(list)
+    for finding in findings:
+        if finding.module is not None and finding.module in endpoints_by_service:
+            findings_by_service[finding.module].append(finding)
     return ArchitectureInventory(
         endpoints_by_service=endpoints_by_service,
         endpoints_by_module=endpoints_by_module,

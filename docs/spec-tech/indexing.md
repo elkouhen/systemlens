@@ -29,6 +29,14 @@ the reconstructed interprocedural flows. AI facts are projected into a
 transient topology view for reconciliation; the facts remain independent rows
 and are never copied into source-derived tables.
 
+Read-model flow listing builds inverted indexes from endpoint identity and
+`(system, topic, role)` to avoid rescanning every flow and endpoint for each
+candidate. Graph projections similarly index Kafka endpoints by service/topic
+and relation targets by service/system/role/topic. Indexing audits build
+flow-by-input and flow-by-output maps in one pass. These projections keep the
+usual lookup paths linear in the number of facts plus emitted matches; bounded
+sorting remains only for deterministic output ordering.
+
 The file inventory scans all eligible paths and hashes their contents on each
 index run. With `F` eligible files, `B` total bytes and `P` configured path
 patterns, its cost is `O(F log F + B + F × P)`. Sorting provides deterministic

@@ -559,21 +559,18 @@ def graph_edges_from_facts(
             for target_service in consumed.get(fact_channel, set()):
                 direct.append((source_service, target_service, fact_channel))
 
+    kafka_endpoint_index: dict[tuple[str, str, str], list[MessageEndpoint]] = {}
+    for service, service_endpoints in endpoints_by_service.items():
+        for endpoint in service_endpoints:
+            if endpoint.system == "kafka" and endpoint.role in {"produce", "consume"}:
+                kafka_endpoint_index.setdefault(
+                    (service, endpoint.topic, endpoint.role), []
+                ).append(endpoint)
     edges: list[GraphEdge] = []
     seen: set[tuple[str, str, str, str, str]] = set()
     for source_service, target_service, fact_channel in direct:
-        producers = [
-            endpoint for endpoint in endpoints_by_service.get(source_service, [])
-            if endpoint.system == "kafka"
-            and endpoint.role == "produce"
-            and endpoint.topic == fact_channel
-        ]
-        consumers = [
-            endpoint for endpoint in endpoints_by_service.get(target_service, [])
-            if endpoint.system == "kafka"
-            and endpoint.role == "consume"
-            and endpoint.topic == fact_channel
-        ]
+        producers = kafka_endpoint_index.get((source_service, fact_channel, "produce"), ())
+        consumers = kafka_endpoint_index.get((target_service, fact_channel, "consume"), ())
         for producer in producers:
             for consumer in consumers:
                 if (
@@ -610,12 +607,17 @@ def graph_edges_from_relations(
         for endpoint in service_endpoints
     ]
     source_index: dict[tuple[str, str | None, int | None, str], list[MessageEndpoint]] = {}
+    target_index: dict[tuple[str, str, str, str], list[MessageEndpoint]] = {}
     for endpoint in endpoints:
         if endpoint.module is None:
             continue
         source_index.setdefault(
             (endpoint.module, endpoint.path, endpoint.start_line, endpoint.role), []
         ).append(endpoint)
+        if endpoint.system in {"rest", "kafka"} and endpoint.role in {"serve", "consume"}:
+            target_index.setdefault(
+                (endpoint.module, endpoint.system, endpoint.role, endpoint.topic), []
+            ).append(endpoint)
 
     edges: list[GraphEdge] = []
     seen: set[tuple[str, str, str, str]] = set()
@@ -637,16 +639,15 @@ def graph_edges_from_relations(
             # relation and the next index will restore an atomic snapshot.
             continue
         for source_endpoint in candidates:
-            target_endpoint = next(
+            target_endpoint = next(iter(target_index.get(
                 (
-                    endpoint
-                    for endpoint in endpoints_by_service.get(relation.target_name, [])
-                    if endpoint.system == kind
-                    and endpoint.role == ("serve" if kind == "rest" else "consume")
-                    and endpoint.topic == source_endpoint.topic
+                    relation.target_name,
+                    kind,
+                    "serve" if kind == "rest" else "consume",
+                    source_endpoint.topic,
                 ),
-                None,
-            )
+                (),
+            )), None)
             key = (kind, relation.source_name, relation.target_name, source_endpoint.id)
             if key in seen:
                 continue
@@ -673,12 +674,13 @@ def find_outbound_calls_in_consumers(
 
     consumers = [e for e in endpoints if e.system == "kafka" and e.role == "consume"]
     calls = [e for e in endpoints if e.system == "rest" and e.role == "call"]
+    calls_by_path: dict[str, list[MessageEndpoint]] = {}
+    for call in calls:
+        calls_by_path.setdefault(call.path, []).append(call)
 
     results: list[OutboundCallInConsumer] = []
     for consumer in consumers:
-        for call in calls:
-            if call.path != consumer.path:
-                continue
+        for call in calls_by_path.get(consumer.path, ()):
             if consumer.start_line <= call.start_line <= consumer.end_line:
                 results.append(OutboundCallInConsumer(consumer, call))
     return results
