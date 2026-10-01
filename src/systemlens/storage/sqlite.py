@@ -21,6 +21,7 @@ from systemlens.domain.code_flows import (
     CodeFlowStep,
     CodeQLCallGraphEdge,
     IntegrationMethod,
+    ensure_unique_code_flow_ids,
 )
 from systemlens.domain.module_inventory import (
     DiscoveredModule,
@@ -776,6 +777,7 @@ class Store:
         ]
 
     def replace_code_flows(self, flows: list[CodeFlow]) -> None:
+        flows = ensure_unique_code_flow_ids(flows)
         self.conn.execute("DELETE FROM code_flows")
         self.conn.executemany(
             """INSERT INTO code_flows

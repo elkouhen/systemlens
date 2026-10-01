@@ -15,6 +15,7 @@ from systemlens.domain.code_flows import (
     CodeFlowStep,
     CodeQLCallGraphEdge,
     compute_code_flow_id,
+    ensure_unique_code_flow_ids,
 )
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.graph import GraphEdge
@@ -216,36 +217,7 @@ def _deduplicate_code_flows(
     )
 
 
-def _ensure_unique_code_flow_ids(flows: list[CodeFlow]) -> list[CodeFlow]:
-    """Disambiguate colliding flow IDs without changing unique historical IDs."""
-    used_ids: set[str] = set()
-    unique: list[CodeFlow] = []
-    for flow in flows:
-        if flow.id not in used_ids:
-            used_ids.add(flow.id)
-            unique.append(flow)
-            continue
-        discriminator = repr((
-            flow.module,
-            flow.path,
-            flow.method,
-            flow.status,
-            tuple(
-                (step.kind, step.name, step.path, step.endpoint_id, step.operation)
-                for step in flow.steps
-            ),
-        )).encode("utf-8")
-        candidate = f"{flow.id}-{hashlib.sha256(discriminator).hexdigest()[:8]}"
-        collision = 2
-        while candidate in used_ids:
-            candidate = (
-                f"{flow.id}-{hashlib.sha256(discriminator).hexdigest()[:8]}"
-                f"-{collision}"
-            )
-            collision += 1
-        used_ids.add(candidate)
-        unique.append(replace(flow, id=candidate))
-    return unique
+_ensure_unique_code_flow_ids = ensure_unique_code_flow_ids
 
 
 def _endpoint_step(endpoint: MessageEndpoint, order: int) -> CodeFlowStep:

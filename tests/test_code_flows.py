@@ -180,6 +180,25 @@ def test_ensure_unique_code_flow_ids_is_deterministic() -> None:
     assert len({flow.id for flow in result}) == 2
 
 
+def test_store_replace_code_flows_defends_against_duplicate_ids(tmp_path: Path) -> None:
+    first = CodeFlow(
+        id="same-id", module="orders", method="receive", path="Orders.java",
+        start_line=2, end_line=2, status="potential", confidence="medium",
+        reason="first", steps=(CodeFlowStep(1, "message_entry", "in", "Orders.java", 2, 2),),
+    )
+    second = replace(first, reason="second", steps=(
+        CodeFlowStep(1, "message_entry", "in", "Orders.java", 2, 2),
+        CodeFlowStep(2, "message_publish", "out", "Orders.java", 2, 2),
+    ))
+
+    with Store(tmp_path) as store:
+        store.replace_code_flows([first, second])
+        persisted = store.all_code_flows()
+
+    assert len(persisted) == 2
+    assert len({flow.id for flow in persisted}) == 2
+
+
 def test_materialize_code_flows_keeps_scheduled_kafka_publication_local(tmp_path: Path) -> None:
     module_root = tmp_path / "orders"
     relative_source = "orders/src/main/java/com/example/ScheduledPublisher.java"

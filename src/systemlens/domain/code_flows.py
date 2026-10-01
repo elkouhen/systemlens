@@ -1,7 +1,7 @@
 """Persisted, source-evidenced potential execution flows."""
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 def compute_code_flow_id(
@@ -43,6 +43,36 @@ class CodeFlow:
     steps: tuple[CodeFlowStep, ...]
     reconciliation: str = "unknown"
     alternative_count: int = 1
+
+
+def ensure_unique_code_flow_ids(flows: list[CodeFlow]) -> list[CodeFlow]:
+    """Disambiguate flow IDs while preserving unique historical IDs."""
+    used_ids: set[str] = set()
+    unique: list[CodeFlow] = []
+    for flow in flows:
+        if flow.id not in used_ids:
+            used_ids.add(flow.id)
+            unique.append(flow)
+            continue
+        discriminator = repr((
+            flow.module,
+            flow.path,
+            flow.method,
+            flow.status,
+            tuple(
+                (step.kind, step.name, step.path, step.endpoint_id, step.operation)
+                for step in flow.steps
+            ),
+        )).encode("utf-8")
+        digest = hashlib.sha256(discriminator).hexdigest()[:8]
+        candidate = f"{flow.id}-{digest}"
+        collision = 2
+        while candidate in used_ids:
+            candidate = f"{flow.id}-{digest}-{collision}"
+            collision += 1
+        used_ids.add(candidate)
+        unique.append(replace(flow, id=candidate))
+    return unique
 
 
 @dataclass(frozen=True)
