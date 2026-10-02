@@ -25,7 +25,7 @@ from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 from systemlens.indexing.java_symbols import JavaSymbols
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v22-unique-identities"
+CODE_FLOW_SIGNATURE = "code-flow-v23-method-call-representatives"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -134,9 +134,9 @@ def _deduplicate_code_flows(
     """Keep one representative for each evidenced endpoint-to-endpoint flow.
 
     Method-call enumeration can expose several implementation/dispatch routes
-    for the same integration pair.  Those routes are useful while debugging
-    the join, but are not distinct application flows.  Prefer a non-cycle,
-    higher-confidence, shorter route and retain deterministic ordering.
+    for the same integration pair. Those routes are useful while debugging
+    the join, but are not distinct application flows. Prefer a route with
+    method-call evidence, then confidence and deterministic length.
     """
     confidence_rank = {"high": 0, "medium": 1, "low": 2}
 
@@ -202,7 +202,9 @@ def _deduplicate_code_flows(
         representative = min(
             parallel,
             key=lambda flow: (
+                0 if any(step.kind == "method_call" for step in flow.steps) else 1,
                 confidence_rank.get(flow.confidence, 99),
+                -sum(step.kind == "method_call" for step in flow.steps),
                 len(flow.steps),
                 flow.id,
             ),
@@ -683,7 +685,9 @@ def materialize_codeql_code_flows(
         candidate = min(
             (representative, flow),
             key=lambda item: (
+                0 if any(step.kind == "method_call" for step in item.steps) else 1,
                 confidence_rank.get(item.confidence, 99),
+                -sum(step.kind == "method_call" for step in item.steps),
                 len(item.steps),
                 item.id,
             ),

@@ -33,10 +33,14 @@ from systemlens.application.architecture_inventory import (
 )
 from systemlens.application.code_flows import (
     internal_flow_stats,
+    internal_flow_debug,
     list_code_flows,
+    internal_flow_stats_by_module,
     render_code_flow_text,
     render_code_flows_text,
     render_internal_flow_stats_text,
+    render_internal_flow_debug_text,
+    render_internal_flow_stats_by_module_text,
     show_code_flow,
 )
 from systemlens.application.flow_calculation import calculate_persisted_flows
@@ -856,14 +860,35 @@ def flows_root(
         "--publishes-to-topic",
         help="Only show flows that publish to at least one Kafka topic.",
     ),
+    module: str | None = typer.Option(
+        None,
+        "--module",
+        help="Only list flows whose indexed evidence stays inside this Maven/Gradle module.",
+    ),
+    explain: bool = typer.Option(
+        False,
+        "--explain",
+        help="Explains how each selected flow was constructed from persisted source evidence.",
+    ),
 ) -> None:
     """List potential code flows without a subcommand."""
     if ctx.invoked_subcommand is None:
         inventory = _load_flow_inventory(root)
+        if explain and module is not None:
+            debug = internal_flow_debug(
+                inventory.code_flows,
+                inventory.endpoints,
+                module,
+                inventory.integration_methods,
+                inventory.codeql_call_edges,
+            )
+            typer.echo(json.dumps(debug) if _option_json(json_output) else render_internal_flow_debug_text(debug))
+            return
         items = list_code_flows(
             inventory.code_flows,
             inventory.endpoints,
             publishes_to_topic=publishes_to_topic,
+            module=module,
         )
         typer.echo(
             json.dumps(items)
@@ -881,13 +906,34 @@ def flows_list(
         "--publishes-to-topic",
         help="Only show flows that publish to at least one Kafka topic.",
     ),
+    module: str | None = typer.Option(
+        None,
+        "--module",
+        help="Only list flows whose indexed evidence stays inside this Maven/Gradle module.",
+    ),
+    explain: bool = typer.Option(
+        False,
+        "--explain",
+        help="Explains how each selected flow was constructed from persisted source evidence.",
+    ),
 ) -> None:
     """List indexed potential code flows."""
     inventory = _load_flow_inventory(root)
+    if explain and module is not None:
+        debug = internal_flow_debug(
+            inventory.code_flows,
+            inventory.endpoints,
+            module,
+            inventory.integration_methods,
+            inventory.codeql_call_edges,
+        )
+        typer.echo(json.dumps(debug) if _option_json(json_output) else render_internal_flow_debug_text(debug))
+        return
     items = list_code_flows(
         inventory.code_flows,
         inventory.endpoints,
         publishes_to_topic=publishes_to_topic,
+        module=module,
     )
     typer.echo(
         json.dumps(items)
@@ -952,18 +998,33 @@ def flows_show(
 def flows_stats(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
+    by_module: bool = typer.Option(
+        False,
+        "--by-module",
+        help="Compte les flux IN -> OUT séparément pour chaque module.",
+    ),
 ) -> None:
     """List HTTP and Kafka connections between indexed modules."""
     inventory = _load_flow_inventory(root)
+    if by_module:
+        stats_by_module = internal_flow_stats_by_module(
+            inventory.code_flows, inventory.endpoints
+        )
+        typer.echo(
+            json.dumps(stats_by_module)
+            if _option_json(json_output)
+            else render_internal_flow_stats_by_module_text(stats_by_module)
+        )
+        return
     edges = graph_edges_from_relations(
         inventory.relations,
         inventory.endpoints_by_service,
     )
-    stats = internal_flow_stats(edges)
+    connection_stats = internal_flow_stats(edges)
     typer.echo(
-        json.dumps(stats)
+        json.dumps(connection_stats)
         if _option_json(json_output)
-        else render_internal_flow_stats_text(stats)
+        else render_internal_flow_stats_text(connection_stats)
     )
 
 
@@ -1202,6 +1263,13 @@ def index_cmd(
         None, help="Manifeste(s) de Topics Markdown ou JSON à indexer explicitement."
     ),
     full: bool = typer.Option(False, "--full", help="Force un scan complet."),
+    module: str | None = typer.Option(
+        None,
+        "--module",
+        help=(
+            "Focalise la liste finale sur un module Maven/Gradle, indiqué par son nom ou son chemin."
+        ),
+    ),
     resume_codeql_join: bool = typer.Option(
         False,
         "--resume-codeql-join",
@@ -1279,13 +1347,38 @@ def index_cmd(
     `systemlens index --manifest TOPICS.md`,
     `systemlens index --manifest kafka-flow-graph-anonymous.json`.
     """
-    repo_root = Path.cwd()
+    repo_root = Path.cwd().resolve()
+    selected_module: DiscoveredModule | None = None
+    if module is not None:
+        candidates = discover_modules(repo_root)
+        requested_path = Path(module).expanduser()
+        if not requested_path.is_absolute():
+            requested_path = (repo_root / requested_path).resolve()
+        matches = [
+            item for item in candidates
+            if item.name == module or item.path.resolve() == requested_path
+        ]
+        if not matches:
+            typer.echo(
+                f"Module introuvable : {module}. Utilisez `systemlens projects` "
+                "pour voir les modules indexés.",
+                err=True,
+            )
+            raise typer.Exit(code=2)
+        if len(matches) > 1:
+            paths = ", ".join(str(item.path) for item in matches)
+            typer.echo(f"Module ambigu : {module} ({paths})", err=True)
+            raise typer.Exit(code=2)
+        selected_module = matches[0]
     _trace_index(
         "cli.index.begin", root=repo_root, full=full, topic_strategy=topic_strategy
     )
     explicit_manifests = _manifest_rel_paths(
         repo_root, list(manifest_args or []) + list(manifests or [])
     )
+    if module is not None and explicit_manifests:
+        typer.echo("`--module` ne peut pas être combiné avec un manifeste externe.", err=True)
+        raise typer.Exit(code=2)
     disabled = frozenset(disable or [])
     known_disabled = {"properties", "module-architecture", "module-tree-sitter"}
     unknown = disabled - known_disabled
@@ -1382,7 +1475,17 @@ def index_cmd(
         "Prochaine étape : systemlens export microservices --html architecture.html "
         "pour explorer le graphe."
     )
-    _trace_index("cli.index.end")
+    if selected_module is not None:
+        with Store(repo_root, readonly=True) as store:
+            debug = internal_flow_debug(
+                store.all_code_flows(),
+                store.all_endpoints(),
+                selected_module.name,
+                store.all_integration_methods(),
+                store.all_codeql_call_edges(),
+            )
+        typer.echo(render_internal_flow_debug_text(debug))
+    _trace_index("cli.index.end", root=repo_root, module=selected_module.name if selected_module else "")
 
 
 def _write_call_graph_progress_html(

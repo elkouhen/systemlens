@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from systemlens.delivery import cli
 from systemlens.application.code_flows import (
+    internal_flow_debug,
     internal_flow_stats,
     list_code_flows,
     render_code_flow_text,
@@ -131,6 +132,74 @@ def test_materialize_code_flows_orders_same_method_effects(tmp_path: Path) -> No
     )
 
     assert shifted_flows[0].id == flows[0].id
+
+
+def test_list_code_flows_can_select_internal_flows_of_one_module() -> None:
+    internal = CodeFlow(
+        id="orders-internal",
+        module="orders",
+        method="com.example.Orders.receive",
+        path="orders/src/main/java/Orders.java",
+        start_line=10,
+        end_line=12,
+        status="potential",
+        confidence="medium",
+        reason="test",
+        steps=(
+            CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 10, 10, "in"),
+            CodeFlowStep(2, "http_call", "GET /local", "Orders.java", 11, 11, "out"),
+        ),
+    )
+    cross_module = replace(
+        internal,
+        id="orders-cross-module",
+        steps=(
+            internal.steps[0],
+            replace(internal.steps[1], endpoint_id="payments-endpoint"),
+        ),
+    )
+    endpoints = [
+        _endpoint("in", "serve", "rest", "POST /orders", "Orders.java", 10),
+        _endpoint("out", "call", "rest", "GET /local", "Orders.java", 11),
+        replace(
+            _endpoint("payments-endpoint", "call", "rest", "GET /payments", "Payments.java", 11),
+            module="payments",
+        ),
+    ]
+
+    result = list_code_flows([cross_module, internal], endpoints, module="orders")
+
+    assert [item["id"] for item in result] == ["orders-internal"]
+
+
+def test_internal_flow_debug_renders_in_method_call_method_call_out_chain() -> None:
+    entry = _endpoint("entry", "serve", "rest", "POST /orders", "Order.java", 10)
+    output = _endpoint("output", "call", "rest", "POST /reserve", "Order.java", 20)
+    flow = CodeFlow(
+        id="orders-chain",
+        module="orders",
+        method="OrderController.placeOrder",
+        path="Order.java",
+        start_line=10,
+        end_line=20,
+        status="potential",
+        confidence="medium",
+        reason="CodeQL path",
+        steps=(
+            CodeFlowStep(1, "http_entry", entry.topic, entry.path, 10, 10, entry.id),
+            CodeFlowStep(2, "method_call", "OrderService.validate", "Order.java", 12, 12),
+            CodeFlowStep(3, "method_call", "ReservationService.sendMessage", "OrderService.java", 18, 18),
+            CodeFlowStep(4, "http_call", output.topic, output.path, 20, 20, output.id),
+        ),
+    )
+
+    debug = internal_flow_debug([flow], [entry, output], "orders")
+
+    assert debug["found"] is True
+    assert debug["flows"][0]["chain"] == (
+        "IN POST /orders -> OrderService.validate -> "
+        "ReservationService.sendMessage -> OUT POST /reserve"
+    )
 
 
 def test_materialize_code_flows_disambiguates_overload_ids(tmp_path: Path) -> None:
@@ -288,7 +357,7 @@ def test_materialize_code_flows_does_not_root_on_untriggered_publication(tmp_pat
 
     assert materialize_code_flows(tmp_path, [producer, consumer], [module]) == []
 
-def test_code_flow_deduplication_keeps_shortest_strongest_route() -> None:
+def test_code_flow_deduplication_keeps_a_method_call_route_for_debugging() -> None:
     entry = _endpoint("entry", "serve", "rest", "POST /orders", "Orders.java", 1)
     output = _endpoint("output", "call", "rest", "POST /inventory", "Orders.java", 8)
     long = CodeFlow(
@@ -306,7 +375,7 @@ def test_code_flow_deduplication_keeps_shortest_strongest_route() -> None:
         CodeFlowStep(2, "http_call", output.topic, output.path, 8, 8, output.id),
     ))
 
-    assert _deduplicate_code_flows([long, short]) == [replace(short, alternative_count=2)]
+    assert _deduplicate_code_flows([long, short]) == [replace(long, alternative_count=2)]
 
 
 def test_codeql_call_graph_groups_edges_without_reversing_direction() -> None:
@@ -448,6 +517,12 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
         }
     ]
 
+    module_result = RUNNER.invoke(
+        app, ["flows", "list", "--root", str(repo), "--module", flows[0].module, "--json"]
+    )
+    assert module_result.exit_code == 0
+    assert [item["id"] for item in json.loads(module_result.output)] == [flows[0].id]
+
     detail = RUNNER.invoke(
         app, ["flows", "show", flows[0].id, "--root", str(repo), "--json"]
     )
@@ -469,6 +544,51 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
     with Store(repo) as store:
         index_repo(repo, Config(), store)
         assert store.all_code_flows() == []
+
+
+def test_index_module_focus_lists_internal_flows_without_rebuilding_codeql(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
+    (repo / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion>"
+        "<groupId>com.example</groupId><artifactId>orders</artifactId>"
+        "<version>1.0.0</version></project>",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(repo)
+
+    assert RUNNER.invoke(app, ["init"]).exit_code == 0
+    result = RUNNER.invoke(app, ["index", "--module", "orders", "--no-codeql"])
+
+    assert result.exit_code == 0, result.output
+    assert "Flux internes du module orders" in result.output
+    assert "Résultat : trouvé (1)" in result.output
+    assert "Type : appel sortant direct depuis la méthode IN" in result.output
+    assert "Chaîne : IN orders.created -> com.example.app.OrderConsumer.onOrderCreated -> restTemplate.postForObject -> OUT POST /charge" in result.output
+    assert "Appel externe : restTemplate.postForObject" in result.output
+    assert "app/OrderConsumer.java" in result.output
+    with Store(repo, readonly=True) as store:
+        assert len(store.all_code_flows()) == 1
+
+    explanation = RUNNER.invoke(
+        app,
+        ["flows", "list", "--root", str(repo), "--module", "orders", "--explain", "--json"],
+    )
+    assert explanation.exit_code == 0
+    explanation_json = json.loads(explanation.output)
+    assert explanation_json["found"] is True
+    assert explanation_json["flows"][0]["methods"][0]["qualified_method"].endswith(
+        "OrderConsumer.onOrderCreated"
+    )
+
+    missing = RUNNER.invoke(
+        app,
+        ["flows", "list", "--root", str(repo), "--module", "missing", "--explain", "--json"],
+    )
+    assert missing.exit_code == 0
+    assert json.loads(missing.output)["found"] is False
 
 
 def test_flows_calculate_reuses_index_after_ai_fact_import(tmp_path: Path, monkeypatch) -> None:

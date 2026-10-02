@@ -1,9 +1,10 @@
 """Read models for persisted potential code flows."""
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import asdict
+import re
 
-from systemlens.domain.code_flows import CodeFlow
+from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 
@@ -105,6 +106,7 @@ def list_code_flows(
     endpoints: list[MessageEndpoint] | None = None,
     *,
     publishes_to_topic: bool = False,
+    module: str | None = None,
 ) -> list[dict[str, object]]:
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints or []}
     flow_index = _build_flow_index(flows, endpoint_by_id)
@@ -112,13 +114,435 @@ def list_code_flows(
     targets_by_key = _target_modules_index(endpoint_by_id)
     items = []
     for flow in flows:
+        if module is not None and not _is_internal_module_flow(
+            flow, endpoint_by_id, module
+        ):
+            continue
         item = code_flow_summary(flow, endpoint_by_id, targets_by_key)
         items.append(item)
-    for flow, item in zip(flows, items, strict=True):
+    selected_flows = [
+        flow for flow in flows
+        if module is None or _is_internal_module_flow(flow, endpoint_by_id, module)
+    ]
+    for flow, item in zip(selected_flows, items, strict=True):
         item["root"] = flow.id in root_ids
     if publishes_to_topic:
         items = [item for item in items if item["output_topics"]]
     return items
+
+
+def _is_internal_module_flow(
+    flow: CodeFlow,
+    endpoints: dict[str, MessageEndpoint],
+    module: str,
+) -> bool:
+    """Return whether a persisted flow stays within one indexed module.
+
+    A flow is owned by its entry method's module. Endpoint steps without a
+    module are not treated as evidence of a cross-module path; an explicitly
+    indexed endpoint in another module is required to exclude the flow.
+    """
+    if flow.module != module:
+        return False
+    endpoint_steps = [
+        step for step in flow.steps
+        if step.endpoint_id and step.endpoint_id in endpoints
+    ]
+    if not endpoint_steps:
+        return False
+    first_endpoint = endpoints[endpoint_steps[0].endpoint_id or ""]
+    last_endpoint = endpoints[endpoint_steps[-1].endpoint_id or ""]
+    if first_endpoint.role not in {"serve", "consume"}:
+        return False
+    if last_endpoint.role not in {"call", "produce"}:
+        return False
+    involved_modules = {
+        endpoint.module
+        for step in flow.steps
+        if step.endpoint_id
+        and (endpoint := endpoints.get(step.endpoint_id)) is not None
+        and endpoint.module is not None
+    }
+    return involved_modules <= {module}
+
+
+def _flow_construction(
+    flow: CodeFlow, endpoints: dict[str, MessageEndpoint]
+) -> dict[str, object]:
+    """Explain one persisted flow using only its stored source evidence."""
+    steps = []
+    for step in flow.steps:
+        endpoint = endpoints.get(step.endpoint_id or "") if step.endpoint_id else None
+        port = (
+            "IN" if endpoint is not None and endpoint.role in {"serve", "consume"}
+            else "OUT" if endpoint is not None and endpoint.role in {"call", "produce"}
+            else "CALL" if step.kind == "method_call"
+            else "STEP"
+        )
+        steps.append({
+            "order": step.order,
+            "port": port,
+            "kind": step.kind,
+            "name": step.name,
+            "path": step.path,
+            "start_line": step.start_line,
+            "end_line": step.end_line,
+            "endpoint_id": step.endpoint_id,
+            "endpoint_module": endpoint.module if endpoint is not None else None,
+        })
+    method_calls = [step for step in flow.steps if step.kind == "method_call"]
+    endpoint_steps = [step for step in steps if step["port"] in {"IN", "OUT"}]
+    input_name = str(endpoint_steps[0]["name"]) if endpoint_steps else "IN"
+    output_name = str(endpoint_steps[-1]["name"]) if endpoint_steps else "OUT"
+    output_endpoint = (
+        endpoints.get(str(endpoint_steps[-1]["endpoint_id"]))
+        if endpoint_steps and endpoint_steps[-1]["endpoint_id"] is not None
+        else None
+    )
+    external_call = _invocation_name(output_endpoint.snippet) if output_endpoint else None
+    call_chain = [f"IN {input_name}", *[step.name for step in method_calls]]
+    if external_call is not None:
+        call_chain.append(external_call)
+    call_chain.append(f"OUT {output_name}")
+    return {
+        "found": True,
+        "flow_id": flow.id,
+        "method": flow.method,
+        "source": {"path": flow.path, "start_line": flow.start_line, "end_line": flow.end_line},
+        "steps": steps,
+        "construction": " -> ".join(str(item["port"]) for item in steps),
+        "chain": " -> ".join(call_chain),
+        "chain_type": "interprocedural" if method_calls else "direct_external_call",
+        "external_call": (
+            {
+                "name": external_call,
+                "path": output_endpoint.path,
+                "line": output_endpoint.start_line,
+            }
+            if external_call is not None and output_endpoint is not None
+            else None
+        ),
+        "method_call_count": len(method_calls),
+        "confidence": flow.confidence,
+        "reason": flow.reason,
+    }
+
+
+def internal_flow_debug(
+    flows: list[CodeFlow], endpoints: list[MessageEndpoint], module: str,
+    integration_methods: list[IntegrationMethod] | None = None,
+    codeql_call_edges: list[CodeQLCallGraphEdge] | None = None,
+) -> dict[str, object]:
+    """Describe found or missing internal flows for one module."""
+    endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
+    graph_mode = integration_methods is not None and codeql_call_edges is not None
+    if graph_mode:
+        assert integration_methods is not None and codeql_call_edges is not None
+        selected = _call_graph_flow_examples(
+            endpoints, module, integration_methods, codeql_call_edges
+        )
+        selected_keys: set[tuple[object, object]] = set()
+        for item in selected:
+            input_item = item.get("input")
+            output_item = item.get("output")
+            if isinstance(input_item, dict) and isinstance(output_item, dict):
+                selected_keys.add((input_item.get("id"), output_item.get("id")))
+        for flow in flows:
+            if not _is_internal_module_flow(flow, endpoint_by_id, module):
+                continue
+            if not any(step.kind == "method_call" for step in flow.steps):
+                continue
+            endpoint_steps = [step for step in flow.steps if step.endpoint_id]
+            if len(endpoint_steps) < 2:
+                continue
+            key = (endpoint_steps[0].endpoint_id, endpoint_steps[-1].endpoint_id)
+            if key in selected_keys:
+                continue
+            selected.append(_flow_construction(flow, endpoint_by_id))
+            selected_keys.add(key)
+    else:
+        selected = [
+            _flow_construction(flow, endpoint_by_id)
+            for flow in flows
+            if _is_internal_module_flow(flow, endpoint_by_id, module)
+        ]
+    module_flows = [flow for flow in flows if flow.module == module]
+    selected_ids = {
+        item["flow_id"] for item in selected if isinstance(item, dict) and "flow_id" in item
+    }
+    excluded = (
+        []
+        if graph_mode
+        else [flow for flow in module_flows if flow.id not in selected_ids]
+    )
+    module_endpoints = [endpoint for endpoint in endpoints if endpoint.module == module]
+    inputs = sorted(
+        f"{endpoint.system}:{endpoint.topic}"
+        for endpoint in module_endpoints
+        if endpoint.role in {"serve", "consume"}
+    )
+    outputs = sorted(
+        f"{endpoint.system}:{endpoint.topic}"
+        for endpoint in module_endpoints
+        if endpoint.role in {"call", "produce"}
+    )
+    return {
+        "module": module,
+        "found": bool(selected),
+        "flow_count": len(selected),
+        "flows": selected,
+        "excluded_flows": [
+            {
+                "flow_id": flow.id,
+                "method": flow.method,
+                "reason": "Le parcours ne commence pas par un port IN et ne se termine pas par un port OUT.",
+                "construction": " -> ".join(step.kind for step in flow.steps),
+            }
+            for flow in sorted(excluded, key=lambda item: (item.path, item.start_line, item.id))
+        ],
+        "indexed_inputs": inputs,
+        "indexed_outputs": outputs,
+        "not_found_reason": (
+            None
+            if selected
+            else (
+                "Aucun chemin interprocédural CodeQL ne relie une entrée indexée "
+                "à un effet indexé dans ce module."
+                if graph_mode
+                else "Aucun chemin source-backed ne relie une entrée indexée à un effet indexé dans ce module."
+            )
+        ),
+    }
+
+
+def _call_graph_flow_examples(
+    endpoints: list[MessageEndpoint],
+    module: str,
+    methods: list[IntegrationMethod],
+    edges: list[CodeQLCallGraphEdge],
+) -> list[dict[str, object]]:
+    """Find one Java call-graph path for every internal IN-to-OUT pair."""
+    endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
+    methods_by_id = {method.id: method for method in methods}
+    module_methods = {
+        method.id for method in methods if method.module == module
+    }
+    inputs = [
+        (method, endpoint)
+        for method in methods
+        if method.id in module_methods
+        for endpoint_id in method.input_endpoint_ids
+        if (endpoint := endpoint_by_id.get(endpoint_id)) is not None
+    ]
+    outputs = [
+        (method, endpoint)
+        for method in methods
+        if method.id in module_methods
+        for endpoint_id in method.output_endpoint_ids
+        if (endpoint := endpoint_by_id.get(endpoint_id)) is not None
+    ]
+    adjacency: dict[str, list[CodeQLCallGraphEdge]] = defaultdict(list)
+    for edge in edges:
+        if edge.caller_id in methods_by_id and edge.callee_id in methods_by_id:
+            adjacency[edge.caller_id].append(edge)
+    examples: list[dict[str, object]] = []
+    for input_method, input_endpoint in sorted(inputs, key=lambda item: item[1].id):
+        for output_method, output_endpoint in sorted(outputs, key=lambda item: item[1].id):
+            method_path = _shortest_method_path(
+                input_method.id,
+                output_method.id,
+                adjacency,
+                methods_by_id,
+                input_method.qualified_method,
+            )
+            if method_path is None:
+                continue
+            method_ids, path_edges = method_path
+            path_methods = [methods_by_id[method_id] for method_id in method_ids]
+            external_call = _invocation_name(output_endpoint.snippet)
+            chain_parts = [
+                f"IN {input_endpoint.topic}",
+                *[method.qualified_method for method in path_methods],
+            ]
+            if external_call is not None:
+                chain_parts.append(external_call)
+            chain_parts.append(f"OUT {output_endpoint.topic}")
+            examples.append({
+                "found": True,
+                "flow_id": f"{input_endpoint.id}->{output_endpoint.id}",
+                "input": _port_evidence(input_endpoint),
+                "output": _port_evidence(output_endpoint),
+                "chain_type": "interprocedural" if path_edges else "direct_external_call",
+                "method_call_count": len(path_edges),
+                "chain": " -> ".join(chain_parts),
+                "external_call": (
+                    {
+                        "name": external_call,
+                        "path": output_endpoint.path,
+                        "line": output_endpoint.start_line,
+                    }
+                    if external_call is not None
+                    else None
+                ),
+                "methods": [
+                    {
+                        "id": method.id,
+                        "qualified_method": method.qualified_method,
+                        "path": method.path,
+                        "start_line": method.start_line,
+                        "end_line": method.end_line,
+                    }
+                    for method in path_methods
+                ],
+                "edges": [
+                    {
+                        "caller_id": edge.caller_id,
+                        "callee_id": edge.callee_id,
+                        "path": edge.path,
+                        "line": edge.line,
+                        "confidence": edge.dispatch_confidence,
+                        "inferred": edge.inferred,
+                    }
+                    for edge in path_edges
+                ],
+            })
+    return examples
+
+
+def _invocation_name(snippet: str) -> str | None:
+    """Extract a receiver-qualified invocation from endpoint source evidence."""
+    matches = re.findall(r"\b([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\s*\(", snippet)
+    preferred = [
+        match for match in matches
+        if match.rsplit(".", 1)[-1] in {
+            "send", "publish", "postForObject", "getForObject", "exchange",
+            "sendMessage", "convertAndSend",
+        }
+    ]
+    return (preferred or matches)[-1] if matches else None
+
+
+def _shortest_method_path(
+    start: str,
+    target: str,
+    adjacency: dict[str, list[CodeQLCallGraphEdge]],
+    methods: dict[str, IntegrationMethod],
+    entry_method: str,
+) -> tuple[list[str], list[CodeQLCallGraphEdge]] | None:
+    queue: deque[tuple[str, list[str], list[CodeQLCallGraphEdge]]] = deque([
+        (start, [start], [])
+    ])
+    visited = {start}
+    while queue:
+        current, method_path, edge_path = queue.popleft()
+        if current == target:
+            return method_path, edge_path
+        for edge in sorted(
+            adjacency.get(current, []),
+            key=lambda item: (item.path, item.line, item.callee_id),
+        ):
+            caller = methods[edge.caller_id].qualified_method
+            callee = methods[edge.callee_id].qualified_method
+            if (
+                caller.endswith("AbstractKafkaMessageProcessor.consumeMessage")
+                and callee.endswith(".processMessage")
+                and entry_method.rsplit(".", 1)[0] != callee.rsplit(".", 1)[0]
+            ):
+                continue
+            if edge.callee_id in visited:
+                continue
+            visited.add(edge.callee_id)
+            queue.append((
+                edge.callee_id,
+                [*method_path, edge.callee_id],
+                [*edge_path, edge],
+            ))
+    return None
+
+
+def _port_evidence(endpoint: MessageEndpoint) -> dict[str, object]:
+    return {
+        "id": endpoint.id,
+        "role": endpoint.role,
+        "system": endpoint.system,
+        "topic": endpoint.topic,
+        "path": endpoint.path,
+        "line": endpoint.start_line,
+        "module": endpoint.module,
+    }
+
+
+def render_internal_flow_debug_text(debug: dict[str, object]) -> str:
+    """Render the internal-flow construction diagnostic for a human."""
+    module = debug["module"]
+    flows = debug["flows"]
+    assert isinstance(flows, list)
+    lines = [
+        f"Flux internes du module {module}",
+        f"Résultat : {'trouvé' if debug['found'] else 'non trouvé'} ({debug['flow_count']})",
+    ]
+    for item in flows:
+        assert isinstance(item, dict)
+        lines.append(f"Exemple {item['flow_id']}")
+        lines.append(
+            f"  Type : {'chaîne interprocédurale' if item['chain_type'] == 'interprocedural' else 'appel sortant direct depuis la méthode IN'}"
+        )
+        lines.append(f"  Chaîne : {item['chain']}")
+        if "methods" in item:
+            methods = item["methods"]
+            assert isinstance(methods, list)
+            for method in methods:
+                assert isinstance(method, dict)
+                lines.append(
+                    f"    Méthode : {method['qualified_method']} "
+                    f"({method['path']}:{method['start_line']})"
+                )
+            edges = item["edges"]
+            assert isinstance(edges, list)
+            for edge in edges:
+                assert isinstance(edge, dict)
+                lines.append(
+                    f"    Appel : {edge['caller_id']} -> {edge['callee_id']} "
+                    f"({edge['path']}:{edge['line']})"
+                )
+            external_call = item.get("external_call")
+            if isinstance(external_call, dict):
+                lines.append(
+                    f"    Appel externe : {external_call['name']} "
+                    f"({external_call['path']}:{external_call['line']})"
+                )
+        else:
+            source = item["source"]
+            assert isinstance(source, dict)
+            lines.append(f"  Source : {source['path']}:{source['start_line']}")
+            steps = item["steps"]
+            assert isinstance(steps, list)
+            for step in steps:
+                assert isinstance(step, dict)
+                lines.append(
+                    f"    {step['order']}. {step['port']} {step['kind']} {step['name']} "
+                    f"({step['path']}:{step['start_line']})"
+                )
+    excluded = debug["excluded_flows"]
+    assert isinstance(excluded, list)
+    if excluded:
+        lines.append("Flux exclus du compteur IN -> OUT :")
+        for item in excluded:
+            assert isinstance(item, dict)
+            lines.append(
+                f"  {item['flow_id']}  {item['method']}  "
+                f"({item['construction']}) : {item['reason']}"
+            )
+    if not flows:
+        inputs = debug["indexed_inputs"]
+        outputs = debug["indexed_outputs"]
+        assert isinstance(inputs, list) and isinstance(outputs, list)
+        lines.extend([
+            f"  Entrées indexées : {', '.join(inputs) or 'aucune'}",
+            f"  Sorties indexées : {', '.join(outputs) or 'aucune'}",
+            f"  Cause : {debug['not_found_reason']}",
+        ])
+    return "\n".join(lines)
 
 
 def internal_flow_stats(edges: list[GraphEdge]) -> dict[str, int]:
@@ -154,6 +578,57 @@ def render_internal_flow_stats_text(stats: dict[str, int]) -> str:
         f"Kafka internal connections: {stats['kafka_internal_connections']}\n"
         f"Total internal connections: {stats['internal_connections']}"
     )
+
+
+def internal_flow_stats_by_module(
+    flows: list[CodeFlow], endpoints: list[MessageEndpoint]
+) -> dict[str, object]:
+    """Count source-backed IN-to-OUT flows for every indexed module."""
+    endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
+    module_names = sorted({
+        endpoint.module for endpoint in endpoints if endpoint.module is not None
+    } | {
+        flow.module for flow in flows
+    })
+    counts = {
+        module: {
+            "internal_flows": sum(
+                _is_internal_module_flow(flow, endpoint_by_id, module)
+                for flow in flows
+            ),
+            "inputs": sum(
+                endpoint.module == module and endpoint.role in {"serve", "consume"}
+                for endpoint in endpoints
+            ),
+            "outputs": sum(
+                endpoint.module == module and endpoint.role in {"call", "produce"}
+                for endpoint in endpoints
+            ),
+        }
+        for module in module_names
+    }
+    return {
+        "modules": counts,
+        "total_internal_flows": sum(
+            int(item["internal_flows"]) for item in counts.values()
+        ),
+    }
+
+
+def render_internal_flow_stats_by_module_text(stats: dict[str, object]) -> str:
+    modules = stats["modules"]
+    assert isinstance(modules, dict)
+    lines = [
+        "Flux internes par module",
+    ]
+    for module, values in modules.items():
+        assert isinstance(values, dict)
+        lines.append(
+            f"{module} : {values['internal_flows']} flux interne(s) "
+            f"({values['inputs']} IN, {values['outputs']} OUT)"
+        )
+    lines.append(f"Total : {stats['total_internal_flows']} flux interne(s)")
+    return "\n".join(lines)
 
 
 def _flow_children(

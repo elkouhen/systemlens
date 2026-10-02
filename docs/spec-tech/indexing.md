@@ -19,6 +19,12 @@ Parent: [Technical specification](../SPEC-TECH.md).
    endpoints.
 7. Persist hashes, modules, dependencies and derived relations.
 
+The CLI `index --module NAME_OR_PATH` keeps the repository snapshot and the
+CodeQL analysis global, then filters the final flow listing to the selected
+build module. This preserves cross-module call resolution. A supplied global
+`--codeql-database` avoids rebuilding the CodeQL database during repeatable
+debug runs.
+
 The `systemlens flows calculate` command reconstructs the complete persisted
 flow snapshot from stored endpoints, integration methods, CodeQL call edges,
 modules, existing source-flow candidates and `graph_facts`. It does not invoke
@@ -36,6 +42,32 @@ and relation targets by service/system/role/topic. Indexing audits build
 flow-by-input and flow-by-output maps in one pass. These projections keep the
 usual lookup paths linear in the number of facts plus emitted matches; bounded
 sorting remains only for deterministic output ordering.
+
+The optional flow-listing module filter selects flows owned by the requested
+module only when every endpoint with an explicit module identity also belongs
+to that module. Missing endpoint module identities do not create a guessed
+cross-module relationship. The filter reads the persisted flow and endpoint
+snapshot and never reparses source files.
+
+The diagnostic form also exposes the ordered construction of each selected
+port flow: IN, persisted method-call transitions and OUT, with relative path
+and line evidence. A direct IN-to-OUT flow is labelled as a same-method call,
+not as an interprocedural chain. Scheduled flows without an IN port are
+reported as excluded from this view. When no port flow is persisted, the
+diagnostic reports the module's indexed inputs and outputs and keeps the
+result as not found rather than inferring a path.
+
+The module statistics view counts a flow only when its first indexed endpoint
+is an IN port, its last indexed endpoint is an OUT port, and every explicitly
+assigned endpoint belongs to the same module. Scheduled flows and unresolved
+paths are not counted as internal module flows; their ports remain visible in
+the IN and OUT totals.
+
+When several routes share the same indexed IN and OUT ports, the persisted
+representative prefers a route with method-call evidence. Confidence and route
+length remain secondary selection criteria, and the number of alternatives is
+retained. This keeps the representative useful for debugging without turning
+alternative routes into additional asserted flows.
 
 The file inventory scans all eligible paths and hashes their contents on each
 index run. With `F` eligible files, `B` total bytes and `P` configured path
