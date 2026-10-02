@@ -127,7 +127,8 @@ walking through callers toward an indexed IN method. Constructed OUT-to-IN
 chains and terminal paths without an input are shown. Terminal paths include
 their stop reason, such as no indexed caller, a cycle, or the hop limit.
 Direct IN-to-OUT calls show the indexed entry method before the output in the
-final flow report.
+final flow report. Every live line includes the current call depth, and every
+terminal line includes the depth and the exact stop reason.
 Interactive terminals render constructed chains in green; redirected output
 remains plain text.
 The index commits a provisional flow snapshot after each join batch, so an

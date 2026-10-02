@@ -1329,10 +1329,25 @@ class OrderController {
         call_chain_module="orders",
     ) == []
     assert messages == [
-        "  ↳ Chaîne explorée en direct : OUT orders.out -> "
+        "  ↳ Chaîne explorée en direct (profondeur=0) : OUT orders.out -> "
         "com.example.OrderController.emit",
         "  ↳ Chaîne arrêtée en direct : OUT orders.out -> "
-        "com.example.OrderController.emit -> [aucun appelant indexé]",
+        "com.example.OrderController.emit -> "
+        "[arrêt profondeur=0 : aucun appelant indexé]",
+    ]
+
+    orphan_messages: list[str] = []
+    assert materialize_codeql_code_flows(
+        [],
+        endpoints,
+        [],
+        module="orders",
+        call_chain_progress=orphan_messages.append,
+        call_chain_module="orders",
+    ) == []
+    assert orphan_messages == [
+        "  ↳ Chaîne arrêtée en direct (profondeur=0) : OUT orders.out -> "
+        "[aucune méthode OUT indexée]"
     ]
 
 

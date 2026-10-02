@@ -792,15 +792,18 @@ def materialize_codeql_code_flows(
             and output_method.module != call_chain_module
         ):
             return
+        depth = len(route)
         parts = [f"OUT {output.topic}", output_method.qualified_method]
         parts.extend(hop.qualified_method for hop, _call, _inferred in route)
         if input_endpoint is not None:
             parts.append(f"IN {input_endpoint.topic}")
-            prefix = "Chaîne construite en direct"
+            prefix = f"Chaîne construite en direct (profondeur={depth})"
         elif explored:
-            prefix = "Chaîne explorée en direct"
+            prefix = f"Chaîne explorée en direct (profondeur={depth})"
         else:
-            parts.append(f"[{stop_reason or 'aucun résultat'}]")
+            parts.append(
+                f"[arrêt profondeur={depth} : {stop_reason or 'aucun résultat'}]"
+            )
             prefix = "Chaîne arrêtée en direct"
         call_chain_progress(f"  ↳ {prefix} : {' -> '.join(parts)}")
 
@@ -816,6 +819,7 @@ def materialize_codeql_code_flows(
             reverse_adjacency[callee.id].append((caller, call, inferred))
 
     if call_chain_progress is not None:
+        reported_output_endpoint_ids: set[str] = set()
         for output_method in methods:
             if (
                 not output_method.output_endpoint_ids
@@ -829,6 +833,7 @@ def materialize_codeql_code_flows(
                 output = endpoint_by_id.get(output_id)
                 if output is None:
                     continue
+                reported_output_endpoint_ids.add(output.id)
                 queue = deque[
                     tuple[IntegrationMethod, list[tuple[IntegrationMethod, CodeQLCall, bool]]]
                 ]([(output_method, [])])
@@ -884,6 +889,18 @@ def materialize_codeql_code_flows(
                     report_reverse_chain(
                         output_method, output, route, stop_reason=reason
                     )
+
+        for output in endpoints:
+            if (
+                output.id in reported_output_endpoint_ids
+                or output.module != call_chain_module
+                or output.role not in {"call", "produce"}
+            ):
+                continue
+            call_chain_progress(
+                f"  ↳ Chaîne arrêtée en direct (profondeur=0) : OUT {output.topic} -> "
+                "[aucune méthode OUT indexée]"
+            )
 
         # The regular flow traversal remains forward for materialization, but
         # live diagnostics use the reverse output-to-input walk above.
