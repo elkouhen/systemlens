@@ -112,7 +112,8 @@ methods, the IN methods explored, the transitions traversed, and the flows
 materialized before final reconciliation.
 With `--show-call-chains --module NAME`, each newly materialized internal
 chain is also printed during the join, using the persisted endpoint names and
-the Java method-call steps available at that checkpoint.
+the Java method-call steps available at that checkpoint. Interactive terminals
+render these constructed chains in green; redirected output remains plain text.
 The index commits a provisional flow snapshot after each join batch, so an
 HTML progress export or a later export from the index retains the call-graph
 arcs found before an interruption.

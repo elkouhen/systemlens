@@ -29,6 +29,14 @@ def echo_index_progress(message: str) -> None:
     typer.echo(message)
 
 
+def echo_index_progress_with_green_chains(message: str) -> None:
+    """Render constructed call chains in green on interactive terminals."""
+    if message.startswith("  ↳ Chaîne construite :"):
+        typer.secho(message, fg="green")
+        return
+    typer.echo(message)
+
+
 def trace_index(stage: str, **fields: object) -> None:
     if os.environ.get("SYSTEMLENS_TRACE") != "1":
         return

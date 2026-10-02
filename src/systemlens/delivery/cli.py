@@ -95,6 +95,7 @@ from systemlens.delivery.web import SystemLensWebApplication, create_web_server
 from systemlens.application.doctor import has_errors, run_doctor
 from systemlens.delivery.cli_support import (
     echo_index_progress as _echo_index_progress,
+    echo_index_progress_with_green_chains as _echo_index_progress_with_green_chains,
     emit_architecture as _emit_architecture,
     manifest_rel_paths as _manifest_rel_paths,
     option_json as _option_json,
@@ -1515,7 +1516,15 @@ def index_cmd(
             config,
             store,
             full=full,
-            progress=None if internal_flows_only and not codeql_progress else _echo_index_progress,
+            progress=(
+                None
+                if internal_flows_only and not codeql_progress
+                else (
+                    _echo_index_progress_with_green_chains
+                    if show_call_chains
+                    else _echo_index_progress
+                )
+            ),
             disabled=disabled,
             extra_files=explicit_manifests,
             topic_strategy=topic_strategy,
