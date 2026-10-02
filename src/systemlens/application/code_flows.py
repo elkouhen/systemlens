@@ -260,12 +260,20 @@ def internal_flow_debug(
                 continue
             selected.append(_flow_construction(flow, endpoint_by_id))
             selected_keys.add(key)
+        attempted_paths = (
+            _call_graph_flow_attempts(
+                endpoints, module, integration_methods, codeql_call_edges
+            )
+            if not selected
+            else []
+        )
     else:
         selected = [
             _flow_construction(flow, endpoint_by_id)
             for flow in flows
             if _is_internal_module_flow(flow, endpoint_by_id, module)
         ]
+        attempted_paths = []
     module_flows = [flow for flow in flows if flow.module == module]
     selected_ids = {
         item["flow_id"] for item in selected if isinstance(item, dict) and "flow_id" in item
@@ -291,6 +299,7 @@ def internal_flow_debug(
         "found": bool(selected),
         "flow_count": len(selected),
         "flows": selected,
+        "attempted_paths": attempted_paths,
         "excluded_flows": [
             {
                 "flow_id": flow.id,
@@ -409,6 +418,165 @@ def _call_graph_flow_examples(
     return examples
 
 
+def _call_graph_flow_attempts(
+    endpoints: list[MessageEndpoint],
+    module: str,
+    methods: list[IntegrationMethod],
+    edges: list[CodeQLCallGraphEdge],
+    *,
+    limit: int = 10,
+) -> list[dict[str, object]]:
+    """Show bounded partial call paths when no internal flow is found."""
+    endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
+    methods_by_id = {method.id: method for method in methods}
+    module_methods = {method.id for method in methods if method.module == module}
+    input_pairs = [
+        (method, endpoint)
+        for method in methods
+        if method.id in module_methods
+        for endpoint_id in method.input_endpoint_ids
+        if (endpoint := endpoint_by_id.get(endpoint_id)) is not None
+    ]
+    output_method_ids = {
+        method.id
+        for method in methods
+        if method.id in module_methods and method.output_endpoint_ids
+    }
+    adjacency: dict[str, list[CodeQLCallGraphEdge]] = defaultdict(list)
+    for edge in edges:
+        if edge.caller_id in methods_by_id and edge.callee_id in methods_by_id:
+            adjacency[edge.caller_id].append(edge)
+
+    attempts: list[dict[str, object]] = []
+    for input_method, input_endpoint in sorted(
+        input_pairs, key=lambda item: (item[1].id, item[0].id)
+    ):
+        if len(attempts) >= limit:
+            break
+        queue: deque[tuple[str, list[str], list[CodeQLCallGraphEdge]]] = deque([
+            (input_method.id, [input_method.id], [])
+        ])
+        visited_paths: set[tuple[str, ...]] = set()
+        while queue and len(attempts) < limit:
+            current, method_path, edge_path = queue.popleft()
+            outgoing = [
+                edge for edge in sorted(
+                    adjacency.get(current, []),
+                    key=lambda item: (item.path, item.line, item.callee_id),
+                )
+                if _call_graph_edge_allowed(
+                    edge, methods_by_id, input_method.qualified_method
+                )
+            ]
+            if not outgoing:
+                attempts.append(
+                    _flow_attempt(
+                        input_endpoint,
+                        method_path,
+                        edge_path,
+                        methods_by_id,
+                        "aucune arête CodeQL sortante depuis cette méthode",
+                    )
+                )
+                continue
+            expanded = False
+            for edge in outgoing:
+                if edge.callee_id in method_path:
+                    attempts.append(
+                        _flow_attempt(
+                            input_endpoint,
+                            method_path,
+                            edge_path,
+                            methods_by_id,
+                            "cycle détecté dans le graphe d'appels",
+                        )
+                    )
+                    continue
+                next_path = (*method_path, edge.callee_id)
+                if next_path in visited_paths:
+                    continue
+                visited_paths.add(next_path)
+                expanded = True
+                next_edges = (*edge_path, edge)
+                if edge.callee_id in output_method_ids:
+                    attempts.append(
+                        _flow_attempt(
+                            input_endpoint,
+                            list(next_path),
+                            list(next_edges),
+                            methods_by_id,
+                            "méthode OUT atteinte, mais aucun flux sélectionné",
+                        )
+                    )
+                else:
+                    queue.append((edge.callee_id, list(next_path), list(next_edges)))
+                if len(attempts) >= limit:
+                    break
+            if not expanded and len(attempts) < limit:
+                attempts.append(
+                    _flow_attempt(
+                        input_endpoint,
+                        method_path,
+                        edge_path,
+                        methods_by_id,
+                        "aucun nouveau chemin d'appel à explorer",
+                    )
+                )
+    if not input_pairs:
+        for endpoint in sorted(
+            (item for item in endpoints if item.module == module and item.role in {"serve", "consume"}),
+            key=lambda item: item.id,
+        )[:limit]:
+            attempts.append({
+                "chain": f"IN {endpoint.topic} -> (aucune méthode IN indexée)",
+                "stop_reason": "aucune méthode Java indexée pour ce port IN",
+                "input": _port_evidence(endpoint),
+                "methods": [],
+                "edges": [],
+            })
+    return attempts[:limit]
+
+
+def _flow_attempt(
+    input_endpoint: MessageEndpoint,
+    method_ids: list[str],
+    edge_path: list[CodeQLCallGraphEdge],
+    methods: dict[str, IntegrationMethod],
+    stop_reason: str,
+) -> dict[str, object]:
+    path_methods = [methods[method_id] for method_id in method_ids]
+    return {
+        "chain": " -> ".join([
+            f"IN {input_endpoint.topic}",
+            *[method.qualified_method for method in path_methods],
+            "(pas de OUT)",
+        ]),
+        "stop_reason": stop_reason,
+        "input": _port_evidence(input_endpoint),
+        "methods": [
+            {
+                "id": method.id,
+                "qualified_method": method.qualified_method,
+                "path": method.path,
+                "start_line": method.start_line,
+                "end_line": method.end_line,
+            }
+            for method in path_methods
+        ],
+        "edges": [
+            {
+                "caller_id": edge.caller_id,
+                "callee_id": edge.callee_id,
+                "path": edge.path,
+                "line": edge.line,
+                "confidence": edge.dispatch_confidence,
+                "inferred": edge.inferred,
+            }
+            for edge in edge_path
+        ],
+    }
+
+
 def _invocation_name(snippet: str) -> str | None:
     """Extract a receiver-qualified invocation from endpoint source evidence."""
     matches = re.findall(r"\b([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\s*\(", snippet)
@@ -441,13 +609,7 @@ def _shortest_method_path(
             adjacency.get(current, []),
             key=lambda item: (item.path, item.line, item.callee_id),
         ):
-            caller = methods[edge.caller_id].qualified_method
-            callee = methods[edge.callee_id].qualified_method
-            if (
-                caller.endswith("AbstractKafkaMessageProcessor.consumeMessage")
-                and callee.endswith(".processMessage")
-                and entry_method.rsplit(".", 1)[0] != callee.rsplit(".", 1)[0]
-            ):
+            if not _call_graph_edge_allowed(edge, methods, entry_method):
                 continue
             if edge.callee_id in visited:
                 continue
@@ -458,6 +620,20 @@ def _shortest_method_path(
                 [*edge_path, edge],
             ))
     return None
+
+
+def _call_graph_edge_allowed(
+    edge: CodeQLCallGraphEdge,
+    methods: dict[str, IntegrationMethod],
+    entry_method: str,
+) -> bool:
+    caller = methods[edge.caller_id].qualified_method
+    callee = methods[edge.callee_id].qualified_method
+    return not (
+        caller.endswith("AbstractKafkaMessageProcessor.consumeMessage")
+        and callee.endswith(".processMessage")
+        and entry_method.rsplit(".", 1)[0] != callee.rsplit(".", 1)[0]
+    )
 
 
 def _port_evidence(endpoint: MessageEndpoint) -> dict[str, object]:
@@ -523,6 +699,14 @@ def render_internal_flow_debug_text(debug: dict[str, object]) -> str:
                     f"    {step['order']}. {step['port']} {step['kind']} {step['name']} "
                     f"({step['path']}:{step['start_line']})"
                 )
+    attempted_paths = debug.get("attempted_paths")
+    if isinstance(attempted_paths, list) and attempted_paths:
+        lines.append(f"  Parcours tentés ({len(attempted_paths)}) :")
+        for index, attempt in enumerate(attempted_paths, start=1):
+            if not isinstance(attempt, dict):
+                continue
+            lines.append(f"    {index}. Chaîne : {attempt['chain']}")
+            lines.append(f"       Arrêt : {attempt['stop_reason']}")
     excluded = debug["excluded_flows"]
     assert isinstance(excluded, list)
     if excluded:

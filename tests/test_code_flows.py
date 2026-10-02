@@ -13,6 +13,7 @@ from systemlens.application.code_flows import (
     internal_flow_stats,
     list_code_flows,
     render_code_flow_text,
+    render_internal_flow_debug_text,
     show_code_flow,
 )
 from systemlens.delivery.cli import app
@@ -22,6 +23,7 @@ from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod
 from systemlens.indexing.code_flows import (
     CodeQLCallGraph,
+    CodeQLCallGraphEdge,
     _deduplicate_code_flows,
     _ensure_unique_code_flow_ids,
     codeql_join_methods_signature,
@@ -200,6 +202,41 @@ def test_internal_flow_debug_renders_in_method_call_method_call_out_chain() -> N
         "IN POST /orders -> OrderService.validate -> "
         "ReservationService.sendMessage -> OUT POST /reserve"
     )
+
+
+def test_internal_flow_debug_lists_attempted_paths_when_no_flow_is_found() -> None:
+    entry = _endpoint("entry", "consume", "kafka", "orders.in", "Consumer.java", 10)
+    output = _endpoint("output", "produce", "kafka", "orders.out", "Publisher.java", 30)
+    methods = [
+        IntegrationMethod(
+            "consumer", "orders", "OrderConsumer.receive", "Consumer.java", 10, 12,
+            (entry.id,), (),
+        ),
+        IntegrationMethod(
+            "service", "orders", "OrderService.reserve", "Service.java", 20, 22,
+            (), (),
+        ),
+        IntegrationMethod(
+            "publisher", "orders", "OrderPublisher.publish", "Publisher.java", 30, 32,
+            (), (output.id,),
+        ),
+    ]
+    edges = [
+        CodeQLCallGraphEdge(
+            "consumer", "service", "Consumer.java", 11, "exact",
+        )
+    ]
+
+    debug = internal_flow_debug([], [entry, output], "orders", methods, edges)
+    rendered = render_internal_flow_debug_text(debug)
+
+    assert debug["found"] is False
+    assert len(debug["attempted_paths"]) == 1
+    assert debug["attempted_paths"][0]["chain"] == (
+        "IN orders.in -> OrderConsumer.receive -> OrderService.reserve -> (pas de OUT)"
+    )
+    assert "Parcours tentés (1)" in rendered
+    assert "aucune arête CodeQL sortante" in rendered
 
 
 def test_materialize_code_flows_disambiguates_overload_ids(tmp_path: Path) -> None:
