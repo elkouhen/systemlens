@@ -37,6 +37,12 @@ def echo_index_progress_with_green_chains(message: str) -> None:
     typer.echo(message)
 
 
+def echo_only_constructed_chains(message: str) -> None:
+    """Render only constructed call chains for focused flow debugging."""
+    if message.startswith("  ↳ Chaîne construite :"):
+        typer.secho(message, fg="green")
+
+
 def trace_index(stage: str, **fields: object) -> None:
     if os.environ.get("SYSTEMLENS_TRACE") != "1":
         return
