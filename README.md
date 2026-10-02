@@ -249,6 +249,11 @@ snapshot:
 systemlens flows list --module orders --explain
 ```
 
+During a focused index, add `--show-call-chains --module orders` to print
+caller chains as they are joined, starting at each OUT and walking toward an
+IN. The output also keeps terminal paths that do not reach an indexed input,
+with their stop reason.
+
 This option is mutually exclusive with `--generate-sources`, because source
 generation must happen before the external database is created. The supplied
 database is caller-managed; SystemLens reads it and does not create a temporary

@@ -632,6 +632,8 @@ def materialize_codeql_code_flows(
     reachability: Sequence[CodeQLReachability] = (),
     source_paths: Sequence[str] = (),
     progress: Callable[[str], None] | None = None,
+    call_chain_progress: Callable[[str], None] | None = None,
+    call_chain_module: str | None = None,
     join_checkpoint: Callable[[list[CodeFlow], int, int], None] | None = None,
     resume_from_entry: int = 0,
     initial_flows: Sequence[CodeFlow] = (),
@@ -710,6 +712,31 @@ def materialize_codeql_code_flows(
         if progress is not None:
             progress(message)
 
+    def report_live_chain(
+        entry: IntegrationMethod,
+        trigger: MessageEndpoint,
+        route: list[tuple[IntegrationMethod, CodeQLCall, bool]],
+        *,
+        output: MessageEndpoint | None = None,
+        stop_reason: str | None = None,
+        explored: bool = False,
+    ) -> None:
+        if call_chain_progress is None:
+            return
+        if call_chain_module is not None and entry.module != call_chain_module:
+            return
+        parts = [f"IN {trigger.topic}", entry.qualified_method]
+        parts.extend(hop.qualified_method for hop, _call, _inferred in route)
+        if output is not None:
+            parts.append(f"OUT {output.topic}")
+            prefix = "Chaîne construite en direct"
+        elif explored:
+            prefix = "Chaîne explorée en direct"
+        else:
+            parts.append(f"[{stop_reason or 'aucun résultat'}]")
+            prefix = "Chaîne arrêtée en direct"
+        call_chain_progress(f"  ↳ {prefix} : {' -> '.join(parts)}")
+
     report(
         f"→ CodeQL : jointure de {len(calls)} appel(s) avec "
         f"{len(methods)} méthode(s) Java..."
@@ -748,6 +775,120 @@ def materialize_codeql_code_flows(
         f"→ CodeQL : graphe d'appels interne construit · {joined_calls} "
         f"arête(s) rattachée(s) à {len(adjacency)} méthode(s) appelante(s)."
     )
+
+    def report_reverse_chain(
+        output_method: IntegrationMethod,
+        output: MessageEndpoint,
+        route: list[tuple[IntegrationMethod, CodeQLCall, bool]],
+        *,
+        input_endpoint: MessageEndpoint | None = None,
+        stop_reason: str | None = None,
+        explored: bool = False,
+    ) -> None:
+        if call_chain_progress is None:
+            return
+        if (
+            call_chain_module is not None
+            and output_method.module != call_chain_module
+        ):
+            return
+        parts = [f"OUT {output.topic}", output_method.qualified_method]
+        parts.extend(hop.qualified_method for hop, _call, _inferred in route)
+        if input_endpoint is not None:
+            parts.append(f"IN {input_endpoint.topic}")
+            prefix = "Chaîne construite en direct"
+        elif explored:
+            prefix = "Chaîne explorée en direct"
+        else:
+            parts.append(f"[{stop_reason or 'aucun résultat'}]")
+            prefix = "Chaîne arrêtée en direct"
+        call_chain_progress(f"  ↳ {prefix} : {' -> '.join(parts)}")
+
+    methods_by_id = {method.id: method for method in methods}
+    reverse_adjacency: dict[
+        str, list[tuple[IntegrationMethod, CodeQLCall, bool]]
+    ] = defaultdict(list)
+    for caller_id, targets in adjacency.items():
+        caller = methods_by_id.get(caller_id)
+        if caller is None:
+            continue
+        for callee, call, inferred in targets:
+            reverse_adjacency[callee.id].append((caller, call, inferred))
+
+    if call_chain_progress is not None:
+        for output_method in methods:
+            if (
+                not output_method.output_endpoint_ids
+                or (
+                    call_chain_module is not None
+                    and output_method.module != call_chain_module
+                )
+            ):
+                continue
+            for output_id in output_method.output_endpoint_ids:
+                output = endpoint_by_id.get(output_id)
+                if output is None:
+                    continue
+                queue = deque[
+                    tuple[IntegrationMethod, list[tuple[IntegrationMethod, CodeQLCall, bool]]]
+                ]([(output_method, [])])
+                reverse_terminal_routes: dict[
+                    tuple[tuple[str, ...], str],
+                    list[tuple[IntegrationMethod, CodeQLCall, bool]],
+                ] = {}
+                report_reverse_chain(output_method, output, [], explored=True)
+
+                def remember_reverse_terminal(
+                    route: list[tuple[IntegrationMethod, CodeQLCall, bool]],
+                    reason: str,
+                ) -> None:
+                    key = (
+                        tuple(hop.qualified_method for hop, _call, _inferred in route),
+                        reason,
+                    )
+                    reverse_terminal_routes.setdefault(key, route)
+
+                while queue:
+                    current, route = queue.popleft()
+                    if current.input_endpoint_ids:
+                        for input_id in current.input_endpoint_ids:
+                            input_endpoint = endpoint_by_id.get(input_id)
+                            if input_endpoint is not None:
+                                report_reverse_chain(
+                                    output_method,
+                                    output,
+                                    route,
+                                    input_endpoint=input_endpoint,
+                                )
+                        continue
+                    if len(route) >= max_hops:
+                        remember_reverse_terminal(route, "limite de profondeur")
+                        continue
+                    predecessors = reverse_adjacency.get(current.id, [])
+                    if not predecessors:
+                        remember_reverse_terminal(route, "aucun appelant indexé")
+                        continue
+                    for caller, call, inferred in predecessors:
+                        next_route = [*route, (caller, call, inferred)]
+                        if caller.id == output_method.id or any(
+                            previous.id == caller.id
+                            for previous, _edge, _inferred in route
+                        ):
+                            remember_reverse_terminal(next_route, "cycle détecté")
+                            continue
+                        report_reverse_chain(
+                            output_method, output, next_route, explored=True
+                        )
+                        queue.append((caller, next_route))
+                for (_route_names, reason), route in sorted(reverse_terminal_routes.items())[:50]:
+                    report_reverse_chain(
+                        output_method, output, route, stop_reason=reason
+                    )
+
+        # The regular flow traversal remains forward for materialization, but
+        # live diagnostics use the reverse output-to-input walk above.
+        call_chain_progress = None
+
     components = call_graph.connected_components(tuple(method.id for method in methods))
     component_by_method = {
         method_id: component
@@ -804,6 +945,8 @@ def materialize_codeql_code_flows(
                     ),
                     steps=(_endpoint_step(trigger, 1), _endpoint_step(output, 2)),
                 ))
+                report_live_chain(entry, trigger, [], explored=True)
+                report_live_chain(entry, trigger, [], output=output)
     explored = 0
 
     def dispatch_matches_entry(
@@ -835,15 +978,32 @@ def materialize_codeql_code_flows(
                 continue
             queue = deque[tuple[IntegrationMethod, list[tuple[IntegrationMethod, CodeQLCall, bool]]]]([(entry, [])])
             visited: set[tuple[str, bool]] = {(entry.id, False)}
+            terminal_routes: dict[
+                tuple[tuple[str, ...], str],
+                list[tuple[IntegrationMethod, CodeQLCall, bool]],
+            ] = {}
+
+            def remember_terminal(
+                route: list[tuple[IntegrationMethod, CodeQLCall, bool]],
+                reason: str,
+            ) -> None:
+                key = (tuple(hop.qualified_method for hop, _call, _inferred in route), reason)
+                terminal_routes.setdefault(key, route)
+
             while queue:
                 current, route = queue.popleft()
                 if len(route) >= max_hops:
+                    remember_terminal(route, "limite de profondeur")
                     continue
-                for target, call, signature_join in adjacency.get(current.id, []):
-                    if target.id not in component:
-                        continue
-                    if not dispatch_matches_entry(entry, current, target):
-                        continue
+                eligible_targets = [
+                    (target, call, signature_join)
+                    for target, call, signature_join in adjacency.get(current.id, [])
+                    if target.id in component
+                    and dispatch_matches_entry(entry, current, target)
+                ]
+                if not eligible_targets and (route or not entry.output_endpoint_ids):
+                    remember_terminal(route, "aucune suite d'appel")
+                for target, call, signature_join in eligible_targets:
                     explored += 1
                     now = time.monotonic()
                     if now - last_exploration_report_at >= 5.0:
@@ -857,6 +1017,7 @@ def materialize_codeql_code_flows(
                         last_exploration_report_at = now
                     next_route = [*route, (target, call, signature_join)]
                     if target.id == entry.id or any(previous.id == target.id for previous, _edge, _signature in route):
+                        remember_terminal(next_route, "cycle détecté")
                         steps = [_endpoint_step(trigger, 1)]
                         for order, (hop, edge, _signature_join) in enumerate(next_route, start=2):
                             steps.append(CodeFlowStep(
@@ -884,6 +1045,7 @@ def materialize_codeql_code_flows(
                             steps=tuple(steps),
                         ))
                         continue
+                    report_live_chain(entry, trigger, next_route, explored=True)
                     if target.output_endpoint_ids:
                         steps = [_endpoint_step(trigger, 1)]
                         for order, (hop, edge, _signature_join) in enumerate(next_route, start=2):
@@ -927,12 +1089,15 @@ def materialize_codeql_code_flows(
                                 ),
                                 steps=tuple([*steps, _endpoint_step(output, len(steps) + 1)]),
                             ))
+                            report_live_chain(entry, trigger, next_route, output=output)
                     possible = any(edge.dispatch_confidence == "possible" or inferred
                                    for _method, edge, inferred in next_route)
                     state = (target.id, possible)
                     if state not in visited:
                         visited.add(state)
                         queue.append((target, next_route))
+            for (_route_names, reason), route in sorted(terminal_routes.items())[:50]:
+                report_live_chain(entry, trigger, route, stop_reason=reason)
         explored_entries += 1
         now = time.monotonic()
         if (

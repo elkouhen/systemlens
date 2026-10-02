@@ -930,6 +930,8 @@ def _index_repo(
                             codeql_edge_confidence=config.codeql_edge_confidence,
                             stats=codeql_stats, reachability=reachability,
                             progress=progress,
+                            call_chain_progress=progress if show_call_chains else None,
+                            call_chain_module=show_call_chains_module,
                             join_checkpoint=publish_join_checkpoint,
                             resume_from_entry=resume_join_entries,
                             initial_flows=resume_join_flows,
@@ -1016,6 +1018,8 @@ def _index_repo(
                                 codeql_edge_confidence=config.codeql_edge_confidence,
                                 stats=codeql_stats, reachability=reachability,
                                 progress=progress,
+                                call_chain_progress=progress if show_call_chains else None,
+                                call_chain_module=show_call_chains_module,
                                 join_checkpoint=publish_join_checkpoint,
                                 resume_from_entry=resume_join_entries,
                                 initial_flows=resume_join_flows,
@@ -1075,6 +1079,8 @@ def _index_repo(
                 stats=codeql_stats,
                 reachability=reachability,
                 progress=progress,
+                call_chain_progress=progress if show_call_chains else None,
+                call_chain_module=show_call_chains_module,
                 join_checkpoint=publish_join_checkpoint,
                 resume_from_entry=resume_join_entries,
                 initial_flows=resume_join_flows,
@@ -1127,6 +1133,8 @@ def _index_repo(
                 source_paths=list(current_hashes),
                 max_hops=config.codeql_max_hops,
                 codeql_edge_confidence=config.codeql_edge_confidence,
+                call_chain_progress=progress if show_call_chains else None,
+                call_chain_module=show_call_chains_module,
             )
             source_flows = [
                 flow for flow in source_candidates

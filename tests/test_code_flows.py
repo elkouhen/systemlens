@@ -1297,6 +1297,45 @@ class OrderPublisher {
     ) == []
 
 
+def test_codeql_join_reports_stopped_live_chain_without_output(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    file = tmp_path / source
+    file.parent.mkdir(parents=True, exist_ok=True)
+    file.write_text(
+        """package com.example;
+class OrderController {
+  void emit() {}
+}
+""",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [replace(
+        _endpoint("output", "produce", "kafka", "orders.out", source, 3),
+        qualified_name="com.example.OrderController",
+    )]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
+    messages: list[str] = []
+
+    assert materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        [],
+        module="orders",
+        call_chain_progress=messages.append,
+        call_chain_module="orders",
+    ) == []
+    assert messages == [
+        "  ↳ Chaîne explorée en direct : OUT orders.out -> "
+        "com.example.OrderController.emit",
+        "  ↳ Chaîne arrêtée en direct : OUT orders.out -> "
+        "com.example.OrderController.emit -> [aucun appelant indexé]",
+    ]
+
+
 def test_codeql_join_resume_skips_completed_input_methods(tmp_path: Path) -> None:
     source = "orders/src/main/java/com/example/OrderFlow.java"
     file = tmp_path / source

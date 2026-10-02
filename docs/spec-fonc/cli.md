@@ -121,10 +121,15 @@ checkpoint carries the same summary in its provisional progress banner.
 During the final join, progress reports the number of calls attached to Java
 methods, the IN methods explored, the transitions traversed, and the flows
 materialized before final reconciliation.
-With `--show-call-chains --module NAME`, each newly materialized internal
-chain is also printed during the join, using the persisted endpoint names and
-the Java method-call steps available at that checkpoint. Interactive terminals
-render these constructed chains in green; redirected output remains plain text.
+With `--show-call-chains --module NAME`, each newly explored internal chain
+prefix is also printed during the join, starting at an indexed OUT method and
+walking through callers toward an indexed IN method. Constructed OUT-to-IN
+chains and terminal paths without an input are shown. Terminal paths include
+their stop reason, such as no indexed caller, a cycle, or the hop limit.
+Direct IN-to-OUT calls show the indexed entry method before the output in the
+final flow report.
+Interactive terminals render constructed chains in green; redirected output
+remains plain text.
 The index commits a provisional flow snapshot after each join batch, so an
 HTML progress export or a later export from the index retains the call-graph
 arcs found before an interruption.

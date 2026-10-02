@@ -30,17 +30,19 @@ def echo_index_progress(message: str) -> None:
 
 
 def echo_index_progress_with_green_chains(message: str) -> None:
-    """Render constructed call chains in green on interactive terminals."""
-    if message.startswith("  ↳ Chaîne construite :"):
+    """Render live call-chain diagnostics with constructed chains in green."""
+    if message.startswith("  ↳ Chaîne construite"):
         typer.secho(message, fg="green")
         return
     typer.echo(message)
 
 
 def echo_only_constructed_chains(message: str) -> None:
-    """Render only constructed call chains for focused flow debugging."""
-    if message.startswith("  ↳ Chaîne construite :"):
+    """Render every live call-chain diagnostic for focused flow debugging."""
+    if message.startswith("  ↳ Chaîne construite"):
         typer.secho(message, fg="green")
+    elif message.startswith("  ↳ Chaîne "):
+        typer.echo(message)
 
 
 def trace_index(stage: str, **fields: object) -> None:
