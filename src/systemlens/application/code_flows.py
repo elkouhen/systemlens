@@ -294,12 +294,27 @@ def internal_flow_debug(
         for endpoint in module_endpoints
         if endpoint.role in {"call", "produce"}
     )
+    graph_metrics = {
+        "method_count": len(integration_methods or []),
+        "input_method_count": sum(
+            bool(method.input_endpoint_ids)
+            for method in integration_methods or []
+            if method.module == module
+        ),
+        "output_method_count": sum(
+            bool(method.output_endpoint_ids)
+            for method in integration_methods or []
+            if method.module == module
+        ),
+        "edge_count": len(codeql_call_edges or []),
+    }
     return {
         "module": module,
         "found": bool(selected),
         "flow_count": len(selected),
         "flows": selected,
         "attempted_paths": attempted_paths,
+        "graph_metrics": graph_metrics,
         "excluded_flows": [
             {
                 "flow_id": flow.id,
@@ -657,6 +672,14 @@ def render_internal_flow_debug_text(debug: dict[str, object]) -> str:
         f"Flux internes du module {module}",
         f"Résultat : {'trouvé' if debug['found'] else 'non trouvé'} ({debug['flow_count']})",
     ]
+    graph_metrics = debug.get("graph_metrics")
+    if isinstance(graph_metrics, dict):
+        lines.append(
+            "  Graphe testé : "
+            f"{graph_metrics['input_method_count']} méthode(s) IN, "
+            f"{graph_metrics['output_method_count']} méthode(s) OUT, "
+            f"{graph_metrics['edge_count']} arête(s) CodeQL"
+        )
     for item in flows:
         assert isinstance(item, dict)
         lines.append(f"Exemple {item['flow_id']}")
@@ -707,6 +730,8 @@ def render_internal_flow_debug_text(debug: dict[str, object]) -> str:
                 continue
             lines.append(f"    {index}. Chaîne : {attempt['chain']}")
             lines.append(f"       Arrêt : {attempt['stop_reason']}")
+    elif not flows:
+        lines.append("  Parcours tentés : aucun nœud d’appel exploitable dans le snapshot")
     excluded = debug["excluded_flows"]
     assert isinstance(excluded, list)
     if excluded:

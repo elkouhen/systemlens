@@ -235,7 +235,14 @@ def test_internal_flow_debug_lists_attempted_paths_when_no_flow_is_found() -> No
     assert debug["attempted_paths"][0]["chain"] == (
         "IN orders.in -> OrderConsumer.receive -> OrderService.reserve -> (pas de OUT)"
     )
+    assert debug["graph_metrics"] == {
+        "method_count": 3,
+        "input_method_count": 1,
+        "output_method_count": 1,
+        "edge_count": 1,
+    }
     assert "Parcours tentés (1)" in rendered
+    assert "Graphe testé : 1 méthode(s) IN, 1 méthode(s) OUT, 1 arête(s) CodeQL" in rendered
     assert "aucune arête CodeQL sortante" in rendered
 
 
