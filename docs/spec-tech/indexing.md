@@ -149,7 +149,11 @@ Python joins require exact source path, method and line evidence except for
 the unique-name fallback above. Buildless AST fallbacks may add only a
 source-declared, uniquely compatible abstract-to-concrete bridge or
 receiver-typed helper call; these synthetic edges remain `possible`/`low` and
-are never name-only guesses. The BFS visits each
+are never name-only guesses. A receiver-typed helper call preserves the
+concrete consumer while walking an inherited method body; when that body calls
+a method overridden exactly once by the concrete consumer, the unique override
+is retained as a possible edge. Ambiguous sibling overrides remain unresolved.
+The BFS visits each
 method/confidence state
 at most once per input endpoint, under the configured depth/global transition
 bounds. Cyclic witness paths are retained without expansion. Medium-confidence

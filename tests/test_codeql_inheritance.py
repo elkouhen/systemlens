@@ -97,6 +97,37 @@ public abstract class Base {
     ]
 
 
+def test_kafka_listener_reaches_inherited_on_consume_message_then_consume(tmp_path: Path):
+    sources = {
+        "api/BaseConsumer.java": """package api;
+public class BaseConsumer {
+  public void onConsumeMessage(String value) { consume(value); }
+  public void consume(String value) {}
+}
+""",
+        "impl/Consumer.java": """package impl;
+import api.BaseConsumer;
+public class Consumer extends BaseConsumer {
+  public void entry(String value) { onConsumeMessage(value); }
+  @Override public void consume(String value) { output(); }
+  void output() {}
+}
+""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources)
+    )
+
+    assert len(flows) == 1
+    assert [step.name for step in flows[0].steps[1:-1]] == [
+        "api.BaseConsumer.onConsumeMessage",
+        "impl.Consumer.consume",
+        "impl.Consumer.output",
+    ]
+
+
 def test_duplicate_qualified_types_across_modules_remain_unresolved(tmp_path: Path):
     sources = {**SOURCES, "duplicate/Concrete.java": SOURCES["impl/Concrete.java"]}
     methods, endpoints = _project(tmp_path, sources)

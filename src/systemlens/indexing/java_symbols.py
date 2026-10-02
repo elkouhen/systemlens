@@ -219,6 +219,15 @@ class JavaSymbols:
                       for candidate in self.implementations(contract)
                       if receiver_type in self.ancestors(candidate.owner)
                       or candidate.owner in receiver_bases}
+        inherited_overrides = [
+            candidate
+            for candidate in candidates.values()
+            if candidate.owner != receiver_type
+            and receiver_type in self.ancestors(candidate.owner)
+        ]
+        if len(inherited_overrides) == 1:
+            self._targets[key] = inherited_overrides[0].method
+            return self._targets[key]
         # Overrides present on the declared receiver hide ancestor bodies.
         # Possible overrides on other runtime subtypes remain ambiguous.
         hidden: set[str] = set()
