@@ -1270,6 +1270,14 @@ def index_cmd(
             "Focalise la liste finale sur un module Maven/Gradle, indiqué par son nom ou son chemin."
         ),
     ),
+    internal_flows_only: bool = typer.Option(
+        False,
+        "--internal-flows-only",
+        help=(
+            "N'affiche que le diagnostic des flux IN → OUT du module sélectionné. "
+            "Requiert --module."
+        ),
+    ),
     resume_codeql_join: bool = typer.Option(
         False,
         "--resume-codeql-join",
@@ -1379,6 +1387,9 @@ def index_cmd(
     if module is not None and explicit_manifests:
         typer.echo("`--module` ne peut pas être combiné avec un manifeste externe.", err=True)
         raise typer.Exit(code=2)
+    if internal_flows_only and module is None:
+        typer.echo("`--internal-flows-only` requiert `--module`.", err=True)
+        raise typer.Exit(code=2)
     disabled = frozenset(disable or [])
     known_disabled = {"properties", "module-architecture", "module-tree-sitter"}
     unknown = disabled - known_disabled
@@ -1448,7 +1459,7 @@ def index_cmd(
             config,
             store,
             full=full,
-            progress=_echo_index_progress,
+            progress=None if internal_flows_only and not codeql_progress else _echo_index_progress,
             disabled=disabled,
             extra_files=explicit_manifests,
             topic_strategy=topic_strategy,
@@ -1462,19 +1473,20 @@ def index_cmd(
         )
         store.set_meta("index_engine", "manual")
         _trace_index("store.close.begin")
-    typer.echo(
-        f"scanned={report.scanned} skipped={report.skipped} "
-        f"+integrations={report.endpoints_added} -integrations={report.endpoints_removed}"
-    )
-    if report.codeql_timed_out:
+    if not internal_flows_only:
         typer.echo(
-            "CodeQL a atteint son délai : le graphe publié est partiel et "
-            "sera complété lors de la prochaine indexation."
+            f"scanned={report.scanned} skipped={report.skipped} "
+            f"+integrations={report.endpoints_added} -integrations={report.endpoints_removed}"
         )
-    typer.echo(
-        "Prochaine étape : systemlens export microservices --html architecture.html "
-        "pour explorer le graphe."
-    )
+        if report.codeql_timed_out:
+            typer.echo(
+                "CodeQL a atteint son délai : le graphe publié est partiel et "
+                "sera complété lors de la prochaine indexation."
+            )
+        typer.echo(
+            "Prochaine étape : systemlens export microservices --html architecture.html "
+            "pour explorer le graphe."
+        )
     if selected_module is not None:
         with Store(repo_root, readonly=True) as store:
             debug = internal_flow_debug(

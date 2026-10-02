@@ -591,6 +591,38 @@ def test_index_module_focus_lists_internal_flows_without_rebuilding_codeql(
     assert json.loads(missing.output)["found"] is False
 
 
+def test_index_internal_flows_only_suppresses_general_summary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
+    (repo / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion>"
+        "<groupId>com.example</groupId><artifactId>orders</artifactId>"
+        "<version>1.0.0</version></project>",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(repo)
+
+    assert RUNNER.invoke(app, ["init"]).exit_code == 0
+    result = RUNNER.invoke(
+        app, ["index", "--module", "orders", "--internal-flows-only", "--no-codeql"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.output.startswith("Flux internes du module orders")
+    assert "Résultat : trouvé (1)" in result.output
+    assert "scanned=" not in result.output
+    assert "Prochaine étape :" not in result.output
+
+
+def test_index_internal_flows_only_requires_module() -> None:
+    result = RUNNER.invoke(app, ["index", "--internal-flows-only", "--no-codeql"])
+
+    assert result.exit_code == 2
+    assert "requiert `--module`" in result.output
+
+
 def test_flows_calculate_reuses_index_after_ai_fact_import(tmp_path: Path, monkeypatch) -> None:
     repo = tmp_path / "repo"
     shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
