@@ -154,6 +154,18 @@ After importing facts, use `systemlens flows calculate` to refresh the persisted
 source-backed flow snapshot while reusing the indexed endpoints. The optional
 command reads the stored AST and CodeQL results; it does not rerun indexation.
 
+Once the global index is current, inspect one module without indexing again:
+
+```bash
+systemlens flows list --module orders --explain
+```
+
+The `--module` option is a read-only filter over the persisted snapshot. It
+does not run AST extraction or CodeQL. Use `systemlens index --module ...` only
+when the source snapshot itself must be refreshed; that command keeps the
+indexing and CodeQL analysis global so calls across module boundaries remain
+available.
+
 For terminal-oriented exploration, use `systemlens microservices`,
 `systemlens topics`, `systemlens apis`, `systemlens projects`, and
 `systemlens analyze audit`. Use `systemlens analyze flows-diagnostic` to
@@ -227,6 +239,13 @@ analysis while SystemLens continues to run its own AST extraction and stores
 the combined snapshot in `.systemlens/findings.db`. The database must describe
 the same repository revision and source-root layout as the SystemLens index.
 Recreate it after source changes that must be reflected in the call graph.
+
+After this one global index, module-level flow queries reuse the persisted
+snapshot:
+
+```bash
+systemlens flows list --module orders --explain
+```
 
 This option is mutually exclusive with `--generate-sources`, because source
 generation must happen before the external database is created. The supplied

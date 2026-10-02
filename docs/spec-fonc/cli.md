@@ -36,6 +36,12 @@ Parent: [Functional specification](../SPEC-FONC.md).
 | `simpleweb [DIRECTORY] [--host HOST] [--port PORT]` | Serves static files from `DIRECTORY`, or from the current directory when omitted, for opening generated HTML files that load adjacent JSON. It binds to `http://127.0.0.1:8000/` by default, has no write routes, and does not create or modify files. The directory must exist. |
 | `systemlens mcp` | Starts the stdio MCP server. |
 
+After a global index, use `systemlens flows list --module NAME` for a
+read-only module query. This command reads the persisted flow snapshot and
+does not rerun AST extraction or CodeQL. The `index --module NAME` option is
+still an indexing command: it limits the diagnostic output, while its source
+inventory and CodeQL analysis remain global.
+
 With `systemlens flows list --module NAME --explain`, the diagnostic includes
 the tested graph metrics and up to ten partial call paths when no internal flow
 is found. A path can end at an indexed method with no persisted CodeQL edge;

@@ -919,7 +919,7 @@ def flows_list(
         help="Explains how each selected flow was constructed from persisted source evidence.",
     ),
 ) -> None:
-    """List indexed potential code flows."""
+    """List indexed potential code flows without re-indexing the repository."""
     inventory = _load_flow_inventory(root)
     if explain and module is not None:
         debug = internal_flow_debug(
@@ -1269,7 +1269,8 @@ def index_cmd(
         None,
         "--module",
         help=(
-            "Focalise la liste finale sur un module Maven/Gradle, indiqué par son nom ou son chemin."
+            "Focalise la sortie finale sur un module Maven/Gradle, indiqué par son nom ou son chemin. "
+            "L'indexation reste globale."
         ),
     ),
     internal_flows_only: bool = typer.Option(
