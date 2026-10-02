@@ -1280,6 +1280,21 @@ class OrderPublisher {
     assert [step.kind for step in reconstructed[0].steps] == [
         "message_entry", "method_call", "method_call", "message_publish",
     ]
+    scoped = materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        [],
+        module="orders",
+        persisted_edges=persisted_edges,
+    )
+    assert len(scoped) == 1
+    assert materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        [],
+        module="payments",
+        persisted_edges=persisted_edges,
+    ) == []
 
 
 def test_codeql_join_resume_skips_completed_input_methods(tmp_path: Path) -> None:

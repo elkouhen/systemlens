@@ -627,6 +627,7 @@ def _build_codeql_call_graph(
 def materialize_codeql_code_flows(
     methods: list[IntegrationMethod], endpoints: list[MessageEndpoint], calls: list[CodeQLCall],
     *, repo_root: Path | None = None, max_hops: int = 12,
+    module: str | None = None,
     stats: dict[str, int] | None = None,
     reachability: Sequence[CodeQLReachability] = (),
     source_paths: Sequence[str] = (),
@@ -763,7 +764,10 @@ def materialize_codeql_code_flows(
     # have no source endpoint path for the AST materializer. If the same
     # indexed method also owns an output endpoint, the method itself is still
     # sufficient evidence for a direct input-to-output flow.
-    input_methods = [entry for entry in methods if entry.input_endpoint_ids]
+    input_methods = [
+        entry for entry in methods
+        if entry.input_endpoint_ids and (module is None or entry.module == module)
+    ]
     if resume_from_entry < 0 or resume_from_entry > len(input_methods):
         raise ValueError(
             f"Invalid CodeQL join resume offset {resume_from_entry}; "
@@ -1005,6 +1009,8 @@ def materialize_codeql_code_flows(
                 continue
             source_method = source_location[0]
             target_method = target_location[0]
+            if module is not None and source_method.module != module:
+                continue
             for input_id in source_method.input_endpoint_ids:
                 trigger = endpoint_by_id.get(input_id)
                 if trigger is None:

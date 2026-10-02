@@ -153,6 +153,8 @@ by `systemlens index`; they are not converted into enrichment facts.
 After importing facts, use `systemlens flows calculate` to refresh the persisted
 source-backed flow snapshot while reusing the indexed endpoints. The optional
 command reads the stored AST and CodeQL results; it does not rerun indexation.
+Use `--module orders` to reconstruct only the flows owned by one module while
+retaining the global persisted call graph for helper methods.
 
 Once the global index is current, inspect one module without indexing again:
 

@@ -18,13 +18,15 @@ from systemlens.scanner import local_spring_application_names
 from systemlens.storage.sqlite import Store
 
 
-def calculate_persisted_flows(store: Store) -> int:
+def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
     """Reconstruct all persisted call-graph flows with source and AI topology.
 
     This function deliberately does not index source files or invoke CodeQL.
     It reads the endpoint, integration-method, CodeQL-edge, module and
     enrichment snapshots already stored in SQLite, rebuilds the derived flow
-    set in memory, and persists only that derived result.
+    set in memory, and persists only that derived result. When ``module`` is
+    provided, only input methods owned by that module are reconstructed; the
+    global persisted method graph remains available for helper calls.
     """
     endpoints = store.all_endpoints()
     modules = store.all_modules()
@@ -53,6 +55,7 @@ def calculate_persisted_flows(store: Store) -> int:
             methods,
             endpoints,
             [],
+            module=module,
             persisted_edges=persisted_call_edges,
         )
         if methods

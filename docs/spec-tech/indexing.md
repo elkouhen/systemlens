@@ -35,6 +35,12 @@ the reconstructed interprocedural flows. AI facts are projected into a
 transient topology view for reconciliation; the facts remain independent rows
 and are never copied into source-derived tables.
 
+With `systemlens flows calculate --module NAME`, the same reconstruction starts
+only from input methods owned by `NAME`. The method and call-edge snapshots
+remain global, so helper methods outside the selected module can still resolve.
+Existing flows remain in the database, and reconstructed flows for the selected
+module replace their matching derived representatives during deduplication.
+
 Read-model flow listing builds inverted indexes from endpoint identity and
 `(system, topic, role)` to avoid rescanning every flow and endpoint for each
 candidate. Graph projections similarly index Kafka endpoints by service/topic

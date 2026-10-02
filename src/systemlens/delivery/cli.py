@@ -948,8 +948,13 @@ def flows_list(
 def flows_calculate(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
+    module: str | None = typer.Option(
+        None,
+        "--module",
+        help="Recalcule uniquement les flux dont la méthode d'entrée appartient à ce module.",
+    ),
 ) -> None:
-    """Recalculer les flux à partir du snapshot indexé courant."""
+    """Recalculer les flux à partir du snapshot indexé courant, globalement ou par module."""
     repo_root = _option_root(root)
     if not db_path(repo_root).is_file():
         typer.echo(
@@ -960,7 +965,7 @@ def flows_calculate(
     try:
         with Store(repo_root) as store:
             with store.transaction():
-                flow_count = calculate_persisted_flows(store)
+                flow_count = calculate_persisted_flows(store, module=module)
             fact_count = len(store.all_graph_facts())
     except (ConfigError, StoreError, RuntimeError, ValueError) as exc:
         typer.echo(str(exc), err=True)
