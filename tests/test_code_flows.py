@@ -605,8 +605,14 @@ def test_index_internal_flows_only_suppresses_general_summary(
     monkeypatch.chdir(repo)
 
     assert RUNNER.invoke(app, ["init"]).exit_code == 0
+    initial = RUNNER.invoke(app, ["index", "--module", "orders", "--no-codeql"])
+    assert initial.exit_code == 0, initial.output
+    def fail_index(*args: object, **kwargs: object) -> None:
+        raise AssertionError("fast flow diagnostics must not reindex")
+
+    monkeypatch.setattr(cli, "index_repo", fail_index)
     result = RUNNER.invoke(
-        app, ["index", "--module", "orders", "--internal-flows-only", "--no-codeql"]
+        app, ["index", "--module", "orders", "--internal-flows-only"]
     )
 
     assert result.exit_code == 0, result.output

@@ -1274,8 +1274,8 @@ def index_cmd(
         False,
         "--internal-flows-only",
         help=(
-            "N'affiche que le diagnostic des flux IN → OUT du module sélectionné. "
-            "Requiert --module."
+            "Analyse rapidement le snapshot existant et n'affiche que les flux "
+            "IN → OUT du module sélectionné. Requiert --module."
         ),
     ),
     resume_codeql_join: bool = typer.Option(
@@ -1390,7 +1390,45 @@ def index_cmd(
     if internal_flows_only and module is None:
         typer.echo("`--internal-flows-only` requiert `--module`.", err=True)
         raise typer.Exit(code=2)
+    if internal_flows_only and full:
+        typer.echo(
+            "`--internal-flows-only` ne peut pas être combiné avec `--full` : "
+            "ce mode réutilise le snapshot existant.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
     disabled = frozenset(disable or [])
+    if internal_flows_only and (
+        resume_codeql_join
+        or codeql_progress
+        or codeql_progress_html is not None
+        or generate_sources
+        or kubernetes
+        or kubernetes_namespace is not None
+        or no_codeql
+        or call_graph_engine is not None
+        or codeql_edge_confidence is not None
+        or codeql_database is not None
+        or disabled
+    ):
+        typer.echo(
+            "`--internal-flows-only` est un diagnostic en lecture seule du snapshot "
+            "existant ; retirez les options d'indexation ou relancez `systemlens index`.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    if internal_flows_only:
+        assert selected_module is not None
+        with Store(repo_root, readonly=True) as store:
+            debug = internal_flow_debug(
+                store.all_code_flows(),
+                store.all_endpoints(),
+                selected_module.name,
+                store.all_integration_methods(),
+                store.all_codeql_call_edges(),
+            )
+        typer.echo(render_internal_flow_debug_text(debug))
+        return
     known_disabled = {"properties", "module-architecture", "module-tree-sitter"}
     unknown = disabled - known_disabled
     if unknown:
