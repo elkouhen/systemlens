@@ -615,6 +615,13 @@ def test_index_module_focus_lists_internal_flows_without_rebuilding_codeql(
     assert "Chaîne : IN orders.created -> com.example.app.OrderConsumer.onOrderCreated -> restTemplate.postForObject -> OUT POST /charge" in result.output
     assert "Appel externe : restTemplate.postForObject" in result.output
     assert "app/OrderConsumer.java" in result.output
+
+    replay = RUNNER.invoke(
+        app, ["index", "--module", "orders", "--show-call-chains", "--no-codeql"]
+    )
+    assert replay.exit_code == 0, replay.output
+    assert "scanned=0" in replay.output
+    assert "Chaîne explorée en direct" in replay.output
     with Store(repo, readonly=True) as store:
         assert len(store.all_code_flows()) == 1
 

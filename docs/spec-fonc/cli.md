@@ -128,7 +128,9 @@ chains and terminal paths without an input are shown. Terminal paths include
 their stop reason, such as no indexed caller, a cycle, or the hop limit.
 Direct IN-to-OUT calls show the indexed entry method before the output in the
 final flow report. Every live line includes the current call depth, and every
-terminal line includes the depth and the exact stop reason.
+terminal line includes the depth and the exact stop reason. If the selected
+snapshot is unchanged and no indexing stage runs, the command replays this
+diagnostic from the persisted CodeQL graph without rewriting the index.
 Interactive terminals render constructed chains in green; redirected output
 remains plain text.
 The index commits a provisional flow snapshot after each join batch, so an

@@ -59,6 +59,7 @@ from systemlens.domain.graph import (
 from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.indexing.service import CallGraphProgress, index_repo
+from systemlens.indexing.code_flows import materialize_codeql_code_flows
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.models import ExtractionDiagnostic
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
@@ -1567,6 +1568,19 @@ def index_cmd(
         )
     if selected_module is not None and show_call_chains:
         with Store(repo_root, readonly=True) as store:
+            if report.scanned == 0 and codeql_database is None:
+                # No indexing stage ran. Replay the live reverse walk from the
+                # persisted CodeQL graph so --show-call-chains remains useful
+                # on an unchanged snapshot.
+                materialize_codeql_code_flows(
+                    store.all_integration_methods(),
+                    store.all_endpoints(),
+                    [],
+                    module=selected_module.name,
+                    call_chain_progress=_echo_only_constructed_chains,
+                    call_chain_module=selected_module.name,
+                    persisted_edges=store.all_codeql_call_edges(),
+                )
             debug = internal_flow_debug(
                 store.all_code_flows(),
                 store.all_endpoints(),
