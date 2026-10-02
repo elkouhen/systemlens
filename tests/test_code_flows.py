@@ -597,7 +597,9 @@ def test_index_module_focus_lists_internal_flows_without_rebuilding_codeql(
     monkeypatch.chdir(repo)
 
     assert RUNNER.invoke(app, ["init"]).exit_code == 0
-    result = RUNNER.invoke(app, ["index", "--module", "orders", "--no-codeql"])
+    result = RUNNER.invoke(
+        app, ["index", "--module", "orders", "--show-call-chains", "--no-codeql"]
+    )
 
     assert result.exit_code == 0, result.output
     assert "Flux internes du module orders" in result.output

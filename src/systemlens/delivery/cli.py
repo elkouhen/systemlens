@@ -1278,6 +1278,14 @@ def index_cmd(
             "IN → OUT du module sélectionné. Requiert --module."
         ),
     ),
+    show_call_chains: bool = typer.Option(
+        False,
+        "--show-call-chains",
+        help=(
+            "Affiche les chaînes d'appels des flux internes construits. "
+            "Requiert --module."
+        ),
+    ),
     resume_codeql_join: bool = typer.Option(
         False,
         "--resume-codeql-join",
@@ -1389,6 +1397,16 @@ def index_cmd(
         raise typer.Exit(code=2)
     if internal_flows_only and module is None:
         typer.echo("`--internal-flows-only` requiert `--module`.", err=True)
+        raise typer.Exit(code=2)
+    if show_call_chains and module is None:
+        typer.echo("`--show-call-chains` requiert `--module`.", err=True)
+        raise typer.Exit(code=2)
+    if show_call_chains and internal_flows_only:
+        typer.echo(
+            "`--show-call-chains` ne peut pas être combiné avec "
+            "`--internal-flows-only` : ce dernier ne construit aucun flux.",
+            err=True,
+        )
         raise typer.Exit(code=2)
     if internal_flows_only and full:
         typer.echo(
@@ -1508,6 +1526,8 @@ def index_cmd(
             codeql_progress=codeql_progress,
             generate_sources=generate_sources,
             resume_codeql_join=resume_codeql_join,
+            show_call_chains=show_call_chains,
+            show_call_chains_module=module,
         )
         store.set_meta("index_engine", "manual")
         _trace_index("store.close.begin")
@@ -1525,7 +1545,7 @@ def index_cmd(
             "Prochaine étape : systemlens export microservices --html architecture.html "
             "pour explorer le graphe."
         )
-    if selected_module is not None:
+    if selected_module is not None and show_call_chains:
         with Store(repo_root, readonly=True) as store:
             debug = internal_flow_debug(
                 store.all_code_flows(),

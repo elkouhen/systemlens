@@ -235,6 +235,8 @@ def _index_repo(
     codeql_progress: bool = False,
     generate_sources: bool = False,
     resume_codeql_join: bool = False,
+    show_call_chains: bool = False,
+    show_call_chains_module: str | None = None,
 ) -> IndexReport:
     timer = _IndexStageTimer(progress)
     # CodeQL diagnostics are opt-in.  Do not inherit the verbosity from older
@@ -578,6 +580,50 @@ def _index_repo(
             repo_root, all_endpoints, list(current_hashes), relation_modules
         )
         store.replace_integration_methods(methods)
+        reported_chain_signatures: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
+
+        def report_built_chains(values: Sequence[CodeFlow]) -> None:
+            if not show_call_chains or progress is None:
+                return
+            endpoint_by_id = {endpoint.id: endpoint for endpoint in all_endpoints}
+            for flow in values:
+                if (
+                    show_call_chains_module is not None
+                    and flow.module != show_call_chains_module
+                ):
+                    continue
+                endpoint_steps = [step for step in flow.steps if step.endpoint_id]
+                if len(endpoint_steps) < 2:
+                    continue
+                first = endpoint_by_id.get(endpoint_steps[0].endpoint_id or "")
+                last = endpoint_by_id.get(endpoint_steps[-1].endpoint_id or "")
+                if (
+                    first is None
+                    or last is None
+                    or first.module != flow.module
+                    or last.module != flow.module
+                    or first.role not in {"serve", "consume"}
+                    or last.role not in {"call", "produce"}
+                ):
+                    continue
+                chain_steps: list[tuple[str, str]] = []
+                for step in flow.steps:
+                    if step.kind in {"message_entry", "http_entry"}:
+                        chain_steps.append(("IN", step.name))
+                    elif step.kind == "method_call":
+                        chain_steps.append(("METHOD", step.name))
+                    elif step.kind in {"message_publish", "http_call"}:
+                        chain_steps.append(("OUT", step.name))
+                signature = (flow.id, tuple(chain_steps))
+                if signature in reported_chain_signatures:
+                    continue
+                reported_chain_signatures.add(signature)
+                rendered = " -> ".join(
+                    f"{kind} {name}" if kind != "METHOD" else name
+                    for kind, name in chain_steps
+                )
+                _report_progress(progress, f"  ↳ Chaîne construite : {rendered}")
+
         store.replace_codeql_call_edges([])
         store.delete_meta("codeql_call_graph_status")
         store.delete_meta("codeql_call_graph_edge_count")
@@ -790,6 +836,7 @@ def _index_repo(
                         [*flows, *partial_codeql_flows], all_endpoints
                     )
                 )
+                report_built_chains(partial_flows)
                 store.replace_code_flows(partial_flows)
                 store.delete_meta("code_flow_signature")
                 store.set_meta("code_flow_snapshot_status", "partial")
@@ -1039,6 +1086,7 @@ def _index_repo(
             flows = _ensure_unique_code_flow_ids(
                 _deduplicate_code_flows([*flows, *codeql_flows], all_endpoints)
             )
+            report_built_chains(flows)
             store.replace_code_flows(flows)
             store.delete_meta("code_flow_signature")
             store.set_meta(
@@ -1201,6 +1249,8 @@ def index_repo(
     codeql_progress: bool = False,
     generate_sources: bool = False,
     resume_codeql_join: bool = False,
+    show_call_chains: bool = False,
+    show_call_chains_module: str | None = None,
 ) -> IndexReport:
     """Index one repository, publishing explicit CodeQL checkpoints when needed."""
     with store.transaction():
@@ -1220,4 +1270,6 @@ def index_repo(
             codeql_progress=codeql_progress,
             generate_sources=generate_sources,
             resume_codeql_join=resume_codeql_join,
+            show_call_chains=show_call_chains,
+            show_call_chains_module=show_call_chains_module,
         )
