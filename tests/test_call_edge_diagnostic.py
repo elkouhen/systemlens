@@ -82,6 +82,11 @@ def test_call_edge_reports_the_missing_caller_from_the_persisted_snapshot(
     assert payload["stage"] == "method_inventory"
     assert payload["caller_candidates"] == []
     assert len(payload["callee_candidates"]) == 1
+    assert payload["presence"] == {
+        "caller_node": {"ast": "absent", "codeql": "unknown"},
+        "callee_node": {"ast": "present", "codeql": "unknown"},
+        "edge": {"ast": "unknown", "codeql": "unknown"},
+    }
     assert "systemlens index --full" in str(payload["recommended_action"])
 
 
@@ -103,6 +108,11 @@ def test_call_edge_reports_a_codeql_or_join_gap_when_the_edge_is_missing(
     assert payload["status"] == "edge_not_persisted"
     assert payload["stage"] == "codeql_extraction_or_join"
     assert payload["edges"] == []
+    assert payload["presence"] == {
+        "caller_node": {"ast": "present", "codeql": "unknown"},
+        "callee_node": {"ast": "present", "codeql": "unknown"},
+        "edge": {"ast": "unknown", "codeql": "unknown"},
+    }
     assert "--codeql-progress" in str(payload["recommended_action"])
 
 
@@ -135,7 +145,7 @@ def test_call_edge_reports_a_possible_edge_filtered_by_exact_mode(
     caller = _method("caller", "orders.Controller.create", inputs=("in",))
     callee = _method("callee", "orders.Service.reserve", outputs=("out",))
     edge = CodeQLCallGraphEdge(
-        "caller", "callee", "src/Controller.java", 15, "possible",
+        "caller", "callee", "src/Controller.java", 15, "possible", inferred=True,
     )
     _given_persisted_snapshot(
         tmp_path,
@@ -154,6 +164,11 @@ def test_call_edge_reports_a_possible_edge_filtered_by_exact_mode(
     assert payload["status"] == "edge_filtered_by_confidence"
     assert payload["stage"] == "flow_reconstruction"
     assert payload["edges"][0]["dispatch_confidence"] == "possible"
+    assert payload["presence"] == {
+        "caller_node": {"ast": "present", "codeql": "unknown"},
+        "callee_node": {"ast": "present", "codeql": "unknown"},
+        "edge": {"ast": "unknown", "codeql": "unknown"},
+    }
     assert "--codeql-edge-confidence possible" in str(payload["recommended_action"])
 
 
@@ -202,6 +217,9 @@ def test_call_edge_text_output_shows_an_edge_used_by_a_flow(tmp_path: Path) -> N
     assert "Verdict : edge_used_in_flow" in result.output
     assert "Étage : complete" in result.output
     assert "confidence=exact" in result.output
+    assert "Nœud caller : CodeQL=present · AST=present" in result.output
+    assert "Nœud callee : CodeQL=present · AST=present" in result.output
+    assert "Arc caller -> callee : CodeQL=present · AST=unknown" in result.output
     assert "Flux : flow-1" in result.output
 
 

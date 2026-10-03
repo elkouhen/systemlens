@@ -21,6 +21,50 @@ def _method_fact(method: IntegrationMethod) -> dict[str, object]:
     }
 
 
+def _presence(
+    edges: Sequence[CodeQLCallGraphEdge],
+    callers: Sequence[IntegrationMethod],
+    callees: Sequence[IntegrationMethod],
+) -> dict[str, object]:
+    """Report only presence facts that the persisted snapshot can prove."""
+    incident_method_ids = {
+        method_id
+        for edge in edges
+        if not edge.inferred
+        for method_id in (edge.caller_id, edge.callee_id)
+    }
+
+    def node(methods: Sequence[IntegrationMethod]) -> dict[str, str]:
+        if not methods:
+            return {"ast": "absent", "codeql": "unknown"}
+        if len(methods) != 1:
+            return {"ast": "present", "codeql": "unknown"}
+        return {
+            "ast": "present",
+            "codeql": (
+                "present" if methods[0].id in incident_method_ids else "unknown"
+            ),
+        }
+
+    matching_edge = (
+        len(callers) == 1
+        and len(callees) == 1
+        and any(
+            edge.caller_id == callers[0].id and edge.callee_id == callees[0].id
+            and not edge.inferred
+            for edge in edges
+        )
+    )
+    return {
+        "caller_node": node(callers),
+        "callee_node": node(callees),
+        "edge": {
+            "codeql": "present" if matching_edge else "unknown",
+            "ast": "unknown",
+        },
+    }
+
+
 def _matching_methods(
     methods: Sequence[IntegrationMethod], query: str,
 ) -> list[IntegrationMethod]:
@@ -147,6 +191,11 @@ def diagnose_call_edge(
         "snapshot": snapshot,
         "edges": [],
         "flow_ids": [],
+        "presence": _presence(
+            inventory.codeql_call_edges,
+            callers,
+            callees,
+        ),
     }
 
     if not callers or not callees:
@@ -327,6 +376,19 @@ def render_call_edge_diagnostic_text(result: Mapping[str, object]) -> str:
         str(result["conclusion"]),
         f"Action : {result['recommended_action']}",
     ]
+    presence = result.get("presence")
+    if isinstance(presence, dict):
+        for key, label in (
+            ("caller_node", "Nœud caller"),
+            ("callee_node", "Nœud callee"),
+            ("edge", "Arc caller -> callee"),
+        ):
+            values = presence.get(key)
+            if isinstance(values, dict):
+                lines.append(
+                    f"- {label} : CodeQL={values.get('codeql', 'unknown')} · "
+                    f"AST={values.get('ast', 'unknown')}"
+                )
     for role in ("caller", "callee"):
         candidates = result.get(f"{role}_candidates", [])
         if not isinstance(candidates, list):

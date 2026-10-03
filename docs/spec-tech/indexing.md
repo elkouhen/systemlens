@@ -193,6 +193,12 @@ it checks the persisted edge before applying the recorded confidence filter.
 It then tests reachability from any indexed input method and to any indexed
 output method. Existing snapshots do not persist rejected raw CodeQL rows, so
 an absent edge remains classified across extraction and CodeQL-to-AST joining.
+The diagnostic reports presence as a three-state fact. An integration method
+proves AST node presence, and an incident non-inferred call edge proves CodeQL
+node presence. A non-inferred caller-to-callee edge proves CodeQL edge
+presence. Inferred edges do not count as CodeQL proof. The index has no
+separate AST call-edge projection and no raw CodeQL node projection, so
+unsupported absence checks remain `unknown`.
 After the call adjacency is built, the decoded CodeQL rows and transient Java
 symbol indexes are released before route expansion; the adjacency remains the
 single in-memory call-graph representation used by the BFS, and its normalized
