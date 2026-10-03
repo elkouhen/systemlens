@@ -175,6 +175,17 @@ compare external integrations with persisted local and cross-service flows.
 Use `systemlens flows` to list conservative,
 source-evidenced paths from an API or topic entry point to its external effects.
 
+To locate a missing Java call between the CodeQL graph and flow
+post-processing, diagnose the expected caller and callee from the persisted
+snapshot:
+
+```bash
+systemlens analyze call-edge OrderController.create OrderService.reserve
+```
+
+Add `--json` to retrieve matched methods, edge evidence, flow IDs, and the
+pipeline stage associated with the verdict.
+
 ### Choose an interface
 
 | Goal | Use |
@@ -365,5 +376,6 @@ RabbitMQ, SQS, or other middleware facts.
 | CLI, MCP, and HTML-export behaviour | [Functional specification](docs/SPEC-FONC.md) |
 | Extraction, storage, and layout design | [Technical specification](docs/SPEC-TECH.md) |
 | A maintainer's code-navigation guide | [Architecture map](docs/ARCHITECTURE.md) |
+| Test coverage, levels, and validation commands | [Test strategy and validation report](docs/TESTING.md) |
 | The rationale for durable design choices | [ADRs](docs/ADR.md) |
 | AI graph manifest format | [AI graph manifest](docs/AI-GRAPH.md) |

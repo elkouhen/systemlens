@@ -231,8 +231,9 @@ def test_duplicate_artifact_names_are_persisted_with_distinct_identities(tmp_pat
 
 
 def test_workspace_federation_namespaces_direct_indexes_with_duplicate_artifacts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
+    # Given two independently indexed services with the same artifact name.
     workspace = tmp_path / "workspace"
     for directory in ("north", "south"):
         service = workspace / directory
@@ -243,10 +244,16 @@ def test_workspace_federation_namespaces_direct_indexes_with_duplicate_artifacts
             "class App { void send() { kafkaTemplate.send(\"orders.created\", new Object()); } }"
         )
         with Store(service) as store:
-            index_repo(service, Config(), store)
+            index_repo(
+                service,
+                Config(codeql_enabled=False, call_graph_engine="none"),
+                store,
+            )
 
+    # When the parent workspace loads their persisted snapshots.
     federation = load_federation(discover_workspace_services(workspace))
 
+    # Then each module and endpoint keeps its path-qualified identity.
     assert set(federation.endpoints_by_module) == {"orders@north", "orders@south"}
     assert {
         endpoint.module

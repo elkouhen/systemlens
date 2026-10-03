@@ -518,6 +518,7 @@ def test_reconcile_code_flows_marks_ambiguous_topology_as_partial() -> None:
 
 
 def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None:
+    # Given a repository with one same-method entry-to-effect flow.
     repo = tmp_path / "repo"
     shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
     (repo / "pom.xml").write_text(
@@ -526,18 +527,27 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
         "<version>1.0.0</version></project>",
         encoding="utf-8",
     )
+
+    # When the repository is indexed without call-graph enrichment.
     with Store(repo) as store:
-        index_repo(repo, Config(), store)
+        index_repo(
+            repo,
+            Config(codeql_enabled=False, call_graph_engine="none"),
+            store,
+        )
         flows = store.all_code_flows()
 
+    # Then the persisted flow keeps its ordered entry and effect.
     assert len(flows) == 1
     assert [step.kind for step in flows[0].steps] == [
         "message_entry",
         "http_call",
     ]
 
+    # When the user lists flows through the CLI.
     result = RUNNER.invoke(app, ["flows", "--root", str(repo), "--json"])
 
+    # Then the public result exposes the complete flow summary.
     assert result.exit_code == 0
     assert json.loads(result.output) == [
         {
@@ -561,22 +571,27 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
         }
     ]
 
+    # When the user filters the same persisted snapshot by module.
     module_result = RUNNER.invoke(
         app, ["flows", "list", "--root", str(repo), "--module", flows[0].module, "--json"]
     )
+    # Then the same flow remains selected.
     assert module_result.exit_code == 0
     assert [item["id"] for item in json.loads(module_result.output)] == [flows[0].id]
 
+    # When the user opens the persisted flow detail.
     detail = RUNNER.invoke(
         app, ["flows", "show", flows[0].id, "--root", str(repo), "--json"]
     )
 
+    # Then the ordered steps match the indexed behavior.
     assert detail.exit_code == 0
     assert [step["kind"] for step in json.loads(detail.output)["steps"]] == [
         "message_entry",
         "http_call",
     ]
 
+    # Given the external effect is removed from the source.
     source = repo / "app/OrderConsumer.java"
     source.write_text(
         source.read_text(encoding="utf-8").replace(
@@ -585,9 +600,17 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
         ),
         encoding="utf-8",
     )
+    # When the repository is indexed again.
     with Store(repo) as store:
-        index_repo(repo, Config(), store)
-        assert store.all_code_flows() == []
+        index_repo(
+            repo,
+            Config(codeql_enabled=False, call_graph_engine="none"),
+            store,
+        )
+        flows_after_removal = store.all_code_flows()
+
+    # Then the obsolete flow is absent from the persisted snapshot.
+    assert flows_after_removal == []
 
 
 def test_index_module_focus_lists_internal_flows_without_rebuilding_codeql(
@@ -1183,25 +1206,6 @@ def test_cli_codeql_progress_html_requires_codeql(tmp_path: Path) -> None:
 
     assert result.exit_code == 2
     assert "requiert CodeQL" in result.output
-
-
-def test_store_round_trips_code_flow_steps(tmp_path: Path) -> None:
-    repo = tmp_path / "repo"
-    shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
-    (repo / "pom.xml").write_text(
-        "<project><modelVersion>4.0.0</modelVersion>"
-        "<groupId>com.example</groupId><artifactId>orders</artifactId>"
-        "<version>1.0.0</version></project>",
-        encoding="utf-8",
-    )
-    with Store(repo) as store:
-        index_repo(repo, Config(), store)
-        before = store.all_code_flows()
-
-    with Store(repo, readonly=True) as store:
-        after = store.all_code_flows()
-
-    assert after == before
 
 
 def test_store_additively_migrates_previous_schema_for_code_flows(

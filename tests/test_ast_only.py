@@ -721,17 +721,29 @@ def test_incremental_property_deletion_reindexes_dependent_java_endpoints(tmp_pa
 
 
 def test_incremental_build_identity_change_reattributes_unchanged_endpoints(tmp_path: Path) -> None:
+    # Given a workspace indexed without the optional call-graph enrichment.
     repo = tmp_path / "workspace"
     shutil.copytree(FIXTURES / "kafka_workspace", repo)
 
     with Store(repo) as store:
-        index_repo(repo, Config(), store)
+        index_repo(
+            repo,
+            Config(codeql_enabled=False, call_graph_engine="none"),
+            store,
+        )
+
+        # When one module changes its persisted build identity.
         pom = repo / "order-service" / "pom.xml"
         pom.write_text(pom.read_text().replace("order-service", "orders-renamed", 1))
-        report = index_repo(repo, Config(), store)
+        report = index_repo(
+            repo,
+            Config(codeql_enabled=False, call_graph_engine="none"),
+            store,
+        )
         endpoint_modules = {endpoint.module for endpoint in store.all_endpoints()}
         relation_modules = {relation.module for relation in store.all_architecture_relations()}
 
+    # Then unchanged endpoint and relation facts use the new identity.
     assert report.scanned > 1
     assert "orders-renamed" in endpoint_modules
     assert "order-service" not in endpoint_modules
@@ -759,6 +771,7 @@ def test_mcp_reindex_preserves_the_persisted_topic_strategy(
 
 
 def test_index_persists_kafka_dto_source_definitions(tmp_path: Path) -> None:
+    # Given one Kafka publisher, its DTO, and an OpenAPI contract.
     (tmp_path / "pom.xml").write_text(
         "<project><modelVersion>4.0.0</modelVersion><artifactId>orders</artifactId></project>",
         encoding="utf-8",
@@ -778,11 +791,18 @@ def test_index_persists_kafka_dto_source_definitions(tmp_path: Path) -> None:
     contract.parent.mkdir(parents=True)
     contract.write_text("openapi: 3.0.0\npaths: {}\n", encoding="utf-8")
 
+    # When the repository is indexed without call-graph enrichment.
     with Store(tmp_path) as store:
-        index_repo(tmp_path, Config(), store, full=True)
+        index_repo(
+            tmp_path,
+            Config(codeql_enabled=False, call_graph_engine="none"),
+            store,
+            full=True,
+        )
         definitions = store.all_kafka_dto_definitions()
         contracts = store.all_openapi_contracts()
 
+    # Then the persisted snapshot exposes both source-backed definitions.
     assert definitions[0]["name"] == "OrderCreated"
     assert definitions[0]["source"] == "src/main/java/com/example/OrderCreated.java"
     assert definitions[0]["fields"] == [{"type": "String", "name": "id"}]

@@ -44,6 +44,10 @@ from systemlens.application.code_flows import (
     show_code_flow,
 )
 from systemlens.application.flow_calculation import calculate_persisted_flows
+from systemlens.application.call_edge_diagnostic import (
+    diagnose_call_edge,
+    render_call_edge_diagnostic_text,
+)
 from systemlens.application.flow_diagnostic import diagnose_flows, render_flow_diagnostic_text
 from systemlens.application.indexing_audit import audit_indexing
 from systemlens.application.architecture_projection import project_architecture_graph
@@ -1100,6 +1104,41 @@ def analyze_indexing_audit(
             f"- [{issue['severity']}] {issue['rule']} : "
             f"{issue['message']}{location}"
         )
+
+
+@analyze_app.command("call-edge")
+def analyze_call_edge(
+    caller: str = typer.Argument(
+        ..., help="Identifiant, nom qualifié ou suffixe de la méthode appelante."
+    ),
+    callee: str = typer.Argument(
+        ..., help="Identifiant, nom qualifié ou suffixe de la méthode appelée."
+    ),
+    root: Path | None = typer.Option(
+        None, "--root", help="Répertoire indexé à analyser."
+    ),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Localiser la perte d'une arête attendue dans le pipeline d'indexation."""
+    repo_root = _option_root(root)
+    inventory = load_architecture_inventory(repo_root)
+    with Store(repo_root, readonly=True) as store:
+        metadata = {
+            key: store.get_meta(key)
+            for key in (
+                "code_flow_signature",
+                "codeql_call_graph_status",
+                "code_flow_snapshot_status",
+            )
+        }
+    result = diagnose_call_edge(
+        inventory, caller, callee, snapshot_metadata=metadata,
+    )
+    typer.echo(
+        json.dumps(result)
+        if _option_json(json_output)
+        else render_call_edge_diagnostic_text(result)
+    )
 
 
 @analyze_app.command("flows-diagnostic")

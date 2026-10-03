@@ -192,10 +192,21 @@ class JavaSymbols:
         return self._ancestors[owner]
 
     def implementations(self, contract: _Method) -> list[_Method]:
-        if any(parameter is None for parameter in contract.parameters):
-            return []
         name = contract.method.qualified_method.rsplit(".", 1)[-1]
-        return self.dispatch.get((contract.owner, name, contract.parameters), [])
+        if not any(parameter is None for parameter in contract.parameters):
+            return self.dispatch.get((contract.owner, name, contract.parameters), [])
+        # Generic contracts can expose a type variable in the source AST
+        # while a concrete implementation has a resolved parameter type.
+        # Gather compatible arities and let the caller reject ambiguity.
+        candidates = {
+            candidate.method.id: candidate
+            for (owner, candidate_name, parameters), values in self.dispatch.items()
+            if owner == contract.owner
+            and candidate_name == name
+            and len(parameters) == len(contract.parameters)
+            for candidate in values
+        }
+        return list(candidates.values())
 
     def bridge(self, method: IntegrationMethod) -> IntegrationMethod | None:
         contract = self.methods.get(method.id)
@@ -213,7 +224,7 @@ class JavaSymbols:
         contracts = [candidate for owner in receiver_bases
                      for candidate in self.by_owner.get((owner, name, arity), [])]
         signatures = {candidate.parameters for candidate in contracts}
-        if len(signatures) != 1 or any(value is None for value in next(iter(signatures), ())):
+        if len(signatures) != 1:
             return None
         candidates = {candidate.method.id: candidate for contract in contracts
                       for candidate in self.implementations(contract)
@@ -275,18 +286,16 @@ class JavaSymbols:
                             found.add(self.resolve(field_path, parser.node_text(field_source, type_node), owner))
         return next(iter(found)) if len(found) == 1 else None
 
-    def fallback_calls(self, resolved_sites: set[tuple[str, int]]) -> list[CodeQLCall]:
+    def fallback_calls(self, resolved_sites: set[tuple[str, int, str]]) -> list[CodeQLCall]:
         calls: list[CodeQLCall] = []
         for info in self.methods.values():
-            if not info.concrete or info.method.output_endpoint_ids:
+            if not info.concrete:
                 continue
             source = self.units[info.method.path].source
             for invocation in parser.walk(info.node):
                 if invocation.type != "method_invocation" or parser.enclosing(invocation, "method_declaration") != info.node:
                     continue
                 line = invocation.start_point.row + 1
-                if (info.method.id, line) in resolved_sites:
-                    continue
                 receiver, name, arguments = parser.invocation_parts(invocation, source)
                 receiver_type: str | None
                 if receiver is None or receiver.type == "this":
@@ -301,6 +310,8 @@ class JavaSymbols:
                     continue
                 target = self.target(receiver_type, name, len(arguments))
                 if target is None:
+                    continue
+                if (info.method.id, line, target.id) in resolved_sites:
                     continue
                 calls.append(CodeQLCall(
                     info.method.qualified_method, info.method.path, info.method.start_line,

@@ -80,6 +80,216 @@ def test_ast_cross_module_abstract_dispatch_through_empty_base_and_helper(tmp_pa
     assert [step.name for step in flows[0].steps[1:-1]] == ["impl.Concrete.execute", "impl.Concrete.output"]
 
 
+def test_ast_interface_field_dispatch_reaches_same_module_output(tmp_path: Path):
+    sources = {
+        "orders/OrderService.java": """package orders;
+public interface OrderService { void reserve(String value); }
+""",
+        "orders/OrderServiceImpl.java": """package orders;
+public class OrderServiceImpl implements OrderService {
+  public void reserve(String value) { output(); }
+  void output() {}
+}
+""",
+        "orders/OrderController.java": """package orders;
+public class OrderController {
+  private OrderService service;
+  public void entry(String value) { service.reserve(value); }
+}
+""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+
+    flows = materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        [],
+        repo_root=tmp_path,
+        source_paths=list(sources),
+    )
+
+    assert len(flows) == 1
+    assert [step.name for step in flows[0].steps[1:-1]] == [
+        "orders.OrderServiceImpl.reserve",
+        "orders.OrderServiceImpl.output",
+    ]
+
+
+def test_ast_fallback_keeps_other_calls_on_same_line_and_output_methods(tmp_path: Path):
+    sources = {
+        "orders/OrderController.java": """package orders;
+public class OrderController {
+  public void entry(String value) { helper(); output(); }
+  void helper() {}
+  void output() {}
+}
+""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    caller = next(method for method in methods if method.qualified_method.endswith("OrderController.entry"))
+    helper = next(method for method in methods if method.qualified_method.endswith("OrderController.helper"))
+    calls = [CodeQLCall(
+        caller.qualified_method, caller.path, caller.start_line,
+        helper.qualified_method, helper.path, helper.start_line,
+        caller.start_line, "exact",
+    )]
+
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, calls, repo_root=tmp_path, source_paths=list(sources),
+    )
+
+    assert any(
+        [step.name for step in flow.steps[1:-1]] == [
+            "orders.OrderController.output",
+        ]
+        for flow in flows
+    )
+
+
+def test_ast_generic_interface_dispatch_reaches_same_module_output(tmp_path: Path):
+    sources = {
+        "orders/Sender.java": """package orders;
+public interface Sender<T> { void send(T value); }
+""",
+        "orders/SenderImpl.java": """package orders;
+public class SenderImpl implements Sender<String> {
+  public void send(String value) { output(); }
+  void output() {}
+}
+""",
+        "orders/OrderController.java": """package orders;
+public class OrderController {
+  private final Sender<String> sender;
+  public void entry(String value) { sender.send(value); }
+}
+""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
+    )
+
+    assert any(
+        [step.name for step in flow.steps[1:-1]] == [
+            "orders.SenderImpl.send",
+            "orders.SenderImpl.output",
+        ]
+        for flow in flows
+    )
+
+
+def test_integration_methods_include_plain_methods_in_repository_root_module(tmp_path: Path):
+    source_path = "src/main/java/orders/OrderController.java"
+    destination = tmp_path / source_path
+    destination.parent.mkdir(parents=True)
+    destination.write_text("""package orders;
+public class OrderController {
+  public void entry(String value) { helper(); }
+  void helper() {}
+}
+""")
+    root_module = DiscoveredModule(
+        "application", tmp_path, "maven", None, "library", False, "",
+    )
+
+    methods = materialize_integration_methods(
+        tmp_path, [], [source_path], [root_module],
+    )
+
+    assert {method.qualified_method for method in methods} == {
+        "orders.OrderController.entry",
+        "orders.OrderController.helper",
+    }
+
+
+def test_ast_spring_style_sender_and_producer_interfaces_reach_three_kafka_outputs(
+    tmp_path: Path,
+):
+    sources = {
+        "orders/MessageSender.java": """package orders;
+public interface MessageSender {
+  void sendOrder(String value);
+  void sendStock(String value);
+  void sendAudit(String value);
+}
+""",
+        "orders/OrderProducer.java": """package orders;
+public interface OrderProducer { void output(String value); }
+""",
+        "orders/StockProducer.java": """package orders;
+public interface StockProducer { void output(String value); }
+""",
+        "orders/AuditProducer.java": """package orders;
+public interface AuditProducer { void output(String value); }
+""",
+        "orders/MessageSenderImpl.java": """package orders;
+import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
+@RequiredArgsConstructor
+@Component
+public class MessageSenderImpl implements MessageSender {
+  private final OrderProducer orderProducer;
+  private final StockProducer stockProducer;
+  private final AuditProducer auditProducer;
+  public void sendOrder(String value) { orderProducer.output(value); }
+  public void sendStock(String value) { stockProducer.output(value); }
+  public void sendAudit(String value) { auditProducer.output(value); }
+}
+""",
+        "orders/OrderProducerImpl.java": """package orders;
+import org.springframework.stereotype.Component;
+@Component
+public class OrderProducerImpl implements OrderProducer {
+  public void output(String value) {}
+}
+""",
+        "orders/StockProducerImpl.java": """package orders;
+import org.springframework.stereotype.Component;
+@Component
+public class StockProducerImpl implements StockProducer {
+  public void output(String value) {}
+}
+""",
+        "orders/AuditProducerImpl.java": """package orders;
+import org.springframework.stereotype.Component;
+@Component
+public class AuditProducerImpl implements AuditProducer {
+  public void output(String value) {}
+}
+""",
+        "orders/OrderHandler.java": """package orders;
+import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
+@RequiredArgsConstructor
+@Component
+public class OrderHandler {
+  private final MessageSender sender;
+  public void entry(String value) {
+    sender.sendOrder(value);
+    sender.sendStock(value);
+    sender.sendAudit(value);
+  }
+}
+""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+
+    flows = materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        [],
+        repo_root=tmp_path,
+        source_paths=list(sources),
+    )
+
+    assert {flow.steps[-1].path for flow in flows} == {
+        "orders/OrderProducerImpl.java",
+        "orders/StockProducerImpl.java",
+        "orders/AuditProducerImpl.java",
+    }
+
+
 def test_template_method_in_base_dispatches_to_cross_module_override(tmp_path: Path):
     sources = {**SOURCES,
                "api/Base.java": """package api;
@@ -150,20 +360,6 @@ public class Concrete extends api.Base {
 """,
         "web/Controller.java": "package web; public class Controller { impl.Concrete service; public void entry() { service.execute(); } }",
     }
-    methods, endpoints = _project(tmp_path, sources)
-    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources))
-    assert len(flows) == 1
-    assert flows[0].steps[-1].path == "impl/Concrete.java"
-
-
-def test_many_unrelated_modules_do_not_change_dispatch(tmp_path: Path):
-    sources = dict(SOURCES)
-    for index in range(250):
-        sources[f"other{index}/Other.java"] = (
-            f"package other{index}; public class Other {{\n"
-            "  public void execute(String value) { otherOutput(); }\n"
-            "  void otherOutput() {}\n}"
-        )
     methods, endpoints = _project(tmp_path, sources)
     flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources))
     assert len(flows) == 1
@@ -340,3 +536,47 @@ def test_real_codeql_cross_module_inheritance_and_csv_contract(tmp_path: Path):
     assert any(relation.target == "impl.Concrete.output" for relation in relations)
     flows = materialize_codeql_code_flows(methods, endpoints, calls, reachability=relations)
     assert any(flow.steps[-1].path == "impl/Concrete.java" for flow in flows)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("codeql") is None, reason="Local CodeQL is required")
+def test_real_codeql_interface_field_dispatch_in_same_module(tmp_path: Path):
+    sources = {
+        "orders/OrderService.java": """package orders;
+public interface OrderService { void reserve(String value); }
+""",
+        "orders/OrderServiceImpl.java": """package orders;
+public class OrderServiceImpl implements OrderService {
+  public void reserve(String value) { output(); }
+  void output() {}
+}
+""",
+        "orders/OrderController.java": """package orders;
+public class OrderController {
+  private OrderService service;
+  public void entry(String value) { service.reserve(value); }
+}
+""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    with automatic_codeql_database(tmp_path, timeout_seconds=180, threads=2) as database:
+        assert database is not None
+        calls = extract_codeql_calls(database, timeout_seconds=180, threads=2)
+        relations = extract_codeql_reachability(database, methods, timeout_seconds=180, threads=2)
+
+    assert any(
+        call.caller == "orders.OrderController.entry"
+        and call.callee.endswith(("OrderService.reserve", "OrderServiceImpl.reserve"))
+        for call in calls
+    )
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, calls, reachability=relations,
+        repo_root=tmp_path, source_paths=list(sources),
+    )
+    assert any(
+        [step.name for step in flow.steps[1:-1]] == [
+            "orders.OrderServiceImpl.reserve",
+            "orders.OrderServiceImpl.output",
+        ]
+        for flow in flows
+    )

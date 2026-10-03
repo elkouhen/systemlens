@@ -159,6 +159,13 @@ are never name-only guesses. A receiver-typed helper call preserves the
 concrete consumer while walking an inherited method body; when that body calls
 a method overridden exactly once by the concrete consumer, the unique override
 is retained as a possible edge. Ambiguous sibling overrides remain unresolved.
+The fallback also scans methods that already own an output endpoint and keeps
+separate resolved-call keys for calls sharing one source line. A generic
+interface call may be completed when the indexed implementations expose one
+unique compatible method with the same arity; multiple compatible
+implementations remain unresolved. Repository-root modules attribute source
+files without endpoints to the root module so their helper methods remain
+available to the call graph.
 The BFS visits each
 method/confidence state
 at most once per input endpoint, under the configured depth/global transition
@@ -179,6 +186,13 @@ findings, keeps zero-count rules in the JSON summary, and includes relative
 source evidence when the finding has a persisted location. The audit does not
 re-parse source files or convert informational uncertainty into an asserted
 architecture relation.
+The read-only `analyze call-edge` command resolves each selector against the
+persisted method ID, qualified name, then qualified-name suffix. It reports
+ambiguous selectors without choosing a candidate. For one caller and callee,
+it checks the persisted edge before applying the recorded confidence filter.
+It then tests reachability from any indexed input method and to any indexed
+output method. Existing snapshots do not persist rejected raw CodeQL rows, so
+an absent edge remains classified across extraction and CodeQL-to-AST joining.
 After the call adjacency is built, the decoded CodeQL rows and transient Java
 symbol indexes are released before route expansion; the adjacency remains the
 single in-memory call-graph representation used by the BFS, and its normalized

@@ -530,7 +530,7 @@ def _build_codeql_call_graph(
     adjacency: dict[str, list[CodeQLEdge]] = defaultdict(list)
     symbols = JavaSymbols(repo_root, methods, source_paths) if repo_root is not None else None
     bridges: dict[str, IntegrationMethod | None] = {}
-    resolved_sites: set[tuple[str, int]] = set()
+    resolved_sites: set[tuple[str, int, str]] = set()
     seen_edges: set[tuple[str, str, int, str, bool]] = set()
     synthetic_calls: set[CodeQLCall] = set()
 
@@ -596,7 +596,7 @@ def _build_codeql_call_graph(
         if symbols is not None:
             info = symbols.methods.get(callee.id)
             if info is not None and info.concrete:
-                resolved_sites.add((caller.id, call.call_line))
+                resolved_sites.add((caller.id, call.call_line, callee.id))
             if callee.id not in bridges:
                 bridges[callee.id] = symbols.bridge(callee)
             candidate = bridges[callee.id]

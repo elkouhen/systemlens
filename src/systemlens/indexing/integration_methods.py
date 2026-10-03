@@ -155,7 +155,10 @@ def materialize_integration_methods(
                         prefix = discovered_module.path.resolve().relative_to(repo_root.resolve()).as_posix()
                     except ValueError:
                         continue
-                    if path == prefix or path.startswith(f"{prefix}/"):
+                    # A repository-root module has ``.`` as its relative
+                    # prefix, while its files still use paths such as
+                    # ``src/main/java/Foo.java``.
+                    if prefix == "." or path == prefix or path.startswith(f"{prefix}/"):
                         module_candidates.append((len(prefix), module_identity(discovered_module)))
                 module = max(module_candidates, default=(0, None))[1]
             if module is None:
