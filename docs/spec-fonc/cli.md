@@ -56,6 +56,14 @@ the tested graph metrics and up to ten partial call paths when no internal flow
 is found. A path can end at an indexed method with no persisted CodeQL edge;
 this explains why the search stopped without hiding the attempted node.
 
+When CodeQL reaches its time limit, the CLI prints
+`systemlens index --resume-codeql-join` as the recovery path. With
+`--no-codeql`, the CLI explicitly reports that the result is AST-only and that
+dynamic or interprocedural calls may remain incomplete. After
+`systemlens import-facts`, the JSON result remains on stdout and the CLI prints
+`systemlens flows calculate` on stderr as the next step, so scripts can keep
+parsing stdout as JSON.
+
 Use `systemlens analyze call-edge CALLER CALLEE` when one expected Java call
 is missing from a flow or graph view. The command reads the method inventory,
 the persisted CodeQL graph, the flow snapshot status, and the configured edge
@@ -149,10 +157,13 @@ the project or runs tests. Maven must find
 its plugins and dependencies in the local cache.
 
 Automatic method-call analysis creates one source-only Java database for the
-whole repository with `codeql`. Progress
-reports the completed project over the total and the calls extracted from it.
-After each completed project, SystemLens persists a partial `code_flows`
-snapshot and emits a checkpoint line with the number of provisional flows.
+whole repository with `codeql`. Progress reports the completed project over the
+total and the calls processed from the global result. By default, SystemLens
+persists the flow snapshot once after all modules have been processed; this
+avoids rewriting the complete SQLite flow table for every module. When
+explicit progress output is enabled, SystemLens can persist a partial
+`code_flows` snapshot after each completed project and emit a checkpoint line
+with the number of provisional flows.
 The checkpoint line names the source-owning Maven module and lists the Java
 methods searched for IN and OUT integration points. The optional HTML
 checkpoint carries the same summary in its provisional progress banner.
@@ -178,8 +189,8 @@ The final reconciliation replaces this partial snapshot and marks it complete.
 SystemLens maps module-relative evidence paths back to the repository root,
 aggregates all calls, and only then joins them to the global method inventory.
 An explicit `--codeql-database` remains a caller-managed global-database
-override, but its call query is scoped to each source-owning project so it
-produces the same progressive checkpoints.
+override. Its calls and methods are queried once globally, then processed by
+source-owning project for the same module progress reporting.
 
 `--strategy strategy1` is opt-in. The selected strategy is persisted with
 the index and reused by incremental MCP reindexing and all derived views.

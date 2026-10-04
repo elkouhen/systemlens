@@ -109,7 +109,10 @@ resolution context. CodeQL calls and methods are queried once globally, then
 the returned rows are partitioned and processed one source-owning module at a
 time. Each module reports its own extracted-call count and duration, and each
 completed module can publish the currently available `code_flows` as an
-explicit partial checkpoint. The final pass joins all call facts together.
+explicit partial checkpoint when explicit progress output is enabled. Without
+that option, module processing only reports progress and the final pass
+persists the complete flow snapshot once. The final pass joins all call facts
+together.
 CodeQL's temporary query pack exports only source-located resolved calls.
 `--codeql-database` reuses one global database supplied by the caller. Once the
 source-backed call graph is constructed, its

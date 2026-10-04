@@ -96,7 +96,9 @@ systemlens index
 
 `systemlens index` uses CodeQL when an available database can provide richer
 call-graph evidence. Use `systemlens index --no-codeql` for a faster AST-only
-inventory when you only need the structural baseline.
+inventory when you only need the structural baseline; dynamic and
+interprocedural calls may be incomplete in this mode. If CodeQL reaches its
+timeout, resume the persisted join with `systemlens index --resume-codeql-join`.
 
 For a human-readable topology, generate an interactive export:
 

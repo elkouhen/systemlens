@@ -961,11 +961,11 @@ def _index_repo(
                         total_units=total_methods,
                     ))
 
-            def publish_module_checkpoints(
+            def report_module_progress(
                 project_calls_by_module: Sequence[tuple[str, list[CodeQLCall]]],
                 roots: Sequence[tuple[str, Path, str]],
             ) -> None:
-                """Publish module checkpoints from one already-built flow graph."""
+                """Report module progress and optionally publish checkpoints."""
                 completed_calls: list[CodeQLCall] = []
                 for number, (name, project_calls) in enumerate(project_calls_by_module, start=1):
                     module_started_at = time.perf_counter()
@@ -978,13 +978,14 @@ def _index_repo(
                         (prefix for root_name, _root, prefix in roots if root_name == name),
                         "",
                     )
-                    publish_call_graph_progress(
-                        number,
-                        len(project_calls_by_module),
-                        name,
-                        completed_calls,
-                        project_prefix,
-                    )
+                    if call_graph_progress is not None:
+                        publish_call_graph_progress(
+                            number,
+                            len(project_calls_by_module),
+                            name,
+                            completed_calls,
+                            project_prefix,
+                        )
                     _report_progress(
                         progress,
                         f"    ✓ {name} : {len(project_calls)} appel(s) traité(s) "
@@ -1061,7 +1062,7 @@ def _index_repo(
                         persisted_edges=persisted_codeql_edges if refresh_codeql_view else None,
                         persisted_methods=persisted_codeql_methods,
                     )
-                    publish_module_checkpoints(scoped_project_calls, roots)
+                    report_module_progress(scoped_project_calls, roots)
                 else:
                     roots = _codeql_module_roots(
                         repo_root,
@@ -1177,7 +1178,7 @@ def _index_repo(
                             persisted_edges=persisted_codeql_edges if refresh_codeql_view else None,
                             persisted_methods=persisted_codeql_methods,
                         )
-                        publish_module_checkpoints(scoped_project_calls, roots)
+                        report_module_progress(scoped_project_calls, roots)
                     timer.end(
                         stage,
                         f"création et rafraîchissement du module {engine_label}"

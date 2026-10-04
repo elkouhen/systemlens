@@ -667,6 +667,29 @@ def test_index_module_focus_lists_internal_flows_without_rebuilding_codeql(
     assert json.loads(missing.output)["found"] is False
 
 
+def test_module_codeql_refresh_explains_missing_global_graph(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
+    (repo / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion>"
+        "<groupId>com.example</groupId><artifactId>orders</artifactId>"
+        "<version>1.0.0</version></project>",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(repo)
+    assert RUNNER.invoke(app, ["init"]).exit_code == 0
+
+    result = RUNNER.invoke(
+        app, ["index", "--module", "orders", "--refresh-codeql-view"]
+    )
+
+    assert result.exit_code == 2, result.output
+    assert "aucun graphe CodeQL global complet" in result.output
+    assert "systemlens index --full" in result.output
+
+
 def test_index_internal_flows_only_suppresses_general_summary(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -1202,7 +1225,8 @@ def test_cli_no_codeql_keeps_ast_only_flow_indexing(
     result = RUNNER.invoke(app, ["index", "--no-codeql"])
 
     assert result.exit_code == 0
-    assert "CodeQL" not in result.output
+    assert "CodeQL désactivé" in result.output
+    assert "peuvent être incomplets" in result.output
     with Store(repo, readonly=True) as store:
         assert [step.kind for step in store.all_code_flows()[0].steps] == [
             "message_entry", "http_call",

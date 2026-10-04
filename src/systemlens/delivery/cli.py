@@ -1572,6 +1572,23 @@ def index_cmd(
     if codeql_progress_html is not None and config.call_graph_engine != "codeql":
         typer.echo("`--codeql-progress-html` requiert le moteur d'appels de méthodes `--call-graph-engine codeql`.", err=True)
         raise typer.Exit(code=2)
+    if refresh_codeql_view:
+        graph_status = None
+        if db_path(repo_root).is_file():
+            with Store(repo_root, readonly=True) as state:
+                graph_status = state.get_meta("codeql_call_graph_status")
+        if graph_status != "complete":
+            typer.echo(
+                "Rafraîchissement impossible : aucun graphe CodeQL global complet "
+                "n'est disponible.",
+                err=True,
+            )
+            typer.echo(
+                "Lancez d'abord `systemlens index --full`, puis relancez "
+                "`systemlens index --module NAME --refresh-codeql-view`.",
+                err=True,
+            )
+            raise typer.Exit(code=2)
 
     def write_codeql_progress(checkpoint: CallGraphProgress) -> None:
         assert codeql_progress_html is not None
@@ -1588,38 +1605,42 @@ def index_cmd(
     _trace_index("store.open.begin")
     with Store(repo_root) as store:
         _trace_index("store.open.end")
-        report = index_repo(
-            repo_root,
-            config,
-            store,
-            full=full,
-            progress=(
-                None
-                if internal_flows_only and not codeql_progress
-                else (
-                    _echo_only_constructed_chains
-                    if show_call_chains and not codeql_progress
+        try:
+            report = index_repo(
+                repo_root,
+                config,
+                store,
+                full=full,
+                progress=(
+                    None
+                    if internal_flows_only and not codeql_progress
                     else (
-                        _echo_index_progress_with_green_chains
-                        if show_call_chains
-                        else _echo_index_progress
+                        _echo_only_constructed_chains
+                        if show_call_chains and not codeql_progress
+                        else (
+                            _echo_index_progress_with_green_chains
+                            if show_call_chains
+                            else _echo_index_progress
+                        )
                     )
-                )
-            ),
-            disabled=disabled,
-            extra_files=explicit_manifests,
-            topic_strategy=topic_strategy,
-            kubernetes=kubernetes,
-            kubernetes_namespace=kubernetes_namespace,
-            codeql_database=codeql_database,
-            call_graph_progress=write_codeql_progress if codeql_progress_html is not None else None,
-            codeql_progress=codeql_progress,
-            generate_sources=generate_sources,
-            resume_codeql_join=resume_codeql_join,
-            show_call_chains=show_call_chains,
-            show_call_chains_module=selected_module.name if selected_module else None,
-            refresh_codeql_view=refresh_codeql_view,
-        )
+                ),
+                disabled=disabled,
+                extra_files=explicit_manifests,
+                topic_strategy=topic_strategy,
+                kubernetes=kubernetes,
+                kubernetes_namespace=kubernetes_namespace,
+                codeql_database=codeql_database,
+                call_graph_progress=write_codeql_progress if codeql_progress_html is not None else None,
+                codeql_progress=codeql_progress,
+                generate_sources=generate_sources,
+                resume_codeql_join=resume_codeql_join,
+                show_call_chains=show_call_chains,
+                show_call_chains_module=selected_module.name if selected_module else None,
+                refresh_codeql_view=refresh_codeql_view,
+            )
+        except (RuntimeError, ValueError) as exc:
+            typer.echo(f"Indexation impossible : {exc}", err=True)
+            raise typer.Exit(code=2) from exc
         store.set_meta("index_engine", "manual")
         _trace_index("store.close.begin")
     if not internal_flows_only:
@@ -1632,10 +1653,24 @@ def index_cmd(
                 "CodeQL a atteint son délai : le graphe publié est partiel et "
                 "sera complété lors de la prochaine indexation."
             )
+            typer.echo(
+                "Pour reprendre la jointure interrompue : "
+                "systemlens index --resume-codeql-join"
+            )
+        if no_codeql:
+            typer.echo(
+                "CodeQL désactivé : les flux interprocéduraux reposent sur "
+                "l'analyse AST et peuvent être incomplets pour les appels dynamiques."
+            )
         typer.echo(
             "Prochaine étape : systemlens export microservices --html architecture.html "
             "pour explorer le graphe."
         )
+        if selected_module is not None:
+            typer.echo(
+                "Pour explorer les flux du module : "
+                f"systemlens flows list --module {selected_module.name} --explain"
+            )
     if selected_module is not None and show_call_chains:
         with Store(repo_root, readonly=True) as store:
             debug_flows = store.all_code_flows()
@@ -3061,6 +3096,10 @@ def import_facts_cmd(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     typer.echo(json.dumps(result, ensure_ascii=False))
+    typer.echo(
+        "Prochaine étape : systemlens flows calculate",
+        err=True,
+    )
 
 
 @app.command(name="mcp")
