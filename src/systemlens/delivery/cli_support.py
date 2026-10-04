@@ -26,7 +26,21 @@ def current_repo_endpoint_warning(store: Store) -> str | None:
 
 
 def echo_index_progress(message: str) -> None:
-    typer.echo(message)
+    _echo_colored_index_progress(message)
+
+
+def _echo_colored_index_progress(message: str) -> None:
+    """Render indexing phases with stable colours in interactive terminals."""
+    if message.startswith("→"):
+        typer.secho(message, fg="cyan", bold=True)
+    elif message.lstrip().startswith("✓") or "✓ " in message:
+        typer.secho(message, fg="green")
+    elif message.startswith("  •"):
+        typer.secho(message, fg="yellow")
+    elif message.startswith("  ↳"):
+        typer.secho(message, fg="green")
+    else:
+        typer.echo(message)
 
 
 def echo_index_progress_with_green_chains(message: str) -> None:
@@ -34,7 +48,7 @@ def echo_index_progress_with_green_chains(message: str) -> None:
     if message.startswith("  ↳ Chaîne construite"):
         typer.secho(message, fg="green")
         return
-    typer.echo(message)
+    _echo_colored_index_progress(message)
 
 
 def echo_only_constructed_chains(message: str) -> None:

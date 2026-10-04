@@ -162,11 +162,26 @@ select enclosing.getQualifiedName() as caller,
 _METHODS_QUERY = """import java
 
 from Method method
-where method.fromSource()
+where method.fromSource()__METHOD_SCOPE__
 select method.getQualifiedName() as qualified_method,
   method.getFile().getRelativePath() as path,
   method.getLocation().getStartLine() as start_line
 """
+
+
+def _methods_query(source_prefix: str = "") -> str:
+    normalized_prefix = source_prefix.strip("/")
+    if not normalized_prefix:
+        scope = ""
+    else:
+        pattern = _ql_string(f"^{re.escape(normalized_prefix)}/")
+        scope = (
+            " and exists(string path | "
+            "path = method.getFile().getRelativePath() and "
+            f"path.regexpMatch({pattern})"
+            ")"
+        )
+    return _METHODS_QUERY.replace("__METHOD_SCOPE__", scope)
 
 _KAFKA_MESSAGE_TYPES_QUERY = """import java
 import semmle.code.java.dataflow.DataFlow
@@ -692,6 +707,7 @@ def extract_codeql_methods(
     executable: str | None = None,
     timeout_seconds: int = 600,
     path_prefix: str = "",
+    source_prefix: str = "",
     threads: int = 1,
     ram_mb: int | None = None,
     verbosity: str | None = None,
@@ -707,7 +723,7 @@ def extract_codeql_methods(
     with tempfile.TemporaryDirectory(prefix="systemlens-codeql-methods-") as directory:
         work = Path(directory)
         query = work / "methods.ql"
-        query.write_text(_METHODS_QUERY, encoding="utf-8")
+        query.write_text(_methods_query(source_prefix), encoding="utf-8")
         (work / "qlpack.yml").write_text(_QLPACK, encoding="utf-8")
         bqrs = work / "methods.bqrs"
         output = work / "methods.csv"

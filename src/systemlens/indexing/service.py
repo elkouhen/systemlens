@@ -240,12 +240,17 @@ def _index_repo(
     resume_codeql_join: bool = False,
     show_call_chains: bool = False,
     show_call_chains_module: str | None = None,
+    refresh_codeql_view: bool = False,
 ) -> IndexReport:
     timer = _IndexStageTimer(progress)
     # CodeQL diagnostics are opt-in.  Do not inherit the verbosity from older
     # configs, otherwise a repository initialized before the quiet default
     # would still flood the index command's output.
     codeql_verbosity = "progress++" if codeql_progress else None
+    if refresh_codeql_view and show_call_chains_module is None:
+        raise ValueError("Refreshing the CodeQL view requires a selected module.")
+    if refresh_codeql_view and config.call_graph_engine != "codeql":
+        raise ValueError("Refreshing the CodeQL view requires the codeql method-call engine.")
     if codeql_database is not None and config.call_graph_engine != "codeql":
         raise ValueError("A CodeQL database requires the codeql method-call engine.")
     topic_strategy = topic_strategy or config.strategy
@@ -339,6 +344,7 @@ def _index_repo(
     _trace("files.end", current=len(current_hashes), previous=len(previous_hashes))
     timer.end("files", "inventaire des fichiers")
 
+    timer.begin("delta", "→ Indexation : calcul du delta incrémental...")
     # The module inventory is intentionally materialized with the index rather
     # than reconstructed by `systemlens modules`: its configuration examples describe
     # the exact repository state that was audited.
@@ -433,6 +439,7 @@ def _index_repo(
         f"({len(changed)} fichier(s) à scanner, {len(unchanged)} inchangé(s), "
         f"{len(deleted)} supprimé(s)).",
     )
+    timer.end("delta", "calcul du delta incrémental")
 
     # Les fichiers supprimés quittent toujours l'inventaire.
     endpoints_removed = store.count_endpoints_for_paths(deleted)
@@ -570,13 +577,14 @@ def _index_repo(
     _report_progress(progress, f"→ Indexation : {len(relations)} relation(s) d'architecture matérialisée(s).")
     timer.end("relations", "matérialisation des relations d'architecture")
 
-    if (
+    should_index_flows = (
         full
         or changed
         or deleted
         or codeql_database is not None
         or store.get_meta("code_flow_signature") != flow_signature
-    ):
+    )
+    if should_index_flows:
         timer.begin("flows", "→ Indexation : matérialisation des flux de code...")
         all_endpoints = store.all_endpoints()
         methods = materialize_integration_methods(
@@ -699,7 +707,18 @@ def _index_repo(
 
         def persist_call_graph(call_graph: CodeQLCallGraph) -> None:
             edges = list(call_graph.edges())
-            methods_projection = list(call_graph.methods)
+            if refresh_codeql_view and codeql_view_prefix:
+                prefix = codeql_view_prefix.rstrip("/") + "/"
+                methods_projection = [
+                    method for method in store.all_codeql_methods()
+                    if not (
+                        method.path == codeql_view_prefix
+                        or method.path.startswith(prefix)
+                    )
+                ]
+            else:
+                methods_projection = []
+            methods_projection.extend(call_graph.methods)
             known_locators = {
                 (method.qualified_method, method.path, method.start_line)
                 for method in methods_projection
@@ -750,8 +769,9 @@ def _index_repo(
         else:
             store.set_meta("codeql_join_methods_signature", current_join_methods_signature)
         flows = materialize_code_flows(repo_root, all_endpoints, relation_modules)
-        if methods and call_graph_engine != "none" and (
+        if (methods or refresh_codeql_view) and call_graph_engine != "none" and (
             (call_graph_engine == "codeql" and codeql_database is not None) or engine_available
+            or refresh_codeql_view
         ):
             engine_label = "CodeQL"
             if not resume_codeql_join:
@@ -765,6 +785,20 @@ def _index_repo(
             codeql_stats: dict[str, int] = {}
             calls: list[CodeQLCall] = []
             codeql_method_projection: list[CodeQLMethod] = []
+            codeql_view_prefix = ""
+            if refresh_codeql_view and show_call_chains_module is not None:
+                selected_view_module = next(
+                    (
+                        item for item in relation_modules
+                        if module_identity(item) == show_call_chains_module
+                        or item.name == show_call_chains_module
+                    ),
+                    None,
+                )
+                if selected_view_module is not None:
+                    codeql_view_prefix = selected_view_module.path.resolve().relative_to(
+                        repo_root.resolve()
+                    ).as_posix()
 
             def publish_call_graph_progress(
                 completed_projects: int,
@@ -772,8 +806,11 @@ def _index_repo(
                 project_name: str,
                 calls: list[CodeQLCall],
                 project_prefix: str = "",
+                skip_materialization: bool = False,
             ) -> None:
-                if prepared_codeql_flows is not None:
+                if skip_materialization:
+                    progress_flows = []
+                elif prepared_codeql_flows is not None:
                     available_sites = {(call.caller_path, call.call_line) for call in calls}
                     progress_flows = [
                         flow for flow in prepared_codeql_flows
@@ -901,35 +938,14 @@ def _index_repo(
                         [path for path in current_hashes if path.endswith(".java")],
                         relation_modules,
                     ) or [("base CodeQL fournie", repo_root, "")]
-                    scoped_project_calls: list[tuple[str, list[CodeQLCall]]] = []
-                    for number, (name, _root, prefix) in enumerate(roots, start=1):
-                        project_calls = extract_codeql_calls(
-                            codeql_database, timeout_seconds=config.codeql_timeout_seconds,
-                            threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
-                            verbosity=codeql_verbosity,
-                            progress=progress if codeql_verbosity is not None else None,
-                            caller_prefix=prefix,
-                            deadline=codeql_deadline,
-                        )
-                        scoped_project_calls.append((name, project_calls))
-                        calls.extend(project_calls)
-                    if not calls and any(prefix for _name, _root, prefix in roots):
-                        _report_progress(
-                            progress,
-                            "→ CodeQL : aucun appel trouvé avec les préfixes de modules ; "
-                            "repli vers la racine de la base fournie.",
-                        )
-                        calls = extract_codeql_calls(
-                            codeql_database, timeout_seconds=config.codeql_timeout_seconds,
-                            threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
-                            verbosity=codeql_verbosity,
-                            progress=progress if codeql_verbosity is not None else None,
-                            deadline=codeql_deadline,
-                        )
-                        scoped_project_calls = [
-                            (name, project_calls)
-                            for name, project_calls in _partition_codeql_calls(calls, roots)
-                        ]
+                    calls = extract_codeql_calls(
+                        codeql_database, timeout_seconds=config.codeql_timeout_seconds,
+                        threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                        verbosity=codeql_verbosity,
+                        progress=progress if codeql_verbosity is not None else None,
+                        deadline=codeql_deadline,
+                    )
+                    method_prefix = codeql_view_prefix if refresh_codeql_view else ""
                     codeql_method_projection = extract_codeql_methods(
                         codeql_database,
                         timeout_seconds=config.codeql_timeout_seconds,
@@ -938,10 +954,17 @@ def _index_repo(
                         verbosity=codeql_verbosity,
                         progress=progress if codeql_verbosity is not None else None,
                         deadline=codeql_deadline,
+                        source_prefix=method_prefix,
                     )
                     enrich_strategy1_kafka_types(codeql_database, deadline=codeql_deadline)
+                    scoped_project_calls = _partition_codeql_calls(calls, roots)
                     scoped_completed_calls: list[CodeQLCall] = []
                     for number, (name, project_calls) in enumerate(scoped_project_calls, start=1):
+                        module_started_at = time.perf_counter()
+                        _report_progress(
+                            progress,
+                            f"  • CodeQL module {number}/{len(roots)} : {name}",
+                        )
                         scoped_completed_calls.extend(project_calls)
                         project_prefix = next(
                             (prefix for root_name, _root, prefix in roots if root_name == name),
@@ -950,6 +973,11 @@ def _index_repo(
                         publish_call_graph_progress(
                             number, len(scoped_project_calls), name, scoped_completed_calls,
                             project_prefix,
+                        )
+                        _report_progress(
+                            progress,
+                            f"    ✓ {name} : {len(project_calls)} appel(s) traité(s) "
+                            f"en {time.perf_counter() - module_started_at:.2f} s.",
                         )
                     timer.end("codeql-extract", "extraction des appels CodeQL")
                     reachability = extract_codeql_reachability(
@@ -1033,13 +1061,6 @@ def _index_repo(
                             assert database is not None
                             enrich_strategy1_kafka_types(database, deadline=codeql_deadline)
                             calls = extract_codeql_calls(
-                                database, timeout_seconds=config.codeql_timeout_seconds,
-                                threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
-                                verbosity=codeql_verbosity,
-                                progress=progress if codeql_verbosity is not None else None,
-                                deadline=codeql_deadline,
-                            )
-                            codeql_method_projection = extract_codeql_methods(
                                 database,
                                 timeout_seconds=config.codeql_timeout_seconds,
                                 threads=config.codeql_threads,
@@ -1048,13 +1069,49 @@ def _index_repo(
                                 progress=progress if codeql_verbosity is not None else None,
                                 deadline=codeql_deadline,
                             )
+                            method_prefix = codeql_view_prefix if refresh_codeql_view else ""
+                            codeql_method_projection = extract_codeql_methods(
+                                database,
+                                timeout_seconds=config.codeql_timeout_seconds,
+                                threads=config.codeql_threads,
+                                ram_mb=config.codeql_ram_mb,
+                                verbosity=codeql_verbosity,
+                                progress=progress if codeql_verbosity is not None else None,
+                                deadline=codeql_deadline,
+                                source_prefix=method_prefix,
+                            )
+                            scoped_project_calls = _partition_codeql_calls(calls, roots)
+                            completed_calls: list[CodeQLCall] = []
+                            for number, (name, project_calls) in enumerate(scoped_project_calls, start=1):
+                                module_started_at = time.perf_counter()
+                                _report_progress(
+                                    progress,
+                                    f"  • {engine_label} module {number}/{len(roots)} : {name}",
+                                )
+                                completed_calls.extend(project_calls)
+                                project_prefix = next(
+                                    (prefix for root_name, _root, prefix in roots if root_name == name),
+                                    "",
+                                )
+                                publish_call_graph_progress(
+                                    number,
+                                    len(roots),
+                                    name,
+                                    completed_calls,
+                                    project_prefix,
+                                    skip_materialization=(call_graph_progress is not None and len(roots) == 1),
+                                )
+                                _report_progress(
+                                    progress,
+                                    f"    ✓ {name} : {len(project_calls)} appel(s) extrait(s) "
+                                    f"en {time.perf_counter() - module_started_at:.2f} s.",
+                                )
                             reachability = extract_codeql_reachability(
                                 database, methods,
                                 timeout_seconds=config.codeql_timeout_seconds,
                                 threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
                                 deadline=codeql_deadline,
                             )
-                        partitioned_calls = _partition_codeql_calls(calls, roots)
                         if call_graph_progress is not None:
                             prepared_codeql_flows = materialize_codeql_code_flows(
                                 methods, all_endpoints, calls, repo_root=repo_root,
@@ -1069,26 +1126,6 @@ def _index_repo(
                                 resume_from_entry=resume_join_entries,
                                 initial_flows=resume_join_flows,
                                 call_graph_sink=persist_call_graph,
-                            )
-                        completed_calls: list[CodeQLCall] = []
-                        for number, (name, project_calls) in enumerate(partitioned_calls, start=1):
-                            module_started_at = time.perf_counter()
-                            _report_progress(
-                                progress,
-                                f"  • {engine_label} module {number}/{len(roots)} : {name}",
-                            )
-                            completed_calls.extend(project_calls)
-                            project_prefix = next(
-                                (prefix for root_name, _root, prefix in roots if root_name == name),
-                                "",
-                            )
-                            publish_call_graph_progress(
-                                number, len(roots), name, completed_calls, project_prefix
-                            )
-                            _report_progress(
-                                progress,
-                                f"    ✓ {name} : {len(project_calls)} appel(s) extrait(s) "
-                                f"en {time.perf_counter() - module_started_at:.2f} s.",
                             )
                     timer.end(stage, f"création et extraction globale {engine_label}")
             except CodeQLTimeout as exc:
@@ -1222,7 +1259,13 @@ def _index_repo(
             f"→ Indexation : {len(flows)} parcours de code potentiel(s) matérialisé(s).",
         )
         timer.end("flows", "matérialisation des flux de code")
+    else:
+        _report_progress(
+            progress,
+            "→ Indexation : flux de code inchangés ; étape ignorée.",
+        )
 
+    timer.begin("statistics", "→ Indexation : calcul des statistiques finales...")
     indexed_ports = [
         endpoint for endpoint in store.all_endpoints()
         if endpoint.system in {"rest", "kafka"}
@@ -1271,6 +1314,7 @@ def _index_repo(
         f"{sum(internal_flows_by_module.values())} flux internes, "
         f"{len(module_names)} modules",
     )
+    timer.end("statistics", "calcul des statistiques finales")
 
     _trace("index_repo.end", scanned=len(changed), skipped=len(unchanged))
     timer.total()
@@ -1304,6 +1348,7 @@ def index_repo(
     resume_codeql_join: bool = False,
     show_call_chains: bool = False,
     show_call_chains_module: str | None = None,
+    refresh_codeql_view: bool = False,
 ) -> IndexReport:
     """Index one repository, publishing explicit CodeQL checkpoints when needed."""
     with store.transaction():
@@ -1325,4 +1370,5 @@ def index_repo(
             resume_codeql_join=resume_codeql_join,
             show_call_chains=show_call_chains,
             show_call_chains_module=show_call_chains_module,
+            refresh_codeql_view=refresh_codeql_view,
         )

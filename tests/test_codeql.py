@@ -21,6 +21,13 @@ def test_query_scopes_source_calls_and_folds_dispatch_resolution() -> None:
     assert "target.fromSource()" in codeql._QUERY
 
 
+def test_methods_query_can_be_scoped_to_a_module_source_prefix() -> None:
+    query = codeql._methods_query("orders-service")
+
+    assert "method.fromSource()" in query
+    assert 'path.regexpMatch("^orders\\\\-service/")' in query
+
+
 def test_reachability_query_walks_from_outputs_to_input_methods() -> None:
     methods = [
         IntegrationMethod(

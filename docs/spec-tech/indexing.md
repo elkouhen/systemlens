@@ -25,6 +25,14 @@ build module. This preserves cross-module call resolution. A supplied global
 `--codeql-database` avoids rebuilding the CodeQL database during repeatable
 debug runs.
 
+`index --module NAME --refresh-codeql-view` forces the interprocedural stage
+and queries source-backed CodeQL methods under the selected module path. The
+result replaces that module's method rows while preserving rows from other
+modules, so the persisted graph can still traverse shared helpers. The option
+is intentionally module-scoped to support creating the method view gradually;
+passing `--codeql-database` reuses the same global CodeQL database for each
+module refresh.
+
 The `systemlens flows calculate` command reconstructs the complete persisted
 flow snapshot from stored endpoints, integration methods, CodeQL call edges,
 modules, existing source-flow candidates and `graph_facts`. It does not invoke
@@ -96,12 +104,15 @@ CodeQL executable is used by default once for the repository to create a
 temporary source-only Java projection (Java files only, without Maven/Gradle
 descriptors or build outputs, except Java files below `target/generated-sources`),
 create a database from that projection, query it, and decode the result as CSV.
-Progress checkpoints group the global result by source-owning project. Each
-completed project publishes the currently available `code_flows` as an
-explicit partial checkpoint, while the final pass joins all call facts
-together. CodeQL's temporary query pack exports only source-located resolved
-calls. `--codeql-database` reuses one global database
-supplied by the caller. Once the source-backed call graph is constructed, its
+The temporary database remains global so cross-module references have the same
+resolution context. CodeQL calls and methods are queried once globally, then
+the returned rows are partitioned and processed one source-owning module at a
+time. Each module reports its own extracted-call count and duration, and each
+completed module can publish the currently available `code_flows` as an
+explicit partial checkpoint. The final pass joins all call facts together.
+CodeQL's temporary query pack exports only source-located resolved calls.
+`--codeql-database` reuses one global database supplied by the caller. Once the
+source-backed call graph is constructed, its
 edges are committed as an explicit partial checkpoint before input-to-output
 reconstruction begins. The checkpoint records
 `codeql_call_graph_status` and the persisted edge count; this status does not

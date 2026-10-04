@@ -1328,6 +1328,14 @@ def index_cmd(
             "L'indexation reste globale."
         ),
     ),
+    refresh_codeql_view: bool = typer.Option(
+        False,
+        "--refresh-codeql-view",
+        help=(
+            "Force la création ou l'actualisation de la vue des méthodes CodeQL "
+            "pour le module sélectionné. Requiert --module."
+        ),
+    ),
     internal_flows_only: bool = typer.Option(
         False,
         "--internal-flows-only",
@@ -1459,6 +1467,9 @@ def index_cmd(
     if show_call_chains and module is None:
         typer.echo("`--show-call-chains` requiert `--module`.", err=True)
         raise typer.Exit(code=2)
+    if refresh_codeql_view and module is None:
+        typer.echo("`--refresh-codeql-view` requiert `--module`.", err=True)
+        raise typer.Exit(code=2)
     if show_call_chains and internal_flows_only:
         typer.echo(
             "`--show-call-chains` ne peut pas être combiné avec "
@@ -1517,6 +1528,9 @@ def index_cmd(
     if no_codeql and codeql_database is not None:
         typer.echo("`--no-codeql` ne peut pas être combiné avec `--codeql-database`.", err=True)
         raise typer.Exit(code=2)
+    if refresh_codeql_view and no_codeql:
+        typer.echo("`--refresh-codeql-view` requiert CodeQL.", err=True)
+        raise typer.Exit(code=2)
     if resume_codeql_join and full:
         typer.echo("`--resume-codeql-join` ne peut pas être combiné avec `--full`.", err=True)
         raise typer.Exit(code=2)
@@ -1549,6 +1563,12 @@ def index_cmd(
         config = replace(config, call_graph_engine=call_graph_engine)
     if codeql_edge_confidence is not None:
         config = replace(config, codeql_edge_confidence=codeql_edge_confidence)
+    if refresh_codeql_view and config.call_graph_engine != "codeql":
+        typer.echo(
+            "`--refresh-codeql-view` requiert le moteur d'appels de méthodes `codeql`.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
     if codeql_progress_html is not None and config.call_graph_engine != "codeql":
         typer.echo("`--codeql-progress-html` requiert le moteur d'appels de méthodes `--call-graph-engine codeql`.", err=True)
         raise typer.Exit(code=2)
@@ -1597,7 +1617,8 @@ def index_cmd(
             generate_sources=generate_sources,
             resume_codeql_join=resume_codeql_join,
             show_call_chains=show_call_chains,
-            show_call_chains_module=module,
+            show_call_chains_module=selected_module.name if selected_module else None,
+            refresh_codeql_view=refresh_codeql_view,
         )
         store.set_meta("index_engine", "manual")
         _trace_index("store.close.begin")

@@ -8,7 +8,7 @@ Parent: [Functional specification](../SPEC-FONC.md).
 | `systemlens init` | Creates `.systemlens/config.yml`; it never overwrites an existing file. |
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
-| `systemlens index [MANIFEST]... [--module NAME_OR_PATH] [--internal-flows-only] [--show-call-chains] [--full] [--resume-codeql-join] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--call-graph-engine codeql\|none] [--codeql-edge-confidence exact\|possible] [--codeql-database DIR] [--codeql-progress] [--codeql-progress-html FILE] [--generate-sources] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. `--module` focuses the final output on one discovered Maven/Gradle module by name or path and lists all persisted flows whose indexed evidence stays inside that module. `--internal-flows-only` requires `--module` and switches to a fast, read-only diagnostic of the existing snapshot. It does not rerun AST extraction or CodeQL and prints only the module's internal IN-to-OUT flow diagnosis. `--show-call-chains` requires `--module` and prints each new internal IN-to-OUT chain as the CodeQL join constructs it. Run a normal global index first, and rerun it after source changes. The normal index and CodeQL database remain global to the repository, so calls crossing module boundaries can be resolved. `--codeql-database` reuses an already-built global database and is the fastest repeatable debug path for a normal index. The default `codeql` engine creates one temporary source-only Java database for the whole repository, then reports extracted calls project by project; this preserves cross-project references. `--codeql-edge-confidence` controls whether reconstruction accepts only exact edges or also possible dispatch and inferred bridges; the default is `possible`. `--codeql-progress` forwards CodeQL's detailed live progress output. `--generate-sources` runs only the Maven/Gradle source-generation phase in the indexed repository, then indexes production Java files below `target/generated-sources`; it never compiles or runs tests. `none` keeps AST-only flows. `--codeql-progress-html` rewrites an explicitly provisional HTML graph after each reported CodeQL project; it requires the `codeql` engine and is not a final export. `--resume-codeql-join` resumes a compatible partial CodeQL join from its last committed IN-method batch and cannot be combined with `--full`. `--no-codeql` is the legacy AST-only alias. |
+| `systemlens index [MANIFEST]... [--module NAME_OR_PATH] [--refresh-codeql-view] [--internal-flows-only] [--show-call-chains] [--full] [--resume-codeql-join] [--strategy default\|strategy1] [--manifest FILE]... [--kubernetes] [--kubernetes-namespace NAME] [--call-graph-engine codeql\|none] [--codeql-edge-confidence exact\|possible] [--codeql-database DIR] [--codeql-progress] [--codeql-progress-html FILE] [--generate-sources] [--no-codeql] [--disable TYPE]...` | Incrementally extracts and persists architecture facts. `--module` focuses the final output on one discovered Maven/Gradle module by name or path and lists all persisted flows whose indexed evidence stays inside that module. `--refresh-codeql-view` requires `--module` and forces a CodeQL method-view refresh for that module, even when the normal incremental index would skip the interprocedural stage. The refreshed module projection replaces only that module's source paths; methods already persisted for other modules remain available for cross-module traversal. `--internal-flows-only` requires `--module` and switches to a fast, read-only diagnostic of the existing snapshot. It does not rerun AST extraction or CodeQL and prints only the module's internal IN-to-OUT flow diagnosis. `--show-call-chains` requires `--module` and prints each new internal IN-to-OUT chain as the CodeQL join constructs it. Run a normal global index first, and rerun it after source changes. The normal index and CodeQL database remain global to the repository, so calls crossing module boundaries can be resolved. `--codeql-database` reuses an already-built global database and is the fastest repeatable debug path for a normal index. The default `codeql` engine creates one temporary source-only Java database for the whole repository, then reports extracted calls project by project; this preserves cross-project references. `--codeql-edge-confidence` controls whether reconstruction accepts only exact edges or also possible dispatch and inferred bridges; the default is `possible`. `--codeql-progress` forwards CodeQL's detailed live progress output. `--generate-sources` runs only the Maven/Gradle source-generation phase in the indexed repository, then indexes production Java files below `target/generated-sources`; it never compiles or runs tests. `none` keeps AST-only flows. `--codeql-progress-html` rewrites an explicitly provisional HTML graph after each reported CodeQL project; it requires the `codeql` engine and is not a final export. `--resume-codeql-join` resumes a compatible partial CodeQL join from its last committed IN-method batch and cannot be combined with `--full`. `--no-codeql` is the legacy AST-only alias. |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts a reviewable fact manifest, including one produced by an agent through the companion skill, into the separate enrichment layer. `--complete` removes stale facts only within the selected namespace. |
 | `systemlens export facts FILE [--namespace NAME] [--partial]` | Exports one persisted enrichment namespace as a `systemlens-ai-graph-v1` manifest. The result preserves fact IDs, evidence, status, confidence, metadata and edge endpoints, and can be reviewed and passed to `import-facts`. `--partial` marks the manifest as an incremental pass; the default is a complete namespace snapshot. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. |
@@ -43,6 +43,12 @@ does not rerun AST extraction or CodeQL. The `index --module NAME` option is
 still an indexing command: it limits the diagnostic output, while its source
 inventory and CodeQL analysis remain global.
 
+To populate or refresh the persisted CodeQL method view one module at a time,
+run `systemlens index --module NAME --refresh-codeql-view`. The option requires
+CodeQL and can reuse a global database supplied with `--codeql-database`; other
+module rows remain in the SQLite snapshot. Use `--full` as well when the normal
+file delta should also be forced.
+
 With `systemlens flows list --module NAME --explain`, the diagnostic includes
 the tested graph metrics and up to ten partial call paths when no internal flow
 is found. A path can end at an indexed method with no persisted CodeQL edge;
@@ -73,19 +79,23 @@ diagnostic re-queries CodeQL for the complete source call graph when needed.
 This keeps ordinary intermediate methods visible even when no source file was
 rescanned and the persisted edge snapshot contains only endpoint anchors.
 
-`systemlens index` reports its file delta, AST analysis stage, persisted endpoint
-count and materialized relations. AST extraction receives all changed files in
-one pass and reports the `AST 1/1` checkpoint. CodeQL creates one global
-database, then reports each source-owning Maven/Gradle module as `module
-<current>/<total>` with its extracted-call count and elapsed duration. The
-indexing output ends with compact statistics for each module: the number of
-`IN` ports, `OUT` ports, and internal code flows. A global line then reports
-the same totals across the indexed repository. Individual port paths and Java
-implementations remain available through the persisted endpoint and module
-commands rather than being printed in the indexing summary.
-remaining indexing stages also report their progress and elapsed wall-clock
-duration with two decimal places. The total duration follows, then a next-step
-hint towards the interactive microservice HTML export. Its result line is:
+`systemlens index` reports the main stages in order: module discovery, file
+inventory, incremental delta, AST extraction, endpoint persistence, module and
+property persistence, architecture relations, CodeQL/interprocedural flows,
+and final statistics. Each completed stage reports its elapsed duration. AST
+extraction receives all changed files in one pass and reports the `AST 1/1`
+checkpoint. CodeQL creates one global database, then processes each
+source-owning Maven/Gradle module as `module <current>/<total>` with its
+extracted-call count and elapsed duration. Interactive terminals colour phase
+headers in cyan, module progress in yellow and completed work in green; the
+plain text content is unchanged when output is redirected. The indexing output
+ends with compact statistics for each module: the number of `IN` ports, `OUT`
+ports, and internal code flows. A global line then reports the same totals
+across the indexed repository. Individual port paths and Java implementations
+remain available through the persisted endpoint and module commands rather than
+being printed in the indexing summary. The total duration follows, then a
+next-step hint towards the interactive microservice HTML export. Its result
+line is:
 
 ```text
 scanned=<N> skipped=<N> +integrations=<N> -integrations=<N>

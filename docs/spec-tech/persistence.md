@@ -31,6 +31,13 @@ index records
 `codeql_call_graph_edge_count` records the number of persisted edges. This
 checkpoint is independent from the later flow-join cursor.
 
+With `index --module NAME --refresh-codeql-view`, the method projection is
+refreshed only for source paths below the selected module. Existing rows for
+other modules are retained, while the call-edge graph remains global so helper
+methods outside the module can still be traversed. The refresh is additive to
+the schema and does not copy CodeQL query output outside the persisted method
+rows.
+
 After the `input → output` calculation completes, the provisional merged flow
 snapshot is committed again before topology reconciliation and final status
 publication. `codeql_input_output_status` is `complete` for a complete CodeQL
