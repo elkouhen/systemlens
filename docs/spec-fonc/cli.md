@@ -55,8 +55,11 @@ confidence recorded by the index. It does not parse source files or run
 CodeQL. Text and JSON output report AST and CodeQL presence for both selected
 nodes and their directed edge. Presence is `present`, `absent`, or `unknown`.
 An absent AST method is provable; missing raw CodeQL or AST-call evidence stays
-`unknown`. JSON output also includes the matched method facts, persisted edge
-evidence, flow IDs, and the pipeline stage associated with the verdict.
+`unknown`. JSON output also includes the proof basis for each presence value,
+the matched method facts, persisted edge evidence, flow IDs, and the pipeline
+stage associated with the verdict. An AST node is proved by its persisted
+integration-method fact; a CodeQL node or edge is proved only by a persisted
+non-inferred CodeQL call edge.
 
 `systemlens index` reports its file delta, AST analysis stage, persisted endpoint
 count and materialized relations. AST extraction receives all changed files in

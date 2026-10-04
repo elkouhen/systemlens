@@ -36,13 +36,25 @@ def _presence(
 
     def node(methods: Sequence[IntegrationMethod]) -> dict[str, str]:
         if not methods:
-            return {"ast": "absent", "codeql": "unknown"}
+            return {
+                "ast": "absent", "codeql": "unknown",
+                "proof_ast": "method_not_in_persisted_inventory",
+                "proof_codeql": "not_proven",
+            }
         if len(methods) != 1:
-            return {"ast": "present", "codeql": "unknown"}
+            return {
+                "ast": "present", "codeql": "unknown",
+                "proof_ast": "multiple_persisted_integration_methods",
+                "proof_codeql": "not_proven",
+            }
+        codeql_present = methods[0].id in incident_method_ids
         return {
             "ast": "present",
-            "codeql": (
-                "present" if methods[0].id in incident_method_ids else "unknown"
+            "codeql": "present" if codeql_present else "unknown",
+            "proof_ast": "persisted_integration_method",
+            "proof_codeql": (
+                "incident_non_inferred_call_edge" if codeql_present
+                else "not_proven_by_persisted_non_inferred_edge"
             ),
         }
 
@@ -61,6 +73,11 @@ def _presence(
         "edge": {
             "codeql": "present" if matching_edge else "unknown",
             "ast": "unknown",
+            "proof_ast": "no_persisted_ast_call_edge_projection",
+            "proof_codeql": (
+                "persisted_non_inferred_call_edge" if matching_edge
+                else "no_matching_persisted_non_inferred_call_edge"
+            ),
         },
     }
 
@@ -387,7 +404,9 @@ def render_call_edge_diagnostic_text(result: Mapping[str, object]) -> str:
             if isinstance(values, dict):
                 lines.append(
                     f"- {label} : CodeQL={values.get('codeql', 'unknown')} · "
-                    f"AST={values.get('ast', 'unknown')}"
+                    f"AST={values.get('ast', 'unknown')} · "
+                    f"preuve CodeQL={values.get('proof_codeql', 'not_proven')} · "
+                    f"preuve AST={values.get('proof_ast', 'not_proven')}"
                 )
     for role in ("caller", "callee"):
         candidates = result.get(f"{role}_candidates", [])

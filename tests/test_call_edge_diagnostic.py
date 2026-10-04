@@ -83,9 +83,15 @@ def test_call_edge_reports_the_missing_caller_from_the_persisted_snapshot(
     assert payload["caller_candidates"] == []
     assert len(payload["callee_candidates"]) == 1
     assert payload["presence"] == {
-        "caller_node": {"ast": "absent", "codeql": "unknown"},
-        "callee_node": {"ast": "present", "codeql": "unknown"},
-        "edge": {"ast": "unknown", "codeql": "unknown"},
+        "caller_node": {"ast": "absent", "codeql": "unknown",
+                         "proof_ast": "method_not_in_persisted_inventory",
+                         "proof_codeql": "not_proven"},
+        "callee_node": {"ast": "present", "codeql": "unknown",
+                         "proof_ast": "persisted_integration_method",
+                         "proof_codeql": "not_proven_by_persisted_non_inferred_edge"},
+        "edge": {"ast": "unknown", "codeql": "unknown",
+                 "proof_ast": "no_persisted_ast_call_edge_projection",
+                 "proof_codeql": "no_matching_persisted_non_inferred_call_edge"},
     }
     assert "systemlens index --full" in str(payload["recommended_action"])
 
@@ -109,9 +115,15 @@ def test_call_edge_reports_a_codeql_or_join_gap_when_the_edge_is_missing(
     assert payload["stage"] == "codeql_extraction_or_join"
     assert payload["edges"] == []
     assert payload["presence"] == {
-        "caller_node": {"ast": "present", "codeql": "unknown"},
-        "callee_node": {"ast": "present", "codeql": "unknown"},
-        "edge": {"ast": "unknown", "codeql": "unknown"},
+        "caller_node": {"ast": "present", "codeql": "unknown",
+                         "proof_ast": "persisted_integration_method",
+                         "proof_codeql": "not_proven_by_persisted_non_inferred_edge"},
+        "callee_node": {"ast": "present", "codeql": "unknown",
+                         "proof_ast": "persisted_integration_method",
+                         "proof_codeql": "not_proven_by_persisted_non_inferred_edge"},
+        "edge": {"ast": "unknown", "codeql": "unknown",
+                 "proof_ast": "no_persisted_ast_call_edge_projection",
+                 "proof_codeql": "no_matching_persisted_non_inferred_call_edge"},
     }
     assert "--codeql-progress" in str(payload["recommended_action"])
 
@@ -165,9 +177,15 @@ def test_call_edge_reports_a_possible_edge_filtered_by_exact_mode(
     assert payload["stage"] == "flow_reconstruction"
     assert payload["edges"][0]["dispatch_confidence"] == "possible"
     assert payload["presence"] == {
-        "caller_node": {"ast": "present", "codeql": "unknown"},
-        "callee_node": {"ast": "present", "codeql": "unknown"},
-        "edge": {"ast": "unknown", "codeql": "unknown"},
+        "caller_node": {"ast": "present", "codeql": "unknown",
+                         "proof_ast": "persisted_integration_method",
+                         "proof_codeql": "not_proven_by_persisted_non_inferred_edge"},
+        "callee_node": {"ast": "present", "codeql": "unknown",
+                         "proof_ast": "persisted_integration_method",
+                         "proof_codeql": "not_proven_by_persisted_non_inferred_edge"},
+        "edge": {"ast": "unknown", "codeql": "unknown",
+                 "proof_ast": "no_persisted_ast_call_edge_projection",
+                 "proof_codeql": "no_matching_persisted_non_inferred_call_edge"},
     }
     assert "--codeql-edge-confidence possible" in str(payload["recommended_action"])
 
