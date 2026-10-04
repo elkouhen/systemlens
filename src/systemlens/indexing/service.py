@@ -1,3 +1,4 @@
+import hashlib
 import os
 import subprocess
 import sys
@@ -28,9 +29,10 @@ from systemlens.indexing.code_flows import (
     reconcile_code_flows,
 )
 from systemlens.indexing.integration_methods import materialize_integration_methods
-from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
+from systemlens.domain.code_flows import CodeFlow, IntegrationMethod, PersistedCodeQLMethod
 from systemlens.indexing.codeql import (
     CodeQLCall,
+    CodeQLMethod,
     CodeQLReachability,
     CodeQLError,
     CodeQLTimeout,
@@ -38,6 +40,7 @@ from systemlens.indexing.codeql import (
     automatic_codeql_database,
     codeql_executable,
     extract_codeql_calls,
+    extract_codeql_methods,
     extract_codeql_reachability,
     _generate_sources,
 )
@@ -625,6 +628,7 @@ def _index_repo(
                 _report_progress(progress, f"  ↳ Chaîne construite : {rendered}")
 
         store.replace_codeql_call_edges([])
+        store.replace_codeql_methods([])
         store.delete_meta("codeql_call_graph_status")
         store.delete_meta("codeql_call_graph_edge_count")
         store.delete_meta("codeql_input_output_status")
@@ -695,6 +699,28 @@ def _index_repo(
 
         def persist_call_graph(call_graph: CodeQLCallGraph) -> None:
             edges = list(call_graph.edges())
+            methods_projection = list(call_graph.methods)
+            known_locators = {
+                (method.qualified_method, method.path, method.start_line)
+                for method in methods_projection
+            }
+            for method in codeql_method_projection:
+                locator = (method.qualified_method, method.path, method.start_line)
+                if locator in known_locators:
+                    continue
+                module = method.path.split("/", 1)[0] if "/" in method.path else ""
+                methods_projection.append(PersistedCodeQLMethod(
+                    id="codeql:" + hashlib.sha256(
+                        f"{module}|{method.path}|{method.start_line}|{method.qualified_method}".encode()
+                    ).hexdigest()[:24],
+                    module=module,
+                    qualified_method=method.qualified_method,
+                    path=method.path,
+                    start_line=method.start_line,
+                    end_line=method.start_line,
+                ))
+                known_locators.add(locator)
+            store.replace_codeql_methods(methods_projection)
             store.replace_codeql_call_edges(edges)
             store.set_meta("codeql_call_graph_status", "complete")
             store.set_meta("codeql_call_graph_edge_count", str(len(edges)))
@@ -738,6 +764,7 @@ def _index_repo(
             prepared_codeql_flows: list[CodeFlow] | None = None
             codeql_stats: dict[str, int] = {}
             calls: list[CodeQLCall] = []
+            codeql_method_projection: list[CodeQLMethod] = []
 
             def publish_call_graph_progress(
                 completed_projects: int,
@@ -903,6 +930,15 @@ def _index_repo(
                             (name, project_calls)
                             for name, project_calls in _partition_codeql_calls(calls, roots)
                         ]
+                    codeql_method_projection = extract_codeql_methods(
+                        codeql_database,
+                        timeout_seconds=config.codeql_timeout_seconds,
+                        threads=config.codeql_threads,
+                        ram_mb=config.codeql_ram_mb,
+                        verbosity=codeql_verbosity,
+                        progress=progress if codeql_verbosity is not None else None,
+                        deadline=codeql_deadline,
+                    )
                     enrich_strategy1_kafka_types(codeql_database, deadline=codeql_deadline)
                     scoped_completed_calls: list[CodeQLCall] = []
                     for number, (name, project_calls) in enumerate(scoped_project_calls, start=1):
@@ -999,6 +1035,15 @@ def _index_repo(
                             calls = extract_codeql_calls(
                                 database, timeout_seconds=config.codeql_timeout_seconds,
                                 threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                                verbosity=codeql_verbosity,
+                                progress=progress if codeql_verbosity is not None else None,
+                                deadline=codeql_deadline,
+                            )
+                            codeql_method_projection = extract_codeql_methods(
+                                database,
+                                timeout_seconds=config.codeql_timeout_seconds,
+                                threads=config.codeql_threads,
+                                ram_mb=config.codeql_ram_mb,
                                 verbosity=codeql_verbosity,
                                 progress=progress if codeql_verbosity is not None else None,
                                 deadline=codeql_deadline,

@@ -696,6 +696,7 @@ def extract_codeql_methods(
     ram_mb: int | None = None,
     verbosity: str | None = None,
     progress: Callable[[str], None] | None = None,
+    deadline: float | None = None,
 ) -> list[CodeQLMethod]:
     """Return source-backed Java methods queried directly from CodeQL."""
     if not database.is_dir():
@@ -722,12 +723,15 @@ def extract_codeql_methods(
         if user_packs.is_dir():
             command.append(f"--additional-packs={user_packs}")
         completed = _run_with_progress(
-            command, timeout=timeout_seconds, progress=progress,
+            command, timeout=_remaining_timeout(timeout_seconds, deadline), progress=progress,
         )
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip()
             raise CodeQLError(f"CodeQL method query failed: {detail}")
-        decoded = _decode_bqrs(executable, bqrs, output, timeout=timeout_seconds)
+        decoded = _decode_bqrs(
+            executable, bqrs, output,
+            timeout=_remaining_timeout(timeout_seconds, deadline),
+        )
         if decoded.returncode != 0:
             detail = (decoded.stderr or decoded.stdout).strip()
             raise CodeQLError(f"CodeQL method query decoding failed: {detail}")

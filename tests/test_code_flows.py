@@ -946,6 +946,9 @@ def test_index_uses_automatic_codeql_database_when_available(
         indexing_service, "extract_codeql_calls", lambda _database, **_kwargs: []
     )
     monkeypatch.setattr(
+        indexing_service, "extract_codeql_methods", lambda _database, **_kwargs: []
+    )
+    monkeypatch.setattr(
         indexing_service, "extract_codeql_reachability",
         lambda _database, _methods, **_kwargs: [],
     )
@@ -1228,7 +1231,7 @@ def test_store_additively_migrates_previous_schema_for_code_flows(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'codeql_call_edges'"
         ).fetchone()
         assert call_edges_table is not None
-        assert store.get_meta("schema_version") == "35"
+        assert store.get_meta("schema_version") == "36"
 
 
 def test_codeql_calls_join_ast_entry_and_output_methods(tmp_path: Path) -> None:
@@ -1646,6 +1649,13 @@ class OrderPublisher {
     ]
     methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
 
+    persisted_edges = []
+    persisted_methods = []
+
+    def persist_graph(graph: CodeQLCallGraph) -> None:
+        persisted_edges.extend(graph.edges())
+        persisted_methods.extend(graph.methods)
+
     flows = materialize_codeql_code_flows(
         methods,
         endpoints,
@@ -1660,10 +1670,20 @@ class OrderPublisher {
             ),
         ],
         source_paths=[source, target],
+        call_graph_sink=persist_graph,
     )
 
     assert len(flows) == 1
     assert any(step.name == "com.example.OrderController.helper" for step in flows[0].steps)
+    reconstructed = materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        [],
+        persisted_edges=persisted_edges,
+        persisted_methods=persisted_methods,
+    )
+    assert len(reconstructed) == 1
+    assert any(step.name == "com.example.OrderController.helper" for step in reconstructed[0].steps)
 
 
 def test_codeql_calls_from_lambda_join_enclosing_entry_method(tmp_path: Path) -> None:

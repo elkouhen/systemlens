@@ -1619,9 +1619,26 @@ def index_cmd(
         with Store(repo_root, readonly=True) as store:
             debug_flows = store.all_code_flows()
             direct_methods = store.all_integration_methods()
-            debug_methods: list[IntegrationMethod] | None = direct_methods
+            persisted_codeql_methods = store.all_codeql_methods()
+            debug_methods: list[IntegrationMethod] | None = [
+                *direct_methods,
+                *[
+                    IntegrationMethod(
+                        id=method.id,
+                        module=method.module,
+                        qualified_method=method.qualified_method,
+                        path=method.path,
+                        start_line=method.start_line,
+                        end_line=method.end_line,
+                        input_endpoint_ids=(),
+                        output_endpoint_ids=(),
+                    )
+                    for method in persisted_codeql_methods
+                    if method.id not in {item.id for item in direct_methods}
+                ],
+            ]
             debug_edges: list[CodeQLCallGraphEdge] | None = store.all_codeql_call_edges()
-            if codeql_database is not None:
+            if codeql_database is not None and not persisted_codeql_methods:
                 # Persisted call edges intentionally contain only the endpoint
                 # anchors. Re-query the supplied database so ordinary methods
                 # between IN and OUT remain visible in this diagnostic.
@@ -1655,6 +1672,7 @@ def index_cmd(
                     call_chain_progress=_echo_only_constructed_chains,
                     call_chain_module=selected_module.name,
                     persisted_edges=store.all_codeql_call_edges(),
+                    persisted_methods=store.all_codeql_methods(),
                 )
             debug = internal_flow_debug(
                 debug_flows,

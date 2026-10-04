@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from systemlens.domain.code_flows import CodeQLCallGraphEdge, IntegrationMethod
+from systemlens.domain.code_flows import (
+    CodeQLCallGraphEdge,
+    IntegrationMethod,
+    PersistedCodeQLMethod,
+)
 from systemlens.domain.models import (
     ArchitectureRelation,
     ExtractionDiagnostic,
@@ -64,6 +68,21 @@ def test_storage_deduplicates_exact_composite_rows(tmp_path: Path) -> None:
         assert store.all_module_dependencies() == [dependency]
         assert store.all_codeql_call_edges() == [edge]
         assert store.all_extraction_diagnostics() == [diagnostic]
+
+
+def test_storage_persists_codeql_method_projection(tmp_path: Path) -> None:
+    method = PersistedCodeQLMethod(
+        id="codeql:helper",
+        module="orders",
+        qualified_method="orders.Service.helper",
+        path="orders/Service.java",
+        start_line=12,
+        end_line=16,
+    )
+    with Store(tmp_path) as store:
+        store.replace_codeql_methods([method])
+
+        assert store.all_codeql_methods() == [method]
 
 
 def test_storage_rejects_conflicting_contract_rows_before_replacing_snapshot(tmp_path: Path) -> None:

@@ -25,6 +25,7 @@ from systemlens.domain.code_flows import (
     CodeFlowStep,
     CodeQLCallGraphEdge,
     IntegrationMethod,
+    PersistedCodeQLMethod,
     ensure_unique_code_flow_ids,
 )
 from systemlens.domain.module_inventory import (
@@ -49,7 +50,7 @@ from systemlens.storage.serialization import (
     row_to_finding as _row_to_finding,
 )
 
-SCHEMA_VERSION = "35"
+SCHEMA_VERSION = "36"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
@@ -416,6 +417,18 @@ class Store:
             );
             CREATE INDEX IF NOT EXISTS idx_codeql_call_edges_caller ON codeql_call_edges(caller_id);
             CREATE INDEX IF NOT EXISTS idx_codeql_call_edges_callee ON codeql_call_edges(callee_id);
+            CREATE TABLE IF NOT EXISTS codeql_methods (
+                id TEXT PRIMARY KEY,
+                module TEXT NOT NULL,
+                qualified_method TEXT NOT NULL,
+                path TEXT NOT NULL,
+                start_line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_codeql_methods_locator
+                ON codeql_methods(path, start_line);
+            CREATE INDEX IF NOT EXISTS idx_codeql_methods_module
+                ON codeql_methods(module);
             """
         )
         self._migrate_module_columns()
@@ -859,6 +872,28 @@ class Store:
             VALUES (?, ?, ?, ?, ?, ?)""",
             rows,
         )
+
+    def replace_codeql_methods(self, methods: list[PersistedCodeQLMethod]) -> None:
+        """Replace the source-backed CodeQL method projection."""
+        methods = _ensure_unique_record_ids(methods)
+        self.conn.execute("DELETE FROM codeql_methods")
+        self.conn.executemany(
+            """INSERT INTO codeql_methods
+            (id, module, qualified_method, path, start_line, end_line)
+            VALUES (?, ?, ?, ?, ?, ?)""",
+            [
+                (item.id, item.module, item.qualified_method, item.path,
+                 item.start_line, item.end_line)
+                for item in methods
+            ],
+        )
+
+    def all_codeql_methods(self) -> list[PersistedCodeQLMethod]:
+        rows = self.conn.execute(
+            """SELECT id, module, qualified_method, path, start_line, end_line
+               FROM codeql_methods ORDER BY module, path, start_line, id"""
+        ).fetchall()
+        return [PersistedCodeQLMethod(**dict(row)) for row in rows]
 
     def all_codeql_call_edges(self) -> list[CodeQLCallGraphEdge]:
         rows = self.conn.execute(

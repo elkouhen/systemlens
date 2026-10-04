@@ -203,10 +203,12 @@ output method. Existing snapshots do not persist rejected raw CodeQL rows, so
 an absent edge remains classified across extraction and CodeQL-to-AST joining.
 The diagnostic reports presence as a three-state fact and includes the proof
 basis for each value. An integration method proves AST node presence, and an
-incident non-inferred call edge proves CodeQL node presence. A non-inferred
-caller-to-callee edge proves CodeQL edge presence. Inferred edges do not count as CodeQL proof. The index has no
-separate AST call-edge projection and no raw CodeQL node projection, so
-unsupported absence checks remain `unknown`.
+incident non-inferred call edge proves CodeQL node presence when only the
+persisted call-edge snapshot is available. The CodeQL projection also stores
+all source-backed method nodes, so ordinary intermediate methods can be
+rehydrated during a persisted flow reconstruction. A non-inferred
+caller-to-callee edge proves CodeQL edge presence. Inferred edges do not count
+as CodeQL proof; unsupported absence checks remain `unknown`.
 When `--codeql-database` is supplied to `analyze call-edge`, node presence is
 queried directly from the source-backed CodeQL `Method` entities instead of
 being inferred from the persisted call-edge snapshot. The BQRS/CSV query
@@ -218,10 +220,10 @@ before rendering internal-flow examples, so an unchanged snapshot does not
 restrict the diagnostic to persisted endpoint-anchor edges.
 After the call adjacency is built, the decoded CodeQL rows and transient Java
 symbol indexes are released before route expansion; the adjacency remains the
-single in-memory call-graph representation used by the BFS. Only edges whose
-caller and callee are persisted integration-method anchors are written to
-`codeql_call_edges`; ordinary intermediate methods remain transient in the
-join and are represented in the persisted flow steps. Live progress uses a wall-clock
+single in-memory call-graph representation used by the BFS. The source-backed
+method projection and all source-backed call edges are written to
+`codeql_methods` and `codeql_call_edges`; ordinary intermediate methods remain
+distinct from `integration_methods` and can be rehydrated in later joins. Live progress uses a wall-clock
 watchdog covering pipe reads;
 POSIX timeouts terminate the complete process group, and
 subprocesses are reaped on errors. The configured deadline covers the complete

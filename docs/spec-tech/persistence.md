@@ -7,7 +7,9 @@ SQLite schema migration is additive where possible. `files` stores hash state,
 `endpoints` stores source facts, and normalized tables store modules,
 dependencies and relations. Each module has a collision-safe identity used by
 endpoints and relations; its artifact/project name remains a display alias.
-Schema version 35 adds `jpa_entities` and `jpa_dtos` JSON columns to module
+Schema version 36 adds the source-backed `codeql_methods` projection alongside
+the complete `codeql_call_edges` graph. Schema version 35 added `jpa_entities`
+and `jpa_dtos` JSON columns to module
 inventory with empty defaults for existing indexes. Migration runs before
 indexing begins.
 
@@ -22,8 +24,9 @@ configuration and index namespace remain unambiguous.
 The endpoint-inventory signature in `meta` is bumped whenever extractor
 behaviour changes. This forces a complete refresh before new facts are served.
 
-After the CodeQL method-call graph is built, the indexed call edges are
-persisted before input-to-output reconstruction starts. The index records
+After the CodeQL method-call graph is built, its source-backed method nodes and
+call edges are persisted before input-to-output reconstruction starts. The
+index records
 `codeql_call_graph_status=complete` and commits a partial-snapshot checkpoint;
 `codeql_call_graph_edge_count` records the number of persisted edges. This
 checkpoint is independent from the later flow-join cursor.

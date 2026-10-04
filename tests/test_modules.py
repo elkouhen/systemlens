@@ -1105,7 +1105,7 @@ def test_store_adds_jpa_inventory_to_existing_index(tmp_path: Path) -> None:
     with Store(tmp_path) as store:
         columns = {row["name"] for row in store.conn.execute("PRAGMA table_info(modules)")}
         assert "jpa_entities" in columns
-        assert store.get_meta("schema_version") == "35"
+        assert store.get_meta("schema_version") == "36"
 
 
 def test_index_repo_materializes_modules_snapshot(

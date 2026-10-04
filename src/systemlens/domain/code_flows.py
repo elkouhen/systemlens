@@ -104,3 +104,15 @@ class CodeQLCallGraphEdge:
     line: int
     dispatch_confidence: str
     inferred: bool = False
+
+
+@dataclass(frozen=True)
+class PersistedCodeQLMethod:
+    """One source-backed method in the persisted CodeQL projection."""
+
+    id: str
+    module: str
+    qualified_method: str
+    path: str
+    start_line: int
+    end_line: int

@@ -16,6 +16,7 @@ from systemlens.domain.code_flows import (
     CodeQLCallGraphEdge,
     compute_code_flow_id,
     ensure_unique_code_flow_ids,
+    PersistedCodeQLMethod,
 )
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.graph import GraphEdge
@@ -45,7 +46,7 @@ class CodeQLCallGraph:
     synthetic_calls: set[CodeQLCall]
     call_count: int
     locate: Callable[[str, str, int], tuple[IntegrationMethod, bool] | None]
-    persistable_method_ids: frozenset[str] = frozenset()
+    methods: tuple[PersistedCodeQLMethod, ...] = ()
 
     @property
     def joined_calls(self) -> int:
@@ -64,9 +65,7 @@ class CodeQLCallGraph:
                     inferred=inferred,
                 )
                 for caller_id, targets in self.adjacency.items()
-                if caller_id in self.persistable_method_ids
                 for callee, call, inferred in targets
-                if callee.id in self.persistable_method_ids
             ),
             key=lambda edge: (
                 edge.caller_id,
@@ -464,6 +463,7 @@ def _build_codeql_call_graph(
     source_paths: Sequence[str],
     progress: Callable[[str], None] | None,
     persisted_edges: Sequence[CodeQLCallGraphEdge] | None = None,
+    persisted_methods: Sequence[PersistedCodeQLMethod] = (),
 ) -> CodeQLCallGraph:
     """Resolve CodeQL rows into the internal graph consumed by reconstruction."""
     def report(message: str) -> None:
@@ -549,6 +549,23 @@ def _build_codeql_call_graph(
         methods_by_path[normalized_path_value(method.path)].append(method)
         methods_by_name[normalized_method_name(method.qualified_method)].append(method)
 
+    graph_methods_by_id = {
+        method.id: method for method in [*methods, *transient_methods.values()]
+    }
+
+    def method_facts(values: dict[str, IntegrationMethod]) -> tuple[PersistedCodeQLMethod, ...]:
+        return tuple(
+            PersistedCodeQLMethod(
+                id=method.id,
+                module=method.module,
+                qualified_method=method.qualified_method,
+                path=method.path,
+                start_line=method.start_line,
+                end_line=method.end_line,
+            )
+            for method in sorted(values.values(), key=lambda item: item.id)
+        )
+
     def locate(
         name: str, path: str, line: int, *, allow_signature_fallback: bool = False,
     ) -> tuple[IntegrationMethod, bool] | None:
@@ -605,6 +622,19 @@ def _build_codeql_call_graph(
 
     if persisted_edges is not None:
         methods_by_id = {method.id: method for method in methods}
+        for persisted in persisted_methods:
+            if persisted.id in methods_by_id:
+                continue
+            methods_by_id[persisted.id] = IntegrationMethod(
+                id=persisted.id,
+                module=persisted.module,
+                qualified_method=persisted.qualified_method,
+                path=persisted.path,
+                start_line=persisted.start_line,
+                end_line=persisted.end_line,
+                input_endpoint_ids=(),
+                output_endpoint_ids=(),
+            )
         for edge in persisted_edges:
             caller = methods_by_id.get(edge.caller_id)
             callee = methods_by_id.get(edge.callee_id)
@@ -630,7 +660,7 @@ def _build_codeql_call_graph(
             synthetic_calls=synthetic_calls,
             call_count=len(persisted_edges),
             locate=lambda name, path, line: locate(name, path, line),
-            persistable_method_ids=frozenset(method.id for method in methods),
+            methods=tuple(persisted_methods),
         )
 
     started_at = time.monotonic()
@@ -682,7 +712,7 @@ def _build_codeql_call_graph(
         synthetic_calls=synthetic_calls,
         call_count=len(calls),
         locate=lambda name, path, line: locate(name, path, line),
-        persistable_method_ids=frozenset(method.id for method in methods),
+        methods=method_facts(graph_methods_by_id),
     )
 
 
@@ -702,6 +732,7 @@ def materialize_codeql_code_flows(
     call_graph_sink: Callable[[CodeQLCallGraph], None] | None = None,
     codeql_edge_confidence: str = "possible",
     persisted_edges: Sequence[CodeQLCallGraphEdge] | None = None,
+    persisted_methods: Sequence[PersistedCodeQLMethod] = (),
 ) -> list[CodeFlow]:
     """Reconstruct endpoint flows from the internal CodeQL call graph.
 
@@ -811,6 +842,7 @@ def materialize_codeql_code_flows(
         source_paths=source_paths,
         progress=progress,
         persisted_edges=persisted_edges,
+        persisted_methods=persisted_methods,
     )
     if call_graph_sink is not None:
         call_graph_sink(call_graph)
