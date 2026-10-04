@@ -334,10 +334,11 @@ In buildless mode, a transient AST symbol index covers source-declared
 qualified types, imports and transitive `extends`/`implements` relations,
 including source files without endpoint facts. It may bridge an
 abstract/interface method to one unique compatible implementation and recover
-receiver-typed helper calls by arity/signature. Duplicate types, ambiguous
-overloads, unknown receivers and unsupported generic/vararg substitutions stay
-unresolved. Synthetic edges are always `possible`/`low` and never replace
-exact CodeQL evidence.
+receiver-typed helper calls by arity/signature. Duplicate types in the caller's
+module, ambiguous overloads, unknown receivers and unsupported generic/vararg
+substitutions stay unresolved. When duplicate qualified types exist in other
+modules, resolution first prefers the caller's module. Synthetic edges are
+always `possible`/`low` and never replace exact CodeQL evidence.
 For a virtual call, CodeQL's unique `exactVirtualMethod` target is retained at
 medium confidence. If no unique target can be proven, its `viableCallable`
 candidates are retained individually at low confidence; SystemLens does not

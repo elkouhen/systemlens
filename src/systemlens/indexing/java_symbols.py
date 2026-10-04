@@ -33,6 +33,7 @@ class _Unit:
 @dataclass
 class _Method:
     method: IntegrationMethod
+    module: str
     owner: str
     node: Node
     parameters: tuple[str | None, ...]
@@ -45,15 +46,17 @@ class JavaSymbols:
     def __init__(self, root: Path, methods: list[IntegrationMethod], source_paths: Sequence[str] = ()):
         self.units: dict[str, _Unit] = {}
         self.types: dict[str, list[tuple[str, Node]]] = defaultdict(list)
+        self.path_modules: dict[str, str] = {}
         self.bases: dict[str, set[str]] = defaultdict(set)
         self.methods: dict[str, _Method] = {}
-        self.by_owner: dict[tuple[str, str, int], list[_Method]] = defaultdict(list)
+        self.by_owner: dict[tuple[str, str, int, str], list[_Method]] = defaultdict(list)
         self.dispatch: dict[tuple[str, str, tuple[str | None, ...]], list[_Method]] = defaultdict(list)
         self._ancestors: dict[str, set[str]] = {}
-        self._targets: dict[tuple[str, str, int], IntegrationMethod | None] = {}
+        self._targets: dict[tuple[str, str, int, str], IntegrationMethod | None] = {}
         by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
         for method in methods:
             by_path[method.path].append(method)
+            self.path_modules.setdefault(method.path, method.module)
         # Include empty intermediate classes too: they have no method facts.
         paths = set(by_path)
         paths.update(path for path in source_paths if path.endswith(".java"))
@@ -114,7 +117,7 @@ class JavaSymbols:
                 if owner_node is None:
                     continue
                 owner = self.owner(path, owner_node)
-                if len(self.types[owner]) != 1:
+                if len(self._type_candidates(owner, path)) != 1:
                     continue
                 parameters = node.child_by_field_name("parameters")
                 parameter_types = []
@@ -132,9 +135,12 @@ class JavaSymbols:
                     if resolved_type is not None and dimensions is not None:
                         resolved_type += "[]" * parser.node_text(source, dimensions).count("[")
                     parameter_types.append(resolved_type)
-                info = _Method(method, owner, node, tuple(parameter_types), node.child_by_field_name("body") is not None)
+                info = _Method(
+                    method, method.module, owner, node, tuple(parameter_types),
+                    node.child_by_field_name("body") is not None,
+                )
                 self.methods[method.id] = info
-                self.by_owner[(owner, name, len(parameter_types))].append(info)
+                self.by_owner[(owner, name, len(parameter_types), method.module)].append(info)
                 if info.concrete and all(value is not None for value in info.parameters):
                     for base_owner in self.ancestors(owner):
                         self.dispatch[(base_owner, name, info.parameters)].append(info)
@@ -148,6 +154,22 @@ class JavaSymbols:
             current = current.parent
         return ".".join(filter(None, [self.units[path].package, *reversed(names)]))
 
+    def _type_candidates(self, qualified_name: str, path: str) -> list[tuple[str, Node]]:
+        """Return visible declarations, preferring the caller's build module.
+
+        Java source-only analysis can see two modules that declare the same
+        qualified type, even though a normal build would select one through
+        its module classpath.  The source module is the strongest available
+        discriminator for internal flow discovery.  If it still leaves more
+        than one candidate, resolution remains conservative.
+        """
+        candidates = self.types.get(qualified_name, [])
+        module = self.path_modules.get(path)
+        if module is None:
+            return candidates
+        same_module = [candidate for candidate in candidates if self.path_modules.get(candidate[0]) == module]
+        return same_module or candidates
+
     def resolve(self, path: str, text: str, owner: str) -> str | None:
         text = re.sub(r"<.*>", "", text).strip()
         if text.endswith("[]"):
@@ -157,21 +179,26 @@ class JavaSymbols:
             return text
         unit = self.units[path]
         if text in self.types and ("." in text or not unit.package):
-            return text if len(self.types[text]) == 1 else None
+            return text if len(self._type_candidates(text, path)) == 1 else None
         scope = owner
         while scope and scope != unit.package:
             nested = f"{scope}.{text}"
             if nested in self.types:
-                return nested if len(self.types[nested]) == 1 else None
+                return nested if len(self._type_candidates(nested, path)) == 1 else None
             scope = scope.rpartition(".")[0]
         first, *rest = text.split(".")
         if first in unit.imports:
             imported = ".".join([unit.imports[first], *rest])
-            return imported if len(self.types.get(imported, [None])) == 1 else None
+            return imported if len(self._type_candidates(imported, path)) == 1 else None
         local = f"{unit.package}.{text}" if unit.package else text
         if local in self.types:
-            return local if len(self.types[local]) == 1 else None
-        candidates = {f"{package}.{text}" for package in unit.wildcards if f"{package}.{text}" in self.types}
+            return local if len(self._type_candidates(local, path)) == 1 else None
+        candidates = {
+            f"{package}.{text}"
+            for package in unit.wildcards
+            if f"{package}.{text}" in self.types
+            and len(self._type_candidates(f"{package}.{text}", path)) == 1
+        }
         if text in _JAVA_LANG:
             candidates.add(f"java.lang.{text}")
         if len(candidates) == 1:
@@ -215,14 +242,23 @@ class JavaSymbols:
         candidates = self.implementations(contract)
         return candidates[0].method if len(candidates) == 1 else None
 
-    def target(self, receiver_type: str, name: str, arity: int) -> IntegrationMethod | None:
-        key = (receiver_type, name, arity)
+    def target(
+        self, receiver_type: str, name: str, arity: int, module: str, path: str,
+    ) -> IntegrationMethod | None:
+        key = (receiver_type, name, arity, module)
         if key in self._targets:
             return self._targets[key]
         self._targets[key] = None
         receiver_bases = self.ancestors(receiver_type)
         contracts = [candidate for owner in receiver_bases
-                     for candidate in self.by_owner.get((owner, name, arity), [])]
+                     for candidate in self.by_owner.get((owner, name, arity, module), [])]
+        if not contracts:
+            contracts = [
+                candidate
+                for (owner, candidate_name, candidate_arity, _candidate_module), values in self.by_owner.items()
+                if owner in receiver_bases and candidate_name == name and candidate_arity == arity
+                for candidate in values
+            ]
         signatures = {candidate.parameters for candidate in contracts}
         if len(signatures) != 1:
             return None
@@ -230,6 +266,24 @@ class JavaSymbols:
                       for candidate in self.implementations(contract)
                       if receiver_type in self.ancestors(candidate.owner)
                       or candidate.owner in receiver_bases}
+        receiver_modules = {
+            self.path_modules.get(candidate_path)
+            for candidate_path, _ in self._type_candidates(receiver_type, path)
+        }
+        receiver_modules.discard(None)
+        preferred_modules = receiver_modules or {module}
+        local_owner_candidates = [
+            candidate for candidate in candidates.values()
+            if candidate.owner == receiver_type and candidate.module in preferred_modules
+        ]
+        inherited_candidates = [
+            candidate for candidate in candidates.values()
+            if candidate.owner != receiver_type
+        ]
+        candidates = {
+            candidate.method.id: candidate
+            for candidate in [*local_owner_candidates, *inherited_candidates]
+        }
         inherited_overrides = [
             candidate
             for candidate in candidates.values()
@@ -308,7 +362,9 @@ class JavaSymbols:
                     receiver_type = None
                 if receiver_type is None:
                     continue
-                target = self.target(receiver_type, name, len(arguments))
+                target = self.target(
+                    receiver_type, name, len(arguments), info.module, info.method.path
+                )
                 if target is None:
                     continue
                 if (info.method.id, line, target.id) in resolved_sites:

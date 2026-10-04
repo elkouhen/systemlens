@@ -1812,6 +1812,58 @@ class OrderController {
     assert flows[0].confidence == "low"
 
 
+def test_ast_fallback_prefers_same_module_for_duplicate_qualified_types(tmp_path: Path) -> None:
+    source_a = "orders/src/main/java/com/example/Shared.java"
+    source_b = "billing/src/main/java/com/example/Shared.java"
+    controller = "orders/src/main/java/com/example/OrderController.java"
+    for source in (source_a, source_b, controller):
+        (tmp_path / source).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / source_a).write_text(
+        "package com.example;\n"
+        "class Shared { void publish() { kafka.send(); } }\n",
+        encoding="utf-8",
+    )
+    (tmp_path / source_b).write_text(
+        "package com.example;\n"
+        "class Shared { void publish() { kafka.send(); } }\n",
+        encoding="utf-8",
+    )
+    (tmp_path / controller).write_text(
+        "package com.example;\n"
+        "class OrderController {\n"
+        "  Shared shared;\n"
+        "  void receive() { shared.publish(); }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    modules = [
+        DiscoveredModule(
+            name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+            kind="application", starts_application=True, configuration_example="",
+        ),
+        DiscoveredModule(
+            name="billing", path=tmp_path / "billing", build_system="maven", version=None,
+            kind="application", starts_application=True, configuration_example="",
+        ),
+    ]
+    endpoints = [
+        replace(_endpoint("entry", "serve", "rest", "POST /orders", controller, 4),
+                qualified_name="com.example.OrderController"),
+        replace(_endpoint("orders-out", "produce", "kafka", "orders.out", source_a, 2),
+                qualified_name="com.example.Shared"),
+        replace(_endpoint("billing-out", "produce", "kafka", "billing.out", source_b, 2),
+                module="billing", qualified_name="com.example.Shared"),
+    ]
+    methods = materialize_integration_methods(
+        tmp_path, endpoints, [source_a, source_b, controller], modules
+    )
+
+    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path)
+
+    assert len(flows) == 1
+    assert flows[0].steps[-1].name == "orders.out"
+
+
 def test_ast_fallback_keeps_ambiguous_candidates_unresolved(tmp_path: Path) -> None:
     source = "orders/src/main/java/com/example/OrderController.java"
     text = """package com.example;
