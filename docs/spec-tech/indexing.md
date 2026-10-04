@@ -163,6 +163,15 @@ predicates are restricted to the already indexed input/output methods by
 relative path and start line. Exact input-to-output reachability is persisted
 with medium confidence; CodeQL-reported possible dispatch is persisted with
 low confidence.
+
+Module ownership uses repository-path ancestry rather than comparing every
+source path with every module. Call partitioning uses the same prefix map, so
+both operations are linear in the number of paths or calls times the maximum
+path depth, not in the product of paths or calls and module count. The
+resolved call graph is built once per index pass; module checkpoints reuse that
+graph and do not rematerialize it. Flow traversal remains bounded by the
+number of indexed input methods and the graph size, `O(I × (V + E))` in the
+worst case, because each input preserves its own dispatch and cycle state.
 Both recursive relations seed only indexed outputs and retain that output as
 their first argument throughout recursion; they do not construct an unrelated
 all-method-pairs closure. Both edges require a source caller and source callee.

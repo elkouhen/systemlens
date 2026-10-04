@@ -488,16 +488,22 @@ def _build_codeql_call_graph(
             (normalized_method_name(item.qualified_method), normalized_path(item.path), item.start_line)
         ].append(item)
     methods_by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
+    methods_by_path_and_name: dict[tuple[str, str], list[IntegrationMethod]] = defaultdict(list)
     methods_by_name: dict[str, list[IntegrationMethod]] = defaultdict(list)
+    module_by_path: dict[str, str] = {}
     for item in methods:
-        methods_by_path[normalized_path(item.path)].append(item)
-        methods_by_name[normalized_method_name(item.qualified_method)].append(item)
+        path = normalized_path(item.path)
+        name = normalized_method_name(item.qualified_method)
+        methods_by_path[path].append(item)
+        methods_by_path_and_name[(path, name)].append(item)
+        methods_by_name[name].append(item)
+        module_by_path.setdefault(path, item.module)
 
     def placeholder(name: str, path: str, line: int) -> IntegrationMethod:
         """Represent a non-port CodeQL method only inside the transient graph."""
         normalized_path = normalized_path_value(path)
-        module = next(
-            (item.module for item in methods if normalized_path_value(item.path) == normalized_path),
+        module = module_by_path.get(
+            normalized_path,
             normalized_path.split("/", 1)[0] if "/" in normalized_path else "",
         )
         method_id = "codeql:" + hashlib.sha256(
@@ -536,9 +542,7 @@ def _build_codeql_call_graph(
             key = (normalized_method_name(name), normalized_path_value(path), line)
             has_enclosing_indexed_method = any(
                 item.start_line <= line <= item.end_line
-                and normalized_method_name(item.qualified_method) == key[0]
-                and normalized_path_value(item.path) == key[1]
-                for item in methods
+                for item in methods_by_path_and_name.get((key[1], key[0]), ())
             )
             if not by_locator.get(key) and not has_enclosing_indexed_method:
                 transient_methods.setdefault(key, placeholder(name, path, line))
@@ -578,9 +582,8 @@ def _build_codeql_call_graph(
         if len(exact) > 1:
             return None
         same_file = [
-            item for item in methods_by_path.get(path, [])
-            if normalized_method_name(item.qualified_method) == normalized_name
-            and item.start_line <= line <= item.end_line
+            item for item in methods_by_path_and_name.get((path, normalized_name), ())
+            if item.start_line <= line <= item.end_line
         ]
         if len(same_file) == 1:
             return same_file[0], False

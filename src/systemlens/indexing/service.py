@@ -126,18 +126,23 @@ def _codeql_module_roots(
     The returned prefix maps CodeQL's module-relative paths to repository
     relative evidence paths.
     """
-    roots = sorted(modules, key=lambda module: len(module.path.resolve().parts), reverse=True)
+    modules_by_path = {
+        module.path.resolve(): module
+        for module in modules
+    }
     selected: dict[Path, str] = {}
     for relative_path in java_paths:
-        candidate = repo_root / relative_path
-        owner = next(
-            (
-                module for module in roots
-                if module.path.resolve() == candidate.parent
-                or module.path.resolve() in candidate.parents
-            ),
-            None,
-        )
+        candidate = (repo_root / relative_path).resolve()
+        owner = None
+        directory = candidate.parent
+        while True:
+            owner = modules_by_path.get(directory)
+            if owner is not None or directory == repo_root.resolve():
+                break
+            parent = directory.parent
+            if parent == directory:
+                break
+            directory = parent
         if owner is None:
             selected.setdefault(repo_root.resolve(), "racine du dépôt")
         else:
@@ -157,19 +162,16 @@ def _partition_codeql_calls(
     by_project: dict[str, list[CodeQLCall]] = {
         name: [] for name, _root, _prefix in roots
     }
-    ordered = sorted(roots, key=lambda item: len(item[2]), reverse=True)
-    fallback = roots[0][0] if roots else "racine du dépôt"
+    by_prefix = {prefix: name for name, _root, prefix in roots}
+    fallback = by_prefix.get("", roots[0][0] if roots else "racine du dépôt")
     for call in calls:
         project = fallback
-        for name, _root, prefix in ordered:
-            if prefix and (
-                call.caller_path == prefix
-                or call.caller_path.startswith(f"{prefix}/")
-            ):
-                project = name
+        path_parts = call.caller_path.strip("/").split("/")
+        for end in range(len(path_parts), -1, -1):
+            prefix = "/".join(path_parts[:end])
+            if prefix in by_prefix:
+                project = by_prefix[prefix]
                 break
-            if not prefix:
-                project = name
         by_project.setdefault(project, []).append(call)
     return [(name, by_project.get(name, [])) for name, _root, _prefix in roots]
 
@@ -929,6 +931,36 @@ def _index_repo(
                         total_units=total_methods,
                     ))
 
+            def publish_module_checkpoints(
+                project_calls_by_module: Sequence[tuple[str, list[CodeQLCall]]],
+                roots: Sequence[tuple[str, Path, str]],
+            ) -> None:
+                """Publish module checkpoints from one already-built flow graph."""
+                completed_calls: list[CodeQLCall] = []
+                for number, (name, project_calls) in enumerate(project_calls_by_module, start=1):
+                    module_started_at = time.perf_counter()
+                    _report_progress(
+                        progress,
+                        f"  • CodeQL module {number}/{len(roots)} : {name}",
+                    )
+                    completed_calls.extend(project_calls)
+                    project_prefix = next(
+                        (prefix for root_name, _root, prefix in roots if root_name == name),
+                        "",
+                    )
+                    publish_call_graph_progress(
+                        number,
+                        len(project_calls_by_module),
+                        name,
+                        completed_calls,
+                        project_prefix,
+                    )
+                    _report_progress(
+                        progress,
+                        f"    ✓ {name} : {len(project_calls)} appel(s) traité(s) "
+                        f"en {time.perf_counter() - module_started_at:.2f} s.",
+                    )
+
             codeql_deadline = time.monotonic() + config.codeql_timeout_seconds
             try:
                 if codeql_database is not None:
@@ -958,27 +990,6 @@ def _index_repo(
                     )
                     enrich_strategy1_kafka_types(codeql_database, deadline=codeql_deadline)
                     scoped_project_calls = _partition_codeql_calls(calls, roots)
-                    scoped_completed_calls: list[CodeQLCall] = []
-                    for number, (name, project_calls) in enumerate(scoped_project_calls, start=1):
-                        module_started_at = time.perf_counter()
-                        _report_progress(
-                            progress,
-                            f"  • CodeQL module {number}/{len(roots)} : {name}",
-                        )
-                        scoped_completed_calls.extend(project_calls)
-                        project_prefix = next(
-                            (prefix for root_name, _root, prefix in roots if root_name == name),
-                            "",
-                        )
-                        publish_call_graph_progress(
-                            number, len(scoped_project_calls), name, scoped_completed_calls,
-                            project_prefix,
-                        )
-                        _report_progress(
-                            progress,
-                            f"    ✓ {name} : {len(project_calls)} appel(s) traité(s) "
-                            f"en {time.perf_counter() - module_started_at:.2f} s.",
-                        )
                     timer.end("codeql-extract", "extraction des appels CodeQL")
                     reachability = extract_codeql_reachability(
                         codeql_database, methods,
@@ -986,21 +997,21 @@ def _index_repo(
                         threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
                         deadline=codeql_deadline,
                     )
-                    if call_graph_progress is not None:
-                        prepared_codeql_flows = materialize_codeql_code_flows(
-                            methods, all_endpoints, calls, repo_root=repo_root,
-                            source_paths=list(current_hashes),
-                            max_hops=config.codeql_max_hops,
-                            codeql_edge_confidence=config.codeql_edge_confidence,
-                            stats=codeql_stats, reachability=reachability,
-                            progress=progress,
-                            call_chain_progress=progress if show_call_chains else None,
-                            call_chain_module=show_call_chains_module,
-                            join_checkpoint=publish_join_checkpoint,
-                            resume_from_entry=resume_join_entries,
-                            initial_flows=resume_join_flows,
-                            call_graph_sink=persist_call_graph,
-                        )
+                    prepared_codeql_flows = materialize_codeql_code_flows(
+                        methods, all_endpoints, calls, repo_root=repo_root,
+                        source_paths=list(current_hashes),
+                        max_hops=config.codeql_max_hops,
+                        codeql_edge_confidence=config.codeql_edge_confidence,
+                        stats=codeql_stats, reachability=reachability,
+                        progress=progress,
+                        call_chain_progress=progress if show_call_chains else None,
+                        call_chain_module=show_call_chains_module,
+                        join_checkpoint=publish_join_checkpoint,
+                        resume_from_entry=resume_join_entries,
+                        initial_flows=resume_join_flows,
+                        call_graph_sink=persist_call_graph,
+                    )
+                    publish_module_checkpoints(scoped_project_calls, roots)
                 else:
                     roots = _codeql_module_roots(
                         repo_root,
@@ -1081,52 +1092,27 @@ def _index_repo(
                                 source_prefix=method_prefix,
                             )
                             scoped_project_calls = _partition_codeql_calls(calls, roots)
-                            completed_calls: list[CodeQLCall] = []
-                            for number, (name, project_calls) in enumerate(scoped_project_calls, start=1):
-                                module_started_at = time.perf_counter()
-                                _report_progress(
-                                    progress,
-                                    f"  • {engine_label} module {number}/{len(roots)} : {name}",
-                                )
-                                completed_calls.extend(project_calls)
-                                project_prefix = next(
-                                    (prefix for root_name, _root, prefix in roots if root_name == name),
-                                    "",
-                                )
-                                publish_call_graph_progress(
-                                    number,
-                                    len(roots),
-                                    name,
-                                    completed_calls,
-                                    project_prefix,
-                                    skip_materialization=(call_graph_progress is not None and len(roots) == 1),
-                                )
-                                _report_progress(
-                                    progress,
-                                    f"    ✓ {name} : {len(project_calls)} appel(s) extrait(s) "
-                                    f"en {time.perf_counter() - module_started_at:.2f} s.",
-                                )
                             reachability = extract_codeql_reachability(
                                 database, methods,
                                 timeout_seconds=config.codeql_timeout_seconds,
                                 threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
                                 deadline=codeql_deadline,
                             )
-                        if call_graph_progress is not None:
-                            prepared_codeql_flows = materialize_codeql_code_flows(
-                                methods, all_endpoints, calls, repo_root=repo_root,
-                                source_paths=list(current_hashes),
-                                max_hops=config.codeql_max_hops,
-                                codeql_edge_confidence=config.codeql_edge_confidence,
-                                stats=codeql_stats, reachability=reachability,
-                                progress=progress,
-                                call_chain_progress=progress if show_call_chains else None,
-                                call_chain_module=show_call_chains_module,
-                                join_checkpoint=publish_join_checkpoint,
-                                resume_from_entry=resume_join_entries,
-                                initial_flows=resume_join_flows,
-                                call_graph_sink=persist_call_graph,
-                            )
+                        prepared_codeql_flows = materialize_codeql_code_flows(
+                            methods, all_endpoints, calls, repo_root=repo_root,
+                            source_paths=list(current_hashes),
+                            max_hops=config.codeql_max_hops,
+                            codeql_edge_confidence=config.codeql_edge_confidence,
+                            stats=codeql_stats, reachability=reachability,
+                            progress=progress,
+                            call_chain_progress=progress if show_call_chains else None,
+                            call_chain_module=show_call_chains_module,
+                            join_checkpoint=publish_join_checkpoint,
+                            resume_from_entry=resume_join_entries,
+                            initial_flows=resume_join_flows,
+                            call_graph_sink=persist_call_graph,
+                        )
+                        publish_module_checkpoints(scoped_project_calls, roots)
                     timer.end(stage, f"création et extraction globale {engine_label}")
             except CodeQLTimeout as exc:
                 calls = exc.calls
