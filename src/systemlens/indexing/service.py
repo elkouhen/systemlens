@@ -29,7 +29,12 @@ from systemlens.indexing.code_flows import (
     reconcile_code_flows,
 )
 from systemlens.indexing.integration_methods import materialize_integration_methods
-from systemlens.domain.code_flows import CodeFlow, IntegrationMethod, PersistedCodeQLMethod
+from systemlens.domain.code_flows import (
+    CodeFlow,
+    CodeQLCallGraphEdge,
+    IntegrationMethod,
+    PersistedCodeQLMethod,
+)
 from systemlens.indexing.codeql import (
     CodeQLCall,
     CodeQLMethod,
@@ -253,6 +258,11 @@ def _index_repo(
         raise ValueError("Refreshing the CodeQL view requires a selected module.")
     if refresh_codeql_view and config.call_graph_engine != "codeql":
         raise ValueError("Refreshing the CodeQL view requires the codeql method-call engine.")
+    if refresh_codeql_view and store.get_meta("codeql_call_graph_status") != "complete":
+        raise ValueError(
+            "Refreshing one module requires a complete global CodeQL graph; "
+            "run a global index first."
+        )
     if codeql_database is not None and config.call_graph_engine != "codeql":
         raise ValueError("A CodeQL database requires the codeql method-call engine.")
     topic_strategy = topic_strategy or config.strategy
@@ -584,6 +594,7 @@ def _index_repo(
         or changed
         or deleted
         or codeql_database is not None
+        or refresh_codeql_view
         or store.get_meta("code_flow_signature") != flow_signature
     )
     if should_index_flows:
@@ -637,10 +648,16 @@ def _index_repo(
                 )
                 _report_progress(progress, f"  ↳ Chaîne construite : {rendered}")
 
-        store.replace_codeql_call_edges([])
-        store.replace_codeql_methods([])
-        store.delete_meta("codeql_call_graph_status")
-        store.delete_meta("codeql_call_graph_edge_count")
+        persisted_codeql_edges: list[CodeQLCallGraphEdge] = []
+        persisted_codeql_methods: list[PersistedCodeQLMethod] = []
+        if refresh_codeql_view:
+            persisted_codeql_edges = store.all_codeql_call_edges()
+            persisted_codeql_methods = store.all_codeql_methods()
+        else:
+            store.replace_codeql_call_edges([])
+            store.replace_codeql_methods([])
+            store.delete_meta("codeql_call_graph_status")
+            store.delete_meta("codeql_call_graph_edge_count")
         store.delete_meta("codeql_input_output_status")
         store.delete_meta("codeql_input_output_flow_count")
 
@@ -720,7 +737,16 @@ def _index_repo(
                 ]
             else:
                 methods_projection = []
-            methods_projection.extend(call_graph.methods)
+            graph_methods = call_graph.methods
+            if refresh_codeql_view and codeql_view_prefix:
+                graph_methods = tuple(
+                    method for method in graph_methods
+                    if not (
+                        method.path == codeql_view_prefix
+                        or method.path.startswith(prefix)
+                    )
+                )
+            methods_projection.extend(graph_methods)
             known_locators = {
                 (method.qualified_method, method.path, method.start_line)
                 for method in methods_projection
@@ -788,6 +814,7 @@ def _index_repo(
             calls: list[CodeQLCall] = []
             codeql_method_projection: list[CodeQLMethod] = []
             codeql_view_prefix = ""
+            selected_view_module: DiscoveredModule | None = None
             if refresh_codeql_view and show_call_chains_module is not None:
                 selected_view_module = next(
                     (
@@ -798,9 +825,12 @@ def _index_repo(
                     None,
                 )
                 if selected_view_module is not None:
-                    codeql_view_prefix = selected_view_module.path.resolve().relative_to(
+                    relative_module_path = selected_view_module.path.resolve().relative_to(
                         repo_root.resolve()
                     ).as_posix()
+                    codeql_view_prefix = (
+                        "" if relative_module_path == "." else relative_module_path
+                    )
 
             def publish_call_graph_progress(
                 completed_projects: int,
@@ -964,19 +994,32 @@ def _index_repo(
             codeql_deadline = time.monotonic() + config.codeql_timeout_seconds
             try:
                 if codeql_database is not None:
-                    timer.begin("codeql-extract", "→ CodeQL : extraction des appels Java depuis la base fournie...")
+                    timer.begin(
+                        "codeql-extract",
+                        "→ CodeQL : rafraîchissement des méthodes du module..."
+                        if refresh_codeql_view
+                        else "→ CodeQL : extraction globale des appels Java depuis la base fournie...",
+                    )
                     roots = _codeql_module_roots(
                         repo_root,
                         [path for path in current_hashes if path.endswith(".java")],
                         relation_modules,
                     ) or [("base CodeQL fournie", repo_root, "")]
-                    calls = extract_codeql_calls(
-                        codeql_database, timeout_seconds=config.codeql_timeout_seconds,
-                        threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
-                        verbosity=codeql_verbosity,
-                        progress=progress if codeql_verbosity is not None else None,
-                        deadline=codeql_deadline,
-                    )
+                    if refresh_codeql_view and selected_view_module is not None:
+                        roots = [(
+                            module_identity(selected_view_module),
+                            selected_view_module.path,
+                            codeql_view_prefix,
+                        )]
+                        calls = []
+                    else:
+                        calls = extract_codeql_calls(
+                            codeql_database, timeout_seconds=config.codeql_timeout_seconds,
+                            threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                            verbosity=codeql_verbosity,
+                            progress=progress if codeql_verbosity is not None else None,
+                            deadline=codeql_deadline,
+                        )
                     method_prefix = codeql_view_prefix if refresh_codeql_view else ""
                     codeql_method_projection = extract_codeql_methods(
                         codeql_database,
@@ -990,8 +1033,13 @@ def _index_repo(
                     )
                     enrich_strategy1_kafka_types(codeql_database, deadline=codeql_deadline)
                     scoped_project_calls = _partition_codeql_calls(calls, roots)
-                    timer.end("codeql-extract", "extraction des appels CodeQL")
-                    reachability = extract_codeql_reachability(
+                    timer.end(
+                        "codeql-extract",
+                        "rafraîchissement des méthodes CodeQL"
+                        if refresh_codeql_view
+                        else "extraction des appels CodeQL",
+                    )
+                    reachability = [] if refresh_codeql_view else extract_codeql_reachability(
                         codeql_database, methods,
                         timeout_seconds=config.codeql_timeout_seconds,
                         threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
@@ -1010,6 +1058,8 @@ def _index_repo(
                         resume_from_entry=resume_join_entries,
                         initial_flows=resume_join_flows,
                         call_graph_sink=persist_call_graph,
+                        persisted_edges=persisted_codeql_edges if refresh_codeql_view else None,
+                        persisted_methods=persisted_codeql_methods,
                     )
                     publish_module_checkpoints(scoped_project_calls, roots)
                 else:
@@ -1019,7 +1069,12 @@ def _index_repo(
                         relation_modules,
                     )
                     stage = f"{call_graph_engine}-database"
-                    timer.begin(stage, f"→ {engine_label} : création et extraction globale...")
+                    timer.begin(
+                        stage,
+                        f"→ {engine_label} : création et rafraîchissement du module..."
+                        if refresh_codeql_view
+                        else f"→ {engine_label} : création et extraction globale...",
+                    )
                     if call_graph_engine == "codeql":
                         if codeql_verbosity is None:
                             if generate_sources:
@@ -1071,15 +1126,23 @@ def _index_repo(
                         with database_context as database:
                             assert database is not None
                             enrich_strategy1_kafka_types(database, deadline=codeql_deadline)
-                            calls = extract_codeql_calls(
-                                database,
-                                timeout_seconds=config.codeql_timeout_seconds,
-                                threads=config.codeql_threads,
-                                ram_mb=config.codeql_ram_mb,
-                                verbosity=codeql_verbosity,
-                                progress=progress if codeql_verbosity is not None else None,
-                                deadline=codeql_deadline,
-                            )
+                            if refresh_codeql_view and selected_view_module is not None:
+                                roots = [(
+                                    module_identity(selected_view_module),
+                                    selected_view_module.path,
+                                    codeql_view_prefix,
+                                )]
+                                calls = []
+                            else:
+                                calls = extract_codeql_calls(
+                                    database,
+                                    timeout_seconds=config.codeql_timeout_seconds,
+                                    threads=config.codeql_threads,
+                                    ram_mb=config.codeql_ram_mb,
+                                    verbosity=codeql_verbosity,
+                                    progress=progress if codeql_verbosity is not None else None,
+                                    deadline=codeql_deadline,
+                                )
                             method_prefix = codeql_view_prefix if refresh_codeql_view else ""
                             codeql_method_projection = extract_codeql_methods(
                                 database,
@@ -1092,7 +1155,7 @@ def _index_repo(
                                 source_prefix=method_prefix,
                             )
                             scoped_project_calls = _partition_codeql_calls(calls, roots)
-                            reachability = extract_codeql_reachability(
+                            reachability = [] if refresh_codeql_view else extract_codeql_reachability(
                                 database, methods,
                                 timeout_seconds=config.codeql_timeout_seconds,
                                 threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
@@ -1111,9 +1174,16 @@ def _index_repo(
                             resume_from_entry=resume_join_entries,
                             initial_flows=resume_join_flows,
                             call_graph_sink=persist_call_graph,
+                            persisted_edges=persisted_codeql_edges if refresh_codeql_view else None,
+                            persisted_methods=persisted_codeql_methods,
                         )
                         publish_module_checkpoints(scoped_project_calls, roots)
-                    timer.end(stage, f"création et extraction globale {engine_label}")
+                    timer.end(
+                        stage,
+                        f"création et rafraîchissement du module {engine_label}"
+                        if refresh_codeql_view
+                        else f"création et extraction globale {engine_label}",
+                    )
             except CodeQLTimeout as exc:
                 calls = exc.calls
                 codeql_timed_out = True
@@ -1137,7 +1207,18 @@ def _index_repo(
                 )
             except (CodeQLError, OSError) as exc:
                 raise RuntimeError(str(exc)) from exc
-            _report_progress(progress, f"→ {engine_label} : {len(calls)} appel(s) extrait(s), jointure des méthodes...")
+            if refresh_codeql_view:
+                _report_progress(
+                    progress,
+                    f"→ {engine_label} : graphe global réutilisé, "
+                    "jointure des méthodes du module...",
+                )
+            else:
+                _report_progress(
+                    progress,
+                    f"→ {engine_label} : {len(calls)} appel(s) extrait(s), "
+                    "jointure des méthodes...",
+                )
             timer.begin("call-graph-join", f"→ {engine_label} : jointure des méthodes et matérialisation des flux...")
             codeql_flows = prepared_codeql_flows if prepared_codeql_flows is not None else materialize_codeql_code_flows(
                 methods, all_endpoints, calls, repo_root=repo_root,

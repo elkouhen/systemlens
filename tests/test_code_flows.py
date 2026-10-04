@@ -1013,6 +1013,62 @@ def test_index_uses_automatic_codeql_database_when_available(
     assert "jointure CodeQL : 1/1 méthode(s) IN traitée(s)" in join_content
 
 
+def test_module_codeql_view_refresh_reuses_the_persisted_call_graph(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "endpoint_index_repo", repo)
+    (repo / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion>"
+        "<groupId>com.example</groupId><artifactId>orders</artifactId>"
+        "<version>1.0.0</version></project>",
+        encoding="utf-8",
+    )
+
+    @contextmanager
+    def automatic_database(*_args, **_kwargs):
+        yield tmp_path / "codeql-db"
+
+    monkeypatch.setattr(indexing_service, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(indexing_service, "automatic_codeql_database", automatic_database)
+    monkeypatch.setattr(
+        indexing_service, "extract_codeql_calls", lambda _database, **_kwargs: []
+    )
+    monkeypatch.setattr(
+        indexing_service, "extract_codeql_methods", lambda _database, **_kwargs: []
+    )
+    monkeypatch.setattr(
+        indexing_service, "extract_codeql_reachability",
+        lambda _database, _methods, **_kwargs: [],
+    )
+
+    with Store(repo) as store:
+        index_repo(repo, Config(), store)
+
+    def unexpected_global_call_query(*_args, **_kwargs):
+        raise AssertionError("module refresh must reuse the persisted call graph")
+
+    monkeypatch.setattr(indexing_service, "extract_codeql_calls", unexpected_global_call_query)
+    queried_prefixes: list[str] = []
+
+    def query_module_methods(_database, **kwargs):
+        queried_prefixes.append(kwargs["source_prefix"])
+        return []
+
+    monkeypatch.setattr(indexing_service, "extract_codeql_methods", query_module_methods)
+    with Store(repo) as store:
+        index_repo(
+            repo,
+            Config(),
+            store,
+            codeql_database=tmp_path / "codeql-db",
+            refresh_codeql_view=True,
+            show_call_chains_module="orders",
+        )
+
+    assert queried_prefixes == [""]
+
+
 def test_codeql_timeout_commits_partial_snapshot_and_runs_post_processing(
     tmp_path: Path, monkeypatch
 ) -> None:

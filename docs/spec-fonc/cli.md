@@ -45,9 +45,11 @@ inventory and CodeQL analysis remain global.
 
 To populate or refresh the persisted CodeQL method view one module at a time,
 run `systemlens index --module NAME --refresh-codeql-view`. The option requires
-CodeQL and can reuse a global database supplied with `--codeql-database`; other
-module rows remain in the SQLite snapshot. Use `--full` as well when the normal
-file delta should also be forced.
+CodeQL and a previously completed global CodeQL call graph. It should reuse the
+global database supplied with `--codeql-database`; the command then queries the
+selected module's methods and reuses the persisted global calls. Other module
+rows remain in the SQLite snapshot. Use `--full` as well when the normal file
+delta should also be forced.
 
 With `systemlens flows list --module NAME --explain`, the diagnostic includes
 the tested graph metrics and up to ten partial call paths when no internal flow
