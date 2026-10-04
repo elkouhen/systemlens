@@ -212,6 +212,10 @@ queried directly from the source-backed CodeQL `Method` entities instead of
 being inferred from the persisted call-edge snapshot. The BQRS/CSV query
 artifacts are temporary and are not persisted; the database must correspond to
 the indexed source revision and relative paths.
+The module-level `--show-call-chains` diagnostic follows the same rule when an
+external CodeQL database is supplied: it rebuilds the transient full call graph
+before rendering internal-flow examples, so an unchanged snapshot does not
+restrict the diagnostic to persisted endpoint-anchor edges.
 After the call adjacency is built, the decoded CodeQL rows and transient Java
 symbol indexes are released before route expansion; the adjacency remains the
 single in-memory call-graph representation used by the BFS. Only edges whose

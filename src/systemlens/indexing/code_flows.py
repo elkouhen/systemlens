@@ -534,7 +534,13 @@ def _build_codeql_call_graph(
             ):
                 continue
             key = (normalized_method_name(name), normalized_path_value(path), line)
-            if not by_locator.get(key):
+            has_enclosing_indexed_method = any(
+                item.start_line <= line <= item.end_line
+                and normalized_method_name(item.qualified_method) == key[0]
+                and normalized_path_value(item.path) == key[1]
+                for item in methods
+            )
+            if not by_locator.get(key) and not has_enclosing_indexed_method:
                 transient_methods.setdefault(key, placeholder(name, path, line))
     for method in transient_methods.values():
         by_locator[

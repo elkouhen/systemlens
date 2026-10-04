@@ -68,6 +68,11 @@ copied into the SystemLens index. This option requires the database to match
 the indexed source paths and revision; without it, node presence falls back to
 the persisted snapshot.
 
+When `index --show-call-chains` is given the same `--codeql-database`, the module
+diagnostic re-queries CodeQL for the complete source call graph when needed.
+This keeps ordinary intermediate methods visible even when no source file was
+rescanned and the persisted edge snapshot contains only endpoint anchors.
+
 `systemlens index` reports its file delta, AST analysis stage, persisted endpoint
 count and materialized relations. AST extraction receives all changed files in
 one pass and reports the `AST 1/1` checkpoint. CodeQL creates one global

@@ -64,7 +64,7 @@ from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.indexing.service import CallGraphProgress, index_repo
 from systemlens.indexing.code_flows import materialize_codeql_code_flows
-from systemlens.indexing.codeql import extract_codeql_methods
+from systemlens.indexing.codeql import extract_codeql_calls, extract_codeql_methods
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.models import ExtractionDiagnostic
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
@@ -1617,6 +1617,32 @@ def index_cmd(
         )
     if selected_module is not None and show_call_chains:
         with Store(repo_root, readonly=True) as store:
+            debug_flows = store.all_code_flows()
+            direct_methods = store.all_integration_methods()
+            debug_methods: list[IntegrationMethod] | None = direct_methods
+            debug_edges: list[CodeQLCallGraphEdge] | None = store.all_codeql_call_edges()
+            if codeql_database is not None:
+                # Persisted call edges intentionally contain only the endpoint
+                # anchors. Re-query the supplied database so ordinary methods
+                # between IN and OUT remain visible in this diagnostic.
+                direct_calls = extract_codeql_calls(codeql_database)
+                direct_flows = materialize_codeql_code_flows(
+                    direct_methods,
+                    store.all_endpoints(),
+                    direct_calls,
+                    repo_root=repo_root,
+                    source_paths=sorted({
+                        path
+                        for call in direct_calls
+                        for path in (call.caller_path, call.callee_path)
+                        if path
+                    }),
+                    module=selected_module.name,
+                    codeql_edge_confidence=config.codeql_edge_confidence,
+                )
+                debug_flows = direct_flows
+                debug_methods = None
+                debug_edges = None
             if report.scanned == 0 and codeql_database is None:
                 # No indexing stage ran. Replay the live reverse walk from the
                 # persisted CodeQL graph so --show-call-chains remains useful
@@ -1631,11 +1657,11 @@ def index_cmd(
                     persisted_edges=store.all_codeql_call_edges(),
                 )
             debug = internal_flow_debug(
-                store.all_code_flows(),
+                debug_flows,
                 store.all_endpoints(),
                 selected_module.name,
-                store.all_integration_methods(),
-                store.all_codeql_call_edges(),
+                debug_methods,
+                debug_edges,
             )
         typer.echo(render_internal_flow_debug_text(debug))
     _trace_index("cli.index.end", root=repo_root, module=selected_module.name if selected_module else "")
