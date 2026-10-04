@@ -6,6 +6,8 @@ import re
 
 from systemlens.application.architecture_inventory import ArchitectureInventory
 from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
+from systemlens.indexing.codeql import CodeQLMethod
+from systemlens.indexing.java_symbols import JavaSymbols
 
 
 def _method_fact(method: IntegrationMethod) -> dict[str, object]:
@@ -25,8 +27,12 @@ def _presence(
     edges: Sequence[CodeQLCallGraphEdge],
     callers: Sequence[IntegrationMethod],
     callees: Sequence[IntegrationMethod],
+    *,
+    callee_alias_ids: set[str] | None = None,
+    codeql_method_ids: set[str] | None = None,
 ) -> dict[str, object]:
     """Report only presence facts that the persisted snapshot can prove."""
+    callee_ids = {method.id for method in callees} | (callee_alias_ids or set())
     incident_method_ids = {
         method_id
         for edge in edges
@@ -47,14 +53,25 @@ def _presence(
                 "proof_ast": "multiple_persisted_integration_methods",
                 "proof_codeql": "not_proven",
             }
-        codeql_present = methods[0].id in incident_method_ids
+        method_ids = {methods[0].id}
+        if methods[0] in callees:
+            method_ids |= callee_alias_ids or set()
+        codeql_present = bool(method_ids & (
+            codeql_method_ids if codeql_method_ids is not None else incident_method_ids
+        ))
         return {
             "ast": "present",
             "codeql": "present" if codeql_present else "unknown",
             "proof_ast": "persisted_integration_method",
             "proof_codeql": (
-                "incident_non_inferred_call_edge" if codeql_present
-                else "not_proven_by_persisted_non_inferred_edge"
+                (
+                    "direct_codeql_method_query" if codeql_method_ids is not None
+                    else "incident_non_inferred_call_edge"
+                ) if codeql_present else (
+                    "not_found_by_direct_codeql_method_query"
+                    if codeql_method_ids is not None
+                    else "not_proven_by_persisted_non_inferred_edge"
+                )
             ),
         }
 
@@ -62,7 +79,7 @@ def _presence(
         len(callers) == 1
         and len(callees) == 1
         and any(
-            edge.caller_id == callers[0].id and edge.callee_id == callees[0].id
+            edge.caller_id == callers[0].id and edge.callee_id in callee_ids
             and not edge.inferred
             for edge in edges
         )
@@ -98,6 +115,44 @@ def _matching_methods(
         (method for method in methods if method.qualified_method.endswith(suffix)),
         key=lambda method: (method.qualified_method, method.path, method.start_line),
     )
+
+
+def _interface_implementation_ids(
+    inventory: ArchitectureInventory, callee: IntegrationMethod,
+) -> set[str]:
+    """Return indexed concrete implementations of an interface method.
+
+    CodeQL may persist a dynamic call against the concrete implementation while
+    the user asks for the interface declaration.  Reuse the source-backed Java
+    symbol resolver here so method-name coincidence cannot create an alias.
+    """
+    for root in inventory.source_roots:
+        if not root.exists():
+            continue
+        symbols = JavaSymbols(
+            root,
+            inventory.integration_methods,
+            source_paths=[method.path for method in inventory.integration_methods],
+        )
+        contract = symbols.methods.get(callee.id)
+        if contract is not None and not contract.concrete:
+            return {candidate.method.id for candidate in symbols.implementations(contract)}
+    return set()
+
+
+def _direct_codeql_method_ids(
+    methods: Sequence[IntegrationMethod],
+    codeql_methods: Sequence[CodeQLMethod],
+) -> set[str]:
+    """Join selected persisted methods with methods returned directly by CodeQL."""
+    facts = {
+        (method.qualified_method, method.path, method.start_line)
+        for method in codeql_methods
+    }
+    return {
+        method.id for method in methods
+        if (method.qualified_method, method.path, method.start_line) in facts
+    }
 
 
 def _signature_settings(signature: str | None) -> dict[str, object]:
@@ -172,12 +227,17 @@ def _can_reach_any(
 
 
 def _flow_uses_edge(
-    flow: CodeFlow, caller: IntegrationMethod, callee: IntegrationMethod,
+    flow: CodeFlow,
+    caller: IntegrationMethod,
+    callee: IntegrationMethod,
+    callee_alias_names: set[str] | None = None,
 ) -> bool:
     route = [flow.method]
     route.extend(step.name for step in flow.steps if step.kind == "method_call")
+    callee_names = {callee.qualified_method}
+    callee_names.update(callee_alias_names or set())
     return any(
-        left == caller.qualified_method and right == callee.qualified_method
+        left == caller.qualified_method and right in callee_names
         for left, right in zip(route, route[1:])
     )
 
@@ -188,6 +248,7 @@ def diagnose_call_edge(
     callee_query: str,
     *,
     snapshot_metadata: Mapping[str, str | None] | None = None,
+    codeql_methods: Sequence[CodeQLMethod] | None = None,
 ) -> dict[str, object]:
     """Classify where one expected call edge disappears from the pipeline."""
     metadata = dict(snapshot_metadata or {})
@@ -199,6 +260,20 @@ def diagnose_call_edge(
     }
     callers = _matching_methods(inventory.integration_methods, caller_query)
     callees = _matching_methods(inventory.integration_methods, callee_query)
+    callee_alias_ids = (
+        _interface_implementation_ids(inventory, callees[0])
+        if len(callees) == 1 else set()
+    )
+    codeql_method_ids = None
+    if codeql_methods is not None:
+        selected_methods = [*callers, *callees]
+        selected_methods.extend(
+            method for method in inventory.integration_methods
+            if method.id in callee_alias_ids
+        )
+        codeql_method_ids = _direct_codeql_method_ids(
+            selected_methods, codeql_methods,
+        )
     result: dict[str, object] = {
         "kind": "call_edge_diagnostic",
         "caller_query": caller_query,
@@ -212,6 +287,8 @@ def diagnose_call_edge(
             inventory.codeql_call_edges,
             callers,
             callees,
+            callee_alias_ids=callee_alias_ids,
+            codeql_method_ids=codeql_method_ids,
         ),
     }
 
@@ -243,9 +320,15 @@ def diagnose_call_edge(
         return result
 
     caller, callee = callers[0], callees[0]
+    callee_ids = {callee.id} | callee_alias_ids
+    callee_alias_names = {
+        method.qualified_method
+        for method in inventory.integration_methods
+        if method.id in callee_alias_ids
+    }
     matching_edges = [
         edge for edge in inventory.codeql_call_edges
-        if edge.caller_id == caller.id and edge.callee_id == callee.id
+        if edge.caller_id == caller.id and edge.callee_id in callee_ids
     ]
     result["edges"] = [
         {
@@ -315,7 +398,7 @@ def diagnose_call_edge(
 
     flow_ids = [
         flow.id for flow in inventory.code_flows
-        if _flow_uses_edge(flow, caller, callee)
+        if _flow_uses_edge(flow, caller, callee, callee_alias_names)
     ]
     result["flow_ids"] = flow_ids
     if flow_ids:
@@ -349,7 +432,10 @@ def diagnose_call_edge(
         if method.output_endpoint_ids
     }
     has_input_path = _reachable(input_methods, caller.id, effective)
-    has_output_path = _can_reach_any(callee.id, output_methods, effective)
+    has_output_path = any(
+        _can_reach_any(callee_id, output_methods, effective)
+        for callee_id in callee_ids
+    )
     result["flow_context"] = {
         "caller_reachable_from_input": has_input_path,
         "callee_can_reach_output": has_output_path,

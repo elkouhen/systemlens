@@ -140,11 +140,13 @@ fail when the required plugin or dependency is unavailable.
 The call query keeps both caller and callee in source code, folds exact
 dispatch before viable-dispatch expansion, and computes that resolution once
 per call. The Python post-processing has two distinct stages: it first resolves
-the CodeQL rows into one source-backed directed method graph, then groups its
-weak connected components and traverses the directed edges from indexed input
-methods to indexed output methods. Components only restrict the search to
-methods linked by observed calls; they do not reverse edges or create routes.
-It does not connect endpoint facts by name alone.
+the CodeQL rows into a transient source-backed directed graph containing every
+source method returned by CodeQL, then groups its weak connected components and
+traverses the directed edges from indexed input methods to indexed output
+methods. `integration_methods` are anchors for those endpoints, not a filter
+for intermediate methods. Components only restrict the search to methods linked
+by observed calls; they do not reverse edges or create routes. It does not
+connect endpoint facts by name alone.
 CodeQL also runs an output-anchored transitive reachability query whose source and target
 predicates are restricted to the already indexed input/output methods by
 relative path and start line. Exact input-to-output reachability is persisted
@@ -193,6 +195,9 @@ The read-only `analyze call-edge` command resolves each selector against the
 persisted method ID, qualified name, then qualified-name suffix. It reports
 ambiguous selectors without choosing a candidate. For one caller and callee,
 it checks the persisted edge before applying the recorded confidence filter.
+When the callee is an interface method, the diagnostic also resolves its
+source-backed indexed implementations and accepts a persisted edge to one of
+those concrete targets as the requested dynamic-dispatch edge.
 It then tests reachability from any indexed input method and to any indexed
 output method. Existing snapshots do not persist rejected raw CodeQL rows, so
 an absent edge remains classified across extraction and CodeQL-to-AST joining.
@@ -202,10 +207,17 @@ incident non-inferred call edge proves CodeQL node presence. A non-inferred
 caller-to-callee edge proves CodeQL edge presence. Inferred edges do not count as CodeQL proof. The index has no
 separate AST call-edge projection and no raw CodeQL node projection, so
 unsupported absence checks remain `unknown`.
+When `--codeql-database` is supplied to `analyze call-edge`, node presence is
+queried directly from the source-backed CodeQL `Method` entities instead of
+being inferred from the persisted call-edge snapshot. The BQRS/CSV query
+artifacts are temporary and are not persisted; the database must correspond to
+the indexed source revision and relative paths.
 After the call adjacency is built, the decoded CodeQL rows and transient Java
 symbol indexes are released before route expansion; the adjacency remains the
-single in-memory call-graph representation used by the BFS, and its normalized
-edges are persisted in `codeql_call_edges`. Live progress uses a wall-clock
+single in-memory call-graph representation used by the BFS. Only edges whose
+caller and callee are persisted integration-method anchors are written to
+`codeql_call_edges`; ordinary intermediate methods remain transient in the
+join and are represented in the persisted flow steps. Live progress uses a wall-clock
 watchdog covering pipe reads;
 POSIX timeouts terminate the complete process group, and
 subprocesses are reaped on errors. The configured deadline covers the complete

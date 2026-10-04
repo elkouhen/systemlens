@@ -1616,6 +1616,56 @@ def test_codeql_call_bridges_unique_cross_module_output_implementation(tmp_path:
     assert flows[0].steps[-1].name == "inventory.out"
 
 
+def test_codeql_flow_keeps_non_integration_methods_between_ports(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    target = "orders/src/main/java/com/example/OrderPublisher.java"
+    for path, content in {
+        source: """package com.example;
+class OrderController {
+  void receive() { helper(); }
+  void helper() {}
+}
+""",
+        target: """package com.example;
+class OrderPublisher {
+  void send() {}
+}
+""",
+    }.items():
+        file = tmp_path / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(content, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        _endpoint("entry", "consume", "kafka", "orders.in", source, 3),
+        replace(_endpoint("output", "produce", "kafka", "orders.out", target, 3),
+                qualified_name="com.example.OrderPublisher"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
+
+    flows = materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        [
+            CodeQLCall(
+                "com.example.OrderController.receive", source, 3,
+                "com.example.OrderController.helper", source, 4, 3,
+            ),
+            CodeQLCall(
+                "com.example.OrderController.helper", source, 4,
+                "com.example.OrderPublisher.send", target, 3, 4,
+            ),
+        ],
+        source_paths=[source, target],
+    )
+
+    assert len(flows) == 1
+    assert any(step.name == "com.example.OrderController.helper" for step in flows[0].steps)
+
+
 def test_codeql_calls_from_lambda_join_enclosing_entry_method(tmp_path: Path) -> None:
     source = "orders/src/main/java/com/example/OrderController.java"
     target = "orders/src/main/java/com/example/OrderPublisher.java"

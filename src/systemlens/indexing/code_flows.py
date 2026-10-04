@@ -45,6 +45,7 @@ class CodeQLCallGraph:
     synthetic_calls: set[CodeQLCall]
     call_count: int
     locate: Callable[[str, str, int], tuple[IntegrationMethod, bool] | None]
+    persistable_method_ids: frozenset[str] = frozenset()
 
     @property
     def joined_calls(self) -> int:
@@ -63,7 +64,9 @@ class CodeQLCallGraph:
                     inferred=inferred,
                 )
                 for caller_id, targets in self.adjacency.items()
+                if caller_id in self.persistable_method_ids
                 for callee, call, inferred in targets
+                if callee.id in self.persistable_method_ids
             ),
             key=lambda edge: (
                 edge.caller_id,
@@ -89,6 +92,7 @@ class CodeQLCallGraph:
             neighbours.setdefault(caller_id, set())
             for target, _call, _inferred in targets:
                 neighbours[caller_id].add(target.id)
+                neighbours.setdefault(target.id, set())
                 neighbours[target.id].add(caller_id)
 
         components: list[frozenset[str]] = []
@@ -489,6 +493,56 @@ def _build_codeql_call_graph(
         methods_by_path[normalized_path(item.path)].append(item)
         methods_by_name[normalized_method_name(item.qualified_method)].append(item)
 
+    def placeholder(name: str, path: str, line: int) -> IntegrationMethod:
+        """Represent a non-port CodeQL method only inside the transient graph."""
+        normalized_path = normalized_path_value(path)
+        module = next(
+            (item.module for item in methods if normalized_path_value(item.path) == normalized_path),
+            normalized_path.split("/", 1)[0] if "/" in normalized_path else "",
+        )
+        method_id = "codeql:" + hashlib.sha256(
+            f"{module}|{normalized_path}|{line}|{normalized_method_name(name)}".encode()
+        ).hexdigest()[:24]
+        return IntegrationMethod(
+            id=method_id,
+            module=module,
+            qualified_method=normalized_method_name(name),
+            path=normalized_path,
+            start_line=line,
+            end_line=line,
+            input_endpoint_ids=(),
+            output_endpoint_ids=(),
+        )
+
+    def normalized_path_value(path: str) -> str:
+        return path.replace("\\", "/").removeprefix("./")
+
+    transient_methods: dict[tuple[str, str, int], IntegrationMethod] = {}
+    known_source_paths = {
+        normalized_path_value(path) for path in source_paths
+    } | {normalized_path_value(method.path) for method in methods}
+    for call in calls:
+        for name, path, line in (
+            (call.caller, call.caller_path, call.caller_line),
+            (call.callee, call.callee_path, call.callee_line),
+        ):
+            if (
+                name.startswith("<anonymous")
+                or not path
+                or line <= 0
+                or normalized_path_value(path) not in known_source_paths
+            ):
+                continue
+            key = (normalized_method_name(name), normalized_path_value(path), line)
+            if not by_locator.get(key):
+                transient_methods.setdefault(key, placeholder(name, path, line))
+    for method in transient_methods.values():
+        by_locator[
+            (normalized_method_name(method.qualified_method), normalized_path_value(method.path), method.start_line)
+        ].append(method)
+        methods_by_path[normalized_path_value(method.path)].append(method)
+        methods_by_name[normalized_method_name(method.qualified_method)].append(method)
+
     def locate(
         name: str, path: str, line: int, *, allow_signature_fallback: bool = False,
     ) -> tuple[IntegrationMethod, bool] | None:
@@ -570,6 +624,7 @@ def _build_codeql_call_graph(
             synthetic_calls=synthetic_calls,
             call_count=len(persisted_edges),
             locate=lambda name, path, line: locate(name, path, line),
+            persistable_method_ids=frozenset(method.id for method in methods),
         )
 
     started_at = time.monotonic()
@@ -621,6 +676,7 @@ def _build_codeql_call_graph(
         synthetic_calls=synthetic_calls,
         call_count=len(calls),
         locate=lambda name, path, line: locate(name, path, line),
+        persistable_method_ids=frozenset(method.id for method in methods),
     )
 
 

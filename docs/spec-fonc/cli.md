@@ -51,8 +51,9 @@ this explains why the search stopped without hiding the attempted node.
 Use `systemlens analyze call-edge CALLER CALLEE` when one expected Java call
 is missing from a flow or graph view. The command reads the method inventory,
 the persisted CodeQL graph, the flow snapshot status, and the configured edge
-confidence recorded by the index. It does not parse source files or run
-CodeQL. Text and JSON output report AST and CodeQL presence for both selected
+confidence recorded by the index. It does not run CodeQL. For an interface
+selector, it also uses the indexed source symbols to match a persisted edge
+whose target is a compatible concrete implementation. Text and JSON output report AST and CodeQL presence for both selected
 nodes and their directed edge. Presence is `present`, `absent`, or `unknown`.
 An absent AST method is provable; missing raw CodeQL or AST-call evidence stays
 `unknown`. JSON output also includes the proof basis for each presence value,
@@ -60,6 +61,12 @@ the matched method facts, persisted edge evidence, flow IDs, and the pipeline
 stage associated with the verdict. An AST node is proved by its persisted
 integration-method fact; a CodeQL node or edge is proved only by a persisted
 non-inferred CodeQL call edge.
+
+Pass `--codeql-database DIR` to query node presence directly from an existing
+CodeQL database during the diagnostic. Query outputs are temporary and are not
+copied into the SystemLens index. This option requires the database to match
+the indexed source paths and revision; without it, node presence falls back to
+the persisted snapshot.
 
 `systemlens index` reports its file delta, AST analysis stage, persisted endpoint
 count and materialized relations. AST extraction receives all changed files in

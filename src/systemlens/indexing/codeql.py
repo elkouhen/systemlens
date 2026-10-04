@@ -33,6 +33,15 @@ class CodeQLCall:
 
 
 @dataclass(frozen=True)
+class CodeQLMethod:
+    """One source-backed Java method returned directly by CodeQL."""
+
+    qualified_method: str
+    path: str
+    start_line: int
+
+
+@dataclass(frozen=True)
 class CodeQLReachability:
     """A direct CodeQL answer for one indexed input/output method pair."""
 
@@ -148,6 +157,15 @@ select enclosing.getQualifiedName() as caller,
   invoked.getLocation().getStartLine() as callee_line,
   call.getLocation().getStartLine() as call_line,
   dispatch_confidence
+"""
+
+_METHODS_QUERY = """import java
+
+from Method method
+where method.fromSource()
+select method.getQualifiedName() as qualified_method,
+  method.getFile().getRelativePath() as path,
+  method.getLocation().getStartLine() as start_line
 """
 
 _KAFKA_MESSAGE_TYPES_QUERY = """import java
@@ -667,6 +685,72 @@ def extract_codeql_calls(
         except OSError as exc:
             raise CodeQLError("CodeQL did not produce a CSV call graph.") from exc
     return _parse_codeql_calls(rows, path_prefix)
+
+
+def extract_codeql_methods(
+    database: Path,
+    executable: str | None = None,
+    timeout_seconds: int = 600,
+    path_prefix: str = "",
+    threads: int = 1,
+    ram_mb: int | None = None,
+    verbosity: str | None = None,
+    progress: Callable[[str], None] | None = None,
+) -> list[CodeQLMethod]:
+    """Return source-backed Java methods queried directly from CodeQL."""
+    if not database.is_dir():
+        raise CodeQLError(f"CodeQL database not found: {database}")
+    executable = executable or codeql_executable()
+    if executable is None:
+        raise CodeQLError("CodeQL executable not found.")
+    with tempfile.TemporaryDirectory(prefix="systemlens-codeql-methods-") as directory:
+        work = Path(directory)
+        query = work / "methods.ql"
+        query.write_text(_METHODS_QUERY, encoding="utf-8")
+        (work / "qlpack.yml").write_text(_QLPACK, encoding="utf-8")
+        bqrs = work / "methods.bqrs"
+        output = work / "methods.csv"
+        command = [
+            executable, "query", "run", str(query), f"--database={database}",
+            f"--output={bqrs}", f"--threads={threads}",
+        ]
+        if verbosity is not None:
+            command.append(f"--verbosity={verbosity}")
+        if ram_mb is not None:
+            command.append(f"--ram={ram_mb}")
+        user_packs = Path.home() / ".codeql" / "packages"
+        if user_packs.is_dir():
+            command.append(f"--additional-packs={user_packs}")
+        completed = _run_with_progress(
+            command, timeout=timeout_seconds, progress=progress,
+        )
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout).strip()
+            raise CodeQLError(f"CodeQL method query failed: {detail}")
+        decoded = _decode_bqrs(executable, bqrs, output, timeout=timeout_seconds)
+        if decoded.returncode != 0:
+            detail = (decoded.stderr or decoded.stdout).strip()
+            raise CodeQLError(f"CodeQL method query decoding failed: {detail}")
+        try:
+            with output.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+        except OSError as exc:
+            raise CodeQLError("CodeQL did not produce a CSV method inventory.") from exc
+    normalized_prefix = path_prefix.strip("/")
+    methods: list[CodeQLMethod] = []
+    for row in rows:
+        try:
+            path = row["path"]
+            if normalized_prefix and path:
+                path = f"{normalized_prefix}/{path.lstrip('/')}"
+            methods.append(CodeQLMethod(
+                qualified_method=row["qualified_method"],
+                path=path,
+                start_line=int(row["start_line"]),
+            ))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise CodeQLError("CodeQL returned an unexpected method schema.") from exc
+    return methods
 
 
 def _parse_codeql_calls(rows: Iterable[Mapping[str, str]], path_prefix: str) -> list[CodeQLCall]:

@@ -89,9 +89,11 @@ CodeQL additionally answers transitive reachability by starting at indexed
 output methods and walking callers until indexed input methods are reached;
 these direct answers are used when the Python-side traversal cannot reconstruct
 the intermediate calls. The configured timeout remains the operational guard.
-Only source-located CodeQL call pairs are materialized. CodeQL's own possible
-virtual-dispatch rows remain visible as low-confidence potential flows; the
-Python materializer does not create additional targets.
+Only source-located CodeQL call pairs are materialized. The internal-flow join
+keeps source-located intermediate methods even when they have no IN or OUT
+integration port; ports only anchor the beginning and end of a flow. CodeQL's
+own possible virtual-dispatch rows remain visible as low-confidence potential
+flows; the Python materializer does not create additional targets.
 Calls are aggregated before the global flow join. `--codeql-database DIR`
 reuses an existing global CodeQL database instead.
 The temporary database and the supplied database path are never persisted. If

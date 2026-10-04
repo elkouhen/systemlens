@@ -190,6 +190,51 @@ def test_call_edge_reports_a_possible_edge_filtered_by_exact_mode(
     assert "--codeql-edge-confidence possible" in str(payload["recommended_action"])
 
 
+def test_call_edge_matches_interface_query_to_concrete_dispatch_target(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "orders").mkdir()
+    (tmp_path / "orders/OrderService.java").write_text(
+        "package orders;\npublic interface OrderService {\n"
+        "  void reserve(String value);\n}\n"
+    )
+    (tmp_path / "orders/OrderServiceImpl.java").write_text(
+        "package orders;\npublic class OrderServiceImpl implements OrderService {\n"
+        "  public void reserve(String value) {}\n}\n"
+    )
+    caller = _method("caller", "orders.OrderController.entry")
+    interface_method = IntegrationMethod(
+        "interface", "orders", "orders.OrderService.reserve",
+        "orders/OrderService.java", 3, 3, (), (),
+    )
+    implementation = IntegrationMethod(
+        "implementation", "orders", "orders.OrderServiceImpl.reserve",
+        "orders/OrderServiceImpl.java", 3, 3, (), (),
+    )
+    edge = CodeQLCallGraphEdge(
+        "caller", "implementation", "orders/OrderController.java", 12, "possible",
+    )
+    _given_persisted_snapshot(
+        tmp_path, [caller, interface_method, implementation], edges=[edge],
+    )
+
+    exit_code, payload = _invoke_json(
+        tmp_path, "OrderController.entry", "OrderService.reserve",
+    )
+
+    assert exit_code == 0
+    assert payload["presence"]["callee_node"]["codeql"] == "present"
+    assert payload["presence"]["edge"]["codeql"] == "present"
+    assert payload["edges"] == [{
+        "caller_id": "caller",
+        "callee_id": "implementation",
+        "path": "orders/OrderController.java",
+        "line": 12,
+        "dispatch_confidence": "possible",
+        "inferred": False,
+    }]
+
+
 def test_call_edge_text_output_shows_an_edge_used_by_a_flow(tmp_path: Path) -> None:
     # Given an exact edge already used by a persisted IN-to-OUT flow.
     caller = _method("caller", "orders.Controller.create", inputs=("in",))

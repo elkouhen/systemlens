@@ -275,6 +275,33 @@ def test_extract_codeql_calls_uses_pinned_local_pack_without_installing(
     assert "--ram=4096" in commands[0][0]
 
 
+def test_extract_codeql_methods_reads_source_nodes_directly(
+    tmp_path: Path, monkeypatch
+) -> None:
+    database = tmp_path / "database"
+    database.mkdir()
+
+    def run(command: list[str], **_kwargs: object) -> CompletedProcess[str]:
+        if command[1:3] == ["bqrs", "decode"]:
+            output = next(part.removeprefix("--output=") for part in command if part.startswith("--output="))
+            Path(output).write_text(
+                "qualified_method,path,start_line\n"
+                "com.example.Service.reserve,Service.java,7\n",
+                encoding="utf-8",
+            )
+        return CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(codeql, "_run_with_progress", run)
+
+    methods = codeql.extract_codeql_methods(
+        database, executable="custom-codeql", timeout_seconds=42, threads=4,
+    )
+
+    assert methods == [codeql.CodeQLMethod(
+        "com.example.Service.reserve", "Service.java", 7,
+    )]
+
+
 def test_extract_codeql_kafka_message_types_reads_strategy1_payload_type(
     tmp_path: Path, monkeypatch
 ) -> None:

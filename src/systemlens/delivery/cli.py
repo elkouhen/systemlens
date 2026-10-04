@@ -64,6 +64,7 @@ from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.indexing.service import CallGraphProgress, index_repo
 from systemlens.indexing.code_flows import materialize_codeql_code_flows
+from systemlens.indexing.codeql import extract_codeql_methods
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.models import ExtractionDiagnostic
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
@@ -1117,6 +1118,10 @@ def analyze_call_edge(
     root: Path | None = typer.Option(
         None, "--root", help="Répertoire indexé à analyser."
     ),
+    codeql_database: Path | None = typer.Option(
+        None, "--codeql-database",
+        help="Base CodeQL à interroger directement pour la présence des nœuds.",
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Localiser la perte d'une arête attendue dans le pipeline d'indexation."""
@@ -1131,8 +1136,13 @@ def analyze_call_edge(
                 "code_flow_snapshot_status",
             )
         }
+    direct_codeql_methods = (
+        extract_codeql_methods(codeql_database)
+        if codeql_database is not None else None
+    )
     result = diagnose_call_edge(
         inventory, caller, callee, snapshot_metadata=metadata,
+        codeql_methods=direct_codeql_methods,
     )
     typer.echo(
         json.dumps(result)
