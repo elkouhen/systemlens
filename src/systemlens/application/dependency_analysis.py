@@ -35,6 +35,7 @@ class DependencyNode(TypedDict):
     technology: NotRequired[str]
     metadata: NotRequired[dict[str, object]]
     status: NotRequired[str]
+    module: NotRequired[str]
 
 
 class DependencyEdge(TypedDict):
@@ -46,6 +47,7 @@ class DependencyEdge(TypedDict):
     technology: NotRequired[str]
     metadata: NotRequired[dict[str, object]]
     status: NotRequired[str]
+    module: NotRequired[str]
 
 
 class DependencyGraphResult(TypedDict):

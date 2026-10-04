@@ -50,6 +50,15 @@ def _validate_namespace(namespace: str) -> str:
     return value
 
 
+def _validate_module(module: str | None) -> str | None:
+    if module is None:
+        return None
+    value = module.strip()
+    if not value or any(char.isspace() for char in value):
+        raise ValueError("module doit être une chaîne non vide sans espace.")
+    return value
+
+
 def _fact_id(*values: str | None) -> str:
     return hashlib.sha256("|".join(value or "" for value in values).encode()).hexdigest()[:16]
 
@@ -62,7 +71,7 @@ def _make_fact(
     evidence_path: str | None = None, evidence_line: int | None = None,
     note: str | None = None, technology: str | None = None,
     metadata: dict[str, object] | None = None,
-    namespace: str = "manual", status: str = "confirmed",
+    namespace: str = "manual", status: str = "confirmed", module: str | None = None,
 ) -> GraphFact:
     if fact_type not in _FACT_TYPES:
         raise ValueError("fact_type doit être 'node' ou 'edge'.")
@@ -81,8 +90,9 @@ def _make_fact(
     if evidence_line is not None and evidence_line < 1:
         raise ValueError("evidence_line doit être supérieur ou égal à 1.")
     resolved_namespace = _validate_namespace(namespace)
+    resolved_module = _validate_module(module)
     fact_id = _fact_id(resolved_namespace, fact_type, kind, name, source_kind, source_name,
-                       target_kind, target_name, relation)
+                       target_kind, target_name, relation, resolved_module)
     return GraphFact(
         id=fact_id, fact_type=fact_type, kind=kind.strip(), name=name,
         source_kind=source_kind, source_name=source_name,
@@ -90,6 +100,7 @@ def _make_fact(
         origin="mcp", confidence=confidence, evidence_path=_validate_path(evidence_path),
         evidence_line=evidence_line, note=note, technology=technology,
         metadata=metadata or {}, namespace=resolved_namespace, status=status,
+        module=resolved_module,
     )
 
 
@@ -118,13 +129,13 @@ def graph_fact_exists(
     fact_type: str, kind: str, name: str | None = None,
     source_kind: str | None = None, source_name: str | None = None,
     target_kind: str | None = None, target_name: str | None = None,
-    relation: str | None = None, namespace: str = "manual",
+    relation: str | None = None, namespace: str = "manual", module: str | None = None,
 ) -> dict[str, object]:
     """Check whether the same semantic enrichment fact is already present."""
     repo_root = _repo_root()
     _require_index(repo_root)
     fact = _make_fact(fact_type, kind, name, source_kind, source_name,
-                      target_kind, target_name, relation, namespace=namespace)
+                      target_kind, target_name, relation, namespace=namespace, module=module)
     with Store(repo_root, readonly=True) as store:
         existing = store.graph_fact_by_id(fact.id)
     return {"exists": existing is not None, "id": fact.id,
@@ -140,7 +151,7 @@ def add_graph_fact(
     evidence_path: str | None = None, evidence_line: int | None = None,
     note: str | None = None, technology: str | None = None,
     metadata: dict[str, object] | None = None,
-    namespace: str = "manual", status: str = "confirmed",
+    namespace: str = "manual", status: str = "confirmed", module: str | None = None,
 ) -> dict[str, object]:
     """Add one assertion; reject an existing semantic duplicate."""
     repo_root = _repo_root()
@@ -148,7 +159,7 @@ def add_graph_fact(
     fact = _make_fact(fact_type, kind, name, source_kind, source_name,
                       target_kind, target_name, relation, confidence,
                       evidence_path, evidence_line, note, technology, metadata,
-                      namespace, status)
+                      namespace, status, module)
     with Store(repo_root) as store:
         if not store.insert_graph_fact(fact):
             raise ValueError(
@@ -237,6 +248,8 @@ def architecture_graph() -> DependencyGraphResult:
                     node["technology"] = fact.technology
                 if fact.metadata:
                     node["metadata"] = fact.metadata
+                if fact.module:
+                    node["module"] = fact.module
                 result["nodes"].append(node)
                 node_keys.add((fact.kind, fact.name))
     known_node_ids = {str(node["id"]) for node in result["nodes"]}
@@ -272,6 +285,8 @@ def architecture_graph() -> DependencyGraphResult:
                 edge["technology"] = fact.technology
             if fact.metadata:
                 edge["metadata"] = fact.metadata
+            if fact.module:
+                edge["module"] = fact.module
             result["edges"].append(edge)
             known_edges.add(edge_key)
     result["summary"]["relations"] = len(result["edges"])

@@ -62,6 +62,8 @@ def graph_facts_manifest(
             node["reason"] = fact.note
         if fact.technology is not None:
             node["technology"] = fact.technology
+        if fact.module is not None:
+            node["module"] = fact.module
         nodes.append(node)
 
     synthetic_nodes: dict[tuple[str, str], str] = {}
@@ -95,6 +97,8 @@ def graph_facts_manifest(
             edge["reason"] = fact.note
         if fact.technology is not None:
             edge["technology"] = fact.technology
+        if fact.module is not None:
+            edge["module"] = fact.module
         edges.append(edge)
 
     for (kind, name), node_id in synthetic_nodes.items():
@@ -119,6 +123,12 @@ def _required_string(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise AiGraphError(f"{field} doit être une chaîne non vide.")
     return value.strip()
+
+
+def _optional_module(value: Any, field: str) -> str | None:
+    if value is None:
+        return None
+    return _required_string(value, field)
 
 
 def _evidence(value: Any, field: str) -> list[dict[str, Any]]:
@@ -192,6 +202,7 @@ def load_fact_manifest(
         raw_id = _required_string(raw.get("id"), f"nodes[{index}].id")
         kind = _required_string(raw.get("kind"), f"nodes[{index}].kind")
         name = _required_string(raw.get("name"), f"nodes[{index}].name")
+        module = _optional_module(raw.get("module"), f"nodes[{index}].module")
         if raw_id in raw_ids:
             raise AiGraphError(f"identifiant de nœud dupliqué: {raw_id}")
         nodes[raw_id] = raw
@@ -223,6 +234,7 @@ def load_fact_manifest(
             note=raw.get("reason") if isinstance(raw.get("reason"), str) else None,
             technology=raw.get("technology") if isinstance(raw.get("technology"), str) else None,
             metadata=metadata, namespace=resolved_namespace, status=status,
+            module=module,
             pass_id=raw.get("pass", resolved_pass),
             source_revision=raw.get("source_revision", resolved_revision),
         ))
@@ -234,6 +246,7 @@ def load_fact_manifest(
         source_id = _required_string(raw.get("source"), f"edges[{index}].source")
         target_id = _required_string(raw.get("target"), f"edges[{index}].target")
         kind = _required_string(raw.get("kind"), f"edges[{index}].kind")
+        module = _optional_module(raw.get("module"), f"edges[{index}].module")
         if raw_id in raw_ids:
             raise AiGraphError(f"identifiant de fait dupliqué: {raw_id}")
         if source_id not in nodes or target_id not in nodes:
@@ -272,6 +285,7 @@ def load_fact_manifest(
             note=raw.get("reason") if isinstance(raw.get("reason"), str) else None,
             technology=raw.get("technology") if isinstance(raw.get("technology"), str) else None,
             metadata=metadata, namespace=resolved_namespace, status=status,
+            module=module,
             pass_id=raw.get("pass", resolved_pass),
             source_revision=raw.get("source_revision", resolved_revision),
         ))

@@ -51,7 +51,7 @@ serialization path.
 `GraphFact` is the separate enrichment layer for facts supplied by a user, or
 by an agent operating through the companion SystemLens skill, via MCP. It
 supports typed nodes and edges, origin, namespace, status, confidence,
-pass/revision metadata, optional relative evidence and a note. The
+module, pass/revision metadata, optional relative evidence and a note. The
 `graph_facts` table is not cleared by indexing. `import_graph_facts` validates
 and upserts a manifest by `(namespace, fact_type, manifest_id)`; complete
 snapshots can remove stale facts only inside their namespace. Source-derived

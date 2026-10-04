@@ -47,10 +47,10 @@ def test_load_fact_manifest_preserves_top_level_event_channel_in_metadata(tmp_pa
     path = tmp_path / "facts.json"
     path.write_text(json.dumps({
         "format": "systemlens-ai-graph-v1",
-        "generated_by": {"namespace": "ai-messaging"},
+            "generated_by": {"namespace": "ai-messaging"},
         "mode": "complete",
         "nodes": [
-            {"id": "orders", "kind": "service", "name": "orders"},
+            {"id": "orders", "kind": "service", "name": "orders", "module": "orders-api"},
             {"id": "billing", "kind": "service", "name": "billing"},
         ],
         "edges": [{
@@ -60,6 +60,7 @@ def test_load_fact_manifest_preserves_top_level_event_channel_in_metadata(tmp_pa
             "kind": "event",
             "channel": "orders.created",
             "confidence": "high",
+            "module": "orders-api",
         }],
     }), encoding="utf-8")
 
@@ -67,6 +68,8 @@ def test_load_fact_manifest_preserves_top_level_event_channel_in_metadata(tmp_pa
 
     edge = next(fact for fact in facts if fact.fact_type == "edge")
     assert edge.metadata == {"channel": "orders.created"}
+    assert edge.module == "orders-api"
+    assert next(fact for fact in facts if fact.fact_type == "node").module == "orders-api"
 
 
 def test_load_fact_manifest_rejects_duplicate_storage_ids(tmp_path):

@@ -516,6 +516,8 @@ class Store:
             self.conn.execute("ALTER TABLE graph_facts ADD COLUMN pass_id TEXT")
         if "source_revision" not in cols:
             self.conn.execute("ALTER TABLE graph_facts ADD COLUMN source_revision TEXT")
+        if "module" not in cols:
+            self.conn.execute("ALTER TABLE graph_facts ADD COLUMN module TEXT")
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_facts_namespace ON graph_facts(namespace)")
 
     def _migrate_code_flow_columns(self) -> None:
@@ -944,8 +946,8 @@ class Store:
             (id, fact_type, kind, name, source_kind, source_name, target_kind,
             target_name, relation, origin, confidence, evidence_path,
              evidence_line, note, technology, metadata, namespace, status,
-             pass_id, source_revision)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             module, pass_id, source_revision)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET fact_type=excluded.fact_type,
             kind=excluded.kind, name=excluded.name, source_kind=excluded.source_kind,
             source_name=excluded.source_name, target_kind=excluded.target_kind,
@@ -954,12 +956,13 @@ class Store:
             evidence_path=excluded.evidence_path, evidence_line=excluded.evidence_line,
             note=excluded.note, technology=excluded.technology, metadata=excluded.metadata,
             namespace=excluded.namespace, status=excluded.status,
+            module=excluded.module,
             pass_id=excluded.pass_id, source_revision=excluded.source_revision""",
             (fact.id, fact.fact_type, fact.kind, fact.name, fact.source_kind,
              fact.source_name, fact.target_kind, fact.target_name, fact.relation,
              fact.origin, fact.confidence, fact.evidence_path, fact.evidence_line,
              fact.note, fact.technology, json.dumps(fact.metadata or {}), fact.namespace,
-             fact.status, fact.pass_id, fact.source_revision),
+             fact.status, fact.module, fact.pass_id, fact.source_revision),
         )
 
     def insert_graph_fact(self, fact: GraphFact) -> bool:
@@ -969,12 +972,14 @@ class Store:
             """INSERT OR IGNORE INTO graph_facts
             (id, fact_type, kind, name, source_kind, source_name, target_kind,
              target_name, relation, origin, confidence, evidence_path,
-             evidence_line, note, technology, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+             evidence_line, note, technology, metadata, namespace, status,
+             module, pass_id, source_revision)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (fact.id, fact.fact_type, fact.kind, fact.name, fact.source_kind,
              fact.source_name, fact.target_kind, fact.target_name, fact.relation,
              fact.origin, fact.confidence, fact.evidence_path, fact.evidence_line,
-             fact.note, fact.technology, json.dumps(fact.metadata or {})),
+             fact.note, fact.technology, json.dumps(fact.metadata or {}), fact.namespace,
+             fact.status, fact.module, fact.pass_id, fact.source_revision),
         )
         return self.conn.total_changes > before
 

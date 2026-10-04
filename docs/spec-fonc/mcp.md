@@ -20,9 +20,10 @@ Only `index_repository` creates or refreshes source-derived facts. Enrichment
 facts are stored separately in `graph_facts`, survive reindexing, and are never
 treated as source evidence.
 
-Nodes require `fact_type=node`, `kind` and `name`;
-edges require source/target kinds and names plus `relation`. Evidence paths are
-relative to the indexed repository and may not escape it.
+Nodes require `fact_type=node`, `kind` and `name`; edges require source/target
+kinds and names plus `relation`. Both fact types accept an optional `module`
+field for the owning build module. Evidence paths are relative to the indexed
+repository and may not escape it.
 
 `add_graph_fact` remains an additive single-fact API and rejects duplicates.
 For iterative analysis, use `import_graph_facts`: it reconciles by the
@@ -36,4 +37,3 @@ updated and removed counts.
 For generic middleware, use `kind=data_schema` or `kind=message_channel`, set
 `technology` to the concrete implementation, and put provider-specific facts
 such as database/schema/table, exchange/queue or partition in `metadata`.
-

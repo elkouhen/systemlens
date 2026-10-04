@@ -200,6 +200,7 @@ class GraphFact:
     metadata: dict[str, object] | None = None
     namespace: str = "manual"
     status: str = "confirmed"
+    module: str | None = None
     pass_id: str | None = None
     source_revision: str | None = None
 
@@ -235,6 +236,7 @@ def merge_graph_facts(existing: GraphFact, incoming: GraphFact) -> GraphFact:
         evidence_line=stronger.evidence_line or weaker.evidence_line,
         note=stronger.note or weaker.note,
         technology=stronger.technology or weaker.technology,
+        module=stronger.module or weaker.module,
         pass_id=stronger.pass_id or weaker.pass_id,
         source_revision=stronger.source_revision or weaker.source_revision,
         metadata=metadata,

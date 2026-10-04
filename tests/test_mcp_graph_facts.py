@@ -30,15 +30,18 @@ def test_mcp_indexes_then_adds_and_removes_graph_facts(tmp_path: Path, monkeypat
     node = add_graph_fact(
         "node", "data_schema", name="fraud_events", confidence="low",
         technology="sql", metadata={"database": "risk", "table": "fraud_events"},
+        module="orders-api",
     )
-    assert graph_fact_exists("node", "data_schema", name="fraud_events")["exists"]
+    assert graph_fact_exists("node", "data_schema", name="fraud_events", module="orders-api")["exists"]
+    assert node["module"] == "orders-api"
     with pytest.raises(ValueError, match="existe déjà"):
-        add_graph_fact("node", "data_schema", name="fraud_events")
+        add_graph_fact("node", "data_schema", name="fraud_events", module="orders-api")
     edge = add_graph_fact(
         "edge", "http", source_kind="microservice", source_name="app",
         target_kind="data_schema", target_name="fraud_events", relation="writes",
         technology="sql",
         evidence_path="README.md", evidence_line=1,
+        module="orders-api",
     )
     assert {fact["id"] for fact in list_graph_facts()} == {node["id"], edge["id"]}
     graph = architecture_graph()
