@@ -25,10 +25,14 @@ from systemlens.scanner.kafka_ast import (
     _declared_identifier_payload_type,
     _method_param_payload_type,
 )
+from systemlens.scanner._spring_properties import (
+    resolve_spring_property,
+    resolve_strategy1_kafka_topic,
+)
 
 _STRATEGY1_PRODUCER_RE = re.compile(r"\bgetTopics\s*\(\s*\)\s*\.\s*get([A-Z]\w*)\s*\(\s*\)")
 _STRATEGY1_KAFKA_KEY_RE = re.compile(
-    r"\$\{\s*kafka\.topics\.([A-Za-z_]\w*)\.[^}:]+(?:\s*:[^}]*)?\s*\}"
+    r"\$\{\s*((?:[A-Za-z_]\w*\.)*(?:kafka\.)?topics\.[A-Za-z_]\w*(?:\.[^}:]+)?)(?:\s*:[^}]*)?\s*\}"
 )
 _STRATEGY1_SEND_METHOD_PREFIX = "envoyerMessageKafka"
 def _strategy1_topic_name(value: str) -> str:
@@ -46,7 +50,9 @@ def _strategy1_topic_from_value(
     if value_node is not None:
         value = java_parser.node_text(source, value_node)
         if match := _STRATEGY1_PRODUCER_RE.search(value):
-            return _strategy1_topic_name(match.group(1)), False, match.group(1)
+            logical_key = match.group(1)
+            resolved = resolve_strategy1_kafka_topic(repo_root, logical_key, rel_path)
+            return resolved or _strategy1_topic_name(logical_key), False, resolved or logical_key
     topic, dynamic = _kafka_topic_from_value(value_node, source, repo_root, rel_path)
     if dynamic and value_node is not None:
         expression = java_parser.node_text(source, value_node)
@@ -194,6 +200,16 @@ def infer_kafka_topic_strategy1_endpoints(
         for offset, annotation in _kafka_listener_annotation_blocks(source):
             line_no = source.count("\n", 0, offset) + 1
             for key_match in _STRATEGY1_KAFKA_KEY_RE.finditer(annotation):
+                property_key = key_match.group(1)
+                property_parts = property_key.split(".")
+                logical_key = (
+                    property_parts[-2]
+                    if property_parts[-1].casefold() == "nom" and len(property_parts) > 1
+                    else property_parts[-1]
+                )
+                resolved = resolve_spring_property(repo_root, property_key, rel_path)
+                if resolved is None:
+                    resolved = resolve_strategy1_kafka_topic(repo_root, logical_key, rel_path)
                 endpoint = _build_endpoint(
                     repo_root,
                     rel_path,
@@ -201,11 +217,11 @@ def infer_kafka_topic_strategy1_endpoints(
                     line_no + annotation.count("\n"),
                     "consume",
                     "kafka",
-                    _strategy1_topic_name(key_match.group(1)),
+                    resolved or _strategy1_topic_name(logical_key),
                     "kafka-topic-strategy1",
                     annotation,
                 )
-                endpoint = replace(endpoint, topic_display=key_match.group(1))
+                endpoint = replace(endpoint, topic_display=resolved or logical_key)
                 endpoints[endpoint.id] = endpoint
         for node in strategy_send_nodes:
             _object_node, method_name, args = java_parser.invocation_parts(node, source_bytes)
@@ -239,7 +255,11 @@ def apply_kafka_topic_strategy1(
     normalized_strategy_endpoints = [
         replace(
             endpoint,
-            topic=_strategy1_topic_name(endpoint.topic),
+            topic=(
+                endpoint.topic
+                if "." in endpoint.topic
+                else _strategy1_topic_name(endpoint.topic)
+            ),
             topic_display=endpoint.topic_display or endpoint.topic,
         )
         if endpoint.system == "kafka" and not endpoint.topic_dynamic

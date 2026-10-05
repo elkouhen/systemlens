@@ -11,12 +11,15 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+import re
 
 import yaml
 
 from systemlens.discovery.java import parser as java_parser
 
 _SPRING_BASE_FILENAMES = (
+    "kafka.yml",
+    "kafka.yaml",
     "application.yml",
     "application.yaml",
     "application.properties",
@@ -176,6 +179,37 @@ def resolve_spring_property(
         if key in flat:
             return flat[key]
     return default or None
+
+
+def resolve_strategy1_kafka_topic(
+    repo_root: Path, logical_key: str, source_path: str | None = None
+) -> str | None:
+    """Resolve a Strategy1 logical topic key from a declared Kafka YAML value.
+
+    ``kafka.yml`` files expose a nested topic object whose ``nom`` leaf
+    contains the broker topic. Matching is limited to a unique topic-shaped key so an
+    unrelated YAML setting cannot become a Kafka endpoint by coincidence.
+    """
+    def normalize(value: str) -> str:
+        return re.sub(r"-+", "-", re.sub(r"[-_.\s]+", "-", value)).strip("-").casefold()
+
+    wanted = normalize(logical_key)
+    candidates: list[str] = []
+    for path_str in _discover_spring_property_files(str(repo_root), source_path):
+        path = Path(path_str)
+        if path.name.casefold() not in {"kafka.yml", "kafka.yaml"}:
+            continue
+        flat = _load_flat_spring_properties(path_str)
+        for property_key, value in flat.items():
+            parts = property_key.split(".")
+            if "topics" not in {part.casefold() for part in parts}:
+                continue
+            leaf = normalize(parts[-1])
+            parent = normalize(parts[-2]) if len(parts) > 1 else ""
+            if leaf == "nom" and parent == wanted:
+                candidates.append(value)
+    unique = list(dict.fromkeys(value for value in candidates if value.strip()))
+    return unique[0] if len(unique) == 1 else None
 
 
 @lru_cache(maxsize=512)

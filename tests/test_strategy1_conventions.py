@@ -76,3 +76,32 @@ record OrderCreated(String id) {}
 
     assert [endpoint.topic for endpoint in endpoints] == ["orders-created"]
     assert [endpoint.topic_display for endpoint in endpoints] == ["Orders_Created"]
+
+
+def test_strategy1_uses_declared_topic_name_from_kafka_yaml(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  OrdersCreated:\n    nom: commerce.orders.created\n",
+        encoding="utf-8",
+    )
+    source = tmp_path / "src/main/java/com/example/Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """import org.springframework.kafka.annotation.KafkaListener;
+class Publisher {
+  void publish(OrderCreated event) {
+    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getOrdersCreated(), event);
+  }
+  @KafkaListener(topics = "${kafka.topics.OrdersCreated.nom}")
+  void consume(OrderCreated event) {}
+}
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = apply_kafka_endpoints([], infer_kafka_endpoints(tmp_path))
+
+    assert sorted((endpoint.role, endpoint.topic) for endpoint in endpoints) == [
+        ("consume", "commerce.orders.created"),
+        ("produce", "commerce.orders.created"),
+    ]

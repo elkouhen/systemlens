@@ -8,6 +8,8 @@ changed files and purges facts for deleted files. A change to a Spring
 configuration file or Maven/Gradle build descriptor expands the refresh to its
 owning module when that boundary is known. Root-level or ambiguous inputs force a
 full refresh because they can affect otherwise unchanged Java source files.
+This includes `kafka.yml` and `kafka.yaml`, whose declared Strategy1 topic names
+can change the endpoint facts of unchanged Java sources.
 The endpoint extractor signature, analysis configuration signature and selected
 topic strategy always force a full refresh. Explicit manifests are included even
 when otherwise excluded.
