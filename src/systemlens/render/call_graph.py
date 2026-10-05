@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
+from typing import Iterator, cast
 
 import networkx as nx
 
@@ -586,24 +586,23 @@ def _all_export_flows(
     endpoints_by_service: dict[str, list[MessageEndpoint]],
     edges: list[GraphEdge],
     index: _CallGraphIndex | None = None,
-) -> list[tuple[CodeFlow, dict[str, object], int]]:
+) -> Iterator[tuple[CodeFlow, dict[str, object], int]]:
     """Build one HTML entry for every persisted flow.
 
     The CLI exposes persisted flows individually. The HTML picker follows the
     same contract; graph-arc deduplication remains inside each call graph.
     """
     index = index or _index_call_graph_inputs(flows, endpoints_by_service, edges)
-    return sorted(
-        [
-            (
-                flow,
-                _networkx_call_graph(
-                    flows, endpoints_by_service, edges,
-                    root_flow_ids={flow.id}, index=index,
-                ),
-                1,
-            )
-            for flow in flows
-        ],
-        key=lambda item: (item[0].module, item[0].path, item[0].start_line, item[0].id),
+    ordered_flows = sorted(
+        flows,
+        key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id),
     )
+    for flow in ordered_flows:
+        yield (
+            flow,
+            _networkx_call_graph(
+                flows, endpoints_by_service, edges,
+                root_flow_ids={flow.id}, index=index,
+            ),
+            1,
+        )

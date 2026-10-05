@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from base64 import b64encode
 from collections import Counter
 from pathlib import Path
@@ -125,18 +126,19 @@ def render_graph_html(
         return None
 
     call_graphs: dict[str, dict[str, object]] = {}
-    graph_ids_by_json: dict[str, str] = {}
-    export_flow_items: list[tuple[CodeFlow, dict[str, object], int, str]] = []
+    graph_ids_by_digest: dict[str, str] = {}
+    export_flow_items: list[tuple[CodeFlow, int, str]] = []
     for flow, call_graph, equivalent_count in _all_export_flows(
         export_flows, endpoints_by_service, edges, index=call_graph_index
     ):
         graph_json = json.dumps(call_graph, sort_keys=True, separators=(",", ":"))
-        call_graph_id = graph_ids_by_json.get(graph_json)
+        graph_digest = hashlib.sha256(graph_json.encode("utf-8")).hexdigest()
+        call_graph_id = graph_ids_by_digest.get(graph_digest)
         if call_graph_id is None:
             call_graph_id = f"call-graph-{len(call_graphs) + 1}"
-            graph_ids_by_json[graph_json] = call_graph_id
+            graph_ids_by_digest[graph_digest] = call_graph_id
             call_graphs[call_graph_id] = call_graph
-        export_flow_items.append((flow, call_graph, equivalent_count, call_graph_id))
+        export_flow_items.append((flow, equivalent_count, call_graph_id))
 
     serialized_code_flows = [
         {
@@ -174,7 +176,7 @@ def render_graph_html(
                 for step in flow.steps
             ],
         }
-        for flow, _call_graph, equivalent_count, call_graph_id in export_flow_items
+        for flow, equivalent_count, call_graph_id in export_flow_items
     ]
     view_model["code_flows"] = serialized_code_flows
     view_model["flow_descriptions"] = {
