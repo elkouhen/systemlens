@@ -320,6 +320,25 @@ def test_call_edges_lists_persisted_calls_independently_of_flows(
     assert payload["edges"][0]["callee"]["module"] == "billing"
 
 
+def test_methods_lists_isolated_indexed_methods_by_module(tmp_path: Path) -> None:
+    orders_method = _method("orders-method", "orders.Controller.create")
+    billing_method = IntegrationMethod(
+        "billing-method", "billing", "billing.Service.reserve",
+        "billing/Service.java", 10, 20, (), (),
+    )
+    _given_persisted_snapshot(tmp_path, [orders_method, billing_method])
+
+    result = RUNNER.invoke(
+        app,
+        ["analyze", "methods", "--module", "billing", "--root", str(tmp_path), "--json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["method_count"] == 1
+    assert payload["methods"][0]["id"] == "billing-method"
+
+
 def test_call_edge_text_output_shows_an_edge_used_by_a_flow(tmp_path: Path) -> None:
     # Given an exact edge already used by a persisted IN-to-OUT flow.
     caller = _method("caller", "orders.Controller.create", inputs=("in",))

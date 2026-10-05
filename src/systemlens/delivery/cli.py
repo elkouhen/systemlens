@@ -46,9 +46,11 @@ from systemlens.application.code_flows import (
 from systemlens.application.flow_calculation import calculate_persisted_flows
 from systemlens.application.call_edge_diagnostic import (
     diagnose_call_edge,
+    list_indexed_methods,
     list_call_edges,
     render_call_edge_diagnostic_text,
     render_call_edges_text,
+    render_indexed_methods_text,
 )
 from systemlens.application.flow_diagnostic import diagnose_flows, render_flow_diagnostic_text
 from systemlens.application.indexing_audit import audit_indexing
@@ -1172,6 +1174,25 @@ def analyze_call_edges(
         json.dumps(result)
         if _option_json(json_output)
         else render_call_edges_text(result)
+    )
+
+
+@analyze_app.command("methods")
+def analyze_methods(
+    module: str | None = typer.Option(
+        None, "--module", help="Filtre facultatif sur le module."
+    ),
+    root: Path | None = typer.Option(
+        None, "--root", help="Répertoire indexé à analyser."
+    ),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Lister toutes les méthodes Java persistées dans l'index."""
+    result = list_indexed_methods(load_architecture_inventory(_option_root(root)), module=module)
+    typer.echo(
+        json.dumps(result)
+        if _option_json(json_output)
+        else render_indexed_methods_text(result)
     )
 
 

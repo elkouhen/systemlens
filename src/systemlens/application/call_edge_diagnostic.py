@@ -593,3 +593,38 @@ def render_call_edges_text(result: Mapping[str, object]) -> str:
             f"confidence={item.get('dispatch_confidence')}{inferred})"
         )
     return "\n".join(lines)
+
+
+def list_indexed_methods(
+    inventory: ArchitectureInventory, *, module: str | None = None,
+) -> dict[str, object]:
+    """List every persisted Java method fact, including isolated methods."""
+    methods = [
+        method for method in inventory.integration_methods
+        if module is None or method.module == module
+    ]
+    methods.sort(key=lambda method: (method.module, method.path, method.start_line, method.id))
+    return {
+        "kind": "indexed_methods",
+        "module": module,
+        "method_count": len(methods),
+        "methods": [_method_fact(method) for method in methods],
+    }
+
+
+def render_indexed_methods_text(result: Mapping[str, object]) -> str:
+    """Render indexed Java methods for terminal inspection."""
+    module = result.get("module") or "tous les modules"
+    lines = [f"Méthodes indexées ({module}) : {result.get('method_count', 0)}"]
+    methods = result.get("methods", [])
+    if not isinstance(methods, list):
+        return "\n".join(lines)
+    for item in methods:
+        if not isinstance(item, Mapping):
+            continue
+        lines.append(
+            f"- {item.get('qualified_method', item.get('id', '?'))} "
+            f"[{item.get('module')}] ({item.get('path')}:{item.get('start_line')}-"
+            f"{item.get('end_line')})"
+        )
+    return "\n".join(lines)
