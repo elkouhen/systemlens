@@ -80,7 +80,7 @@ record OrderCreated(String id) {}
     )
 
     assert [(endpoint.topic, endpoint.framework) for endpoint in endpoints] == [
-        ("orderscreated", "kafka-topic-strategy1")
+        ("orders_created", "kafka-topic-strategy1")
     ]
 
 
@@ -557,9 +557,9 @@ record ReplyCreated(String replyId) {}
         (endpoint.role, endpoint.topic, endpoint.message_type, endpoint.framework)
         for endpoint in endpoints
     ) == [
-        ("produce", "orderscreated", "OrderCreated", "kafka-topic-strategy1"),
-        ("produce", "repliescreated", "ReplyCreated", "kafka-topic-strategy1"),
-        ("produce", "requestscreated", "RequestCreated", "kafka-topic-strategy1"),
+        ("produce", "orders_created", "OrderCreated", "kafka-topic-strategy1"),
+        ("produce", "replies_created", "ReplyCreated", "kafka-topic-strategy1"),
+        ("produce", "requests_created", "RequestCreated", "kafka-topic-strategy1"),
     ]
 
 
@@ -582,7 +582,7 @@ record OrderCreated(String id) {}
     )
 
     assert [(endpoint.topic, endpoint.message_type) for endpoint in endpoints] == [
-        ("orderscreated", "OrderCreated")
+        ("orders_created", "OrderCreated")
     ]
 
 
@@ -607,8 +607,8 @@ record OrderCreated(String id) {}
     )
 
     assert sorted(endpoint.topic for endpoint in endpoints) == [
-        "orderscreated",
-        "ordersretry",
+        "orders_created",
+        "orders_retry",
     ]
 
 
@@ -630,7 +630,7 @@ record OrderCreated(String id) {}
     endpoints = infer_kafka_topic_strategy1_endpoints(tmp_path, ["src/main/java/Publisher.java"])
 
     assert [(endpoint.topic, endpoint.topic_dynamic) for endpoint in endpoints] == [
-        ("conversionunitaire", False)
+        ("conversion_unitaire", False)
     ]
 
 

@@ -32,10 +32,11 @@ _STRATEGY1_KAFKA_KEY_RE = re.compile(
 )
 _STRATEGY1_SEND_METHOD_PREFIX = "envoyerMessageKafka"
 def _strategy1_topic_name(value: str) -> str:
-    """Normalize a Strategy1 topic key for case-insensitive matching."""
+    """Normalize a Strategy1 topic key to lowercase snake case."""
     separated = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", value)
     separated = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", separated)
-    return separated.replace("-", "_").replace("_", "").casefold()
+    separated = re.sub(r"[-.\s]+", "_", separated)
+    return re.sub(r"_+", "_", separated).strip("_").casefold()
 
 
 def _strategy1_topic_from_value(
@@ -122,9 +123,9 @@ def infer_kafka_topic_strategy1_endpoints(
     family call (`envoyerMessageKafka(topic, payload)`,
     `envoyerMessageKafkaRequest(...)`, `envoyerMessageKafkaReply(...)`, etc.).
     Listeners use a Spring key shaped as `kafka.topics.xxx.<property>`.
-    Accessor and property conventions are normalized to a case-folded Kafka
-    key with underscores removed. Topic dots and other physical separators
-    remain unchanged.
+    Accessor and property conventions are normalized to lowercase snake-case
+    Kafka keys. CamelCase boundaries, dots, hyphens and whitespace become
+    underscores, and repeated or edge underscores are collapsed or removed.
     """
     if files is None:
         candidate_files = [

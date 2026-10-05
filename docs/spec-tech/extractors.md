@@ -144,8 +144,8 @@ argument with two such accessors creates one
 producer fact for each statically resolved branch. Other values use the
 conservative topic resolver and receive the same normalization when they are
 concrete. Strategy1 normalization applies
-`casefold()` after removing underscores; dots and other physical separators
-remain unchanged. The second
+`casefold()` after converting word boundaries and physical separators to
+single underscores. The canonical key is lowercase snake case. The second
 argument is always used to derive the payload type from its method parameter,
 local variable declaration or enclosing class field, including calls with
 three arguments. This positional rule applies identically to

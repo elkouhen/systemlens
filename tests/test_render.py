@@ -493,14 +493,14 @@ def test_graph_keeps_unmatched_and_dynamic_kafka_evidence() -> None:
 def test_graph_displays_source_topic_label_without_changing_topic_identity() -> None:
     producer = replace(
         _kafka_endpoint("produce", "OrderCreated", "Publisher.java"),
-        topic="orderscreated",
+        topic="orders_created",
         topic_display="Orders_Created",
     )
 
     data = _html_graph_data(render_graph_html({"orders": [producer]}, []))
 
     topic = next(node for node in data["nodes"] if node["kind"] == "kafka_topic")
-    assert topic["id"] == "kafka_topic:orderscreated"
+    assert topic["id"] == "kafka_topic:orders_created"
     assert topic["name"] == "Orders_Created"
     assert data["nodes"]
 
