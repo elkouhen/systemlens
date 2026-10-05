@@ -140,12 +140,14 @@ With `--strategy strategy1`, every method whose name starts with
 `envoyerMessageKafka` is an additional producer convention, including
 `envoyerMessageKafkaRequest(topic, payload)` and
 `envoyerMessageKafkaReply(topic, payload)`. A first argument shaped as
-`kafkaProperties.getTopics().getXxx()` resolves to the normalized Strategy1
-topic key while retaining `Xxx` as its display label. A conditional first
+`kafkaProperties.getTopics().getXxx()` resolves through the applicable
+`kafka.yml` or `kafka.yaml` `topics.<key>.nom` declaration. When no Kafka YAML
+file exists, the extractor falls back to the normalized Strategy1 topic key.
+A conditional first
 argument with two such accessors creates one
 producer fact for each statically resolved branch. Other values use the
-conservative topic resolver and receive the same normalization when they are
-concrete. Strategy1 normalization applies
+conservative topic resolver and must match a declared Kafka YAML value when
+such a file exists. Unknown values remain dynamic. Strategy1 normalization applies
 `casefold()` after converting word boundaries and physical separators to
 single hyphens. The canonical key is lowercase kebab case. The second
 argument is always used to derive the payload type from its method parameter,
@@ -153,6 +155,10 @@ local variable declaration or enclosing class field, including calls with
 three arguments. This positional rule applies identically to
 `envoyerMessageKafka`, `envoyerMessageKafkaRequest` and
 `envoyerMessageKafkaReply`.
+
+The Strategy1 extractor builds the logical-key mapping once for each distinct
+set of applicable Kafka YAML files during one indexing pass. It reuses that
+mapping for all Java files in the same configuration scope.
 
 When CodeQL is available, it completes a missing Strategy1 producer type from
 the second argument, including local data-flow within the enclosing method.

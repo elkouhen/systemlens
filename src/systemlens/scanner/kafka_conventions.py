@@ -26,6 +26,7 @@ from systemlens.scanner.kafka_ast import (
     _method_param_payload_type,
 )
 from systemlens.scanner._spring_properties import (
+    _discover_spring_property_files,
     remove_strategy1_kafka_prefix,
     resolve_spring_property,
     resolve_strategy1_kafka_topic,
@@ -174,6 +175,7 @@ def infer_kafka_topic_strategy1_endpoints(
         candidate_files = sorted(path for path in files if path.endswith(".java"))
 
     endpoints: dict[str, MessageEndpoint] = {}
+    kafka_catalogs: dict[tuple[str, ...], dict[str, str] | None] = {}
     for rel_path in candidate_files:
         parsed = java_parser.parse_java(str(repo_root), rel_path)
         if parsed is None:
@@ -181,7 +183,14 @@ def infer_kafka_topic_strategy1_endpoints(
         source_bytes, root = parsed
         source = source_bytes.decode("utf-8", errors="replace")
         lines = source.splitlines()
-        kafka_catalog = strategy1_kafka_topics(repo_root, rel_path)
+        kafka_files = tuple(
+            path
+            for path in _discover_spring_property_files(str(repo_root), rel_path)
+            if Path(path).name.casefold() in {"kafka.yml", "kafka.yaml"}
+        )
+        if kafka_files not in kafka_catalogs:
+            kafka_catalogs[kafka_files] = strategy1_kafka_topics(repo_root, rel_path)
+        kafka_catalog = kafka_catalogs[kafka_files]
         strategy_send_nodes = []
         for candidate in java_parser.walk(root):
             if candidate.type != "method_invocation":
