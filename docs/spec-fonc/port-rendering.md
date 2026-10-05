@@ -25,7 +25,8 @@ partial topic relation when it can be represented without pairing it to
 another service. A dynamic topic with the same display label as a concrete
 topic reuses that topic node. Other identical dynamic labels within one
 microservice may share one unresolved topic node, but each endpoint relation
-remains visible. Hovering a port displays its identifier, direction,
+remains visible. The topic uses the same visual label as a concrete topic.
+Hovering a port displays its identifier, direction,
 protocol endpoint, statically inferred Java parameter/message type when known,
 source-relative evidence path and line, associated Java method and, for a resolved REST call, its
 resolved target; an external caller is never presented as an input's output.

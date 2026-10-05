@@ -768,22 +768,24 @@ def build_graph_view_model(
             for key, node in concrete_topic_nodes.items()
             if sum(_topic_display_key(topic_name(name)) == key for name in kafka_topics) == 1
         }
-    # Group identical unresolved labels within one service to keep the graph
-    # readable. The expression remains part of the key, and every endpoint
-    # keeps its own link and evidence, so grouping does not assert a topic
-    # identity or create a producer/consumer pairing.
+    # Group identical unresolved labels across services to keep topic resources
+    # visually consistent with concrete topics. The expression remains part of
+    # the key, and every endpoint keeps its own link and evidence, so grouping
+    # does not assert a topic identity or create a producer/consumer pairing.
     dynamic_kafka_nodes: dict[str, str] = {}
-    dynamic_kafka_groups: dict[tuple[str, str, str], list[MessageEndpoint]] = {}
+    dynamic_kafka_groups: dict[tuple[str, str], list[tuple[str, MessageEndpoint]]] = {}
     for service, endpoints in endpoints_by_service.items():
         for endpoint in endpoints:
             if endpoint.system == "kafka" and endpoint.topic_dynamic:
                 dynamic_kafka_groups.setdefault(
-                    (service, topic_display(endpoint), endpoint.topic), []
-                ).append(endpoint)
-    for (service, display_name, expression), grouped_endpoints in sorted(
+                    (topic_display(endpoint), endpoint.topic), []
+                ).append((service, endpoint))
+    for (display_name, expression), grouped_items in sorted(
         dynamic_kafka_groups.items(),
-        key=lambda item: (item[0][0], item[0][1], item[0][2]),
+        key=lambda item: (item[0][0], item[0][1]),
     ):
+        grouped_items.sort(key=lambda item: (item[0], item[1].path, item[1].start_line, item[1].id))
+        grouped_endpoints = [endpoint for _service, endpoint in grouped_items]
         grouped_endpoints.sort(key=lambda endpoint: (endpoint.path, endpoint.start_line, endpoint.id))
         static_node = concrete_topic_nodes.get(_topic_display_key(display_name))
         node_id = (
@@ -802,8 +804,8 @@ def build_graph_view_model(
         nodes.append({
             "id": node_id,
             "kind": "kafka_topic",
-            "name": f"Topic dynamique · {service}",
-            "label": f"? {display_name} · {service}",
+            "name": display_name,
+            "label": display_name,
             "topic_expression": expression,
             "endpoint_ids": [endpoint.id for endpoint in grouped_endpoints],
             "unresolved": True,

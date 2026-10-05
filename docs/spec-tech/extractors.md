@@ -91,7 +91,7 @@ message types are unknown. The arc has medium confidence when type evidence is
 missing. Two known and different types remain incompatible and do not create an
 arc. An unmatched endpoint is exported as partial evidence. A dynamic topic
 whose display label matches one concrete topic reuses that topic's graph node;
-otherwise identical dynamic labels within one service share an unresolved node.
+otherwise identical dynamic labels share one unresolved node.
 Each endpoint link and source evidence remain separate, and dynamic topics do
 not create a producer/consumer pairing. The HTML payload includes a warning
 status (`unknown`, `partial`, or `mismatch`) so consumers can distinguish

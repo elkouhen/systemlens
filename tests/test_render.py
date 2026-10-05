@@ -508,6 +508,9 @@ def test_graph_groups_identical_dynamic_topic_evidence_without_pairing_it() -> N
 
     dynamic_nodes = [node for node in data["nodes"] if node.get("unresolved")]
     assert len(dynamic_nodes) == 1
+    assert dynamic_nodes[0]["name"] == "<dynamic>"
+    assert dynamic_nodes[0]["label"] == "<dynamic>"
+    assert "Topic dynamique" not in dynamic_nodes[0]["name"]
     assert dynamic_nodes[0]["endpoint_ids"] == ["dynamic-first", "dynamic-second"]
     assert len(data["links"]) == 2
     assert all(link["unresolved"] for link in data["links"])
