@@ -209,12 +209,28 @@ def strategy1_kafka_topics(
     """Load the unique logical-to-broker topic declarations from kafka YAML."""
     values_by_key: dict[str, set[str]] = {}
     found_file = False
-    for path_str in _discover_spring_property_files(str(repo_root), source_path):
-        path = Path(path_str)
-        if path.name.casefold() not in {"kafka.yml", "kafka.yaml"}:
-            continue
+    if source_path is None:
+        property_files = tuple(
+            path
+            for path in repo_root.rglob("*")
+            if path.is_file()
+            and path.name.casefold() in {"kafka.yml", "kafka.yaml"}
+            and "target" not in path.parts
+            and "build" not in path.parts
+            and not any(
+                path.parts[index:index + 2] == ("src", "test")
+                for index in range(len(path.parts) - 1)
+            )
+        )
+    else:
+        property_files = tuple(
+            Path(path)
+            for path in _discover_spring_property_files(str(repo_root), source_path)
+            if Path(path).name.casefold() in {"kafka.yml", "kafka.yaml"}
+        )
+    for path in property_files:
         found_file = True
-        flat = _load_flat_spring_properties(path_str)
+        flat = _load_flat_spring_properties(str(path))
         for property_key, value in flat.items():
             parts = property_key.split(".")
             if "topics" not in {part.casefold() for part in parts}:

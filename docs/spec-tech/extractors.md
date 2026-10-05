@@ -156,9 +156,9 @@ three arguments. This positional rule applies identically to
 `envoyerMessageKafka`, `envoyerMessageKafkaRequest` and
 `envoyerMessageKafkaReply`.
 
-The Strategy1 extractor builds the logical-key mapping once for each distinct
-set of applicable Kafka YAML files during one indexing pass. It reuses that
-mapping for all Java files in the same configuration scope.
+The Strategy1 extractor scans the repository for Kafka YAML files once at the
+start of one indexing pass. It builds one logical-key mapping and reuses it for
+all Java files in that pass. Conflicting declarations remain unresolved.
 
 When CodeQL is available, it completes a missing Strategy1 producer type from
 the second argument, including local data-flow within the enclosing method.
