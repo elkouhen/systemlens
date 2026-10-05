@@ -450,6 +450,7 @@ def _run_with_progress(
 
 def _prepare_source_only_root(
     repo_root: Path, destination: Path, *, include_target_java_sources: bool = False,
+    allowed_paths: Sequence[str] | None = None,
 ) -> int:
     """Copy application and generated Java sources without build descriptors.
 
@@ -459,11 +460,14 @@ def _prepare_source_only_root(
     source generation was explicitly requested for this index.
     """
     excluded_directories = {".git", ".systemlens", "target", "out"}
+    allowed = set(allowed_paths or ())
     copied = 0
     for source in repo_root.rglob("*.java"):
         if not source.is_file():
             continue
         relative = source.relative_to(repo_root)
+        if allowed and relative.as_posix() not in allowed:
+            continue
         parts = relative.parts
         generated_target = any(
             parts[index:index + 2] == ("target", "generated-sources")
@@ -576,6 +580,7 @@ def automatic_codeql_database(
     progress: Callable[[str], None] | None = None,
     generate_sources: bool = False,
     include_target_java_sources: bool = False,
+    allowed_paths: Sequence[str] | None = None,
     deadline: float | None = None,
 ) -> Iterator[Path | None]:
     """Create a temporary source-only Java database for one index run.
@@ -607,6 +612,7 @@ def automatic_codeql_database(
             include_target_java_sources=(
                 include_target_java_sources or generate_sources
             ),
+            allowed_paths=allowed_paths,
         )
         command = [
             executable, "database", "create", str(database), "--language=java",

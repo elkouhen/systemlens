@@ -135,6 +135,22 @@ def test_source_only_root_can_include_all_target_java_sources(tmp_path: Path) ->
     assert (destination / "service/target/custom/GeneratedMapper.java").exists()
 
 
+def test_source_only_root_respects_indexed_source_perimeter(tmp_path: Path) -> None:
+    allowed = tmp_path / "src/main/java/App.java"
+    excluded = tmp_path / "src/test/java/AppTest.java"
+    allowed.parent.mkdir(parents=True)
+    excluded.parent.mkdir(parents=True)
+    allowed.write_text("class App {}", encoding="utf-8")
+    excluded.write_text("class AppTest {}", encoding="utf-8")
+    destination = tmp_path / "source"
+
+    assert codeql._prepare_source_only_root(
+        tmp_path, destination, allowed_paths=[allowed.relative_to(tmp_path).as_posix()]
+    ) == 1
+    assert (destination / "src/main/java/App.java").exists()
+    assert not (destination / "src/test/java/AppTest.java").exists()
+
+
 def test_source_only_root_keeps_source_packages_named_build(tmp_path: Path) -> None:
     source = tmp_path / "service/src/main/java/com/example/build/Order.java"
     source.parent.mkdir(parents=True)

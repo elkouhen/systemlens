@@ -47,6 +47,7 @@ class CodeQLCallGraph:
     call_count: int
     locate: Callable[[str, str, int], tuple[IntegrationMethod, bool] | None]
     methods: tuple[PersistedCodeQLMethod, ...] = ()
+    symbols: JavaSymbols | None = None
 
     @property
     def joined_calls(self) -> int:
@@ -698,6 +699,7 @@ def _build_codeql_call_graph(
             call_count=len(persisted_edges),
             locate=lambda name, path, line: locate(name, path, line),
             methods=tuple(persisted_methods),
+            symbols=symbols,
         )
 
     started_at = time.monotonic()
@@ -756,6 +758,7 @@ def _build_codeql_call_graph(
         call_count=len(calls),
         locate=lambda name, path, line: locate(name, path, line),
         methods=method_facts(graph_methods_by_id),
+        symbols=symbols,
     )
 
 
@@ -887,6 +890,7 @@ def materialize_codeql_code_flows(
         persisted_edges=persisted_edges,
         persisted_methods=persisted_methods,
     )
+    dispatch_symbols = call_graph.symbols
     if call_graph_sink is not None:
         call_graph_sink(call_graph)
     adjacency = call_graph.adjacency
@@ -1116,6 +1120,16 @@ def materialize_codeql_code_flows(
         crossing to another consumer creates impossible POC flows and false
         cycles.
         """
+        if dispatch_symbols is not None:
+            current_owner = current.qualified_method.rsplit(".", 1)[0]
+            target_owner = target.qualified_method.rsplit(".", 1)[0]
+            entry_owner = entry.qualified_method.rsplit(".", 1)[0]
+            target_module = target.module
+            if current_owner != target_owner and (current_owner, target_module) in dispatch_symbols.ancestors(target_owner, target_module):
+                if (current_owner, entry.module) in dispatch_symbols.ancestors(entry_owner, entry.module):
+                    return target_owner == entry_owner or target_owner in {
+                        owner for owner, _module in dispatch_symbols.ancestors(entry_owner, entry.module)
+                    }
         if not current.qualified_method.endswith(
             "AbstractKafkaMessageProcessor.consumeMessage"
         ) or not target.qualified_method.endswith(".processMessage"):
@@ -1322,6 +1336,8 @@ def materialize_codeql_code_flows(
             item.source_path, item.source_line, item.source, item.confidence,
             item.target_path, item.target_line, item.target,
         )):
+            if codeql_edge_confidence == "exact" and relation.confidence != "exact":
+                continue
             source_location = locate(relation.source, relation.source_path, relation.source_line)
             target_location = locate(relation.target, relation.target_path, relation.target_line)
             if source_location is None or target_location is None:

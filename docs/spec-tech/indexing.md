@@ -146,6 +146,11 @@ absent or still ambiguous, all compatible candidates remain possible rather
 than selecting one by name. An ambiguous receiver type is retained for
 dispatch; compatible contracts are collected and the caller-module preference
 is applied to their concrete implementations.
+For a statically declared base-class receiver, both the base body and known
+overrides remain possible. A single override does not prove the runtime type.
+When a flow starts in a concrete subtype and then enters an inherited body,
+dispatch is restricted to that subtype and its ancestors so sibling overrides
+cannot cross into the flow. Explicit `super` calls target direct parent bodies.
 Symbol collection scans source bytes and syntax nodes once per flow rebuild.
 `JavaSymbols.resolve` accepts explicit imports and qualified type names as
 signature identities even when dependency sources are absent. Callees still
@@ -163,12 +168,18 @@ return types through the receiver hierarchy. It requires one parameter signature
 and one resolved return type, and bounds nested receiver analysis to 16 calls.
 Generic return substitution and ambiguous overload selection are unsupported.
 These inferred calls retain `possible` dispatch and low flow confidence.
+Known positions in a partially resolved generic signature still constrain
+candidate implementations. Unknown positions may widen the candidate set, but
+they do not erase known parameter types.
 Route traversal has the existing bounded `O(I × (V + E))` worst case for `I`
 indexed input methods, `V` source methods and `E` resolved call edges.
 
 The source projection prevents `build-mode=none` from invoking Maven or Gradle
 for dependency discovery; unresolved external types are accepted as the
 documented accuracy trade-off for offline indexing.
+The projection receives the eligible relative-path inventory from the indexer,
+so excluded test sources and build outputs cannot enter the temporary CodeQL
+database or its persisted method projection.
 With `--generate-sources`, the indexed repository runs only Maven
 `generate-sources` or Gradle `generateSources` before this projection is
 created. A root build descriptor owns its nested modules. If the repository has

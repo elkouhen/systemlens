@@ -13,7 +13,7 @@ functional or technical contract.
 | Optional or repository-specific behaviour | [ADR-5](#adr-5-strategy1-conventions-are-opt-in), [ADR-12](#adr-12-kubernetes-discovery-is-explicit-and-snapshot-based) |
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
 | Indexed contracts and implementation boundaries | [ADR-25](#adr-25-separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26-organize-implementation-modules-by-architectural-ownership) |
-| Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph) |
+| Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch) |
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
@@ -778,3 +778,23 @@ tables, JDBC engines, or read/write operations from this annotation.
 to load with an empty JPA inventory until reindexed. Users can see declared
 entities in the CLI. Runtime database identity and repository operations remain
 outside this static fact.
+
+## ADR-43: Preserve receiver context in inherited dispatch
+
+**Status:** Accepted.
+
+**Context:** Source-only Java resolution can see a base method, several
+overrides, and a concrete entry subtype at the same time. Selecting one
+override from the method name alone creates cross-subtype flows, while dropping
+the base body loses valid calls from a base-typed receiver.
+
+**Decision:** Keep the declared base body and known overrides as possible targets
+when the runtime receiver is unknown. When a flow starts in a concrete subtype,
+restrict inherited-body dispatch to that subtype and its ancestors. Resolve
+`super.method()` against the direct parent declaration. Preserve known generic
+signature positions when expanding partially resolved contracts. Keep all such
+fallback edges at possible dispatch and low flow confidence.
+
+**Consequences:** Sibling implementations no longer enter one concrete flow,
+while base-typed fields retain explicit alternatives. Runtime bean selection,
+generic substitution that cannot be proven, and reflection remain unresolved.

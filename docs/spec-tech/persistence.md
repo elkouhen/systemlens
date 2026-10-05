@@ -27,7 +27,8 @@ behaviour changes. This forces a complete refresh before new facts are served.
 After the CodeQL method-call graph is built, its source-backed method nodes and
 call edges are persisted before input-to-output reconstruction starts. The
 index records
-`codeql_call_graph_status=complete` and commits a partial-snapshot checkpoint;
+`codeql_call_graph_status=complete` for a completed extraction, or `partial`
+when the extraction reaches its timeout, and commits a partial-snapshot checkpoint;
 `codeql_call_graph_edge_count` records the number of persisted edges. This
 checkpoint is independent from the later flow-join cursor.
 

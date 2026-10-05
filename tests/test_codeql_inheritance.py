@@ -1012,6 +1012,75 @@ def test_inherited_interface_body_is_hidden_by_abstract_redeclaration(tmp_path: 
     assert symbols.implementations(contract) == []
 
 
+def test_static_base_receiver_keeps_base_and_known_override_candidates(tmp_path: Path):
+    sources = {
+        "app/Base.java": """package app; public class Base {
+  public void send() { output(); }
+  void output() {}
+}""",
+        "app/Child.java": """package app; public class Child extends Base {
+  public void send() { otherOutput(); }
+  void otherOutput() {}
+}""",
+        "app/Controller.java": """package app; public class Controller {
+  Base port;
+  public void entry() { port.send(); }
+}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
+    )
+    assert {flow.steps[-1].path for flow in flows} == {
+        "app/Base.java", "app/Child.java",
+    }
+
+
+def test_inherited_template_dispatch_stays_on_entry_subtype(tmp_path: Path):
+    sources = {
+        "app/Base.java": """package app; public abstract class Base {
+  public void process() { send(); }
+  public abstract void send();
+}""",
+        "app/First.java": """package app; public class First extends Base {
+  public void entry() { process(); }
+  public void send() { output(); }
+  void output() {}
+}""",
+        "app/Second.java": """package app; public class Second extends Base {
+  public void entry() { process(); }
+  public void send() { otherOutput(); }
+  void otherOutput() {}
+}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
+    )
+    assert {(flow.method, flow.steps[-1].path) for flow in flows} == {
+        ("app.First.entry", "app/First.java"),
+        ("app.Second.entry", "app/Second.java"),
+    }
+
+
+def test_super_dispatch_targets_direct_parent_body(tmp_path: Path):
+    sources = {
+        "app/Base.java": """package app; public class Base {
+  public void send() { output(); }
+  void output() {}
+}""",
+        "app/Controller.java": """package app; public class Controller extends Base {
+  public void entry() { super.send(); }
+}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
+    )
+    assert len(flows) == 1
+    assert flows[0].steps[-1].path == "app/Base.java"
+
+
 def test_distinct_external_parameter_types_do_not_match(tmp_path: Path):
     sources = {
         "app/Port.java": "package app; import external.One; public interface Port { void send(One value); }",
@@ -1022,3 +1091,25 @@ public abstract class Adapter implements Port { public void send(Two value) {} }
     symbols = JavaSymbols(tmp_path, methods, list(sources))
     contract = next(m for m in symbols.methods.values() if m.method.qualified_method == "app.Port.send")
     assert symbols.implementations(contract) == []
+
+
+def test_generic_interface_keeps_known_parameter_constraints(tmp_path: Path):
+    sources = {
+        "app/Port.java": "package app; public interface Port<T> { void send(T value, String suffix); }",
+        "app/Adapter.java": """package app; public class Adapter implements Port<String> {
+  public void send(String value, String suffix) { output(); }
+  public void send(Integer value, Integer suffix) { otherOutput(); }
+  void output() {}
+  void otherOutput() {}
+}""",
+        "app/Controller.java": """package app; public class Controller {
+  Port<String> port;
+  public void entry() { port.send("x", "y"); }
+}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
+    )
+    assert len(flows) == 1
+    assert flows[0].steps[-1].path == "app/Adapter.java"

@@ -124,6 +124,11 @@ does not evaluate getter bodies or select runtime beans.
 When a caller module has compatible implementations of the same interface method,
 the candidates from that caller module are preferred. If the caller module has no
 compatible implementation, candidates from other modules remain possible.
+The static base type remains a possible target when a subtype override is also
+visible. An inherited template call is restricted to the concrete entry subtype
+when that subtype is known. `super.method()` resolves to the direct parent
+declaration. These rules prevent sibling implementations from entering one
+source flow while preserving uncertainty for a base-typed field.
 Inheritance relations are kept distinct when the same qualified interface or
 class name is declared in different modules. An ambiguous receiver type is
 retained long enough to collect compatible contracts, then implementations

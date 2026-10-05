@@ -751,7 +751,10 @@ def _index_repo(
                 (method.qualified_method, method.path, method.start_line)
                 for method in methods_projection
             }
+            eligible_paths = set(current_hashes)
             for method in codeql_method_projection:
+                if method.path not in eligible_paths:
+                    continue
                 locator = (method.qualified_method, method.path, method.start_line)
                 if locator in known_locators:
                     continue
@@ -769,7 +772,10 @@ def _index_repo(
                 known_locators.add(locator)
             store.replace_codeql_methods(methods_projection)
             store.replace_codeql_call_edges(edges)
-            store.set_meta("codeql_call_graph_status", "complete")
+            store.set_meta(
+                "codeql_call_graph_status",
+                "partial" if codeql_timed_out else "complete",
+            )
             store.set_meta("codeql_call_graph_edge_count", str(len(edges)))
             store.commit_checkpoint()
             _report_progress(
@@ -1089,6 +1095,7 @@ def _index_repo(
                                     # files instead of running Maven twice.
                                     generate_sources=False,
                                     include_target_java_sources=True,
+                                    allowed_paths=list(current_hashes),
                                     deadline=codeql_deadline,
                                 )
                             else:
@@ -1097,6 +1104,7 @@ def _index_repo(
                                     timeout_seconds=config.codeql_timeout_seconds,
                                     threads=config.codeql_threads,
                                     ram_mb=config.codeql_ram_mb,
+                                    allowed_paths=list(current_hashes),
                                     deadline=codeql_deadline,
                                 )
                         elif generate_sources:
@@ -1112,6 +1120,7 @@ def _index_repo(
                                 # files instead of running Maven twice.
                                 generate_sources=False,
                                 include_target_java_sources=True,
+                                allowed_paths=list(current_hashes),
                                 deadline=codeql_deadline,
                             )
                         else:
@@ -1122,6 +1131,7 @@ def _index_repo(
                                 ram_mb=config.codeql_ram_mb,
                                 verbosity=codeql_verbosity,
                                 progress=progress,
+                                allowed_paths=list(current_hashes),
                                 deadline=codeql_deadline,
                             )
                         with database_context as database:

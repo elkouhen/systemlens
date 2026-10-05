@@ -31,7 +31,7 @@ from systemlens.indexing.code_flows import (
 from systemlens.indexing.code_flows import materialize_code_flows, reconcile_code_flows
 from systemlens.indexing.code_flows import materialize_codeql_code_flows
 from systemlens.indexing import codeql
-from systemlens.indexing.codeql import CodeQLCall
+from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 from systemlens.indexing.integration_methods import materialize_integration_methods
 from systemlens.indexing import service as indexing_service
 from systemlens.infrastructure.config import Config
@@ -956,6 +956,7 @@ def test_index_uses_automatic_codeql_database_when_available(
         threads: int = 1,
         ram_mb: int | None = None,
         deadline: float | None = None,
+        allowed_paths: list[str] | None = None,
     ):
         observed_roots.append(root)
         assert timeout_seconds == 600
@@ -1121,6 +1122,7 @@ def test_codeql_timeout_commits_partial_snapshot_and_runs_post_processing(
         assert store.all_code_flows()
         assert store.get_meta("code_flow_signature") is None
         assert store.get_meta("code_flow_snapshot_status") == "partial"
+        assert store.get_meta("codeql_call_graph_status") == "partial"
 
     assert any("délai dépassé" in message for message in progress)
 
@@ -1622,6 +1624,37 @@ def test_codeql_edge_confidence_can_exclude_possible_dispatch(tmp_path: Path) ->
     assert len(materialize_codeql_code_flows(
         methods, endpoints, [call], codeql_edge_confidence="possible"
     )) == 1
+
+
+def test_exact_edge_confidence_excludes_low_confidence_reachability(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    target = "orders/src/main/java/com/example/OrderPublisher.java"
+    for path, content in {
+        source: "package com.example; class OrderController { void receive() {} }\n",
+        target: "package com.example; class OrderPublisher { void send() {} }\n",
+    }.items():
+        file = tmp_path / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(content, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        _endpoint("entry", "consume", "kafka", "orders.in", source, 1),
+        replace(_endpoint("output", "produce", "kafka", "orders.out", target, 1),
+                qualified_name="com.example.OrderPublisher"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
+    entry = next(method for method in methods if method.input_endpoint_ids)
+    output = next(method for method in methods if method.output_endpoint_ids)
+    reachability = [CodeQLReachability(
+        entry.qualified_method, entry.path, entry.start_line,
+        output.qualified_method, output.path, output.start_line, "low",
+    )]
+    assert materialize_codeql_code_flows(
+        methods, endpoints, [], reachability=reachability, codeql_edge_confidence="exact",
+    ) == []
 
 
 def test_codeql_call_without_callee_source_location_uses_explicit_low_confidence_join(tmp_path: Path) -> None:

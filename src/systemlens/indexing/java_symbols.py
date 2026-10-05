@@ -81,6 +81,7 @@ class JavaSymbols:
                     else:
                         imports[imported.rsplit(".", 1)[-1]] = imported
             self.units[path] = _Unit(source, package, imports, wildcards)
+            self.path_modules.setdefault(path, self.path_modules.get(path, path.split("/", 1)[0] if "/" in path else ""))
             nodes = list(parser.walk(tree))
             for node in nodes:
                 if node.type in _TYPES:
@@ -284,6 +285,10 @@ class JavaSymbols:
             and candidate_name == name
             and len(parameters) == len(contract.parameters)
             for candidate in values
+            if all(
+                expected is None or actual == expected
+                for expected, actual in zip(contract.parameters, candidate.parameters)
+            )
         }
         return list(candidates.values())
 
@@ -310,6 +315,7 @@ class JavaSymbols:
         key = (receiver_type, name, arity, module)
         self._targets[key] = None
         receiver_locations = self._type_candidates(receiver_type, path)
+        receiver_is_interface = any(node.type == "interface_declaration" for _path, node in receiver_locations)
         receiver_module = (
             self.path_modules.get(receiver_locations[0][0], module)
             if len(receiver_locations) == 1 else module
@@ -365,23 +371,6 @@ class JavaSymbols:
             candidate.method.id: candidate
             for candidate in [*local_owner_candidates, *inherited_candidates]
         }
-        inherited_overrides = [
-            candidate
-            for candidate in candidates.values()
-            if candidate.owner != receiver_type
-            and any(
-                ancestor_owner == receiver_type
-                for ancestor_owner, _ancestor_module in self.ancestors(
-                    candidate.owner, candidate.module
-                )
-            )
-        ]
-        if len(inherited_overrides) == 1 and all(
-            candidate is inherited_overrides[0]
-            or (candidate.owner, candidate.module) in receiver_bases
-            for candidate in candidates.values()
-        ):
-            return [inherited_overrides[0].method]
         # Overrides present on the declared receiver hide ancestor bodies.
         # Possible overrides on other runtime subtypes remain ambiguous.
         hidden: set[str] = set()
@@ -396,8 +385,12 @@ class JavaSymbols:
                 )
         remaining = [candidate for candidate in candidates.values() if candidate.owner not in hidden]
         local_remaining = [candidate for candidate in remaining if candidate.module == module]
-        if local_remaining:
+        if local_remaining and not inherited_candidates:
             remaining = local_remaining
+        elif receiver_is_interface:
+            preferred = [candidate for candidate in remaining if candidate.module == module]
+            if preferred:
+                remaining = preferred
         return [candidate.method for candidate in remaining]
 
     def variable_type(self, info: _Method, name: str, invocation: Node, *, field_only: bool = False) -> str | None:
@@ -427,8 +420,13 @@ class JavaSymbols:
                             allow_ambiguous=True,
                         )
             scope = scope.parent
-        found: set[str | None] = set()
-        for owner, _owner_module in self.ancestors(info.owner, info.module):
+        owners = [info.owner] + sorted(
+            (owner for owner, _module in self.ancestors(info.owner, info.module) if owner != info.owner),
+            key=len,
+            reverse=True,
+        )
+        for owner in owners:
+            found: set[str | None] = set()
             for field_path, declaration in self.types.get(owner, []):
                 body = declaration.child_by_field_name("body")
                 field_source = self.units[field_path].source
@@ -443,14 +441,16 @@ class JavaSymbols:
                                 field_path, parser.node_text(field_source, type_node), owner,
                                 allow_ambiguous=True,
                             ))
-        return next(iter(found)) if len(found) == 1 else None
+            if found:
+                return next(iter(found)) if len(found) == 1 else None
+        return None
 
     def receiver_type(self, info: _Method, receiver: Node | None, invocation: Node, depth: int = 0) -> str | None:
         """Read declared receiver/return types without evaluating method bodies."""
         if depth > 16:
             return None
         source = self.units[info.method.path].source
-        if receiver is None or receiver.type == "this":
+        if receiver is None or receiver.type in {"this", "super"}:
             return info.owner
         if receiver.type == "identifier":
             return self.variable_type(info, parser.node_text(source, receiver), invocation)
@@ -466,8 +466,10 @@ class JavaSymbols:
         if len(locations) != 1:
             return None
         module = self.path_modules.get(locations[0][0], info.module)
-        declarations = [candidate for base, base_module in self.ancestors(owner, module)
-                        for candidate in self.by_owner.get((base, name, len(arguments), base_module), [])]
+        declarations = [candidate for candidate in self.by_owner.get((owner, name, len(arguments), module), [])]
+        if not declarations:
+            declarations = [candidate for base, base_module in self.ancestors(owner, module)
+                            for candidate in self.by_owner.get((base, name, len(arguments), base_module), [])]
         if len({candidate.parameters for candidate in declarations}) != 1:
             return None
         returns: set[str | None] = set()
@@ -497,9 +499,17 @@ class JavaSymbols:
                 target = self.target(
                     receiver_type, name, len(arguments), info.module, info.method.path
                 )
-                targets = [target] if target is not None else self.possible_targets(
-                    receiver_type, name, len(arguments), info.module, info.method.path
-                )
+                if receiver is not None and receiver.type == "super":
+                    direct_bases = self.bases.get((info.owner, info.module), set())
+                    targets = [
+                        candidate.method
+                        for base_owner, base_module in direct_bases
+                        for candidate in self.by_owner.get((base_owner, name, len(arguments), base_module), [])
+                    ]
+                else:
+                    targets = [target] if target is not None else self.possible_targets(
+                        receiver_type, name, len(arguments), info.module, info.method.path
+                    )
                 if not targets:
                     continue
                 for target in targets:
