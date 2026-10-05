@@ -89,10 +89,11 @@ explicit listener parameter or client generic signature. A concrete shared
 topic creates a producer/consumer service arc even when one or both Java
 message types are unknown. The arc has medium confidence when type evidence is
 missing. Two known and different types remain incompatible and do not create an
-arc. An unmatched endpoint is exported as partial evidence. Identical dynamic
-topic labels within one service share an unresolved topic node while retaining
-each endpoint link and source evidence; dynamic topics do not create a
-producer/consumer pairing. The HTML payload includes a warning
+arc. An unmatched endpoint is exported as partial evidence. A dynamic topic
+whose display label matches one concrete topic reuses that topic's graph node;
+otherwise identical dynamic labels within one service share an unresolved node.
+Each endpoint link and source evidence remain separate, and dynamic topics do
+not create a producer/consumer pairing. The HTML payload includes a warning
 status (`unknown`, `partial`, or `mismatch`) so consumers can distinguish
 evidence from a complete typed match. The Kafka AST resolver evaluates
 ternary topic expressions branch by branch, preserving one endpoint per
@@ -146,7 +147,7 @@ producer fact for each statically resolved branch. Other values use the
 conservative topic resolver and receive the same normalization when they are
 concrete. Strategy1 normalization applies
 `casefold()` after converting word boundaries and physical separators to
-single underscores. The canonical key is lowercase snake case. The second
+single hyphens. The canonical key is lowercase kebab case. The second
 argument is always used to derive the payload type from its method parameter,
 local variable declaration or enclosing class field, including calls with
 three arguments. This positional rule applies identically to

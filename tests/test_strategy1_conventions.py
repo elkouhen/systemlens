@@ -50,12 +50,12 @@ def test_strategy1_replacement_keeps_an_ast_payload_type() -> None:
 
     result = apply_kafka_endpoints([generic], [strategy])
 
-    assert result[0].topic == "orders_created"
+    assert result[0].topic == "orders-created"
     assert result[0].topic_display == "ORDERS_CREATED"
     assert result[0].message_type == "OrderCreated"
 
 
-def test_strategy1_normalizes_topic_keys_to_lowercase_snake_case(tmp_path: Path) -> None:
+def test_strategy1_normalizes_topic_keys_to_lowercase_kebab_case(tmp_path: Path) -> None:
     source = tmp_path / "src/main/java/com/example/Publisher.java"
     source.parent.mkdir(parents=True)
     source.write_text(
@@ -74,5 +74,5 @@ record OrderCreated(String id) {}
         ["src/main/java/com/example/Publisher.java"],
     )
 
-    assert [endpoint.topic for endpoint in endpoints] == ["orders_created"]
+    assert [endpoint.topic for endpoint in endpoints] == ["orders-created"]
     assert [endpoint.topic_display for endpoint in endpoints] == ["Orders_Created"]

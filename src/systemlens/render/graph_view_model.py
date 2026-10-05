@@ -1,6 +1,7 @@
 """Build the browser-facing graph model from an architecture snapshot."""
 
 from pathlib import Path
+import re
 from typing import Any
 
 from systemlens.domain.graph import (
@@ -42,6 +43,14 @@ from systemlens.render._graph_view_helpers import (
 )
 from systemlens.render.likec4_export import _complexity_ranking
 from systemlens.render.snapshot import kafka_dto_views
+
+
+def _topic_display_key(value: str) -> str:
+    """Return the display key used to merge equivalent graph topic labels."""
+    separated = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", value)
+    separated = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", separated)
+    separated = re.sub(r"[-_.\s]+", "-", separated)
+    return re.sub(r"-+", "-", separated).strip("-").casefold()
 
 
 def _indexing_issues(
@@ -726,8 +735,9 @@ def build_graph_view_model(
                 ),
             }
         )
-    nodes += [
-        {
+    concrete_topic_nodes: dict[str, dict[str, object]] = {}
+    for name in kafka_topics:
+        node = {
             "id": f"kafka_topic:{name}",
             "kind": "kafka_topic",
             "name": topic_name(name),
@@ -746,8 +756,18 @@ def build_graph_view_model(
             "width": 190,
             "height": 42,
         }
+        nodes.append(node)
+        concrete_topic_nodes.setdefault(_topic_display_key(topic_name(name)), node)
+    concrete_topic_keys = {
+        _topic_display_key(topic_name(name))
         for name in kafka_topics
-    ]
+    }
+    if len(concrete_topic_keys) != len(kafka_topics):
+        concrete_topic_nodes = {
+            key: node
+            for key, node in concrete_topic_nodes.items()
+            if sum(_topic_display_key(topic_name(name)) == key for name in kafka_topics) == 1
+        }
     # Group identical unresolved labels within one service to keep the graph
     # readable. The expression remains part of the key, and every endpoint
     # keeps its own link and evidence, so grouping does not assert a topic
@@ -765,9 +785,19 @@ def build_graph_view_model(
         key=lambda item: (item[0][0], item[0][1], item[0][2]),
     ):
         grouped_endpoints.sort(key=lambda endpoint: (endpoint.path, endpoint.start_line, endpoint.id))
-        node_id = f"kafka_topic_unresolved:{grouped_endpoints[0].id}"
+        static_node = concrete_topic_nodes.get(_topic_display_key(display_name))
+        node_id = (
+            str(static_node["id"])
+            if static_node is not None
+            else f"kafka_topic_unresolved:{grouped_endpoints[0].id}"
+        )
         for endpoint in grouped_endpoints:
             dynamic_kafka_nodes[endpoint.id] = node_id
+        if static_node is not None:
+            static_node.setdefault("dynamic_endpoint_ids", []).extend(
+                endpoint.id for endpoint in grouped_endpoints
+            )
+            continue
         message_types = {endpoint.message_type for endpoint in grouped_endpoints if endpoint.message_type}
         nodes.append({
             "id": node_id,

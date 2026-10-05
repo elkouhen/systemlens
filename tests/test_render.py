@@ -513,17 +513,42 @@ def test_graph_groups_identical_dynamic_topic_evidence_without_pairing_it() -> N
     assert all(link["unresolved"] for link in data["links"])
 
 
+def test_graph_merges_dynamic_topic_with_matching_static_topic_node() -> None:
+    static = replace(
+        _kafka_endpoint("produce", "OrderCreated", "Publisher.java"),
+        topic="orders-created",
+    )
+    dynamic = replace(
+        _kafka_endpoint("consume", "OrderCreated", "Consumer.java"),
+        id="dynamic-consumer",
+        topic="<dynamic>",
+        topic_display="Orders_Created",
+        topic_dynamic=True,
+    )
+
+    data = _html_graph_data(render_graph_html({"orders": [static], "payments": [dynamic]}, []))
+    topic_nodes = [node for node in data["nodes"] if node["kind"] == "kafka_topic"]
+
+    assert [node["id"] for node in topic_nodes] == ["kafka_topic:orders-created"]
+    assert topic_nodes[0]["dynamic_endpoint_ids"] == ["dynamic-consumer"]
+    dynamic_link = next(
+        link for link in data["links"] if link.get("endpoint_ids") == ["dynamic-consumer"]
+    )
+    assert dynamic_link["source"] == "kafka_topic:orders-created"
+    assert dynamic_link["target"] == "microservice:payments"
+
+
 def test_graph_displays_source_topic_label_without_changing_topic_identity() -> None:
     producer = replace(
         _kafka_endpoint("produce", "OrderCreated", "Publisher.java"),
-        topic="orders_created",
+        topic="orders-created",
         topic_display="Orders_Created",
     )
 
     data = _html_graph_data(render_graph_html({"orders": [producer]}, []))
 
     topic = next(node for node in data["nodes"] if node["kind"] == "kafka_topic")
-    assert topic["id"] == "kafka_topic:orders_created"
+    assert topic["id"] == "kafka_topic:orders-created"
     assert topic["name"] == "Orders_Created"
     assert data["nodes"]
 

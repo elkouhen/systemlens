@@ -160,9 +160,9 @@ third argument is present. Simple `Message<T>`, `GenericMessage<T>` and
 `ProducerRecord<K,V>` wrappers are unwrapped. It never replaces an AST type
 and applies only a unique source-backed result; ambiguous results remain
 unknown.
-Strategy1 topic keys are compared as lowercase snake-case values. CamelCase
-boundaries, dots, hyphens and whitespace become underscores; repeated or edge
-underscores are collapsed or removed. Dynamic topic expressions are not
+Strategy1 topic keys are compared as lowercase kebab-case values. CamelCase
+boundaries, dots, underscores and whitespace become hyphens; repeated or edge
+hyphens are collapsed or removed. Dynamic topic expressions are not
 normalized or paired with concrete topics. A conditional topic expression
 creates one producer fact for each statically resolved branch.
 Kafka topic expressions also resolve source-local conventionally named uppercase
