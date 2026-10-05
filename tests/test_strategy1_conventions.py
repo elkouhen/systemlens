@@ -105,3 +105,28 @@ record OrderCreated(String id) {}
         ("consume", "commerce.orders.created"),
         ("produce", "commerce.orders.created"),
     ]
+
+
+def test_strategy1_does_not_fabricate_topics_missing_from_kafka_yaml(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  OrdersCreated:\n    nom: commerce.orders.created\n",
+        encoding="utf-8",
+    )
+    source = tmp_path / "src/main/java/Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class Publisher {
+  void publish(OrderCreated event) {
+    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getUnknown(), event);
+  }
+}
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_endpoints(tmp_path)
+
+    assert [(endpoint.topic, endpoint.topic_dynamic) for endpoint in endpoints] == [
+        ("<dynamic>", True)
+    ]

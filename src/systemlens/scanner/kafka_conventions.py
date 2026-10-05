@@ -29,6 +29,7 @@ from systemlens.scanner._spring_properties import (
     remove_strategy1_kafka_prefix,
     resolve_spring_property,
     resolve_strategy1_kafka_topic,
+    strategy1_kafka_topics,
 )
 
 _STRATEGY1_PRODUCER_RE = re.compile(r"\bgetTopics\s*\(\s*\)\s*\.\s*get([A-Z]\w*)\s*\(\s*\)")
@@ -44,38 +45,67 @@ def _strategy1_topic_name(value: str) -> str:
     return re.sub(r"-+", "-", separated).strip("-").casefold()
 
 
+def _validate_strategy1_topic(
+    topic: str,
+    catalog: dict[str, str] | None,
+    logical_key: str | None = None,
+) -> tuple[str, bool]:
+    """Validate a Strategy1 topic against kafka.yml when that catalog exists."""
+    if catalog is None:
+        return topic, False
+    if logical_key is not None:
+        declared = catalog.get(_strategy1_topic_name(logical_key))
+        if declared is not None:
+            return declared, False
+    if topic in catalog.values():
+        return topic, False
+    return "<dynamic>", True
+
+
 def _strategy1_topic_from_value(
-    value_node, source: bytes, repo_root: Path, rel_path: str
+    value_node, source: bytes, repo_root: Path, rel_path: str,
+    catalog: dict[str, str] | None,
 ) -> tuple[str, bool, str | None]:
     """Resolve a Strategy1 `getTopics().getXxx()` argument before fallback."""
     if value_node is not None:
         value = java_parser.node_text(source, value_node)
         if match := _STRATEGY1_PRODUCER_RE.search(value):
             logical_key = match.group(1)
-            resolved = resolve_strategy1_kafka_topic(repo_root, logical_key, rel_path)
-            return resolved or _strategy1_topic_name(logical_key), False, resolved or logical_key
+            resolved, dynamic = _validate_strategy1_topic(
+                _strategy1_topic_name(logical_key), catalog, logical_key
+            )
+            if catalog is None:
+                resolved = resolve_strategy1_kafka_topic(repo_root, logical_key, rel_path) or resolved
+                dynamic = False
+            return resolved, dynamic, resolved if not dynamic and catalog is not None else logical_key
     topic, dynamic = _kafka_topic_from_value(value_node, source, repo_root, rel_path)
+    if not dynamic:
+        topic, dynamic = _validate_strategy1_topic(topic, catalog)
     if dynamic and value_node is not None:
         expression = java_parser.node_text(source, value_node)
         enum_constant = expression.rsplit(".", 1)[-1]
         if re.fullmatch(r"(?:FLUX[_A-Z0-9]*_)?[A-Z][A-Z0-9_]*", enum_constant):
-            logical_name = re.sub(r"^FLUX_", "", enum_constant)
-            if logical_name not in {"TOPIC", "NULL", "EMPTY"}:
-                return _strategy1_topic_name(logical_name), False, logical_name
+                logical_name = re.sub(r"^FLUX_", "", enum_constant)
+                if logical_name not in {"TOPIC", "NULL", "EMPTY"}:
+                    resolved, dynamic = _validate_strategy1_topic(
+                        _strategy1_topic_name(logical_name), catalog, logical_name
+                    )
+                    return resolved, dynamic, logical_name
     return (_strategy1_topic_name(topic) if not dynamic else topic), dynamic, topic if not dynamic else None
 
 
 def _strategy1_topic_values(
-    value_node, source: bytes, repo_root: Path, rel_path: str
+    value_node, source: bytes, repo_root: Path, rel_path: str,
+    catalog: dict[str, str] | None,
 ) -> list[tuple[str, bool, str | None]]:
     """Resolve every branch of a Strategy1 topic conditional expression."""
     if value_node is None or value_node.type != "ternary_expression":
-        return [_strategy1_topic_from_value(value_node, source, repo_root, rel_path)]
+        return [_strategy1_topic_from_value(value_node, source, repo_root, rel_path, catalog)]
     values: list[tuple[str, bool, str | None]] = []
     for field in ("consequence", "alternative"):
         branch = value_node.child_by_field_name(field)
         if branch is not None:
-            values.extend(_strategy1_topic_values(branch, source, repo_root, rel_path))
+            values.extend(_strategy1_topic_values(branch, source, repo_root, rel_path, catalog))
     return list(dict.fromkeys(values))
 
 
@@ -151,6 +181,7 @@ def infer_kafka_topic_strategy1_endpoints(
         source_bytes, root = parsed
         source = source_bytes.decode("utf-8", errors="replace")
         lines = source.splitlines()
+        kafka_catalog = strategy1_kafka_topics(repo_root, rel_path)
         strategy_send_nodes = []
         for candidate in java_parser.walk(root):
             if candidate.type != "method_invocation":
@@ -181,6 +212,10 @@ def infer_kafka_topic_strategy1_endpoints(
                 ),
                 None,
             )
+            logical_key = match.group(1)
+            topic, topic_dynamic = _validate_strategy1_topic(
+                _strategy1_topic_name(logical_key), kafka_catalog, logical_key
+            )
             endpoint = _build_endpoint(
                 repo_root,
                 rel_path,
@@ -188,14 +223,15 @@ def infer_kafka_topic_strategy1_endpoints(
                 line_no,
                 "produce",
                 "kafka",
-                _strategy1_topic_name(match.group(1)),
+                topic,
                 "kafka-topic-strategy1",
                 lines[line_no - 1].strip(),
             )
             endpoint = replace(
                 endpoint,
                 message_type=_listener_payload_type(source_bytes, method),
-                topic_display=match.group(1),
+                topic_dynamic=topic_dynamic,
+                topic_display=topic if topic_dynamic else logical_key,
             )
             endpoints[endpoint.id] = endpoint
         for offset, annotation in _kafka_listener_annotation_blocks(source):
@@ -209,7 +245,9 @@ def infer_kafka_topic_strategy1_endpoints(
                     else property_parts[-1]
                 )
                 resolved = resolve_spring_property(repo_root, property_key, rel_path)
-                if resolved is None:
+                if kafka_catalog is not None:
+                    resolved = kafka_catalog.get(_strategy1_topic_name(logical_key))
+                elif resolved is None:
                     resolved = resolve_strategy1_kafka_topic(repo_root, logical_key, rel_path)
                 if resolved is not None:
                     resolved = remove_strategy1_kafka_prefix(resolved)
@@ -220,11 +258,15 @@ def infer_kafka_topic_strategy1_endpoints(
                     line_no + annotation.count("\n"),
                     "consume",
                     "kafka",
-                    resolved or _strategy1_topic_name(logical_key),
+                    resolved or ("<dynamic>" if kafka_catalog is not None else _strategy1_topic_name(logical_key)),
                     "kafka-topic-strategy1",
                     annotation,
                 )
-                endpoint = replace(endpoint, topic_display=resolved or logical_key)
+                endpoint = replace(
+                    endpoint,
+                    topic_dynamic=resolved is None,
+                    topic_display=resolved or logical_key,
+                )
                 endpoints[endpoint.id] = endpoint
         for node in strategy_send_nodes:
             _object_node, method_name, args = java_parser.invocation_parts(node, source_bytes)
@@ -235,7 +277,7 @@ def infer_kafka_topic_strategy1_endpoints(
             ):
                 continue
             for topic, dynamic, topic_display in _strategy1_topic_values(
-                args[0], source_bytes, repo_root, rel_path
+                args[0], source_bytes, repo_root, rel_path, kafka_catalog
             ):
                 endpoint = _kafka_endpoint(
                     repo_root,

@@ -168,9 +168,12 @@ creates one producer fact for each statically resolved branch.
 When Strategy1 finds a matching logical key in `kafka.yml` or `kafka.yaml`,
 the declared scalar topic name is persisted and used for producer/consumer
 matching. The supported declaration is the nested `topics.<key>.nom` leaf. An ambiguous or missing
-declaration keeps the normalized logical key as the fallback.
+declaration keeps the normalized logical key as the fallback only when no Kafka
+YAML file exists.
 If the declared value starts with `${kafka.prefix-topic}.`, Strategy1 removes
 that variable prefix before persisting and matching the topic name.
+When a Kafka YAML file exists, an unknown logical key or undeclared literal is
+kept as a dynamic topic and does not receive a derived name.
 Kafka topic expressions also resolve source-local conventionally named uppercase
 `static final` string constants and concatenations whose operands are all
 statically resolvable.

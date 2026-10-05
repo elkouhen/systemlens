@@ -191,32 +191,47 @@ def resolve_strategy1_kafka_topic(
     contains the broker topic. Matching is limited to a unique topic-shaped key so an
     unrelated YAML setting cannot become a Kafka endpoint by coincidence.
     """
-    def normalize(value: str) -> str:
-        return re.sub(r"-+", "-", re.sub(r"[-_.\s]+", "-", value)).strip("-").casefold()
+    catalog = strategy1_kafka_topics(repo_root, source_path)
+    if catalog is None:
+        return None
+    return catalog.get(_normalize_strategy1_kafka_key(logical_key))
 
-    wanted = normalize(logical_key)
-    candidates: list[str] = []
+
+def _normalize_strategy1_kafka_key(value: str) -> str:
+    separated = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", value)
+    separated = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", separated)
+    return re.sub(r"-+", "-", re.sub(r"[-_.\s]+", "-", separated)).strip("-").casefold()
+
+
+def strategy1_kafka_topics(
+    repo_root: Path, source_path: str | None = None
+) -> dict[str, str] | None:
+    """Load the unique logical-to-broker topic declarations from kafka YAML."""
+    values_by_key: dict[str, set[str]] = {}
+    found_file = False
     for path_str in _discover_spring_property_files(str(repo_root), source_path):
         path = Path(path_str)
         if path.name.casefold() not in {"kafka.yml", "kafka.yaml"}:
             continue
+        found_file = True
         flat = _load_flat_spring_properties(path_str)
         for property_key, value in flat.items():
             parts = property_key.split(".")
             if "topics" not in {part.casefold() for part in parts}:
                 continue
-            leaf = normalize(parts[-1])
-            parent = normalize(parts[-2]) if len(parts) > 1 else ""
-            if leaf == "nom" and parent == wanted:
-                candidates.append(value)
-    unique = list(
-        dict.fromkeys(
-            remove_strategy1_kafka_prefix(value)
-            for value in candidates
-            if value.strip()
-        )
-    )
-    return unique[0] if len(unique) == 1 else None
+            if _normalize_strategy1_kafka_key(parts[-1]) != "nom" or len(parts) < 2:
+                continue
+            logical_key = _normalize_strategy1_kafka_key(parts[-2])
+            declared_value = remove_strategy1_kafka_prefix(value)
+            if declared_value:
+                values_by_key.setdefault(logical_key, set()).add(declared_value)
+    if not found_file:
+        return None
+    return {
+        logical_key: next(iter(values))
+        for logical_key, values in values_by_key.items()
+        if len(values) == 1
+    }
 
 
 def remove_strategy1_kafka_prefix(value: str) -> str:
