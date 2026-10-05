@@ -1115,6 +1115,9 @@ def analyze_call_edge(
     callee: str = typer.Argument(
         ..., help="Identifiant, nom qualifié ou suffixe de la méthode appelée."
     ),
+    module: str | None = typer.Option(
+        None, "--module", help="Module de contexte pour désambiguïser les méthodes."
+    ),
     root: Path | None = typer.Option(
         None, "--root", help="Répertoire indexé à analyser."
     ),
@@ -1141,7 +1144,7 @@ def analyze_call_edge(
         if codeql_database is not None else None
     )
     result = diagnose_call_edge(
-        inventory, caller, callee, snapshot_metadata=metadata,
+        inventory, caller, callee, module=module, snapshot_metadata=metadata,
         codeql_methods=direct_codeql_methods,
     )
     typer.echo(

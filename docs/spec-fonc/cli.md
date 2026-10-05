@@ -24,7 +24,7 @@ Parent: [Functional specification](../SPEC-FONC.md).
 | `systemlens analyze coverage [--root DIR] [--json]` | Reports inventory coverage and unresolved integrations. |
 | `systemlens analyze indexing-issues [--root DIR] [--json]` | Lists unresolved indexing facts. JSON includes source evidence suitable for reviewing proposed heuristics. |
 | `systemlens analyze indexing-audit [--root DIR] [--json]` | Audits twenty distinct indexing-quality controls using only the persisted snapshot. It reports detected gaps such as unresolved endpoints, incomplete flows, ambiguous dispatch and orphaned graph edges, with source evidence when available. |
-| `systemlens analyze call-edge CALLER CALLEE [--root DIR] [--json]` | Diagnoses one expected Java call edge from the persisted snapshot. Each method selector accepts an exact method ID, a qualified name, or an unambiguous qualified-name suffix. The result identifies a method-inventory gap, an absent CodeQL edge, a confidence filter, or the missing IN-to-OUT context. An absent edge is classified as a CodeQL extraction or CodeQL-to-AST join gap because existing snapshots do not retain rejected raw CodeQL rows. |
+| `systemlens analyze call-edge CALLER CALLEE [--module NAME] [--root DIR] [--json]` | Diagnoses one expected Java call edge from the persisted snapshot. Each method selector accepts an exact method ID, a qualified name, or a qualified-name suffix. Without `--module`, a unique caller selects its module as the context and both selectors are restricted to that module. `--module` explicitly selects the context module. The result identifies a method-inventory gap, an absent CodeQL edge, a confidence filter, or the missing IN-to-OUT context. An absent edge is classified as a CodeQL extraction or CodeQL-to-AST join gap because existing snapshots do not retain rejected raw CodeQL rows. |
 | `systemlens analyze flows-diagnostic [--root DIR] [--json]` | Reconciles persisted external endpoints, integration methods, local code flows, and cross-service flows; classifies where each external entry disappears without re-parsing source files. |
 | `systemlens analyze microservices calls\|dependencies\|external-apis\|orphan-integrations [NAME] [--root DIR] [--json]` | Lists a service's outgoing calls, dependencies, external APIs, or integrations with no resolved caller/callee, depending on the subcommand. `external-apis` and `orphan-integrations` accept an optional `NAME` to scope the result to one service. |
 | `systemlens analyze microservices impact NAME [--root DIR] [--json]` | Lists direct neighbors and bounded transitive impact paths for a microservice. REST impact travels from a provider to its callers; Kafka impact travels from a producer to its consumers. For a topic, API, or collection, the command keeps direct neighbors and returns no transitive paths. JSON keeps `neighbors` for direct compatibility and adds `paths` for the transitive result. `paths_truncated` reports whether the result reached the depth or result limit; `paths_max_depth` and `paths_limit` report those bounds. |
@@ -64,13 +64,16 @@ dynamic or interprocedural calls may remain incomplete. After
 `systemlens flows calculate` on stderr as the next step, so scripts can keep
 parsing stdout as JSON.
 
-Use `systemlens analyze call-edge CALLER CALLEE` when one expected Java call
+Use `systemlens analyze call-edge CALLER CALLEE [--module MODULE]` when one expected Java call
 is missing from a flow or graph view. The command reads the method inventory,
 the persisted CodeQL graph, the flow snapshot status, and the configured edge
 confidence recorded by the index. It does not run CodeQL. For an interface
 selector, it also uses the indexed source symbols to match a persisted edge
 whose target is a compatible concrete implementation. Text and JSON output report AST and CodeQL presence for both selected
 nodes and their directed edge. Presence is `present`, `absent`, or `unknown`.
+When `--module` is omitted and the caller selector resolves to one method, its
+module is used automatically for both selectors and for interface implementation
+matching. Use `--module` when the selectors are ambiguous across projects.
 An absent AST method is provable; missing raw CodeQL or AST-call evidence stays
 `unknown`. JSON output also includes the proof basis for each presence value,
 the matched method facts, persisted edge evidence, flow IDs, and the pipeline

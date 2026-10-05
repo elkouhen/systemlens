@@ -100,25 +100,26 @@ def _presence(
 
 
 def _matching_methods(
-    methods: Sequence[IntegrationMethod], query: str,
+    methods: Sequence[IntegrationMethod], query: str, *, module: str | None = None,
 ) -> list[IntegrationMethod]:
     """Resolve an ID, qualified name, or unambiguous qualified-name suffix."""
+    candidates = [method for method in methods if module is None or method.module == module]
     query = query.strip()
-    exact_id = [method for method in methods if method.id == query]
+    exact_id = [method for method in candidates if method.id == query]
     if exact_id:
         return exact_id
-    exact_name = [method for method in methods if method.qualified_method == query]
+    exact_name = [method for method in candidates if method.qualified_method == query]
     if exact_name:
         return exact_name
     suffix = query if query.startswith(".") else f".{query}"
     return sorted(
-        (method for method in methods if method.qualified_method.endswith(suffix)),
+        (method for method in candidates if method.qualified_method.endswith(suffix)),
         key=lambda method: (method.qualified_method, method.path, method.start_line),
     )
 
 
 def _interface_implementation_ids(
-    inventory: ArchitectureInventory, callee: IntegrationMethod,
+    inventory: ArchitectureInventory, callee: IntegrationMethod, *, module: str | None = None,
 ) -> set[str]:
     """Return indexed concrete implementations of an interface method.
 
@@ -136,7 +137,11 @@ def _interface_implementation_ids(
         )
         contract = symbols.methods.get(callee.id)
         if contract is not None and not contract.concrete:
-            return {candidate.method.id for candidate in symbols.implementations(contract)}
+            return {
+                candidate.method.id
+                for candidate in symbols.implementations(contract)
+                if module is None or candidate.method.module == module
+            }
     return set()
 
 
@@ -247,6 +252,7 @@ def diagnose_call_edge(
     caller_query: str,
     callee_query: str,
     *,
+    module: str | None = None,
     snapshot_metadata: Mapping[str, str | None] | None = None,
     codeql_methods: Sequence[CodeQLMethod] | None = None,
 ) -> dict[str, object]:
@@ -258,10 +264,20 @@ def diagnose_call_edge(
         "flow_snapshot_status": metadata.get("code_flow_snapshot_status") or "unknown",
         **settings,
     }
-    callers = _matching_methods(inventory.integration_methods, caller_query)
-    callees = _matching_methods(inventory.integration_methods, callee_query)
+    all_callers = _matching_methods(inventory.integration_methods, caller_query)
+    selected_module = module
+    if selected_module is None and len(all_callers) == 1:
+        selected_module = all_callers[0].module
+    callers = _matching_methods(
+        inventory.integration_methods, caller_query, module=selected_module,
+    )
+    callees = _matching_methods(
+        inventory.integration_methods, callee_query, module=selected_module,
+    )
     callee_alias_ids = (
-        _interface_implementation_ids(inventory, callees[0])
+        _interface_implementation_ids(
+            inventory, callees[0], module=selected_module,
+        )
         if len(callees) == 1 else set()
     )
     codeql_method_ids = None
@@ -278,6 +294,7 @@ def diagnose_call_edge(
         "kind": "call_edge_diagnostic",
         "caller_query": caller_query,
         "callee_query": callee_query,
+        "module": selected_module,
         "caller_candidates": [_method_fact(method) for method in callers],
         "callee_candidates": [_method_fact(method) for method in callees],
         "snapshot": snapshot,
