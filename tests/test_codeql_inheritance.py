@@ -612,6 +612,36 @@ def test_interface_dispatch_prefers_the_callers_module(tmp_path: Path):
     assert {flow.steps[-1].path for flow in flows} == {"orders/LocalPort.java"}
 
 
+def test_internal_flow_scopes_duplicate_interface_implementations_by_module(tmp_path: Path):
+    sources = {
+        "orders/api/Port.java": "package api; public interface Port { void send(); }",
+        "orders/impl/Adapter.java": (
+            "package impl; public class Adapter implements api.Port { "
+            "public void send() { output(); } void output() {} }"
+        ),
+        "orders/web/Controller.java": (
+            "package web; import api.Port; public class Controller { Port port; "
+            "public void entry() { port.send(); } }"
+        ),
+        "billing/api/Port.java": "package api; public interface Port { void send(); }",
+        "billing/impl/Adapter.java": (
+            "package impl; public class Adapter implements api.Port { "
+            "public void send() { output(); } void output() {} }"
+        ),
+    }
+    methods, endpoints = _project(tmp_path, sources)
+
+    flows = materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        [],
+        repo_root=tmp_path,
+        source_paths=list(sources),
+    )
+
+    assert {flow.steps[-1].path for flow in flows} == {"orders/impl/Adapter.java"}
+
+
 def test_qualified_import_does_not_merge_same_simple_type_names(tmp_path: Path):
     sources = {**SOURCES, "unrelated/Base.java": "package unrelated; public abstract class Base { public abstract void execute(String v); }",
                "unrelated/Other.java": "package unrelated; public class Other extends Base { public void execute(String v) { otherOutput(); } void otherOutput() {} }"}
