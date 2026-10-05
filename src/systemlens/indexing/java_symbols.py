@@ -97,11 +97,16 @@ class JavaSymbols:
                     for type_node in child.named_children:
                         candidates = type_node.named_children if type_node.type == "type_list" else [type_node]
                         for candidate in candidates:
-                            base = self.resolve(path, parser.node_text(self.units[path].source, candidate), owner)
+                            base = self.resolve(
+                                path,
+                                parser.node_text(self.units[path].source, candidate),
+                                owner,
+                                allow_ambiguous=True,
+                            )
                             if base is not None and base in self.types and base != owner:
                                 base_locations = self._type_candidates(base, path)
-                                if len(base_locations) == 1:
-                                    base_module = self.path_modules.get(base_locations[0][0], "")
+                                for base_path, _base_node in base_locations:
+                                    base_module = self.path_modules.get(base_path, "")
                                     self.bases[(owner, self.path_modules.get(path, ""))].add(
                                         (base, base_module)
                                     )
@@ -173,40 +178,42 @@ class JavaSymbols:
         same_module = [candidate for candidate in candidates if self.path_modules.get(candidate[0]) == module]
         return same_module or candidates
 
-    def resolve(self, path: str, text: str, owner: str) -> str | None:
+    def resolve(
+        self, path: str, text: str, owner: str, *, allow_ambiguous: bool = False,
+    ) -> str | None:
         text = re.sub(r"<.*>", "", text).strip()
         if text.endswith("[]"):
-            element = self.resolve(path, text[:-2], owner)
+            element = self.resolve(path, text[:-2], owner, allow_ambiguous=allow_ambiguous)
             return element + "[]" if element else None
         if text in _PRIMITIVES:
             return text
         unit = self.units[path]
         if text in self.types and ("." in text or not unit.package):
-            return text if len(self._type_candidates(text, path)) == 1 else None
+            return text if allow_ambiguous or len(self._type_candidates(text, path)) == 1 else None
         scope = owner
         while scope and scope != unit.package:
             nested = f"{scope}.{text}"
             if nested in self.types:
-                return nested if len(self._type_candidates(nested, path)) == 1 else None
+                return nested if allow_ambiguous or len(self._type_candidates(nested, path)) == 1 else None
             scope = scope.rpartition(".")[0]
         first, *rest = text.split(".")
         if first in unit.imports:
             imported = ".".join([unit.imports[first], *rest])
-            return imported if len(self._type_candidates(imported, path)) == 1 else None
+            return imported if allow_ambiguous or len(self._type_candidates(imported, path)) == 1 else None
         local = f"{unit.package}.{text}" if unit.package else text
         if local in self.types:
-            return local if len(self._type_candidates(local, path)) == 1 else None
+            return local if allow_ambiguous or len(self._type_candidates(local, path)) == 1 else None
         candidates = {
             f"{package}.{text}"
             for package in unit.wildcards
             if f"{package}.{text}" in self.types
-            and len(self._type_candidates(f"{package}.{text}", path)) == 1
+            and (allow_ambiguous or len(self._type_candidates(f"{package}.{text}", path)) == 1)
         }
         if text in _JAVA_LANG:
             candidates.add(f"java.lang.{text}")
         if len(candidates) == 1:
             candidate = next(iter(candidates))
-            return candidate if len(self.types.get(candidate, [None])) == 1 else None
+            return candidate if allow_ambiguous or len(self.types.get(candidate, [None])) == 1 else None
         return None
 
     def ancestors(self, owner: str, module: str) -> set[tuple[str, str]]:
@@ -270,6 +277,15 @@ class JavaSymbols:
         receiver_bases = self.ancestors(receiver_type, receiver_module)
         contracts = [candidate for owner in receiver_bases
                      for candidate in self.by_owner.get((owner[0], name, arity, owner[1]), [])]
+        if len(receiver_locations) > 1:
+            contracts = [
+                candidate
+                for (owner, candidate_name, candidate_arity, _candidate_module), values in self.by_owner.items()
+                if owner == receiver_type
+                and candidate_name == name
+                and candidate_arity == arity
+                for candidate in values
+            ]
         if not contracts:
             contracts = [
                 candidate
@@ -347,7 +363,10 @@ class JavaSymbols:
             ident = parameter.child_by_field_name("name")
             type_node = parameter.child_by_field_name("type")
             if ident is not None and parser.node_text(source, ident) == name and type_node is not None:
-                return self.resolve(path, parser.node_text(source, type_node), info.owner)
+                return self.resolve(
+                    path, parser.node_text(source, type_node), info.owner,
+                    allow_ambiguous=True,
+                )
         # Only enclosing lexical blocks can contribute local declarations.
         scope = invocation.parent if not field_only else None
         while scope is not None and scope != info.node:
@@ -358,7 +377,10 @@ class JavaSymbols:
                 for child in declaration.named_children:
                     ident = child.child_by_field_name("name")
                     if ident is not None and parser.node_text(source, ident) == name and type_node is not None:
-                        return self.resolve(path, parser.node_text(source, type_node), info.owner)
+                        return self.resolve(
+                            path, parser.node_text(source, type_node), info.owner,
+                            allow_ambiguous=True,
+                        )
             scope = scope.parent
         found: set[str | None] = set()
         for owner, _owner_module in self.ancestors(info.owner, info.module):
@@ -372,7 +394,10 @@ class JavaSymbols:
                     for child in field.named_children:
                         ident = child.child_by_field_name("name")
                         if ident is not None and parser.node_text(field_source, ident) == name and type_node is not None:
-                            found.add(self.resolve(field_path, parser.node_text(field_source, type_node), owner))
+                            found.add(self.resolve(
+                                field_path, parser.node_text(field_source, type_node), owner,
+                                allow_ambiguous=True,
+                            ))
         return next(iter(found)) if len(found) == 1 else None
 
     def fallback_calls(self, resolved_sites: set[tuple[str, int, str]]) -> list[CodeQLCall]:

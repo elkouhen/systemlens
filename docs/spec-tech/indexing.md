@@ -129,15 +129,18 @@ dependencies. The configured CodeQL thread count and optional RAM limit are
 passed to database creation and query execution only; they tune performance and
 do not alter or invalidate persisted architecture facts.
 
-When CodeQL is disabled or unavailable, a source symbol pass follows uniquely
-resolved, receiver-typed calls between indexed Java methods. It keeps these
-candidates at low confidence and drops ambiguous types or overloads.
+When CodeQL is disabled or unavailable, a source symbol pass follows
+receiver-typed calls between indexed Java methods. It keeps these candidates at
+low confidence and drops ambiguous overloads, while retaining an ambiguous
+receiver type long enough to apply module-scoped interface dispatch.
 When duplicate qualified types exist in different build modules, resolution
 first restricts candidates to the caller's module. Inheritance declarations and
 dispatch indexes retain the `(qualified name, module)` identity, so homonymous
 interfaces and classes cannot merge their relations. If the module scope is
 absent or still ambiguous, all compatible candidates remain possible rather
-than selecting one by name.
+than selecting one by name. An ambiguous receiver type is retained for
+dispatch; compatible contracts are collected and the caller-module preference
+is applied to their concrete implementations.
 Symbol collection scans source bytes and syntax nodes once per flow rebuild.
 Route traversal has the existing bounded `O(I × (V + E))` worst case for `I`
 indexed input methods, `V` source methods and `E` resolved call edges.

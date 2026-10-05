@@ -115,9 +115,10 @@ When a caller module has compatible implementations of the same interface method
 the candidates from that caller module are preferred. If the caller module has no
 compatible implementation, candidates from other modules remain possible.
 Inheritance relations are kept distinct when the same qualified interface or
-class name is declared in different modules. If no module context can resolve
-the duplicate, the alternatives are retained with their ambiguity instead of
-being merged or guessed.
+class name is declared in different modules. An ambiguous receiver type is
+retained long enough to collect compatible contracts, then implementations
+from the caller's module are preferred; if no preference is possible, the
+alternatives remain explicit instead of being merged or guessed.
 CodeQL contributes only source-located resolved callees; recovered receiver
 types and `methodFullName` values without source evidence are diagnostics, not
 architecture edges. Reflection, dynamic routing, and runtime-only routing are
