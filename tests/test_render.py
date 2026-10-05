@@ -490,6 +490,29 @@ def test_graph_keeps_unmatched_and_dynamic_kafka_evidence() -> None:
     assert any("Aucun endpoint opposé" in link["message_type_warning"] for link in data["links"])
 
 
+def test_graph_groups_identical_dynamic_topic_evidence_without_pairing_it() -> None:
+    first = replace(
+        _kafka_endpoint("produce", "OrderCreated", "Publisher.java"),
+        id="dynamic-first",
+        topic="<dynamic>",
+        topic_dynamic=True,
+    )
+    second = replace(
+        _kafka_endpoint("produce", "OrderCreated", "RetryPublisher.java"),
+        id="dynamic-second",
+        topic="<dynamic>",
+        topic_dynamic=True,
+    )
+
+    data = _html_graph_data(render_graph_html({"orders": [first, second]}, []))
+
+    dynamic_nodes = [node for node in data["nodes"] if node.get("unresolved")]
+    assert len(dynamic_nodes) == 1
+    assert dynamic_nodes[0]["endpoint_ids"] == ["dynamic-first", "dynamic-second"]
+    assert len(data["links"]) == 2
+    assert all(link["unresolved"] for link in data["links"])
+
+
 def test_graph_displays_source_topic_label_without_changing_topic_identity() -> None:
     producer = replace(
         _kafka_endpoint("produce", "OrderCreated", "Publisher.java"),

@@ -22,7 +22,9 @@ deterministically to avoid overlap. Cycles remain visible as directed return
 paths. An unresolved target, dynamic topic, or ambiguous route MUST NOT create
 a port-to-port path. The corresponding endpoint evidence remains visible as a
 partial topic relation when it can be represented without pairing it to
-another service. Hovering a port displays its identifier, direction,
+another service. Identical dynamic topic labels within one microservice may
+share one unresolved topic node, but each endpoint relation remains visible.
+Hovering a port displays its identifier, direction,
 protocol endpoint, statically inferred Java parameter/message type when known,
 source-relative evidence path and line, associated Java method and, for a resolved REST call, its
 resolved target; an external caller is never presented as an input's output.

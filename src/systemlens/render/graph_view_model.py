@@ -748,25 +748,44 @@ def build_graph_view_model(
         }
         for name in kafka_topics
     ]
-    # A dynamic topic expression cannot safely be shared with another dynamic
-    # expression. Give each one its own evidence node so the graph exposes the
-    # integration without inventing a concrete Kafka dependency.
+    # Group identical unresolved labels within one service to keep the graph
+    # readable. The expression remains part of the key, and every endpoint
+    # keeps its own link and evidence, so grouping does not assert a topic
+    # identity or create a producer/consumer pairing.
     dynamic_kafka_nodes: dict[str, str] = {}
-    for service, endpoint in sorted(
-        ((service, endpoint) for service, endpoints in endpoints_by_service.items() for endpoint in endpoints
-         if endpoint.system == "kafka" and endpoint.topic_dynamic),
-        key=lambda item: (item[0], item[1].path, item[1].start_line, item[1].id),
+    dynamic_kafka_groups: dict[tuple[str, str, str], list[MessageEndpoint]] = {}
+    for service, endpoints in endpoints_by_service.items():
+        for endpoint in endpoints:
+            if endpoint.system == "kafka" and endpoint.topic_dynamic:
+                dynamic_kafka_groups.setdefault(
+                    (service, topic_display(endpoint), endpoint.topic), []
+                ).append(endpoint)
+    for (service, display_name, expression), grouped_endpoints in sorted(
+        dynamic_kafka_groups.items(),
+        key=lambda item: (item[0][0], item[0][1], item[0][2]),
     ):
-        node_id = f"kafka_topic_unresolved:{endpoint.id}"
-        dynamic_kafka_nodes[endpoint.id] = node_id
+        grouped_endpoints.sort(key=lambda endpoint: (endpoint.path, endpoint.start_line, endpoint.id))
+        node_id = f"kafka_topic_unresolved:{grouped_endpoints[0].id}"
+        for endpoint in grouped_endpoints:
+            dynamic_kafka_nodes[endpoint.id] = node_id
+        message_types = {endpoint.message_type for endpoint in grouped_endpoints if endpoint.message_type}
         nodes.append({
             "id": node_id,
             "kind": "kafka_topic",
             "name": f"Topic dynamique · {service}",
-            "label": f"? {topic_display(endpoint)} · {service}",
-            "topic_expression": endpoint.topic,
+            "label": f"? {display_name} · {service}",
+            "topic_expression": expression,
+            "endpoint_ids": [endpoint.id for endpoint in grouped_endpoints],
             "unresolved": True,
-            "message_type_status": "unknown" if not endpoint.message_type else "known",
+            "message_type_status": (
+                "unknown"
+                if not message_types
+                else "partial"
+                if any(not endpoint.message_type for endpoint in grouped_endpoints)
+                else "mixed"
+                if len(message_types) > 1
+                else "known"
+            ),
             "width": 190,
             "height": 42,
         })

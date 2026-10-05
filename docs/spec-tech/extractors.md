@@ -89,9 +89,10 @@ explicit listener parameter or client generic signature. A concrete shared
 topic creates a producer/consumer service arc even when one or both Java
 message types are unknown. The arc has medium confidence when type evidence is
 missing. Two known and different types remain incompatible and do not create an
-arc. An unmatched endpoint is exported as partial evidence, and a dynamic
-topic receives an endpoint-specific unresolved topic node; dynamic topics do
-not create a producer/consumer pairing. The HTML payload includes a warning
+arc. An unmatched endpoint is exported as partial evidence. Identical dynamic
+topic labels within one service share an unresolved topic node while retaining
+each endpoint link and source evidence; dynamic topics do not create a
+producer/consumer pairing. The HTML payload includes a warning
 status (`unknown`, `partial`, or `mismatch`) so consumers can distinguish
 evidence from a complete typed match. The Kafka AST resolver evaluates
 ternary topic expressions branch by branch, preserving one endpoint per
