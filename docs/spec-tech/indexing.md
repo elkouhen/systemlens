@@ -147,6 +147,22 @@ than selecting one by name. An ambiguous receiver type is retained for
 dispatch; compatible contracts are collected and the caller-module preference
 is applied to their concrete implementations.
 Symbol collection scans source bytes and syntax nodes once per flow rebuild.
+`JavaSymbols.resolve` accepts explicit imports and qualified type names as
+signature identities even when dependency sources are absent. Callees still
+require indexed source methods; external type identities do not create edges.
+
+The symbol index groups inherited declarations by name and parameter signature
+for each source class. More specific declarations hide ancestor bodies, including
+abstract redeclarations. Public instance bodies are associated with the class's
+ancestor contracts, preserving separate compatible implementations.
+For `D` inherited declarations in one signature group, hiding checks cost
+`O(D²)`; the additional index stores compatible contract-to-method memberships.
+
+For a method invocation used as a receiver, the fallback reads source-declared
+return types through the receiver hierarchy. It requires one parameter signature
+and one resolved return type, and bounds nested receiver analysis to 16 calls.
+Generic return substitution and ambiguous overload selection are unsupported.
+These inferred calls retain `possible` dispatch and low flow confidence.
 Route traversal has the existing bounded `O(I × (V + E))` worst case for `I`
 indexed input methods, `V` source methods and `E` resolved call edges.
 

@@ -21,6 +21,9 @@ The functional specification owns observable CLI, MCP, export, and interaction
 behavior. This specification owns implementation constraints and persisted data
 contracts. [ADRs](ADR.md) own durable architectural choices.
 
+The indexing section specifies Java signature identity, inherited interface
+implementations, and declared return types used by the call-graph fallback.
+
 ## Detailed sections
 
 - [Architecture](spec-tech/architecture.md)

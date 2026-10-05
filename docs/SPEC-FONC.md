@@ -18,6 +18,9 @@ in `docs/spec-fonc/` so each topic can be read and reviewed independently.
 The keywords **MUST** and **MUST NOT** identify compatibility requirements.
 The section files are normative for the behavior they own.
 
+The extraction rules include interface calls through inherited implementations
+and declared method return types, with explicit fallback confidence limits.
+
 ## Contract ownership
 
 The functional specification owns CLI, MCP, export, interaction, and

@@ -55,6 +55,7 @@ public class Controller {
   Base service;
   public void entry(String value) { service.execute(value); }
 }
+
 """,
     "impl/Concrete.java": """package impl;
 import api.Middle;
@@ -854,3 +855,170 @@ public class OrderController {
         ]
         for flow in flows
     )
+
+
+@pytest.mark.parametrize("parameter,imports", [
+    ("String", ""),
+    ("java.lang.String", ""),
+    ("UUID", "import java.util.UUID;"),
+    ("java.util.UUID", ""),
+    ("UUID[]", "import java.util.UUID;"),
+])
+@pytest.mark.parametrize("contract_call", [False, True])
+def test_interface_parameter_identity_does_not_require_dependency_sources(
+    tmp_path: Path, parameter: str, imports: str, contract_call: bool,
+):
+    sources = {
+        "app/Port.java": f"package app; {imports} public interface Port {{ void send({parameter} value); }}",
+        "app/Adapter.java": f"""package app; {imports}
+public class Adapter implements Port {{
+  public void send({parameter} value) {{ output(); }}
+  void output() {{}}
+}}""",
+        "app/Controller.java": f"""package app; {imports}
+public class Controller {{
+  Port port;
+  public void entry({parameter} value) {{ port.send(value); }}
+}}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    caller = next(m for m in methods if m.qualified_method == "app.Controller.entry")
+    contract = next(m for m in methods if m.qualified_method == "app.Port.send")
+    calls = [CodeQLCall(caller.qualified_method, caller.path, caller.start_line,
+                        contract.qualified_method, contract.path, contract.start_line,
+                        caller.start_line, "possible")] if contract_call else []
+    edges = []
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, calls, repo_root=tmp_path, source_paths=list(sources),
+        call_graph_sink=lambda graph: edges.extend(graph.edges()),
+    )
+    implementation = next(m for m in methods if m.qualified_method == "app.Adapter.send")
+    assert any(e.caller_id == caller.id and e.callee_id == implementation.id
+               and e.inferred and e.dispatch_confidence == "possible" for e in edges)
+    assert len(flows) == 1
+    assert flows[0].confidence == "low"
+
+
+@pytest.mark.parametrize("second_adapter", [False, True])
+@pytest.mark.parametrize("contract_call", [False, True])
+def test_interface_implementation_inherited_from_unrelated_base(
+    tmp_path: Path, second_adapter: bool, contract_call: bool,
+):
+    sources = {
+        "app/Port.java": "package app; public interface Port { void send(String value); }",
+        "app/Base.java": """package app; public class Base {
+  public void send(String value) { output(); }
+  void output() {}
+}""",
+        "app/Adapter.java": "package app; public class Adapter extends Base implements Port {}",
+        "app/Controller.java": """package app; public class Controller {
+  Port port;
+  public void entry(String value) { port.send(value); }
+}""",
+    }
+    if second_adapter:
+        sources["app/Second.java"] = """package app; public class Second implements Port {
+  public void send(String value) { otherOutput(); }
+  void otherOutput() {}
+}"""
+    methods, endpoints = _project(tmp_path, sources)
+    caller = next(m for m in methods if m.qualified_method == "app.Controller.entry")
+    contract = next(m for m in methods if m.qualified_method == "app.Port.send")
+    calls = [CodeQLCall(caller.qualified_method, caller.path, caller.start_line,
+                        contract.qualified_method, contract.path, contract.start_line,
+                        caller.start_line, "possible")] if contract_call else []
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, calls, repo_root=tmp_path, source_paths=list(sources),
+    )
+    assert {f.steps[-1].path for f in flows} == (
+        {"app/Base.java", "app/Second.java"} if second_adapter else {"app/Base.java"}
+    )
+    assert all(f.confidence == "low" for f in flows)
+
+
+@pytest.mark.parametrize("receiver", ["getPort()", "this.getPort()", "holder.getPort()", "getHolder().getPort()"])
+def test_declared_getter_return_type_reaches_interface_implementation(tmp_path: Path, receiver: str):
+    sources = {
+        "app/Port.java": "package app; public interface Port { void send(); }",
+        "app/Adapter.java": """package app; public class Adapter implements Port {
+  public void send() { output(); }
+  void output() {}
+}""",
+        "app/Holder.java": "package app; public interface Holder { Port getPort(); }",
+        "app/Controller.java": f"""package app; public class Controller {{
+  Port port;
+  Holder holder;
+  Port getPort() {{ return port; }}
+  Holder getHolder() {{ return holder; }}
+  public void entry() {{ {receiver}.send(); }}
+}}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
+    )
+    assert len(flows) == 1
+    assert flows[0].steps[-1].path == "app/Adapter.java"
+    assert flows[0].confidence == "low"
+
+
+@pytest.mark.parametrize("getter", [
+    "<T> T getPort() { return null; }",
+    "Port getPort(String v) { return null; } Port getPort(Integer v) { return null; }",
+])
+def test_unresolved_or_overloaded_getter_does_not_guess_receiver(tmp_path: Path, getter: str):
+    argument = '"x"' if "String" in getter else ""
+    sources = {
+        "app/Port.java": "package app; public interface Port { void send(); }",
+        "app/Adapter.java": """package app; public class Adapter implements Port {
+  public void send() { output(); }
+  void output() {}
+}""",
+        "app/Controller.java": f"""package app; public class Controller {{
+  {getter}
+  public void entry() {{ getPort({argument}).send(); }}
+}}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    assert materialize_codeql_code_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
+    ) == []
+
+
+@pytest.mark.parametrize("modifier", ["private", "protected", "public static"])
+def test_non_public_instance_body_cannot_supply_interface_implementation(tmp_path: Path, modifier: str):
+    sources = {
+        "app/Port.java": "package app; public interface Port { void send(); }",
+        "app/Base.java": f"package app; public class Base {{ {modifier} void send() {{}} }}",
+        "app/Adapter.java": "package app; public abstract class Adapter extends Base implements Port {}",
+    }
+    methods, _ = _project(tmp_path, sources)
+    symbols = JavaSymbols(tmp_path, methods, list(sources))
+    contract = next(m for m in symbols.methods.values() if m.method.qualified_method == "app.Port.send")
+    assert symbols.implementations(contract) == []
+
+
+def test_inherited_interface_body_is_hidden_by_abstract_redeclaration(tmp_path: Path):
+    sources = {
+        "app/Port.java": "package app; public interface Port { void send(); }",
+        "app/Base.java": "package app; public class Base { public void send() {} }",
+        "app/Adapter.java": """package app; public abstract class Adapter extends Base implements Port {
+  public abstract void send();
+}""",
+    }
+    methods, _ = _project(tmp_path, sources)
+    symbols = JavaSymbols(tmp_path, methods, list(sources))
+    contract = next(m for m in symbols.methods.values() if m.method.qualified_method == "app.Port.send")
+    assert symbols.implementations(contract) == []
+
+
+def test_distinct_external_parameter_types_do_not_match(tmp_path: Path):
+    sources = {
+        "app/Port.java": "package app; import external.One; public interface Port { void send(One value); }",
+        "app/Adapter.java": """package app; import external.Two;
+public abstract class Adapter implements Port { public void send(Two value) {} }""",
+    }
+    methods, _ = _project(tmp_path, sources)
+    symbols = JavaSymbols(tmp_path, methods, list(sources))
+    contract = next(m for m in symbols.methods.values() if m.method.qualified_method == "app.Port.send")
+    assert symbols.implementations(contract) == []

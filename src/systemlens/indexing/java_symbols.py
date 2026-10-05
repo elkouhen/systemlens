@@ -53,6 +53,7 @@ class JavaSymbols:
         self.dispatch: dict[tuple[str, str, str, tuple[str | None, ...]], list[_Method]] = defaultdict(list)
         self._ancestors: dict[tuple[str, str], set[tuple[str, str]]] = {}
         self._targets: dict[tuple[str, str, int, str], IntegrationMethod | None] = {}
+        self.inherited_dispatch: dict[tuple[str, str], set[str]] = defaultdict(set)
         by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
         for method in methods:
             by_path[method.path].append(method)
@@ -153,6 +154,43 @@ class JavaSymbols:
                     for base_owner, base_module in self.ancestors(owner, info.module):
                         self.dispatch[(base_owner, base_module, name, info.parameters)].append(info)
 
+        self._index_inherited_implementations()
+
+    def _index_inherited_implementations(self) -> None:
+        """Associate inherited public bodies with contracts on source subtypes."""
+        by_type: dict[tuple[str, str], list[_Method]] = defaultdict(list)
+        for info in self.methods.values():
+            by_type[(info.owner, info.module)].append(info)
+        for owner, locations in self.types.items():
+            for path, node in locations:
+                if node.type != "class_declaration":
+                    continue
+                ancestors = self.ancestors(owner, self.path_modules.get(path, ""))
+                signatures: dict[tuple[str, tuple[str | None, ...]], list[_Method]] = defaultdict(list)
+                for ancestor in ancestors:
+                    for info in by_type.get(ancestor, []):
+                        name = info.method.qualified_method.rsplit(".", 1)[-1]
+                        signatures[(name, info.parameters)].append(info)
+                for (name, parameters), declarations in signatures.items():
+                    if any(parameter is None for parameter in parameters):
+                        continue
+                    bodies = [info for info in declarations if info.concrete and not any(
+                        other is not info
+                        and (info.owner, info.module) != (other.owner, other.module)
+                        and (info.owner, info.module) in self.ancestors(other.owner, other.module)
+                        for other in declarations
+                    )]
+                    for info in bodies:
+                        modifiers = next((child for child in info.node.children if child.type == "modifiers"), None)
+                        words = set(parser.node_text(self.units[info.method.path].source, modifiers).split()) if modifiers else set()
+                        if "public" not in words or words & {"static", "private"}:
+                            continue
+                        for base_owner, base_module in ancestors:
+                            key = (base_owner, base_module, name, parameters)
+                            if info not in self.dispatch[key]:
+                                self.dispatch[key].append(info)
+                            self.inherited_dispatch[(base_owner, base_module)].add(info.method.id)
+
     def owner(self, path: str, node: Node) -> str:
         names: list[str] = []
         current: Node | None = node
@@ -199,7 +237,7 @@ class JavaSymbols:
         first, *rest = text.split(".")
         if first in unit.imports:
             imported = ".".join([unit.imports[first], *rest])
-            return imported if allow_ambiguous or len(self._type_candidates(imported, path)) == 1 else None
+            return imported if allow_ambiguous or len(self._type_candidates(imported, path)) <= 1 else None
         local = f"{unit.package}.{text}" if unit.package else text
         if local in self.types:
             return local if allow_ambiguous or len(self._type_candidates(local, path)) == 1 else None
@@ -214,6 +252,8 @@ class JavaSymbols:
         if len(candidates) == 1:
             candidate = next(iter(candidates))
             return candidate if allow_ambiguous or len(self.types.get(candidate, [None])) == 1 else None
+        if not candidates and re.fullmatch(r"[\w$]+(?:\.[\w$]+)+", text):
+            return text
         return None
 
     def ancestors(self, owner: str, module: str) -> set[tuple[str, str]]:
@@ -305,7 +345,8 @@ class JavaSymbols:
                               candidate.owner, candidate.module
                           )
                       )
-                      or (candidate.owner, candidate.module) in receiver_bases}
+                      or (candidate.owner, candidate.module) in receiver_bases
+                      or candidate.method.id in self.inherited_dispatch.get((receiver_type, receiver_module), set())}
         receiver_modules = {
             self.path_modules.get(candidate_path)
             for candidate_path, _ in self._type_candidates(receiver_type, path)
@@ -335,7 +376,11 @@ class JavaSymbols:
                 )
             )
         ]
-        if len(inherited_overrides) == 1:
+        if len(inherited_overrides) == 1 and all(
+            candidate is inherited_overrides[0]
+            or (candidate.owner, candidate.module) in receiver_bases
+            for candidate in candidates.values()
+        ):
             return [inherited_overrides[0].method]
         # Overrides present on the declared receiver hide ancestor bodies.
         # Possible overrides on other runtime subtypes remain ambiguous.
@@ -400,6 +445,41 @@ class JavaSymbols:
                             ))
         return next(iter(found)) if len(found) == 1 else None
 
+    def receiver_type(self, info: _Method, receiver: Node | None, invocation: Node, depth: int = 0) -> str | None:
+        """Read declared receiver/return types without evaluating method bodies."""
+        if depth > 16:
+            return None
+        source = self.units[info.method.path].source
+        if receiver is None or receiver.type == "this":
+            return info.owner
+        if receiver.type == "identifier":
+            return self.variable_type(info, parser.node_text(source, receiver), invocation)
+        if receiver.type == "field_access" and parser.node_text(source, receiver).startswith("this."):
+            return self.variable_type(info, parser.node_text(source, receiver)[5:], invocation, field_only=True)
+        if receiver.type != "method_invocation":
+            return None
+        parent_receiver, name, arguments = parser.invocation_parts(receiver, source)
+        owner = self.receiver_type(info, parent_receiver, receiver, depth + 1)
+        if owner is None:
+            return None
+        locations = self._type_candidates(owner, info.method.path)
+        if len(locations) != 1:
+            return None
+        module = self.path_modules.get(locations[0][0], info.module)
+        declarations = [candidate for base, base_module in self.ancestors(owner, module)
+                        for candidate in self.by_owner.get((base, name, len(arguments), base_module), [])]
+        if len({candidate.parameters for candidate in declarations}) != 1:
+            return None
+        returns: set[str | None] = set()
+        for candidate in declarations:
+            type_node = candidate.node.child_by_field_name("type")
+            returns.add(self.resolve(
+                candidate.method.path,
+                parser.node_text(self.units[candidate.method.path].source, type_node),
+                candidate.owner,
+            ) if type_node is not None else None)
+        return next(iter(returns)) if len(returns) == 1 else None
+
     def fallback_calls(self, resolved_sites: set[tuple[str, int, str]]) -> list[CodeQLCall]:
         calls: list[CodeQLCall] = []
         for info in self.methods.values():
@@ -411,15 +491,7 @@ class JavaSymbols:
                     continue
                 line = invocation.start_point.row + 1
                 receiver, name, arguments = parser.invocation_parts(invocation, source)
-                receiver_type: str | None
-                if receiver is None or receiver.type == "this":
-                    receiver_type = info.owner
-                elif receiver.type == "identifier":
-                    receiver_type = self.variable_type(info, parser.node_text(source, receiver), invocation)
-                elif receiver.type == "field_access" and parser.node_text(source, receiver).startswith("this."):
-                    receiver_type = self.variable_type(info, parser.node_text(source, receiver)[5:], invocation, field_only=True)
-                else:
-                    receiver_type = None
+                receiver_type = self.receiver_type(info, receiver, invocation)
                 if receiver_type is None:
                     continue
                 target = self.target(

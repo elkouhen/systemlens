@@ -114,6 +114,13 @@ exactly one indexed method has the qualified name. That fallback is marked
 Source-declared abstract/interface dispatch may bridge to source-backed concrete
 implementations and receiver-based helper calls may be added, always as
 `possible`/`low`; multiple candidates remain separate and explicitly ambiguous.
+Explicit imports and qualified parameter types can identify a signature without
+dependency sources. Interface implementations can use inherited public instance
+methods, provided a more specific declaration does not hide the inherited body.
+Calls such as `getPort().send()` use the getter's declared return type when its
+name and arity identify one parameter signature and one resolved return type.
+Unknown return types and ambiguous overloads remain unresolved; the fallback
+does not evaluate getter bodies or select runtime beans.
 When a caller module has compatible implementations of the same interface method,
 the candidates from that caller module are preferred. If the caller module has no
 compatible implementation, candidates from other modules remain possible.

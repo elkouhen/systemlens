@@ -26,7 +26,7 @@ from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 from systemlens.indexing.java_symbols import JavaSymbols
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v25-inherited-dispatch-candidates"
+CODE_FLOW_SIGNATURE = "code-flow-v26-interface-signatures-and-receivers"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
