@@ -75,7 +75,7 @@ def infer_kafka_endpoints(
     endpoints = _infer_kafka_endpoints(repo_root, files)
     if strategy1:
         endpoints = apply_kafka_topic_strategy1(
-            endpoints, infer_kafka_topic_strategy1_endpoints(repo_root, files)
+            endpoints, infer_kafka_topic_strategy1_endpoints(repo_root, files), repo_root
         )
     return endpoints
 

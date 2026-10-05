@@ -14,9 +14,10 @@ def infer_kafka_endpoints(repo_root, files: list[str] | None = None) -> list[Mes
 
 
 def apply_kafka_endpoints(
-    endpoints: list[MessageEndpoint], strategy_endpoints: list[MessageEndpoint]
+    endpoints: list[MessageEndpoint], strategy_endpoints: list[MessageEndpoint],
+    repo_root=None,
 ) -> list[MessageEndpoint]:
     """Replace generic Kafka facts at source sites covered by Strategy1."""
     from systemlens.scanner.kafka_conventions import apply_kafka_topic_strategy1
 
-    return apply_kafka_topic_strategy1(endpoints, strategy_endpoints)
+    return apply_kafka_topic_strategy1(endpoints, strategy_endpoints, repo_root)

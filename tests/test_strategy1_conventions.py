@@ -7,6 +7,7 @@ from systemlens.conventions.strategy1.profile import is_enabled
 from systemlens.conventions.strategy1.rest import rest_target_service_hint
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule
+from systemlens.scanner import infer_kafka_endpoints as infer_indexed_kafka_endpoints
 
 
 def _module(name: str, path: Path) -> DiscoveredModule:
@@ -129,4 +130,84 @@ record OrderCreated(String id) {}
 
     assert [(endpoint.topic, endpoint.topic_dynamic) for endpoint in endpoints] == [
         ("<dynamic>", True)
+    ]
+
+
+def test_strategy1_validates_resolved_dynamic_topic_after_prefix_removal(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  OrdersCreated:\n    nom: ${kafka.prefix-topic}.commerce.orders.created\n",
+        encoding="utf-8",
+    )
+    source = tmp_path / "src/main/java/Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """import org.springframework.beans.factory.annotation.Value;
+class Publisher {
+  @Value("${kafka.topics.OrdersCreated.nom}")
+  private String topic;
+  void publish(OrderCreated event) {
+    kafkaService.envoyerMessageKafka(topic, event);
+  }
+}
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_endpoints(tmp_path)
+
+    assert [(endpoint.topic, endpoint.topic_dynamic) for endpoint in endpoints] == [
+        ("commerce.orders.created", False)
+    ]
+
+
+def test_strategy1_maps_literal_send_topic_key_from_kafka_yaml(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  OrdersCreated:\n    nom: commerce.orders.created\n",
+        encoding="utf-8",
+    )
+    source = tmp_path / "src/main/java/Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class Publisher {
+  void publish(OrderCreated event) {
+    kafkaService.envoyerMessageKafka("OrdersCreated", event);
+  }
+}
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_endpoints(tmp_path)
+
+    assert [(endpoint.topic, endpoint.topic_dynamic) for endpoint in endpoints] == [
+        ("commerce.orders.created", False)
+    ]
+
+
+def test_strategy1_maps_generic_send_topic_key_from_kafka_yaml(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  OrdersCreated:\n    nom: commerce.orders.created\n",
+        encoding="utf-8",
+    )
+    source = tmp_path / "src/main/java/Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """import org.springframework.kafka.core.KafkaTemplate;
+class Publisher {
+  private KafkaTemplate<String, OrderCreated> template;
+  void publish(OrderCreated event) {
+    template.send("OrdersCreated", event);
+  }
+}
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_indexed_kafka_endpoints(tmp_path, strategy1=True)
+
+    assert [(endpoint.topic, endpoint.topic_dynamic) for endpoint in endpoints] == [
+        ("commerce.orders.created", False)
     ]

@@ -179,6 +179,8 @@ def resolve_spring_property(
         flat = _load_flat_spring_properties(path_str)
         if key in flat:
             return flat[key]
+        if key.casefold().startswith("kafka.") and key[6:] in flat:
+            return flat[key[6:]]
     return default or None
 
 

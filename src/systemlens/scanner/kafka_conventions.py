@@ -31,6 +31,7 @@ from systemlens.scanner._spring_properties import (
     resolve_strategy1_kafka_topic,
     strategy1_kafka_topics,
 )
+from systemlens.domain.topic_expressions import spring_topic_reference
 
 _STRATEGY1_PRODUCER_RE = re.compile(r"\bgetTopics\s*\(\s*\)\s*\.\s*get([A-Z]\w*)\s*\(\s*\)")
 _STRATEGY1_KAFKA_KEY_RE = re.compile(
@@ -57,6 +58,9 @@ def _validate_strategy1_topic(
         declared = catalog.get(_strategy1_topic_name(logical_key))
         if declared is not None:
             return declared, False
+    declared = catalog.get(_strategy1_topic_name(topic))
+    if declared is not None:
+        return declared, False
     if topic in catalog.values():
         return topic, False
     return "<dynamic>", True
@@ -79,7 +83,21 @@ def _strategy1_topic_from_value(
                 dynamic = False
             return resolved, dynamic, resolved if not dynamic and catalog is not None else logical_key
     topic, dynamic = _kafka_topic_from_value(value_node, source, repo_root, rel_path)
+    if dynamic and value_node is not None and value_node.type == "string_literal":
+        literal = java_parser.string_value(value_node, source)
+        reference = spring_topic_reference(literal or "")
+        if reference is not None and catalog is not None:
+            parts = reference.property_key.split(".")
+            logical_key = (
+                parts[-2]
+                if parts and parts[-1].casefold() == "nom" and len(parts) > 1
+                else parts[-1]
+            )
+            declared = catalog.get(_strategy1_topic_name(logical_key))
+            if declared is not None:
+                return declared, False, declared
     if not dynamic:
+        topic = remove_strategy1_kafka_prefix(topic)
         topic, dynamic = _validate_strategy1_topic(topic, catalog)
     if dynamic and value_node is not None:
         expression = java_parser.node_text(source, value_node)
@@ -91,7 +109,9 @@ def _strategy1_topic_from_value(
                         _strategy1_topic_name(logical_name), catalog, logical_name
                     )
                     return resolved, dynamic, logical_name
-    return (_strategy1_topic_name(topic) if not dynamic else topic), dynamic, topic if not dynamic else None
+    if not dynamic:
+        topic = topic if catalog is not None else _strategy1_topic_name(topic)
+    return topic, dynamic, topic if not dynamic else None
 
 
 def _strategy1_topic_values(
@@ -295,9 +315,26 @@ def infer_kafka_topic_strategy1_endpoints(
                 endpoints[endpoint.id] = endpoint
     return list(endpoints.values())
 def apply_kafka_topic_strategy1(
-    endpoints: list[MessageEndpoint], strategy_endpoints: list[MessageEndpoint]
+    endpoints: list[MessageEndpoint], strategy_endpoints: list[MessageEndpoint],
+    repo_root: Path | None = None,
 ) -> list[MessageEndpoint]:
     """Replace standard Kafka extraction without discarding known payload types."""
+    catalog = strategy1_kafka_topics(repo_root) if repo_root is not None else None
+    validated_endpoints = []
+    for endpoint in endpoints:
+        if catalog is None or endpoint.system != "kafka" or endpoint.role != "produce":
+            validated_endpoints.append(endpoint)
+            continue
+        logical_key = endpoint.topic.rsplit(".", 1)[-1]
+        topic, dynamic = _validate_strategy1_topic(endpoint.topic, catalog, logical_key)
+        validated_endpoints.append(
+            replace(
+                endpoint,
+                topic=topic,
+                topic_dynamic=dynamic,
+                topic_display=endpoint.topic_display or endpoint.topic,
+            )
+        )
     normalized_strategy_endpoints = [
         replace(
             endpoint,
@@ -313,7 +350,7 @@ def apply_kafka_topic_strategy1(
         for endpoint in strategy_endpoints
     ]
     generic_by_site: dict[tuple[str, str, int], list[MessageEndpoint]] = {}
-    for endpoint in endpoints:
+    for endpoint in validated_endpoints:
         if endpoint.system == "kafka":
             generic_by_site.setdefault(
                 (endpoint.role, endpoint.path, endpoint.start_line), []
@@ -324,7 +361,7 @@ def apply_kafka_topic_strategy1(
     }
     retained = [
         endpoint
-        for endpoint in endpoints
+        for endpoint in validated_endpoints
         if endpoint.system != "kafka"
         or (endpoint.role, endpoint.path, endpoint.start_line) not in covered_sites
     ]
