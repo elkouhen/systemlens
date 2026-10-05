@@ -479,6 +479,10 @@ def _build_codeql_call_graph(
     def normalized_method_name(name: str) -> str:
         """Align analyzer method names with Java source declarations."""
         normalized = name.replace("$", ".").split(":", 1)[0]
+        # CodeQL uses ``$`` as the qualified-name marker for a type in the
+        # unnamed package.  Replacing it with the nested-type separator would
+        # otherwise leave a leading ``..`` and prevent the source join.
+        normalized = normalized.lstrip(".")
         open_parenthesis = normalized.find("(")
         if open_parenthesis >= 0:
             normalized = normalized[:open_parenthesis]

@@ -81,6 +81,35 @@ def test_ast_cross_module_abstract_dispatch_through_empty_base_and_helper(tmp_pa
     assert [step.name for step in flows[0].steps[1:-1]] == ["impl.Concrete.execute", "impl.Concrete.output"]
 
 
+def test_codeql_unnamed_package_marker_joins_to_indexed_method(tmp_path: Path):
+    sources = {
+        "orders/Controller.java": """public class Controller {
+  public void entry() { output(); }
+  public void output() {}
+}
+""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    entry = next(method for method in methods if method.qualified_method == "Controller.entry")
+    output = next(method for method in methods if method.qualified_method == "Controller.output")
+    persisted_edges = []
+
+    materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        [CodeQLCall(
+            "$.Controller.entry", entry.path, entry.start_line,
+            "$.Controller.output", output.path, output.start_line,
+            entry.start_line,
+        )],
+        repo_root=tmp_path,
+        source_paths=list(sources),
+        call_graph_sink=lambda graph: persisted_edges.extend(graph.edges()),
+    )
+
+    assert any(edge.caller_id == entry.id and edge.callee_id == output.id for edge in persisted_edges)
+
+
 def test_ast_interface_field_dispatch_reaches_same_module_output(tmp_path: Path):
     sources = {
         "orders/OrderService.java": """package orders;
