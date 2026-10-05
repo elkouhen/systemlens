@@ -1322,6 +1322,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="topic-visibility-filter"' in document
     assert 'id="topic-visibility-list"' in document
     assert 'hiddenTopics.has(node.name)' in document
+    assert 'persistHiddenMicroservices();\n          renderMicroserviceVisibility();\n          rebuildGraph();' in document
     assert 'Tout réafficher' in document
     assert '.microservice-visibility-reset' in document
     assert 'systemlens:hidden-microservices' in document

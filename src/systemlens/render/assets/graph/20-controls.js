@@ -165,6 +165,7 @@
           if (input.checked) hiddenMicroservices.delete(name);
           else hiddenMicroservices.add(name);
           persistHiddenMicroservices();
+          renderMicroserviceVisibility();
           rebuildGraph();
         });
         label.append(input, document.createTextNode(name));
