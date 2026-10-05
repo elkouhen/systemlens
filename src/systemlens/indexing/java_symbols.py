@@ -245,9 +245,17 @@ class JavaSymbols:
     def target(
         self, receiver_type: str, name: str, arity: int, module: str, path: str,
     ) -> IntegrationMethod | None:
+        candidates = self.possible_targets(receiver_type, name, arity, module, path)
+        if len(candidates) == 1:
+            self._targets[(receiver_type, name, arity, module)] = candidates[0]
+            return candidates[0]
+        return None
+
+    def possible_targets(
+        self, receiver_type: str, name: str, arity: int, module: str, path: str,
+    ) -> list[IntegrationMethod]:
+        """Return all source-backed targets compatible with a receiver call."""
         key = (receiver_type, name, arity, module)
-        if key in self._targets:
-            return self._targets[key]
         self._targets[key] = None
         receiver_bases = self.ancestors(receiver_type)
         contracts = [candidate for owner in receiver_bases
@@ -261,7 +269,7 @@ class JavaSymbols:
             ]
         signatures = {candidate.parameters for candidate in contracts}
         if len(signatures) != 1:
-            return None
+            return []
         candidates = {candidate.method.id: candidate for contract in contracts
                       for candidate in self.implementations(contract)
                       if receiver_type in self.ancestors(candidate.owner)
@@ -291,8 +299,7 @@ class JavaSymbols:
             and receiver_type in self.ancestors(candidate.owner)
         ]
         if len(inherited_overrides) == 1:
-            self._targets[key] = inherited_overrides[0].method
-            return self._targets[key]
+            return [inherited_overrides[0].method]
         # Overrides present on the declared receiver hide ancestor bodies.
         # Possible overrides on other runtime subtypes remain ambiguous.
         hidden: set[str] = set()
@@ -300,9 +307,7 @@ class JavaSymbols:
             if candidate.owner in receiver_bases:
                 hidden.update(self.ancestors(candidate.owner) - {candidate.owner})
         remaining = [candidate for candidate in candidates.values() if candidate.owner not in hidden]
-        if len(remaining) == 1:
-            self._targets[key] = remaining[0].method
-        return self._targets[key]
+        return [candidate.method for candidate in remaining]
 
     def variable_type(self, info: _Method, name: str, invocation: Node, *, field_only: bool = False) -> str | None:
         path = info.method.path
@@ -365,12 +370,16 @@ class JavaSymbols:
                 target = self.target(
                     receiver_type, name, len(arguments), info.module, info.method.path
                 )
-                if target is None:
+                targets = [target] if target is not None else self.possible_targets(
+                    receiver_type, name, len(arguments), info.module, info.method.path
+                )
+                if not targets:
                     continue
-                if (info.method.id, line, target.id) in resolved_sites:
-                    continue
-                calls.append(CodeQLCall(
-                    info.method.qualified_method, info.method.path, info.method.start_line,
-                    target.qualified_method, target.path, target.start_line, line, "possible",
-                ))
+                for target in targets:
+                    if (info.method.id, line, target.id) in resolved_sites:
+                        continue
+                    calls.append(CodeQLCall(
+                        info.method.qualified_method, info.method.path, info.method.start_line,
+                        target.qualified_method, target.path, target.start_line, line, "possible",
+                    ))
         return calls

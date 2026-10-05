@@ -517,7 +517,13 @@ def test_multiple_real_implementations_remain_unresolved(tmp_path: Path):
     sources = {**SOURCES, "impl/Second.java":
                "package impl; public class Second extends api.Base { public void execute(String v) { otherOutput(); } void otherOutput() {} }"}
     methods, endpoints = _project(tmp_path, sources)
-    assert materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources)) == []
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources)
+    )
+    assert {flow.steps[-1].path for flow in flows} == {
+        "impl/Concrete.java", "impl/Second.java",
+    }
+    assert all(flow.confidence == "low" for flow in flows)
 
 
 def test_qualified_import_does_not_merge_same_simple_type_names(tmp_path: Path):
