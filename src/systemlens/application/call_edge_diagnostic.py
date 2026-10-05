@@ -264,10 +264,7 @@ def diagnose_call_edge(
         "flow_snapshot_status": metadata.get("code_flow_snapshot_status") or "unknown",
         **settings,
     }
-    all_callers = _matching_methods(inventory.integration_methods, caller_query)
     selected_module = module
-    if selected_module is None and len(all_callers) == 1:
-        selected_module = all_callers[0].module
     callers = _matching_methods(
         inventory.integration_methods, caller_query, module=selected_module,
     )
@@ -534,4 +531,65 @@ def render_call_edge_diagnostic_text(result: Mapping[str, object]) -> str:
     flow_ids = result.get("flow_ids", [])
     if isinstance(flow_ids, list) and flow_ids:
         lines.append(f"Flux : {', '.join(str(flow_id) for flow_id in flow_ids)}")
+    return "\n".join(lines)
+
+
+def list_call_edges(
+    inventory: ArchitectureInventory, *, module: str | None = None,
+) -> dict[str, object]:
+    """List persisted method-call edges, including edges unused by flows."""
+    methods_by_id = {method.id: method for method in inventory.integration_methods}
+    selected: list[dict[str, object]] = []
+    for edge in inventory.codeql_call_edges:
+        caller = methods_by_id.get(edge.caller_id)
+        callee = methods_by_id.get(edge.callee_id)
+        if module is not None and (caller is None or caller.module != module):
+            continue
+        selected.append({
+            "caller": _method_fact(caller) if caller is not None else {"id": edge.caller_id},
+            "callee": _method_fact(callee) if callee is not None else {"id": edge.callee_id},
+            "path": edge.path,
+            "line": edge.line,
+            "dispatch_confidence": edge.dispatch_confidence,
+            "inferred": edge.inferred,
+        })
+    selected.sort(key=lambda item: (
+        str(cast_mapping(item["caller"]).get("qualified_method", "")),
+        str(cast_mapping(item["callee"]).get("qualified_method", "")),
+        str(item["path"]),
+        int(item["line"]),
+    ))
+    return {
+        "kind": "call_edges",
+        "module": module,
+        "edge_count": len(selected),
+        "edges": selected,
+    }
+
+
+def cast_mapping(value: object) -> Mapping[str, object]:
+    """Treat a rendered method fact as a mapping for deterministic sorting."""
+    return value if isinstance(value, Mapping) else {}
+
+
+def render_call_edges_text(result: Mapping[str, object]) -> str:
+    """Render persisted method-call edges for terminal inspection."""
+    module = result.get("module") or "tous les modules"
+    lines = [f"Arêtes d'appel ({module}) : {result.get('edge_count', 0)}"]
+    edges = result.get("edges", [])
+    if not isinstance(edges, list):
+        return "\n".join(lines)
+    for item in edges:
+        if not isinstance(item, Mapping):
+            continue
+        caller = cast_mapping(item.get("caller"))
+        callee = cast_mapping(item.get("callee"))
+        caller_name = caller.get("qualified_method", caller.get("id", "?"))
+        callee_name = callee.get("qualified_method", callee.get("id", "?"))
+        inferred = " inferred" if item.get("inferred") else ""
+        lines.append(
+            f"- {caller_name} -> {callee_name} "
+            f"({item.get('path')}:{item.get('line')}, "
+            f"confidence={item.get('dispatch_confidence')}{inferred})"
+        )
     return "\n".join(lines)

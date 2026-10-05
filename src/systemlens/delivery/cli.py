@@ -46,7 +46,9 @@ from systemlens.application.code_flows import (
 from systemlens.application.flow_calculation import calculate_persisted_flows
 from systemlens.application.call_edge_diagnostic import (
     diagnose_call_edge,
+    list_call_edges,
     render_call_edge_diagnostic_text,
+    render_call_edges_text,
 )
 from systemlens.application.flow_diagnostic import diagnose_flows, render_flow_diagnostic_text
 from systemlens.application.indexing_audit import audit_indexing
@@ -1116,7 +1118,7 @@ def analyze_call_edge(
         ..., help="Identifiant, nom qualifié ou suffixe de la méthode appelée."
     ),
     module: str | None = typer.Option(
-        None, "--module", help="Module de contexte pour désambiguïser les méthodes."
+        None, "--module", help="Filtre facultatif de module pour désambiguïser les méthodes."
     ),
     root: Path | None = typer.Option(
         None, "--root", help="Répertoire indexé à analyser."
@@ -1151,6 +1153,25 @@ def analyze_call_edge(
         json.dumps(result)
         if _option_json(json_output)
         else render_call_edge_diagnostic_text(result)
+    )
+
+
+@analyze_app.command("call-edges")
+def analyze_call_edges(
+    module: str | None = typer.Option(
+        None, "--module", help="Filtre facultatif sur le module appelant."
+    ),
+    root: Path | None = typer.Option(
+        None, "--root", help="Répertoire indexé à analyser."
+    ),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Lister les arêtes CodeQL persistées, indépendamment des flux."""
+    result = list_call_edges(load_architecture_inventory(_option_root(root)), module=module)
+    typer.echo(
+        json.dumps(result)
+        if _option_json(json_output)
+        else render_call_edges_text(result)
     )
 
 

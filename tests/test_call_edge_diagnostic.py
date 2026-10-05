@@ -240,7 +240,7 @@ def test_call_edge_matches_interface_query_to_concrete_dispatch_target(
     }]
 
 
-def test_call_edge_defaults_to_the_callers_module_for_ambiguous_callees(
+def test_call_edge_keeps_repository_wide_candidates_without_module_filter(
     tmp_path: Path,
 ) -> None:
     caller = _method("caller", "orders.Controller.create")
@@ -249,11 +249,8 @@ def test_call_edge_defaults_to_the_callers_module_for_ambiguous_callees(
         "billing-callee", "billing", "billing.Service.reserve",
         "billing/Service.java", 10, 20, (), (),
     )
-    edge = CodeQLCallGraphEdge(
-        "caller", "orders-callee", "orders/Controller.java", 15, "exact",
-    )
     _given_persisted_snapshot(
-        tmp_path, [caller, orders_callee, billing_callee], edges=[edge],
+        tmp_path, [caller, orders_callee, billing_callee],
     )
 
     exit_code, payload = _invoke_json(
@@ -261,9 +258,11 @@ def test_call_edge_defaults_to_the_callers_module_for_ambiguous_callees(
     )
 
     assert exit_code == 0
-    assert payload["module"] == "orders"
-    assert payload["status"] == "edge_outside_input_path"
-    assert [item["id"] for item in payload["callee_candidates"]] == ["orders-callee"]
+    assert payload["module"] is None
+    assert payload["status"] == "method_selection_ambiguous"
+    assert [item["id"] for item in payload["callee_candidates"]] == [
+        "billing-callee", "orders-callee",
+    ]
 
 
 def test_call_edge_accepts_an_explicit_module_context(
@@ -293,6 +292,32 @@ def test_call_edge_accepts_an_explicit_module_context(
     assert payload["module"] == "billing"
     assert payload["status"] == "edge_outside_input_path"
     assert payload["caller_candidates"][0]["id"] == "billing-caller"
+
+
+def test_call_edges_lists_persisted_calls_independently_of_flows(
+    tmp_path: Path,
+) -> None:
+    caller = _method("caller", "orders.Controller.create")
+    callee = IntegrationMethod(
+        "callee", "billing", "billing.Service.reserve",
+        "billing/Service.java", 10, 20, (), (),
+    )
+    edges = [
+        CodeQLCallGraphEdge("caller", "callee", "orders/Controller.java", 15, "possible"),
+        CodeQLCallGraphEdge("caller", "callee", "orders/Controller.java", 16, "possible", inferred=True),
+    ]
+    _given_persisted_snapshot(tmp_path, [caller, callee], edges=edges)
+
+    result = RUNNER.invoke(
+        app,
+        ["analyze", "call-edges", "--module", "orders", "--root", str(tmp_path), "--json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["edge_count"] == 2
+    assert [edge["inferred"] for edge in payload["edges"]] == [False, True]
+    assert payload["edges"][0]["callee"]["module"] == "billing"
 
 
 def test_call_edge_text_output_shows_an_edge_used_by_a_flow(tmp_path: Path) -> None:
