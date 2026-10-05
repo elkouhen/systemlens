@@ -8,7 +8,8 @@ Parent: [Technical specification](../SPEC-TECH.md).
 `MessageEndpoint` is the primary extracted fact. It records role, system,
 topic, dynamic status, source (`code` or `manifest`), framework, location,
 snippet, module, qualified name, optional Kafka message type, and an optional
-source display label for normalized Kafka topics. Its identifier
+source display label when the source key differs from the declared topic value.
+Its identifier
 is stable for a source location:
 
 ```text
@@ -20,7 +21,7 @@ the first identifier and assigns later endpoints a deterministic content-derived
 suffix before persistence. This keeps source evidence distinct when two
 interactions share the same file and line span.
 
-The normalized `topic` remains the identity used for matching and graph
+The persisted `topic` remains the identity used for matching and graph
 relations. `topic_display`, when present, is the source spelling shown by UI
 adapters; it never changes topic identity or relation resolution.
 

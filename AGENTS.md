@@ -154,6 +154,8 @@ To keep long agent sessions reliable and reviewable:
 7. Use Archify only to analyze or visualize Python projects. Do not use it to
    replace SystemLens' native exports or infer architecture facts that
    SystemLens has not indexed.
+8. Before taking a material action, state what you will do. After taking it,
+   state what you did, which files or systems changed, and which validation ran.
 
 ## Cross-functional review
 

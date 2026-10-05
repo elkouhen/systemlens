@@ -27,8 +27,6 @@ from systemlens.scanner.kafka_ast import (
 )
 from systemlens.scanner._spring_properties import (
     remove_strategy1_kafka_prefix,
-    resolve_spring_property,
-    resolve_strategy1_kafka_topic,
     strategy1_kafka_topics,
 )
 from systemlens.domain.topic_expressions import spring_topic_reference
@@ -38,27 +36,19 @@ _STRATEGY1_KAFKA_KEY_RE = re.compile(
     r"\$\{\s*((?:[A-Za-z_]\w*\.)*(?:kafka\.)?topics\.[A-Za-z_]\w*(?:\.[^}:]+)?)(?:\s*:[^}]*)?\s*\}"
 )
 _STRATEGY1_SEND_METHOD_PREFIX = "envoyerMessageKafka"
-def _strategy1_topic_name(value: str) -> str:
-    """Normalize a Strategy1 topic key to lowercase kebab case."""
-    separated = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", value)
-    separated = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", separated)
-    separated = re.sub(r"[-_.\s]+", "-", separated)
-    return re.sub(r"-+", "-", separated).strip("-").casefold()
-
-
 def _validate_strategy1_topic(
     topic: str,
     catalog: dict[str, str] | None,
     logical_key: str | None = None,
 ) -> tuple[str, bool]:
-    """Validate a Strategy1 topic against kafka.yml when that catalog exists."""
+    """Resolve a Strategy1 topic by exact key or exact declared value."""
     if catalog is None:
-        return topic, False
+        return "<dynamic>", True
     if logical_key is not None:
-        declared = catalog.get(_strategy1_topic_name(logical_key))
+        declared = catalog.get(logical_key)
         if declared is not None:
             return declared, False
-    declared = catalog.get(_strategy1_topic_name(topic))
+    declared = catalog.get(topic)
     if declared is not None:
         return declared, False
     if topic in catalog.values():
@@ -75,12 +65,7 @@ def _strategy1_topic_from_value(
         value = java_parser.node_text(source, value_node)
         if match := _STRATEGY1_PRODUCER_RE.search(value):
             logical_key = match.group(1)
-            resolved, dynamic = _validate_strategy1_topic(
-                _strategy1_topic_name(logical_key), catalog, logical_key
-            )
-            if catalog is None:
-                resolved = resolve_strategy1_kafka_topic(repo_root, logical_key, rel_path) or resolved
-                dynamic = False
+            resolved, dynamic = _validate_strategy1_topic(logical_key, catalog, logical_key)
             return resolved, dynamic, resolved if not dynamic and catalog is not None else logical_key
     topic, dynamic = _kafka_topic_from_value(value_node, source, repo_root, rel_path)
     if dynamic and value_node is not None and value_node.type == "string_literal":
@@ -93,7 +78,7 @@ def _strategy1_topic_from_value(
                 if parts and parts[-1].casefold() == "nom" and len(parts) > 1
                 else parts[-1]
             )
-            declared = catalog.get(_strategy1_topic_name(logical_key))
+            declared = catalog.get(logical_key)
             if declared is not None:
                 return declared, False, declared
     if not dynamic:
@@ -103,15 +88,14 @@ def _strategy1_topic_from_value(
         expression = java_parser.node_text(source, value_node)
         enum_constant = expression.rsplit(".", 1)[-1]
         if re.fullmatch(r"(?:FLUX[_A-Z0-9]*_)?[A-Z][A-Z0-9_]*", enum_constant):
-                logical_name = re.sub(r"^FLUX_", "", enum_constant)
-                if logical_name not in {"TOPIC", "NULL", "EMPTY"}:
-                    resolved, dynamic = _validate_strategy1_topic(
-                        _strategy1_topic_name(logical_name), catalog, logical_name
-                    )
-                    return resolved, dynamic, logical_name
+            if enum_constant not in {"TOPIC", "NULL", "EMPTY"}:
+                resolved, dynamic = _validate_strategy1_topic(enum_constant, catalog, enum_constant)
+                return resolved, dynamic, enum_constant
     if not dynamic:
-        topic = topic if catalog is not None else _strategy1_topic_name(topic)
-    return topic, dynamic, topic if not dynamic else None
+        topic_display = topic
+    else:
+        topic_display = None
+    return topic, dynamic, topic_display
 
 
 def _strategy1_topic_values(
@@ -180,9 +164,9 @@ def infer_kafka_topic_strategy1_endpoints(
     family call (`envoyerMessageKafka(topic, payload)`,
     `envoyerMessageKafkaRequest(...)`, `envoyerMessageKafkaReply(...)`, etc.).
     Listeners use a Spring key shaped as `kafka.topics.xxx.<property>`.
-    Accessor and property conventions are normalized to lowercase kebab-case
-    Kafka keys. CamelCase boundaries, dots, hyphens and whitespace become
-    hyphens, and repeated or edge hyphens are collapsed or removed.
+    Accessor and property keys must match the exact keys declared in
+    `kafka.yml` or `kafka.yaml`. Declared topic values may remove the
+    `${kafka.prefix-topic}.` environment prefix.
     """
     if files is None:
         candidate_files = [
@@ -233,9 +217,7 @@ def infer_kafka_topic_strategy1_endpoints(
                 None,
             )
             logical_key = match.group(1)
-            topic, topic_dynamic = _validate_strategy1_topic(
-                _strategy1_topic_name(logical_key), kafka_catalog, logical_key
-            )
+            topic, topic_dynamic = _validate_strategy1_topic(logical_key, kafka_catalog, logical_key)
             endpoint = _build_endpoint(
                 repo_root,
                 rel_path,
@@ -264,14 +246,7 @@ def infer_kafka_topic_strategy1_endpoints(
                     if property_parts[-1].casefold() == "nom" and len(property_parts) > 1
                     else property_parts[-1]
                 )
-                if kafka_catalog is not None:
-                    resolved = kafka_catalog.get(_strategy1_topic_name(logical_key))
-                else:
-                    resolved = resolve_spring_property(repo_root, property_key, rel_path)
-                    if resolved is None:
-                        resolved = resolve_strategy1_kafka_topic(repo_root, logical_key, rel_path)
-                if resolved is not None:
-                    resolved = remove_strategy1_kafka_prefix(resolved)
+                resolved = kafka_catalog.get(logical_key) if kafka_catalog is not None else None
                 endpoint = _build_endpoint(
                     repo_root,
                     rel_path,
@@ -279,7 +254,7 @@ def infer_kafka_topic_strategy1_endpoints(
                     line_no + annotation.count("\n"),
                     "consume",
                     "kafka",
-                    resolved or ("<dynamic>" if kafka_catalog is not None else _strategy1_topic_name(logical_key)),
+                    resolved or "<dynamic>",
                     "kafka-topic-strategy1",
                     annotation,
                 )
@@ -341,7 +316,7 @@ def apply_kafka_topic_strategy1(
             topic=(
                 endpoint.topic
                 if "." in endpoint.topic
-                else _strategy1_topic_name(endpoint.topic)
+                else endpoint.topic
             ),
             topic_display=endpoint.topic_display or endpoint.topic,
         )

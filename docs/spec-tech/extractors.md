@@ -50,9 +50,10 @@ retains both the contract path and domain marker. If an equivalent
 typed adapter endpoint takes precedence so one HTTP interaction produces one
 port label. Operation IDs appearing in several contracts remain unresolved.
 
-Strategy1 also normalizes uppercase `Flux` enum constants as topic conventions,
-removing a leading `FLUX_` prefix. Arbitrary variable topics remain dynamic
-unless another source-backed resolver proves their value.
+Strategy1 resolves listener and sender topic keys only through exact entries in
+`kafka.yml` or `kafka.yaml`. It does not normalize topic keys or derive names
+from Java identifiers. It removes `${kafka.prefix-topic}.` only from a matched
+declared value. Arbitrary variable topics and unmatched keys remain dynamic.
 
 REST graph construction first resolves an explicit target identity from an HTTP
 host, `lb://` URI, configured client domain, or an opt-in Strategy1 convention.
@@ -140,19 +141,15 @@ With `--strategy strategy1`, every method whose name starts with
 `envoyerMessageKafka` is an additional producer convention, including
 `envoyerMessageKafkaRequest(topic, payload)` and
 `envoyerMessageKafkaReply(topic, payload)`. A first argument shaped as
-`kafkaProperties.getTopics().getXxx()` resolves through the applicable
-`kafka.yml` or `kafka.yaml` `topics.<key>.nom` declaration. When no Kafka YAML
-file exists, the extractor falls back to the normalized Strategy1 topic key.
-A conditional first
-argument with two such accessors creates one
-producer fact for each statically resolved branch. Other values use the
-conservative topic resolver and must match a declared Kafka YAML value when
-such a file exists. Unknown values remain dynamic. Strategy1 normalization applies
-`casefold()` after converting word boundaries and physical separators to
-single hyphens. The canonical key is lowercase kebab case. The second
-argument is always used to derive the payload type from its method parameter,
-local variable declaration or enclosing class field, including calls with
-three arguments. This positional rule applies identically to
+`kafkaProperties.getTopics().getXxx()` resolves only through an exact
+`kafka.yml` or `kafka.yaml` `topics.<key>.nom` declaration. A conditional first
+argument with two such accessors creates one producer fact for each statically
+resolved branch with an exact catalog match. Other values use the conservative
+topic resolver and remain dynamic unless they match an exact declared value.
+Strategy1 applies no topic-key normalization. The second argument is always
+used to derive the payload type from its method parameter, local variable
+declaration or enclosing class field, including calls with three arguments.
+This positional rule applies identically to
 `envoyerMessageKafka`, `envoyerMessageKafkaRequest` and
 `envoyerMessageKafkaReply`.
 

@@ -51,18 +51,22 @@ def test_strategy1_replacement_keeps_an_ast_payload_type() -> None:
 
     result = apply_kafka_endpoints([generic], [strategy])
 
-    assert result[0].topic == "orders-created"
+    assert result[0].topic == "ORDERS_CREATED"
     assert result[0].topic_display == "ORDERS_CREATED"
     assert result[0].message_type == "OrderCreated"
 
 
-def test_strategy1_normalizes_topic_keys_to_lowercase_kebab_case(tmp_path: Path) -> None:
+def test_strategy1_requires_an_exact_kafka_yaml_topic_key(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  Orders_Created:\n    nom: commerce.orders.created\n",
+        encoding="utf-8",
+    )
     source = tmp_path / "src/main/java/com/example/Publisher.java"
     source.parent.mkdir(parents=True)
     source.write_text(
         """class Publisher {
   void publish(OrderCreated event) {
-    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getOrders_Created(), event);
+    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getOrdersCreated(), event);
   }
 }
 record OrderCreated(String id) {}
@@ -75,8 +79,8 @@ record OrderCreated(String id) {}
         ["src/main/java/com/example/Publisher.java"],
     )
 
-    assert [endpoint.topic for endpoint in endpoints] == ["orders-created"]
-    assert [endpoint.topic_display for endpoint in endpoints] == ["Orders_Created"]
+    assert [endpoint.topic for endpoint in endpoints] == ["<dynamic>"]
+    assert [endpoint.topic_display for endpoint in endpoints] == ["OrdersCreated"]
 
 
 def test_strategy1_uses_declared_topic_name_from_kafka_yaml(tmp_path: Path) -> None:

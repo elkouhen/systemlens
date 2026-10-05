@@ -60,6 +60,10 @@ def test_ast_extractors_find_rest_and_kafka_facts() -> None:
 
 
 def test_kafka_index_extractor_applies_strategy1_when_enabled(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  OrdersCreated:\n    nom: orders.created\n",
+        encoding="utf-8",
+    )
     source = tmp_path / "src/main/java/com/example/Publisher.java"
     source.parent.mkdir(parents=True)
     source.write_text(
@@ -80,7 +84,7 @@ record OrderCreated(String id) {}
     )
 
     assert [(endpoint.topic, endpoint.framework) for endpoint in endpoints] == [
-        ("orders-created", "kafka-topic-strategy1")
+        ("orders.created", "kafka-topic-strategy1")
     ]
 
 
@@ -528,6 +532,10 @@ class Publisher {
 
 
 def test_strategy1_recognizes_envoyer_message_kafka_method_family_as_producers(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  OrdersCreated:\n    nom: orders.created\n  RequestsCreated:\n    nom: requests.created\n  RepliesCreated:\n    nom: replies.created\n",
+        encoding="utf-8",
+    )
     source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
     source.parent.mkdir(parents=True)
     source.write_text(
@@ -557,13 +565,17 @@ record ReplyCreated(String replyId) {}
         (endpoint.role, endpoint.topic, endpoint.message_type, endpoint.framework)
         for endpoint in endpoints
     ) == [
-        ("produce", "orders-created", "OrderCreated", "kafka-topic-strategy1"),
-        ("produce", "replies-created", "ReplyCreated", "kafka-topic-strategy1"),
-        ("produce", "requests-created", "RequestCreated", "kafka-topic-strategy1"),
+        ("produce", "orders.created", "OrderCreated", "kafka-topic-strategy1"),
+        ("produce", "replies.created", "ReplyCreated", "kafka-topic-strategy1"),
+        ("produce", "requests.created", "RequestCreated", "kafka-topic-strategy1"),
     ]
 
 
 def test_strategy1_get_topics_uses_the_publishing_method_dto_type(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  OrdersCreated:\n    nom: orders.created\n",
+        encoding="utf-8",
+    )
     source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
     source.parent.mkdir(parents=True)
     source.write_text(
@@ -582,11 +594,15 @@ record OrderCreated(String id) {}
     )
 
     assert [(endpoint.topic, endpoint.message_type) for endpoint in endpoints] == [
-        ("orders-created", "OrderCreated")
+        ("orders.created", "OrderCreated")
     ]
 
 
 def test_strategy1_conditional_topic_creates_one_endpoint_per_static_branch(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  Orders_Created:\n    nom: orders.created\n  Orders_Retry:\n    nom: orders.retry\n",
+        encoding="utf-8",
+    )
     source = tmp_path / "src" / "main" / "java" / "com" / "example" / "Publisher.java"
     source.parent.mkdir(parents=True)
     source.write_text(
@@ -607,12 +623,16 @@ record OrderCreated(String id) {}
     )
 
     assert sorted(endpoint.topic for endpoint in endpoints) == [
-        "orders-created",
-        "orders-retry",
+        "orders.created",
+        "orders.retry",
     ]
 
 
-def test_strategy1_resolves_flux_enum_topic_convention(tmp_path: Path) -> None:
+def test_strategy1_resolves_flux_enum_topic_from_kafka_yaml(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  CONVERSION_UNITAIRE:\n    nom: conversion.unitaire\n",
+        encoding="utf-8",
+    )
     source = tmp_path / "src/main/java/Publisher.java"
     source.parent.mkdir(parents=True)
     source.write_text(
@@ -630,7 +650,7 @@ record OrderCreated(String id) {}
     endpoints = infer_kafka_topic_strategy1_endpoints(tmp_path, ["src/main/java/Publisher.java"])
 
     assert [(endpoint.topic, endpoint.topic_dynamic) for endpoint in endpoints] == [
-        ("conversion-unitaire", False)
+        ("conversion.unitaire", False)
     ]
 
 

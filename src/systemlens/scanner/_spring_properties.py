@@ -196,13 +196,7 @@ def resolve_strategy1_kafka_topic(
     catalog = strategy1_kafka_topics(repo_root, source_path)
     if catalog is None:
         return None
-    return catalog.get(_normalize_strategy1_kafka_key(logical_key))
-
-
-def _normalize_strategy1_kafka_key(value: str) -> str:
-    separated = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", value)
-    separated = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", separated)
-    return re.sub(r"-+", "-", re.sub(r"[-_.\s]+", "-", separated)).strip("-").casefold()
+    return catalog.get(logical_key)
 
 
 def strategy1_kafka_topics(
@@ -237,9 +231,9 @@ def strategy1_kafka_topics(
             parts = property_key.split(".")
             if "topics" not in {part.casefold() for part in parts}:
                 continue
-            if _normalize_strategy1_kafka_key(parts[-1]) != "nom" or len(parts) < 2:
+            if parts[-1].casefold() != "nom" or len(parts) < 2:
                 continue
-            logical_key = _normalize_strategy1_kafka_key(parts[-2])
+            logical_key = parts[-2]
             declared_value = remove_strategy1_kafka_prefix(value)
             if declared_value:
                 values_by_key.setdefault(logical_key, set()).add(declared_value)
