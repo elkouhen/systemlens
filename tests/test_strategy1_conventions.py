@@ -80,7 +80,7 @@ record OrderCreated(String id) {}
 
 def test_strategy1_uses_declared_topic_name_from_kafka_yaml(tmp_path: Path) -> None:
     (tmp_path / "kafka.yml").write_text(
-        "topics:\n  OrdersCreated:\n    nom: commerce.orders.created\n",
+        "topics:\n  OrdersCreated:\n    nom: ${kafka.prefix-topic}.commerce.orders.created\n",
         encoding="utf-8",
     )
     source = tmp_path / "src/main/java/com/example/Publisher.java"

@@ -26,6 +26,7 @@ from systemlens.scanner.kafka_ast import (
     _method_param_payload_type,
 )
 from systemlens.scanner._spring_properties import (
+    remove_strategy1_kafka_prefix,
     resolve_spring_property,
     resolve_strategy1_kafka_topic,
 )
@@ -210,6 +211,8 @@ def infer_kafka_topic_strategy1_endpoints(
                 resolved = resolve_spring_property(repo_root, property_key, rel_path)
                 if resolved is None:
                     resolved = resolve_strategy1_kafka_topic(repo_root, logical_key, rel_path)
+                if resolved is not None:
+                    resolved = remove_strategy1_kafka_prefix(resolved)
                 endpoint = _build_endpoint(
                     repo_root,
                     rel_path,

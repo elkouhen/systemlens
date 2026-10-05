@@ -39,6 +39,7 @@ _SPRING_CLOUD_CONFIG_DIR_PATTERNS = (
     "src/main/resources/configurations",
     "configurations",
 )
+_STRATEGY1_KAFKA_PREFIX_RE = re.compile(r"^\$\{[^}]+\}\.")
 def _flatten_properties(data: object, prefix: str = "") -> dict[str, str]:
     flat: dict[str, str] = {}
     if isinstance(data, dict):
@@ -208,8 +209,19 @@ def resolve_strategy1_kafka_topic(
             parent = normalize(parts[-2]) if len(parts) > 1 else ""
             if leaf == "nom" and parent == wanted:
                 candidates.append(value)
-    unique = list(dict.fromkeys(value for value in candidates if value.strip()))
+    unique = list(
+        dict.fromkeys(
+            remove_strategy1_kafka_prefix(value)
+            for value in candidates
+            if value.strip()
+        )
+    )
     return unique[0] if len(unique) == 1 else None
+
+
+def remove_strategy1_kafka_prefix(value: str) -> str:
+    """Remove the variable Kafka topic prefix from a declared topic value."""
+    return _STRATEGY1_KAFKA_PREFIX_RE.sub("", value.strip(), count=1)
 
 
 @lru_cache(maxsize=512)
