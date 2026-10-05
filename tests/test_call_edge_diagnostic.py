@@ -339,6 +339,39 @@ def test_methods_lists_isolated_indexed_methods_by_module(tmp_path: Path) -> Non
     assert payload["methods"][0]["id"] == "billing-method"
 
 
+def test_methods_lists_inheritance_edges_to_concrete_implementations(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "orders").mkdir()
+    (tmp_path / "orders/OrderService.java").write_text(
+        "package orders; public interface OrderService { void reserve(String value); }\n",
+    )
+    (tmp_path / "orders/OrderServiceImpl.java").write_text(
+        "package orders; public class OrderServiceImpl implements OrderService { "
+        "public void reserve(String value) {} }\n",
+    )
+    interface_method = IntegrationMethod(
+        "interface", "orders", "orders.OrderService.reserve",
+        "orders/OrderService.java", 1, 1, (), (),
+    )
+    implementation = IntegrationMethod(
+        "implementation", "orders", "orders.OrderServiceImpl.reserve",
+        "orders/OrderServiceImpl.java", 1, 1, (), (),
+    )
+    _given_persisted_snapshot(tmp_path, [interface_method, implementation])
+
+    result = RUNNER.invoke(
+        app,
+        ["analyze", "methods", "--module", "orders", "--root", str(tmp_path), "--json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["inheritance_edge_count"] == 1
+    assert payload["inheritance_edges"][0]["base"]["id"] == "interface"
+    assert payload["inheritance_edges"][0]["implementation"]["id"] == "implementation"
+
+
 def test_call_edge_text_output_shows_an_edge_used_by_a_flow(tmp_path: Path) -> None:
     # Given an exact edge already used by a persisted IN-to-OUT flow.
     caller = _method("caller", "orders.Controller.create", inputs=("in",))

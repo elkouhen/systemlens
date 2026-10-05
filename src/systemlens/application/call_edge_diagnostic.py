@@ -604,11 +604,40 @@ def list_indexed_methods(
         if module is None or method.module == module
     ]
     methods.sort(key=lambda method: (method.module, method.path, method.start_line, method.id))
+    selected_ids = {method.id for method in methods}
+    inheritance_edges: dict[tuple[str, str], dict[str, object]] = {}
+    source_paths = [method.path for method in inventory.integration_methods]
+    for root in inventory.source_roots:
+        if not root.exists():
+            continue
+        symbols = JavaSymbols(root, inventory.integration_methods, source_paths=source_paths)
+        for method in methods:
+            contract = symbols.methods.get(method.id)
+            if contract is None or contract.concrete:
+                continue
+            for candidate in symbols.implementations(contract):
+                implementation = candidate.method
+                if implementation.id not in selected_ids:
+                    continue
+                inheritance_edges[(method.id, implementation.id)] = {
+                    "base": _method_fact(method),
+                    "implementation": _method_fact(implementation),
+                    "kind": "implements",
+                }
+    ordered_inheritance = sorted(
+        inheritance_edges.values(),
+        key=lambda edge: (
+            cast_mapping(edge["base"]).get("qualified_method", ""),
+            cast_mapping(edge["implementation"]).get("qualified_method", ""),
+        ),
+    )
     return {
         "kind": "indexed_methods",
         "module": module,
         "method_count": len(methods),
         "methods": [_method_fact(method) for method in methods],
+        "inheritance_edge_count": len(ordered_inheritance),
+        "inheritance_edges": ordered_inheritance,
     }
 
 
@@ -627,4 +656,17 @@ def render_indexed_methods_text(result: Mapping[str, object]) -> str:
             f"[{item.get('module')}] ({item.get('path')}:{item.get('start_line')}-"
             f"{item.get('end_line')})"
         )
+    inheritance_edges = result.get("inheritance_edges", [])
+    if isinstance(inheritance_edges, list) and inheritance_edges:
+        lines.append("Relations d'héritage :")
+        for item in inheritance_edges:
+            if not isinstance(item, Mapping):
+                continue
+            base = cast_mapping(item.get("base"))
+            implementation = cast_mapping(item.get("implementation"))
+            lines.append(
+                f"- {base.get('qualified_method', base.get('id', '?'))} "
+                f"-> {implementation.get('qualified_method', implementation.get('id', '?'))} "
+                f"[{implementation.get('module', '?')}]"
+            )
     return "\n".join(lines)
