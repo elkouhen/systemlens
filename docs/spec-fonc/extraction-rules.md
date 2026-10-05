@@ -111,6 +111,9 @@ exactly one indexed method has the qualified name. That fallback is marked
 Source-declared abstract/interface dispatch may bridge to source-backed concrete
 implementations and receiver-based helper calls may be added, always as
 `possible`/`low`; multiple candidates remain separate and explicitly ambiguous.
+When a caller module has compatible implementations of the same interface method,
+the candidates from that caller module are preferred. If the caller module has no
+compatible implementation, candidates from other modules remain possible.
 CodeQL contributes only source-located resolved callees; recovered receiver
 types and `methodFullName` values without source evidence are diagnostics, not
 architecture edges. Reflection, dynamic routing, and runtime-only routing are

@@ -526,6 +526,31 @@ def test_multiple_real_implementations_remain_unresolved(tmp_path: Path):
     assert all(flow.confidence == "low" for flow in flows)
 
 
+def test_interface_dispatch_prefers_the_callers_module(tmp_path: Path):
+    sources = {
+        "api/Port.java": "package api; public interface Port { void send(); }",
+        "orders/Controller.java": (
+            "package orders; import api.Port; public class Controller { Port port; "
+            "public void entry() { port.send(); } }"
+        ),
+        "orders/LocalPort.java": (
+            "package orders; public class LocalPort implements api.Port { "
+            "public void send() { output(); } void output() {} }"
+        ),
+        "billing/RemotePort.java": (
+            "package billing; public class RemotePort implements api.Port { "
+            "public void send() { output(); } void output() {} }"
+        ),
+    }
+    methods, endpoints = _project(tmp_path, sources)
+
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources)
+    )
+
+    assert {flow.steps[-1].path for flow in flows} == {"orders/LocalPort.java"}
+
+
 def test_qualified_import_does_not_merge_same_simple_type_names(tmp_path: Path):
     sources = {**SOURCES, "unrelated/Base.java": "package unrelated; public abstract class Base { public abstract void execute(String v); }",
                "unrelated/Other.java": "package unrelated; public class Other extends Base { public void execute(String v) { otherOutput(); } void otherOutput() {} }"}

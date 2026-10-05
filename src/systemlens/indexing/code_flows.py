@@ -466,6 +466,12 @@ def _build_codeql_call_graph(
     persisted_methods: Sequence[PersistedCodeQLMethod] = (),
 ) -> CodeQLCallGraph:
     """Resolve CodeQL rows into the internal graph consumed by reconstruction."""
+    def prefer_caller_module(
+        candidates: Sequence[IntegrationMethod], caller: IntegrationMethod,
+    ) -> tuple[IntegrationMethod, ...]:
+        local = tuple(candidate for candidate in candidates if candidate.module == caller.module)
+        return local or tuple(candidates)
+
     def report(message: str) -> None:
         if progress is not None:
             progress(message)
@@ -609,7 +615,7 @@ def _build_codeql_call_graph(
 
     adjacency: dict[str, list[CodeQLEdge]] = defaultdict(list)
     symbols = JavaSymbols(repo_root, methods, source_paths) if repo_root is not None else None
-    implementation_targets: dict[str, tuple[IntegrationMethod, ...]] = {}
+    implementation_targets: dict[tuple[str, str], tuple[IntegrationMethod, ...]] = {}
     resolved_sites: set[tuple[str, int, str]] = set()
     seen_edges: set[tuple[str, str, int, str, bool]] = set()
     synthetic_calls: set[CodeQLCall] = set()
@@ -661,9 +667,13 @@ def _build_codeql_call_graph(
             if symbols is not None and not edge.inferred:
                 callee_info = symbols.methods.get(callee.id)
                 if callee_info is not None and not callee_info.concrete:
+                    target_key = (callee.id, caller.module)
                     candidates = implementation_targets.setdefault(
-                        callee.id,
-                        tuple(candidate.method for candidate in symbols.implementations(callee_info)),
+                        target_key,
+                        prefer_caller_module(
+                            tuple(candidate.method for candidate in symbols.implementations(callee_info)),
+                            caller,
+                        ),
                     )
                     for candidate in candidates:
                         synthetic = CodeQLCall(
@@ -711,12 +721,16 @@ def _build_codeql_call_graph(
             info = symbols.methods.get(callee.id)
             if info is not None and info.concrete:
                 resolved_sites.add((caller.id, call.call_line, callee.id))
-            if callee.id not in implementation_targets:
-                implementation_targets[callee.id] = tuple(
+            target_key = (callee.id, caller.module)
+            if target_key not in implementation_targets:
+                implementation_targets[target_key] = tuple(
                     candidate.method
                     for candidate in symbols.implementations(info)
                 ) if info is not None and not info.concrete else ()
-            for candidate in implementation_targets[callee.id]:
+                implementation_targets[target_key] = prefer_caller_module(
+                    implementation_targets[target_key], caller,
+                )
+            for candidate in implementation_targets[target_key]:
                 synthetic = replace(
                     call, callee=candidate.qualified_method, callee_path=candidate.path,
                     callee_line=candidate.start_line, dispatch_confidence="possible",

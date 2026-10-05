@@ -307,6 +307,9 @@ class JavaSymbols:
             if candidate.owner in receiver_bases:
                 hidden.update(self.ancestors(candidate.owner) - {candidate.owner})
         remaining = [candidate for candidate in candidates.values() if candidate.owner not in hidden]
+        local_remaining = [candidate for candidate in remaining if candidate.module == module]
+        if local_remaining:
+            remaining = local_remaining
         return [candidate.method for candidate in remaining]
 
     def variable_type(self, info: _Method, name: str, invocation: Node, *, field_only: bool = False) -> str | None:

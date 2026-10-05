@@ -195,6 +195,9 @@ retained as a possible, low-confidence candidate; multiple candidates remain
 separate rather than being collapsed into one runtime target. Repository-root
 modules attribute source files without endpoints to the root module so their
 helper methods remain available to the call graph.
+When several modules provide compatible implementations, the call graph prefers
+implementations from the caller's module. It retains cross-module candidates only
+when the caller's module has no compatible implementation.
 The BFS visits each
 method/confidence state
 at most once per input endpoint, under the configured depth/global transition

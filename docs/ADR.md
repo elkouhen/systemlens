@@ -511,6 +511,8 @@ spots. Multiple concrete implementations are retained as separate low-confidence
 possible candidates rather than resolved to one runtime target. Symbol/hierarchy
 indexing and per-source predecessor trees consume memory proportional to their
 relations;
+When the caller module provides compatible implementations, it is preferred;
+cross-module candidates remain available only when that local set is empty.
 the QL closures remain potentially large but are explicitly output-anchored.
 Subprocess deadlines cover progress reads as well as execution and terminate
 the POSIX process group. The code-flow signature changes to rebuild old flows.
