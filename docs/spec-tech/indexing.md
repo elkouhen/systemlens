@@ -189,11 +189,12 @@ a method overridden exactly once by the concrete consumer, the unique override
 is retained as a possible edge. Ambiguous sibling overrides remain unresolved.
 The fallback also scans methods that already own an output endpoint and keeps
 separate resolved-call keys for calls sharing one source line. A generic
-interface call may be completed when the indexed implementations expose one
-unique compatible method with the same arity; multiple compatible
-implementations remain unresolved. Repository-root modules attribute source
-files without endpoints to the root module so their helper methods remain
-available to the call graph.
+interface call may be completed when the indexed implementations expose
+compatible methods with the same arity. Each compatible implementation is
+retained as a possible, low-confidence candidate; multiple candidates remain
+separate rather than being collapsed into one runtime target. Repository-root
+modules attribute source files without endpoints to the root module so their
+helper methods remain available to the call graph.
 The BFS visits each
 method/confidence state
 at most once per input endpoint, under the configured depth/global transition

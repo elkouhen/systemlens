@@ -93,7 +93,10 @@ Only source-located CodeQL call pairs are materialized. The internal-flow join
 keeps source-located intermediate methods even when they have no IN or OUT
 integration port; ports only anchor the beginning and end of a flow. CodeQL's
 own possible virtual-dispatch rows remain visible as low-confidence potential
-flows; the Python materializer does not create additional targets.
+flows. When CodeQL returns only a source-backed interface method, the Python
+materializer expands it to every source-backed compatible implementation and
+marks each added edge as inferred and possible; it preserves all candidates
+instead of choosing one runtime target.
 Calls are aggregated before the global flow join. `--codeql-database DIR`
 reuses an existing global CodeQL database instead.
 The temporary database and the supplied database path are never persisted. If
@@ -105,9 +108,9 @@ flow with low confidence. Calls without an exact caller and callee source
 location remain unresolved unless the extractor cannot prove a usable path and
 exactly one indexed method has the qualified name. That fallback is marked
 `low` with signature-join provenance; it does not apply to ambiguous names.
-Source-declared abstract/interface dispatch may bridge to one unique concrete
-implementation and receiver-based helper calls may be added, always as
-`possible`/`low`; ambiguous candidates remain unresolved.
+Source-declared abstract/interface dispatch may bridge to source-backed concrete
+implementations and receiver-based helper calls may be added, always as
+`possible`/`low`; multiple candidates remain separate and explicitly ambiguous.
 CodeQL contributes only source-located resolved callees; recovered receiver
 types and `methodFullName` values without source evidence are diagnostics, not
 architecture edges. Reflection, dynamic routing, and runtime-only routing are

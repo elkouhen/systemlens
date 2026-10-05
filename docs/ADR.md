@@ -506,9 +506,11 @@ materialize global CodeQL flows once for HTML progress and final persistence.
 
 **Consequences:** Source-backed cross-module inheritance works without changing
 SQLite or endpoint contracts. Previously invented name-only flows disappear.
-Unsupported generic substitution, varargs, unknown types and multiple concrete
-implementations remain fallback blind spots. Symbol/hierarchy indexing and
-per-source predecessor trees consume memory proportional to their relations;
+Unsupported generic substitution, varargs and unknown types remain fallback blind
+spots. Multiple concrete implementations are retained as separate low-confidence
+possible candidates rather than resolved to one runtime target. Symbol/hierarchy
+indexing and per-source predecessor trees consume memory proportional to their
+relations;
 the QL closures remain potentially large but are explicitly output-anchored.
 Subprocess deadlines cover progress reads as well as execution and terminate
 the POSIX process group. The code-flow signature changes to rebuild old flows.

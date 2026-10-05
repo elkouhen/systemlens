@@ -26,7 +26,7 @@ from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 from systemlens.indexing.java_symbols import JavaSymbols
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v23-method-call-representatives"
+CODE_FLOW_SIGNATURE = "code-flow-v24-inherited-dispatch-candidates"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 _MONGO_WRITE_OPERATIONS = frozenset({
@@ -609,7 +609,7 @@ def _build_codeql_call_graph(
 
     adjacency: dict[str, list[CodeQLEdge]] = defaultdict(list)
     symbols = JavaSymbols(repo_root, methods, source_paths) if repo_root is not None else None
-    bridges: dict[str, IntegrationMethod | None] = {}
+    implementation_targets: dict[str, tuple[IntegrationMethod, ...]] = {}
     resolved_sites: set[tuple[str, int, str]] = set()
     seen_edges: set[tuple[str, str, int, str, bool]] = set()
     synthetic_calls: set[CodeQLCall] = set()
@@ -658,6 +658,26 @@ def _build_codeql_call_graph(
                 ),
                 edge.inferred,
             )
+            if symbols is not None and not edge.inferred:
+                callee_info = symbols.methods.get(callee.id)
+                if callee_info is not None and not callee_info.concrete:
+                    candidates = implementation_targets.setdefault(
+                        callee.id,
+                        tuple(candidate.method for candidate in symbols.implementations(callee_info)),
+                    )
+                    for candidate in candidates:
+                        synthetic = CodeQLCall(
+                            caller=caller.qualified_method,
+                            caller_path=caller.path,
+                            caller_line=caller.start_line,
+                            callee=candidate.qualified_method,
+                            callee_path=candidate.path,
+                            callee_line=candidate.start_line,
+                            call_line=edge.line,
+                            dispatch_confidence="possible",
+                        )
+                        synthetic_calls.add(synthetic)
+                        add_edge(caller, candidate, synthetic, True)
         return CodeQLCallGraph(
             adjacency=adjacency,
             synthetic_calls=synthetic_calls,
@@ -691,10 +711,12 @@ def _build_codeql_call_graph(
             info = symbols.methods.get(callee.id)
             if info is not None and info.concrete:
                 resolved_sites.add((caller.id, call.call_line, callee.id))
-            if callee.id not in bridges:
-                bridges[callee.id] = symbols.bridge(callee)
-            candidate = bridges[callee.id]
-            if candidate is not None:
+            if callee.id not in implementation_targets:
+                implementation_targets[callee.id] = tuple(
+                    candidate.method
+                    for candidate in symbols.implementations(info)
+                ) if info is not None and not info.concrete else ()
+            for candidate in implementation_targets[callee.id]:
                 synthetic = replace(
                     call, callee=candidate.qualified_method, callee_path=candidate.path,
                     callee_line=candidate.start_line, dispatch_confidence="possible",

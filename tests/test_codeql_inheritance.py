@@ -8,6 +8,7 @@ import shutil
 import pytest
 
 from systemlens.domain.models import MessageEndpoint
+from systemlens.domain.code_flows import CodeQLCallGraphEdge, PersistedCodeQLMethod
 from systemlens.domain.module_inventory import DiscoveredModule
 from systemlens.indexing.code_flows import materialize_codeql_code_flows
 from systemlens.indexing.codeql import (
@@ -113,6 +114,127 @@ public class OrderController {
         "orders.OrderServiceImpl.reserve",
         "orders.OrderServiceImpl.output",
     ]
+
+
+def test_interface_call_persists_inferred_edge_to_unique_implementation(tmp_path: Path):
+    sources = {
+        "orders/OrderService.java": """package orders;
+public interface OrderService { void reserve(String value); }
+""",
+        "orders/OrderServiceImpl.java": """package orders;
+public class OrderServiceImpl implements OrderService {
+  public void reserve(String value) { output(); }
+  void output() {}
+}
+""",
+        "orders/OrderController.java": """package orders;
+public class OrderController {
+  private OrderService service;
+  public void entry(String value) { service.reserve(value); }
+}
+""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    interface_method = next(
+        method for method in methods
+        if method.qualified_method == "orders.OrderService.reserve"
+    )
+    persisted_edges = []
+
+    materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        [CodeQLCall(
+            "orders.OrderController.entry",
+            "orders/OrderController.java",
+            4,
+            interface_method.qualified_method,
+            interface_method.path,
+            interface_method.start_line,
+            4,
+            "possible",
+        )],
+        repo_root=tmp_path,
+        source_paths=list(sources),
+        call_graph_sink=lambda graph: persisted_edges.extend(graph.edges()),
+    )
+
+    implementation = next(
+        method for method in methods
+        if method.qualified_method == "orders.OrderServiceImpl.reserve"
+    )
+    assert any(
+        edge.callee_id == implementation.id
+        and edge.dispatch_confidence == "possible"
+        and edge.inferred
+        for edge in persisted_edges
+    )
+
+
+def test_persisted_interface_edge_rehydrates_implementation_candidates(tmp_path: Path):
+    sources = {
+        "orders/OrderService.java": """package orders;
+public interface OrderService { void reserve(String value); }
+""",
+        "orders/OrderServiceImpl.java": """package orders;
+public class OrderServiceImpl implements OrderService {
+  public void reserve(String value) { output(); }
+  void output() {}
+}
+""",
+        "orders/OrderController.java": """package orders;
+public class OrderController {
+  private OrderService service;
+  public void entry(String value) { service.reserve(value); }
+}
+""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    entry = next(method for method in methods if method.input_endpoint_ids)
+    interface_method = next(
+        method for method in methods
+        if method.qualified_method == "orders.OrderService.reserve"
+    )
+    implementation = next(
+        method for method in methods
+        if method.qualified_method == "orders.OrderServiceImpl.reserve"
+    )
+    persisted_methods = [
+        PersistedCodeQLMethod(
+            id=method.id,
+            module=method.module,
+            qualified_method=method.qualified_method,
+            path=method.path,
+            start_line=method.start_line,
+            end_line=method.end_line,
+        )
+        for method in methods
+    ]
+    persisted_edges = [CodeQLCallGraphEdge(
+        caller_id=entry.id,
+        callee_id=interface_method.id,
+        path=entry.path,
+        line=entry.start_line,
+        dispatch_confidence="possible",
+    )]
+    rehydrated_edges = []
+    materialize_codeql_code_flows(
+        methods,
+        endpoints,
+        [],
+        repo_root=tmp_path,
+        source_paths=list(sources),
+        persisted_edges=persisted_edges,
+        persisted_methods=persisted_methods,
+        call_graph_sink=lambda graph: rehydrated_edges.extend(graph.edges()),
+    )
+
+    assert any(
+        edge.callee_id == implementation.id
+        and edge.dispatch_confidence == "possible"
+        and edge.inferred
+        for edge in rehydrated_edges
+    )
 
 
 def test_ast_fallback_keeps_other_calls_on_same_line_and_output_methods(tmp_path: Path):
