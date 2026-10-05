@@ -114,6 +114,11 @@ that option, module processing only reports progress and the final pass
 persists the complete flow snapshot once. The final pass joins all call facts
 together.
 CodeQL's temporary query pack exports only source-located resolved calls.
+When a call has a source-backed interface declaration and CodeQL also exposes
+a concrete virtual target, the query keeps the declared interface call as an
+additional possible witness. This preserves the contract edge for module-aware
+dispatch enrichment; duplicate graph rows are deduplicated by their target and
+confidence.
 `--codeql-database` reuses one global database supplied by the caller. Once the
 source-backed call graph is constructed, its
 edges are committed as an explicit partial checkpoint before input-to-output

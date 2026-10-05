@@ -124,6 +124,9 @@ predicate exactTarget(MethodCall call, Method target) {
  * The final branch keeps the declared source method when a buildless database
  * cannot expose its concrete implementation.  Python may then add a
  * conservative source-backed bridge if it can prove one.
+ * A source-backed interface declaration is also kept as a witness when
+ * CodeQL exposes a concrete virtual target, so downstream dispatch enrichment
+ * retains the caller-to-contract edge.
  */
 predicate resolvedTarget(MethodCall call, Method target, string confidence) {
   exactTarget(call, target) and confidence = "exact"
@@ -137,6 +140,10 @@ predicate resolvedTarget(MethodCall call, Method target, string confidence) {
   // to a unique source implementation carrying an integration endpoint.
   not exists(Method exact | exactTarget(call, exact)) and
   target = call.getMethod() and target.fromSource() and confidence = "possible"
+  or
+  target = call.getMethod() and
+  target.getDeclaringType() instanceof Interface and
+  target.fromSource() and confidence = "possible"
 }
 
 predicate callerInScope(Callable enclosing) {
