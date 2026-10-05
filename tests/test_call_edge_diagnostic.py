@@ -372,6 +372,38 @@ def test_methods_lists_inheritance_edges_to_concrete_implementations(
     assert payload["inheritance_edges"][0]["implementation"]["id"] == "implementation"
 
 
+def test_methods_lists_overrides_of_concrete_parent_methods(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "orders").mkdir()
+    (tmp_path / "orders/Base.java").write_text(
+        "package orders; public class Base { public void reserve(String value) {} }\n",
+    )
+    (tmp_path / "orders/Child.java").write_text(
+        "package orders; public class Child extends Base { "
+        "@Override public void reserve(String value) {} }\n",
+    )
+    base_method = IntegrationMethod(
+        "base", "orders", "orders.Base.reserve", "orders/Base.java", 1, 1, (), (),
+    )
+    child_method = IntegrationMethod(
+        "child", "orders", "orders.Child.reserve", "orders/Child.java", 1, 1, (), (),
+    )
+    _given_persisted_snapshot(tmp_path, [base_method, child_method])
+
+    result = RUNNER.invoke(
+        app,
+        ["analyze", "methods", "--module", "orders", "--root", str(tmp_path), "--json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert any(
+        edge["base"]["id"] == "base" and edge["implementation"]["id"] == "child"
+        for edge in payload["inheritance_edges"]
+    )
+
+
 def test_call_edge_text_output_shows_an_edge_used_by_a_flow(tmp_path: Path) -> None:
     # Given an exact edge already used by a persisted IN-to-OUT flow.
     caller = _method("caller", "orders.Controller.create", inputs=("in",))

@@ -613,11 +613,11 @@ def list_indexed_methods(
         symbols = JavaSymbols(root, inventory.integration_methods, source_paths=source_paths)
         for method in methods:
             contract = symbols.methods.get(method.id)
-            if contract is None or contract.concrete:
+            if contract is None:
                 continue
             for candidate in symbols.implementations(contract):
                 implementation = candidate.method
-                if implementation.id not in selected_ids:
+                if implementation.id == method.id or implementation.id not in selected_ids:
                     continue
                 inheritance_edges[(method.id, implementation.id)] = {
                     "base": _method_fact(method),
