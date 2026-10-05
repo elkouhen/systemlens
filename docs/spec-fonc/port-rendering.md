@@ -81,13 +81,14 @@ producer and consumer services. When the matching Java type is indexed, its
 inspector also shows its source, declared fields, enum values, and conservative
 recursive project-type navigation.
 
-The Explorer provides a `Microservices visibles` panel with a search field.
-Without a search term, the panel lists only the selected hidden microservices.
-Entering a term lists matching indexed microservices so the user can add one or
-remove one from the hidden set. Hiding a service removes its node and incident
-relations from the current graph and its related layouts. The selection is
-stored in the browser's local storage for this type of export. It does not
-modify the indexed facts, persisted relations, or source configuration.
+The Explorer provides a `Ressources visibles` panel with independent sections
+for microservices and Topics. Without a search term, each section lists only
+the selected hidden resources. Entering a term lists matching indexed
+resources so the user can add one or remove one from the hidden set. Hiding a
+resource removes its node and incident relations from the current graph and
+its related layouts. The selections are stored in the browser's local storage
+for this type of export. They do not modify the indexed facts, persisted
+relations, or source configuration.
 
 The HTML export opens on the Explorer tab with the global architecture graph.
 Before a flow selection it shows only the high-level node cards and

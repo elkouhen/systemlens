@@ -1,9 +1,18 @@
 // Ordered source module: 00-core.js
     const graphData = JSON.parse(document.getElementById("graph-data").textContent);
     const hiddenMicroservicesStorageKey = "systemlens:hidden-microservices";
+    const hiddenTopicsStorageKey = "systemlens:hidden-topics";
     const hiddenMicroservices = new Set((() => {
       try {
         const stored = JSON.parse(localStorage.getItem(hiddenMicroservicesStorageKey) || "[]");
+        return Array.isArray(stored) ? stored.filter(value => typeof value === "string") : [];
+      } catch (_error) {
+        return [];
+      }
+    })());
+    const hiddenTopics = new Set((() => {
+      try {
+        const stored = JSON.parse(localStorage.getItem(hiddenTopicsStorageKey) || "[]");
         return Array.isArray(stored) ? stored.filter(value => typeof value === "string") : [];
       } catch (_error) {
         return [];
@@ -388,7 +397,9 @@
         return !hiddenMicroservices.has(node.name)
           && (node.external ? nodeExternalMicroservice.checked : nodeMicroservice.checked);
       }
-      if (["kafka_topic", "message_channel"].includes(node.kind)) return nodeKafkaTopic.checked;
+      if (["kafka_topic", "message_channel"].includes(node.kind)) {
+        return !hiddenTopics.has(node.name) && nodeKafkaTopic.checked;
+      }
       if (["mongodb_collection", "data_schema"].includes(node.kind)) return nodeMongodbCollection.checked;
       return nodeOther.checked;
     }

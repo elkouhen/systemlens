@@ -143,12 +143,19 @@
         </div>
       </details>
       <details id="microservice-visibility-controls" class="display-controls">
-        <summary>Microservices visibles</summary>
-        <p class="path-help">Décochez un microservice pour le masquer du graphe et de ses relations. Ce réglage est mémorisé dans ce navigateur.</p>
+        <summary>Ressources visibles</summary>
+        <h3 class="visibility-subtitle">Microservices</h3>
+        <p class="path-help">Décochez un microservice pour le masquer du graphe et de ses relations.</p>
         <input id="microservice-visibility-filter" class="reference-filter-input" type="search" placeholder="Rechercher un microservice" autocomplete="off" aria-label="Rechercher un microservice à masquer">
         <p id="microservice-visibility-summary" class="microservice-visibility-summary" role="status"></p>
         <div id="microservice-visibility-list" class="microservice-visibility-list"></div>
         <button id="microservice-visibility-reset" class="microservice-visibility-reset" type="button">Tout réafficher</button>
+        <h3 class="visibility-subtitle">Topics</h3>
+        <p class="path-help">Décochez un topic pour le masquer du graphe et de ses relations.</p>
+        <input id="topic-visibility-filter" class="reference-filter-input" type="search" placeholder="Rechercher un topic" autocomplete="off" aria-label="Rechercher un topic à masquer">
+        <p id="topic-visibility-summary" class="microservice-visibility-summary" role="status"></p>
+        <div id="topic-visibility-list" class="microservice-visibility-list"></div>
+        <button id="topic-visibility-reset" class="microservice-visibility-reset" type="button">Tout réafficher</button>
       </details>
       <details id="advanced-controls" class="advanced-controls">
         <summary>Actions avancées</summary>

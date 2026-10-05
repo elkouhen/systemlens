@@ -62,6 +62,10 @@
     const microserviceVisibilityReset = document.getElementById("microservice-visibility-reset");
     const microserviceVisibilityFilter = document.getElementById("microservice-visibility-filter");
     const microserviceVisibilitySummary = document.getElementById("microservice-visibility-summary");
+    const topicVisibilityList = document.getElementById("topic-visibility-list");
+    const topicVisibilityReset = document.getElementById("topic-visibility-reset");
+    const topicVisibilityFilter = document.getElementById("topic-visibility-filter");
+    const topicVisibilitySummary = document.getElementById("topic-visibility-summary");
     const collectionsList = document.getElementById("collections-list");
     const collectionsEmpty = document.getElementById("collections-empty");
     const collectionsFilter = document.getElementById("collections-filter");
@@ -118,6 +122,11 @@
       .map(node => node.name)
       .filter(Boolean)
       .sort((left, right) => left.localeCompare(right));
+    const topicNames = graphData.nodes
+      .filter(node => ["kafka_topic", "message_channel"].includes(node.kind))
+      .map(node => node.name)
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right));
     const persistHiddenMicroservices = () => {
       try {
         localStorage.setItem(hiddenMicroservicesStorageKey, JSON.stringify([...hiddenMicroservices].sort()));
@@ -170,6 +179,59 @@
     });
     microserviceVisibilityFilter?.addEventListener("input", renderMicroserviceVisibility);
     renderMicroserviceVisibility();
+    const persistHiddenTopics = () => {
+      try {
+        localStorage.setItem(hiddenTopicsStorageKey, JSON.stringify([...hiddenTopics].sort()));
+      } catch (_error) { /* optional preference */ }
+    };
+    const renderTopicVisibility = () => {
+      if (!topicVisibilityList) return;
+      topicVisibilityList.replaceChildren();
+      const query = (topicVisibilityFilter?.value || "").trim().toLocaleLowerCase();
+      const hiddenNames = topicNames.filter(name => hiddenTopics.has(name));
+      const matchingNames = query
+        ? topicNames.filter(name => name.toLocaleLowerCase().includes(query))
+        : hiddenNames;
+      if (topicVisibilitySummary) {
+        const hiddenCount = hiddenNames.length;
+        topicVisibilitySummary.textContent = query
+          ? `${matchingNames.length} résultat${matchingNames.length > 1 ? "s" : ""} · ${hiddenCount} caché${hiddenCount > 1 ? "s" : ""}`
+          : hiddenCount
+            ? `${hiddenCount} topic${hiddenCount > 1 ? "s" : ""} caché${hiddenCount > 1 ? "s" : ""}`
+            : "Aucun topic caché";
+      }
+      if (!matchingNames.length) {
+        const empty = document.createElement("p");
+        empty.className = "microservice-visibility-empty";
+        empty.textContent = query ? "Aucun topic correspondant." : "Utilisez la recherche pour en cacher un.";
+        topicVisibilityList.append(empty);
+      }
+      matchingNames.forEach(name => {
+        const label = document.createElement("label");
+        label.className = "microservice-visibility-item";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = !hiddenTopics.has(name);
+        input.setAttribute("aria-label", `Afficher ${name}`);
+        input.addEventListener("change", () => {
+          if (input.checked) hiddenTopics.delete(name);
+          else hiddenTopics.add(name);
+          persistHiddenTopics();
+          renderTopicVisibility();
+          rebuildGraph();
+        });
+        label.append(input, document.createTextNode(name));
+        topicVisibilityList.append(label);
+      });
+    };
+    topicVisibilityReset?.addEventListener("click", () => {
+      hiddenTopics.clear();
+      persistHiddenTopics();
+      renderTopicVisibility();
+      rebuildGraph();
+    });
+    topicVisibilityFilter?.addEventListener("input", renderTopicVisibility);
+    renderTopicVisibility();
     function restoreInitialNodePositions() {
       network.forEachNode(node => {
         const position = initialNodePositions.get(node);
