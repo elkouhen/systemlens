@@ -133,8 +133,11 @@ When CodeQL is disabled or unavailable, a source symbol pass follows uniquely
 resolved, receiver-typed calls between indexed Java methods. It keeps these
 candidates at low confidence and drops ambiguous types or overloads.
 When duplicate qualified types exist in different build modules, resolution
-first restricts candidates to the caller's module. If that scope is absent or
-still ambiguous, the call remains unresolved rather than selecting by name.
+first restricts candidates to the caller's module. Inheritance declarations and
+dispatch indexes retain the `(qualified name, module)` identity, so homonymous
+interfaces and classes cannot merge their relations. If the module scope is
+absent or still ambiguous, all compatible candidates remain possible rather
+than selecting one by name.
 Symbol collection scans source bytes and syntax nodes once per flow rebuild.
 Route traversal has the existing bounded `O(I × (V + E))` worst case for `I`
 indexed input methods, `V` source methods and `E` resolved call edges.

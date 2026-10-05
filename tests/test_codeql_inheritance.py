@@ -489,10 +489,42 @@ public class Consumer extends BaseConsumer {
     ]
 
 
-def test_duplicate_qualified_types_across_modules_remain_unresolved(tmp_path: Path):
+def test_duplicate_qualified_types_across_modules_keep_ambiguous_candidates(tmp_path: Path):
     sources = {**SOURCES, "duplicate/Concrete.java": SOURCES["impl/Concrete.java"]}
     methods, endpoints = _project(tmp_path, sources)
-    assert materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources)) == []
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources)
+    )
+    assert {flow.steps[-1].path for flow in flows} == {
+        "impl/Concrete.java", "duplicate/Concrete.java",
+    }
+    assert all(flow.confidence == "low" for flow in flows)
+
+
+def test_duplicate_interface_names_keep_module_scoped_inheritance(tmp_path: Path):
+    sources = {
+        "orders/api/Port.java": "package api; public interface Port { void send(); }",
+        "orders/impl/Adapter.java": (
+            "package impl; public class Adapter implements api.Port { public void send() {} }"
+        ),
+        "billing/api/Port.java": "package api; public interface Port { void send(); }",
+        "billing/impl/Adapter.java": (
+            "package impl; public class Adapter implements api.Port { public void send() {} }"
+        ),
+    }
+    methods, _endpoints = _project(tmp_path, sources)
+    symbols = JavaSymbols(tmp_path, methods, source_paths=list(sources))
+
+    interface_methods = [
+        method for method in methods if method.qualified_method == "api.Port.send"
+    ]
+    assert {method.module for method in interface_methods} == {"orders", "billing"}
+    for method in interface_methods:
+        contract = symbols.methods[method.id]
+        implementations = symbols.implementations(contract)
+        assert len(implementations) == 1
+        assert implementations[0].module == method.module
+        assert implementations[0].method.qualified_method == "impl.Adapter.send"
 
 
 def test_declared_receiver_override_hides_ancestor_body(tmp_path: Path):

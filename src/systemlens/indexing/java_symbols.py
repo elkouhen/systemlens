@@ -47,11 +47,11 @@ class JavaSymbols:
         self.units: dict[str, _Unit] = {}
         self.types: dict[str, list[tuple[str, Node]]] = defaultdict(list)
         self.path_modules: dict[str, str] = {}
-        self.bases: dict[str, set[str]] = defaultdict(set)
+        self.bases: dict[tuple[str, str], set[tuple[str, str]]] = defaultdict(set)
         self.methods: dict[str, _Method] = {}
         self.by_owner: dict[tuple[str, str, int, str], list[_Method]] = defaultdict(list)
-        self.dispatch: dict[tuple[str, str, tuple[str | None, ...]], list[_Method]] = defaultdict(list)
-        self._ancestors: dict[str, set[str]] = {}
+        self.dispatch: dict[tuple[str, str, str, tuple[str | None, ...]], list[_Method]] = defaultdict(list)
+        self._ancestors: dict[tuple[str, str], set[tuple[str, str]]] = {}
         self._targets: dict[tuple[str, str, int, str], IntegrationMethod | None] = {}
         by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
         for method in methods:
@@ -90,18 +90,21 @@ class JavaSymbols:
                     key = (self.owner(path, node), parser.declaration_name(node, source) or "", node.start_point.row + 1)
                     declarations[path][key].append(node)
         for owner, locations in self.types.items():
-            if len(locations) != 1:
-                continue
-            path, node = locations[0]
-            for child in node.named_children:
-                if child.type not in {"superclass", "super_interfaces", "extends_interfaces"}:
-                    continue
-                for type_node in child.named_children:
-                    candidates = type_node.named_children if type_node.type == "type_list" else [type_node]
-                    for candidate in candidates:
-                        base = self.resolve(path, parser.node_text(self.units[path].source, candidate), owner)
-                        if base is not None and base in self.types and base != owner:
-                            self.bases[owner].add(base)
+            for path, node in locations:
+                for child in node.named_children:
+                    if child.type not in {"superclass", "super_interfaces", "extends_interfaces"}:
+                        continue
+                    for type_node in child.named_children:
+                        candidates = type_node.named_children if type_node.type == "type_list" else [type_node]
+                        for candidate in candidates:
+                            base = self.resolve(path, parser.node_text(self.units[path].source, candidate), owner)
+                            if base is not None and base in self.types and base != owner:
+                                base_locations = self._type_candidates(base, path)
+                                if len(base_locations) == 1:
+                                    base_module = self.path_modules.get(base_locations[0][0], "")
+                                    self.bases[(owner, self.path_modules.get(path, ""))].add(
+                                        (base, base_module)
+                                    )
         for path, path_methods in by_path.items():
             if path not in self.units:
                 continue
@@ -142,8 +145,8 @@ class JavaSymbols:
                 self.methods[method.id] = info
                 self.by_owner[(owner, name, len(parameter_types), method.module)].append(info)
                 if info.concrete and all(value is not None for value in info.parameters):
-                    for base_owner in self.ancestors(owner):
-                        self.dispatch[(base_owner, name, info.parameters)].append(info)
+                    for base_owner, base_module in self.ancestors(owner, info.module):
+                        self.dispatch[(base_owner, base_module, name, info.parameters)].append(info)
 
     def owner(self, path: str, node: Node) -> str:
         names: list[str] = []
@@ -206,29 +209,31 @@ class JavaSymbols:
             return candidate if len(self.types.get(candidate, [None])) == 1 else None
         return None
 
-    def ancestors(self, owner: str) -> set[str]:
-        if owner not in self._ancestors:
-            seen: set[str] = set()
-            pending = [owner]
+    def ancestors(self, owner: str, module: str) -> set[tuple[str, str]]:
+        key = (owner, module)
+        if key not in self._ancestors:
+            seen: set[tuple[str, str]] = set()
+            pending = [key]
             while pending:
                 current = pending.pop()
                 if current not in seen:
                     seen.add(current)
                     pending.extend(self.bases.get(current, ()))
-            self._ancestors[owner] = seen
-        return self._ancestors[owner]
+            self._ancestors[key] = seen
+        return self._ancestors[key]
 
     def implementations(self, contract: _Method) -> list[_Method]:
         name = contract.method.qualified_method.rsplit(".", 1)[-1]
         if not any(parameter is None for parameter in contract.parameters):
-            return self.dispatch.get((contract.owner, name, contract.parameters), [])
+            return self.dispatch.get((contract.owner, contract.module, name, contract.parameters), [])
         # Generic contracts can expose a type variable in the source AST
         # while a concrete implementation has a resolved parameter type.
         # Gather compatible arities and let the caller reject ambiguity.
         candidates = {
             candidate.method.id: candidate
-            for (owner, candidate_name, parameters), values in self.dispatch.items()
+            for (owner, module, candidate_name, parameters), values in self.dispatch.items()
             if owner == contract.owner
+            and module == contract.module
             and candidate_name == name
             and len(parameters) == len(contract.parameters)
             for candidate in values
@@ -257,14 +262,20 @@ class JavaSymbols:
         """Return all source-backed targets compatible with a receiver call."""
         key = (receiver_type, name, arity, module)
         self._targets[key] = None
-        receiver_bases = self.ancestors(receiver_type)
+        receiver_locations = self._type_candidates(receiver_type, path)
+        receiver_module = (
+            self.path_modules.get(receiver_locations[0][0], module)
+            if len(receiver_locations) == 1 else module
+        )
+        receiver_bases = self.ancestors(receiver_type, receiver_module)
         contracts = [candidate for owner in receiver_bases
-                     for candidate in self.by_owner.get((owner, name, arity, module), [])]
+                     for candidate in self.by_owner.get((owner[0], name, arity, owner[1]), [])]
         if not contracts:
             contracts = [
                 candidate
                 for (owner, candidate_name, candidate_arity, _candidate_module), values in self.by_owner.items()
-                if owner in receiver_bases and candidate_name == name and candidate_arity == arity
+                if (owner, _candidate_module) in receiver_bases
+                and candidate_name == name and candidate_arity == arity
                 for candidate in values
             ]
         signatures = {candidate.parameters for candidate in contracts}
@@ -272,8 +283,13 @@ class JavaSymbols:
             return []
         candidates = {candidate.method.id: candidate for contract in contracts
                       for candidate in self.implementations(contract)
-                      if receiver_type in self.ancestors(candidate.owner)
-                      or candidate.owner in receiver_bases}
+                      if any(
+                          ancestor_owner == receiver_type
+                          for ancestor_owner, _ancestor_module in self.ancestors(
+                              candidate.owner, candidate.module
+                          )
+                      )
+                      or (candidate.owner, candidate.module) in receiver_bases}
         receiver_modules = {
             self.path_modules.get(candidate_path)
             for candidate_path, _ in self._type_candidates(receiver_type, path)
@@ -296,7 +312,12 @@ class JavaSymbols:
             candidate
             for candidate in candidates.values()
             if candidate.owner != receiver_type
-            and receiver_type in self.ancestors(candidate.owner)
+            and any(
+                ancestor_owner == receiver_type
+                for ancestor_owner, _ancestor_module in self.ancestors(
+                    candidate.owner, candidate.module
+                )
+            )
         ]
         if len(inherited_overrides) == 1:
             return [inherited_overrides[0].method]
@@ -304,8 +325,14 @@ class JavaSymbols:
         # Possible overrides on other runtime subtypes remain ambiguous.
         hidden: set[str] = set()
         for candidate in candidates.values():
-            if candidate.owner in receiver_bases:
-                hidden.update(self.ancestors(candidate.owner) - {candidate.owner})
+            if (candidate.owner, candidate.module) in receiver_bases:
+                hidden.update(
+                    ancestor_owner
+                    for ancestor_owner, _ancestor_module in self.ancestors(
+                        candidate.owner, candidate.module
+                    )
+                    if ancestor_owner != candidate.owner
+                )
         remaining = [candidate for candidate in candidates.values() if candidate.owner not in hidden]
         local_remaining = [candidate for candidate in remaining if candidate.module == module]
         if local_remaining:
@@ -334,7 +361,7 @@ class JavaSymbols:
                         return self.resolve(path, parser.node_text(source, type_node), info.owner)
             scope = scope.parent
         found: set[str | None] = set()
-        for owner in self.ancestors(info.owner):
+        for owner, _owner_module in self.ancestors(info.owner, info.module):
             for field_path, declaration in self.types.get(owner, []):
                 body = declaration.child_by_field_name("body")
                 field_source = self.units[field_path].source

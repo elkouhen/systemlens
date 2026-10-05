@@ -509,8 +509,8 @@ SQLite or endpoint contracts. Previously invented name-only flows disappear.
 Unsupported generic substitution, varargs and unknown types remain fallback blind
 spots. Multiple concrete implementations are retained as separate low-confidence
 possible candidates rather than resolved to one runtime target. Symbol/hierarchy
-indexing and per-source predecessor trees consume memory proportional to their
-relations;
+indexing keeps duplicate qualified types separate by module, and per-source
+predecessor trees consume memory proportional to their relations;
 When the caller module provides compatible implementations, it is preferred;
 cross-module candidates remain available only when that local set is empty.
 the QL closures remain potentially large but are explicitly output-anchored.
