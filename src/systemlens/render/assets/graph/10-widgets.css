@@ -122,6 +122,13 @@
     .display-controls > summary, .advanced-controls > summary, .advanced-tools > summary { color: #315f9b; font-size: var(--type-body); font-weight: 750; line-height: 1.35; cursor: pointer; }
     .display-controls[open] > summary, .advanced-controls[open] > summary, .advanced-tools[open] > summary { margin-bottom: 8px; }
     .display-filter-groups { display: grid; gap: 8px; }
+    .microservice-visibility-list { display: grid; gap: 5px; max-height: 180px; overflow-y: auto; padding: 2px 0; }
+    .microservice-visibility-item { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--ui-text, #172033); font-size: 11px; overflow-wrap: anywhere; }
+    .microservice-visibility-item input { flex: 0 0 auto; }
+    .microservice-visibility-summary { margin: 0; color: var(--ui-muted, #64748b); font-size: 10px; line-height: 1.35; }
+    .microservice-visibility-empty { margin: 0; color: var(--ui-muted, #64748b); font-size: 11px; line-height: 1.4; }
+    .microservice-visibility-reset { justify-self: start; width: auto !important; min-height: 30px; padding: 0 10px; border: 1px solid var(--ui-accent-border, #c7d8f3) !important; border-radius: 8px !important; color: var(--ui-accent-text, #315f9b) !important; background: var(--ui-accent-soft, #f8fbff) !important; font-size: 11px !important; font-weight: 700; }
+    .microservice-visibility-reset:hover { border-color: var(--ui-accent, #3156d3) !important; background: var(--ui-accent-soft-strong, #ebefff) !important; }
     .advanced-tools .toolbar-tabs { margin-top: 8px; }
     .relation-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; border: 0; }
     .relation-filters legend { width: 100%; margin-bottom: 2px; color: #59708d; font-size: var(--type-kicker); font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }

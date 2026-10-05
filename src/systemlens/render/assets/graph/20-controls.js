@@ -58,6 +58,10 @@
     const microservicesEmpty = document.getElementById("microservices-empty");
     const microservicesFilter = document.getElementById("microservices-filter");
     const microservicesTitle = document.getElementById("microservices-title");
+    const microserviceVisibilityList = document.getElementById("microservice-visibility-list");
+    const microserviceVisibilityReset = document.getElementById("microservice-visibility-reset");
+    const microserviceVisibilityFilter = document.getElementById("microservice-visibility-filter");
+    const microserviceVisibilitySummary = document.getElementById("microservice-visibility-summary");
     const collectionsList = document.getElementById("collections-list");
     const collectionsEmpty = document.getElementById("collections-empty");
     const collectionsFilter = document.getElementById("collections-filter");
@@ -109,6 +113,63 @@
     const MAX_SIMPLE_PATH_DEPTH = 8;
     const MAX_SIMPLE_PATHS = 8;
     const MAX_SIMPLE_PATH_EXPLORATIONS = 2000;
+    const microserviceNames = graphData.nodes
+      .filter(node => node.kind === "microservice")
+      .map(node => node.name)
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right));
+    const persistHiddenMicroservices = () => {
+      try {
+        localStorage.setItem(hiddenMicroservicesStorageKey, JSON.stringify([...hiddenMicroservices].sort()));
+      } catch (_error) { /* optional preference */ }
+    };
+    const renderMicroserviceVisibility = () => {
+      if (!microserviceVisibilityList) return;
+      microserviceVisibilityList.replaceChildren();
+      const query = (microserviceVisibilityFilter?.value || "").trim().toLocaleLowerCase();
+      const hiddenNames = microserviceNames.filter(name => hiddenMicroservices.has(name));
+      const matchingNames = query
+        ? microserviceNames.filter(name => name.toLocaleLowerCase().includes(query))
+        : hiddenNames;
+      if (microserviceVisibilitySummary) {
+        const hiddenCount = microserviceNames.filter(name => hiddenMicroservices.has(name)).length;
+        microserviceVisibilitySummary.textContent = query
+          ? `${matchingNames.length} résultat${matchingNames.length > 1 ? "s" : ""} · ${hiddenCount} caché${hiddenCount > 1 ? "s" : ""}`
+          : hiddenCount
+            ? `${hiddenCount} microservice${hiddenCount > 1 ? "s" : ""} caché${hiddenCount > 1 ? "s" : ""}`
+            : "Aucun microservice caché";
+      }
+      if (!matchingNames.length) {
+        const empty = document.createElement("p");
+        empty.className = "microservice-visibility-empty";
+        empty.textContent = query ? "Aucun microservice correspondant." : "Utilisez la recherche pour en cacher un.";
+        microserviceVisibilityList.append(empty);
+      }
+      matchingNames.forEach(name => {
+        const label = document.createElement("label");
+        label.className = "microservice-visibility-item";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = !hiddenMicroservices.has(name);
+        input.setAttribute("aria-label", `Afficher ${name}`);
+        input.addEventListener("change", () => {
+          if (input.checked) hiddenMicroservices.delete(name);
+          else hiddenMicroservices.add(name);
+          persistHiddenMicroservices();
+          rebuildGraph();
+        });
+        label.append(input, document.createTextNode(name));
+        microserviceVisibilityList.append(label);
+      });
+    };
+    microserviceVisibilityReset?.addEventListener("click", () => {
+      hiddenMicroservices.clear();
+      persistHiddenMicroservices();
+      renderMicroserviceVisibility();
+      rebuildGraph();
+    });
+    microserviceVisibilityFilter?.addEventListener("input", renderMicroserviceVisibility);
+    renderMicroserviceVisibility();
     function restoreInitialNodePositions() {
       network.forEachNode(node => {
         const position = initialNodePositions.get(node);

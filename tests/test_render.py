@@ -1313,6 +1313,16 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'else if (showingFlowGraph) graphState.viewMode = "call-graph";' in document
     assert '|| graphState.viewMode === "call-graph";' in document
     assert 'id="display-controls"' in document
+    assert 'id="microservice-visibility-controls"' in document
+    assert 'id="microservice-visibility-list"' in document
+    assert 'id="microservice-visibility-filter"' in document
+    assert 'id="microservice-visibility-summary"' in document
+    assert 'const hiddenNames = microserviceNames.filter(name => hiddenMicroservices.has(name));' in document
+    assert 'const matchingNames = query' in document
+    assert 'Tout réafficher' in document
+    assert '.microservice-visibility-reset' in document
+    assert 'systemlens:hidden-microservices' in document
+    assert 'hiddenMicroservices.has(node.name)' in document
     assert 'id="relation-other"' in document
     assert 'id="node-other"' in document
     assert 'class="filter-presets"' not in document

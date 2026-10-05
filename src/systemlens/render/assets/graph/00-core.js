@@ -1,5 +1,14 @@
 // Ordered source module: 00-core.js
     const graphData = JSON.parse(document.getElementById("graph-data").textContent);
+    const hiddenMicroservicesStorageKey = "systemlens:hidden-microservices";
+    const hiddenMicroservices = new Set((() => {
+      try {
+        const stored = JSON.parse(localStorage.getItem(hiddenMicroservicesStorageKey) || "[]");
+        return Array.isArray(stored) ? stored.filter(value => typeof value === "string") : [];
+      } catch (_error) {
+        return [];
+      }
+    })());
     function callGraphForFlow(flow) {
       return graphData.call_graphs?.[flow?.call_graph_id]
         || flow?.call_graph
@@ -376,8 +385,8 @@
     function isVisibleNode(node) {
       if (!node) return false;
       if (node.kind === "microservice") {
-        return (node.external ? nodeExternalMicroservice.checked : nodeMicroservice.checked)
-          ;
+        return !hiddenMicroservices.has(node.name)
+          && (node.external ? nodeExternalMicroservice.checked : nodeMicroservice.checked);
       }
       if (["kafka_topic", "message_channel"].includes(node.kind)) return nodeKafkaTopic.checked;
       if (["mongodb_collection", "data_schema"].includes(node.kind)) return nodeMongodbCollection.checked;
