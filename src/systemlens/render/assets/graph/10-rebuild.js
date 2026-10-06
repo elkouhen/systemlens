@@ -1779,14 +1779,16 @@
           const targetPort = (nodeDataById.get(targetId)?.ports || []).find(port => (
             port.direction === "in" && (!link.label || port.name === link.label)
           ));
-          const sourceAnchor = (link.endpoint_ids || [])
-            .map(endpointId => anchorsByEndpointId.get(endpointId))
-            .find(anchor => anchor?.classList.contains("is-out"))
-            || [...(sourcePort ? [anchorsByEndpointId.get(sourcePort.endpoint_id)] : [])][0];
-          const targetAnchor = (link.endpoint_ids || [])
-            .map(endpointId => anchorsByEndpointId.get(endpointId))
-            .find(anchor => anchor?.classList.contains("is-in"))
-            || [...(targetPort ? [anchorsByEndpointId.get(targetPort.endpoint_id)] : [])][0];
+          const sourceAnchors = [...source.querySelectorAll(".graph-node-port-reference.is-out")];
+          const targetAnchors = [...target.querySelectorAll(".graph-node-port-reference.is-in")];
+          const sourceAnchor = sourceAnchors.find(anchor => (
+            anchor.dataset.endpointId === sourcePort?.endpoint_id
+            || (link.endpoint_ids || []).includes(anchor.dataset.endpointId)
+          ));
+          const targetAnchor = targetAnchors.find(anchor => (
+            anchor.dataset.endpointId === targetPort?.endpoint_id
+            || (link.endpoint_ids || []).includes(anchor.dataset.endpointId)
+          ));
           if (!sourceAnchor || !targetAnchor) return null;
           const sourceCardBounds = source.getBoundingClientRect();
           const targetCardBounds = target.getBoundingClientRect();

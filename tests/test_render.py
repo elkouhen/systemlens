@@ -1582,7 +1582,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)" in document
     assert 'type: "arrow"' in document
     assert 'const callGraphPath = (link, edgeKey, index) =>' in document
-    assert 'const sourceAnchor = (link.endpoint_ids || [])' in document
+    assert 'const sourceAnchors = [...source.querySelectorAll(".graph-node-port-reference.is-out")]' in document
+    assert 'const targetAnchors = [...target.querySelectorAll(".graph-node-port-reference.is-in")]' in document
     assert 'orthogonalPath(' in document
     assert 'const selectedCallGraphLinks = callGraphOnly' in document
     assert 'const firstCallGraphLink = selectedCallGraphLinks[0]' in document
@@ -1660,6 +1661,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "obstacle.left - overlayBounds.left - 14" in document
     assert 'const sourceSide = "EAST";' in document
     assert 'const targetSide = "WEST";' in document
+    assert 'source.querySelectorAll(".graph-node-port-reference.is-out")' in document
+    assert 'target.querySelectorAll(".graph-node-port-reference.is-in")' in document
     assert 'const start = [sourceBounds.right, sourceBounds.top + sourceBounds.height / 2];' in document
     assert 'const end = [targetBounds.left, targetBounds.top + targetBounds.height / 2];' in document
     assert 'const addLibavoidObstacle = card =>' in document
