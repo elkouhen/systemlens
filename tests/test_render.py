@@ -1457,6 +1457,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "graphWheelCleanup: null" in document
     assert "graphWheelCleanup?.();" in document
     assert "graphCanvas.removeEventListener(\"wheel\", handleGraphWheel)" in document
+    assert "Math.max(-120, Math.min(120, delta)) * .0006" in document
     assert "Keep the graph point under the cursor fixed" in document
     assert "const GRAPH_CARD_SCALE = 1" in document
     assert "const GRAPH_CARD_WIDTH = 110 * GRAPH_CARD_SCALE" in document

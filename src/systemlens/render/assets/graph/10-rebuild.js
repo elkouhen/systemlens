@@ -2131,7 +2131,7 @@
         };
         const graphPoint = renderer.viewportToGraph(cursor);
         const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
-        const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * .0012);
+        const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * .0006);
         const maximumRatio = ["cluster", "elk"].includes(graphState.activeLayout)
           ? graphState.maximumCollisionFreeRatio
           : 100;
