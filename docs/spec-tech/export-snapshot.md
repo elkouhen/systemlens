@@ -80,32 +80,15 @@ graph is cyclic and has no zero-indegree module, all flow modules are used as
 deterministic roots while preserving arc direction.
 The snapshot also exposes the breadth-first traversal levels and call tree that
 assign arc numbers before they are copied to the rendered call graph.
-Service-to-service
-interaction-graph edges
-use orthogonal straight-segment routes in the SVG overlay between their actual
-output and input port anchors. ELK.js supplies the positioned graph and the
-browser libavoid WASM router receives fixed node rectangles plus explicit port
-sides, then returns absolute source, bend, and target points. The router
-includes every visible microservice card as an obstacle, not only the source
-and target cards of the routed edges; route validation excludes the source and
-target cards themselves. It nudges parallel routes. OUT arcs always leave
-through the right edge of their port anchor and
-IN arcs always arrive at the left edge of their port anchor, regardless of the
-relative position of the endpoint cards. Route validation also requires the
-first segment to leave the OUT side and the final segment to approach the IN
-side; a route that immediately turns through its source or target card is
-rejected. Returned
-Libavoid points are never clamped after routing: routes that leave the safe
-viewport or intersect an expanded obstacle are rejected and use the existing
-geometry fallback. A returned Libavoid route whose Manhattan length is
-disproportionate to the direct distance is also rejected, preventing
-full-viewport U-shaped detours; the bounded orthogonal fallback is preferred
-when it is short and obstacle-free. Arc labels use the same protocol-specific
-color as their associated paths, including the theme-specific dark-mode colors,
-and are subdued until hover or analysis selection. A two-point route remains
-direct when the segment is clear; a rectangular detour is created
-only when an obstacle blocks that direct segment. In the focused
-flow graph view, endpoint arcs are represented by the
+Service-to-service interaction-graph edges use the complete projected edge set
+during microservice placement. The SVG overlay then draws exactly one straight
+segment between the actual output and input port anchors. `OUT` arcs leave
+through the right edge of their port anchor and `IN` arcs arrive at the left
+edge of their port anchor. The focused flow graph does not add obstacle-routing
+bends or curves; card separation is handled by the placement pass. Arc labels
+use the same protocol-specific color as their associated paths, including the
+theme-specific dark-mode colors, and are subdued until hover or analysis
+selection. In the focused flow graph view, endpoint arcs are represented by the
 projected service edge and are not drawn a second time in the port overlay.
 While a code flow is selected, port anchors are interactive analysis controls:
 clicking an input or output endpoint, or directly on an arc, records a

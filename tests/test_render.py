@@ -1596,7 +1596,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'const callGraphPath = (link, edgeKey, index) =>' in document
     assert 'const sourceAnchors = [...source.querySelectorAll(".graph-node-port-reference.is-out")]' in document
     assert 'const targetAnchors = [...target.querySelectorAll(".graph-node-port-reference.is-in")]' in document
-    assert 'orthogonalPath(' in document
+    assert 'router: "direct-port"' in document
+    assert 'const layoutLinks = callGraphOnly' in document
+    assert 'layoutGraphNodes(connectedNodes, layoutLinks)' in document
     assert 'const selectedCallGraphLinks = callGraphOnly' in document
     assert 'const firstCallGraphLink = selectedCallGraphLinks[0]' in document
     assert 'graphState.selectedCallGraphEdgeKey = firstCallGraphLink?.edgeKey || null' in document
@@ -1643,13 +1645,6 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert ".graph-call-label { fill: #7c3aed;" in document
     assert ".graph-call-label.is-kafka { fill: #009e73; }" in document
     assert 'path.classList.add("is-rest")' in document
-    assert 'obstacleRouted' in document
-    assert 'const occupiedCallGraphSegments = []' in document
-    assert 'const viewportMargin = 90' in document
-    assert 'lane >= viewportMargin && lane <= overlayBounds.width - viewportMargin' in document
-    assert '@mr_mint/elkjs-libavoid' in document
-    assert 'routeEdges(routeGraph' in document
-    assert 'shapeBufferDistance: 14' in document
     assert 'is-code-flow-node' in document
     assert 'Selection must not change the card geometry' in document
     assert 'graph-flow-port-tooltip' not in document
@@ -1664,18 +1659,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'event.target.closest?.(".graph-node-port-reference")' in document
     assert "const toggleAnalysisEndpoint = (endpointId, event) =>" in document
     assert 'hitArea.addEventListener("click", event =>' in document
-    assert "if (!routeInsideViewport) return null;" in document
-    assert "if (!pathIsClear(points, routeObstacles)) return null;" in document
-    assert 'portPathIsExternal(compact, "EAST", "WEST")' in document
-    assert 'if (!portPathIsExternal(points, "EAST", "WEST")) return null;' in document
-    assert 'portPathIsExternal([start, end], "EAST", "WEST")' in document
-    assert 'previous[0] >= end[0] - epsilon' in document
-    assert 'previous[0] <= end[0] + epsilon' in document
-    assert 'const approachLane = Math.min(end[0] - 48, start[0] - 48);' in document
-    assert "if (!pathIsClear([start, end], obstacles))" in document
     assert "obstacle.left - overlayBounds.left - 14" in document
-    assert 'const sourceSide = "EAST";' in document
-    assert 'const targetSide = "WEST";' in document
+    assert 'router: "direct-port"' in document
+    assert 'const layoutLinks = callGraphOnly' in document
+    assert 'layoutGraphNodes(connectedNodes, layoutLinks)' in document
     assert 'source.querySelectorAll(".graph-node-port-reference.is-out")' in document
     assert 'target.querySelectorAll(".graph-node-port-reference.is-in")' in document
     assert 'const start = [sourceBounds.right, sourceBounds.top + sourceBounds.height / 2];' in document

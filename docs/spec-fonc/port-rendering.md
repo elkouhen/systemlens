@@ -183,14 +183,11 @@ When a selected flow occupies less space than the available focus area, its
 specific framing may zoom in (a camera ratio below the overview ratio) so the
 flow remains readable; the ratio is bounded and the cards remain inside the
 visible margins.
-The selected interaction graph's service-to-service arcs are rendered as orthogonal
-straight segments between the actual output and input ports. ELK.js keeps the
-node placement while `@mr_mint/elkjs-libavoid` computes obstacle-avoiding routes
-around the visible microservice cards, with a padding margin and nudging for
-parallel dependencies. A local orthogonal router is used only as a runtime
-fallback when the external WASM module cannot be loaded.
-The route validator requires the first segment to leave an `OUT` port toward
-the right and the final segment to approach an `IN` port from the left. A stale
+The selected interaction graph places microservices with all projected
+service-to-service edges and fixed card repulsion. Each service-to-service arc
+is then rendered as one straight SVG segment from the actual `OUT` port to the
+actual `IN` port. The focused view does not add obstacle-routing bends or curves;
+the placement algorithm is responsible for keeping cards readable. A stale
 overlay generation MUST NOT reinsert a path, label, or hit area after a newer
 graph render has started.
 Endpoint-to-endpoint dependencies are projected into the selected

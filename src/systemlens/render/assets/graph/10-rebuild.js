@@ -231,41 +231,6 @@
           node.vx *= .72; node.vy *= .72;
         });
       }
-      if (graphState.selectedCodeFlowId && graphState.pathMicroserviceOrder?.size) {
-        // Call graphs are read as a directed tree/DAG. Use the persisted
-        // service edges to place each level horizontally and its branches
-        // vertically; fall back to the historical lane for flows without
-        // exported call-graph edges.
-        const serviceGap = 4.8;
-        const resourceGap = 2.4;
-        const serviceX = new Map();
-        layoutNodes.forEach(node => {
-          const treePosition = graphState.codeFlowTreeCoordinates?.get(node.id);
-          if (treePosition) {
-            node.x = treePosition.x;
-            node.y = treePosition.y;
-            serviceX.set(node.id, node.x);
-            return;
-          }
-          const order = graphState.pathMicroserviceOrder.get(node.id);
-          if (order) {
-            serviceX.set(node.id, (order - 1) * serviceGap);
-            node.x = (order - 1) * serviceGap;
-            node.y = 0;
-          }
-        });
-        layoutNodes.forEach(node => {
-          if (serviceX.has(node.id)) return;
-          const neighbours = links
-            .filter(link => link.source === node.id || link.target === node.id)
-            .map(link => serviceX.get(link.source === node.id ? link.target : link.source))
-            .filter(value => Number.isFinite(value));
-          if (!neighbours.length) return;
-          node.x = (Math.min(...neighbours) + Math.max(...neighbours)) / 2;
-          if (neighbours.length === 1) node.x += resourceGap;
-          node.y = 0;
-        });
-      }
       return layoutNodes;
     }
     function layoutIsolatedNodes(nodes, connectedNodes) {
@@ -339,7 +304,14 @@
       // Keep visible services in the layout even when their only relations
       // point to a service hidden by the selected layer/namespace filter.
       const isolatedNodes = filteredNodes.filter(node => !visibleNodeIds.has(node.id));
-      const positionedConnectedNodes = layoutGraphNodes(connectedNodes, visibleLinks);
+      const layoutLinks = callGraphOnly
+        ? (selectedCallGraph?.edges || []).map(edge => ({
+          source: `microservice:${edge.source}`,
+          target: `microservice:${edge.target}`,
+          kind: edge.kind,
+        }))
+        : visibleLinks;
+      const positionedConnectedNodes = layoutGraphNodes(connectedNodes, layoutLinks);
       const layoutNodes = [
         ...positionedConnectedNodes,
         ...layoutIsolatedNodes(isolatedNodes, positionedConnectedNodes),
@@ -1851,39 +1823,12 @@
           const end = [targetBounds.left, targetBounds.top + targetBounds.height / 2];
           const startPoint = [start[0] - overlayBounds.left, start[1] - overlayBounds.top];
           const endPoint = [end[0] - overlayBounds.left, end[1] - overlayBounds.top];
-          const resolvedEdgeKey = edgeKey || `call-edge-${index}`;
-          const sourcePortId = (link.endpoint_ids || []).find(endpointId => (
-            anchorsByEndpointId.get(endpointId)?.classList.contains("is-out")
-          )) || `${resolvedEdgeKey}-source`;
-          const targetPortId = (link.endpoint_ids || []).find(endpointId => (
-            anchorsByEndpointId.get(endpointId)?.classList.contains("is-in")
-          )) || `${resolvedEdgeKey}-target`;
-          const sourceSide = "EAST";
-          const targetSide = "WEST";
-          ensureLibavoidNode(source, sourceCardBounds, sourceAnchor, sourcePortId, sourceSide);
-          ensureLibavoidNode(target, targetCardBounds, targetAnchor, targetPortId, targetSide);
-          libavoidEdges.push({
-            id: resolvedEdgeKey,
-            source: sourceId,
-            target: targetId,
-          });
-          const libavoidRouted = routePointsToPath(
-            libavoidRoutes.get(resolvedEdgeKey),
-            startPoint,
-            endPoint,
-            sourceId,
-            targetId,
-          );
-          if (libavoidRouted) return libavoidRouted;
-          const fallback = hybridPath(
-            startPoint,
-            endPoint,
-            sourceId,
-            targetId,
-            occupiedCallGraphSegments,
-          );
-          fallback.router = "libavoid-fallback";
-          return fallback;
+          return {
+            d: `M ${startPoint[0]} ${startPoint[1]} L ${endPoint[0]} ${endPoint[1]}`,
+            points: [startPoint, endPoint],
+            obstacleRouted: false,
+            router: "direct-port",
+          };
         };
         const portsByEndpointId = new Map(
           [...nodeDataById.values()].flatMap(node => (node.ports || []).map(port => [port.endpoint_id, port]))
