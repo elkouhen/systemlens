@@ -26,6 +26,7 @@ from systemlens.scanner.kafka_ast import (
     _method_param_payload_type,
 )
 from systemlens.scanner._spring_properties import (
+    normalize_strategy1_kafka_key,
     remove_strategy1_kafka_prefix,
     strategy1_kafka_topics,
 )
@@ -45,10 +46,10 @@ def _validate_strategy1_topic(
     if catalog is None:
         return "<dynamic>", True
     if logical_key is not None:
-        declared = catalog.get(logical_key)
+        declared = catalog.get(normalize_strategy1_kafka_key(logical_key))
         if declared is not None:
             return declared, False
-    declared = catalog.get(topic)
+    declared = catalog.get(normalize_strategy1_kafka_key(topic))
     if declared is not None:
         return declared, False
     if topic in catalog.values():
@@ -78,7 +79,7 @@ def _strategy1_topic_from_value(
                 if parts and parts[-1].casefold() == "nom" and len(parts) > 1
                 else parts[-1]
             )
-            declared = catalog.get(logical_key)
+            declared = catalog.get(normalize_strategy1_kafka_key(logical_key))
             if declared is not None:
                 return declared, False, declared
     if not dynamic:
@@ -246,7 +247,11 @@ def infer_kafka_topic_strategy1_endpoints(
                     if property_parts[-1].casefold() == "nom" and len(property_parts) > 1
                     else property_parts[-1]
                 )
-                resolved = kafka_catalog.get(logical_key) if kafka_catalog is not None else None
+                resolved = (
+                    kafka_catalog.get(normalize_strategy1_kafka_key(logical_key))
+                    if kafka_catalog is not None
+                    else None
+                )
                 endpoint = _build_endpoint(
                     repo_root,
                     rel_path,

@@ -50,10 +50,12 @@ retains both the contract path and domain marker. If an equivalent
 typed adapter endpoint takes precedence so one HTTP interaction produces one
 port label. Operation IDs appearing in several contracts remain unresolved.
 
-Strategy1 resolves listener and sender topic keys only through exact entries in
-`kafka.yml` or `kafka.yaml`. It does not normalize topic keys or derive names
-from Java identifiers. It removes `${kafka.prefix-topic}.` only from a matched
-declared value. Arbitrary variable topics and unmatched keys remain dynamic.
+Strategy1 resolves listener and sender logical topic keys against entries in
+`kafka.yml` or `kafka.yaml` after normalizing case, separators and Java naming
+boundaries. For example, `getFlux11()` can resolve the `FLUX_11` entry. The
+declared `nom` value remains the persisted broker topic, after removing a
+`${kafka.prefix-topic}.` prefix. Arbitrary variable topics and unmatched keys
+remain dynamic.
 
 REST graph construction first resolves an explicit target identity from an HTTP
 host, `lb://` URI, configured client domain, or an opt-in Strategy1 convention.

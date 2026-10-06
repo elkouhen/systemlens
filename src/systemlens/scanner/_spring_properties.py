@@ -40,6 +40,16 @@ _SPRING_CLOUD_CONFIG_DIR_PATTERNS = (
     "configurations",
 )
 _STRATEGY1_KAFKA_PREFIX_RE = re.compile(r"^\$\{[^}]+\}\.")
+
+
+def normalize_strategy1_kafka_key(value: str) -> str:
+    """Normalize a Strategy1 logical Kafka key for code/config matching."""
+    separated = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", value)
+    separated = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", separated)
+    separated = re.sub(r"([A-Za-z])([0-9])", r"\1_\2", separated)
+    return re.sub(r"-+", "-", re.sub(r"[-_.\s]+", "-", separated)).strip("-").casefold()
+
+
 def _flatten_properties(data: object, prefix: str = "") -> dict[str, str]:
     flat: dict[str, str] = {}
     if isinstance(data, dict):
@@ -196,7 +206,7 @@ def resolve_strategy1_kafka_topic(
     catalog = strategy1_kafka_topics(repo_root, source_path)
     if catalog is None:
         return None
-    return catalog.get(logical_key)
+    return catalog.get(normalize_strategy1_kafka_key(logical_key))
 
 
 def strategy1_kafka_topics(
@@ -233,7 +243,7 @@ def strategy1_kafka_topics(
                 continue
             if parts[-1].casefold() != "nom" or len(parts) < 2:
                 continue
-            logical_key = parts[-2]
+            logical_key = normalize_strategy1_kafka_key(parts[-2])
             declared_value = remove_strategy1_kafka_prefix(value)
             if declared_value:
                 values_by_key.setdefault(logical_key, set()).add(declared_value)

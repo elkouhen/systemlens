@@ -56,9 +56,9 @@ def test_strategy1_replacement_keeps_an_ast_payload_type() -> None:
     assert result[0].message_type == "OrderCreated"
 
 
-def test_strategy1_requires_an_exact_kafka_yaml_topic_key(tmp_path: Path) -> None:
+def test_strategy1_matches_java_topic_accessor_to_normalized_kafka_yaml_key(tmp_path: Path) -> None:
     (tmp_path / "kafka.yml").write_text(
-        "topics:\n  Orders_Created:\n    nom: commerce.orders.created\n",
+        "topics:\n  FLUX_11:\n    nom: flux11aemettre\n",
         encoding="utf-8",
     )
     source = tmp_path / "src/main/java/com/example/Publisher.java"
@@ -66,7 +66,7 @@ def test_strategy1_requires_an_exact_kafka_yaml_topic_key(tmp_path: Path) -> Non
     source.write_text(
         """class Publisher {
   void publish(OrderCreated event) {
-    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getOrdersCreated(), event);
+    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getFlux11(), event);
   }
 }
 record OrderCreated(String id) {}
@@ -79,8 +79,9 @@ record OrderCreated(String id) {}
         ["src/main/java/com/example/Publisher.java"],
     )
 
-    assert [endpoint.topic for endpoint in endpoints] == ["<dynamic>"]
-    assert [endpoint.topic_display for endpoint in endpoints] == ["OrdersCreated"]
+    assert [endpoint.topic for endpoint in endpoints] == ["flux11aemettre"]
+    assert [endpoint.topic_dynamic for endpoint in endpoints] == [False]
+    assert [endpoint.topic_display for endpoint in endpoints] == ["flux11aemettre"]
 
 
 def test_strategy1_uses_declared_topic_name_from_kafka_yaml(tmp_path: Path) -> None:
