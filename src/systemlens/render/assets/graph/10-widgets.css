@@ -200,8 +200,6 @@
     .code-flow-filter-summary { margin: 0; padding: 5px 7px; border-left: 3px solid #94a3b8; border-radius: 4px; color: #475569; background: #f8fafc; font-size: 10px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
     .code-flows-summary { margin: 0; color: var(--ui-muted); font-size: 10px; line-height: 1.25; }
     .code-flow-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .code-flow-title-row .code-flow-compare { width: auto; height: 30px; flex: 0 0 auto; padding: 0 9px; color: var(--ui-accent-text); background: var(--ui-control); font-size: 10px; font-weight: 800; white-space: nowrap; }
-    .code-flow-title-row .code-flow-compare:disabled { opacity: .65; cursor: not-allowed; }
     .code-flow-summary { margin: 0; color: var(--ui-muted); font-size: 10px; line-height: 1.25; overflow-wrap: anywhere; }
     .code-flow-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; }
     .code-flow-stat { display: flex; align-items: baseline; justify-content: center; gap: 3px; min-width: 0; padding: 3px 4px; border: 1px solid var(--ui-border); border-radius: 4px; color: var(--ui-muted); background: var(--ui-control); text-align: center; }
@@ -225,30 +223,6 @@
     .code-flow-item.is-unavailable { cursor: not-allowed; opacity: .72; }
     .code-flow-item:not(.is-unavailable):hover, .code-flow-item:focus-visible { border-color: var(--ui-selected); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-selected) 18%, transparent); outline: none; }
     .code-flow-header { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 4px; min-width: 0; }
-    .code-flow-select { width: 13px; height: 13px; margin: 1px 0 0; accent-color: var(--ui-selected); }
-    #graph-comparison { position: fixed; z-index: 4; top: 18px; right: 18px; bottom: 18px; left: 444px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; overflow: auto; padding: 4px; pointer-events: auto; }
-    #graph-comparison[hidden] { display: none; }
-    .comparison-flow-panel { --comparison-accent: #3156d3; min-width: 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--comparison-accent) 35%, #cbd5f5); border-top: 3px solid var(--comparison-accent); border-radius: 12px; background: rgba(248, 250, 255, .96); box-shadow: 0 12px 28px rgba(30, 41, 91, .14); }
-    .comparison-flow-panel:nth-child(2n) { --comparison-accent: #008f69; }
-    .comparison-flow-panel:nth-child(3n) { --comparison-accent: #9333a8; }
-    .comparison-flow-header { display: grid; gap: 3px; padding: 9px 11px; border-bottom: 1px solid color-mix(in srgb, var(--comparison-accent) 25%, #cbd5f5); color: #253b86; background: color-mix(in srgb, var(--comparison-accent) 8%, #eef2ff); }
-    .comparison-flow-header strong { font-size: 12px; overflow-wrap: anywhere; }
-    .comparison-flow-header span { color: #586a9d; font-size: 10px; overflow-wrap: anywhere; }
-    .comparison-flow-canvas { position: relative; min-height: 280px; height: calc(100% - 58px); overflow: auto; padding: 20px; }
-    .comparison-flow-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-    .comparison-flow-edge { transition: stroke .12s ease, stroke-width .12s ease; }
-    .comparison-flow-edge.is-highlighted { stroke: #f97316; stroke-width: 4; }
-    .comparison-flow-edge-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
-    .comparison-flow-edge-label { pointer-events: auto; transition: color .12s ease, background .12s ease, box-shadow .12s ease, font-size .12s ease; }
-    .comparison-flow-edge-label.is-highlighted { z-index: 4; color: #9a3412; background: #fff7ed; box-shadow: 0 0 0 2px #fdba74; font-size: 11px; }
-    .comparison-flow-node { position: absolute; z-index: 1; width: 110px; height: 70px; min-height: 70px; box-sizing: border-box; transform: none; }
-    .comparison-flow-node.graph-node-card-label { display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; transform: none; }
-    .comparison-flow-node .graph-node-port-reference { position: absolute; }
-    .comparison-flow-shared-badge { position: absolute; right: -8px; bottom: -8px; z-index: 3; padding: 2px 4px; border: 1px solid #64748b; border-radius: 6px; color: #334155; background: #f8fafc; font-size: 8px; font-weight: 850; white-space: nowrap; }
-    .comparison-flow-edge-label { position: absolute; z-index: 2; color: #4054a8; background: rgba(255, 255, 255, .92); font-size: 9px; font-weight: 750; pointer-events: none; }
-    @media (max-width: 900px) {
-      #graph-comparison { top: 210px; right: 8px; bottom: 8px; left: 8px; grid-template-columns: 1fr; }
-    }
     .code-flow-title { font-size: 11px; line-height: 1.2; }
     .code-flow-method { display: block; color: #475569; font: 600 9px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
     .code-flow-topology-notice { margin: 0; padding: 6px 7px; border-left: 3px solid #d97706; border-radius: 4px; color: #92400e; background: #fffbeb; font-size: 10px; font-weight: 650; line-height: 1.35; }

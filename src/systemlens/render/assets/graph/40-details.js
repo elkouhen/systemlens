@@ -11,7 +11,6 @@
       const showingFlows = tab === "flows";
       const showingFlowGraph = showingFlows && options.showFlowGraph === true;
       const graphVisible = showingGraph || showingFlowGraph;
-      const graphComparison = document.getElementById("graph-comparison");
       if (showingGraph) graphState.viewMode = "architecture";
       else if (showingFlowGraph) graphState.viewMode = "call-graph";
       else if (showingFlows) graphState.viewMode = "empty";
@@ -26,9 +25,6 @@
         document.getElementById("graph-node-labels"),
         document.getElementById("graph-flow-tooltips"),
       ].forEach(element => { if (element) element.hidden = !graphVisible; });
-      if (graphComparison) {
-        graphComparison.hidden = !graphVisible || !graphState.comparisonMode;
-      }
       if (!graphVisible && graphFlowStatus) graphFlowStatus.hidden = true;
       // The two navigation surfaces have different meanings: Graphe is the
       // static architecture view, while Flux de code only becomes a graph
@@ -41,8 +37,6 @@
         graphState.dependencyFocusOnly = false;
         graphState.analysisPortEndpointId = null;
         graphState.selectedCodeFlowId = null;
-        graphState.selectedCodeFlowIds = [];
-        graphState.comparisonMode = false;
         graphState.callGraphDisplayMode = "network";
         graphState.selectedCallGraphEdgeKey = null;
         graphState.showAllCodeFlowPorts = false;
@@ -59,7 +53,6 @@
         delete graphCanvas.dataset.selectedCodeFlow;
         delete graphCanvas.dataset.selectedCallGraphArc;
         delete graphCanvas.dataset.flowFocusRatio;
-        graphComparison?.replaceChildren();
         // The Flux de code panel is hidden behind the toolbar and does not
         // need a graph rebuild. Rebuild only when returning to Graphe, after
         // the static view has become visible again.
@@ -599,7 +592,7 @@
         const graphAction = document.createElement("button");
         graphAction.type = "button";
         graphAction.className = "reference-action";
-        graphAction.textContent = "Graphe d’appel";
+        graphAction.textContent = "Arbre d’appel";
         graphAction.title = "Afficher ce flux dans le graphe d’appel";
         const openInGraph = () => showCodeFlow(flow);
         graphAction.addEventListener("click", openInGraph);

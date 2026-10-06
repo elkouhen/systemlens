@@ -1177,21 +1177,18 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert page.locator("#analysis-ports-toggle").get_attribute("aria-pressed") == "true"
         page.locator("#graph-tab").click()
         assert page.locator("#graph-tab").get_attribute("aria-selected") == "true"
-        assert page.locator(".graph-local-port-path.is-code-flow-path").count() >= 1
-        assert page.locator(".graph-port-path").count() == 0
-        assert page.locator(".graph-call-path").count() >= 1
-        assert page.locator("#graph-port-paths .graph-arc-hit-area").count() >= 1
-        assert page.locator("#graph-port-paths .graph-arc-hit-area").first.get_attribute("title")
-        page.locator("#analysis-mode-tree").click()
+        assert page.locator(".graph-call-path").count() == 0
         page.locator("#graph-call-tree").wait_for(state="visible")
         assert page.locator("#graph-call-tree .graph-call-tree-node").count() >= 3
         assert page.locator("#graph").get_attribute("class") == "is-call-tree-hidden"
         assert page.locator("#call-tree-depth-control").is_visible()
+        page.locator("#graph-call-tree .graph-call-tree-node").first.hover()
+        page.locator("#graph-flow-tooltips .graph-entity-tooltip").wait_for(state="visible")
+        page.locator("#graph-call-tree .graph-call-tree-edge").first.hover()
+        page.locator("#graph-flow-tooltips .graph-edge-tooltip").wait_for(state="visible")
         page.locator("#call-tree-depth").select_option("3")
         page.locator("#call-tree-direction").select_option("tb")
         assert page.locator("#graph-call-tree .graph-call-tree-node").count() >= 3
-        page.locator("#analysis-mode-tree").click()
-        page.locator("#graph-call-tree").wait_for(state="hidden")
         page.keyboard.press("Escape")
         assert page.locator("#graph-flow-tooltips .graph-arc-tooltip").count() == 0
         page.locator("#graph-port-paths .graph-arc-hit-area").first.click()

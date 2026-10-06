@@ -268,16 +268,13 @@
       }));
     }
     function rebuildGraph() {
-      const selectedCodeFlowIds = graphState.selectedCodeFlowIds?.length
-        ? graphState.selectedCodeFlowIds
-        : (graphState.selectedCodeFlowId ? [graphState.selectedCodeFlowId] : []);
       const callGraphOnly = graphState.viewMode === "call-graph"
-        && selectedCodeFlowIds.length > 0;
+        && Boolean(graphState.selectedCodeFlowId);
       if (callGraphOnly && !graphState.selectedCallGraphEdgeKey) {
         graphState.selectedCallGraphEdgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc || null;
       }
       const selectedFlows = callGraphOnly
-        ? (graphData.code_flows || []).filter(flow => selectedCodeFlowIds.includes(flow.id))
+        ? (graphData.code_flows || []).filter(flow => flow.id === graphState.selectedCodeFlowId)
         : [];
       const selectedFlow = selectedFlows[0] || null;
       const selectedCallGraph = callGraphForFlows(selectedFlows);
@@ -309,11 +306,10 @@
       }
       const visibleNodeIds = new Set(visibleLinks.flatMap(link => [link.source, link.target]));
       const filteredNodes = graphData.nodes.filter(node => (
-        isVisibleNode(node)
+        (callGraphOnly
+          ? node.kind === "microservice" && graphState.relatedNodes?.has(node.id)
+          : isVisibleNode(node))
         && (!dependencyFocusOnly || graphState.relatedNodes?.has(node.id))
-        && (!callGraphOnly || (
-          node.kind === "microservice" && graphState.relatedNodes?.has(node.id)
-        ))
       ));
       const connectedNodes = filteredNodes.filter(node => visibleNodeIds.has(node.id));
       // Keep visible services in the layout even when their only relations
@@ -335,8 +331,8 @@
       graphState.graphPanCleanup = null;
       graphState.graphWheelCleanup?.();
       graphState.graphWheelCleanup = null;
-      // A filtered/layout graph has a new coordinate system. Never compare
-      // its camera with a safe state captured from the previous graph.
+      // A filtered/layout graph has a new coordinate system. Never reuse
+      // its camera from a safe state captured for the previous graph.
       graphState.cameraFitAdjusting = false;
       graphState.lastSafeCameraState = null;
       graphState.clusterLayoutPositions = new Map();
@@ -607,7 +603,7 @@
         inertiaRatio: 0,
         labelAlignment: "center",
         nodeReducer: (node, data) => {
-          if (!isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
+          if (!callGraphOnly && !isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
           if (graphState.selectedCodeFlowId && nodeDataById.get(node)?.kind !== "microservice") {
             return { ...data, hidden: true, label: "" };
           }
@@ -630,7 +626,9 @@
           return { ...renderedData, color: "#d8e0ea", label: "" };
         },
         edgeReducer: (edge, data) => {
-          if (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge))) return { ...data, hidden: true };
+          if (!callGraphOnly && (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge)))) {
+            return { ...data, hidden: true };
+          }
           if (data.hitArea) return data;
           if (graphState.selectedCodeFlowId) {
             // The selected call graph is rendered once by the LibAvoid SVG
@@ -748,7 +746,7 @@
         const renderGeneration = ++overlayRenderGeneration;
         const isCurrentRender = () => renderGeneration === overlayRenderGeneration;
         renderCallTreeOverlay();
-        if (graphState.callGraphDisplayMode === "tree" && graphState.selectedCodeFlowId) return;
+        if (graphState.selectedCodeFlowId) return;
         nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         portPathOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         const nodePoints = new Map();
@@ -768,7 +766,7 @@
           const contextCollapse = document.getElementById("analysis-context-collapse");
           if (!context || !title || !help || !clear) return;
           const active = Boolean(graphState.selectedCodeFlowId);
-          const showContext = active && !graphState.comparisonMode;
+          const showContext = active;
           context.hidden = !showContext;
           context.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
           if (contextCopy) contextCopy.id = "graph-mode-context-copy";
@@ -787,14 +785,10 @@
           if (backToFlows) backToFlows.hidden = !showContext;
           if (backToArchitecture) backToArchitecture.hidden = !showContext;
           if (!active) return;
-          const selectedFlowCount = graphState.selectedCodeFlowIds?.length || 1;
-          title.textContent = selectedFlowCount > 1
-            ? `Graphes d’appel · ${selectedFlowCount} flux`
-            : "Graphe d’appel";
+          title.textContent = "Arbre d’appel";
           if (pathLabel) {
           const selectedFlows = (graphData.code_flows || []).filter(flow => (
-            (graphState.selectedCodeFlowIds?.length ? graphState.selectedCodeFlowIds : [graphState.selectedCodeFlowId])
-              .includes(flow.id)
+            flow.id === graphState.selectedCodeFlowId
           ));
             const portsByEndpointId = new Map(
               graphData.nodes.flatMap(node => (node.ports || []).map(port => [port.endpoint_id, port]))
@@ -890,8 +884,7 @@
         };
         updateAnalysisModeIndicator();
         const selectedFlows = (graphData.code_flows || []).filter(flow => (
-          (graphState.selectedCodeFlowIds?.length ? graphState.selectedCodeFlowIds : [graphState.selectedCodeFlowId])
-            .includes(flow.id)
+          flow.id === graphState.selectedCodeFlowId
         ));
         const referencedCodeFlowPortIds = new Set([
           ...selectedFlows.flatMap(flow => (flow.steps || []).map(step => step.endpoint_id)),
@@ -899,8 +892,8 @@
         ].filter(Boolean));
         network.forEachNode((id, attributes) => {
           if (
-            !isVisibleNodeId(id)
-            || attributes.hidden
+            (!callGraphOnly && !isVisibleNodeId(id))
+            || (!callGraphOnly && attributes.hidden)
             || (graphState.selectedCodeFlowId && !graphState.relatedNodes?.has(id))
           ) return;
           // graphToViewport is Sigma's public conversion and includes its
@@ -1221,7 +1214,16 @@
               tooltip.append(title);
               const protocol = document.createElement("span");
               protocol.className = "graph-port-tooltip-meta";
-              protocol.textContent = `${port.type || "Endpoint"} · ${port.method || "Méthode inconnue"}`;
+              protocol.textContent = port.type || "Endpoint";
+              const qualifiedMethod = String(port.method || "").trim();
+              const separator = qualifiedMethod.lastIndexOf("::");
+              const ownerSeparator = separator >= 0 ? separator : qualifiedMethod.lastIndexOf(".");
+              const javaClass = document.createElement("span");
+              javaClass.className = "graph-port-tooltip-meta";
+              javaClass.textContent = `Classe Java : ${ownerSeparator > 0 ? qualifiedMethod.slice(0, ownerSeparator) : "Classe inconnue"}`;
+              const javaMethod = document.createElement("span");
+              javaMethod.className = "graph-port-tooltip-meta";
+              javaMethod.textContent = `Méthode Java : ${ownerSeparator > 0 ? qualifiedMethod.slice(ownerSeparator + (separator >= 0 ? 2 : 1)) : qualifiedMethod || "Méthode inconnue"}`;
               const endpoint = document.createElement("span");
               endpoint.className = "graph-port-tooltip-topic";
               const isTopicMessage = /kafka|topic|message/i.test(`${port.type} ${port.name}`);
@@ -1230,7 +1232,7 @@
                 : `${port.system === "rest" ? "Ressource HTTP" : "Ressource"} : ${port.name}`;
               const evidence = document.createElement("code");
               evidence.textContent = `${port.path || "Source inconnue"}${port.line ? `:${port.line}` : ""}`;
-              tooltip.append(title, protocol, endpoint, evidence);
+              tooltip.append(title, protocol, javaClass, javaMethod, endpoint, evidence);
               if (port.message_type) {
                 const messageType = document.createElement("span");
                 messageType.className = "graph-port-tooltip-type";

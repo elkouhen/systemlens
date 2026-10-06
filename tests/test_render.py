@@ -597,7 +597,7 @@ def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> No
     assert 'createDetailsGroup("Flux associés", false)' in document
     assert 'appendAssociatedCodeFlows("Flux associés", associatedFlows, associatedFlowsGroup);' in document
     assert 'listAction.textContent = "Flux";' in document
-    assert 'graphAction.textContent = "Graphe d’appel";' in document
+    assert 'graphAction.textContent = "Arbre d’appel";' in document
     assert 'sourceAction.textContent = "Java";' in document
     assert 'function openCodeFlowInList(flow)' in document
     assert 'port-flow-arrow' in document
@@ -869,7 +869,6 @@ def test_graph_html_marks_only_the_selected_call_graph_entry_service_as_root() -
 def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     document = render_graph_html({}, [])
 
-    assert "const interServiceCodeFlows = codeFlows.filter(flow =>" in document
     assert "function serviceIdsForCodeFlow(flow)" in document
     assert "function callGraphArcCount(flow)" in document
     assert "function servicesForCodeFlow(flow)" in document
@@ -884,35 +883,66 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert 'const methodChain = [' not in document
     assert 'description.className = "code-flow-reason"' in document
     assert 'className = "code-flow-stats"' in document
-    assert "return serviceIdsForCodeFlow(flow).size >= 2;" in document
     assert "Keep a partially reconciled interprocedural flow selectable" in document
-    assert 'id="code-flow-scope"' in document
+    assert 'id="code-flow-scope"' not in document
     assert 'id="code-flow-selection-help"' in document
-    assert "Cochez au moins deux flux pour les comparer côte à côte" in document
-    assert '<option value="local">Flux internes</option>' in document
-    assert "const localCodeFlows = codeFlows.filter(flow =>" in document
+    assert "Cliquez sur un flux pour ouvrir son graphe d’appel" in document
     assert 'nodeDataById.get(nodeId)?.kind === "microservice"' in document
     assert "function showCodeFlowItemTooltip(flow, item)" in document
     assert 'className = "graph-edge-tooltip code-flow-item-tooltip"' in document
     assert 'const flowPath = [...(graphState.pathMicroserviceOrder?.keys() || [])]' not in document
-    assert 'title.textContent = selectedFlowCount > 1\n            ? `Graphes d’appel · ${selectedFlowCount} flux`\n            : "Graphe d’appel";' in document
-    assert "const scopedCodeFlows = scope === \"all\"" in document
-    assert "const visible = scopedCodeFlows.filter(flow =>" in document
-    assert "Flux inter-services (${visible.length}/${interServiceCodeFlows.length})" in document
-    assert "Tous les flux (${visible.length}/${codeFlows.length})" in document
-    assert "Flux internes (${visible.length}/${localCodeFlows.length})" in document
-    assert 'id="analysis-mode-tree"' in document
+    assert 'title.textContent = "Arbre d’appel";' in document
+    assert "const visible = codeFlows.filter(flow =>" in document
+    assert "Flux de code (${visible.length}/${codeFlows.length})" in document
+    assert 'id="analysis-mode-tree"' not in document
     assert "const edgeDisplayLabel = edge =>" in document
     assert "graph-call-tree-edge-label" in document
+    assert "const portsByEndpointId = new Map" in document
+    assert "const treePortLabels = new Map" in document
+    assert "treePortLabel(edge.endpoint_ids?.[1], \"in\")" in document
+    assert "treePortLabels.set(endpointId" in document
+    assert 'const qualifiedMethod = String(port.method || "").trim();' in document
+    assert "Classe Java : ${javaClass}" in document
+    assert "const javaClass = document.createElement(\"span\")" in document
+    assert "showTreePortTooltip" in document
+    assert "graph-node-port-reference is-${direction} is-${port.protocol}" in document
+    assert 'anchor.title = `${direction === "in" ? "Port d’entrée" : "Port de sortie"} · ${port.label}`' in document
+    assert "occurrence.children.map(child => treePort" in document
     assert "label.append(title);" in document
     assert 'id="call-tree-depth"' in document
     assert 'id="call-tree-direction"' in document
-    assert "function renderCallTreeOverlay()" in document
-    assert "function zoomCallTree(factor)" in document
+    assert "function captureCallTreeCamera()" in document
+    assert "function renderCallTreeOverlay(preservedCamera = null)" in document
+    assert 'callTreeDepth: 3' in document
+    assert '<option value="3" selected>3</option>' in document
+    assert "hiddenChildrenCount" in document
+    assert "graph-call-tree-more-badge" in document
+    assert "callTreeExpanded" in document
+    assert "callTreeCollapsed" in document
+    assert "graphState.callTreeExpanded.add(occurrence.pathKey)" in document
+    assert "const camera = captureCallTreeCamera()" in document
+    assert "renderCallTreeOverlay(camera)" in document
+    assert "Afficher le niveau suivant" in document
+    assert 'more.textContent = canCollapse ? "− replier"' in document
+    assert 'graphState.callTreeExpanded.delete(occurrence.pathKey)' in document
+    assert 'graphState.callTreeCollapsed.add(occurrence.pathKey)' in document
+    assert "const makeOccurrence = (name, depth, ancestorInputPorts, inputEndpointId = null, pathKey = name)" in document
+    assert "ancestorInputPorts.has(inputEndpointId)" in document
+    assert "edge.endpoint_ids?.[1]" in document
+    assert "function zoomCallTree(factor, anchorX = null, anchorY = null)" in document
     assert "graphCallTreeOverlay.addEventListener(\"wheel\"" in document
     assert "if (zoomCallTree(0.8)) return;" in document
-    assert "const occurrence = { id: `call-tree-${occurrenceCount++}`" in document
+    assert "zoomCallTree(factor, event.clientX - bounds.left, event.clientY - bounds.top)" in document
+    assert "const logicalX = (x - left) / oldTotalScale;" in document
+    assert "const occurrence = {" in document
+    assert "id: `call-tree-${occurrenceCount++}`" in document
     assert "occurrence.cycle = true" in document
+    assert "const treeOccurrenceTooltipLines = occurrence =>" in document
+    assert 'showTreeTooltip("graph-call-tree-entity-tooltip", occurrence.name, treeOccurrenceTooltipLines(occurrence)' in document
+    assert 'lines.push(`IN ${input.label} · ${input.method}`)' in document
+    assert 'lines.push(`OUT ${outputText}${outputs.length > 3 ? " …" : ""}`)' in document
+    assert 'className = "graph-edge-tooltip"' in document
+    assert 'line.addEventListener("mouseenter"' in document
     assert "indexingIssueCount" in document
     assert "Qualité : aucun signal d’indexation" in document
 
@@ -1404,9 +1434,13 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "Commit the view mode only after its layout and camera are ready" in document
     assert "const previousLayout = graphState.activeLayout" in document
     assert "const visibleLinks = callGraphOnly" in document
+    assert "const filteredNodes = graphData.nodes.filter(node => (" in document
+    assert "? node.kind === \"microservice\" && graphState.relatedNodes?.has(node.id)" in document
+    assert "if (!callGraphOnly && !isVisibleNodeId(node))" in document
+    assert "(!callGraphOnly && !isVisibleNodeId(id))" in document
     assert "function callGraphForFlows(flows)" in document
-    assert 'id="code-flow-compare"' in document
-    assert 'className = "code-flow-select"' in document
+    assert 'id="code-flow-compare"' not in document
+    assert 'className = "code-flow-select"' not in document
     assert 'size: 2, color: relationColor(link), kind: link.kind, type: "arrow"' in document
     assert 'zoomToSizeRatioFunction: () => 1' in document
     assert 'const screenScale = renderer.scaleSize(1)' in document
@@ -1626,8 +1660,6 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'callGraphPortLabel(port, port.direction)' in document
     assert 'callGraphPortLabel(port, portDirection)' in document
     assert 'const counterKey = direction;' in document
-    assert 'const flowPortLabels = new Map();' in document
-    assert 'flowPortLabels.set(endpointId' in document
     assert 'const directKafkaLink = (topic, source, target)' in document
     assert "Keeping Sigma's straight edge underneath would draw" in document
     assert 'path.classList.add("graph-call-path")' in document

@@ -42,7 +42,6 @@
     const analysisModeCenter = document.getElementById("analysis-mode-center");
     const analysisModeBack = document.getElementById("analysis-mode-back");
     const analysisModeArchitecture = document.getElementById("analysis-mode-architecture");
-    const analysisModeTree = document.getElementById("analysis-mode-tree");
     const callTreeDepth = document.getElementById("call-tree-depth");
     const callTreeDirection = document.getElementById("call-tree-direction");
     const analysisPortsToggle = document.getElementById("analysis-ports-toggle");
@@ -73,13 +72,8 @@
     analysisModeArchitecture?.addEventListener("click", () => {
       setToolbarTab("graph");
     });
-    analysisModeTree?.addEventListener("click", () => {
-      if (!graphState.selectedCodeFlowId) return;
-      graphState.callGraphDisplayMode = graphState.callGraphDisplayMode === "tree" ? "network" : "tree";
-      rebuildGraph();
-    });
-    callTreeDepth?.addEventListener("change", () => {
-      graphState.callTreeDepth = Math.max(1, Math.min(8, Number(callTreeDepth.value) || 5));
+      callTreeDepth?.addEventListener("change", () => {
+        graphState.callTreeDepth = Math.max(1, Math.min(8, Number(callTreeDepth.value) || 3));
       requestGraphRender();
     });
     callTreeDirection?.addEventListener("change", () => {

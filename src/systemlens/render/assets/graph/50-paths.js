@@ -30,14 +30,14 @@
       search.value = "";
       pathStops.splice(0, pathStops.length);
       graphState.selectedCodeFlowId = null;
-      graphState.selectedCodeFlowIds = [];
-      graphState.comparisonMode = false;
       graphState.viewMode = "architecture";
-      graphState.callGraphDisplayMode = "network";
+      graphState.callGraphDisplayMode = "tree";
       graphState.callTreeZoom = 1;
       graphState.codeFlowRootNodeId = null;
       graphState.codeFlowTrigger = null;
       graphState.codeFlowTreeCoordinates = new Map();
+      graphState.callTreeExpanded = new Set();
+      graphState.callTreeCollapsed = new Set();
       graphState.relatedLocalPortLinks = new Set();
       graphFlowStatus.hidden = true;
       delete graphCanvas.dataset.selectedCodeFlow;
@@ -498,11 +498,10 @@
       )));
       graphState.analysisPortEndpointId = null;
       graphState.selectedCodeFlowId = context.codeFlow?.id || null;
-      graphState.selectedCodeFlowIds = (context.codeFlows || (context.codeFlow ? [context.codeFlow] : []))
-        .map(flow => flow.id);
-      graphState.comparisonMode = graphState.selectedCodeFlowIds.length > 1;
+      graphState.callTreeExpanded = new Set();
+      graphState.callTreeCollapsed = new Set();
       graphState.viewMode = context.codeFlow ? "call-graph" : "architecture";
-      graphState.callGraphDisplayMode = "network";
+      graphState.callGraphDisplayMode = "tree";
       graphState.callTreeZoom = 1;
       graphState.selectedCallGraphEdgeKey = null;
       graphCanvas.removeAttribute("data-selected-call-graph-arc");
@@ -535,8 +534,7 @@
         // frame once Sigma has projected the new node set.
         graphCanvas.dataset.flowFocusRatio = "1";
         // Reset to the complete visible graph before centering the selected
-        // flow. This is important for a comparison: its horizontal lanes can
-        // be wider than the first flow's local camera envelope.
+        // flow. Keep the selected single-flow camera envelope readable.
         fitCameraToVisibleGraph(renderer, "overview")
           .then(() => requestAnimationFrame(() => requestAnimationFrame(() => (
             scheduleFlowCameraFit({ nodes: [...graphState.relatedNodes] })
@@ -1279,7 +1277,6 @@
         relatedEdges: null,
         relatedLocalPortLinks: new Set(),
         selectedCodeFlowId: null,
-        selectedCodeFlowIds: [],
         viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
         codeFlowRootNodeId: null,
@@ -1304,7 +1301,6 @@
       graphState.relatedEdges = new Set();
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
-      graphState.selectedCodeFlowIds = [];
       graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
       graphState.codeFlowRootNodeId = null;
@@ -1366,7 +1362,6 @@
       updateSelectedNodeDependencyScope(id);
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
-      graphState.selectedCodeFlowIds = [];
       graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
       graphState.codeFlowRootNodeId = null;

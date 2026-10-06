@@ -43,7 +43,7 @@ navigation is sourced exclusively from the canonical `cluster_path` value.
 
 ### Camera interactions
 
-The selected call-graph tree is rendered as a separate hierarchical projection
+The selected call graph is rendered only as a separate hierarchical projection
 of the persisted call-graph snapshot. It does not mutate the architecture
 graph or the persisted node identifiers. Each tree occurrence receives a local
 render identifier, while its label and node actions resolve to the original

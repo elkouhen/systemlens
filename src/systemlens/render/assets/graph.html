@@ -203,11 +203,11 @@
     <div id="flows-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="flows-tab" hidden>
       <div class="references-header">
         <p class="references-kicker">Parcours potentiels du code</p>
-        <div class="code-flow-title-row"><h2 id="code-flows-title" class="references-title">Flux de code</h2><button id="code-flow-compare" class="graph-action-label code-flow-compare" type="button" disabled>Comparer les flux sélectionnés</button></div>
+        <div class="code-flow-title-row"><h2 id="code-flows-title" class="references-title">Flux de code</h2></div>
         <p class="references-description">Parcours ordonnés issus du code source. Ils décrivent un comportement potentiel, pas une trace runtime.</p>
-        <p id="code-flow-selection-help" class="code-flow-selection-help">Cochez au moins deux flux pour les comparer côte à côte. Cliquez sur le titre d’un flux pour ouvrir son graphe d’appel.</p>
+        <p id="code-flow-selection-help" class="code-flow-selection-help">Cliquez sur un flux pour ouvrir son graphe d’appel.</p>
       </div>
-    <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Filtrer par service, méthode ou déclencheur" autocomplete="off" aria-label="Filtrer les flux de code"><input id="code-flow-message-type" class="code-flow-message-type-filter" type="search" placeholder="Type de message Kafka" list="code-flow-message-types" autocomplete="off" aria-label="Filtrer par type de message Kafka"><datalist id="code-flow-message-types"></datalist><select id="code-flow-scope" class="code-flow-scope-filter" aria-label="Portée des flux"><option value="inter">Inter-services</option><option value="all">Tous les flux</option><option value="local">Flux internes</option></select><select id="code-flow-confidence" class="code-flow-scope-filter" aria-label="Niveau de confiance"><option value="all">Toutes confiances</option><option value="high">Confiance élevée</option><option value="medium">Confiance moyenne</option><option value="low">Confiance faible</option></select><select id="code-flow-kind" class="code-flow-scope-filter" aria-label="Type de flux"><option value="all">Tous protocoles</option><option value="http">HTTP</option><option value="kafka">Kafka</option><option value="mixed">Mixte</option></select><button id="code-flow-cycles" class="code-flow-cycle-filter" type="button" aria-pressed="false">Cycles uniquement</button><button id="code-flow-filter-reset" class="code-flow-filter-reset" type="button">Effacer les filtres</button></div><p id="code-flow-filter-summary" class="code-flow-filter-summary"></p><p id="code-flows-summary" class="code-flows-summary"></p><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux de code indexé.</p></section>
+    <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Filtrer par service, méthode ou déclencheur" autocomplete="off" aria-label="Filtrer les flux de code"><input id="code-flow-message-type" class="code-flow-message-type-filter" type="search" placeholder="Filtrer par type de message Kafka" list="code-flow-message-types" autocomplete="off" aria-label="Filtrer par type de message Kafka"><datalist id="code-flow-message-types"></datalist><select id="code-flow-confidence" class="code-flow-scope-filter" aria-label="Niveau de confiance"><option value="all">Toutes confiances</option><option value="high">Confiance élevée</option><option value="medium">Confiance moyenne</option><option value="low">Confiance faible</option></select><select id="code-flow-kind" class="code-flow-scope-filter" aria-label="Type de flux"><option value="all">Tous protocoles</option><option value="http">HTTP</option><option value="kafka">Kafka</option><option value="mixed">Mixte</option></select><button id="code-flow-cycles" class="code-flow-cycle-filter" type="button" aria-pressed="false">Cycles uniquement</button><button id="code-flow-filter-reset" class="code-flow-filter-reset" type="button">Effacer les filtres</button></div><p id="code-flow-filter-summary" class="code-flow-filter-summary"></p><p id="code-flows-summary" class="code-flows-summary"></p><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux de code indexé.</p></section>
     </div>
     <div id="contracts-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="contracts-tab" hidden>
       <div class="references-header">
@@ -264,9 +264,8 @@
       <button id="analysis-mode-center" class="graph-action-label graph-secondary-action" type="button">Centrer</button>
       <button id="analysis-mode-back" class="graph-action-label graph-secondary-action" type="button" hidden>Retour aux flux</button>
       <button id="analysis-mode-architecture" class="graph-action-label graph-secondary-action" type="button" hidden>Architecture</button>
-      <button id="analysis-mode-tree" class="graph-action-label graph-secondary-action" type="button" aria-pressed="false" hidden>Vue arbre</button>
       <label id="call-tree-depth-control" class="graph-tree-control" hidden>Profondeur
-        <select id="call-tree-depth" aria-label="Profondeur maximale de l’arbre d’appels"><option value="3">3</option><option value="5" selected>5</option><option value="8">8</option></select>
+        <select id="call-tree-depth" aria-label="Profondeur maximale de l’arbre d’appels"><option value="3" selected>3</option><option value="5">5</option><option value="8">8</option></select>
       </label>
       <label id="call-tree-direction-control" class="graph-tree-control" hidden>Orientation
         <select id="call-tree-direction" aria-label="Orientation de l’arbre d’appels"><option value="lr" selected>Gauche à droite</option><option value="tb">Haut en bas</option></select>
@@ -297,7 +296,6 @@
     </div>
   </details>
   <div id="graph" aria-label="Graphe des interactions"></div>
-  <div id="graph-comparison" hidden aria-label="Comparaison des graphes d’appel"></div>
   <div id="graph-layers" aria-hidden="true"></div>
   <div id="graph-groups" aria-hidden="true"></div>
   <svg id="graph-port-paths" aria-hidden="true"></svg>

@@ -3,7 +3,6 @@
     const codeFlowsList = document.getElementById("code-flows");
     const codeFlowsEmpty = document.getElementById("code-flows-empty");
     const codeFlowFilter = document.getElementById("code-flow-filter");
-    const codeFlowScope = document.getElementById("code-flow-scope");
     const codeFlowConfidence = document.getElementById("code-flow-confidence");
     const codeFlowKind = document.getElementById("code-flow-kind");
     const codeFlowMessageType = document.getElementById("code-flow-message-type");
@@ -13,7 +12,6 @@
     const codeFlowFilterSummary = document.getElementById("code-flow-filter-summary");
     const codeFlowFilterReset = document.getElementById("code-flow-filter-reset");
     const codeFlowsTitle = document.getElementById("code-flows-title");
-    const codeFlowCompare = document.getElementById("code-flow-compare");
     let callTreePan = null;
     let callTreePanBound = false;
     function codeFlowStepLabel(kind) {
@@ -97,7 +95,7 @@
       return `Dans ${flow.module}, le flux potentiel ${triggerVerb} ${trigger.name} peut ${effectVerb} ${effect.name}.`;
     }
 
-    function compareCodeFlows(left, right) {
+    function sortCodeFlows(left, right) {
       return codeFlowPriority(left) - codeFlowPriority(right)
         || serviceIdsForCodeFlow(right).size - serviceIdsForCodeFlow(left).size
         || callGraphArcCount(right) - callGraphArcCount(left)
@@ -109,7 +107,6 @@
       const filters = [];
       if (codeFlowFilter.value.trim()) filters.push("recherche");
       if (codeFlowMessageType.value.trim()) filters.push("type de message");
-      if (codeFlowScope.value !== "inter") filters.push(codeFlowScope.options[codeFlowScope.selectedIndex]?.text || "portée");
       if (codeFlowConfidence.value !== "all") filters.push(codeFlowConfidence.options[codeFlowConfidence.selectedIndex]?.text || "confiance");
       if (codeFlowKind.value !== "all") filters.push(codeFlowKind.options[codeFlowKind.selectedIndex]?.text || "protocole");
       if (codeFlowCycles.getAttribute("aria-pressed") === "true") filters.push("cycles");
@@ -120,14 +117,13 @@
       const filters = activeCodeFlowFilters();
       codeFlowFilterSummary.textContent = filters.length
         ? `${filters.length} filtre${filters.length > 1 ? "s" : ""} actif${filters.length > 1 ? "s" : ""} · ${filters.join(" · ")}`
-        : "Aucun filtre additionnel · portée inter-services par défaut";
+        : "Aucun filtre additionnel";
       codeFlowFilterReset.disabled = filters.length === 0;
     }
 
     function resetCodeFlowFilters() {
       codeFlowFilter.value = "";
       codeFlowMessageType.value = "";
-      codeFlowScope.value = "inter";
       codeFlowConfidence.value = "all";
       codeFlowKind.value = "all";
       codeFlowCycles.setAttribute("aria-pressed", "false");
@@ -184,7 +180,23 @@
     );
     const nodeIdForEndpoint = endpointId => uniqueNodeId(nodeIdsByEndpoint.get(endpointId));
 
-    function renderCallTreeOverlay() {
+    function captureCallTreeCamera() {
+      const canvas = graphCallTreeOverlay?.querySelector(".graph-call-tree-canvas");
+      if (!canvas) return null;
+      const viewport = graphCallTreeOverlay.getBoundingClientRect();
+      const baseScale = Number(canvas.dataset.baseScale) || 1;
+      const totalScale = baseScale * (graphState.callTreeZoom || 1);
+      if (!totalScale) return null;
+      return {
+        left: Number.parseFloat(canvas.style.left) || 0,
+        top: Number.parseFloat(canvas.style.top) || 0,
+        totalScale,
+        centerX: viewport.width / 2,
+        centerY: viewport.height / 2,
+      };
+    }
+
+    function renderCallTreeOverlay(preservedCamera = null) {
       if (!graphCallTreeOverlay) return;
       if (!callTreePanBound) {
         callTreePanBound = true;
@@ -224,25 +236,21 @@
         graphCallTreeOverlay.addEventListener("wheel", event => {
           if (!graphState.selectedCodeFlowId || graphState.callGraphDisplayMode !== "tree") return;
           event.preventDefault();
-          zoomCallTree(Math.exp(Math.max(-120, Math.min(120, event.deltaY)) * -.001));
+          const bounds = graphCallTreeOverlay.getBoundingClientRect();
+          const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+          const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * -.0006);
+          zoomCallTree(factor, event.clientX - bounds.left, event.clientY - bounds.top);
         }, { passive: false });
       }
       const active = Boolean(graphState.selectedCodeFlowId)
-        && !graphState.comparisonMode
         && graphState.viewMode === "call-graph";
-      const treeActive = active && graphState.callGraphDisplayMode === "tree";
+      const treeActive = active;
       graphCallTreeOverlay.hidden = !treeActive;
       document.getElementById("graph")?.classList.toggle("is-call-tree-hidden", treeActive);
       [graphLayersOverlay, graphGroupsOverlay, portPathOverlay, nodeLabelOverlay]
         .forEach(element => element?.classList.toggle("is-call-tree-hidden", treeActive));
-      const treeButton = document.getElementById("analysis-mode-tree");
       const depthControl = document.getElementById("call-tree-depth-control");
       const directionControl = document.getElementById("call-tree-direction-control");
-      if (treeButton) {
-        treeButton.hidden = !active;
-        treeButton.setAttribute("aria-pressed", String(treeActive));
-        treeButton.textContent = treeActive ? "Vue réseau" : "Vue arbre";
-      }
       if (depthControl) depthControl.hidden = !treeActive;
       if (directionControl) directionControl.hidden = !treeActive;
       if (!treeActive) {
@@ -250,9 +258,7 @@
         return;
       }
       const selectedFlows = (graphData.code_flows || []).filter(flow => (
-        (graphState.selectedCodeFlowIds?.length
-          ? graphState.selectedCodeFlowIds
-          : [graphState.selectedCodeFlowId]).includes(flow.id)
+        flow.id === graphState.selectedCodeFlowId
       ));
       const callGraph = callGraphForFlows(selectedFlows);
       const edges = (callGraph?.edges || []).filter(edge => edge.source !== edge.target);
@@ -268,17 +274,47 @@
       const roots = nodes.filter(node => !incoming.has(node));
       const rootNames = roots.length ? roots : nodes.slice(0, 1);
       let occurrenceCount = 0;
-      const maxDepth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 5));
-      const makeOccurrence = (name, depth, ancestors) => {
-        const occurrence = { id: `call-tree-${occurrenceCount++}`, name, depth, children: [], cycle: false };
-        if (ancestors.has(name)) {
+      const maxDepth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 3));
+      const makeOccurrence = (name, depth, ancestorInputPorts, inputEndpointId = null, pathKey = name) => {
+        const occurrence = {
+          id: `call-tree-${occurrenceCount++}`,
+          name,
+          pathKey,
+          depth,
+          children: [],
+          cycle: false,
+          hiddenChildrenCount: 0,
+          expanded: false,
+          collapsed: false,
+        };
+        if (inputEndpointId && ancestorInputPorts.has(inputEndpointId)) {
           occurrence.cycle = true;
           return occurrence;
         }
-        if (depth >= maxDepth) return occurrence;
-        const nextAncestors = new Set(ancestors).add(name);
-        (childrenBySource.get(name) || []).forEach(({ edge, index }) => {
-          const child = makeOccurrence(edge.target, depth + 1, nextAncestors);
+        const outgoing = childrenBySource.get(name) || [];
+        const expanded = graphState.callTreeExpanded.has(pathKey);
+        const collapsed = graphState.callTreeCollapsed.has(pathKey);
+        occurrence.expanded = expanded;
+        occurrence.collapsed = collapsed;
+        if (collapsed) {
+          occurrence.hiddenChildrenCount = outgoing.length;
+          return occurrence;
+        }
+        if (depth >= Math.min(8, maxDepth + (expanded ? 1 : 0))) {
+          occurrence.hiddenChildrenCount = outgoing.length;
+          return occurrence;
+        }
+        const nextInputPorts = new Set(ancestorInputPorts);
+        if (inputEndpointId) nextInputPorts.add(inputEndpointId);
+        outgoing.forEach(({ edge, index }) => {
+          const childPathKey = `${pathKey}>${edge.endpoint_ids?.[1] || edge.target}`;
+          const child = makeOccurrence(
+            edge.target,
+            depth + 1,
+            nextInputPorts,
+            edge.endpoint_ids?.[1],
+            childPathKey,
+          );
           child.edge = edge;
           child.edgeIndex = index;
           occurrence.children.push(child);
@@ -327,10 +363,24 @@
       canvas.className = "graph-call-tree-canvas";
       canvas.style.width = `${logicalWidth}px`;
       canvas.style.height = `${logicalHeight}px`;
-      canvas.style.left = `${offsetX}px`;
-      canvas.style.top = `${offsetY}px`;
       canvas.dataset.baseScale = String(scale);
-      canvas.style.transform = `scale(${scale * (graphState.callTreeZoom || 1)})`;
+      let left = offsetX;
+      let top = offsetY;
+      let zoom = graphState.callTreeZoom || 1;
+      if (preservedCamera) {
+        const centerX = preservedCamera.centerX ?? viewport.width / 2;
+        const centerY = preservedCamera.centerY ?? viewport.height / 2;
+        const logicalCenterX = (centerX - preservedCamera.left) / preservedCamera.totalScale;
+        const logicalCenterY = (centerY - preservedCamera.top) / preservedCamera.totalScale;
+        zoom = Math.max(.5, Math.min(4, preservedCamera.totalScale / scale));
+        const totalScale = scale * zoom;
+        left = centerX - logicalCenterX * totalScale;
+        top = centerY - logicalCenterY * totalScale;
+      }
+      graphState.callTreeZoom = zoom;
+      canvas.style.left = `${left}px`;
+      canvas.style.top = `${top}px`;
+      canvas.style.transform = `scale(${scale * zoom})`;
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.setAttribute("width", String(logicalWidth));
       svg.setAttribute("height", String(logicalHeight));
@@ -344,6 +394,102 @@
         const label = edge.label || protocol;
         const text = `${prefix}${label} · ${protocol}`;
         return text.length > 58 ? `${text.slice(0, 55)}…` : text;
+      };
+      const portsByEndpointId = new Map(
+        graphData.nodes.flatMap(node => (node.ports || []).map(port => [port.endpoint_id, port]))
+      );
+      const treePortLabels = new Map();
+      const treePortCounters = new Map();
+      const treePortLabel = (endpointId, direction) => {
+        const port = endpointId ? portsByEndpointId.get(endpointId) : null;
+        const persistedLabel = String(port?.label || "").match(direction === "out" ? /O\d+/ : /I\d+/)?.[0];
+        if (persistedLabel) return persistedLabel;
+        if (!endpointId) return direction === "out" ? "OUT" : "IN";
+        if (!treePortLabels.has(endpointId)) {
+          const next = (treePortCounters.get(direction) || 0) + 1;
+          treePortCounters.set(direction, next);
+          treePortLabels.set(endpointId, `${direction === "out" ? "O" : "I"}${next}`);
+        }
+        return treePortLabels.get(endpointId);
+      };
+      edges
+        .slice()
+        .sort((left, right) => Number(left.order || 0) - Number(right.order || 0))
+        .forEach(edge => {
+          treePortLabel(edge.endpoint_ids?.[0], "out");
+          treePortLabel(edge.endpoint_ids?.[1], "in");
+        });
+      const treePort = (endpointId, direction) => {
+        const port = endpointId ? portsByEndpointId.get(endpointId) : null;
+        return {
+          endpointId,
+          direction,
+          label: treePortLabel(endpointId, direction),
+          protocol: port?.system === "kafka" ? "kafka" : port?.system === "rest" ? "http" : "unknown",
+          type: port?.type || "Endpoint",
+          method: port?.method || "Méthode Java inconnue",
+          name: port?.name || "Ressource inconnue",
+          path: port?.path || "Source inconnue",
+          line: port?.line,
+        };
+      };
+      const clearTreeTooltip = () => flowTooltipOverlay?.replaceChildren();
+      const showTreeTooltip = (className, titleText, lines, clientX, clientY) => {
+        if (!flowTooltipOverlay) return;
+        const tooltip = document.createElement("span");
+        tooltip.className = className;
+        const title = document.createElement("strong");
+        title.textContent = titleText;
+        tooltip.append(title);
+        lines.filter(Boolean).forEach((text, index) => {
+          const line = document.createElement("span");
+          line.className = index === 0 ? `${className}-kind` : `${className}-detail`;
+          line.textContent = text;
+          tooltip.append(line);
+        });
+        flowTooltipOverlay.replaceChildren(tooltip);
+        const bounds = tooltip.getBoundingClientRect();
+        const left = Math.max(8, Math.min(window.innerWidth - bounds.width - 8, clientX - bounds.width / 2));
+        const below = clientY + bounds.height + 10 <= window.innerHeight;
+        tooltip.dataset.placement = below ? "bottom" : "top";
+        tooltip.style.setProperty("--tooltip-arrow-left", `${Math.max(10, Math.min(bounds.width - 10, clientX - left))}px`);
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${below ? clientY + 10 : Math.max(8, clientY - bounds.height - 10)}px`;
+      };
+      const showTreePortTooltip = (port, clientX, clientY) => {
+        const direction = port.direction === "in" ? "IN" : "OUT";
+        const qualifiedMethod = String(port.method || "").trim();
+        const separator = qualifiedMethod.lastIndexOf("::");
+        const ownerSeparator = separator >= 0 ? separator : qualifiedMethod.lastIndexOf(".");
+        const javaClass = ownerSeparator > 0 ? qualifiedMethod.slice(0, ownerSeparator) : "Classe inconnue";
+        const javaMethod = ownerSeparator > 0
+          ? qualifiedMethod.slice(ownerSeparator + (separator >= 0 ? 2 : 1))
+          : qualifiedMethod || "Méthode inconnue";
+        showTreeTooltip("graph-port-tooltip", `${port.label} · Port ${direction}`, [
+          `Classe Java : ${javaClass}`,
+          `Méthode Java : ${javaMethod}`,
+          `${port.type} · ${port.name}`,
+          `${port.path}${port.line ? `:${port.line}` : ""}`,
+        ], clientX, clientY);
+      };
+      const treeOccurrenceTooltipLines = occurrence => {
+        const lines = [
+          occurrence.cycle ? "Microservice · cycle détecté" : "Microservice",
+          `Niveau ${occurrence.depth + 1}${occurrence.cycle ? " · expansion arrêtée" : ""}`,
+        ];
+        const input = occurrence.edge && treePort(occurrence.edge.endpoint_ids?.[1], "in");
+        if (input?.endpointId) lines.push(`IN ${input.label} · ${input.method}`);
+        const outputs = occurrence.children
+          .map(child => treePort(child.edge.endpoint_ids?.[0], "out"))
+          .filter(port => port.endpointId);
+        if (outputs.length) {
+          const outputText = outputs
+            .slice(0, 3)
+            .map(port => `${port.label} · ${port.method}`)
+            .join(" | ");
+          lines.push(`OUT ${outputText}${outputs.length > 3 ? " …" : ""}`);
+        }
+        return lines;
       };
       allOccurrences.forEach(occurrence => {
         const source = position(occurrence);
@@ -367,7 +513,24 @@
             const middleY = (startY + endY) / 2;
             line.setAttribute("d", `M ${source.x + cardWidth / 2} ${startY} C ${source.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${endY}`);
           }
-          line.classList.add("graph-call-tree-edge");
+          const protocolClass = child.edge.kind === "rest" ? "is-rest" : child.edge.kind === "kafka" ? "is-kafka" : "";
+          line.classList.add("graph-call-tree-edge", protocolClass);
+          line.addEventListener("mouseenter", event => {
+            line.classList.add("is-hovered");
+            const protocol = child.edge.kind === "kafka" ? "Kafka" : child.edge.kind === "rest" ? "HTTP" : child.edge.kind || "Appel";
+            showTreeTooltip("graph-edge-tooltip", `Arc${child.edge.order ? ` #${child.edge.order}` : ""}`, [
+              `${child.edge.source} → ${child.edge.target}`,
+              `${child.edge.label || "Relation"} · ${protocol}`,
+            ], event.clientX, event.clientY);
+          });
+          line.addEventListener("mousemove", event => {
+            const tooltip = flowTooltipOverlay?.firstElementChild;
+            if (tooltip) showTreeTooltip("graph-edge-tooltip", `Arc${child.edge.order ? ` #${child.edge.order}` : ""}`, [
+              `${child.edge.source} → ${child.edge.target}`,
+              `${child.edge.label || "Relation"} · ${child.edge.kind === "kafka" ? "Kafka" : child.edge.kind === "rest" ? "HTTP" : child.edge.kind || "Appel"}`,
+            ], event.clientX, event.clientY);
+          });
+          line.addEventListener("mouseleave", () => { line.classList.remove("is-hovered"); clearTreeTooltip(); });
           svg.append(line);
           const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
           label.classList.add("graph-call-tree-edge-label");
@@ -386,26 +549,119 @@
         node.type = "button";
         node.className = `graph-call-tree-node${occurrence.cycle ? " is-cycle" : ""}`;
         const original = nodeIdForCodeFlowResource(occurrence.name, "microservice");
-        node.textContent = occurrence.name;
+        const originalNode = original ? nodeDataById.get(original) : null;
+        node.style.setProperty("--card-accent", originalNode?.color || "#64748b");
+        const icon = document.createElement("span");
+        icon.className = "graph-node-card-icon is-service";
+        const name = document.createElement("span");
+        name.className = "graph-node-card-name";
+        name.textContent = occurrence.name;
+        const kind = document.createElement("span");
+        kind.className = "graph-node-card-kind";
+        kind.textContent = occurrence.cycle
+          ? "Microservice · cycle"
+          : occurrence.hiddenChildrenCount
+            ? `Microservice · +${occurrence.hiddenChildrenCount} appels`
+            : "Microservice";
+        node.append(icon, name, kind);
+        const ports = [
+          occurrence.edge && treePort(occurrence.edge.endpoint_ids?.[1], "in"),
+          ...occurrence.children.map(child => treePort(child.edge.endpoint_ids?.[0], "out")),
+        ].filter(Boolean);
+        const portsByDirection = ports.reduce((groups, port) => {
+          const directionPorts = groups[port.direction] || [];
+          if (!directionPorts.some(existing => (
+            existing.endpointId && existing.endpointId === port.endpointId
+          ))) directionPorts.push(port);
+          groups[port.direction] = directionPorts;
+          return groups;
+        }, { in: [], out: [] });
+        Object.entries(portsByDirection).forEach(([direction, directionPorts]) => {
+          directionPorts.forEach((port, index) => {
+            const anchor = document.createElement("span");
+            anchor.className = `graph-node-port-reference is-${direction} is-${port.protocol}`;
+            anchor.textContent = port.label;
+            anchor.title = `${direction === "in" ? "Port d’entrée" : "Port de sortie"} · ${port.label}`;
+            anchor.style.setProperty(
+              "--port-offset",
+              `${((index + 1) / (directionPorts.length + 1)) * 100}%`
+            );
+            anchor.addEventListener("pointerenter", event => showTreePortTooltip(port, event.clientX, event.clientY));
+            anchor.addEventListener("pointermove", event => showTreePortTooltip(port, event.clientX, event.clientY));
+            anchor.addEventListener("pointerleave", clearTreeTooltip);
+            node.append(anchor);
+          });
+        });
+        if (occurrence.cycle) {
+          const badge = document.createElement("span");
+          badge.className = "graph-node-root-badge graph-call-tree-cycle-badge";
+          badge.textContent = "Cycle";
+          node.append(badge);
+        }
+        const canCollapse = occurrence.children.length > 0;
+        if (occurrence.hiddenChildrenCount || canCollapse) {
+          const more = document.createElement("span");
+          more.className = `graph-call-tree-more-badge${canCollapse ? " is-expanded" : ""}`;
+          more.textContent = canCollapse ? "− replier" : `+${occurrence.hiddenChildrenCount} appels`;
+          more.title = canCollapse
+            ? "Replier cette branche"
+            : `Afficher le niveau suivant (${occurrence.hiddenChildrenCount} appels)`;
+          more.addEventListener("click", event => {
+            event.preventDefault();
+            event.stopPropagation();
+            const camera = captureCallTreeCamera();
+            if (canCollapse) {
+              graphState.callTreeCollapsed.add(occurrence.pathKey);
+              graphState.callTreeExpanded.delete(occurrence.pathKey);
+            } else {
+              graphState.callTreeCollapsed.delete(occurrence.pathKey);
+              graphState.callTreeExpanded.add(occurrence.pathKey);
+            }
+            renderCallTreeOverlay(camera);
+          });
+          node.append(more);
+        }
         node.title = occurrence.cycle
           ? `${occurrence.name} · cycle détecté`
           : `${occurrence.name} · occurrence ${occurrence.id}`;
         const point = position(occurrence);
         node.style.left = `${point.x}px`;
         node.style.top = `${point.y}px`;
+        node.addEventListener("pointerover", event => {
+          if (event.target.closest?.(".graph-node-port-reference")) return;
+          node.classList.add("is-hovered");
+          showTreeTooltip("graph-call-tree-entity-tooltip", occurrence.name, treeOccurrenceTooltipLines(occurrence), event.clientX, event.clientY);
+        });
+        node.addEventListener("pointermove", event => {
+          if (event.target.closest?.(".graph-node-port-reference")) return;
+          showTreeTooltip("graph-call-tree-entity-tooltip", occurrence.name, treeOccurrenceTooltipLines(occurrence), event.clientX, event.clientY);
+        });
+        node.addEventListener("mouseleave", () => { node.classList.remove("is-hovered"); clearTreeTooltip(); });
         node.addEventListener("click", () => { if (original) selectNode(original); });
         canvas.append(node);
       });
       graphCallTreeOverlay.replaceChildren(canvas);
     }
-    function zoomCallTree(factor) {
+    function zoomCallTree(factor, anchorX = null, anchorY = null) {
       if (graphState.callGraphDisplayMode !== "tree") return false;
-      graphState.callTreeZoom = Math.max(.5, Math.min(4, (graphState.callTreeZoom || 1) * factor));
       const canvas = graphCallTreeOverlay?.querySelector(".graph-call-tree-canvas");
-      if (canvas) {
-        const baseScale = Number(canvas.dataset.baseScale) || 1;
-        canvas.style.transform = `scale(${baseScale * graphState.callTreeZoom})`;
-      }
+      if (!canvas) return false;
+      const bounds = graphCallTreeOverlay.getBoundingClientRect();
+      const baseScale = Number(canvas.dataset.baseScale) || 1;
+      const oldZoom = graphState.callTreeZoom || 1;
+      const oldTotalScale = baseScale * oldZoom;
+      const x = anchorX ?? bounds.width / 2;
+      const y = anchorY ?? bounds.height / 2;
+      const left = Number.parseFloat(canvas.style.left) || 0;
+      const top = Number.parseFloat(canvas.style.top) || 0;
+      const logicalX = (x - left) / oldTotalScale;
+      const logicalY = (y - top) / oldTotalScale;
+      const nextZoom = Math.max(.5, Math.min(4, oldZoom * factor));
+      const nextTotalScale = baseScale * nextZoom;
+      graphState.callTreeZoom = nextZoom;
+      canvas.style.left = `${x - logicalX * nextTotalScale}px`;
+      canvas.style.top = `${y - logicalY * nextTotalScale}px`;
+      canvas.style.transform = `scale(${nextTotalScale})`;
       return true;
     }
     const uniqueTopologyLink = (endpointId, source) => {
@@ -528,29 +784,6 @@
       return edges.length || localLinks.length ? { nodes, edges, localLinks } : null;
     }
 
-    // The default Flux tab is an inter-service navigation surface. The scope
-    // selector below can broaden or narrow it to persisted local paths.
-    const interServiceCodeFlows = codeFlows.filter(flow => {
-      const path = pathForCodeFlow(flow);
-      if (path) {
-        const services = new Set(path.nodes.filter(nodeId => (
-          nodeDataById.get(nodeId)?.kind === "microservice"
-        )));
-        if (services.size >= 2) return true;
-      }
-      // A persisted interprocedural flow is still useful evidence when one of
-      // its topology edges is unresolved or absent from the export. Do not
-      // hide it merely because the graph cannot prove a complete visual path.
-      return serviceIdsForCodeFlow(flow).size >= 2;
-    });
-    const localCodeFlows = codeFlows.filter(flow => {
-      const services = serviceIdsForCodeFlow(flow);
-      const endpointIds = [...new Set((flow.steps || [])
-        .map(step => step.endpoint_id)
-        .filter(Boolean))];
-      return endpointIds.length >= 2 && services.size === 1;
-    });
-
     function showCodeFlows(flows) {
       const pathResults = flows.map(flow => {
         const globalCallGraph = callGraphForFlow(flow);
@@ -587,237 +820,16 @@
       }
       showPath(path, path.nodes, {
         codeFlow: flow,
-        codeFlows: flows,
         codeFlowRootNodeId: rootNodeId,
         codeFlowTrigger: flow.steps?.[0] || null,
         showDetails: false,
         topologyReconciled: pathResults.every(result => result.reconciled),
       });
-      renderComparisonGraphs(flows);
       syncCodeFlowSelection();
     }
 
     function showCodeFlow(flow) {
       showCodeFlows([flow]);
-    }
-
-    function renderComparisonGraphs(flows) {
-      const comparison = document.getElementById("graph-comparison");
-      if (!comparison) return;
-      const graphElements = [
-        graphCanvas,
-        document.getElementById("graph-layers"),
-        document.getElementById("graph-groups"),
-        document.getElementById("graph-port-paths"),
-        document.getElementById("graph-node-labels"),
-        document.getElementById("graph-flow-tooltips"),
-      ];
-      graphElements.forEach(element => { if (element) element.hidden = flows.length > 1; });
-      comparison.replaceChildren();
-      comparison.hidden = flows.length < 2;
-      if (flows.length < 2) return;
-      const serviceCounts = new Map();
-      flows.forEach(flow => {
-        const graph = callGraphForFlow(flow) || {};
-        [...new Set(graph.node_order || graph.nodes || [])].forEach(name => {
-          serviceCounts.set(name, (serviceCounts.get(name) || 0) + 1);
-        });
-      });
-      flows.forEach((flow, flowIndex) => {
-        const graph = callGraphForFlow(flow) || {};
-        const names = [...new Set(graph.node_order || graph.nodes || [])];
-        const edges = (graph.edges || []).filter(edge => names.includes(edge.source) && names.includes(edge.target));
-        const portForEndpoint = endpointId => [...nodeDataById.values()]
-          .flatMap(candidate => candidate.ports || [])
-          .find(candidate => candidate.endpoint_id === endpointId);
-        const flowPortLabels = new Map();
-        const flowPortCounters = new Map();
-        edges
-          .slice()
-          .sort((left, right) => Number(left.order || 0) - Number(right.order || 0))
-          .forEach(edge => {
-            [[edge.endpoint_ids?.[0], "out"], [edge.endpoint_ids?.[1], "in"]].forEach(([endpointId, direction]) => {
-              if (!endpointId || flowPortLabels.has(endpointId)) return;
-              const next = (flowPortCounters.get(direction) || 0) + 1;
-              flowPortCounters.set(direction, next);
-              flowPortLabels.set(endpointId, `${direction === "out" ? "O" : "I"}${next}`);
-            });
-          });
-        const portCode = (endpointId, direction) => {
-          const port = portForEndpoint(endpointId);
-          if (flowPortLabels.has(endpointId)) return flowPortLabels.get(endpointId);
-          return port?.label?.match(direction === "out" ? /O\d+/ : /I\d+/)?.[0]
-            || (direction === "out" ? "OUT" : "IN");
-        };
-        const children = new Map();
-        const incoming = new Set();
-        edges.forEach(edge => {
-          children.set(edge.source, [...(children.get(edge.source) || []), edge.target]);
-          incoming.add(edge.target);
-        });
-        const roots = names.filter(name => !incoming.has(name));
-        const levels = new Map((roots.length ? roots : names.slice(0, 1)).map(name => [name, 0]));
-        const queue = [...levels.keys()];
-        for (let index = 0; index < queue.length; index += 1) {
-          const source = queue[index];
-          (children.get(source) || []).forEach(target => {
-            if (levels.has(target)) return;
-            levels.set(target, (levels.get(source) || 0) + 1);
-            queue.push(target);
-          });
-        }
-        names.forEach((name, index) => { if (!levels.has(name)) levels.set(name, index); });
-        const byLevel = new Map();
-        names.forEach(name => {
-          const level = levels.get(name) || 0;
-          byLevel.set(level, [...(byLevel.get(level) || []), name]);
-        });
-        const positions = new Map();
-        const portsByNode = new Map();
-        const addPort = (name, endpointId, direction) => {
-          if (!endpointId) return;
-          const list = portsByNode.get(name) || [];
-          if (!list.some(port => port.endpointId === endpointId)) list.push({ endpointId, direction });
-          portsByNode.set(name, list);
-        };
-        edges.forEach(edge => {
-          addPort(edge.source, edge.endpoint_ids?.[0], "out");
-          addPort(edge.target, edge.endpoint_ids?.[1], "in");
-        });
-        byLevel.forEach((levelNames, level) => {
-          levelNames.sort((left, right) => left.localeCompare(right));
-          levelNames.forEach((name, row) => positions.set(name, {
-            x: 28 + level * 180,
-            y: 28 + row * 82,
-          }));
-        });
-        const width = Math.max(360, (Math.max(...levels.values(), 0) + 1) * 180 + 80);
-        const height = Math.max(280, Math.max(...[...byLevel.values()].map(items => items.length), 1) * 82 + 70);
-        const panel = document.createElement("section");
-        panel.className = "comparison-flow-panel";
-        panel.setAttribute("aria-label", `Graphe d’appel ${flowIndex + 1}`);
-        const header = document.createElement("header");
-        header.className = "comparison-flow-header";
-        const title = document.createElement("strong");
-        const trigger = flow.steps?.[0];
-        const triggerName = trigger?.kind === "http_entry"
-          ? `${flow.module} · ${trigger.name}`
-          : trigger?.name || "Déclencheur inconnu";
-        title.textContent = `${flowIndex + 1}. ${codeFlowStepLabel(trigger?.kind)} · ${triggerName}`;
-        const meta = document.createElement("span");
-        const protocol = [...codeFlowProtocols(flow)].map(value => value.toUpperCase()).join(" + ") || "Protocole inconnu";
-        meta.textContent = `${flow.module} · ${names.length} services · ${edges.length} arcs · ${protocol}`;
-        header.append(title, meta);
-        const canvas = document.createElement("div");
-        canvas.className = "comparison-flow-canvas";
-        canvas.style.minWidth = `${width}px`;
-        canvas.style.minHeight = `${height}px`;
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.classList.add("comparison-flow-svg");
-        svg.style.width = `${width}px`;
-        svg.style.height = `${height}px`;
-        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-        const markerId = `comparison-arrow-${flowIndex}`;
-        svg.innerHTML = `<defs><marker id="${markerId}" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#7182d4"></path></marker></defs>`;
-        edges.forEach((edge, edgeIndex) => {
-          const source = positions.get(edge.source);
-          const target = positions.get(edge.target);
-          if (!source || !target) return;
-          const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-          line.setAttribute("x1", String(source.x + 112));
-          line.setAttribute("y1", String(source.y + 24));
-          line.setAttribute("x2", String(target.x));
-          line.setAttribute("y2", String(target.y + 24));
-          line.classList.add("comparison-flow-edge");
-          line.setAttribute("stroke", "#7182d4");
-          line.setAttribute("stroke-width", "2");
-          line.setAttribute("marker-end", `url(#${markerId})`);
-          const hitLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-          hitLine.classList.add("comparison-flow-edge-hit");
-          hitLine.setAttribute("x1", line.getAttribute("x1"));
-          hitLine.setAttribute("y1", line.getAttribute("y1"));
-          hitLine.setAttribute("x2", line.getAttribute("x2"));
-          hitLine.setAttribute("y2", line.getAttribute("y2"));
-          const label = document.createElement("span");
-          label.className = "comparison-flow-edge-label";
-          const sourcePort = portForEndpoint(edge.endpoint_ids?.[0]);
-          const targetPort = portForEndpoint(edge.endpoint_ids?.[1]);
-          const protocol = edge.kind === "kafka" ? "Kafka" : edge.kind === "rest" ? "HTTP" : edge.kind || "Relation";
-          const detail = sourcePort?.message_type?.split(".").at(-1)
-            || targetPort?.message_type?.split(".").at(-1)
-            || sourcePort?.name
-            || targetPort?.name
-            || "relation";
-          const portMapping = `${portCode(edge.endpoint_ids?.[0], "out")} → ${portCode(edge.endpoint_ids?.[1], "in")}`;
-          label.textContent = String(edge.order ?? edgeIndex + 1);
-          label.title = `${portMapping} · ${detail} · ${protocol}`;
-          label.style.left = `${Math.min(source.x + 112, target.x) + 12}px`;
-          label.style.top = `${(source.y + target.y) / 2 + 17}px`;
-          canvas.append(label);
-          const setHighlighted = highlighted => {
-            line.classList.toggle("is-highlighted", highlighted);
-            hitLine.classList.toggle("is-highlighted", highlighted);
-            label.classList.toggle("is-highlighted", highlighted);
-          };
-          hitLine.addEventListener("mouseenter", () => setHighlighted(true));
-          hitLine.addEventListener("mouseleave", () => setHighlighted(false));
-          label.addEventListener("mouseenter", () => setHighlighted(true));
-          label.addEventListener("mouseleave", () => setHighlighted(false));
-          svg.append(line, hitLine);
-        });
-        canvas.append(svg);
-        positions.forEach((position, name) => {
-          const node = document.createElement("div");
-          node.className = "comparison-flow-node graph-node-card-label is-code-flow-node";
-          node.style.left = `${position.x}px`;
-          node.style.top = `${position.y}px`;
-          const icon = document.createElement("span");
-          icon.className = "graph-node-card-icon is-service";
-          const nodeName = document.createElement("span");
-          nodeName.className = "graph-node-card-name";
-          nodeName.textContent = name;
-          const kind = document.createElement("span");
-          kind.className = "graph-node-card-kind";
-          kind.textContent = "Microservice";
-          node.append(icon, nodeName, kind);
-          if (name === flow.module) {
-            const rootBadge = document.createElement("span");
-            rootBadge.className = "graph-node-root-badge";
-            rootBadge.textContent = "Racine";
-            node.append(rootBadge);
-            const trigger = flow.steps?.[0];
-            if (trigger?.name) {
-              const triggerBadge = document.createElement("span");
-              const protocol = trigger.kind === "http_entry" ? "HTTP" : trigger.kind === "cron_entry" ? "Cron" : "Kafka";
-              triggerBadge.className = `graph-node-trigger-badge is-${protocol.toLowerCase()}`;
-              triggerBadge.textContent = `${protocol} · ${trigger.name}`;
-              triggerBadge.title = `Déclencheur ${protocol} · ${trigger.name}`;
-              node.append(triggerBadge);
-            }
-          }
-          if ((serviceCounts.get(name) || 0) > 1) {
-            const shared = document.createElement("span");
-            shared.className = "comparison-flow-shared-badge";
-            shared.textContent = "Commun";
-            shared.title = "Service présent dans plusieurs graphes comparés";
-            node.append(shared);
-          }
-          (portsByNode.get(name) || []).forEach((port, index, ports) => {
-            const anchor = document.createElement("span");
-            const endpoint = [...nodeDataById.values()]
-              .flatMap(candidate => candidate.ports || [])
-              .find(candidate => candidate.endpoint_id === port.endpointId);
-            const protocol = endpoint?.system === "kafka" ? "kafka" : endpoint?.system === "rest" ? "http" : "unknown";
-            anchor.className = `graph-node-port-reference is-${port.direction} is-${protocol}`;
-            anchor.textContent = portCode(port.endpointId, port.direction);
-            anchor.style.setProperty("--port-offset", `${((index + 1) / (ports.length + 1)) * 100}%`);
-            node.append(anchor);
-          });
-          canvas.append(node);
-        });
-        panel.append(header, canvas);
-        comparison.append(panel);
-      });
     }
 
     function callGraphPathForCodeFlow(flow) {
@@ -896,16 +908,8 @@
 
     function syncCodeFlowSelection() {
       codeFlowsList.querySelectorAll(".code-flow-item").forEach(item => {
-        const selected = graphState.selectedCodeFlowIds.includes(item.dataset.flowId);
-        item.classList.toggle("is-selected", selected);
-        const checkbox = item.querySelector(".code-flow-select");
-        if (checkbox) checkbox.checked = selected;
+        item.classList.toggle("is-selected", item.dataset.flowId === graphState.selectedCodeFlowId);
       });
-      const count = graphState.selectedCodeFlowIds.length;
-      codeFlowCompare.disabled = count < 2;
-      codeFlowCompare.textContent = count >= 2
-        ? `Comparer ${count} flux`
-        : "Comparer les flux sélectionnés";
     }
 
     function servicesForCodeFlow(flow) {
@@ -968,39 +972,21 @@
       if (!overlay) return;
       overlay.replaceChildren();
       const graphCanvas = document.getElementById("graph");
-      const comparison = document.getElementById("graph-comparison");
-      overlay.hidden = Boolean(graphCanvas?.hidden && comparison?.hidden);
+      overlay.hidden = Boolean(graphCanvas?.hidden);
     }
 
     function codeFlowItem(flow) {
       const item = document.createElement("li");
-      const selected = graphState.selectedCodeFlowIds.includes(flow.id);
+      const selected = graphState.selectedCodeFlowId === flow.id;
       item.className = `code-flow-item${flow.status === "cycle" ? " is-cycle" : ""}${flow.reconciliation === "partial" ? " is-partial" : ""}${selected ? " is-selected" : ""}`;
       item.dataset.flowId = flow.id;
       const header = document.createElement("div");
       header.className = "code-flow-header";
-      const select = document.createElement("input");
-      select.type = "checkbox";
-      select.className = "code-flow-select";
-      select.checked = selected;
-      select.title = "Ajouter ce flux à la comparaison";
-      select.setAttribute("aria-label", `Ajouter le flux ${flow.id} à la comparaison`);
-      select.addEventListener("click", event => event.stopPropagation());
-      select.addEventListener("change", event => {
-        const selectedIds = new Set(graphState.selectedCodeFlowIds);
-        if (event.target.checked) selectedIds.add(flow.id);
-        else selectedIds.delete(flow.id);
-        graphState.selectedCodeFlowIds = [...selectedIds];
-        syncCodeFlowSelection();
-        const selectedFlows = codeFlows.filter(candidate => selectedIds.has(candidate.id));
-        if (selectedFlows.length) showCodeFlows(selectedFlows);
-        else setToolbarTab("flows");
-      });
       const trigger = flow.steps?.[0];
       const title = document.createElement("div");
       title.className = "reference-title code-flow-title";
       title.textContent = `${codeFlowStepLabel(trigger?.kind)} · ${trigger?.name || "Déclencheur inconnu"}`;
-      header.append(select, title);
+      header.append(title);
       const exactPath = pathForCodeFlow(flow);
       const path = exactPath || nodePathForCodeFlow(flow);
       const meta = document.createElement("div");
@@ -1040,16 +1026,10 @@
     function renderCodeFlows() {
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
       const cyclesOnly = codeFlowCycles.getAttribute("aria-pressed") === "true";
-      const scope = codeFlowScope.value;
       const confidence = codeFlowConfidence.value;
       const kind = codeFlowKind.value;
       const messageTypeQuery = codeFlowMessageType.value.trim().toLocaleLowerCase();
-      const scopedCodeFlows = scope === "all"
-        ? codeFlows
-        : scope === "local"
-          ? localCodeFlows
-          : interServiceCodeFlows;
-      const visible = scopedCodeFlows.filter(flow => {
+      const visible = codeFlows.filter(flow => {
         const haystack = [
           flow.id,
           flow.module,
@@ -1071,25 +1051,20 @@
           && kindMatches
           && messageTypeMatches;
       });
-      codeFlowsList.replaceChildren(...visible.sort(compareCodeFlows).map(codeFlowItem));
+      codeFlowsList.replaceChildren(...visible.sort(sortCodeFlows).map(codeFlowItem));
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
-      codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} · ${scopedCodeFlows.length} dans cette portée · cochez au moins deux flux pour les comparer côte à côte.`;
-      const cycleCount = scopedCodeFlows.filter(flow => flow.status === "cycle").length;
+      codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} sur ${codeFlows.length} · cliquez sur un flux pour ouvrir son graphe d’appel.`;
+      const cycleCount = codeFlows.filter(flow => flow.status === "cycle").length;
       codeFlowCycles.textContent = `Cycles uniquement (${cycleCount})`;
       codeFlowCycles.disabled = cycleCount === 0;
       updateCodeFlowFilterSummary();
       codeFlowsTitle.textContent = cyclesOnly
         ? `Cycles détectés (${visible.length})`
-        : scope === "all"
-          ? `Tous les flux (${visible.length}/${codeFlows.length})`
-          : scope === "local"
-            ? `Flux internes (${visible.length}/${localCodeFlows.length})`
-            : `Flux inter-services (${visible.length}/${interServiceCodeFlows.length})`;
+        : `Flux de code (${visible.length}/${codeFlows.length})`;
     }
 
     codeFlowFilter.addEventListener("input", renderCodeFlows);
-    codeFlowScope.addEventListener("change", renderCodeFlows);
     codeFlowConfidence.addEventListener("change", renderCodeFlows);
     codeFlowKind.addEventListener("change", renderCodeFlows);
     codeFlowMessageType.addEventListener("input", renderCodeFlows);
@@ -1098,9 +1073,5 @@
       renderCodeFlows();
     });
     codeFlowFilterReset.addEventListener("click", resetCodeFlowFilters);
-    codeFlowCompare.addEventListener("click", () => {
-      const selected = codeFlows.filter(flow => graphState.selectedCodeFlowIds.includes(flow.id));
-      if (selected.length >= 2) showCodeFlows(selected);
-    });
     document.getElementById("flows-panel").addEventListener("systemlens:flows-open", renderCodeFlows);
     renderCodeFlows();

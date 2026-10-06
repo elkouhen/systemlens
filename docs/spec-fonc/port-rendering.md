@@ -122,21 +122,16 @@ without changing the indexed graph. The `Dépendances uniquement` option hides
 everything outside that scope and recalculates the active graph layout around
 the remaining nodes.
 This diagnostic text belongs to the widget and does not change graph path
-rendering. The Flux tab
-provides a
-scope selector with `Inter-services`, `Tous les flux`, and `Flux internes`.
-`Flux internes` isolates persisted flows with distinct input/output endpoints
-belonging to the same microservice; `Tous les flux` additionally includes
-flows whose topology cannot be fully reconciled.
-The Flux tab also provides independent filters for confidence (`élevée`,
+rendering. The Flux tab lists inter-service and internal flows together.
+It provides independent filters for confidence (`élevée`,
 `moyenne`, `faible`), protocol (`HTTP`, `Kafka`, `Mixte`), and Kafka message
 type. The message-type field offers native autocomplete values from the
 indexed Kafka ports and accepts partial text matching. A compact
 summary reports the number of visible flows and each card summarizes its
 service sequence, effects, confidence, reconciliation status, and alternative
 route count. The filter area reports the active filters and provides one
-action to restore the default scope and clear every additional filter. A
-selected flow can be recentered from the analysis banner.
+action to clear every additional filter. A selected flow can be recentered
+from the analysis banner.
 Equivalent persisted routes that render the same interaction graph are grouped into
 one visible flow, preventing duplicate graph cards while retaining their count
 in the export model.
@@ -164,13 +159,10 @@ When a flow is selected from the Flux de code tab, that tab remains active so
 the user can select another flow directly. The selected flow still updates the
 Explorer graph and its analysis state; opening the Explorer tab remains
 available through the normal tab control.
-The Flux de code catalogue provides a checkbox for each available flow. Checking
-one or more flows immediately opens their call graphs simultaneously in one
-Explorer workspace, with one independent graph panel per selected flow. The
-comparison action remains available when at least two flows are selected.
-Each panel owns its services, ports, and arcs, so the selected flows are not
-merged into one graph. Unchecking a flow removes its panel, and clearing the
-view or returning to Architecture clears the comparison selection.
+The Flux de code catalogue provides one entry for each available flow. Clicking
+an entry opens its single call graph in the Explorer workspace. Selecting
+another entry replaces the currently displayed call graph; the graphs are not
+merged and no side-by-side call-graph comparison is offered.
 The export keeps the architecture graph and the selected call graph as
 explicitly separated view modes. Opening Graphe selects the architecture mode
 and rebuilds only the persisted topology projection. Opening Flux de code

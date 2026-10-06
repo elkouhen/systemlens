@@ -84,9 +84,9 @@ List all persisted flows, including local flows:
 systemlens flows --json > flows.json
 ```
 
-The HTML export defaults to the `Inter-services` scope. Select `Internal
-flows` or `All flows` in the Flux tab before concluding that local flows are
-missing.
+The HTML export lists local and inter-service flows together. Use the search,
+confidence, protocol, message-type, and cycle filters before concluding that
+local flows are missing.
 
 To verify the HTML itself rather than only checking that the `code_flows` key
 exists, regenerate the export and run this standard-library-only diagnostic:
@@ -238,8 +238,8 @@ counters.
 
 ### The flow exists but is not visible in the UI
 
-First switch the Flux scope from `Inter-services` to `Internal flows` or `All
-flows`. Also check the search filter and remember that a partial flow can be
+The Flux tab lists local and inter-service flows together. Check the search,
+confidence, protocol, message-type, and cycle filters. A partial flow can be
 listed even when its topology path cannot be rendered completely.
 
 ## 6. Minimal report to share for further diagnosis

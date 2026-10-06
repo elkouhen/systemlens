@@ -91,22 +91,33 @@ level is the root set. Selecting a call graph keeps the root, arc order and
 trigger metadata visible; the export does not merge distinct flows into one
 undifferentiated edge.
 
-When a single code flow is selected, the graph context provides a second
-visualization mode, `Vue arbre`. It expands the selected directed call graph
-into a hierarchy of call occurrences. A microservice is therefore rendered
-once per occurrence in the expanded tree, so the same service may appear in
-several branches.
+When a single code flow is selected, the graph displays the selected directed
+call graph as a hierarchy of call occurrences. A microservice is therefore
+rendered once per occurrence in the expanded tree, so the same service may
+appear in several branches.
 
 The tree mode exposes a maximum depth of 3, 5 or 8 levels and an orientation
-of left-to-right or top-to-bottom. The default is depth 5 and left-to-right.
+of left-to-right or top-to-bottom. The default is depth 3 and left-to-right.
 When a branch reaches the configured depth, expansion stops. When a branch
-reaches a service already present in its current ancestry, the occurrence is
-rendered as a cycle endpoint and is not expanded further. The existing network
-visualization remains the default and is restored by `Vue réseau`.
-The upper graph context widget shows the selected view and its controls only;
-it does not repeat the call hierarchy. In `Vue arbre`, dragging the empty tree
+reaches an input endpoint already displayed on the current branch, the
+occurrence is rendered as a cycle endpoint and is not expanded further. A
+repeated service using a different input port is therefore not marked as a
+cycle solely because its name is repeated. The existing network
+projection remains available when the tree depth is increased.
+At the depth boundary, the node displays the number of hidden child calls;
+clicking that `+N appels` badge reveals one additional level for that branch
+without changing the current tree viewport. Every visible node with
+descendants displays a `− replier` badge that collapses that branch and
+preserves the viewport. A collapsed node displays a `+N appels` badge to
+reopen its descendants.
+The depth selector can still be increased to reveal more levels globally.
+The tree is the only call-graph rendering mode. The upper graph context widget
+shows the tree controls only; it does not repeat the call hierarchy. Dragging the empty tree
 workspace pans the tree, while clicking a service occurrence keeps its
-selection action.
+selection action. Hovering a service occurrence displays its level and cycle
+state. The service occurrence tooltip also displays its IN and OUT ports with
+the associated Java methods. Hovering an arc displays its order, source,
+target, protocol and indexed relation label.
 
 The call-graph heading identifies the view without displaying a service or
 method sequence. Flow descriptions state the trigger and the observed effect
@@ -118,22 +129,20 @@ available in the opened flow view rather than expanding every list entry.
 Clicking the entry still opens the complete flow view, so the compact layout
 does not remove any indexed information.
 
-The Flux tab explains the two selection actions directly above the catalogue:
-clicking a flow title opens its call graph, while checking at least two flow
-boxes displays independent call-graph panels side by side. The Architecture
-summary also reports the number of persisted indexing signals, or explicitly
-states that no signal was found; this is a navigation aid, not a completeness
-claim beyond the persisted diagnostics.
+The Flux tab explains the selection action directly above the catalogue:
+clicking a flow entry opens its call graph, replacing the previously displayed
+flow. The Architecture summary also reports the number of persisted indexing
+signals, or explicitly states that no signal was found; this is a navigation
+aid, not a completeness claim beyond the persisted diagnostics.
 
 Hovering or focusing a flow entry opens a tooltip with its complete description,
 trigger, service route, arc and step counts, effects, protocol, confidence and
 topology status. The tooltip is dismissed when the pointer or keyboard focus
 leaves the entry.
 
-In the side-by-side flow comparison, each arc has a transparent hover target.
-Hovering an arc or its order label highlights only that arc and its label
-inside the current comparison panel. The other compared graph remains
-unchanged, and the interaction does not merge the graphs.
+In the selected flow graph, each arc has a transparent hover target. Hovering
+an arc or its order label highlights that arc and its label without changing
+the persisted graph data.
 
 The exported Explorer presents the graph as a layered workspace: a compact
 control surface, a searchable graph context, summary counters, and a separate
