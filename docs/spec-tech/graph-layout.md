@@ -62,6 +62,8 @@ The tree projection is an independent overlay. Its background captures
 primary-pointer drags and translates the tree canvas, while service cards keep
 pointer interaction for selection. The graph context widget exposes the mode
 and controls without duplicating the tree hierarchy.
+The tree canvas also supports wheel and button zoom from 0.5x to 4x without
+changing persisted graph coordinates.
 
 The shared card size remains stable during navigation. Camera fitting starts
 from Sigma's native complete overview. In the plain graph, `All nodes` uses

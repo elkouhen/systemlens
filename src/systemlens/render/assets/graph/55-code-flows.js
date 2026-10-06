@@ -221,6 +221,11 @@
           window.addEventListener("pointerup", finishCallTreePan, true);
           window.addEventListener("pointercancel", finishCallTreePan, true);
         }, true);
+        graphCallTreeOverlay.addEventListener("wheel", event => {
+          if (!graphState.selectedCodeFlowId || graphState.callGraphDisplayMode !== "tree") return;
+          event.preventDefault();
+          zoomCallTree(Math.exp(Math.max(-120, Math.min(120, event.deltaY)) * -.001));
+        }, { passive: false });
       }
       const active = Boolean(graphState.selectedCodeFlowId)
         && !graphState.comparisonMode
@@ -324,7 +329,8 @@
       canvas.style.height = `${logicalHeight}px`;
       canvas.style.left = `${offsetX}px`;
       canvas.style.top = `${offsetY}px`;
-      canvas.style.transform = `scale(${scale})`;
+      canvas.dataset.baseScale = String(scale);
+      canvas.style.transform = `scale(${scale * (graphState.callTreeZoom || 1)})`;
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.setAttribute("width", String(logicalWidth));
       svg.setAttribute("height", String(logicalHeight));
@@ -391,6 +397,16 @@
         canvas.append(node);
       });
       graphCallTreeOverlay.replaceChildren(canvas);
+    }
+    function zoomCallTree(factor) {
+      if (graphState.callGraphDisplayMode !== "tree") return false;
+      graphState.callTreeZoom = Math.max(.5, Math.min(4, (graphState.callTreeZoom || 1) * factor));
+      const canvas = graphCallTreeOverlay?.querySelector(".graph-call-tree-canvas");
+      if (canvas) {
+        const baseScale = Number(canvas.dataset.baseScale) || 1;
+        canvas.style.transform = `scale(${baseScale * graphState.callTreeZoom})`;
+      }
+      return true;
     }
     const uniqueTopologyLink = (endpointId, source) => {
       const candidates = (graphLinksByEndpoint.get(endpointId) || []).filter(candidate => (

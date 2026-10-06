@@ -908,6 +908,9 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert 'id="call-tree-depth"' in document
     assert 'id="call-tree-direction"' in document
     assert "function renderCallTreeOverlay()" in document
+    assert "function zoomCallTree(factor)" in document
+    assert "graphCallTreeOverlay.addEventListener(\"wheel\"" in document
+    assert "if (zoomCallTree(0.8)) return;" in document
     assert "const occurrence = { id: `call-tree-${occurrenceCount++}`" in document
     assert "occurrence.cycle = true" in document
     assert "indexingIssueCount" in document

@@ -176,6 +176,7 @@
       graphCanvas.dataset.fitRatio = String(targetRenderer.getCamera().getState().ratio);
     }
     document.getElementById("zoom-in").addEventListener("click", () => {
+      if (zoomCallTree(0.8)) return;
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
@@ -183,6 +184,7 @@
       requestGraphRender();
     });
     document.getElementById("zoom-out").addEventListener("click", () => {
+      if (zoomCallTree(1.25)) return;
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();

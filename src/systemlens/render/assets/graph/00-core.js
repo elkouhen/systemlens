@@ -224,6 +224,7 @@
       callGraphDisplayMode: "network",
       callTreeDepth: 5,
       callTreeDirection: "lr",
+      callTreeZoom: 1,
     };
     function updateGraphState(patch) {
       Object.assign(graphState, patch);
