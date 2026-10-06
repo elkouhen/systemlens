@@ -186,6 +186,10 @@ node placement while `@mr_mint/elkjs-libavoid` computes obstacle-avoiding routes
 around the visible microservice cards, with a padding margin and nudging for
 parallel dependencies. A local orthogonal router is used only as a runtime
 fallback when the external WASM module cannot be loaded.
+The route validator requires the first segment to leave an `OUT` port toward
+the right and the final segment to approach an `IN` port from the left. A stale
+overlay generation MUST NOT reinsert a path, label, or hit area after a newer
+graph render has started.
 Endpoint-to-endpoint dependencies are projected into the selected
 service-to-service arc. The selected flow's canonical NetworkX arcs are the
 sole source for the focused overlay, so topology links and port links cannot

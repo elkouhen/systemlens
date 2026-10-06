@@ -1,6 +1,7 @@
 // Ordered source module: 10-rebuild.js
     let callGraphArcNavigator = { links: [], views: [], activeIndex: null };
     let selectedCallGraphArcVisualTimer = null;
+    let overlayRenderGeneration = 0;
     const clearCallGraphAnalysisFocus = () => {
       graphState.analysisPortEndpointId = null;
       document.querySelectorAll(
@@ -25,7 +26,11 @@
     };
     const syncSelectedCallGraphArcVisual = () => {
       const edgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc;
+      const currentRenderGeneration = String(overlayRenderGeneration);
       const selectedNodeIds = new Set();
+      document.querySelectorAll(".graph-call-path, .graph-call-label").forEach(element => {
+        if (element.dataset.renderGeneration !== currentRenderGeneration) element.remove();
+      });
       if (edgeKey) {
         const selectedPath = [...document.querySelectorAll(
           ".graph-call-path:not(.graph-arc-hit-area)"
@@ -717,6 +722,8 @@
         });
       };
       renderOverlays = () => {
+        const renderGeneration = ++overlayRenderGeneration;
+        const isCurrentRender = () => renderGeneration === overlayRenderGeneration;
         nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         portPathOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         const nodePoints = new Map();
@@ -1434,10 +1441,17 @@
               overlayBounds.width - viewportMargin,
               Math.max(start[0] + 48, end[0] + 48),
             );
+            // Keep the final approach outside the target card. A single lane
+            // ending directly at a WEST port can otherwise cross the card
+            // when the target is the only obstacle left in this corridor.
+            const approachLane = Math.min(end[0] - 48, start[0] - 48);
+            const approachY = end[1] - 48;
             const points = [
               start,
               [externalLane, start[1]],
-              [externalLane, end[1]],
+              [externalLane, approachY],
+              [approachLane, approachY],
+              [approachLane, end[1]],
               end,
             ];
             return {
@@ -1502,9 +1516,9 @@
                 ? next[1] >= start[1] - epsilon
                 : previous[1] <= start[1] + epsilon;
           const entersTarget = targetSide === "EAST"
-            ? previous[0] <= end[0] + epsilon
+            ? previous[0] >= end[0] - epsilon
             : targetSide === "WEST"
-              ? previous[0] >= end[0] - epsilon
+              ? previous[0] <= end[0] + epsilon
               : targetSide === "SOUTH"
                 ? previous[1] <= end[1] + epsilon
                 : previous[1] >= end[1] - epsilon;
@@ -1892,6 +1906,7 @@
           return hitArea;
         };
         selectedCallGraphLinks.forEach(({ link, index, edgeKey }) => {
+          if (!isCurrentRender()) return;
           const routed = callGraphPath(link, edgeKey, index);
           if (!routed) return;
           const resolvedEdgeKey = edgeKey || `edge-${index}`;
@@ -1899,6 +1914,7 @@
           if (wasRouted !== routed.obstacleRouted) {
             network.setEdgeAttribute(resolvedEdgeKey, "obstacleRouted", routed.obstacleRouted);
             renderer.refresh();
+            if (!isCurrentRender()) return;
           }
           if (routed.obstacleRouted) {
             occupiedCallGraphSegments.push(...routed.points.slice(1).map((point, pointIndex) => (
@@ -1912,6 +1928,7 @@
           path.classList.add("graph-call-path");
           if (link.kind === "rest") path.classList.add("is-rest");
           path.dataset.arcKey = resolvedEdgeKey;
+          path.dataset.renderGeneration = String(renderGeneration);
           path.dataset.sourceNode = link.source;
           path.dataset.targetNode = link.target;
           path.classList.toggle(
@@ -1931,6 +1948,7 @@
           portPathOverlay.append(path);
           const arcLabel = document.createElementNS(svgNamespace, "text");
           arcLabel.classList.add("graph-call-label");
+          arcLabel.dataset.renderGeneration = String(renderGeneration);
           if (link.kind === "rest") arcLabel.classList.add("is-rest");
           arcLabel.dataset.arcKey = resolvedEdgeKey;
           arcLabel.dataset.sourceNode = link.source;
@@ -1978,6 +1996,7 @@
             hitArea.classList.add("is-keyboard-selected");
           }
           hitArea.dataset.arcKey = resolvedEdgeKey;
+          hitArea.dataset.renderGeneration = String(renderGeneration);
           hitArea.dataset.sourceNode = link.source;
           hitArea.dataset.targetNode = link.target;
           hitArea.classList.toggle(
@@ -2015,12 +2034,15 @@
             showTooltip: () => showArcTooltip(path, link, sourcePort, targetPort),
           });
         });
+        if (!isCurrentRender()) return;
         const activeIndex = callGraphArcNavigator.views.findIndex(
           view => view.edgeKey === graphState.selectedCallGraphEdgeKey,
         );
         callGraphArcNavigator.activeIndex = activeIndex >= 0 ? activeIndex : null;
         if (activeIndex >= 0) {
-          requestAnimationFrame(() => focusCallGraphArc(activeIndex));
+          requestAnimationFrame(() => {
+            if (isCurrentRender()) focusCallGraphArc(activeIndex);
+          });
         }
         const libavoidRouteKeyForGeometry = [
           ...[...libavoidNodes.values()].map(node => (

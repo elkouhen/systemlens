@@ -1465,6 +1465,11 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "portPathOverlay.append(view.path, view.arcLabel, view.hitArea);" in document
     assert "is-navigation-hidden" in document
     assert ".graph-call-path.is-navigation-hidden, .graph-call-label.is-navigation-hidden { display: none; }" in document
+    assert "let overlayRenderGeneration = 0;" in document
+    assert "const isCurrentRender = () => renderGeneration === overlayRenderGeneration;" in document
+    assert "if (!isCurrentRender()) return;" in document
+    assert "const currentRenderGeneration = String(overlayRenderGeneration);" in document
+    assert "if (element.dataset.renderGeneration !== currentRenderGeneration) element.remove();" in document
     assert "const GRAPH_CARD_SCALE = 1" in document
     assert "const GRAPH_CARD_WIDTH = 110 * GRAPH_CARD_SCALE" in document
     assert "const GRAPH_CARD_HEIGHT = 70 * GRAPH_CARD_SCALE" in document
