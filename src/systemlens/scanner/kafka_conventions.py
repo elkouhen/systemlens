@@ -99,19 +99,169 @@ def _strategy1_topic_from_value(
     return topic, dynamic, topic_display
 
 
+def _strategy1_topic_expression_nodes(value_node, source: bytes, invocation, seen= frozenset()):
+    """Return all source expressions that can provide one send topic."""
+    if value_node is None:
+        return []
+    if value_node.type == "parenthesized_expression" and value_node.named_children:
+        return _strategy1_topic_expression_nodes(value_node.named_children[0], source, invocation, seen)
+    if value_node.type == "ternary_expression":
+        return [
+            expression
+            for field in ("consequence", "alternative")
+            for expression in _strategy1_topic_expression_nodes(
+                value_node.child_by_field_name(field), source, invocation, seen
+            )
+        ]
+    if value_node.type == "switch_expression":
+        switch_block = next(
+            (child for child in value_node.named_children if child.type == "switch_block"), None
+        )
+        expressions = []
+        for rule in switch_block.named_children if switch_block is not None else ():
+            for child in rule.named_children:
+                if child.type in {"switch_label", "block"}:
+                    continue
+                expression = child.named_children[0] if child.type == "expression_statement" and child.named_children else child
+                expressions.extend(_strategy1_topic_expression_nodes(expression, source, invocation, seen))
+        return expressions
+    if value_node.type != "identifier" or invocation is None:
+        return [value_node]
+    variable_name = java_parser.node_text(source, value_node)
+    if variable_name in seen:
+        return [value_node]
+    method = java_parser.enclosing(invocation, "method_declaration")
+    body = method.child_by_field_name("body") if method is not None else None
+    if body is None:
+        return [value_node]
+
+    def unique(nodes):
+        result = []
+        keys = set()
+        for node in nodes:
+            key = (node.type, node.start_byte, node.end_byte)
+            if key not in keys:
+                keys.add(key)
+                result.append(node)
+        return result
+
+    def value_from_assignment(node):
+        if node.type == "expression_statement" and node.named_children:
+            node = node.named_children[0]
+        if node.type == "variable_declarator":
+            name = node.child_by_field_name("name")
+            value = node.child_by_field_name("value")
+        elif node.type == "assignment_expression":
+            name = node.child_by_field_name("left")
+            value = node.child_by_field_name("right")
+            operator = node.child_by_field_name("operator")
+            if operator is None or java_parser.node_text(source, operator) != "=":
+                return []
+        else:
+            return []
+        if name is None or java_parser.node_text(source, name) != variable_name or value is None:
+            return []
+        return _strategy1_topic_expression_nodes(value, source, invocation, seen | {variable_name})
+
+    def contains(node, target):
+        return node.start_byte <= target.start_byte and target.end_byte <= node.end_byte
+
+    def branch(node, states):
+        if node is None:
+            return states, False
+        if node.type == "block":
+            return sequence(list(node.named_children), states)
+        return statement(node, states)
+
+    def sequence(statements, states):
+        current = states
+        for node in statements:
+            current, reached = statement(node, current)
+            if reached:
+                return current, True
+        return current, False
+
+    def statement(node, states):
+        if contains(node, invocation):
+            if node.type == "if_statement":
+                branches = []
+                for candidate in (
+                    node.child_by_field_name("consequence"),
+                    node.child_by_field_name("alternative"),
+                ):
+                    values, reached = branch(candidate, states)
+                    if reached:
+                        branches.extend(values)
+                return unique(branches), True
+            if node.type in {"switch_statement", "switch_expression"}:
+                switch_block = next(
+                    (child for child in node.named_children if child.type == "switch_block"), None
+                )
+                branches = []
+                for group in switch_block.named_children if switch_block is not None else ():
+                    values, reached = sequence(list(group.named_children), states)
+                    if reached:
+                        branches.extend(values)
+                return unique(branches), True
+            return states, True
+        if node.type == "local_variable_declaration":
+            values = [value for child in node.named_children for value in value_from_assignment(child)]
+            return unique(values) or states, False
+        if node.type == "expression_statement":
+            values = value_from_assignment(node)
+            return unique(values) or states, False
+        if node.type == "if_statement":
+            branches = []
+            for candidate in (
+                node.child_by_field_name("consequence"),
+                node.child_by_field_name("alternative"),
+            ):
+                values, reached = branch(candidate, states)
+                if reached:
+                    return values, True
+                branches.extend(values)
+            if node.child_by_field_name("alternative") is None:
+                branches.extend(states)
+            return unique(branches), False
+        if node.type in {"switch_statement", "switch_expression"}:
+            switch_block = next(
+                (child for child in node.named_children if child.type == "switch_block"), None
+            )
+            branches = []
+            for group in switch_block.named_children if switch_block is not None else ():
+                values, reached = sequence(list(group.named_children), states)
+                if reached:
+                    return values, True
+                branches.extend(values)
+            return unique(branches) or states, False
+        if node.type == "block":
+            return sequence(list(node.named_children), states)
+        return states, False
+
+    states, reached = sequence(list(body.named_children), [value_node])
+    if not reached:
+        return [value_node]
+    return unique(
+        expression
+        for state in states
+        for expression in _strategy1_topic_expression_nodes(
+            state, source, invocation, seen | {variable_name}
+        )
+    ) or [value_node]
+
+
 def _strategy1_topic_values(
     value_node, source: bytes, repo_root: Path, rel_path: str,
-    catalog: dict[str, str] | None,
+    catalog: dict[str, str] | None, invocation=None,
 ) -> list[tuple[str, bool, str | None]]:
-    """Resolve every branch of a Strategy1 topic conditional expression."""
-    if value_node is None or value_node.type != "ternary_expression":
-        return [_strategy1_topic_from_value(value_node, source, repo_root, rel_path, catalog)]
-    values: list[tuple[str, bool, str | None]] = []
-    for field in ("consequence", "alternative"):
-        branch = value_node.child_by_field_name(field)
-        if branch is not None:
-            values.extend(_strategy1_topic_values(branch, source, repo_root, rel_path, catalog))
-    return list(dict.fromkeys(values))
+    """Resolve every statically possible branch of a Strategy1 topic expression."""
+    expressions = _strategy1_topic_expression_nodes(value_node, source, invocation)
+    if not expressions:
+        expressions = [value_node]
+    return list(dict.fromkeys(
+        _strategy1_topic_from_value(expression, source, repo_root, rel_path, catalog)
+        for expression in expressions
+    ))
 
 
 def _kafka_listener_annotation_blocks(source: str) -> list[tuple[int, str]]:
@@ -230,11 +380,19 @@ def infer_kafka_topic_strategy1_endpoints(
                 and len(candidate_args) >= 2
             ):
                 strategy_send_nodes.append(candidate)
+        strategy_send_methods = [
+            method
+            for node in strategy_send_nodes
+            if (method := java_parser.enclosing(node, "method_declaration")) is not None
+        ]
         for match in _STRATEGY1_PRODUCER_RE.finditer(source):
             match_offset = len(source[:match.start()].encode("utf-8"))
             if any(
                 candidate.start_byte <= match_offset < candidate.end_byte
                 for candidate in strategy_send_nodes
+            ) or any(
+                method.start_byte <= match_offset < method.end_byte
+                for method in strategy_send_methods
             ):
                 continue
             line_no = source.count("\n", 0, match.start()) + 1
@@ -309,7 +467,7 @@ def infer_kafka_topic_strategy1_endpoints(
             ):
                 continue
             for topic, dynamic, topic_display in _strategy1_topic_values(
-                args[0], source_bytes, repo_root, rel_path, kafka_catalog
+                args[0], source_bytes, repo_root, rel_path, kafka_catalog, node
             ):
                 endpoint = _kafka_endpoint(
                     repo_root,

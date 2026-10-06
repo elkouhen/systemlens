@@ -43,6 +43,26 @@ navigation is sourced exclusively from the canonical `cluster_path` value.
 
 ### Camera interactions
 
+The selected call-graph tree is rendered as a separate hierarchical projection
+of the persisted call-graph snapshot. It does not mutate the architecture
+graph or the persisted node identifiers. Each tree occurrence receives a local
+render identifier, while its label and node actions resolve to the original
+microservice. The tree uses a deterministic depth-first expansion with a
+per-branch ancestry set, a configured depth limit, and a deterministic child
+order inherited from the exported edge order.
+
+Tree coordinates are assigned by depth and leaf order. Internal occurrences
+are centered over their visible children, then the complete logical canvas is
+scaled to the graph workspace. This gives repeated services independent cards
+and prevents shared-node identity from collapsing distinct branches. A cycle
+endpoint is retained as a terminal occurrence. Expansion is bounded by the
+configured depth, so rendering cost is O(o + e), where `o` is the number of
+expanded occurrences and `e` is the number of inspected outgoing edges.
+The tree projection is an independent overlay. Its background captures
+primary-pointer drags and translates the tree canvas, while service cards keep
+pointer interaction for selection. The graph context widget exposes the mode
+and controls without duplicating the tree hierarchy.
+
 The shared card size remains stable during navigation. Camera fitting starts
 from Sigma's native complete overview. In the plain graph, `All nodes` uses
 that state unchanged. In compound module and layer views, it measures the
@@ -199,4 +219,3 @@ synchronization. Snapshots are written under `output/playwright/` for visual
 inspection when a regression occurs.
 The browser launcher tries Playwright Chromium first, then Firefox and WebKit;
 an integration test is skipped only when all three engines fail to launch.
-

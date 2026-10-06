@@ -901,6 +901,15 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "Flux inter-services (${visible.length}/${interServiceCodeFlows.length})" in document
     assert "Tous les flux (${visible.length}/${codeFlows.length})" in document
     assert "Flux internes (${visible.length}/${localCodeFlows.length})" in document
+    assert 'id="analysis-mode-tree"' in document
+    assert "const edgeDisplayLabel = edge =>" in document
+    assert "graph-call-tree-edge-label" in document
+    assert "label.append(title);" in document
+    assert 'id="call-tree-depth"' in document
+    assert 'id="call-tree-direction"' in document
+    assert "function renderCallTreeOverlay()" in document
+    assert "const occurrence = { id: `call-tree-${occurrenceCount++}`" in document
+    assert "occurrence.cycle = true" in document
     assert "indexingIssueCount" in document
     assert "Qualité : aucun signal d’indexation" in document
 

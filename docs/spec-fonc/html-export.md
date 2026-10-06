@@ -91,6 +91,23 @@ level is the root set. Selecting a call graph keeps the root, arc order and
 trigger metadata visible; the export does not merge distinct flows into one
 undifferentiated edge.
 
+When a single code flow is selected, the graph context provides a second
+visualization mode, `Vue arbre`. It expands the selected directed call graph
+into a hierarchy of call occurrences. A microservice is therefore rendered
+once per occurrence in the expanded tree, so the same service may appear in
+several branches.
+
+The tree mode exposes a maximum depth of 3, 5 or 8 levels and an orientation
+of left-to-right or top-to-bottom. The default is depth 5 and left-to-right.
+When a branch reaches the configured depth, expansion stops. When a branch
+reaches a service already present in its current ancestry, the occurrence is
+rendered as a cycle endpoint and is not expanded further. The existing network
+visualization remains the default and is restored by `Vue réseau`.
+The upper graph context widget shows the selected view and its controls only;
+it does not repeat the call hierarchy. In `Vue arbre`, dragging the empty tree
+workspace pans the tree, while clicking a service occurrence keeps its
+selection action.
+
 The call-graph heading identifies the view without displaying a service or
 method sequence. Flow descriptions state the trigger and the observed effect
 without presenting an ordered method-call sequence.

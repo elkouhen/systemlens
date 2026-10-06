@@ -99,8 +99,10 @@ Each endpoint link and source evidence remain separate, and dynamic topics do
 not create a producer/consumer pairing. The HTML payload includes a warning
 status (`unknown`, `partial`, or `mismatch`) so consumers can distinguish
 evidence from a complete typed match. The Kafka AST resolver evaluates
-ternary topic expressions branch by branch, preserving one endpoint per
+conditional topic expressions branch by branch, preserving one endpoint per
 statically resolved branch so the call graph can retain every possible topic.
+It handles ternary expressions, topic variables assigned in `if/else` branches,
+and `switch` statements or expressions through one shared branch resolver.
 source-local conventionally named uppercase `static final` string constants
 and binary string concatenations through the bounded Java string evaluator. It
 returns a concrete topic only when every operand resolves; a partially dynamic
@@ -145,8 +147,9 @@ With `--strategy strategy1`, every method whose name starts with
 `envoyerMessageKafkaReply(topic, payload)`. A first argument shaped as
 `kafkaProperties.getTopics().getXxx()` resolves only through an exact
 `kafka.yml` or `kafka.yaml` `topics.<key>.nom` declaration. A conditional first
-argument with two such accessors creates one producer fact for each statically
-resolved branch with an exact catalog match. Other values use the conservative
+argument creates one producer fact for each statically resolved branch with an
+exact catalog match. This includes a ternary expression and a topic variable
+assigned in `if/else` or `switch` branches. Other values use the conservative
 topic resolver and remain dynamic unless they match an exact declared value.
 For listeners, the extractor inspects only the `topics` attribute. Only
 `${kafka.topics.<key>.nom}` placeholders in that attribute create consume

@@ -14,6 +14,8 @@
     const codeFlowFilterReset = document.getElementById("code-flow-filter-reset");
     const codeFlowsTitle = document.getElementById("code-flows-title");
     const codeFlowCompare = document.getElementById("code-flow-compare");
+    let callTreePan = null;
+    let callTreePanBound = false;
     function codeFlowStepLabel(kind) {
       return ({
         http_entry: "Entrée HTTP",
@@ -181,6 +183,215 @@
       nodeIdsByResource.get(`${kind}:${name}`)
     );
     const nodeIdForEndpoint = endpointId => uniqueNodeId(nodeIdsByEndpoint.get(endpointId));
+
+    function renderCallTreeOverlay() {
+      if (!graphCallTreeOverlay) return;
+      if (!callTreePanBound) {
+        callTreePanBound = true;
+        const finishCallTreePan = event => {
+          if (!callTreePan || event.pointerId !== callTreePan.pointerId) return;
+          callTreePan = null;
+          window.removeEventListener("pointermove", moveCallTreePan, true);
+          window.removeEventListener("pointerup", finishCallTreePan, true);
+          window.removeEventListener("pointercancel", finishCallTreePan, true);
+          try { graphCallTreeOverlay.releasePointerCapture?.(event.pointerId); } catch (_error) { /* overlay was rebuilt during the gesture */ }
+        };
+        const moveCallTreePan = event => {
+          if (!callTreePan || event.pointerId !== callTreePan.pointerId) return;
+          const canvas = graphCallTreeOverlay.querySelector(".graph-call-tree-canvas");
+          if (!canvas) return;
+          canvas.style.left = `${callTreePan.startLeft + event.clientX - callTreePan.startX}px`;
+          canvas.style.top = `${callTreePan.startTop + event.clientY - callTreePan.startY}px`;
+        };
+        graphCallTreeOverlay.addEventListener("pointerdown", event => {
+          if (event.button !== 0 || event.target.closest?.(".graph-call-tree-node")) return;
+          const canvas = graphCallTreeOverlay.querySelector(".graph-call-tree-canvas");
+          if (!canvas) return;
+          callTreePan = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            startLeft: Number.parseFloat(canvas.style.left) || 0,
+            startTop: Number.parseFloat(canvas.style.top) || 0,
+          };
+          event.preventDefault();
+          event.stopPropagation();
+          graphCallTreeOverlay.setPointerCapture?.(event.pointerId);
+          window.addEventListener("pointermove", moveCallTreePan, true);
+          window.addEventListener("pointerup", finishCallTreePan, true);
+          window.addEventListener("pointercancel", finishCallTreePan, true);
+        }, true);
+      }
+      const active = Boolean(graphState.selectedCodeFlowId)
+        && !graphState.comparisonMode
+        && graphState.viewMode === "call-graph";
+      const treeActive = active && graphState.callGraphDisplayMode === "tree";
+      graphCallTreeOverlay.hidden = !treeActive;
+      document.getElementById("graph")?.classList.toggle("is-call-tree-hidden", treeActive);
+      [graphLayersOverlay, graphGroupsOverlay, portPathOverlay, nodeLabelOverlay]
+        .forEach(element => element?.classList.toggle("is-call-tree-hidden", treeActive));
+      const treeButton = document.getElementById("analysis-mode-tree");
+      const depthControl = document.getElementById("call-tree-depth-control");
+      const directionControl = document.getElementById("call-tree-direction-control");
+      if (treeButton) {
+        treeButton.hidden = !active;
+        treeButton.setAttribute("aria-pressed", String(treeActive));
+        treeButton.textContent = treeActive ? "Vue réseau" : "Vue arbre";
+      }
+      if (depthControl) depthControl.hidden = !treeActive;
+      if (directionControl) directionControl.hidden = !treeActive;
+      if (!treeActive) {
+        graphCallTreeOverlay.replaceChildren();
+        return;
+      }
+      const selectedFlows = (graphData.code_flows || []).filter(flow => (
+        (graphState.selectedCodeFlowIds?.length
+          ? graphState.selectedCodeFlowIds
+          : [graphState.selectedCodeFlowId]).includes(flow.id)
+      ));
+      const callGraph = callGraphForFlows(selectedFlows);
+      const edges = (callGraph?.edges || []).filter(edge => edge.source !== edge.target);
+      const order = callGraph?.node_order || callGraph?.nodes || [];
+      const nodes = [...new Set([...order, ...edges.flatMap(edge => [edge.source, edge.target])])];
+      const childrenBySource = new Map();
+      const incoming = new Set();
+      edges.forEach((edge, index) => {
+        const child = { edge, index };
+        childrenBySource.set(edge.source, [...(childrenBySource.get(edge.source) || []), child]);
+        incoming.add(edge.target);
+      });
+      const roots = nodes.filter(node => !incoming.has(node));
+      const rootNames = roots.length ? roots : nodes.slice(0, 1);
+      let occurrenceCount = 0;
+      const maxDepth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 5));
+      const makeOccurrence = (name, depth, ancestors) => {
+        const occurrence = { id: `call-tree-${occurrenceCount++}`, name, depth, children: [], cycle: false };
+        if (ancestors.has(name)) {
+          occurrence.cycle = true;
+          return occurrence;
+        }
+        if (depth >= maxDepth) return occurrence;
+        const nextAncestors = new Set(ancestors).add(name);
+        (childrenBySource.get(name) || []).forEach(({ edge, index }) => {
+          const child = makeOccurrence(edge.target, depth + 1, nextAncestors);
+          child.edge = edge;
+          child.edgeIndex = index;
+          occurrence.children.push(child);
+        });
+        return occurrence;
+      };
+      const rootsTree = rootNames.map(name => makeOccurrence(name, 0, new Set()));
+      if (!rootsTree.length) {
+        graphCallTreeOverlay.textContent = "Aucun appel interservice résolu.";
+        return;
+      }
+      let leafIndex = 0;
+      const assignPositions = occurrence => {
+        occurrence.children.forEach(assignPositions);
+        occurrence.x = occurrence.depth;
+        occurrence.y = occurrence.children.length
+          ? occurrence.children.reduce((sum, child) => sum + child.y, 0) / occurrence.children.length
+          : leafIndex++;
+      };
+      rootsTree.forEach(assignPositions);
+      const allOccurrences = [];
+      const collect = occurrence => {
+        allOccurrences.push(occurrence);
+        occurrence.children.forEach(collect);
+      };
+      rootsTree.forEach(collect);
+      const direction = graphState.callTreeDirection === "tb" ? "tb" : "lr";
+      const gapX = 190;
+      const gapY = 105;
+      const cardWidth = 110;
+      const cardHeight = 70;
+      const logicalWidth = direction === "lr"
+        ? (Math.max(...allOccurrences.map(item => item.x)) + 1) * gapX
+        : Math.max(1, leafIndex) * gapX;
+      const logicalHeight = direction === "lr"
+        ? Math.max(1, leafIndex) * gapY
+        : (Math.max(...allOccurrences.map(item => item.x)) + 1) * gapY;
+      const viewport = graphCallTreeOverlay.getBoundingClientRect();
+      const scale = Math.min(1, (viewport.width - 32) / logicalWidth, (viewport.height - 32) / logicalHeight);
+      const offsetX = Math.max(16, (viewport.width - logicalWidth * scale) / 2);
+      const offsetY = Math.max(16, (viewport.height - logicalHeight * scale) / 2);
+      const position = occurrence => direction === "lr"
+        ? { x: occurrence.x * gapX, y: occurrence.y * gapY }
+        : { x: occurrence.y * gapX, y: occurrence.x * gapY };
+      const canvas = document.createElement("div");
+      canvas.className = "graph-call-tree-canvas";
+      canvas.style.width = `${logicalWidth}px`;
+      canvas.style.height = `${logicalHeight}px`;
+      canvas.style.left = `${offsetX}px`;
+      canvas.style.top = `${offsetY}px`;
+      canvas.style.transform = `scale(${scale})`;
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("width", String(logicalWidth));
+      svg.setAttribute("height", String(logicalHeight));
+      svg.setAttribute("aria-hidden", "true");
+      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      defs.innerHTML = '<marker id="graph-call-tree-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#7c3aed"></path></marker>';
+      svg.append(defs);
+      const edgeDisplayLabel = edge => {
+        const protocol = edge.kind === "kafka" ? "Kafka" : edge.kind === "rest" ? "HTTP" : edge.kind || "Appel";
+        const prefix = edge.order ? `#${edge.order} · ` : "";
+        const label = edge.label || protocol;
+        const text = `${prefix}${label} · ${protocol}`;
+        return text.length > 58 ? `${text.slice(0, 55)}…` : text;
+      };
+      allOccurrences.forEach(occurrence => {
+        const source = position(occurrence);
+        occurrence.children.forEach(child => {
+          const target = position(child);
+          const labelX = direction === "lr"
+            ? (source.x + cardWidth + target.x) / 2
+            : (source.x + target.x + cardWidth) / 2;
+          const labelY = direction === "lr"
+            ? (source.y + target.y + cardHeight) / 2 - 7
+            : (source.y + cardHeight + target.y) / 2 - 7;
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          if (direction === "lr") {
+            const startX = source.x + cardWidth;
+            const endX = target.x;
+            const middleX = (startX + endX) / 2;
+            line.setAttribute("d", `M ${startX} ${source.y + cardHeight / 2} C ${middleX} ${source.y + cardHeight / 2}, ${middleX} ${target.y + cardHeight / 2}, ${endX} ${target.y + cardHeight / 2}`);
+          } else {
+            const startY = source.y + cardHeight;
+            const endY = target.y;
+            const middleY = (startY + endY) / 2;
+            line.setAttribute("d", `M ${source.x + cardWidth / 2} ${startY} C ${source.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${endY}`);
+          }
+          line.classList.add("graph-call-tree-edge");
+          svg.append(line);
+          const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          label.classList.add("graph-call-tree-edge-label");
+          label.setAttribute("x", String(labelX));
+          label.setAttribute("y", String(labelY));
+          label.textContent = edgeDisplayLabel(child.edge);
+          const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+          title.textContent = `${child.edge.order ? `Arc #${child.edge.order} · ` : ""}${child.edge.label || child.edge.kind || "Appel"}`;
+          label.append(title);
+          svg.append(label);
+        });
+      });
+      canvas.append(svg);
+      allOccurrences.forEach(occurrence => {
+        const node = document.createElement("button");
+        node.type = "button";
+        node.className = `graph-call-tree-node${occurrence.cycle ? " is-cycle" : ""}`;
+        const original = nodeIdForCodeFlowResource(occurrence.name, "microservice");
+        node.textContent = occurrence.name;
+        node.title = occurrence.cycle
+          ? `${occurrence.name} · cycle détecté`
+          : `${occurrence.name} · occurrence ${occurrence.id}`;
+        const point = position(occurrence);
+        node.style.left = `${point.x}px`;
+        node.style.top = `${point.y}px`;
+        node.addEventListener("click", () => { if (original) selectNode(original); });
+        canvas.append(node);
+      });
+      graphCallTreeOverlay.replaceChildren(canvas);
+    }
     const uniqueTopologyLink = (endpointId, source) => {
       const candidates = (graphLinksByEndpoint.get(endpointId) || []).filter(candidate => (
         candidate.link.source === source

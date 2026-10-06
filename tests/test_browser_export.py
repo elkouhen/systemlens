@@ -1182,6 +1182,16 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert page.locator(".graph-call-path").count() >= 1
         assert page.locator("#graph-port-paths .graph-arc-hit-area").count() >= 1
         assert page.locator("#graph-port-paths .graph-arc-hit-area").first.get_attribute("title")
+        page.locator("#analysis-mode-tree").click()
+        page.locator("#graph-call-tree").wait_for(state="visible")
+        assert page.locator("#graph-call-tree .graph-call-tree-node").count() >= 3
+        assert page.locator("#graph").get_attribute("class") == "is-call-tree-hidden"
+        assert page.locator("#call-tree-depth-control").is_visible()
+        page.locator("#call-tree-depth").select_option("3")
+        page.locator("#call-tree-direction").select_option("tb")
+        assert page.locator("#graph-call-tree .graph-call-tree-node").count() >= 3
+        page.locator("#analysis-mode-tree").click()
+        page.locator("#graph-call-tree").wait_for(state="hidden")
         page.keyboard.press("Escape")
         assert page.locator("#graph-flow-tooltips .graph-arc-tooltip").count() == 0
         page.locator("#graph-port-paths .graph-arc-hit-area").first.click()

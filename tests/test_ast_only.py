@@ -628,6 +628,83 @@ record OrderCreated(String id) {}
     ]
 
 
+def test_strategy1_if_else_topic_variable_creates_one_endpoint_per_branch(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  Orders_Created:\n    nom: orders.created\n  Orders_Retry:\n    nom: orders.retry\n  Orders_Dead:\n    nom: orders.dead\n",
+        encoding="utf-8",
+    )
+    source = tmp_path / "src/main/java/Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class Publisher {
+  void publish(OrderCreated event, boolean retry, boolean dead) {
+    String topic;
+    if (retry) {
+      topic = kafkaProperties.getTopics().getOrders_Retry();
+    } else if (dead) {
+      topic = kafkaProperties.getTopics().getOrders_Dead();
+    } else {
+      topic = kafkaProperties.getTopics().getOrders_Created();
+    }
+    kafkaService.envoyerMessageKafkaReply(topic, event);
+  }
+}
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_topic_strategy1_endpoints(
+        tmp_path, ["src/main/java/Publisher.java"]
+    )
+
+    assert sorted(endpoint.topic for endpoint in endpoints) == [
+        "orders.created",
+        "orders.dead",
+        "orders.retry",
+    ]
+
+
+def test_strategy1_switch_topic_variable_creates_one_endpoint_per_branch(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  Orders_Created:\n    nom: orders.created\n  Orders_Retry:\n    nom: orders.retry\n  Orders_Dead:\n    nom: orders.dead\n",
+        encoding="utf-8",
+    )
+    source = tmp_path / "src/main/java/Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class Publisher {
+  void publish(OrderCreated event, int state) {
+    String topic;
+    switch (state) {
+      case 1:
+        topic = kafkaProperties.getTopics().getOrders_Retry();
+        break;
+      case 2:
+        topic = kafkaProperties.getTopics().getOrders_Dead();
+        break;
+      default:
+        topic = kafkaProperties.getTopics().getOrders_Created();
+    }
+    kafkaService.envoyerMessageKafkaReply(topic, event);
+  }
+}
+record OrderCreated(String id) {}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_topic_strategy1_endpoints(
+        tmp_path, ["src/main/java/Publisher.java"]
+    )
+
+    assert sorted(endpoint.topic for endpoint in endpoints) == [
+        "orders.created",
+        "orders.dead",
+        "orders.retry",
+    ]
+
+
 def test_strategy1_resolves_flux_enum_topic_from_kafka_yaml(tmp_path: Path) -> None:
     (tmp_path / "kafka.yml").write_text(
         "topics:\n  CONVERSION_UNITAIRE:\n    nom: conversion.unitaire\n",

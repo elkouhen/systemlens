@@ -33,6 +33,7 @@
       graphState.selectedCodeFlowIds = [];
       graphState.comparisonMode = false;
       graphState.viewMode = "architecture";
+      graphState.callGraphDisplayMode = "network";
       graphState.codeFlowRootNodeId = null;
       graphState.codeFlowTrigger = null;
       graphState.codeFlowTreeCoordinates = new Map();
@@ -500,6 +501,7 @@
         .map(flow => flow.id);
       graphState.comparisonMode = graphState.selectedCodeFlowIds.length > 1;
       graphState.viewMode = context.codeFlow ? "call-graph" : "architecture";
+      graphState.callGraphDisplayMode = "network";
       graphState.selectedCallGraphEdgeKey = null;
       graphCanvas.removeAttribute("data-selected-call-graph-arc");
       graphState.showAllCodeFlowPorts = false;

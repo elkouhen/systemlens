@@ -258,15 +258,23 @@
   <div id="graph-mode-context" class="graph-mode-context" hidden>
     <div id="graph-mode-context-copy" class="graph-mode-context-copy">
       <strong id="graph-mode-context-title"></strong>
-      <span id="graph-mode-context-path" class="graph-mode-context-path"></span>
       <span id="graph-mode-context-help"></span>
     </div>
-    <button id="analysis-mode-center" class="graph-action-label graph-secondary-action" type="button">Centrer</button>
-    <button id="analysis-mode-back" class="graph-action-label graph-secondary-action" type="button" hidden>Retour aux flux</button>
-    <button id="analysis-mode-architecture" class="graph-action-label graph-secondary-action" type="button" hidden>Architecture</button>
-    <button id="analysis-ports-toggle" class="graph-action-label graph-secondary-action" type="button" aria-pressed="false" hidden>Afficher tous les ports</button>
-    <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" hidden>Réinitialiser l’analyse</button>
-    <button id="analysis-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy">Réduire</button>
+    <div class="graph-mode-context-actions">
+      <button id="analysis-mode-center" class="graph-action-label graph-secondary-action" type="button">Centrer</button>
+      <button id="analysis-mode-back" class="graph-action-label graph-secondary-action" type="button" hidden>Retour aux flux</button>
+      <button id="analysis-mode-architecture" class="graph-action-label graph-secondary-action" type="button" hidden>Architecture</button>
+      <button id="analysis-mode-tree" class="graph-action-label graph-secondary-action" type="button" aria-pressed="false" hidden>Vue arbre</button>
+      <label id="call-tree-depth-control" class="graph-tree-control" hidden>Profondeur
+        <select id="call-tree-depth" aria-label="Profondeur maximale de l’arbre d’appels"><option value="3">3</option><option value="5" selected>5</option><option value="8">8</option></select>
+      </label>
+      <label id="call-tree-direction-control" class="graph-tree-control" hidden>Orientation
+        <select id="call-tree-direction" aria-label="Orientation de l’arbre d’appels"><option value="lr" selected>Gauche à droite</option><option value="tb">Haut en bas</option></select>
+      </label>
+      <button id="analysis-ports-toggle" class="graph-action-label graph-secondary-action" type="button" aria-pressed="false" hidden>Afficher tous les ports</button>
+      <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" hidden>Réinitialiser l’analyse</button>
+      <button id="analysis-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy">Réduire</button>
+    </div>
   </div>
   <details id="graph-legend" class="legend" aria-label="Légende du graphe">
     <summary>Légende</summary>
@@ -294,6 +302,7 @@
   <div id="graph-groups" aria-hidden="true"></div>
   <svg id="graph-port-paths" aria-hidden="true"></svg>
   <div id="graph-node-labels" aria-hidden="true"></div>
+  <div id="graph-call-tree" aria-label="Arbre hiérarchique des appels" hidden></div>
   <div id="graph-flow-tooltips" aria-hidden="true"></div>
   <p id="graph-flow-status" hidden></p>
   <div id="inspector-modal" class="inspector-modal" role="dialog" aria-modal="true" aria-labelledby="inspector-title" hidden>

@@ -63,6 +63,20 @@
     :root[data-theme="dark"] .graph-local-port-path { stroke: #fbbf24; }
     :root[data-theme="dark"] .graph-local-port-path.is-code-flow-path { stroke: #c4b5fd; }
     #graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
+    #graph-call-tree { position: fixed; left: var(--workspace-left, 0px); right: var(--workspace-right, 0px); top: var(--workspace-top, 0px); bottom: var(--workspace-bottom, 0px); z-index: 5; overflow: hidden; background: color-mix(in srgb, #f8fafc 86%, transparent); cursor: grab; touch-action: none; }
+    #graph-call-tree:active { cursor: grabbing; }
+    #graph-call-tree[hidden] { display: none; }
+    #graph.is-call-tree-hidden, #graph-layers.is-call-tree-hidden, #graph-groups.is-call-tree-hidden, #graph-port-paths.is-call-tree-hidden, #graph-node-labels.is-call-tree-hidden { visibility: hidden; }
+    .graph-call-tree-canvas { position: absolute; transform-origin: 0 0; pointer-events: none; }
+    .graph-call-tree-edge { fill: none; stroke: #7c3aed; stroke-width: 2; opacity: .8; marker-end: url(#graph-call-tree-arrow); }
+    .graph-call-tree-edge-label { fill: #4338ca; font-size: 10px; font-weight: 800; paint-order: stroke; stroke: #f8fafc; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; }
+    .graph-call-tree-node { position: absolute; width: 110px; height: 70px; display: grid; place-items: center; padding: 8px; border: 1px solid #7c3aed; border-radius: 8px; color: #172033; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .14); font-size: 11px; font-weight: 750; line-height: 1.15; text-align: center; overflow-wrap: anywhere; cursor: pointer; pointer-events: auto; }
+    .graph-call-tree-node.is-cycle { border-color: #d97706; color: #92400e; background: #fffbeb; }
+    .graph-tree-control { display: inline-flex; align-items: center; gap: 4px; color: #3348b8; font-size: 10px; font-weight: 750; white-space: nowrap; }
+    .graph-tree-control select { height: 26px; padding: 0 4px; border: 1px solid #a5b4fc; border-radius: 5px; color: #3348b8; background: #fff; font: inherit; }
+    :root[data-theme="dark"] #graph-call-tree { background: color-mix(in srgb, #0f172a 88%, transparent); }
+    :root[data-theme="dark"] .graph-call-tree-node { color: #e2e8f0; background: #172033; }
+    :root[data-theme="dark"] .graph-call-tree-edge-label { fill: #c4b5fd; stroke: #0f172a; }
     /* Only flow tooltips rise over fixed widgets; graph cards stay below. */
     #graph-flow-tooltips { position: fixed; inset: 0; z-index: 11; pointer-events: none; overflow: visible; }
     #graph-flow-status { position: fixed; z-index: 10; top: 16px; left: 50%; max-width: min(460px, calc(100vw - 32px)); margin: 0; padding: 8px 11px; transform: translateX(-50%); border: 1px solid #f59e0b; border-radius: 8px; color: #78350f; background: #fffbeb; box-shadow: 0 5px 16px rgba(15, 23, 42, .18); font-size: 11px; font-weight: 700; line-height: 1.35; text-align: center; pointer-events: none; }

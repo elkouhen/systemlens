@@ -7,9 +7,11 @@ An endpoint has a role (`serve`/`call` for REST, `produce`/`consume` for a topic
 a system, a topic (`METHOD /path` for REST), source location, framework and
 optional module, qualified name and Java message type. A value that cannot be
 resolved statically is flagged `topic_dynamic=true`; it is never fabricated.
-When a Kafka send uses a Java ternary topic expression, extraction keeps both
-branches as separate topic endpoints. The call graph can therefore point to
-both statically resolved topics.
+When a Kafka send uses a conditional Java topic expression, extraction keeps
+each statically resolved branch as a separate topic endpoint. This covers
+ternary expressions, topic variables assigned in `if/else` branches, and
+`switch` statements or expressions. The call graph can therefore point to
+every statically resolved topic.
 
 With `--strategy strategy1`, the extractor recognizes generated OpenAPI client calls when an `ApiClient`
 receiver invokes `invokeAPI` with a literal route and an `HttpMethod` enum. It
@@ -172,7 +174,8 @@ that environment prefix before persisting and matching the physical topic.
 An absent, ambiguous or non-matching declaration remains dynamic and does not
 receive a derived name. A conditional topic expression creates one producer
 fact for each statically resolved branch when each branch has an exact catalog
-match.
+match. The same branch resolver handles direct expressions and variables
+assigned by `if/else` or `switch` control flow.
 Kafka topic expressions also resolve source-local conventionally named uppercase
 `static final` string constants and concatenations whose operands are all
 statically resolvable.

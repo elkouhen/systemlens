@@ -95,6 +95,7 @@
     const graphGroupsOverlay = document.getElementById("graph-groups");
     const portPathOverlay = document.getElementById("graph-port-paths");
     const nodeLabelOverlay = document.getElementById("graph-node-labels");
+    const graphCallTreeOverlay = document.getElementById("graph-call-tree");
     const flowTooltipOverlay = document.getElementById("graph-flow-tooltips");
     const graphFlowStatus = document.getElementById("graph-flow-status");
     const showProjectGroups = document.getElementById("show-project-groups");
@@ -220,6 +221,9 @@
       fitRequest: 0,
       maximumCollisionFreeRatio: 100,
       renderMode: "cards",
+      callGraphDisplayMode: "network",
+      callTreeDepth: 5,
+      callTreeDirection: "lr",
     };
     function updateGraphState(patch) {
       Object.assign(graphState, patch);

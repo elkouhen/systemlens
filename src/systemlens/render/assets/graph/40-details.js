@@ -43,6 +43,7 @@
         graphState.selectedCodeFlowId = null;
         graphState.selectedCodeFlowIds = [];
         graphState.comparisonMode = false;
+        graphState.callGraphDisplayMode = "network";
         graphState.selectedCallGraphEdgeKey = null;
         graphState.showAllCodeFlowPorts = false;
         graphState.pathMicroserviceOrder = new Map();
