@@ -25,6 +25,20 @@
     };
     const syncSelectedCallGraphArcVisual = () => {
       const edgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc;
+      const selectedNodeIds = new Set();
+      if (edgeKey) {
+        const selectedPath = [...document.querySelectorAll(
+          ".graph-call-path:not(.graph-arc-hit-area)"
+        )].find(element => element.dataset.arcKey === edgeKey);
+        if (selectedPath?.dataset.sourceNode) selectedNodeIds.add(selectedPath.dataset.sourceNode);
+        if (selectedPath?.dataset.targetNode) selectedNodeIds.add(selectedPath.dataset.targetNode);
+      }
+      document.querySelectorAll(".graph-node-card-label").forEach(element => {
+        element.classList.toggle(
+          "is-call-graph-arc-selected",
+          selectedNodeIds.has(element.dataset.nodeId),
+        );
+      });
       if (!edgeKey) {
         if (selectedCallGraphArcVisualTimer) {
           clearInterval(selectedCallGraphArcVisualTimer);
@@ -107,6 +121,11 @@
           candidate.path.style.removeProperty("filter");
         }
       });
+      syncSelectedCallGraphArcVisual();
+      // SVG paints later siblings on top. Move the active arc, its label and
+      // its hit area to the end of the overlay so the selected relation stays
+      // visible when routes overlap.
+      portPathOverlay.append(view.path, view.arcLabel, view.hitArea);
       view.showTooltip();
     };
     if (!window.__systemlensCallGraphArcKeyboardNavigation) {
@@ -1871,6 +1890,8 @@
           path.classList.add("graph-call-path");
           if (link.kind === "rest") path.classList.add("is-rest");
           path.dataset.arcKey = resolvedEdgeKey;
+          path.dataset.sourceNode = link.source;
+          path.dataset.targetNode = link.target;
           if (resolvedEdgeKey === currentSelectedCallGraphEdgeKey) {
             path.classList.add("is-keyboard-selected");
           }
@@ -1886,6 +1907,8 @@
           arcLabel.classList.add("graph-call-label");
           if (link.kind === "rest") arcLabel.classList.add("is-rest");
           arcLabel.dataset.arcKey = resolvedEdgeKey;
+          arcLabel.dataset.sourceNode = link.source;
+          arcLabel.dataset.targetNode = link.target;
           if (resolvedEdgeKey === currentSelectedCallGraphEdgeKey) {
             arcLabel.classList.add("is-keyboard-selected");
           }
@@ -1924,6 +1947,9 @@
           if (resolvedEdgeKey === currentSelectedCallGraphEdgeKey) {
             hitArea.classList.add("is-keyboard-selected");
           }
+          hitArea.dataset.arcKey = resolvedEdgeKey;
+          hitArea.dataset.sourceNode = link.source;
+          hitArea.dataset.targetNode = link.target;
           hitArea.addEventListener("pointerenter", () => {
             path.classList.add("is-analysis-hovered");
             arcLabel.classList.add("is-analysis-hovered");

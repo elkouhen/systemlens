@@ -1349,6 +1349,9 @@
       graphState.relatedEdges = relatedEdges;
     }
     function selectNode(id, preservePath = false) {
+      // A focused flow graph is navigated with its flow arcs and camera only.
+      // Do not let a microservice click leave the flow projection.
+      if (graphState.selectedCodeFlowId) return;
       if (!preservePath && !pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;

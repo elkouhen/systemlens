@@ -1459,6 +1459,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "graphCanvas.removeEventListener(\"wheel\", handleGraphWheel)" in document
     assert "Math.max(-120, Math.min(120, delta)) * .0006" in document
     assert "Keep the graph point under the cursor fixed" in document
+    assert "if (graphState.selectedCodeFlowId) return;" in document
+    assert "is-call-graph-arc-selected" in document
+    assert "path.dataset.sourceNode = link.source;" in document
+    assert "portPathOverlay.append(view.path, view.arcLabel, view.hitArea);" in document
     assert "const GRAPH_CARD_SCALE = 1" in document
     assert "const GRAPH_CARD_WIDTH = 110 * GRAPH_CARD_SCALE" in document
     assert "const GRAPH_CARD_HEIGHT = 70 * GRAPH_CARD_SCALE" in document
