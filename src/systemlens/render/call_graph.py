@@ -24,6 +24,11 @@ class _CallGraphIndex:
     edges_by_output: dict[str, list[GraphEdge]]
     trigger_flow_ids_by_endpoint: dict[str, list[str]]
     trigger_flow_ids: set[str]
+    default_root_flow_ids: tuple[str, ...]
+    triggers: dict[str, list[dict[str, object]]]
+    flow_transitions: dict[
+        str, tuple[tuple[str, tuple[tuple[GraphEdge, tuple[str, ...]], ...]], ...]
+    ]
 
 
 def _index_call_graph_inputs(
@@ -101,10 +106,65 @@ def _index_call_graph_inputs(
         if endpoint_id:
             trigger_flow_ids_by_endpoint.setdefault(endpoint_id, []).append(flow.id)
 
+    incoming_flow_ids = {
+        target_flow_id
+        for output_endpoint_ids in output_endpoint_ids_by_flow.values()
+        for endpoint_id in output_endpoint_ids
+        for edge in edges_by_output.get(endpoint_id, [])
+        for target_flow_id in trigger_flow_ids_by_endpoint.get(
+            edge.to_endpoint.id if edge.to_endpoint is not None else "", []
+        )
+    }
+    default_root_flow_ids = tuple(sorted(trigger_flow_ids - incoming_flow_ids))
+    triggers: dict[str, list[dict[str, object]]] = {}
+    for flow in ordered_flows:
+        if not flow.steps or flow.steps[0].kind not in trigger_kinds:
+            continue
+        trigger = flow.steps[0]
+        trigger_service = (
+            service_by_endpoint.get(trigger.endpoint_id)
+            if trigger.endpoint_id else flow.module
+        )
+        if trigger_service:
+            triggers.setdefault(trigger_service, []).append({
+                "flow_id": flow.id,
+                "kind": trigger.kind,
+                "name": trigger.name,
+                "endpoint_id": trigger.endpoint_id,
+            })
+
+    flow_transitions: dict[
+        str, tuple[tuple[str, tuple[tuple[GraphEdge, tuple[str, ...]], ...]], ...]
+    ] = {}
+    for flow in ordered_flows:
+        if not flow.module:
+            continue
+        transitions: list[tuple[str, tuple[tuple[GraphEdge, tuple[str, ...]], ...]]] = []
+        for endpoint_id in sorted(
+            output_endpoint_ids_by_flow.get(flow.id, set()),
+            key=lambda item: (output_order_by_endpoint[item], item),
+        ):
+            if service_by_endpoint.get(endpoint_id) != flow.module:
+                continue
+            endpoint_transitions: list[tuple[GraphEdge, tuple[str, ...]]] = []
+            for edge in edges_by_output.get(endpoint_id, []):
+                target_endpoint_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
+                target_module = service_by_endpoint.get(target_endpoint_id) if target_endpoint_id else None
+                if not target_module or target_module == flow.module:
+                    continue
+                target_flow_ids = tuple(
+                    trigger_flow_ids_by_endpoint.get(target_endpoint_id or "", [])
+                )
+                endpoint_transitions.append((edge, target_flow_ids))
+            if endpoint_transitions:
+                transitions.append((endpoint_id, tuple(endpoint_transitions)))
+        flow_transitions[flow.id] = tuple(transitions)
+
     return _CallGraphIndex(
         endpoint_by_id, service_by_endpoint, service_order, ordered_flows, flow_by_id,
         output_endpoint_ids_by_flow, output_order_by_endpoint, edges_by_output,
-        trigger_flow_ids_by_endpoint, trigger_flow_ids,
+        trigger_flow_ids_by_endpoint, trigger_flow_ids, default_root_flow_ids,
+        triggers, flow_transitions,
     )
 
 
@@ -128,11 +188,8 @@ def _networkx_call_graph(
     traversal_tree = nx.MultiDiGraph()
     seen_relation_keys: set[tuple[str, str, str, str | None]] = set()
     relation_discovery_order = 0
-    ordered_flows = index.ordered_flows
     flow_by_id = index.flow_by_id
-    output_endpoint_ids_by_flow = index.output_endpoint_ids_by_flow
-    output_order_by_endpoint = index.output_order_by_endpoint
-    trigger_kinds = {"http_entry", "message_entry", "cron_entry"}
+    flow_transitions = index.flow_transitions
 
     def add_relation(edge: GraphEdge) -> tuple[str, str, str, str | None] | None:
         nonlocal relation_discovery_order
@@ -159,22 +216,13 @@ def _networkx_call_graph(
         relation_discovery_order += 1
         return key
 
-    edges_by_output = index.edges_by_output
-    trigger_flow_ids_by_endpoint = index.trigger_flow_ids_by_endpoint
     trigger_flow_ids = index.trigger_flow_ids
+    triggers = index.triggers
 
-    incoming_flow_ids = {
-        target_flow_id
-        for output_endpoint_ids in output_endpoint_ids_by_flow.values()
-        for endpoint_id in output_endpoint_ids
-        for edge in edges_by_output.get(endpoint_id, [])
-        for target_flow_id in trigger_flow_ids_by_endpoint.get(
-            edge.to_endpoint.id if edge.to_endpoint is not None else "", []
-        )
-    }
-    default_root_flow_ids = trigger_flow_ids - incoming_flow_ids
     frontier = sorted(
-        root_flow_ids if root_flow_ids is not None else default_root_flow_ids
+        root_flow_ids
+        if root_flow_ids is not None
+        else index.default_root_flow_ids
     )
     if not frontier:
         # A cycle without an external trigger has no natural flow root.
@@ -206,32 +254,18 @@ def _networkx_call_graph(
                 continue
             module = current_flow.module
             graph.add_node(module)
-            for endpoint_id in sorted(
-                output_endpoint_ids_by_flow.get(flow_id, set()),
-                key=lambda endpoint_id: (output_order_by_endpoint[endpoint_id], endpoint_id),
-            ):
+            for endpoint_id, edge_transitions in flow_transitions.get(flow_id, ()):
                 if endpoint_id in expanded_output_ids:
                     continue
                 expanded_output_ids.add(endpoint_id)
-                if service_by_endpoint.get(endpoint_id) != module:
-                    continue
-                for edge in edges_by_output.get(endpoint_id, []):
-                    target_endpoint_id = (
-                        edge.to_endpoint.id if edge.to_endpoint is not None else None
-                    )
-                    target_module = (
-                        service_by_endpoint.get(target_endpoint_id)
-                        if target_endpoint_id
-                        else None
-                    )
-                    if not target_module or target_module == module:
-                        continue
+                for edge, target_flow_ids in edge_transitions:
                     graph_edge_key = add_relation(edge)
                     if graph_edge_key is None:
                         continue
-                    target_flow_ids = trigger_flow_ids_by_endpoint.get(
-                        target_endpoint_id or "", []
-                    )
+                    target_endpoint = edge.to_endpoint
+                    if target_endpoint is None:
+                        continue
+                    target_module = service_by_endpoint[target_endpoint.id]
                     if target_flow_ids and (
                         target_module not in traversal_tree
                         and target_module not in tree_parent_modules
@@ -316,23 +350,6 @@ def _networkx_call_graph(
                 if traversal_tree.has_edge(module, _target, key=graph_edge_key):
                     traversal_tree.edges[module, _target, graph_edge_key]["order"] = next_edge_order
                 next_edge_order += 1
-
-    triggers: dict[str, list[dict[str, object]]] = {}
-    for flow in ordered_flows:
-        if not flow.steps or flow.steps[0].kind not in trigger_kinds:
-            continue
-        trigger = flow.steps[0]
-        trigger_service = (
-            service_by_endpoint.get(trigger.endpoint_id)
-            if trigger.endpoint_id else flow.module
-        )
-        if trigger_service:
-            triggers.setdefault(trigger_service, []).append({
-                "flow_id": flow.id,
-                "kind": trigger.kind,
-                "name": trigger.name,
-                "endpoint_id": trigger.endpoint_id,
-            })
 
     if nx.is_directed_acyclic_graph(graph):
         component_order = list(nx.lexicographical_topological_sort(graph))

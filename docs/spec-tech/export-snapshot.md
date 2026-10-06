@@ -121,7 +121,11 @@ type when the indexed port does not provide one.
 The export also includes `all_flows_call_graph`, built by scanning every
 persisted flow before adding module nodes, valid output-to-input service arcs,
 and trigger events. The exporter builds shared endpoint, flow and edge indexes
-once and reuses them for each flow graph.
+once and reuses them for each flow graph. The shared index also precomputes
+flow transitions grouped by output endpoint, default roots, and trigger
+metadata. Each root still gets its own traversal because its reachable graph,
+edge discovery order, and call tree can differ; the optimization removes
+repeated global scans without collapsing distinct persisted flow graphs.
 The port gesture is isolated from the card drag and node-selection handlers, so
 analysis never changes the graph view or camera and does not persist data.
 Every visible SVG arc has a transparent, wider hit-area path layered above it;
