@@ -59,6 +59,7 @@
     const syncSelectedCallGraphArcVisual = () => {
       const edgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc;
       const currentRenderGeneration = String(overlayRenderGeneration);
+      portPathOverlay.classList.toggle("is-selected-call-graph-front", Boolean(edgeKey));
       const selectedNodeIds = new Set();
       document.querySelectorAll(".graph-call-path, .graph-call-label").forEach(element => {
         if (element.dataset.renderGeneration !== currentRenderGeneration) element.remove();

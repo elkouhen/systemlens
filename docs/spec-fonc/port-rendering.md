@@ -48,6 +48,9 @@ different flow restores the referenced-port default; this control changes only
 the rendered view and does not change persisted facts.
 The visible arc remains visually thin, but its interactive hit area is wider so
 that selecting an arc remains usable in a dense graph.
+When an arc is selected, its SVG layer is raised above the service cards so the
+complete route remains visible across node boundaries. Clearing the selection
+restores the ordinary layer order.
 Its primary card title is the input trigger, while the Java method remains
 visible as source evidence. Flow selection reconciles every integration step
 only through its persisted endpoint identifier: route labels and resource names

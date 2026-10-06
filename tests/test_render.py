@@ -1461,6 +1461,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "Keep the graph point under the cursor fixed" in document
     assert "if (graphState.selectedCodeFlowId) return;" in document
     assert "is-call-graph-arc-selected" in document
+    assert "#graph-port-paths.is-selected-call-graph-front { z-index: 4; }" in document
+    assert 'portPathOverlay.classList.toggle("is-selected-call-graph-front", Boolean(edgeKey));' in document
     assert "path.dataset.sourceNode = link.source;" in document
     assert "portPathOverlay.append(...selectedElements);" in document
     assert "const moveSelectedCallGraphArcToFront = view =>" in document
