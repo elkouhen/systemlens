@@ -31,6 +31,7 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
     endpoints = store.all_endpoints()
     modules = store.all_modules()
     persisted_flows = store.all_code_flows()
+    current_endpoint_ids = {endpoint.id for endpoint in endpoints}
     methods = store.all_integration_methods()
     persisted_call_edges = store.all_codeql_call_edges()
     persisted_codeql_methods = store.all_codeql_methods()
@@ -63,8 +64,20 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
         if methods
         else []
     )
+    retained_persisted_flows = [
+        flow
+        for flow in persisted_flows
+        if flow.module != module
+        and all(
+            step.endpoint_id is not None
+            and step.endpoint_id in current_endpoint_ids
+            for step in flow.steps
+            if step.endpoint_id is not None
+        )
+        and any(step.endpoint_id is not None for step in flow.steps)
+    ]
     flows = _ensure_unique_code_flow_ids(_deduplicate_code_flows(
-        [*persisted_flows, *reconstructed_flows], endpoints,
+        [*retained_persisted_flows, *reconstructed_flows], endpoints,
     ))
     reconciled = reconcile_code_flows(
         flows,

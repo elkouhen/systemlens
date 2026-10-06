@@ -37,17 +37,18 @@ The `systemlens flows calculate` command reconstructs the complete persisted
 flow snapshot from stored endpoints, integration methods, CodeQL call edges,
 modules, existing source-flow candidates and `graph_facts`. It does not invoke
 source extraction or CodeQL. The persisted method graph is rebuilt in memory
-and all endpoint-to-endpoint paths are traversed again; existing `code_flows`
-are retained as the persisted AST/source-flow snapshot and deduplicated with
-the reconstructed interprocedural flows. AI facts are projected into a
-transient topology view for reconciliation; the facts remain independent rows
-and are never copied into source-derived tables.
+and all endpoint-to-endpoint paths are traversed again. Persisted flows remain
+eligible only when every endpoint step still belongs to the current endpoint
+snapshot; stale flows are dropped before deduplication. AI facts are projected
+into a transient topology view for reconciliation; the facts remain independent
+rows and are never copied into source-derived tables.
 
 With `systemlens flows calculate --module NAME`, the same reconstruction starts
 only from input methods owned by `NAME`. The method and call-edge snapshots
 remain global, so helper methods outside the selected module can still resolve.
-Existing flows remain in the database, and reconstructed flows for the selected
-module replace their matching derived representatives during deduplication.
+Flows owned by other modules remain eligible when their endpoint steps are still
+current. Flows owned by the selected module are rebuilt from the current method
+and endpoint snapshots.
 
 Read-model flow listing builds inverted indexes from endpoint identity and
 `(system, topic, role)` to avoid rescanning every flow and endpoint for each

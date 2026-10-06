@@ -16,6 +16,7 @@ from systemlens.application.code_flows import (
     render_internal_flow_debug_text,
     show_code_flow,
 )
+from systemlens.application.flow_calculation import calculate_persisted_flows
 from systemlens.delivery.cli import app
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.domain.graph import GraphEdge
@@ -778,6 +779,39 @@ def test_flows_calculate_reuses_index_after_ai_fact_import(tmp_path: Path, monke
     with Store(repo, readonly=True) as store:
         assert len(store.all_code_flows()) == len(initial_flows)
         assert len(store.graph_facts_by_namespace("ai-boundaries")) == 1
+
+
+def test_flows_calculate_drops_persisted_flows_with_removed_endpoints(tmp_path: Path) -> None:
+    current_endpoint = _endpoint(
+        "current-endpoint", "consume", "kafka", "orders.created", "Consumer.java", 1
+    )
+    current_flow = CodeFlow(
+        id="current-flow",
+        module="orders",
+        method="Consumer.consume",
+        path="Consumer.java",
+        start_line=1,
+        end_line=1,
+        status="potential",
+        confidence="medium",
+        reason="test",
+        steps=(CodeFlowStep(1, "message_entry", "orders.created", "Consumer.java", 1, 1, current_endpoint.id),),
+    )
+    stale_flow = replace(
+        current_flow,
+        id="stale-flow",
+        steps=(CodeFlowStep(1, "message_entry", "topic-group", "Consumer.java", 1, 1, "removed-endpoint"),),
+    )
+
+    with Store(tmp_path) as store:
+        store.replace_endpoints_for_files([current_endpoint.path], [current_endpoint])
+        store.replace_code_flows([current_flow, stale_flow])
+
+        assert calculate_persisted_flows(store) == 1
+        persisted = store.all_code_flows()
+
+    assert [flow.id for flow in persisted] == ["current-flow"]
+    assert all(step.name != "topic-group" for flow in persisted for step in flow.steps)
 
 
 def test_flows_list_can_filter_kafka_publications_and_exposes_flow_types() -> None:
