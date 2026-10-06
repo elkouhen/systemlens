@@ -1662,6 +1662,9 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'portPathIsExternal(compact, "EAST", "WEST")' in document
     assert 'if (!portPathIsExternal(points, "EAST", "WEST")) return null;' in document
     assert 'portPathIsExternal([start, end], "EAST", "WEST")' in document
+    assert 'previous[0] >= end[0] - epsilon' in document
+    assert 'previous[0] <= end[0] + epsilon' in document
+    assert 'const approachLane = Math.min(end[0] - 48, start[0] - 48);' in document
     assert "if (!pathIsClear([start, end], obstacles))" in document
     assert "obstacle.left - overlayBounds.left - 14" in document
     assert 'const sourceSide = "EAST";' in document
