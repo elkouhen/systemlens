@@ -36,6 +36,21 @@
     const moveSelectedCallGraphArcToFront = view => {
       moveCallGraphArcElementsToFront(view && [view.path, view.arcLabel, view.hitArea]);
     };
+    const selectedCallGraphArcViews = edgeKey => {
+      const selectedIndex = callGraphArcNavigator.views.findIndex(view => view.edgeKey === edgeKey);
+      if (selectedIndex < 0) return [];
+      const sourceNode = callGraphArcNavigator.views[selectedIndex].sourceNode;
+      const views = [callGraphArcNavigator.views[selectedIndex]];
+      for (let index = selectedIndex - 1; index >= 0; index -= 1) {
+        if (callGraphArcNavigator.views[index].sourceNode !== sourceNode) break;
+        views.unshift(callGraphArcNavigator.views[index]);
+      }
+      for (let index = selectedIndex + 1; index < callGraphArcNavigator.views.length; index += 1) {
+        if (callGraphArcNavigator.views[index].sourceNode !== sourceNode) break;
+        views.push(callGraphArcNavigator.views[index]);
+      }
+      return views;
+    };
     const moveSelectedCallGraphArcDomToFront = edgeKey => {
       if (!edgeKey) return;
       const currentGeneration = String(overlayRenderGeneration);
@@ -64,19 +79,6 @@
       document.querySelectorAll(".graph-call-path, .graph-call-label").forEach(element => {
         if (element.dataset.renderGeneration !== currentRenderGeneration) element.remove();
       });
-      if (edgeKey) {
-        const selectedPath = [...document.querySelectorAll(
-          ".graph-call-path:not(.graph-arc-hit-area)"
-        )].find(element => element.dataset.arcKey === edgeKey);
-        if (selectedPath?.dataset.sourceNode) selectedNodeIds.add(selectedPath.dataset.sourceNode);
-        if (selectedPath?.dataset.targetNode) selectedNodeIds.add(selectedPath.dataset.targetNode);
-      }
-      document.querySelectorAll(".graph-node-card-label").forEach(element => {
-        element.classList.toggle(
-          "is-call-graph-arc-selected",
-          selectedNodeIds.has(element.dataset.nodeId),
-        );
-      });
       if (!edgeKey) {
         document.querySelectorAll(".graph-call-path, .graph-call-label").forEach(element => {
           element.classList.remove("is-navigation-hidden");
@@ -87,8 +89,20 @@
         }
         return;
       }
+      const selectedViews = selectedCallGraphArcViews(edgeKey);
+      const selectedKeys = new Set(selectedViews.map(view => view.edgeKey));
+      selectedViews.forEach(view => {
+        if (view.sourceNode) selectedNodeIds.add(view.sourceNode);
+        if (view.targetNode) selectedNodeIds.add(view.targetNode);
+      });
+      document.querySelectorAll(".graph-node-card-label").forEach(element => {
+        element.classList.toggle(
+          "is-call-graph-arc-selected",
+          selectedNodeIds.has(element.dataset.nodeId),
+        );
+      });
       document.querySelectorAll(".graph-call-path, .graph-call-label").forEach(element => {
-        const active = element.dataset.arcKey === edgeKey;
+        const active = selectedKeys.has(element.dataset.arcKey);
         element.classList.toggle("is-navigation-hidden", Boolean(edgeKey) && !active);
         element.classList.toggle("is-keyboard-selected", active);
         if (element.classList.contains("graph-call-path") && !element.classList.contains("graph-arc-hit-area")) {
@@ -103,8 +117,7 @@
           }
         }
       });
-      const selectedView = callGraphArcNavigator.views.find(view => view.edgeKey === edgeKey);
-      moveSelectedCallGraphArcToFront(selectedView);
+      selectedViews.forEach(moveSelectedCallGraphArcToFront);
       moveSelectedCallGraphArcDomToFront(edgeKey);
     };
     const keepSelectedCallGraphArcVisible = () => {
@@ -151,8 +164,10 @@
       callGraphArcNavigator.activeIndex = normalizedIndex;
       graphState.selectedCallGraphEdgeKey = view.edgeKey;
       document.getElementById("graph")?.setAttribute("data-selected-call-graph-arc", view.edgeKey);
+      const selectedViews = selectedCallGraphArcViews(view.edgeKey);
+      const selectedKeys = new Set(selectedViews.map(candidate => candidate.edgeKey));
       views.forEach(candidate => {
-        const active = candidate === view;
+        const active = selectedKeys.has(candidate.edgeKey);
         candidate.path.classList.toggle("is-keyboard-selected", active);
         candidate.arcLabel.classList.toggle("is-keyboard-selected", active);
         candidate.hitArea.classList.toggle("is-keyboard-selected", active);
@@ -167,10 +182,10 @@
         }
       });
       syncSelectedCallGraphArcVisual();
-      // SVG paints later siblings on top. Move the active arc, its label and
-      // its hit area to the end of the overlay so the selected relation stays
+      // SVG paints later siblings on top. Move the selected arcs, their labels
+      // and their hit areas to the end of the overlay so the group stays
       // visible when routes overlap.
-      moveSelectedCallGraphArcToFront(view);
+      selectedViews.forEach(moveSelectedCallGraphArcToFront);
       view.showTooltip();
     };
     if (!window.__systemlensCallGraphArcKeyboardNavigation) {
@@ -2012,6 +2027,8 @@
             path,
             arcLabel,
             hitArea,
+            sourceNode: link.source,
+            targetNode: link.target,
             showTooltip: () => showArcTooltip(path, link, sourcePort, targetPort),
           });
         });

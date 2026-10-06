@@ -1469,9 +1469,14 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "const moveSelectedCallGraphArcDomToFront = edgeKey =>" in document
     assert "moveSelectedCallGraphArcDomToFront(edgeKey);" in document
     assert "const alreadyLast = selectedElements.every" in document
-    assert "moveSelectedCallGraphArcToFront(selectedView);" in document
     assert "is-navigation-hidden" in document
     assert ".graph-call-path.is-navigation-hidden, .graph-call-label.is-navigation-hidden { display: none; }" in document
+    assert "const selectedCallGraphArcViews = edgeKey =>" in document
+    assert "if (callGraphArcNavigator.views[index].sourceNode !== sourceNode) break;" in document
+    assert "const selectedKeys = new Set(selectedViews.map(view => view.edgeKey));" in document
+    assert "selectedViews.forEach(moveSelectedCallGraphArcToFront);" in document
+    assert "sourceNode: link.source" in document
+    assert "targetNode: link.target" in document
     assert "let overlayRenderGeneration = 0;" in document
     assert "const isCurrentRender = () => renderGeneration === overlayRenderGeneration;" in document
     assert "if (!isCurrentRender()) return;" in document

@@ -49,7 +49,9 @@ the rendered view and does not change persisted facts.
 The visible arc remains visually thin, but its interactive hit area is wider so
 that selecting an arc remains usable in a dense graph.
 When an arc is selected, its SVG layer is raised above the service cards so the
-complete route remains visible across node boundaries. Clearing the selection
+complete route remains visible across node boundaries. Consecutive arcs that
+leave the same service are selected and highlighted together, while navigation
+still advances through their individual arcs. Clearing the selection
 restores the ordinary layer order.
 Its primary card title is the input trigger, while the Java method remains
 visible as source evidence. Flow selection reconciles every integration step

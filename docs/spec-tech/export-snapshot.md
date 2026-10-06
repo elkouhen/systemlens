@@ -95,6 +95,10 @@ clicking an input or output endpoint, or directly on an arc, records a
 transient endpoint focus and highlights every associated service arc, local
 port relation, and arc label; clicking the same port or arc clears the focus,
 while selecting another port or arc moves it.
+When navigation selects an arc, consecutive arcs with the same source service
+share the selected visibility, emphasis, and foreground ordering. The
+navigation cursor remains anchored to one arc so `N` and `P` continue to move
+through individual projected edges.
 The analysis banner derives a compact timeline from persisted step endpoint
 IDs and the exported port inventory. It displays port labels, protocol,
 resource/topic names, and message types. Non-integration method-call steps are
