@@ -303,6 +303,30 @@ def list_objects(catalog: ArchitectureCatalog, kind: str) -> list[dict[str, obje
     return []
 
 
+def list_dynamic_topic_endpoints(catalog: ArchitectureCatalog) -> list[dict[str, object]]:
+    """List each unresolved Kafka topic occurrence with its source evidence."""
+    dynamic_endpoints = [
+        endpoint
+        for endpoint in catalog.endpoints
+        if endpoint.system == "kafka" and endpoint.topic_dynamic
+    ]
+    return [
+        {
+            "kind": "topic",
+            "name": endpoint.topic,
+            "id": endpoint.id,
+            "role": endpoint.role,
+            "module": endpoint.module,
+            "framework": endpoint.framework,
+            "message_type": endpoint.message_type,
+            "path": endpoint.path,
+            "line": endpoint.start_line,
+            "snippet": endpoint.snippet,
+        }
+        for endpoint in dynamic_endpoints
+    ]
+
+
 def topic_summary(catalog: ArchitectureCatalog, topic: str) -> dict[str, object]:
     endpoints = [endpoint for endpoint in catalog.endpoints if endpoint.system == "kafka" and endpoint.topic == topic]
     return {

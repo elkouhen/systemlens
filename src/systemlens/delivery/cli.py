@@ -21,6 +21,7 @@ from systemlens.application.architecture import (
     find_microservice_paths,
     indexing_issues,
     inventory_coverage,
+    list_dynamic_topic_endpoints,
     list_objects as list_architecture_objects,
     neighbors as architecture_neighbors,
     show_object as show_architecture_object,
@@ -191,9 +192,9 @@ class _CatalogCommandSpec:
 
 _TOPICS = _CatalogCommandSpec(
     kind="topic",
-    commands=frozenset({"show", "neighbors", "consumers", "producers", "search", "trace"}),
+    commands=frozenset({"dynamic", "show", "neighbors", "consumers", "producers", "search", "trace"}),
     list_usage="Usage : `systemlens topics [list] --root <workspace>`.",
-    usage="Usage : `systemlens topics [list|show|neighbors|search] [topic]`.",
+    usage="Usage : `systemlens topics [list|dynamic|show|neighbors|search] [topic]`.",
     required_target="`systemlens topics {command}` requiert un topic.",
     missing_target="Topic introuvable : {target}",
 )
@@ -233,6 +234,8 @@ def _catalog_command_result(
     max_depth: int,
     limit: int,
 ) -> object | None:
+    if spec.kind == "topic" and command == "dynamic":
+        return list_dynamic_topic_endpoints(catalog)
     if command == "show":
         return show_architecture_object(catalog, spec.kind, target)
     if command == "neighbors":
@@ -288,6 +291,18 @@ def _run_catalog_command(
         return
 
     command = resolved_arguments[0]
+    if command == "dynamic" and len(resolved_arguments) == 1:
+        result = _catalog_command_result(
+            spec,
+            command,
+            "",
+            workspace_root,
+            catalog,
+            max_depth=max_depth,
+            limit=limit,
+        )
+        _emit_architecture(result, resolved_json)
+        return
     if command not in spec.commands or len(resolved_arguments) != 2:
         if command in spec.commands and spec.required_target is not None:
             typer.echo(spec.required_target.format(command=command), err=True)
@@ -338,7 +353,7 @@ def topics_cmd(
 ) -> None:
     """Parcourir les topics et les services qui les publient ou consomment.
 
-    Exemples : `systemlens topics`, `systemlens topics show orders.created`,
+    Exemples : `systemlens topics`, `systemlens topics dynamic`, `systemlens topics show orders.created`,
     `systemlens topics neighbors orders.created`.
     """
     _run_catalog_command(
@@ -582,6 +597,17 @@ def topics_list(
 ) -> None:
     """Lister les topics."""
     topics_cmd([], root, json_output, 6, 50)
+
+
+@topics_app.command("dynamic")
+def topics_dynamic(
+    root: Optional[Path] = typer.Option(  # noqa: UP007
+        None, "--root", help="Répertoire parent indexé. Défaut : répertoire courant."
+    ),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Lister chaque occurrence de topic Kafka non résolue."""
+    topics_cmd(["dynamic"], root, json_output, 6, 50)
 
 
 @topics_app.command("show")

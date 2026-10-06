@@ -114,6 +114,22 @@ def test_catalog_relationship_commands_keep_their_public_result_shape(
     assert json.loads(result.output) == expected
 
 
+def test_topics_dynamic_lists_unresolved_topic_occurrences(
+    catalog: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    expected = [{"kind": "topic", "name": "<dynamic>", "role": "consume"}]
+    monkeypatch.setattr(
+        cli,
+        "list_dynamic_topic_endpoints",
+        lambda received_catalog: expected if received_catalog is catalog else [],
+    )
+
+    result = runner.invoke(app, ["topics", "dynamic", "--json"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.output) == expected
+
+
 def test_catalog_command_preserves_missing_object_error(
     catalog: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
