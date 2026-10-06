@@ -1462,7 +1462,12 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "if (graphState.selectedCodeFlowId) return;" in document
     assert "is-call-graph-arc-selected" in document
     assert "path.dataset.sourceNode = link.source;" in document
-    assert "portPathOverlay.append(view.path, view.arcLabel, view.hitArea);" in document
+    assert "portPathOverlay.append(...selectedElements);" in document
+    assert "const moveSelectedCallGraphArcToFront = view =>" in document
+    assert "const moveSelectedCallGraphArcDomToFront = edgeKey =>" in document
+    assert "moveSelectedCallGraphArcDomToFront(edgeKey);" in document
+    assert "const alreadyLast = selectedElements.every" in document
+    assert "moveSelectedCallGraphArcToFront(selectedView);" in document
     assert "is-navigation-hidden" in document
     assert ".graph-call-path.is-navigation-hidden, .graph-call-label.is-navigation-hidden { display: none; }" in document
     assert "let overlayRenderGeneration = 0;" in document

@@ -24,6 +24,38 @@
       syncSelectedCallGraphArcVisual();
       flowTooltipOverlay.replaceChildren();
     };
+    const moveCallGraphArcElementsToFront = selectedElements => {
+      if (selectedElements.some(element => !element || !portPathOverlay.contains(element))) return;
+      const currentGeneration = String(overlayRenderGeneration);
+      if (selectedElements.some(element => element.dataset.renderGeneration !== currentGeneration)) return;
+      const alreadyLast = selectedElements.every((element, index) => (
+        portPathOverlay.children[portPathOverlay.children.length - selectedElements.length + index] === element
+      ));
+      if (!alreadyLast) portPathOverlay.append(...selectedElements);
+    };
+    const moveSelectedCallGraphArcToFront = view => {
+      moveCallGraphArcElementsToFront(view && [view.path, view.arcLabel, view.hitArea]);
+    };
+    const moveSelectedCallGraphArcDomToFront = edgeKey => {
+      if (!edgeKey) return;
+      const currentGeneration = String(overlayRenderGeneration);
+      const path = [...document.querySelectorAll(
+        ".graph-call-path:not(.graph-arc-hit-area)",
+      )].find(element => (
+        element.dataset.arcKey === edgeKey
+        && element.dataset.renderGeneration === currentGeneration
+      ));
+      if (!path) return;
+      const label = [...document.querySelectorAll(".graph-call-label")].find(element => (
+        element.dataset.arcKey === edgeKey
+        && element.dataset.renderGeneration === currentGeneration
+      ));
+      const hitArea = [...document.querySelectorAll(".graph-call-path.graph-arc-hit-area")].find(element => (
+        element.dataset.arcKey === edgeKey
+        && element.dataset.renderGeneration === currentGeneration
+      ));
+      moveCallGraphArcElementsToFront([path, label, hitArea]);
+    };
     const syncSelectedCallGraphArcVisual = () => {
       const edgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc;
       const currentRenderGeneration = String(overlayRenderGeneration);
@@ -70,6 +102,9 @@
           }
         }
       });
+      const selectedView = callGraphArcNavigator.views.find(view => view.edgeKey === edgeKey);
+      moveSelectedCallGraphArcToFront(selectedView);
+      moveSelectedCallGraphArcDomToFront(edgeKey);
     };
     const keepSelectedCallGraphArcVisible = () => {
       syncSelectedCallGraphArcVisual();
@@ -134,7 +169,7 @@
       // SVG paints later siblings on top. Move the active arc, its label and
       // its hit area to the end of the overlay so the selected relation stays
       // visible when routes overlap.
-      portPathOverlay.append(view.path, view.arcLabel, view.hitArea);
+      moveSelectedCallGraphArcToFront(view);
       view.showTooltip();
     };
     if (!window.__systemlensCallGraphArcKeyboardNavigation) {
