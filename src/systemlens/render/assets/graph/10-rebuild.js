@@ -40,6 +40,9 @@
         );
       });
       if (!edgeKey) {
+        document.querySelectorAll(".graph-call-path, .graph-call-label").forEach(element => {
+          element.classList.remove("is-navigation-hidden");
+        });
         if (selectedCallGraphArcVisualTimer) {
           clearInterval(selectedCallGraphArcVisualTimer);
           selectedCallGraphArcVisualTimer = null;
@@ -48,6 +51,7 @@
       }
       document.querySelectorAll(".graph-call-path, .graph-call-label").forEach(element => {
         const active = element.dataset.arcKey === edgeKey;
+        element.classList.toggle("is-navigation-hidden", Boolean(edgeKey) && !active);
         element.classList.toggle("is-keyboard-selected", active);
         if (element.classList.contains("graph-call-path") && !element.classList.contains("graph-arc-hit-area")) {
           if (active) {
@@ -1411,7 +1415,8 @@
             const compact = points.filter((point, index) => (
               index === 0 || point[0] !== points[index - 1][0] || point[1] !== points[index - 1][1]
             ));
-            if (compact.every((point, index) => index === 0 || segmentIsClear(compact[index - 1], point, obstacles))
+            if (portPathIsExternal(compact, "EAST", "WEST")
+              && compact.every((point, index) => index === 0 || segmentIsClear(compact[index - 1], point, obstacles))
               && pathIsClear(compact, [], occupiedSegments)) {
               const length = compact.slice(1).reduce((total, point, index) => (
                 total + Math.abs(point[0] - compact[index][0]) + Math.abs(point[1] - compact[index][1])
@@ -1424,7 +1429,22 @@
           };
           xLanes.forEach(x => addCandidate([start, [x, start[1]], [x, end[1]], end]));
           yLanes.forEach(y => addCandidate([start, [start[0], y], [end[0], y], end]));
-          if (!candidates.length) return { d: `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`, points: [start, end] };
+          if (!candidates.length) {
+            const externalLane = Math.min(
+              overlayBounds.width - viewportMargin,
+              Math.max(start[0] + 48, end[0] + 48),
+            );
+            const points = [
+              start,
+              [externalLane, start[1]],
+              [externalLane, end[1]],
+              end,
+            ];
+            return {
+              d: points.map((point, index) => `${index ? "L" : "M"} ${point[0]} ${point[1]}`).join(" "),
+              points,
+            };
+          }
           const points = candidates.sort((left, right) => left.score - right.score)[0].points;
           return {
             d: points.map((point, index) => `${index ? "L" : "M"} ${point[0]} ${point[1]}`).join(" "),
@@ -1892,6 +1912,10 @@
           path.dataset.arcKey = resolvedEdgeKey;
           path.dataset.sourceNode = link.source;
           path.dataset.targetNode = link.target;
+          path.classList.toggle(
+            "is-navigation-hidden",
+            Boolean(currentSelectedCallGraphEdgeKey) && resolvedEdgeKey !== currentSelectedCallGraphEdgeKey,
+          );
           if (resolvedEdgeKey === currentSelectedCallGraphEdgeKey) {
             path.classList.add("is-keyboard-selected");
           }
@@ -1909,6 +1933,10 @@
           arcLabel.dataset.arcKey = resolvedEdgeKey;
           arcLabel.dataset.sourceNode = link.source;
           arcLabel.dataset.targetNode = link.target;
+          arcLabel.classList.toggle(
+            "is-navigation-hidden",
+            Boolean(currentSelectedCallGraphEdgeKey) && resolvedEdgeKey !== currentSelectedCallGraphEdgeKey,
+          );
           if (resolvedEdgeKey === currentSelectedCallGraphEdgeKey) {
             arcLabel.classList.add("is-keyboard-selected");
           }
@@ -1950,6 +1978,10 @@
           hitArea.dataset.arcKey = resolvedEdgeKey;
           hitArea.dataset.sourceNode = link.source;
           hitArea.dataset.targetNode = link.target;
+          hitArea.classList.toggle(
+            "is-navigation-hidden",
+            Boolean(currentSelectedCallGraphEdgeKey) && resolvedEdgeKey !== currentSelectedCallGraphEdgeKey,
+          );
           hitArea.addEventListener("pointerenter", () => {
             path.classList.add("is-analysis-hovered");
             arcLabel.classList.add("is-analysis-hovered");

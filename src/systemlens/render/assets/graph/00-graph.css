@@ -47,6 +47,7 @@
     .graph-call-label.is-kafka { fill: #009e73; }
     .graph-call-label.is-analysis-selected, .graph-call-label.is-analysis-hovered { font-size: 13px; font-weight: 850; opacity: 1; }
     .graph-call-label.is-keyboard-selected { fill: #b91c1c; font-size: 14px; font-weight: 900; opacity: 1; }
+    .graph-call-path.is-navigation-hidden, .graph-call-label.is-navigation-hidden { display: none; }
     .graph-call-path.is-analysis-hovered { stroke-width: 3; filter: drop-shadow(0 0 3px currentColor); }
     :root[data-theme="dark"] .graph-port-path, :root[data-theme="dark"] .graph-call-path { stroke: #c4b5fd; }
     :root[data-theme="dark"] .graph-port-path.is-rest, :root[data-theme="dark"] .graph-call-path.is-rest { stroke: #fbbf24; }

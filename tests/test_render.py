@@ -1463,6 +1463,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "is-call-graph-arc-selected" in document
     assert "path.dataset.sourceNode = link.source;" in document
     assert "portPathOverlay.append(view.path, view.arcLabel, view.hitArea);" in document
+    assert "is-navigation-hidden" in document
+    assert ".graph-call-path.is-navigation-hidden, .graph-call-label.is-navigation-hidden { display: none; }" in document
     assert "const GRAPH_CARD_SCALE = 1" in document
     assert "const GRAPH_CARD_WIDTH = 110 * GRAPH_CARD_SCALE" in document
     assert "const GRAPH_CARD_HEIGHT = 70 * GRAPH_CARD_SCALE" in document
@@ -1651,6 +1653,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'hitArea.addEventListener("click", event =>' in document
     assert "if (!routeInsideViewport) return null;" in document
     assert "if (!pathIsClear(points, routeObstacles)) return null;" in document
+    assert 'portPathIsExternal(compact, "EAST", "WEST")' in document
     assert 'if (!portPathIsExternal(points, "EAST", "WEST")) return null;' in document
     assert 'portPathIsExternal([start, end], "EAST", "WEST")' in document
     assert "if (!pathIsClear([start, end], obstacles))" in document
