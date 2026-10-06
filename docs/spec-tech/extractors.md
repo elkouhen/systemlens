@@ -148,6 +148,10 @@ With `--strategy strategy1`, every method whose name starts with
 argument with two such accessors creates one producer fact for each statically
 resolved branch with an exact catalog match. Other values use the conservative
 topic resolver and remain dynamic unless they match an exact declared value.
+For listeners, the extractor inspects only the `topics` attribute. Only
+`${kafka.topics.<key>.nom}` placeholders in that attribute create consume
+endpoints. A `${kafka.topics.<key>.groupe}` placeholder in `groupId` identifies
+the consumer group and is ignored by topic extraction.
 Strategy1 applies no topic-key normalization. The second argument is always
 used to derive the payload type from its method parameter, local variable
 declaration or enclosing class field, including calls with three arguments.

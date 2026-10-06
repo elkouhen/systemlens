@@ -880,6 +880,8 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert 'function codeFlowStats(flow)' in document
     assert 'function codeFlowDescription(flow)' in document
     assert 'const aiDescription = graphData.flow_descriptions?.[flow.id];' in document
+    assert 'return `Dans ${flow.module}, le flux potentiel ${triggerVerb} ${trigger.name} peut ${effectVerb} ${effect.name}.`;' in document
+    assert 'const methodChain = [' not in document
     assert 'description.className = "code-flow-reason"' in document
     assert 'className = "code-flow-stats"' in document
     assert "return serviceIdsForCodeFlow(flow).size >= 2;" in document
@@ -892,6 +894,8 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert 'nodeDataById.get(nodeId)?.kind === "microservice"' in document
     assert "function showCodeFlowItemTooltip(flow, item)" in document
     assert 'className = "graph-edge-tooltip code-flow-item-tooltip"' in document
+    assert 'const flowPath = [...(graphState.pathMicroserviceOrder?.keys() || [])]' not in document
+    assert 'title.textContent = selectedFlowCount > 1\n            ? `Graphes d’appel · ${selectedFlowCount} flux`\n            : "Graphe d’appel";' in document
     assert "const scopedCodeFlows = scope === \"all\"" in document
     assert "const visible = scopedCodeFlows.filter(flow =>" in document
     assert "Flux inter-services (${visible.length}/${interServiceCodeFlows.length})" in document

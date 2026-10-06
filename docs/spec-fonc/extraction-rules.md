@@ -164,6 +164,9 @@ Strategy1 resolves every listener and sender topic through an exact key lookup
 in `kafka.yml` or `kafka.yaml`. The supported declaration is the nested
 `topics.<key>.nom` leaf. Strategy1 does not normalize case, CamelCase,
 underscores, dots, whitespace, prefixes or suffixes when comparing the key.
+Only the `topics` attribute of `@KafkaListener` is inspected for topic
+references. Properties such as `topics.<key>.groupe` in `groupId` are
+consumer-group settings, not topic references, and are ignored.
 If the declared value starts with `${kafka.prefix-topic}.`, Strategy1 removes
 that environment prefix before persisting and matching the physical topic.
 An absent, ambiguous or non-matching declaration remains dynamic and does not

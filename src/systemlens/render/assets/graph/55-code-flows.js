@@ -71,11 +71,6 @@
       ];
     }
 
-    function codeFlowMethodLabel(name) {
-      const parts = String(name || "").split(".").filter(Boolean);
-      return parts.length > 1 ? parts.slice(-2).join(".") : (name || "méthode inconnue");
-    }
-
     function codeFlowDescription(flow) {
       const aiDescription = graphData.flow_descriptions?.[flow.id];
       if (aiDescription) return aiDescription;
@@ -97,14 +92,7 @@
           : effect.kind === "data_write"
             ? "écrire dans"
             : "lire";
-      const methodChain = [
-        flow.method,
-        ...steps.filter(step => step.kind === "method_call").map(step => step.name),
-      ].map(codeFlowMethodLabel).filter((name, index, values) => values.indexOf(name) === index);
-      const chainText = methodChain.length > 1
-        ? `, puis enchaîne ${methodChain.slice(1).join(" puis ")}`
-        : "";
-      return `Dans ${flow.module}, le flux potentiel ${triggerVerb} ${trigger.name} et démarre ${methodChain[0]}${chainText}, avant de ${effectVerb} ${effect.name}.`;
+      return `Dans ${flow.module}, le flux potentiel ${triggerVerb} ${trigger.name} peut ${effectVerb} ${effect.name}.`;
     }
 
     function compareCodeFlows(left, right) {

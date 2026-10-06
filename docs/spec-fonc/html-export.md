@@ -91,6 +91,10 @@ level is the root set. Selecting a call graph keeps the root, arc order and
 trigger metadata visible; the export does not merge distinct flows into one
 undifferentiated edge.
 
+The call-graph heading identifies the view without displaying a service or
+method sequence. Flow descriptions state the trigger and the observed effect
+without presenting an ordered method-call sequence.
+
 Flow entries use a compact summary layout: the description is limited to two
 lines and statistics are displayed inline. Status and protocol details remain
 available in the opened flow view rather than expanding every list entry.

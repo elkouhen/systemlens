@@ -34,7 +34,7 @@ from systemlens.domain.topic_expressions import spring_topic_reference
 
 _STRATEGY1_PRODUCER_RE = re.compile(r"\bgetTopics\s*\(\s*\)\s*\.\s*get([A-Z]\w*)\s*\(\s*\)")
 _STRATEGY1_KAFKA_KEY_RE = re.compile(
-    r"\$\{\s*((?:[A-Za-z_]\w*\.)*(?:kafka\.)?topics\.[A-Za-z_]\w*(?:\.[^}:]+)?)(?:\s*:[^}]*)?\s*\}"
+    r"\$\{\s*((?:[A-Za-z_]\w*\.)*(?:kafka\.)?topics\.[A-Za-z_]\w*\.nom)(?:\s*:[^}]*)?\s*\}"
 )
 _STRATEGY1_SEND_METHOD_PREFIX = "envoyerMessageKafka"
 def _validate_strategy1_topic(
@@ -129,6 +129,36 @@ def _kafka_listener_annotation_blocks(source: str) -> list[tuple[int, str]]:
                     blocks.append((match.start(), source[match.start():index + 1]))
                     break
     return blocks
+
+
+def _kafka_listener_topics_value(annotation: str) -> str:
+    """Return only the value assigned to the `topics` annotation attribute."""
+    match = re.search(r"\btopics\s*=", annotation)
+    if match is None:
+        return ""
+    start = match.end()
+    depth = 0
+    quote: str | None = None
+    escaped = False
+    for index in range(start, len(annotation)):
+        character = annotation[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in {"'", '"'}:
+            quote = character
+        elif character in "({[":
+            depth += 1
+        elif character in ")}]":
+            depth = max(0, depth - 1)
+        elif character == "," and depth == 0:
+            return annotation[start:index]
+    return annotation[start:]
 
 
 def _strategy1_method_payload_type(source: bytes, invocation) -> str | None:
@@ -239,7 +269,8 @@ def infer_kafka_topic_strategy1_endpoints(
             endpoints[endpoint.id] = endpoint
         for offset, annotation in _kafka_listener_annotation_blocks(source):
             line_no = source.count("\n", 0, offset) + 1
-            for key_match in _STRATEGY1_KAFKA_KEY_RE.finditer(annotation):
+            topics_value = _kafka_listener_topics_value(annotation)
+            for key_match in _STRATEGY1_KAFKA_KEY_RE.finditer(topics_value):
                 property_key = key_match.group(1)
                 property_parts = property_key.split(".")
                 logical_key = (

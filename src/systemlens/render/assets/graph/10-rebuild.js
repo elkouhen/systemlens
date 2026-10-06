@@ -732,17 +732,10 @@
           if (backToFlows) backToFlows.hidden = !showContext;
           if (backToArchitecture) backToArchitecture.hidden = !showContext;
           if (!active) return;
-          const flowPath = [...(graphState.pathMicroserviceOrder?.keys() || [])]
-            .map(id => nodeDataById.get(id)?.name)
-            .filter(Boolean)
-            .join(" → ");
-          const trigger = graphState.codeFlowTrigger?.name;
           const selectedFlowCount = graphState.selectedCodeFlowIds?.length || 1;
           title.textContent = selectedFlowCount > 1
             ? `Graphes d’appel · ${selectedFlowCount} flux`
-            : flowPath
-              ? `Graphe d’appel · ${flowPath}`
-              : trigger ? `Graphe d’appel · ${trigger}` : "Graphe d’appel";
+            : "Graphe d’appel";
           if (pathLabel) {
           const selectedFlows = (graphData.code_flows || []).filter(flow => (
             (graphState.selectedCodeFlowIds?.length ? graphState.selectedCodeFlowIds : [graphState.selectedCodeFlowId])
