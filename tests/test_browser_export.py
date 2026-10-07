@@ -1168,25 +1168,19 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         )
         assert float(page.locator("#graph").get_attribute("data-flow-focus-ratio")) > 0
         assert page.locator(".graph-node-card-label.is-code-flow-node").count() == 3
-        assert page.locator("#analysis-ports-toggle").inner_text() == "Afficher tous les ports"
         referenced_port_count = page.locator(".graph-node-port-reference").count()
         assert referenced_port_count > 0
-        page.locator("#analysis-ports-toggle").click()
-        assert page.locator("#analysis-ports-toggle").inner_text() == "Afficher les ports référencés"
-        assert page.locator(".graph-node-port-reference").count() > referenced_port_count
-        assert page.locator("#analysis-ports-toggle").get_attribute("aria-pressed") == "true"
         page.locator("#graph-tab").click()
         assert page.locator("#graph-tab").get_attribute("aria-selected") == "true"
         assert page.locator(".graph-call-path").count() == 0
         page.locator("#graph-call-tree").wait_for(state="visible")
         assert page.locator("#graph-call-tree .graph-call-tree-node").count() >= 3
         assert page.locator("#graph").get_attribute("class") == "is-call-tree-hidden"
-        assert page.locator("#call-tree-depth-control").is_visible()
+        assert page.locator("#call-tree-depth-control").count() == 0
         page.locator("#graph-call-tree .graph-call-tree-node").first.hover()
         page.locator("#graph-flow-tooltips .graph-entity-tooltip").wait_for(state="visible")
         page.locator("#graph-call-tree .graph-call-tree-edge").first.hover()
         page.locator("#graph-flow-tooltips .graph-edge-tooltip").wait_for(state="visible")
-        page.locator("#call-tree-depth").select_option("3")
         page.locator("#call-tree-direction").select_option("tb")
         assert page.locator("#graph-call-tree .graph-call-tree-node").count() >= 3
         page.keyboard.press("Escape")

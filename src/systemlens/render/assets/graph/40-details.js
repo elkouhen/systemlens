@@ -7,6 +7,7 @@
       nodesByNormalizedName.set(key, [...(nodesByNormalizedName.get(key) || []), node]);
     });
     function setToolbarTab(tab, options = {}) {
+      graphState.analysisContextCollapsed = true;
       const showingGraph = tab === "graph";
       const showingFlows = tab === "flows";
       const showingFlowGraph = showingFlows && options.showFlowGraph === true;
@@ -39,7 +40,6 @@
         graphState.selectedCodeFlowId = null;
         graphState.callGraphDisplayMode = "network";
         graphState.selectedCallGraphEdgeKey = null;
-        graphState.showAllCodeFlowPorts = false;
         graphState.pathMicroserviceOrder = new Map();
         graphState.codeFlowTreeCoordinates = new Map();
         graphState.relatedLocalPortLinks = new Set();

@@ -86,8 +86,16 @@
     .graph-mode-context-copy strong { color: #293c82; font-size: 11px; overflow-wrap: anywhere; }
     .graph-mode-context-copy span { color: #52658f; }
     .graph-mode-context-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
+    .architecture-context-actions { display: contents; }
+    .architecture-context-actions[hidden] { display: none; }
+    .graph-mode-context .architecture-context-actions .graph-action-label { width: auto; height: 27px; padding: 0 8px; font-size: 10px; font-weight: 700; }
+    .graph-mode-context .architecture-context-actions .zoom-controls button { width: 27px; height: 27px; font-size: 16px; }
+    .graph-mode-context .architecture-context-actions .graph-control-group { padding: 0 2px; }
+    .graph-mode-context .architecture-context-actions .graph-control-group button { height: 27px; font-size: 10px; }
+    .graph-mode-context.is-architecture-toolbar { padding: 8px 10px; }
     .graph-mode-context .graph-secondary-action { flex: 0 0 auto; height: 27px; padding: 0 8px; border: 1px solid #a5b4fc; border-radius: 7px; color: #3348b8; background: #fff; font-size: 10px; }
     .graph-mode-context .graph-tree-control { display: inline-flex; align-items: center; gap: 4px; height: 27px; padding: 0 7px; border: 1px solid #c7d2fe; border-radius: 7px; color: #52658f; background: rgba(255, 255, 255, .72); font-size: 9px; font-weight: 750; }
+    .graph-mode-context .graph-tree-control[hidden] { display: none; }
     .graph-mode-context .graph-tree-control select { height: 21px; padding: 0 3px; border: 0; color: #3348b8; background: transparent; font-size: 10px; font-weight: 800; }
     .graph-mode-context .graph-secondary-action:hover { border-color: #405ad5; background: #eef2ff; }
     @media (max-width: 720px) {

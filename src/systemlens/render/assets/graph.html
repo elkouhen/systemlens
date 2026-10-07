@@ -74,31 +74,7 @@
         <p id="search-status" class="explore-search-status" role="status"></p>
       </div>
       <section id="graph-context" class="graph-context" aria-label="Contexte du graphe">
-        <div class="graph-actions" aria-label="Navigation du graphe">
-          <div class="graph-action-row camera-actions">
-            <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
-              <button id="zoom-out" type="button" aria-label="Dézoomer" title="Dézoomer">−</button>
-              <button id="zoom-in" type="button" aria-label="Zoomer" title="Zoomer">+</button>
-            </div>
-            <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
-              <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tout le graphe" title="Afficher tout le graphe" aria-pressed="false">Tout le graphe</button>
-              <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher une vue lisible" title="Afficher une vue lisible" aria-pressed="true">Vue lisible</button>
-            </div>
-            <span class="graph-actions-spacer" aria-hidden="true"></span>
-            <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled>Réinitialiser</button>
-          </div>
-          <div class="graph-action-row display-actions">
-            <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
-              <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe statique</button>
-              <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Vue par couches</button>
-              <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Vue par modules</button>
-            </div>
-            <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
-              <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
-              <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
-            </div>
-          </div>
-          <div class="graph-action-row dependency-actions">
+        <div class="graph-action-row dependency-actions">
             <fieldset id="dependency-analysis-controls" class="dependency-analysis-controls" disabled>
               <legend>Analyse du nœud sélectionné</legend>
               <label class="dependency-focus-control" title="Masquer les nœuds et relations hors de la portée choisie">
@@ -117,7 +93,6 @@
               </label>
               <span id="dependency-analysis-help" class="dependency-analysis-help">Sélectionnez un nœud pour activer cette analyse.</span>
             </fieldset>
-          </div>
         </div>
         <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
         <button id="inventory-status" class="inventory-status" type="button" hidden></button>
@@ -261,18 +236,33 @@
       <span id="graph-mode-context-help"></span>
     </div>
     <div class="graph-mode-context-actions">
-      <button id="analysis-mode-center" class="graph-action-label graph-secondary-action" type="button">Centrer</button>
-      <button id="analysis-mode-back" class="graph-action-label graph-secondary-action" type="button" hidden>Retour aux flux</button>
-      <button id="analysis-mode-architecture" class="graph-action-label graph-secondary-action" type="button" hidden>Architecture</button>
-      <label id="call-tree-depth-control" class="graph-tree-control" hidden>Profondeur
-        <select id="call-tree-depth" aria-label="Profondeur maximale de l’arbre d’appels"><option value="3" selected>3</option><option value="5">5</option><option value="8">8</option></select>
+      <button id="analysis-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue" title="Recentrer la vue sur le graphe ou l’arbre visible">Centrer</button>
+      <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
+        <button id="zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer" title="Augmenter l’échelle de la vue">+</button>
+        <button id="zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer" title="Réduire l’échelle de la vue">−</button>
+      </div>
+      <div id="architecture-context-actions" class="architecture-context-actions">
+        <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
+          <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tout le graphe" title="Afficher tout le graphe" aria-pressed="false">Tout le graphe</button>
+          <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher une vue lisible" title="Afficher une vue lisible" aria-pressed="true">Vue lisible</button>
+        </div>
+        <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled>Réinitialiser</button>
+        <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
+          <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe statique</button>
+          <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Vue par couches</button>
+          <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Vue par modules</button>
+        </div>
+        <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
+          <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
+          <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
+        </div>
+      </div>
+      <button id="analysis-mode-expand-all" class="graph-action-label graph-secondary-action" type="button" title="Déplier tous les niveaux de l’arbre d’appel" hidden>Déplier tous les nœuds</button>
+      <label id="call-tree-direction-control" class="graph-tree-control" title="Choisir la direction de lecture de l’arbre d’appel" hidden>Orientation
+        <select id="call-tree-direction" aria-label="Orientation de l’arbre d’appels" title="Choisir l’orientation de l’arbre"><option value="lr" selected>Gauche à droite</option><option value="tb">Haut en bas</option></select>
       </label>
-      <label id="call-tree-direction-control" class="graph-tree-control" hidden>Orientation
-        <select id="call-tree-direction" aria-label="Orientation de l’arbre d’appels"><option value="lr" selected>Gauche à droite</option><option value="tb">Haut en bas</option></select>
-      </label>
-      <button id="analysis-ports-toggle" class="graph-action-label graph-secondary-action" type="button" aria-pressed="false" hidden>Afficher tous les ports</button>
-      <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" hidden>Réinitialiser l’analyse</button>
-      <button id="analysis-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy">Réduire</button>
+      <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" title="Effacer l’arc ou le port actuellement analysé" hidden>Réinitialiser l’analyse</button>
+      <button id="analysis-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy" title="Réduire la toolbar">Réduire</button>
     </div>
   </div>
   <details id="graph-legend" class="legend" aria-label="Légende du graphe">

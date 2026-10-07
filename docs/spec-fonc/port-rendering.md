@@ -42,10 +42,10 @@ another port or arc moves it. Pressing Escape also clears the selected arc and
 its tooltip. This interaction does not change the view,
 selected flow, camera, or persisted facts.
 The selected call graph displays only its referenced IN and OUT ports by
-default. The analysis context provides an `Afficher tous les ports` control to
-show every indexed port on the services in the selected graph. Returning to a
-different flow restores the referenced-port default; this control changes only
-the rendered view and does not change persisted facts.
+default. The analysis context keeps the ports referenced by the selected flow
+visible on the services in the selected graph. Returning to a different flow
+restores the referenced-port default; this view is derived from persisted
+facts and does not change them.
 The visible arc remains visually thin, but its interactive hit area is wider so
 that selecting an arc remains usable in a dense graph.
 When an arc is selected, its SVG layer is raised above the service cards so the

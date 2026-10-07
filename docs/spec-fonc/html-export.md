@@ -111,13 +111,17 @@ descendants displays a `− replier` badge that collapses that branch and
 preserves the viewport. A collapsed node displays a `+N appels` badge to
 reopen its descendants.
 The depth selector can still be increased to reveal more levels globally.
-The tree is the only call-graph rendering mode. The upper graph context widget
-shows the tree controls only; it does not repeat the call hierarchy. Dragging the empty tree
+The tree is the only call-graph rendering mode. The upper graph toolbar shows
+`Centrer`, zoom, fit, selection reset, layout, and node-rendering actions in
+the architecture view. In the call-graph view it keeps centering and zoom and
+adds the tree controls and `Déplier tous les nœuds`; it does not repeat the
+call hierarchy. The context widget is collapsed by default and can be
+expanded with `Développer`. Dragging the empty tree
 workspace pans the tree, while clicking a service occurrence keeps its
 selection action. Hovering a service occurrence displays its level and cycle
 state. The service occurrence tooltip also displays its IN and OUT ports with
 the associated Java methods. Hovering an arc displays its order, source,
-target, protocol and indexed relation label.
+target, protocol, indexed relation label and message type when available.
 
 The call-graph heading identifies the view without displaying a service or
 method sequence. Flow descriptions state the trigger and the observed effect

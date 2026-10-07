@@ -407,8 +407,16 @@
     .graph-mode-context-copy strong { color: #293c82; font-size: 11px; overflow-wrap: anywhere; }
     .graph-mode-context-copy span { color: #52658f; }
     .graph-mode-context-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
+    .architecture-context-actions { display: contents; }
+    .architecture-context-actions[hidden] { display: none; }
+    .graph-mode-context .architecture-context-actions .graph-action-label { width: auto; height: 27px; padding: 0 8px; font-size: 10px; font-weight: 700; }
+    .graph-mode-context .architecture-context-actions .zoom-controls button { width: 27px; height: 27px; font-size: 16px; }
+    .graph-mode-context .architecture-context-actions .graph-control-group { padding: 0 2px; }
+    .graph-mode-context .architecture-context-actions .graph-control-group button { height: 27px; font-size: 10px; }
+    .graph-mode-context.is-architecture-toolbar { padding: 8px 10px; }
     .graph-mode-context .graph-secondary-action { flex: 0 0 auto; height: 27px; padding: 0 8px; border: 1px solid #a5b4fc; border-radius: 7px; color: #3348b8; background: #fff; font-size: 10px; }
     .graph-mode-context .graph-tree-control { display: inline-flex; align-items: center; gap: 4px; height: 27px; padding: 0 7px; border: 1px solid #c7d2fe; border-radius: 7px; color: #52658f; background: rgba(255, 255, 255, .72); font-size: 9px; font-weight: 750; }
+    .graph-mode-context .graph-tree-control[hidden] { display: none; }
     .graph-mode-context .graph-tree-control select { height: 21px; padding: 0 3px; border: 0; color: #3348b8; background: transparent; font-size: 10px; font-weight: 800; }
     .graph-mode-context .graph-secondary-action:hover { border-color: #405ad5; background: #eef2ff; }
     @media (max-width: 720px) {
@@ -1198,6 +1206,33 @@
     .graph-actions { gap: 8px; }
     .graph-control-group { border-radius: 12px; }
     .graph-control-group button { border-radius: 9px !important; }
+    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .graph-control-group { display: contents; border: 0; background: transparent; }
+    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .graph-control-group button,
+    .graph-mode-context.is-architecture-toolbar .architecture-context-actions > .graph-action-label {
+      width: auto;
+      height: 27px !important;
+      padding: 0 8px;
+      border: 1px solid #a5b4fc;
+      border-radius: 7px !important;
+      color: #3348b8;
+      background: #fff;
+      box-shadow: none;
+      font-size: 10px;
+    }
+    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .zoom-controls button { width: 27px; padding: 0; font-size: 16px; }
+    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .graph-control-group button:hover,
+    .graph-mode-context.is-architecture-toolbar .architecture-context-actions > .graph-action-label:hover { border-color: #405ad5; background: #eef2ff; }
+    .graph-mode-context .zoom-controls { display: contents; border: 0; background: transparent; }
+    .graph-mode-context .zoom-controls button { width: 27px; height: 27px !important; padding: 0; border: 1px solid #a5b4fc; border-radius: 7px !important; color: #3348b8; background: #fff; box-shadow: none; font-size: 16px; }
+    .graph-mode-context .zoom-controls button:hover { border-color: #405ad5; background: #eef2ff; }
+    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .fit-mode.is-active,
+    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .view-mode.is-active,
+    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .render-mode.is-active {
+      border-color: #405ad5;
+      color: #fff;
+      background: #3156d3;
+      box-shadow: 0 2px 6px rgba(49, 86, 211, .25);
+    }
     .display-controls, .advanced-controls, .advanced-tools {
       padding-right: 11px;
       padding-left: 11px;
@@ -1505,31 +1540,7 @@
         <p id="search-status" class="explore-search-status" role="status"></p>
       </div>
       <section id="graph-context" class="graph-context" aria-label="Contexte du graphe">
-        <div class="graph-actions" aria-label="Navigation du graphe">
-          <div class="graph-action-row camera-actions">
-            <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
-              <button id="zoom-out" type="button" aria-label="Dézoomer" title="Dézoomer">−</button>
-              <button id="zoom-in" type="button" aria-label="Zoomer" title="Zoomer">+</button>
-            </div>
-            <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
-              <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tout le graphe" title="Afficher tout le graphe" aria-pressed="false">Tout le graphe</button>
-              <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher une vue lisible" title="Afficher une vue lisible" aria-pressed="true">Vue lisible</button>
-            </div>
-            <span class="graph-actions-spacer" aria-hidden="true"></span>
-            <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled>Réinitialiser</button>
-          </div>
-          <div class="graph-action-row display-actions">
-            <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
-              <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe statique</button>
-              <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Vue par couches</button>
-              <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Vue par modules</button>
-            </div>
-            <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
-              <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
-              <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
-            </div>
-          </div>
-          <div class="graph-action-row dependency-actions">
+        <div class="graph-action-row dependency-actions">
             <fieldset id="dependency-analysis-controls" class="dependency-analysis-controls" disabled>
               <legend>Analyse du nœud sélectionné</legend>
               <label class="dependency-focus-control" title="Masquer les nœuds et relations hors de la portée choisie">
@@ -1548,7 +1559,6 @@
               </label>
               <span id="dependency-analysis-help" class="dependency-analysis-help">Sélectionnez un nœud pour activer cette analyse.</span>
             </fieldset>
-          </div>
         </div>
         <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
         <button id="inventory-status" class="inventory-status" type="button" hidden></button>
@@ -1692,18 +1702,33 @@
       <span id="graph-mode-context-help"></span>
     </div>
     <div class="graph-mode-context-actions">
-      <button id="analysis-mode-center" class="graph-action-label graph-secondary-action" type="button">Centrer</button>
-      <button id="analysis-mode-back" class="graph-action-label graph-secondary-action" type="button" hidden>Retour aux flux</button>
-      <button id="analysis-mode-architecture" class="graph-action-label graph-secondary-action" type="button" hidden>Architecture</button>
-      <label id="call-tree-depth-control" class="graph-tree-control" hidden>Profondeur
-        <select id="call-tree-depth" aria-label="Profondeur maximale de l’arbre d’appels"><option value="3" selected>3</option><option value="5">5</option><option value="8">8</option></select>
+      <button id="analysis-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue" title="Recentrer la vue sur le graphe ou l’arbre visible">Centrer</button>
+      <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
+        <button id="zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer" title="Augmenter l’échelle de la vue">+</button>
+        <button id="zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer" title="Réduire l’échelle de la vue">−</button>
+      </div>
+      <div id="architecture-context-actions" class="architecture-context-actions">
+        <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
+          <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tout le graphe" title="Afficher tout le graphe" aria-pressed="false">Tout le graphe</button>
+          <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher une vue lisible" title="Afficher une vue lisible" aria-pressed="true">Vue lisible</button>
+        </div>
+        <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled>Réinitialiser</button>
+        <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
+          <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe statique</button>
+          <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Vue par couches</button>
+          <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Vue par modules</button>
+        </div>
+        <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
+          <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
+          <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
+        </div>
+      </div>
+      <button id="analysis-mode-expand-all" class="graph-action-label graph-secondary-action" type="button" title="Déplier tous les niveaux de l’arbre d’appel" hidden>Déplier tous les nœuds</button>
+      <label id="call-tree-direction-control" class="graph-tree-control" title="Choisir la direction de lecture de l’arbre d’appel" hidden>Orientation
+        <select id="call-tree-direction" aria-label="Orientation de l’arbre d’appels" title="Choisir l’orientation de l’arbre"><option value="lr" selected>Gauche à droite</option><option value="tb">Haut en bas</option></select>
       </label>
-      <label id="call-tree-direction-control" class="graph-tree-control" hidden>Orientation
-        <select id="call-tree-direction" aria-label="Orientation de l’arbre d’appels"><option value="lr" selected>Gauche à droite</option><option value="tb">Haut en bas</option></select>
-      </label>
-      <button id="analysis-ports-toggle" class="graph-action-label graph-secondary-action" type="button" aria-pressed="false" hidden>Afficher tous les ports</button>
-      <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" hidden>Réinitialiser l’analyse</button>
-      <button id="analysis-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy">Réduire</button>
+      <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" title="Effacer l’arc ou le port actuellement analysé" hidden>Réinitialiser l’analyse</button>
+      <button id="analysis-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy" title="Réduire la toolbar">Réduire</button>
     </div>
   </div>
   <details id="graph-legend" class="legend" aria-label="Légende du graphe">
@@ -1938,8 +1963,7 @@
       analysisPortEndpointId: null,
       selectedCodeFlowId: null,
       selectedCallGraphEdgeKey: null,
-      analysisContextCollapsed: false,
-      showAllCodeFlowPorts: false,
+      analysisContextCollapsed: true,
       codeFlowRootNodeId: null,
       codeFlowTrigger: null,
       pathMicroserviceOrder: new Map(),
@@ -3069,28 +3093,28 @@
         const renderGeneration = ++overlayRenderGeneration;
         const isCurrentRender = () => renderGeneration === overlayRenderGeneration;
         renderCallTreeOverlay();
-        if (graphState.selectedCodeFlowId) return;
         nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         portPathOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         const nodePoints = new Map();
         const graphPointToViewport = graphPoint => {
           return renderer.graphToViewport(graphPoint);
         };
-        const updateAnalysisModeIndicator = () => {
+        function updateAnalysisModeIndicator() {
           const context = document.getElementById("graph-mode-context");
           const contextCopy = document.getElementById("graph-mode-context-copy");
           const title = document.getElementById("graph-mode-context-title");
           const pathLabel = document.getElementById("graph-mode-context-path");
           const help = document.getElementById("graph-mode-context-help");
           const clear = document.getElementById("analysis-mode-clear");
-          const portsToggle = document.getElementById("analysis-ports-toggle");
-          const backToFlows = document.getElementById("analysis-mode-back");
-          const backToArchitecture = document.getElementById("analysis-mode-architecture");
+          const architectureActions = document.getElementById("architecture-context-actions");
+          const expandAll = document.getElementById("analysis-mode-expand-all");
           const contextCollapse = document.getElementById("analysis-context-collapse");
           if (!context || !title || !help || !clear) return;
           const active = Boolean(graphState.selectedCodeFlowId);
-          const showContext = active;
+          const callGraphActive = active && graphState.viewMode === "call-graph";
+          const showContext = graphState.viewMode === "architecture" || active;
           context.hidden = !showContext;
+          context.classList.toggle("is-architecture-toolbar", graphState.viewMode === "architecture" && !callGraphActive);
           context.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
           if (contextCopy) contextCopy.id = "graph-mode-context-copy";
           if (contextCollapse) {
@@ -3098,16 +3122,17 @@
             contextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
             contextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
           }
-          if (portsToggle) {
-            portsToggle.hidden = !showContext;
-            portsToggle.setAttribute("aria-pressed", String(Boolean(graphState.showAllCodeFlowPorts)));
-            portsToggle.textContent = graphState.showAllCodeFlowPorts
-              ? "Afficher les ports référencés"
-              : "Afficher tous les ports";
+          if (architectureActions) architectureActions.hidden = callGraphActive;
+          const directionControl = document.getElementById("call-tree-direction-control");
+          if (directionControl) directionControl.hidden = !callGraphActive;
+          if (expandAll) expandAll.hidden = !callGraphActive;
+          if (contextCollapse) contextCollapse.hidden = !callGraphActive;
+          if (!callGraphActive) {
+            title.textContent = "Graphe d’architecture";
+            help.textContent = "Actions rapides sur la vue du graphe.";
+            if (clear) clear.hidden = true;
+            return;
           }
-          if (backToFlows) backToFlows.hidden = !showContext;
-          if (backToArchitecture) backToArchitecture.hidden = !showContext;
-          if (!active) return;
           title.textContent = "Arbre d’appel";
           if (pathLabel) {
           const selectedFlows = (graphData.code_flows || []).filter(flow => (
@@ -3194,7 +3219,7 @@
             ? "Arc associé sélectionné · cliquez sur un autre arc ou port pour changer"
             : "Cliquez sur un port ou un arc pour afficher sa relation";
           clear.hidden = !graphState.analysisPortEndpointId;
-        };
+        }
         const toggleAnalysisEndpoint = (endpointId, event) => {
           if (!endpointId) return;
           event?.preventDefault();
@@ -3206,6 +3231,7 @@
           requestGraphRender();
         };
         updateAnalysisModeIndicator();
+        if (graphState.selectedCodeFlowId) return;
         const selectedFlows = (graphData.code_flows || []).filter(flow => (
           flow.id === graphState.selectedCodeFlowId
         ));
@@ -3510,7 +3536,7 @@
           if (graphState.selectedCodeFlowId) {
           (node.ports || []).filter(port => (
             port.label
-            && (graphState.showAllCodeFlowPorts || referencedCodeFlowPortIds.has(port.endpoint_id))
+            && referencedCodeFlowPortIds.has(port.endpoint_id)
           )).forEach(port => {
             portsByDirection[port.direction]?.push(port);
           });
@@ -4192,6 +4218,13 @@
             const relationText = [protocol, link.label].filter(Boolean).join(" · ");
             relation.textContent = `${order}${relationText || "Relation"}`;
             tooltip.append(title, relation);
+            const messageTypes = [...new Set([sourcePort?.message_type, targetPort?.message_type].filter(Boolean))];
+            if (messageTypes.length) {
+              const messageType = document.createElement("span");
+              messageType.className = "graph-arc-tooltip-type";
+              messageType.textContent = `Type de message : ${messageTypes.join(" · ")}`;
+              tooltip.append(messageType);
+            }
             return tooltip;
         };
         const showArcTooltip = (path, link, sourcePort, targetPort, event = null) => {
@@ -5589,6 +5622,7 @@
       nodesByNormalizedName.set(key, [...(nodesByNormalizedName.get(key) || []), node]);
     });
     function setToolbarTab(tab, options = {}) {
+      graphState.analysisContextCollapsed = true;
       const showingGraph = tab === "graph";
       const showingFlows = tab === "flows";
       const showingFlowGraph = showingFlows && options.showFlowGraph === true;
@@ -5621,7 +5655,6 @@
         graphState.selectedCodeFlowId = null;
         graphState.callGraphDisplayMode = "network";
         graphState.selectedCallGraphEdgeKey = null;
-        graphState.showAllCodeFlowPorts = false;
         graphState.pathMicroserviceOrder = new Map();
         graphState.codeFlowTreeCoordinates = new Map();
         graphState.relatedLocalPortLinks = new Set();
@@ -7375,7 +7408,6 @@
       graphState.callTreeZoom = 1;
       graphState.selectedCallGraphEdgeKey = null;
       graphCanvas.removeAttribute("data-selected-call-graph-arc");
-      graphState.showAllCodeFlowPorts = false;
       graphState.codeFlowRootNodeId = context.codeFlowRootNodeId || null;
       graphState.codeFlowTrigger = context.codeFlowTrigger || null;
       graphFlowStatus.hidden = context.topologyReconciled !== false;
@@ -8493,9 +8525,7 @@
       document.getElementById("graph")?.classList.toggle("is-call-tree-hidden", treeActive);
       [graphLayersOverlay, graphGroupsOverlay, portPathOverlay, nodeLabelOverlay]
         .forEach(element => element?.classList.toggle("is-call-tree-hidden", treeActive));
-      const depthControl = document.getElementById("call-tree-depth-control");
       const directionControl = document.getElementById("call-tree-direction-control");
-      if (depthControl) depthControl.hidden = !treeActive;
       if (directionControl) directionControl.hidden = !treeActive;
       if (!treeActive) {
         graphCallTreeOverlay.replaceChildren();
@@ -8673,6 +8703,7 @@
           type: port?.type || "Endpoint",
           method: port?.method || "Méthode Java inconnue",
           name: port?.name || "Ressource inconnue",
+          messageType: port?.message_type || null,
           path: port?.path || "Source inconnue",
           line: port?.line,
         };
@@ -8735,6 +8766,26 @@
         }
         return lines;
       };
+      const treeEdgeTooltip = edge => {
+        const sourcePort = treePort(edge.endpoint_ids?.[0], "out");
+        const targetPort = treePort(edge.endpoint_ids?.[1], "in");
+        const protocol = edge.kind === "kafka" ? "Kafka" : edge.kind === "rest" ? "HTTP" : edge.kind || "Appel";
+        const lines = [
+          `${edge.source} → ${edge.target}`,
+          `${edge.label || "Relation"} · ${protocol}`,
+        ];
+        if (sourcePort.endpointId) {
+          lines.push(`OUT ${sourcePort.label} · ${sourcePort.method}`);
+          lines.push(`Ressource / paramètres : ${sourcePort.name}`);
+        }
+        if (targetPort.endpointId) lines.push(`IN ${targetPort.label} · ${targetPort.method}`);
+        const messageTypes = [...new Set([sourcePort.messageType, targetPort.messageType].filter(Boolean))];
+        if (messageTypes.length) lines.push(`Type de message : ${messageTypes.join(" · ")}`);
+        return {
+          title: `Arc${edge.order ? ` #${edge.order}` : ""}`,
+          lines,
+        };
+      };
       allOccurrences.forEach(occurrence => {
         const source = position(occurrence);
         occurrence.children.forEach(child => {
@@ -8759,20 +8810,15 @@
           }
           const protocolClass = child.edge.kind === "rest" ? "is-rest" : child.edge.kind === "kafka" ? "is-kafka" : "";
           line.classList.add("graph-call-tree-edge", protocolClass);
+          const edgeTooltip = treeEdgeTooltip(child.edge);
+          line.setAttribute("title", [edgeTooltip.title, ...edgeTooltip.lines].join(" · "));
           line.addEventListener("mouseenter", event => {
             line.classList.add("is-hovered");
-            const protocol = child.edge.kind === "kafka" ? "Kafka" : child.edge.kind === "rest" ? "HTTP" : child.edge.kind || "Appel";
-            showTreeTooltip("graph-edge-tooltip", `Arc${child.edge.order ? ` #${child.edge.order}` : ""}`, [
-              `${child.edge.source} → ${child.edge.target}`,
-              `${child.edge.label || "Relation"} · ${protocol}`,
-            ], event.clientX, event.clientY);
+            showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
           });
           line.addEventListener("mousemove", event => {
             const tooltip = flowTooltipOverlay?.firstElementChild;
-            if (tooltip) showTreeTooltip("graph-edge-tooltip", `Arc${child.edge.order ? ` #${child.edge.order}` : ""}`, [
-              `${child.edge.source} → ${child.edge.target}`,
-              `${child.edge.label || "Relation"} · ${child.edge.kind === "kafka" ? "Kafka" : child.edge.kind === "rest" ? "HTTP" : child.edge.kind || "Appel"}`,
-            ], event.clientX, event.clientY);
+            if (tooltip) showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
           });
           line.addEventListener("mouseleave", () => { line.classList.remove("is-hovered"); clearTreeTooltip(); });
           svg.append(line);
@@ -8906,6 +8952,15 @@
       canvas.style.left = `${x - logicalX * nextTotalScale}px`;
       canvas.style.top = `${y - logicalY * nextTotalScale}px`;
       canvas.style.transform = `scale(${nextTotalScale})`;
+      return true;
+    }
+    function expandAllCallTree() {
+      if (!graphState.selectedCodeFlowId || graphState.callGraphDisplayMode !== "tree") return false;
+      const camera = captureCallTreeCamera();
+      graphState.callTreeDepth = 8;
+      graphState.callTreeExpanded = new Set();
+      graphState.callTreeCollapsed = new Set();
+      renderCallTreeOverlay(camera);
       return true;
     }
     const uniqueTopologyLink = (endpointId, source) => {
@@ -9049,6 +9104,10 @@
           .map(link => [`${link.input_endpoint_id}:${link.output_endpoint_id}`, link])).values()],
       };
       const flow = flows[0];
+      graphState.callTreeDepth = 3;
+      graphState.callTreeExpanded = new Set();
+      graphState.callTreeCollapsed = new Set();
+      graphState.callTreeZoom = 1;
       // The owning module is the consumer for an input-triggered flow. The
       // visual root must follow the exported call-graph path instead: it is
       // the upstream producer when a single Kafka source is proven, and the
@@ -9333,7 +9392,6 @@
         selectedCodeFlowId: null,
         viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
-        showAllCodeFlowPorts: false,
         pathMicroserviceOrder: new Map(),
         codeFlowTreeCoordinates: new Map(),
       });
@@ -9362,11 +9420,8 @@
     const renderSymbolsButton = document.getElementById("render-symbols");
     const analysisModeClear = document.getElementById("analysis-mode-clear");
     const analysisModeCenter = document.getElementById("analysis-mode-center");
-    const analysisModeBack = document.getElementById("analysis-mode-back");
-    const analysisModeArchitecture = document.getElementById("analysis-mode-architecture");
-    const callTreeDepth = document.getElementById("call-tree-depth");
+    const analysisModeExpandAll = document.getElementById("analysis-mode-expand-all");
     const callTreeDirection = document.getElementById("call-tree-direction");
-    const analysisPortsToggle = document.getElementById("analysis-ports-toggle");
     const analysisContextCollapse = document.getElementById("analysis-context-collapse");
     const toolbar = document.getElementById("architecture-toolbar");
     const toolbarCollapse = document.getElementById("toolbar-collapse");
@@ -9383,28 +9438,20 @@
       requestGraphRender();
     });
     analysisModeCenter?.addEventListener("click", () => {
-      if (!graphState.selectedCodeFlowId || !graphState.relatedNodes?.size) return;
+      if (!graphState.selectedCodeFlowId) {
+        fitCameraToVisibleGraph(renderer, "readable");
+        return;
+      }
+      if (!graphState.relatedNodes?.size) return;
       const orderedNodes = [...(graphState.pathMicroserviceOrder?.keys() || [])];
       const remainingNodes = [...graphState.relatedNodes].filter(id => !orderedNodes.includes(id));
       scheduleFlowCameraFit({ nodes: [...orderedNodes, ...remainingNodes] });
     });
-    analysisModeBack?.addEventListener("click", () => {
-      setToolbarTab("flows");
-    });
-    analysisModeArchitecture?.addEventListener("click", () => {
-      setToolbarTab("graph");
-    });
-      callTreeDepth?.addEventListener("change", () => {
-        graphState.callTreeDepth = Math.max(1, Math.min(8, Number(callTreeDepth.value) || 3));
-      requestGraphRender();
+    analysisModeExpandAll?.addEventListener("click", () => {
+      expandAllCallTree();
     });
     callTreeDirection?.addEventListener("change", () => {
       graphState.callTreeDirection = callTreeDirection.value === "tb" ? "tb" : "lr";
-      requestGraphRender();
-    });
-    analysisPortsToggle?.addEventListener("click", () => {
-      if (!graphState.selectedCodeFlowId) return;
-      graphState.showAllCodeFlowPorts = !graphState.showAllCodeFlowPorts;
       requestGraphRender();
     });
     analysisContextCollapse?.addEventListener("click", () => {
@@ -9492,7 +9539,7 @@
       graphCanvas.dataset.fitRatio = String(targetRenderer.getCamera().getState().ratio);
     }
     document.getElementById("zoom-in").addEventListener("click", () => {
-      if (zoomCallTree(0.8)) return;
+      if (zoomCallTree(1.25)) return;
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
@@ -9500,7 +9547,7 @@
       requestGraphRender();
     });
     document.getElementById("zoom-out").addEventListener("click", () => {
-      if (zoomCallTree(1.25)) return;
+      if (zoomCallTree(0.8)) return;
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();

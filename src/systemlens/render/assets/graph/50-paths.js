@@ -505,7 +505,6 @@
       graphState.callTreeZoom = 1;
       graphState.selectedCallGraphEdgeKey = null;
       graphCanvas.removeAttribute("data-selected-call-graph-arc");
-      graphState.showAllCodeFlowPorts = false;
       graphState.codeFlowRootNodeId = context.codeFlowRootNodeId || null;
       graphState.codeFlowTrigger = context.codeFlowTrigger || null;
       graphFlowStatus.hidden = context.topologyReconciled !== false;

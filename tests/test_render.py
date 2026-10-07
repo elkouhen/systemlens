@@ -909,12 +909,29 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert 'anchor.title = `${direction === "in" ? "Port d’entrée" : "Port de sortie"} · ${port.label}`' in document
     assert "occurrence.children.map(child => treePort" in document
     assert "label.append(title);" in document
-    assert 'id="call-tree-depth"' in document
+    assert 'id="call-tree-depth"' not in document
     assert 'id="call-tree-direction"' in document
+    assert 'id="analysis-mode-expand-all"' in document
+    assert 'id="analysis-ports-toggle"' not in document
+    assert "function expandAllCallTree()" in document
+    assert "graphState.callTreeDepth = 8" in document
+    assert 'className = "graph-arc-tooltip-type"' in document
+    assert "Type de message : ${messageTypes.join" in document
+    assert "const showContext = graphState.viewMode === \"architecture\" || active;" in document
+    assert "const callGraphActive = active && graphState.viewMode === \"call-graph\";" in document
+    assert "if (directionControl) directionControl.hidden = !callGraphActive;" in document
+    assert 'id="architecture-context-actions"' in document
+    assert 'id="zoom-out"' in document
+    assert 'id="zoom-in"' in document
+    assert 'title="Recentrer la vue sur le graphe ou l’arbre visible"' in document
+    assert 'title="Déplier tous les niveaux de l’arbre d’appel"' in document
+    assert 'title="Effacer l’arc ou le port actuellement analysé"' in document
+    assert "if (contextCollapse) contextCollapse.hidden = !callGraphActive;" in document
+    assert "if (!callGraphActive) {" in document
+    assert 'title.textContent = "Graphe d’architecture";' in document
     assert "function captureCallTreeCamera()" in document
     assert "function renderCallTreeOverlay(preservedCamera = null)" in document
     assert 'callTreeDepth: 3' in document
-    assert '<option value="3" selected>3</option>' in document
     assert "hiddenChildrenCount" in document
     assert "graph-call-tree-more-badge" in document
     assert "callTreeExpanded" in document
@@ -1617,6 +1634,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'function activeCodeFlowFilters()' in document
     assert 'function resetCodeFlowFilters()' in document
     assert 'id="analysis-context-collapse"' in document
+    assert "analysisContextCollapsed: true" in document
+    assert "graphState.analysisContextCollapsed = true;" in document
     assert 'id="graph-mode-context-copy"' in document
     assert 'if ((tab === "graph" || tab === "flows") && !showingFlowGraph) {' in document
     assert 'if (tab === "graph") {' in document
@@ -1726,11 +1745,12 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "function scheduleFlowCameraFit(path, attempt = 0)" in document
     assert ".toolbar { overflow-x: hidden; }" in document
     assert 'id="graph-context"' in document
+    assert 'class="graph-actions"' not in document
     assert 'id="graph-mode-context"' in document
     assert 'id="analysis-mode-clear"' in document
-    assert 'id="analysis-mode-back"' in document
-    assert 'id="analysis-mode-architecture"' in document
-    assert 'const updateAnalysisModeIndicator = () =>' in document
+    assert 'id="analysis-mode-back"' not in document
+    assert 'id="analysis-mode-architecture"' not in document
+    assert 'function updateAnalysisModeIndicator()' in document
     assert 'toolbar-tab-group-title' in document
     assert 'id="architecture-tabs-group"' in document
     assert 'id="architecture-mode-tab"' in document
@@ -1750,7 +1770,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="show-path"' not in document
     assert 'class="path-help"' in document
     assert document.index('class="toolbar-tabs"') < document.index('id="quick-search"')
-    assert document.index('id="quick-search"') < document.index('class="graph-actions"')
+    assert document.index('id="quick-search"') < document.index('id="architecture-context-actions"')
     graph_panel_start = document.index('id="graph-panel"')
     assert graph_panel_start < document.index('id="quick-search"')
     assert "@media (max-width: 1024px)" in document

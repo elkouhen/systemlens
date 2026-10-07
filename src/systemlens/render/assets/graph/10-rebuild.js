@@ -746,28 +746,28 @@
         const renderGeneration = ++overlayRenderGeneration;
         const isCurrentRender = () => renderGeneration === overlayRenderGeneration;
         renderCallTreeOverlay();
-        if (graphState.selectedCodeFlowId) return;
         nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         portPathOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         const nodePoints = new Map();
         const graphPointToViewport = graphPoint => {
           return renderer.graphToViewport(graphPoint);
         };
-        const updateAnalysisModeIndicator = () => {
+        function updateAnalysisModeIndicator() {
           const context = document.getElementById("graph-mode-context");
           const contextCopy = document.getElementById("graph-mode-context-copy");
           const title = document.getElementById("graph-mode-context-title");
           const pathLabel = document.getElementById("graph-mode-context-path");
           const help = document.getElementById("graph-mode-context-help");
           const clear = document.getElementById("analysis-mode-clear");
-          const portsToggle = document.getElementById("analysis-ports-toggle");
-          const backToFlows = document.getElementById("analysis-mode-back");
-          const backToArchitecture = document.getElementById("analysis-mode-architecture");
+          const architectureActions = document.getElementById("architecture-context-actions");
+          const expandAll = document.getElementById("analysis-mode-expand-all");
           const contextCollapse = document.getElementById("analysis-context-collapse");
           if (!context || !title || !help || !clear) return;
           const active = Boolean(graphState.selectedCodeFlowId);
-          const showContext = active;
+          const callGraphActive = active && graphState.viewMode === "call-graph";
+          const showContext = graphState.viewMode === "architecture" || active;
           context.hidden = !showContext;
+          context.classList.toggle("is-architecture-toolbar", graphState.viewMode === "architecture" && !callGraphActive);
           context.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
           if (contextCopy) contextCopy.id = "graph-mode-context-copy";
           if (contextCollapse) {
@@ -775,16 +775,17 @@
             contextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
             contextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
           }
-          if (portsToggle) {
-            portsToggle.hidden = !showContext;
-            portsToggle.setAttribute("aria-pressed", String(Boolean(graphState.showAllCodeFlowPorts)));
-            portsToggle.textContent = graphState.showAllCodeFlowPorts
-              ? "Afficher les ports référencés"
-              : "Afficher tous les ports";
+          if (architectureActions) architectureActions.hidden = callGraphActive;
+          const directionControl = document.getElementById("call-tree-direction-control");
+          if (directionControl) directionControl.hidden = !callGraphActive;
+          if (expandAll) expandAll.hidden = !callGraphActive;
+          if (contextCollapse) contextCollapse.hidden = !callGraphActive;
+          if (!callGraphActive) {
+            title.textContent = "Graphe d’architecture";
+            help.textContent = "Actions rapides sur la vue du graphe.";
+            if (clear) clear.hidden = true;
+            return;
           }
-          if (backToFlows) backToFlows.hidden = !showContext;
-          if (backToArchitecture) backToArchitecture.hidden = !showContext;
-          if (!active) return;
           title.textContent = "Arbre d’appel";
           if (pathLabel) {
           const selectedFlows = (graphData.code_flows || []).filter(flow => (
@@ -871,7 +872,7 @@
             ? "Arc associé sélectionné · cliquez sur un autre arc ou port pour changer"
             : "Cliquez sur un port ou un arc pour afficher sa relation";
           clear.hidden = !graphState.analysisPortEndpointId;
-        };
+        }
         const toggleAnalysisEndpoint = (endpointId, event) => {
           if (!endpointId) return;
           event?.preventDefault();
@@ -883,6 +884,7 @@
           requestGraphRender();
         };
         updateAnalysisModeIndicator();
+        if (graphState.selectedCodeFlowId) return;
         const selectedFlows = (graphData.code_flows || []).filter(flow => (
           flow.id === graphState.selectedCodeFlowId
         ));
@@ -1187,7 +1189,7 @@
           if (graphState.selectedCodeFlowId) {
           (node.ports || []).filter(port => (
             port.label
-            && (graphState.showAllCodeFlowPorts || referencedCodeFlowPortIds.has(port.endpoint_id))
+            && referencedCodeFlowPortIds.has(port.endpoint_id)
           )).forEach(port => {
             portsByDirection[port.direction]?.push(port);
           });
@@ -1869,6 +1871,13 @@
             const relationText = [protocol, link.label].filter(Boolean).join(" · ");
             relation.textContent = `${order}${relationText || "Relation"}`;
             tooltip.append(title, relation);
+            const messageTypes = [...new Set([sourcePort?.message_type, targetPort?.message_type].filter(Boolean))];
+            if (messageTypes.length) {
+              const messageType = document.createElement("span");
+              messageType.className = "graph-arc-tooltip-type";
+              messageType.textContent = `Type de message : ${messageTypes.join(" · ")}`;
+              tooltip.append(messageType);
+            }
             return tooltip;
         };
         const showArcTooltip = (path, link, sourcePort, targetPort, event = null) => {

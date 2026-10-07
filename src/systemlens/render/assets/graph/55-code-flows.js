@@ -249,9 +249,7 @@
       document.getElementById("graph")?.classList.toggle("is-call-tree-hidden", treeActive);
       [graphLayersOverlay, graphGroupsOverlay, portPathOverlay, nodeLabelOverlay]
         .forEach(element => element?.classList.toggle("is-call-tree-hidden", treeActive));
-      const depthControl = document.getElementById("call-tree-depth-control");
       const directionControl = document.getElementById("call-tree-direction-control");
-      if (depthControl) depthControl.hidden = !treeActive;
       if (directionControl) directionControl.hidden = !treeActive;
       if (!treeActive) {
         graphCallTreeOverlay.replaceChildren();
@@ -429,6 +427,7 @@
           type: port?.type || "Endpoint",
           method: port?.method || "Méthode Java inconnue",
           name: port?.name || "Ressource inconnue",
+          messageType: port?.message_type || null,
           path: port?.path || "Source inconnue",
           line: port?.line,
         };
@@ -491,6 +490,26 @@
         }
         return lines;
       };
+      const treeEdgeTooltip = edge => {
+        const sourcePort = treePort(edge.endpoint_ids?.[0], "out");
+        const targetPort = treePort(edge.endpoint_ids?.[1], "in");
+        const protocol = edge.kind === "kafka" ? "Kafka" : edge.kind === "rest" ? "HTTP" : edge.kind || "Appel";
+        const lines = [
+          `${edge.source} → ${edge.target}`,
+          `${edge.label || "Relation"} · ${protocol}`,
+        ];
+        if (sourcePort.endpointId) {
+          lines.push(`OUT ${sourcePort.label} · ${sourcePort.method}`);
+          lines.push(`Ressource / paramètres : ${sourcePort.name}`);
+        }
+        if (targetPort.endpointId) lines.push(`IN ${targetPort.label} · ${targetPort.method}`);
+        const messageTypes = [...new Set([sourcePort.messageType, targetPort.messageType].filter(Boolean))];
+        if (messageTypes.length) lines.push(`Type de message : ${messageTypes.join(" · ")}`);
+        return {
+          title: `Arc${edge.order ? ` #${edge.order}` : ""}`,
+          lines,
+        };
+      };
       allOccurrences.forEach(occurrence => {
         const source = position(occurrence);
         occurrence.children.forEach(child => {
@@ -515,20 +534,15 @@
           }
           const protocolClass = child.edge.kind === "rest" ? "is-rest" : child.edge.kind === "kafka" ? "is-kafka" : "";
           line.classList.add("graph-call-tree-edge", protocolClass);
+          const edgeTooltip = treeEdgeTooltip(child.edge);
+          line.setAttribute("title", [edgeTooltip.title, ...edgeTooltip.lines].join(" · "));
           line.addEventListener("mouseenter", event => {
             line.classList.add("is-hovered");
-            const protocol = child.edge.kind === "kafka" ? "Kafka" : child.edge.kind === "rest" ? "HTTP" : child.edge.kind || "Appel";
-            showTreeTooltip("graph-edge-tooltip", `Arc${child.edge.order ? ` #${child.edge.order}` : ""}`, [
-              `${child.edge.source} → ${child.edge.target}`,
-              `${child.edge.label || "Relation"} · ${protocol}`,
-            ], event.clientX, event.clientY);
+            showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
           });
           line.addEventListener("mousemove", event => {
             const tooltip = flowTooltipOverlay?.firstElementChild;
-            if (tooltip) showTreeTooltip("graph-edge-tooltip", `Arc${child.edge.order ? ` #${child.edge.order}` : ""}`, [
-              `${child.edge.source} → ${child.edge.target}`,
-              `${child.edge.label || "Relation"} · ${child.edge.kind === "kafka" ? "Kafka" : child.edge.kind === "rest" ? "HTTP" : child.edge.kind || "Appel"}`,
-            ], event.clientX, event.clientY);
+            if (tooltip) showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
           });
           line.addEventListener("mouseleave", () => { line.classList.remove("is-hovered"); clearTreeTooltip(); });
           svg.append(line);
@@ -662,6 +676,15 @@
       canvas.style.left = `${x - logicalX * nextTotalScale}px`;
       canvas.style.top = `${y - logicalY * nextTotalScale}px`;
       canvas.style.transform = `scale(${nextTotalScale})`;
+      return true;
+    }
+    function expandAllCallTree() {
+      if (!graphState.selectedCodeFlowId || graphState.callGraphDisplayMode !== "tree") return false;
+      const camera = captureCallTreeCamera();
+      graphState.callTreeDepth = 8;
+      graphState.callTreeExpanded = new Set();
+      graphState.callTreeCollapsed = new Set();
+      renderCallTreeOverlay(camera);
       return true;
     }
     const uniqueTopologyLink = (endpointId, source) => {
@@ -805,6 +828,10 @@
           .map(link => [`${link.input_endpoint_id}:${link.output_endpoint_id}`, link])).values()],
       };
       const flow = flows[0];
+      graphState.callTreeDepth = 3;
+      graphState.callTreeExpanded = new Set();
+      graphState.callTreeCollapsed = new Set();
+      graphState.callTreeZoom = 1;
       // The owning module is the consumer for an input-triggered flow. The
       // visual root must follow the exported call-graph path instead: it is
       // the upstream producer when a single Kafka source is proven, and the

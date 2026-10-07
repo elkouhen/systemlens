@@ -11,7 +11,6 @@
         selectedCodeFlowId: null,
         viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
-        showAllCodeFlowPorts: false,
         pathMicroserviceOrder: new Map(),
         codeFlowTreeCoordinates: new Map(),
       });
@@ -40,11 +39,8 @@
     const renderSymbolsButton = document.getElementById("render-symbols");
     const analysisModeClear = document.getElementById("analysis-mode-clear");
     const analysisModeCenter = document.getElementById("analysis-mode-center");
-    const analysisModeBack = document.getElementById("analysis-mode-back");
-    const analysisModeArchitecture = document.getElementById("analysis-mode-architecture");
-    const callTreeDepth = document.getElementById("call-tree-depth");
+    const analysisModeExpandAll = document.getElementById("analysis-mode-expand-all");
     const callTreeDirection = document.getElementById("call-tree-direction");
-    const analysisPortsToggle = document.getElementById("analysis-ports-toggle");
     const analysisContextCollapse = document.getElementById("analysis-context-collapse");
     const toolbar = document.getElementById("architecture-toolbar");
     const toolbarCollapse = document.getElementById("toolbar-collapse");
@@ -61,28 +57,20 @@
       requestGraphRender();
     });
     analysisModeCenter?.addEventListener("click", () => {
-      if (!graphState.selectedCodeFlowId || !graphState.relatedNodes?.size) return;
+      if (!graphState.selectedCodeFlowId) {
+        fitCameraToVisibleGraph(renderer, "readable");
+        return;
+      }
+      if (!graphState.relatedNodes?.size) return;
       const orderedNodes = [...(graphState.pathMicroserviceOrder?.keys() || [])];
       const remainingNodes = [...graphState.relatedNodes].filter(id => !orderedNodes.includes(id));
       scheduleFlowCameraFit({ nodes: [...orderedNodes, ...remainingNodes] });
     });
-    analysisModeBack?.addEventListener("click", () => {
-      setToolbarTab("flows");
-    });
-    analysisModeArchitecture?.addEventListener("click", () => {
-      setToolbarTab("graph");
-    });
-      callTreeDepth?.addEventListener("change", () => {
-        graphState.callTreeDepth = Math.max(1, Math.min(8, Number(callTreeDepth.value) || 3));
-      requestGraphRender();
+    analysisModeExpandAll?.addEventListener("click", () => {
+      expandAllCallTree();
     });
     callTreeDirection?.addEventListener("change", () => {
       graphState.callTreeDirection = callTreeDirection.value === "tb" ? "tb" : "lr";
-      requestGraphRender();
-    });
-    analysisPortsToggle?.addEventListener("click", () => {
-      if (!graphState.selectedCodeFlowId) return;
-      graphState.showAllCodeFlowPorts = !graphState.showAllCodeFlowPorts;
       requestGraphRender();
     });
     analysisContextCollapse?.addEventListener("click", () => {
@@ -170,7 +158,7 @@
       graphCanvas.dataset.fitRatio = String(targetRenderer.getCamera().getState().ratio);
     }
     document.getElementById("zoom-in").addEventListener("click", () => {
-      if (zoomCallTree(0.8)) return;
+      if (zoomCallTree(1.25)) return;
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
@@ -178,7 +166,7 @@
       requestGraphRender();
     });
     document.getElementById("zoom-out").addEventListener("click", () => {
-      if (zoomCallTree(1.25)) return;
+      if (zoomCallTree(0.8)) return;
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
