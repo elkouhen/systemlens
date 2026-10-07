@@ -2,6 +2,10 @@
 
 Parent: [Functional specification](../SPEC-FONC.md).
 
+The shared presentation and interaction rules are defined in
+[UX/UI rules](../UX-UI.md). This page owns endpoint evidence, port mapping,
+and flow-specific rendering behavior.
+
 
 The Explorer renders a microservice as one compact rectangle with its numbered
 input ports (`I<n>`) distributed along the left side and its numbered output

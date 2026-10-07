@@ -2,6 +2,10 @@
 
 Parent: [Functional specification](../SPEC-FONC.md).
 
+The shared presentation and interaction rules are defined in
+[UX/UI rules](../UX-UI.md). This page owns the layered-view geometry and
+containment invariants that implement that contract.
+
 
 The HTML architecture view MUST preserve these visual invariants:
 
@@ -78,4 +82,3 @@ producing or owning microservice.
 If several microservices modify the same resource in writing, the renderer
 MUST associate the resource with the microservice belonging to the lowest
 software layer in the canonical visual order.
-

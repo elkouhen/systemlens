@@ -2,6 +2,10 @@
 
 Parent: [Technical specification](../SPEC-TECH.md).
 
+The user-facing presentation and interaction contract is maintained in
+[UX/UI rules](../UX-UI.md). This page owns coordinate systems, camera
+mechanics, packing algorithms, complexity, and fallback behavior.
+
 
 ### Coordinate system and rendering
 

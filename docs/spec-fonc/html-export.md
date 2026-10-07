@@ -2,6 +2,11 @@
 
 Parent: [Functional specification](../SPEC-FONC.md).
 
+The consolidated presentation and interaction contract is maintained in
+[UX/UI rules](../UX-UI.md). This page owns export states, inspectors, flow
+catalogue behavior, and evidence semantics; it does not duplicate the global
+visual language or camera contract.
+
 
 Microservice cards in the Explorer view remain compact rectangles. A card with
 persisted internal code flows displays their count, so services with discovered

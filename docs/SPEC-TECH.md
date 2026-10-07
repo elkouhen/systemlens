@@ -14,12 +14,14 @@ can evolve without one oversized specification.
 | Index orchestration or flow algorithms | [Indexing](spec-tech/indexing.md) |
 | Source extraction | [Extractors](spec-tech/extractors.md) |
 | Browser coordinates, camera, or placement | [Graph layout](spec-tech/graph-layout.md) |
+| Visible HTML presentation or interaction | [UX/UI rules](UX-UI.md) |
 | SQLite schema or migrations | [Persistence](spec-tech/persistence.md) |
 | Validation and quality gates | [Verification](spec-tech/verification.md) |
 
-The functional specification owns observable CLI, MCP, export, and interaction
-behavior. This specification owns implementation constraints and persisted data
-contracts. [ADRs](ADR.md) own durable architectural choices.
+The functional specification owns observable CLI, MCP, and export domain
+behavior. The [UX/UI rules](UX-UI.md) own visible HTML presentation and
+interaction semantics. This specification owns implementation constraints and
+persisted data contracts. [ADRs](ADR.md) own durable architectural choices.
 
 The indexing section specifies Java signature identity, inherited interface
 implementations, and declared return types used by the call-graph fallback.
@@ -34,3 +36,4 @@ implementations, and declared return types used by the call-graph fallback.
 - [Graph layout algorithms](spec-tech/graph-layout.md)
 - [Persistence and compatibility](spec-tech/persistence.md)
 - [Verification](spec-tech/verification.md)
+- [UX/UI rules](UX-UI.md)

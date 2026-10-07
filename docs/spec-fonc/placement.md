@@ -2,6 +2,10 @@
 
 Parent: [Functional specification](../SPEC-FONC.md).
 
+The shared presentation and interaction rules are defined in
+[UX/UI rules](../UX-UI.md). This page owns placement and navigation behavior
+that is specific to the generated architecture graph.
+
 
 For the graph export, a module is a structural group that can contain child
 modules and projects. Module membership comes from project directory

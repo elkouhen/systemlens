@@ -377,6 +377,7 @@ RabbitMQ, SQS, or other middleware facts.
 | An interactive overview and examples | [Documentation site](docs/index.html) |
 | CLI, MCP, and HTML-export behaviour | [Functional specification](docs/SPEC-FONC.md) |
 | Extraction, storage, and layout design | [Technical specification](docs/SPEC-TECH.md) |
+| HTML export UX/UI rules | [UX/UI rules](docs/UX-UI.md) |
 | A maintainer's code-navigation guide | [Architecture map](docs/ARCHITECTURE.md) |
 | Test coverage, levels, and validation commands | [Test strategy and validation report](docs/TESTING.md) |
 | The rationale for durable design choices | [ADRs](docs/ADR.md) |

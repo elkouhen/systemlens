@@ -12,6 +12,7 @@ in `docs/spec-fonc/` so each topic can be read and reviewed independently.
 | Change endpoint or flow extraction | [Extraction rules](spec-fonc/extraction-rules.md) |
 | Change export behavior | [HTML export](spec-fonc/html-export.md), [XLSX diagnostic export](spec-fonc/xlsx-export.md), [port rendering](spec-fonc/port-rendering.md), and [placement](spec-fonc/placement.md) |
 | Change graph views | [Layered view](spec-fonc/layered-view.md) and [module rendering](spec-fonc/modules.md) |
+| Change HTML presentation or interaction | [UX/UI rules](UX-UI.md) |
 | Change incremental indexing or MCP | [Incrementality](spec-fonc/incrementality.md) and [MCP](spec-fonc/mcp.md) |
 | Check a limitation | [Boundaries](spec-fonc/boundaries.md) |
 
@@ -23,9 +24,10 @@ and declared method return types, with explicit fallback confidence limits.
 
 ## Contract ownership
 
-The functional specification owns CLI, MCP, export, interaction, and
-compatibility behavior. The technical specification owns implementation
-constraints, persistence, algorithms, and internal data shape.
+The functional specification owns CLI, MCP, export domain behavior, and
+compatibility behavior. The [UX/UI rules](UX-UI.md) own visible presentation,
+layout affordances, and interaction semantics. The technical specification
+owns implementation constraints, persistence, algorithms, and internal data shape.
 
 When a change crosses both contracts, update both entry points and their
 owning section files. Keep product intent in [PRD](PRD.md) and durable design
@@ -45,3 +47,4 @@ choices in [ADRs](ADR.md).
 - [Incrementality and freshness](spec-fonc/incrementality.md)
 - [MCP](spec-fonc/mcp.md)
 - [Boundaries](spec-fonc/boundaries.md)
+- [UX/UI rules](UX-UI.md)

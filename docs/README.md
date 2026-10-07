@@ -11,6 +11,7 @@ owns the question, then follow its links to implementation evidence.
 | What problem does SystemLens solve? | [Product requirements](PRD.md) |
 | Which commands, MCP tools, and exports are public? | [Functional specification](SPEC-FONC.md) |
 | How do indexing, storage, extraction, and rendering work? | [Technical specification](SPEC-TECH.md) |
+| What are the UX/UI rules for the HTML export? | [UX/UI rules](UX-UI.md) |
 | Why was an architectural choice made? | [Architecture decisions](ADR.md) |
 | How should maintainers navigate the code? | [Architecture map](ARCHITECTURE.md) |
 | How are tests organized and validated? | [Test strategy and validation report](TESTING.md) |
@@ -21,7 +22,8 @@ owns the question, then follow its links to implementation evidence.
 ## Source ownership
 
 The PRD owns product scope and success measures. The functional specification
-owns observable behavior. The technical specification owns implementation
+owns observable behavior. The [UX/UI rules](UX-UI.md) own visible presentation
+and interaction semantics. The technical specification owns implementation
 constraints and persisted data contracts. ADRs own durable decisions.
 
 ## Terminology

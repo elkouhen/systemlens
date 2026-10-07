@@ -2,6 +2,10 @@
 
 Parent: [Functional specification](../SPEC-FONC.md).
 
+The shared presentation and interaction rules are defined in
+[UX/UI rules](../UX-UI.md). This page owns module membership, resource
+ownership, and module-specific behavior.
+
 
 The module view MUST preserve these visual invariants:
 
