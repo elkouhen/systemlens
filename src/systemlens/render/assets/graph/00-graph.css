@@ -35,8 +35,8 @@
     #graph-port-paths { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; }
     #graph-port-paths.is-selected-call-graph-front { z-index: 4; }
     .graph-port-path, .graph-call-path { fill: none; stroke: #7c3aed; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .9; pointer-events: stroke; }
-    .graph-dependency-hit-area { fill: none; stroke: transparent; stroke-width: 24px; stroke-linecap: round; pointer-events: stroke; cursor: default; }
-    .graph-arc-hit-area { fill: none; stroke: transparent !important; stroke-width: 14px !important; stroke-linecap: round; pointer-events: stroke; cursor: default; }
+    .graph-dependency-hit-area { fill: none; stroke: transparent; stroke-width: 36px; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
+    .graph-arc-hit-area { fill: none; stroke: transparent !important; stroke-width: 24px !important; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
     .graph-arc-hit-area.is-keyboard-selected { stroke: transparent !important; stroke-width: 14px !important; opacity: 1; filter: none; }
     .graph-port-path.is-rest, .graph-call-path.is-rest { stroke: #d55e00; }
     .graph-port-path.is-kafka, .graph-call-path.is-kafka { stroke: #009e73; }
@@ -68,11 +68,14 @@
     #graph-call-tree[hidden] { display: none; }
     #graph.is-call-tree-hidden, #graph-layers.is-call-tree-hidden, #graph-groups.is-call-tree-hidden, #graph-port-paths.is-call-tree-hidden, #graph-node-labels.is-call-tree-hidden { visibility: hidden; }
     .graph-call-tree-canvas { position: absolute; transform-origin: 0 0; pointer-events: none; }
+    .graph-call-tree-canvas > svg { pointer-events: auto; }
     .graph-call-tree-edge { fill: none; stroke: #7c3aed; stroke-width: 2; opacity: .8; marker-end: url(#graph-call-tree-arrow); pointer-events: stroke; cursor: help; transition: stroke-width .12s ease, opacity .12s ease; }
+    .graph-call-tree-edge-hit { fill: none; stroke: transparent; stroke-width: 28px; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
     .graph-call-tree-edge.is-rest { stroke: #d55e00; }
     .graph-call-tree-edge.is-kafka { stroke: #009e73; }
     .graph-call-tree-edge.is-hovered { stroke-width: 4; opacity: 1; }
     .graph-call-tree-edge-label { fill: #4338ca; font-size: 10px; font-weight: 800; paint-order: stroke; stroke: #f8fafc; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; }
+    .graph-call-tree-edge-label.is-clickable { pointer-events: auto; cursor: pointer; }
     .graph-call-tree-node { position: absolute; width: 110px; height: 70px; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; cursor: pointer; pointer-events: auto; transition: box-shadow .12s ease, outline .12s ease; }
     .graph-call-tree-node.is-hovered { outline: 2px solid color-mix(in srgb, var(--card-accent, #64748b) 70%, transparent); outline-offset: 2px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 8px 22px rgba(15, 23, 42, .2); }
     .graph-call-tree-node .graph-node-card-icon { grid-column: 2; grid-row: 1; }

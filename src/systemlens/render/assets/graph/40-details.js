@@ -2,6 +2,13 @@
     function normalizeNodeName(name) {
       return name.trim().replace(/\\s+/g, " ").toLocaleLowerCase();
     }
+    function compareCodeFlows(left, right) {
+      const leftCycle = left.status === "cycle" ? 0 : 1;
+      const rightCycle = right.status === "cycle" ? 0 : 1;
+      return leftCycle - rightCycle
+        || (right.steps?.length || 0) - (left.steps?.length || 0)
+        || String(left.method || "").localeCompare(String(right.method || ""));
+    }
     graphData.nodes.forEach(node => {
       const key = normalizeNodeName(node.name);
       nodesByNormalizedName.set(key, [...(nodesByNormalizedName.get(key) || []), node]);
@@ -457,7 +464,7 @@
       topicsList.replaceChildren();
       const query = topicsFilter.value.trim().toLocaleLowerCase();
       const topics = graphData.nodes
-        .filter(node => node.kind === "kafka_topic")
+        .filter(node => ["kafka_topic", "message_channel"].includes(node.kind))
         .slice()
         .sort((left, right) => left.name.localeCompare(right.name));
       const visibleTopics = topics.filter(node => !query || node.name.toLocaleLowerCase().includes(query));
@@ -476,7 +483,6 @@
       const item = referenceItem(nodeDisplayName(node), meta, "Voir", () => {
         setToolbarTab("graph");
         selectNode(node.id);
-        openArchitectureNodeInspector(node, { reset: true });
       });
       item.classList.add("architecture-resource-reference");
       item.addEventListener("click", event => {
@@ -791,7 +797,7 @@
         if (button) {
           const target = nodeDataById.get(button.dataset.modelNodeId);
           if (!target) return;
-          selectNode(target.id);
+          selectNode(target.id, false, false);
           openArchitectureNodeInspector(target, { push: true });
           return;
         }
@@ -976,7 +982,7 @@
     }
     function openArchitectureReference(node, backAction) {
       if (!node) return;
-      selectNode(node.id);
+      selectNode(node.id, false, false);
       openArchitectureNodeInspector(node, { reset: true, backAction });
     }
     function architectureReferenceEntry(node, label, title, backAction) {

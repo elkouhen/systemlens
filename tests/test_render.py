@@ -1707,7 +1707,7 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'hitArea.classList.add("graph-arc-hit-area");' in document
     assert 'const callGraphArcTooltipLabel = (link, sourcePort, targetPort) =>' in document
     assert 'hitArea.setAttribute("title", tooltipLabel);' in document
-    assert ".graph-arc-hit-area { fill: none; stroke: transparent !important; stroke-width: 14px !important;" in document
+    assert ".graph-arc-hit-area { fill: none; stroke: transparent !important; stroke-width: 24px !important;" in document
     assert ".graph-port-path, .graph-call-path { fill: none; stroke: #7c3aed; stroke-width: 2;" in document
     assert ".graph-call-path.is-rest { stroke: #d55e00; }" in document
     assert ".graph-call-label { fill: #7c3aed;" in document

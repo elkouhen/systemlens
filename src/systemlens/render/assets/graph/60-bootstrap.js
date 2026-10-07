@@ -1,5 +1,6 @@
 // Ordered source module: 60-bootstrap.js
     function reset() {
+      closeInspector();
       expandedHttpRoute = null;
       updateGraphState({
         selectedId: null,

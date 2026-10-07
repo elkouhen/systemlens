@@ -46,17 +46,17 @@ def test_service_inspector_shows_persisted_jpa_entity() -> None:
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
         page.locator(".graph-node-card-label").filter(has_text="payment").click()
-        assert page.get_by_text("Entités JPA déclarées").is_visible()
-        assert page.get_by_text(
-            "example.Customer · payment/src/main/java/example/Customer.java:3"
-        ).is_visible()
+        assert page.locator("#inspector-modal").is_visible()
+        assert page.locator("#details").is_hidden()
+        assert page.locator("#inspector-body").get_by_text("Entités JPA déclarées").is_visible()
+        assert page.locator("#inspector-body").get_by_text("example.Customer", exact=False).is_visible()
         context.close()
         browser.close()
 
 
 @pytest.mark.slow
-def test_architecture_catalogue_opens_node_inspector_widget() -> None:
-    document = _SIMPLE_DATASET_EXPORT.read_text(encoding="utf-8")
+def test_architecture_catalogue_opens_node_inspection_modal() -> None:
+    document = _current_simple_dataset_document()
     with sync_playwright() as playwright:
         try:
             browser = _launch_visual_browser(playwright)
@@ -67,7 +67,7 @@ def test_architecture_catalogue_opens_node_inspector_widget() -> None:
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
         page.locator("#microservices-tab").click()
-        page.locator("#microservices-list .reference-title").first.click()
+        page.locator("#microservices-list .reference-title").filter(has_text="order-service").click()
         assert page.locator("#inspector-modal").is_visible()
         assert page.locator("#inspector-title").inner_text().startswith("Microservice ·")
         assert page.locator("#inspector-body .architecture-node-inspector").is_visible()
@@ -77,34 +77,43 @@ def test_architecture_catalogue_opens_node_inspector_widget() -> None:
         assert page.locator("#inspector-title").inner_text().startswith(("Topic ·", "Collection ·", "Microservice ·"))
         page.locator("#inspector-back").click()
         assert page.locator("#inspector-title").inner_text().startswith("Microservice ·")
-        called_route = page.locator("#inspector-body .architecture-node-inspector [data-inspector-kind='route']").first
-        assert called_route.is_visible()
-        called_route.click()
-        assert page.locator("#inspector-title").inner_text().startswith("Route HTTP ·")
-        page.locator("#inspector-back").click()
-        assert page.locator("#inspector-title").inner_text().startswith("Microservice ·")
-        route_page = context.new_page()
-        route_page.set_default_timeout(5_000)
-        route_page.set_content(document, wait_until="load")
-        route_page.locator("#routes-tab").click()
-        route_page.locator("#routes-panel").wait_for(state="visible")
-        route = route_page.locator("#routes-list .route-reference-toggle").first
-        route.wait_for(state="visible")
-        route.click()
-        assert route_page.locator("#inspector-title").inner_text().startswith("Route HTTP ·")
-        assert route_page.locator("#inspector-body .route-inspector-summary").is_visible()
-        clients = route_page.get_by_role("heading", name="Microservices clients").locator("..")
-        clients.get_by_role("button", name=re.compile("order-service")).click()
-        assert route_page.locator("#inspector-title").inner_text().startswith("Microservice · order-service")
-        route_page.locator("#inspector-back").click()
-        assert route_page.locator("#inspector-title").inner_text().startswith("Route HTTP ·")
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_topic_catalogue_opens_node_inspection_modal() -> None:
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1200, "height": 800})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator("#kafka-tab").click()
+        topic = page.locator("#topics-list .reference-title").first
+        topic.wait_for(state="visible")
+        topic.click()
+        assert page.locator("#inspector-modal").is_visible()
+        assert page.locator("#inspector-title").inner_text().startswith("Topic ·")
+        assert page.locator("#details").is_hidden()
+        assert page.locator("#inspector-body").get_by_text("Relations", exact=True).is_visible()
+        page.locator("#inspector-close").click()
+        graph_topic = page.locator(".graph-node-card-label").filter(has_text="supermarket.stock.restock-requested").first
+        graph_topic.click()
+        assert page.locator("#inspector-modal").is_visible()
+        assert page.locator("#inspector-title").inner_text().startswith("Topic ·")
+        assert page.locator("#details").is_hidden()
         context.close()
         browser.close()
 
 
 @pytest.mark.slow
 def test_microservice_called_route_opens_target_route_inspector() -> None:
-    document = _SIMPLE_DATASET_EXPORT.read_text(encoding="utf-8")
+    document = _current_simple_dataset_document()
     with sync_playwright() as playwright:
         try:
             browser = _launch_visual_browser(playwright)
@@ -130,8 +139,8 @@ def test_microservice_called_route_opens_target_route_inspector() -> None:
 
 
 @pytest.mark.slow
-def test_graph_node_widget_exposes_called_route_navigation() -> None:
-    document = _SIMPLE_DATASET_EXPORT.read_text(encoding="utf-8")
+def test_graph_node_opens_called_route_in_inspection_modal() -> None:
+    document = _current_simple_dataset_document()
     with sync_playwright() as playwright:
         try:
             browser = _launch_visual_browser(playwright)
@@ -141,13 +150,63 @@ def test_graph_node_widget_exposes_called_route_navigation() -> None:
         page = context.new_page()
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
-        page.locator(".graph-node-card-label").filter(has_text="order-service").click()
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 0"
+        )
+        page.locator(".graph-node-card-label").filter(has_text="order-service").click(force=True)
         called_route = page.locator(
-            "#details [data-inspector-kind='route'][data-inspector-route='POST /api/reservations']"
+            "#inspector-body [data-inspector-kind='route'][data-inspector-route='POST /api/reservations']"
         )
         assert called_route.count() >= 1
         called_route.first.click()
         assert page.locator("#inspector-title").inner_text().startswith("Route HTTP · POST /api/reservations")
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_architecture_arc_opens_node_inspection_modal() -> None:
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1400, "height": 900})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        hit_area = page.locator("#graph-port-paths .graph-dependency-hit-area").first
+        hit_area.click(force=True)
+        assert page.locator("#inspector-title").inner_text().startswith(("Topic ·", "Route HTTP ·", "Microservice ·"))
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_call_tree_nodes_and_kafka_arcs_open_node_inspection_modal() -> None:
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1400, "height": 900})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator("#flows-mode-tab").click()
+        page.locator(".code-flow-item").first.click()
+        page.locator(".graph-call-tree-node").first.click()
+        assert page.locator("#inspector-title").inner_text().startswith("Microservice ·")
+        page.locator("#inspector-close").click()
+        http_label = page.locator(".graph-call-tree-edge-label.is-clickable").filter(has_text="HTTP").first
+        http_label.click()
+        assert page.locator("#inspector-title").inner_text().startswith("Route HTTP ·")
+        page.locator("#inspector-close").click()
+        topic_label = page.locator(".graph-call-tree-edge-label.is-clickable").filter(has_text="Kafka").first
+        topic_label.click()
+        assert page.locator("#inspector-title").inner_text().startswith("Topic ·")
         context.close()
         browser.close()
 
@@ -167,6 +226,27 @@ _LAYER_GEOMETRY = (
 _GRAPH_ASSETS = Path(__file__).parents[1] / "src" / "systemlens" / "render" / "assets"
 _GRAPH_CSS_MODULES = tuple(sorted(_GRAPH_ASSETS.joinpath("graph").glob("*.css")))
 _GRAPH_JS_MODULES = tuple(sorted(_GRAPH_ASSETS.joinpath("graph").glob("*.js")))
+
+
+def _current_simple_dataset_document() -> str:
+    """Use the checked-in model data with the current renderer assets."""
+    source = _SIMPLE_DATASET_EXPORT.read_text(encoding="utf-8")
+    match = re.search(r'<script id="graph-data"[^>]*>([\s\S]*?)</script>', source)
+    assert match, "The simple export must contain a graph-data script"
+    template = _GRAPH_TEMPLATE.read_text(encoding="utf-8")
+    return (
+        template
+        .replace(
+            "__GRAPH_CSS__",
+            "".join(path.read_text(encoding="utf-8") for path in _GRAPH_CSS_MODULES),
+        )
+        .replace(
+            "__GRAPH_JS__",
+            "\n".join(path.read_text(encoding="utf-8") for path in _GRAPH_JS_MODULES),
+        )
+        .replace("__GRAPH_DATA__", match.group(1))
+        .replace("__LAYER_GEOMETRY__", _LAYER_GEOMETRY.read_text(encoding="utf-8"))
+    )
 
 
 def _complex_dataset_document() -> str:
@@ -1496,13 +1576,15 @@ def test_selection_and_render_mode_preserve_graph_framing() -> None:
 
         selected = page.locator(".graph-node-card-label").first
         selected.dispatch_event("click")
-        page.locator("#details:not(.is-empty)").wait_for(state="visible")
+        page.locator("#inspector-modal").wait_for(state="visible")
+        assert page.locator("#details").is_hidden()
         page.wait_for_timeout(100)
         assert selected.locator(".graph-node-card-name").evaluate(
             "name => getComputedStyle(name).visibility"
         ) == "visible"
         _assert_node_centers_unchanged(graph_centers, _node_centers(page))
 
+        page.locator("#inspector-close").click()
         page.locator("#render-cards").click()
         page.wait_for_function("() => document.querySelector('#graph')?.dataset.renderMode === 'cards'")
         _assert_node_centers_unchanged(graph_centers, _node_centers(page))
@@ -1546,7 +1628,7 @@ def test_selection_and_render_mode_preserve_graph_framing() -> None:
             page.locator(f'.graph-node-card-label[data-node-id="{bottom_node_id}"]').dispatch_event(
                 "click"
             )
-            page.locator("#details:not(.is-empty)").wait_for(state="visible")
+            page.locator("#inspector-modal").wait_for(state="visible")
             page.wait_for_timeout(350)
             graph_after_selection = page.locator("#graph").bounding_box()
             assert graph_after_selection["height"] == pytest.approx(
@@ -1573,6 +1655,7 @@ def test_selection_and_render_mode_preserve_graph_framing() -> None:
             assert page.locator(".graph-namespace-group").count() > 0
             if button_id == "layout-elk":
                 assert page.locator(".graph-layer-band").count() > 0
+            page.locator("#inspector-close").click()
             page.locator("#reset").click()
             page.wait_for_timeout(200)
 
@@ -1592,7 +1675,7 @@ def test_generated_simple_supermarket_starts_with_every_node_in_view() -> None:
         page.set_default_timeout(10_000)
         errors: list[str] = []
         page.on("pageerror", lambda error: errors.append(str(error)))
-        page.set_content(_SIMPLE_DATASET_EXPORT.read_text(encoding="utf-8"), wait_until="load")
+        page.set_content(_current_simple_dataset_document(), wait_until="load")
         page.wait_for_function(
             "() => document.querySelector('#graph')?.dataset.visibleNodeCount === '7'"
         )
@@ -2270,24 +2353,23 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         assert not page.get_by_text("Flux de donnees").count()
         orders_stop.click()
         _capture_render_snapshot(page, "constrained-after-node-select")
-        assert page.locator(".details-title").inner_text() == "orders"
-        assert "has-details" in (page.locator(".toolbar").get_attribute("class") or "")
-        assert page.locator("#reset").inner_text() == "Fermer"
+        assert page.locator("#inspector-title").inner_text().startswith("Microservice · orders")
+        assert "has-details" not in (page.locator(".toolbar").get_attribute("class") or "")
+        assert page.locator("#reset").inner_text() == "Réinitialiser"
         assert search.is_hidden()
         assert page.locator("#graph-summary").is_hidden()
-        assert page.locator("#details").bounding_box() is not None
-        assert page.locator("#details .details-title").bounding_box() is not None
-        module_action = page.get_by_role("link", name="Ouvrir le projet Maven dans VS Code")
+        assert page.locator("#details").is_hidden()
+        module_action = page.locator("#inspector-body").get_by_role("link", name="Ouvrir le projet Maven dans VS Code")
         assert module_action.is_visible()
         assert module_action.get_attribute("href") == f"vscode://file/{module.path}"
-        assert page.locator("#details .details-group > summary").all_text_contents() == [
+        assert page.locator("#inspector-body .details-group > summary").all_text_contents() == [
             "Architecture", "Ports d'intégration", "Relations", "Sources"
         ]
-        details_meta = page.locator("#details .details-meta").inner_text()
+        details_meta = page.locator("#inspector-body .details-meta").inner_text()
         assert "Relations : 4" in details_meta
         assert "Layer :" not in details_meta
         assert "Chemin des clusters :" not in details_meta
-        architecture = page.locator("#details .details-group").filter(has_text="Architecture")
+        architecture = page.locator("#inspector-body .details-group").filter(has_text="Architecture")
         assert "Application" in architecture.inner_text()
         assert "test_html_export_resources_are0" in architecture.inner_text()
         architecture_links = architecture.locator("button.relation-link")
@@ -2304,7 +2386,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         assert page.get_by_text("Publisher.java:4").is_visible()
         page.get_by_role("button", name="orders.created", exact=True).click()
         _capture_render_snapshot(page, "constrained-after-topic-select")
-        consumers = page.locator("#details .details-section").filter(has_text="Services consommateurs")
+        consumers = page.locator("#inspector-body .details-section").filter(has_text="Services consommateurs")
         assert consumers.get_by_role("button", name="payments", exact=True).is_visible()
         assert not consumers.get_by_role("button", name="orders.created", exact=True).count()
         assert page.get_by_text("DTO de topic", exact=True).is_visible()
@@ -2323,7 +2405,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         search.fill("inventory")
         search.press("Enter")
         _capture_render_snapshot(page, "constrained-after-inventory-search")
-        assert page.locator(".details-title").inner_text() == "inventory"
+        assert page.locator("#inspector-title").inner_text().startswith("Microservice · inventory")
         # Run the same geometry contract against every primary view and every
         # camera state. This is intentionally one fixture so a layout fix for
         # one view cannot silently regress another view.

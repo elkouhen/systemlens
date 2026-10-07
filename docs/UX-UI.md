@@ -76,9 +76,11 @@ selection.
 
 ## Navigation, selection, and inspection
 
-Selecting a microservice or resource focuses its graph card and opens the
-corresponding inspector. Relations in the inspector remain interactive and
-open the target while preserving a breadcrumb path. The header back action
+Selecting a microservice, Topic, Mongo collection, or any other indexed
+resource focuses its graph card and opens a dedicated introspection window.
+The introspection MUST NOT render as a nested sub-widget inside the left
+navigation widget. Relations in the introspection window remain interactive
+and open the target while preserving a breadcrumb path. The header back action
 returns to the previous element; nested DTO and persistence-class views use
 the same action and MUST NOT add a second in-body return control.
 

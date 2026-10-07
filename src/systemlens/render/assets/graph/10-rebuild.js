@@ -883,6 +883,35 @@
           updateAnalysisModeIndicator();
           requestGraphRender();
         };
+        const inspectArchitectureLink = link => {
+          const source = nodeDataById.get(link.source);
+          const target = nodeDataById.get(link.target);
+          const labeledResource = graphData.nodes.find(node => (
+            ["kafka_topic", "message_channel", "mongodb_collection", "data_schema", "jpa_entity"].includes(node.kind)
+            && node.name === link.label
+          ));
+          const resource = labeledResource || [target, source].find(node => node && [
+            "kafka_topic", "message_channel", "mongodb_collection", "data_schema", "jpa_entity",
+          ].includes(node.kind));
+          if (resource) {
+            renderDetails(resource.id);
+            openArchitectureNodeInspector(resource, { reset: true });
+            hideInlineDetailsAfterModal();
+            return;
+          }
+          if (link.kind === "rest" && target) {
+            const route = (target.http_routes || []).find(item => item.route === link.label);
+            if (route) {
+              openHttpRouteInspector(target, route);
+              return;
+            }
+          }
+          if (target) {
+            renderDetails(target.id);
+            openArchitectureNodeInspector(target, { reset: true });
+            hideInlineDetailsAfterModal();
+          }
+        };
         updateAnalysisModeIndicator();
         if (graphState.selectedCodeFlowId) return;
         const selectedFlows = (graphData.code_flows || []).filter(flow => (
@@ -1295,7 +1324,10 @@
             window.removeEventListener("pointermove", moveForwardedPointer, true);
             window.removeEventListener("pointerup", finishForwardedPointer, true);
             window.removeEventListener("pointercancel", finishForwardedPointer, true);
-            if (!wasDrag) selectNode(id);
+            if (!wasDrag) {
+              suppressNextCardClick = true;
+              selectNode(id);
+            }
           };
           const moveForwardedPointer = event => {
             if (!forwardedPointer || event.pointerId !== forwardedPointer.pointerId) return;
@@ -1346,6 +1378,12 @@
               suppressNextCardClick = false;
               return;
             }
+            if (isResource) {
+              renderDetails(id);
+              openArchitectureNodeInspector(node, { reset: true });
+              hideInlineDetailsAfterModal();
+              return;
+            }
             selectNode(id);
           });
           nodeLabelOverlay.append(label);
@@ -1370,6 +1408,13 @@
               showDependencyTooltip(link, event.clientX, event.clientY);
             });
             hitArea.addEventListener("pointerleave", () => flowTooltipOverlay.replaceChildren());
+            if (link.kind === "kafka") {
+              hitArea.addEventListener("click", event => {
+                inspectArchitectureLink(link);
+                event.preventDefault();
+                event.stopPropagation();
+              });
+            }
             portPathOverlay.append(hitArea);
           });
         }
@@ -2031,6 +2076,7 @@
             clearCallGraphAnalysisFocus();
             const viewIndex = callGraphArcNavigator.views.findIndex(view => view.edgeKey === resolvedEdgeKey);
             if (viewIndex >= 0) focusCallGraphArc(viewIndex);
+            inspectArchitectureLink(link);
             event?.preventDefault();
             event?.stopPropagation();
           });
@@ -2208,6 +2254,14 @@
       });
       renderer.on("leaveEdge", () => flowTooltipOverlay.replaceChildren());
       renderer.on("clickNode", ({ node }) => selectNode(node));
+      renderer.on("clickEdge", ({ edge, event }) => {
+        if (graphState.selectedCodeFlowId) return;
+        const match = String(edge).match(/^edge(?:-hit)?-(\d+)$/);
+        const link = match ? visibleLinks[Number(match[1])] : null;
+        if (!link || link.kind !== "kafka") return;
+        inspectArchitectureLink(link);
+        event?.preventSigmaDefault?.();
+      });
       renderer.on("clickStage", reset);
       renderer.on("doubleClickStage", event => event.preventSigmaDefault?.());
       renderer.on("doubleClickNode", event => event.preventSigmaDefault?.());

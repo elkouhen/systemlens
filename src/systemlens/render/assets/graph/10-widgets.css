@@ -64,7 +64,13 @@
     #search { width: 100%; }
     .graph-context { display: grid; gap: 8px; }
     .graph-context[hidden] { display: none; }
-    .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 444px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: min(680px, calc(100vw - 480px)); max-height: min(24vh, 170px); box-sizing: border-box; padding: 10px 12px; overflow: hidden; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 12px; color: #283b73; background: rgba(238, 242, 255, .96); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; }
+    .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 444px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: min(680px, calc(100vw - 480px)); max-height: min(24vh, 170px); box-sizing: border-box; padding: 10px 12px; overflow: hidden; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 12px; color: #283b73; background: rgba(238, 242, 255, .96); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; pointer-events: none; }
+    .graph-mode-context > * { pointer-events: auto; }
+    .graph-mode-context.is-architecture-toolbar .graph-mode-context-copy { pointer-events: none; }
+    .graph-mode-context.is-architecture-toolbar .graph-mode-context-actions { pointer-events: none; }
+    .graph-mode-context.is-architecture-toolbar .graph-mode-context-actions button,
+    .graph-mode-context.is-architecture-toolbar .graph-mode-context-actions select,
+    .graph-mode-context.is-architecture-toolbar .graph-mode-context-actions input { pointer-events: auto; }
     .graph-mode-context[hidden] { display: none; }
     .graph-mode-context-copy { display: grid; gap: 3px; min-width: 0; min-height: 0; overflow: hidden; }
     .graph-mode-context.is-collapsed .graph-mode-context-copy { display: none; }

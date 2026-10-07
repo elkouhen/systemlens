@@ -23,6 +23,15 @@
       empty.textContent = message;
       details.append(empty);
     }
+    function hideInlineDetailsAfterModal() {
+      details.classList.add("is-empty");
+      document.querySelector(".toolbar")?.classList.remove("has-details");
+      details.replaceChildren();
+      resetButton.disabled = false;
+      resetButton.textContent = "Réinitialiser";
+      resetButton.title = "Réinitialiser la sélection";
+      resetButton.setAttribute("aria-label", resetButton.title);
+    }
     function persistState() {
       // Explorer state is ephemeral; URL fragments never drive rendering.
     }
@@ -708,7 +717,7 @@
       inspectorBody.append(summary);
       const openRelatedNode = node => {
         if (!node) return;
-        selectNode(node.id);
+        selectNode(node.id, false, false);
         openArchitectureNodeInspector(node, {
           reset: true,
           backAction: () => openHttpRouteInspector(providerNode, route),
@@ -739,7 +748,7 @@
         title: `Ouvrir ${route.location} dans VS Code`,
         action: () => { window.location.href = route.vscode_uri; },
       }] : [], inspectorBody);
-      selectNode(providerNode.id);
+      selectNode(providerNode.id, false, false);
     }
     function openHttpCallInspector(callerNode, route, call) {
       if (!callerNode || !route) return;
@@ -762,7 +771,7 @@
       inspectorBody.append(summary);
       const openRelatedNode = node => {
         if (!node) return;
-        selectNode(node.id);
+        selectNode(node.id, false, false);
         openArchitectureNodeInspector(node, {
           reset: true,
           backAction: () => openHttpCallInspector(callerNode, route, call),
@@ -1311,6 +1320,11 @@
       });
       renderer.refresh();
       renderDetails(id);
+      const node = nodeDataById.get(id);
+      if (node) {
+        openArchitectureNodeInspector(node, { reset: true });
+        hideInlineDetailsAfterModal();
+      }
       persistState();
     }
     function focusPublishedRestResource(id, resource) {
@@ -1347,10 +1361,21 @@
       graphState.relatedNodes = new Set(distances.keys());
       graphState.relatedEdges = relatedEdges;
     }
-    function selectNode(id, preservePath = false) {
+    function selectNode(id, preservePath = false, openNodeInspector = true) {
       // A focused flow graph is navigated with its flow arcs and camera only.
       // Do not let a microservice click leave the flow projection.
       if (graphState.selectedCodeFlowId) return;
+      const node = nodeDataById.get(id);
+      const isInspectableResource = node && [
+        "kafka_topic", "message_channel", "mongodb_collection", "data_schema", "jpa_entity",
+      ].includes(node.kind);
+      if (openNodeInspector && isInspectableResource) {
+        renderDetails(id);
+        openArchitectureNodeInspector(node, { reset: true });
+        hideInlineDetailsAfterModal();
+        persistState();
+        return;
+      }
       if (!preservePath && !pathLock.checked) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
@@ -1368,5 +1393,9 @@
       delete graphCanvas.dataset.selectedCodeFlow;
       renderer.refresh();
       renderDetails(id);
+      if (openNodeInspector && node) {
+        openArchitectureNodeInspector(node, { reset: true });
+        hideInlineDetailsAfterModal();
+      }
       persistState();
     }

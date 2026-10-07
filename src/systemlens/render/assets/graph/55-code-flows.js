@@ -178,6 +178,33 @@
     const nodeIdForCodeFlowResource = (name, kind) => uniqueNodeId(
       nodeIdsByResource.get(`${kind}:${name}`)
     );
+    const nodeForCallTreeTopic = name => graphData.nodes.find(node => (
+      ["kafka_topic", "message_channel"].includes(node.kind)
+      && node.name === name
+    ));
+    const routeForCallTreeEdge = edge => {
+      const target = graphData.nodes.find(node => (
+        node.kind === "microservice" && node.name === edge.target
+      ));
+      const route = target?.http_routes?.find(item => item.route === edge.label);
+      return target && route ? { target, route } : null;
+    };
+    const openCallTreeNodeInspector = node => {
+      if (!node) return;
+      renderDetails(node.id);
+      openArchitectureNodeInspector(node, { reset: true });
+      hideInlineDetailsAfterModal();
+    };
+    const openCallTreeEdgeInspector = edge => {
+      if (edge.kind === "kafka") {
+        openCallTreeNodeInspector(nodeForCallTreeTopic(edge.label));
+        return;
+      }
+      if (edge.kind === "rest") {
+        const route = routeForCallTreeEdge(edge);
+        if (route) openHttpRouteInspector(route.target, route.route);
+      }
+    };
     const nodeIdForEndpoint = endpointId => uniqueNodeId(nodeIdsByEndpoint.get(endpointId));
 
     function captureCallTreeCamera() {
@@ -216,7 +243,10 @@
           canvas.style.top = `${callTreePan.startTop + event.clientY - callTreePan.startY}px`;
         };
         graphCallTreeOverlay.addEventListener("pointerdown", event => {
-          if (event.button !== 0 || event.target.closest?.(".graph-call-tree-node")) return;
+          const interactiveEdge = event.target.closest?.(".graph-call-tree-edge-label.is-clickable")
+            || event.target.classList?.contains("graph-call-tree-edge")
+            || event.target.classList?.contains("graph-call-tree-edge-hit");
+          if (event.button !== 0 || event.target.closest?.(".graph-call-tree-node") || interactiveEdge) return;
           const canvas = graphCallTreeOverlay.querySelector(".graph-call-tree-canvas");
           if (!canvas) return;
           callTreePan = {
@@ -532,8 +562,12 @@
             const middleY = (startY + endY) / 2;
             line.setAttribute("d", `M ${source.x + cardWidth / 2} ${startY} C ${source.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${endY}`);
           }
+          const edgeHit = line.cloneNode();
+          edgeHit.classList.remove("graph-call-tree-edge");
+          edgeHit.classList.add("graph-call-tree-edge-hit");
           const protocolClass = child.edge.kind === "rest" ? "is-rest" : child.edge.kind === "kafka" ? "is-kafka" : "";
           line.classList.add("graph-call-tree-edge", protocolClass);
+          edgeHit.classList.add(protocolClass);
           const edgeTooltip = treeEdgeTooltip(child.edge);
           line.setAttribute("title", [edgeTooltip.title, ...edgeTooltip.lines].join(" · "));
           line.addEventListener("mouseenter", event => {
@@ -545,12 +579,40 @@
             if (tooltip) showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
           });
           line.addEventListener("mouseleave", () => { line.classList.remove("is-hovered"); clearTreeTooltip(); });
+          const topicNode = child.edge.kind === "kafka"
+            ? nodeForCallTreeTopic(child.edge.label)
+            : null;
+          const callTreeRoute = child.edge.kind === "rest"
+            ? routeForCallTreeEdge(child.edge)
+            : null;
+          if (topicNode || callTreeRoute) {
+            line.style.cursor = "pointer";
+            line.addEventListener("click", event => {
+              event.preventDefault();
+              event.stopPropagation();
+              openCallTreeEdgeInspector(child.edge);
+            });
+            edgeHit.addEventListener("click", event => {
+              event.preventDefault();
+              event.stopPropagation();
+              openCallTreeEdgeInspector(child.edge);
+            });
+          }
+          svg.append(edgeHit);
           svg.append(line);
           const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
           label.classList.add("graph-call-tree-edge-label");
           label.setAttribute("x", String(labelX));
           label.setAttribute("y", String(labelY));
           label.textContent = edgeDisplayLabel(child.edge);
+          if (topicNode || callTreeRoute) {
+            label.classList.add("is-clickable");
+            label.addEventListener("click", event => {
+              event.preventDefault();
+              event.stopPropagation();
+              openCallTreeEdgeInspector(child.edge);
+            });
+          }
           const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
           title.textContent = `${child.edge.order ? `Arc #${child.edge.order} · ` : ""}${child.edge.label || child.edge.kind || "Appel"}`;
           label.append(title);
@@ -651,7 +713,11 @@
           showTreeTooltip("graph-call-tree-entity-tooltip", occurrence.name, treeOccurrenceTooltipLines(occurrence), event.clientX, event.clientY);
         });
         node.addEventListener("mouseleave", () => { node.classList.remove("is-hovered"); clearTreeTooltip(); });
-        node.addEventListener("click", () => { if (original) selectNode(original); });
+        node.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          openCallTreeNodeInspector(originalNode);
+        });
         canvas.append(node);
       });
       graphCallTreeOverlay.replaceChildren(canvas);
