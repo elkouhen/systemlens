@@ -604,32 +604,6 @@
       showPath(path, stops);
       return true;
     }
-    function showSimplePaths() {
-      const parsed = parsePathQuery();
-      if (parsed.error) {
-        graphState.selectedId = null; graphState.relatedNodes = null; graphState.relatedEdges = null; graphState.pathMicroserviceOrder = new Map();
-        renderer.refresh();
-        setDetailsEmpty(parsed.error);
-        pathStops.splice(0, pathStops.length);
-        persistState();
-        return;
-      }
-      if (parsed.stops.length !== 2) {
-        setDetailsEmpty("Les chemins simples se recherchent entre un microservice source et un microservice cible, sans nœud intermédiaire imposé.");
-        return;
-      }
-      const simplePaths = allSimplePaths(parsed.stops[0], parsed.stops[1]);
-      graphState.selectedId = null; graphState.relatedNodes = null; graphState.relatedEdges = null; graphState.relatedLocalPortLinks = new Set(); graphState.pathMicroserviceOrder = new Map();
-      pathStops.splice(0, pathStops.length);
-      renderer.refresh();
-      if (!simplePaths.paths.length) {
-        setDetailsEmpty(`Aucun chemin simple orienté, de ${nodeDataById.get(parsed.stops[0]).name} vers ${nodeDataById.get(parsed.stops[1]).name}, dans les limites de recherche.`);
-        persistState();
-        return;
-      }
-      renderSimplePathChoices(simplePaths.paths, simplePaths.limited);
-      persistState();
-    }
     function appendServiceKafkaActivities(node, role, title, links, container) {
       if (!links.length) return;
       const section = document.createElement("section");
@@ -1275,7 +1249,7 @@
       if (!members.length) appendList("Ressources contenues", ["Aucune ressource directe"]);
     }
     async function selectCluster(cluster) {
-      if (!pathLock.checked) clearPathControls();
+      clearPathControls();
       if (!graphState.layeredView && !graphState.clusteredView) await applyLayout("cluster");
       const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);
       updateGraphState({
@@ -1298,7 +1272,7 @@
       persistState();
     }
     function focusNodeRelations(id, matches) {
-      if (!pathLock.checked) clearPathControls();
+      clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
       dependencyAnalysisControls.disabled = false;
@@ -1376,7 +1350,7 @@
         persistState();
         return;
       }
-      if (!preservePath && !pathLock.checked) clearPathControls();
+      if (!preservePath) clearPathControls();
       graphState.pathMicroserviceOrder = new Map();
       graphState.selectedId = id;
       dependencyAnalysisControls.disabled = false;

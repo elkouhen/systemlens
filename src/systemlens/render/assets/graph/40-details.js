@@ -18,7 +18,10 @@
       const showingGraph = tab === "graph";
       const showingFlows = tab === "flows";
       const showingFlowGraph = showingFlows && options.showFlowGraph === true;
-      const graphVisible = showingGraph || showingFlowGraph;
+      // Architecture catalogues remain contextual views over the same graph:
+      // changing to Microservices, Topics, Routes, or another architecture
+      // sub-view must not make the graph disappear behind the toolbar.
+      const graphVisible = !showingFlows || showingFlowGraph;
       if (showingGraph) graphState.viewMode = "architecture";
       else if (showingFlowGraph) graphState.viewMode = "call-graph";
       else if (showingFlows) graphState.viewMode = "empty";

@@ -98,7 +98,6 @@
     const graphCallTreeOverlay = document.getElementById("graph-call-tree");
     const flowTooltipOverlay = document.getElementById("graph-flow-tooltips");
     const graphFlowStatus = document.getElementById("graph-flow-status");
-    const showProjectGroups = document.getElementById("show-project-groups");
     const nodeKindLabel = node => {
       const genericLabel = node.kind === "kafka_topic"
         ? "Topic"
@@ -222,7 +221,6 @@
       renderMode: "cards",
       callGraphDisplayMode: "tree",
       callTreeDepth: 3,
-      callTreeDirection: "lr",
       callTreeZoom: 1,
     };
     function updateGraphState(patch) {

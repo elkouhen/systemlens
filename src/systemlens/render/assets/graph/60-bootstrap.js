@@ -29,19 +29,17 @@
       persistState();
     }
     function restoreState() {
-      pathLock.checked = false;
     }
     function activeRenderer() {
       return renderer;
     }
-    const fitOverviewButton = document.getElementById("fit-view");
-    const fitReadableButton = document.getElementById("fit-readable");
     const renderCardsButton = document.getElementById("render-cards");
     const renderSymbolsButton = document.getElementById("render-symbols");
     const analysisModeClear = document.getElementById("analysis-mode-clear");
     const analysisModeCenter = document.getElementById("analysis-mode-center");
     const analysisModeExpandAll = document.getElementById("analysis-mode-expand-all");
-    const callTreeDirection = document.getElementById("call-tree-direction");
+    const callTreeDepthDecrease = document.getElementById("call-tree-depth-decrease");
+    const callTreeDepthIncrease = document.getElementById("call-tree-depth-increase");
     const analysisContextCollapse = document.getElementById("analysis-context-collapse");
     const toolbar = document.getElementById("architecture-toolbar");
     const toolbarCollapse = document.getElementById("toolbar-collapse");
@@ -70,9 +68,11 @@
     analysisModeExpandAll?.addEventListener("click", () => {
       expandAllCallTree();
     });
-    callTreeDirection?.addEventListener("change", () => {
-      graphState.callTreeDirection = callTreeDirection.value === "tb" ? "tb" : "lr";
-      requestGraphRender();
+    callTreeDepthDecrease?.addEventListener("click", () => {
+      adjustCallTreeDepth(-1);
+    });
+    callTreeDepthIncrease?.addEventListener("click", () => {
+      adjustCallTreeDepth(1);
     });
     analysisContextCollapse?.addEventListener("click", () => {
       graphState.analysisContextCollapsed = !graphState.analysisContextCollapsed;
@@ -83,9 +83,10 @@
     });
     function updateFitModeControls(mode) {
       [
-        [fitOverviewButton, "overview"],
-        [fitReadableButton, "readable"],
+        [null, "overview"],
+        [null, "readable"],
       ].forEach(([button, buttonMode]) => {
+        if (!button) return;
         const active = mode === buttonMode;
         button.classList.toggle("is-active", active);
         button.setAttribute("aria-pressed", String(active));
@@ -174,8 +175,6 @@
       camera.setState({ ...state, ratio: Math.min(graphState.maximumCollisionFreeRatio, state.ratio * 1.25) });
       requestGraphRender();
     });
-    fitOverviewButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "overview"));
-    fitReadableButton.addEventListener("click", () => fitCameraToVisibleGraph(activeRenderer(), "readable"));
     renderCardsButton.addEventListener("click", () => setNodeRenderMode("cards"));
     renderSymbolsButton.addEventListener("click", () => setNodeRenderMode("symbols"));
     resetButton.addEventListener("click", reset);
@@ -201,7 +200,6 @@
     inspectorBack.addEventListener("click", goBackInspector);
     inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });
     window.addEventListener("keydown", event => { if (event.key === "Escape" && !inspectorModal.hidden) closeInspector(); });
-    document.getElementById("show-simple-paths").addEventListener("click", showSimplePaths);
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
     microservicesTab.addEventListener("click", () => setToolbarTab("microservices"));
@@ -230,7 +228,6 @@
       nodeKafkaTopic,
       nodeMongodbCollection,
       nodeOther,
-      showProjectGroups,
     ].forEach(control => control.addEventListener("click", () => {
       // Reflect the checkbox state synchronously. Rebuilding Sigma and
       // applying the active layout are intentionally asynchronous, while the
@@ -262,7 +259,6 @@
     mongoClassReferencesFilter.addEventListener("input", renderReferences);
     microservicesFilter.addEventListener("input", renderMicroservices);
     collectionsFilter.addEventListener("input", renderCollections);
-    pathLock.addEventListener("change", persistState);
     renderIndexingIssues();
     renderReferences();
     renderMicroservices();

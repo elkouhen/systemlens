@@ -64,7 +64,7 @@
     #search { width: 100%; }
     .graph-context { display: grid; gap: 8px; }
     .graph-context[hidden] { display: none; }
-    .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 444px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: min(680px, calc(100vw - 480px)); max-height: min(24vh, 170px); box-sizing: border-box; padding: 10px 12px; overflow: hidden; border: 1px solid #c7d2fe; border-left: 3px solid #405ad5; border-radius: 12px; color: #283b73; background: rgba(238, 242, 255, .96); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; pointer-events: none; }
+    .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 444px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: min(680px, calc(100vw - 480px)); max-height: min(24vh, 170px); box-sizing: border-box; padding: 10px 12px; overflow: hidden; border: 1px solid var(--ui-accent-border); border-left: 3px solid var(--ui-selected); border-radius: 12px; color: var(--ui-text); background: var(--ui-panel); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; pointer-events: none; }
     .graph-mode-context > * { pointer-events: auto; }
     .graph-mode-context.is-architecture-toolbar .graph-mode-context-copy { pointer-events: none; }
     .graph-mode-context.is-architecture-toolbar .graph-mode-context-actions { pointer-events: none; }
@@ -75,22 +75,23 @@
     .graph-mode-context-copy { display: grid; gap: 3px; min-width: 0; min-height: 0; overflow: hidden; }
     .graph-mode-context.is-collapsed .graph-mode-context-copy { display: none; }
     .graph-mode-context.is-collapsed { width: auto; }
-    .graph-mode-context-path { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; max-width: 100%; max-height: 66px; padding: 1px 4px 2px 0; overflow-y: auto; color: #334155; font-size: 10px; font-weight: 750; scrollbar-width: thin; }
+    .graph-mode-context-path { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; max-width: 100%; max-height: 66px; padding: 1px 4px 2px 0; overflow-y: auto; color: var(--ui-text); font-size: 10px; font-weight: 750; scrollbar-width: thin; }
     .graph-mode-context-path.graph-mode-tree { display: block; }
     .graph-mode-tree-list, .graph-mode-tree-children { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
-    .graph-mode-tree-children { margin: 2px 0 0 10px; padding-left: 8px; border-left: 1px solid #a5b4fc; }
-    .graph-mode-tree-node { min-width: 0; color: #293c82; font-size: 9px; line-height: 1.15; }
-    .graph-mode-tree-node > strong { display: inline-block; padding: 2px 5px; border: 1px solid #c7d2fe; border-radius: 4px; background: #fff; overflow-wrap: anywhere; }
+    .graph-mode-tree-children { margin: 2px 0 0 10px; padding-left: 8px; border-left: 1px solid var(--ui-accent-border); }
+    .graph-mode-tree-node { min-width: 0; color: var(--ui-title); font-size: 9px; line-height: 1.15; }
+    .graph-mode-tree-node > strong { display: inline-block; padding: 2px 5px; border: 1px solid var(--ui-border); border-radius: 4px; background: var(--ui-control); overflow-wrap: anywhere; }
     .graph-mode-tree-branch { display: grid; gap: 2px; min-width: 0; }
-    .graph-mode-tree-edge { display: inline-block; width: fit-content; max-width: 100%; padding: 1px 4px; border-radius: 3px; color: #4338ca; background: #eef2ff; font-size: 8px; overflow-wrap: anywhere; }
+    .graph-mode-tree-edge { display: inline-block; width: fit-content; max-width: 100%; padding: 1px 4px; border-radius: 3px; color: var(--ui-accent-text); background: var(--ui-accent-soft); font-size: 8px; overflow-wrap: anywhere; }
     .graph-mode-tree-node.is-cycle > strong { color: #9a3412; border-color: #fdba74; background: #fff7ed; }
-    .graph-mode-flow-step { display: flex; flex: 0 1 auto; align-items: baseline; gap: 3px; min-width: 0; max-width: 230px; padding: 2px 4px; border: 1px solid #c7d2fe; border-radius: 4px; background: #fff; }
-    .graph-mode-flow-step b { flex: 0 0 auto; color: #4338ca; font-size: 9px; }
-    .graph-mode-flow-step strong { min-width: 0; color: #293c82; font-size: 9px; line-height: 1.15; overflow-wrap: anywhere; }
-    .graph-mode-flow-step small { flex: 0 0 auto; color: #64748b; font-size: 8px; line-height: 1.15; white-space: nowrap; }
-    .graph-mode-flow-arrow { display: grid; flex: 0 0 auto; place-items: center; color: #64748b; font-size: 10px; }
-    .graph-mode-context-copy strong { color: #293c82; font-size: 11px; overflow-wrap: anywhere; }
-    .graph-mode-context-copy span { color: #52658f; }
+    .graph-mode-flow-step { display: flex; flex: 0 1 auto; align-items: baseline; gap: 3px; min-width: 0; max-width: 230px; padding: 2px 4px; border: 1px solid var(--ui-border); border-radius: 4px; background: var(--ui-control); }
+    .graph-mode-flow-step b { flex: 0 0 auto; color: var(--ui-accent-text); font-size: 9px; }
+    .graph-mode-flow-step strong { min-width: 0; color: var(--ui-title); font-size: 9px; line-height: 1.15; overflow-wrap: anywhere; }
+    .graph-mode-flow-step small { flex: 0 0 auto; color: var(--ui-muted); font-size: 8px; line-height: 1.15; white-space: nowrap; }
+    .graph-mode-flow-arrow { display: grid; flex: 0 0 auto; place-items: center; color: var(--ui-muted); font-size: 10px; }
+    .graph-mode-context-copy strong { color: var(--ui-title); font-size: 11px; overflow-wrap: anywhere; }
+    .graph-mode-context-copy span { color: var(--ui-muted); }
+    .graph-mode-context-trigger { width: fit-content; max-width: 100%; padding: 3px 6px; border: 1px solid var(--ui-accent-border); border-radius: 6px; color: var(--ui-accent-text) !important; background: var(--ui-accent-soft); font-size: 10px; font-weight: 800; overflow-wrap: anywhere; }
     .graph-mode-context-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
     .architecture-context-actions { display: contents; }
     .architecture-context-actions[hidden] { display: none; }
@@ -98,12 +99,20 @@
     .graph-mode-context .architecture-context-actions .zoom-controls button { width: 27px; height: 27px; font-size: 16px; }
     .graph-mode-context .architecture-context-actions .graph-control-group { padding: 0 2px; }
     .graph-mode-context .architecture-context-actions .graph-control-group button { height: 27px; font-size: 10px; }
+    .graph-mode-context .architecture-context-actions .view-controls { flex: 1 1 390px; min-width: 330px; gap: 0; padding: 2px; border: 1px solid #aebed4; border-radius: 9px; background: #edf2f7; overflow: hidden; }
+    .graph-mode-context .architecture-context-actions .view-controls button { flex: 1 1 0; min-width: 0; width: auto; padding: 0 8px; border: 0; border-left: 1px solid #cbd6e5; border-radius: 0; color: #52616b; background: transparent; font-weight: 750; white-space: nowrap; }
+    .graph-mode-context .architecture-context-actions .view-controls button:first-child { border-left: 0; }
+    .graph-mode-context .architecture-context-actions .view-controls button:hover { background: rgba(255, 255, 255, .8); }
     .graph-mode-context.is-architecture-toolbar { padding: 8px 10px; }
-    .graph-mode-context .graph-secondary-action { flex: 0 0 auto; height: 27px; padding: 0 8px; border: 1px solid #a5b4fc; border-radius: 7px; color: #3348b8; background: #fff; font-size: 10px; }
-    .graph-mode-context .graph-tree-control { display: inline-flex; align-items: center; gap: 4px; height: 27px; padding: 0 7px; border: 1px solid #c7d2fe; border-radius: 7px; color: #52658f; background: rgba(255, 255, 255, .72); font-size: 9px; font-weight: 750; }
-    .graph-mode-context .graph-tree-control[hidden] { display: none; }
-    .graph-mode-context .graph-tree-control select { height: 21px; padding: 0 3px; border: 0; color: #3348b8; background: transparent; font-size: 10px; font-weight: 800; }
-    .graph-mode-context .graph-secondary-action:hover { border-color: #405ad5; background: #eef2ff; }
+    .graph-mode-context .graph-secondary-action { flex: 0 0 auto; height: 27px; padding: 0 8px; border: 1px solid var(--ui-accent-border); border-radius: 7px; color: var(--ui-accent-text); background: var(--ui-control); font-size: 10px; }
+    .graph-mode-context .graph-secondary-action:hover { border-color: var(--ui-selected); background: var(--ui-accent-soft-hover); }
+    .call-tree-depth-control { display: inline-flex; align-items: center; gap: 4px; height: 27px; padding: 0 5px 0 7px; border: 1px solid var(--ui-accent-border); border-radius: 7px; color: var(--ui-muted); background: var(--ui-control); font-size: 9px; font-weight: 750; }
+    .call-tree-depth-control[hidden] { display: none; }
+    .call-tree-depth-label { white-space: nowrap; }
+    .call-tree-depth-control .graph-secondary-action { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 5px; color: var(--ui-accent-text); background: transparent; font-size: 15px; line-height: 1; }
+    .call-tree-depth-control .graph-secondary-action:hover { color: var(--ui-on-accent); background: var(--ui-selected); }
+    .call-tree-depth-control .graph-secondary-action:disabled { opacity: .4; cursor: not-allowed; }
+    .call-tree-depth-value { min-width: 16px; color: var(--ui-title); font-size: 11px; font-weight: 850; text-align: center; }
     @media (max-width: 720px) {
       .graph-mode-context { top: auto; right: 8px; bottom: 8px; left: 8px; width: auto; }
     }

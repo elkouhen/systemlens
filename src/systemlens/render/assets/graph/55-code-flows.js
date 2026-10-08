@@ -279,8 +279,6 @@
       document.getElementById("graph")?.classList.toggle("is-call-tree-hidden", treeActive);
       [graphLayersOverlay, graphGroupsOverlay, portPathOverlay, nodeLabelOverlay]
         .forEach(element => element?.classList.toggle("is-call-tree-hidden", treeActive));
-      const directionControl = document.getElementById("call-tree-direction-control");
-      if (directionControl) directionControl.hidden = !treeActive;
       if (!treeActive) {
         graphCallTreeOverlay.replaceChildren();
         return;
@@ -292,15 +290,46 @@
       const edges = (callGraph?.edges || []).filter(edge => edge.source !== edge.target);
       const order = callGraph?.node_order || callGraph?.nodes || [];
       const nodes = [...new Set([...order, ...edges.flatMap(edge => [edge.source, edge.target])])];
-      const childrenBySource = new Map();
+      const treePortsByEndpointId = new Map(graphData.nodes.flatMap(node => (
+        (node.ports || []).map(port => [port.endpoint_id, port])
+      )));
+      const selectedFlow = selectedFlows[0] || null;
+      const flowById = new Map(codeFlows.map(flow => [flow.id, flow]));
+      const flowIdsByOutputEndpoint = new Map();
+      const outputEndpointIdsByFlow = new Map();
+      codeFlows.forEach(flow => {
+        const outputEndpointIds = new Set((flow.steps || [])
+          .map(step => step.endpoint_id)
+          .filter(endpointId => treePortsByEndpointId.get(endpointId)?.direction === "out"));
+        outputEndpointIdsByFlow.set(flow.id, outputEndpointIds);
+        outputEndpointIds.forEach(endpointId => {
+          flowIdsByOutputEndpoint.set(endpointId, [
+            ...(flowIdsByOutputEndpoint.get(endpointId) || []), flow.id,
+          ]);
+        });
+      });
+      const childrenByInputEndpoint = new Map();
+      const childrenByRootService = new Map();
       const incoming = new Set();
       edges.forEach((edge, index) => {
         const child = { edge, index };
-        childrenBySource.set(edge.source, [...(childrenBySource.get(edge.source) || []), child]);
+        const sourceEndpointId = edge.endpoint_ids?.[0];
+        const sourceFlowIds = flowIdsByOutputEndpoint.get(sourceEndpointId) || [];
+        sourceFlowIds.forEach(flowId => {
+          const triggerEndpointId = flowById.get(flowId)?.steps?.[0]?.endpoint_id;
+          if (!triggerEndpointId) return;
+          const children = childrenByInputEndpoint.get(triggerEndpointId) || [];
+          if (!children.some(item => item.index === index)) children.push(child);
+          childrenByInputEndpoint.set(triggerEndpointId, children);
+        });
+        childrenByRootService.set(edge.source, [
+          ...(childrenByRootService.get(edge.source) || []), child,
+        ]);
         incoming.add(edge.target);
       });
       const roots = nodes.filter(node => !incoming.has(node));
       const rootNames = roots.length ? roots : nodes.slice(0, 1);
+      const rootInputEndpointId = selectedFlow?.steps?.[0]?.endpoint_id || null;
       let occurrenceCount = 0;
       const maxDepth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 3));
       const makeOccurrence = (name, depth, ancestorInputPorts, inputEndpointId = null, pathKey = name) => {
@@ -319,7 +348,12 @@
           occurrence.cycle = true;
           return occurrence;
         }
-        const outgoing = childrenBySource.get(name) || [];
+        const outgoing = inputEndpointId
+          ? (childrenByInputEndpoint.get(inputEndpointId) || [])
+          : (childrenByRootService.get(name) || []).filter(({ edge }) => (
+            !rootInputEndpointId
+            || outputEndpointIdsByFlow.get(selectedFlow?.id)?.has(edge.endpoint_ids?.[0])
+          ));
         const expanded = graphState.callTreeExpanded.has(pathKey);
         const collapsed = graphState.callTreeCollapsed.has(pathKey);
         occurrence.expanded = expanded;
@@ -349,11 +383,18 @@
         });
         return occurrence;
       };
-      const rootsTree = rootNames.map(name => makeOccurrence(name, 0, new Set()));
+      const rootsTree = rootNames.map(name => makeOccurrence(
+        name,
+        0,
+        new Set(),
+        rootNames.length === 1 ? rootInputEndpointId : null,
+      ));
       if (!rootsTree.length) {
         graphCallTreeOverlay.textContent = "Aucun appel interservice résolu.";
         return;
       }
+      const treeTrigger = selectedFlow?.steps?.[0] || null;
+      const treeTriggerRootName = rootsTree[0]?.name || null;
       let leafIndex = 0;
       const assignPositions = occurrence => {
         occurrence.children.forEach(assignPositions);
@@ -369,7 +410,11 @@
         occurrence.children.forEach(collect);
       };
       rootsTree.forEach(collect);
-      const direction = graphState.callTreeDirection === "tb" ? "tb" : "lr";
+      const occurrenceCounts = new Map();
+      allOccurrences.forEach(occurrence => {
+        occurrenceCounts.set(occurrence.name, (occurrenceCounts.get(occurrence.name) || 0) + 1);
+      });
+      const direction = "lr";
       const gapX = 190;
       const gapY = 105;
       const cardWidth = 110;
@@ -506,6 +551,8 @@
           occurrence.cycle ? "Microservice · cycle détecté" : "Microservice",
           `Niveau ${occurrence.depth + 1}${occurrence.cycle ? " · expansion arrêtée" : ""}`,
         ];
+        const occurrenceCount = occurrenceCounts.get(occurrence.name) || 1;
+        if (occurrenceCount > 1) lines.push(`Appelé ${occurrenceCount} fois dans l’arbre`);
         const input = occurrence.edge && treePort(occurrence.edge.endpoint_ids?.[1], "in");
         if (input?.endpointId) lines.push(`IN ${input.label} · ${input.method}`);
         const outputs = occurrence.children
@@ -623,7 +670,11 @@
       allOccurrences.forEach(occurrence => {
         const node = document.createElement("button");
         node.type = "button";
-        node.className = `graph-call-tree-node${occurrence.cycle ? " is-cycle" : ""}`;
+        const occurrenceCount = occurrenceCounts.get(occurrence.name) || 1;
+        const frequencyClass = occurrenceCount >= 4 ? "is-frequency-4"
+          : occurrenceCount === 3 ? "is-frequency-3"
+            : occurrenceCount === 2 ? "is-frequency-2" : "";
+        node.className = `graph-call-tree-node${frequencyClass ? ` ${frequencyClass}` : ""}${occurrence.cycle ? " is-cycle" : ""}`;
         const original = nodeIdForCodeFlowResource(occurrence.name, "microservice");
         const originalNode = original ? nodeDataById.get(original) : null;
         node.style.setProperty("--card-accent", originalNode?.color || "#64748b");
@@ -640,6 +691,18 @@
             ? `Microservice · +${occurrence.hiddenChildrenCount} appels`
             : "Microservice";
         node.append(icon, name, kind);
+        if (treeTrigger && occurrence.depth === 0 && occurrence.name === treeTriggerRootName) {
+          const triggerKind = ({
+            http_entry: ["HTTP", "is-http"],
+            message_entry: ["Kafka", "is-kafka"],
+            cron_entry: ["Cron", "is-cron"],
+          })[treeTrigger.kind] || ["Déclencheur", "is-cron"];
+          const triggerBadge = document.createElement("span");
+          triggerBadge.className = `graph-node-trigger-badge ${triggerKind[1]}`;
+          triggerBadge.textContent = `${triggerKind[0]} · ${treeTrigger.name || "Événement inconnu"}`;
+          triggerBadge.title = "Événement déclencheur du graphe d’appel sélectionné";
+          node.append(triggerBadge);
+        }
         const ports = [
           occurrence.edge && treePort(occurrence.edge.endpoint_ids?.[1], "in"),
           ...occurrence.children.map(child => treePort(child.edge.endpoint_ids?.[0], "out")),
@@ -751,6 +814,32 @@
       graphState.callTreeExpanded = new Set();
       graphState.callTreeCollapsed = new Set();
       renderCallTreeOverlay(camera);
+      syncCallTreeDepthControl();
+      return true;
+    }
+    function syncCallTreeDepthControl() {
+      const active = Boolean(graphState.selectedCodeFlowId)
+        && graphState.viewMode === "call-graph"
+        && graphState.callGraphDisplayMode === "tree";
+      const depth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 3));
+      const depthControl = document.getElementById("call-tree-depth-control");
+      const depthValue = document.getElementById("call-tree-depth-value");
+      const depthDecrease = document.getElementById("call-tree-depth-decrease");
+      const depthIncrease = document.getElementById("call-tree-depth-increase");
+      if (depthControl) depthControl.hidden = !active;
+      if (depthValue) depthValue.textContent = String(depth);
+      if (depthDecrease) depthDecrease.disabled = !active || depth <= 1;
+      if (depthIncrease) depthIncrease.disabled = !active || depth >= 8;
+    }
+    function adjustCallTreeDepth(delta) {
+      if (!graphState.selectedCodeFlowId || graphState.callGraphDisplayMode !== "tree") return false;
+      const currentDepth = Number(graphState.callTreeDepth) || 3;
+      const nextDepth = Math.max(1, Math.min(8, currentDepth + delta));
+      if (nextDepth === currentDepth) return false;
+      const camera = captureCallTreeCamera();
+      graphState.callTreeDepth = nextDepth;
+      renderCallTreeOverlay(camera);
+      syncCallTreeDepthControl();
       return true;
     }
     const uniqueTopologyLink = (endpointId, source) => {

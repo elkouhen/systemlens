@@ -75,25 +75,26 @@
       width: auto;
       height: 27px !important;
       padding: 0 8px;
-      border: 1px solid #a5b4fc;
+      border: 1px solid var(--ui-accent-border);
       border-radius: 7px !important;
-      color: #3348b8;
-      background: #fff;
+      color: var(--ui-accent-text);
+      background: var(--ui-control);
       box-shadow: none;
       font-size: 10px;
     }
     .graph-mode-context.is-architecture-toolbar .architecture-context-actions .zoom-controls button { width: 27px; padding: 0; font-size: 16px; }
     .graph-mode-context.is-architecture-toolbar .architecture-context-actions .graph-control-group button:hover,
-    .graph-mode-context.is-architecture-toolbar .architecture-context-actions > .graph-action-label:hover { border-color: #405ad5; background: #eef2ff; }
+    .graph-mode-context.is-architecture-toolbar .architecture-context-actions > .graph-action-label:hover { border-color: var(--ui-selected); background: var(--ui-accent-soft-hover); }
     .graph-mode-context .zoom-controls { display: contents; border: 0; background: transparent; }
-    .graph-mode-context .zoom-controls button { width: 27px; height: 27px !important; padding: 0; border: 1px solid #a5b4fc; border-radius: 7px !important; color: #3348b8; background: #fff; box-shadow: none; font-size: 16px; }
-    .graph-mode-context .zoom-controls button:hover { border-color: #405ad5; background: #eef2ff; }
+    .graph-mode-context .zoom-controls button { width: 27px; height: 27px !important; padding: 0; border: 1px solid var(--ui-accent-border); border-radius: 7px !important; color: var(--ui-accent-text); background: var(--ui-control); box-shadow: none; font-size: 16px; }
+    .graph-mode-context .zoom-controls button:hover { border-color: var(--ui-selected); background: var(--ui-accent-soft-hover); }
+    .call-tree-depth-control { min-height: 27px; }
     .graph-mode-context.is-architecture-toolbar .architecture-context-actions .fit-mode.is-active,
     .graph-mode-context.is-architecture-toolbar .architecture-context-actions .view-mode.is-active,
     .graph-mode-context.is-architecture-toolbar .architecture-context-actions .render-mode.is-active {
-      border-color: #405ad5;
-      color: #fff;
-      background: #3156d3;
+      border-color: var(--ui-selected);
+      color: var(--ui-on-accent);
+      background: var(--ui-selected);
       box-shadow: 0 2px 6px rgba(49, 86, 211, .25);
     }
     .display-controls, .advanced-controls, .advanced-tools {

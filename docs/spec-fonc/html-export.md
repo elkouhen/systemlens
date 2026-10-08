@@ -101,8 +101,9 @@ call graph as a hierarchy of call occurrences. A microservice is therefore
 rendered once per occurrence in the expanded tree, so the same service may
 appear in several branches.
 
-The tree mode exposes a maximum depth of 3, 5 or 8 levels and an orientation
-of left-to-right or top-to-bottom. The default is depth 3 and left-to-right.
+The tree mode uses a fixed left-to-right orientation and an incremental depth
+control from 1 to 8 levels. The default is depth 3. The `−` and `+` controls
+change one level at a time.
 When a branch reaches the configured depth, expansion stops. When a branch
 reaches an input endpoint already displayed on the current branch, the
 occurrence is rendered as a cycle endpoint and is not expanded further. A
@@ -115,7 +116,7 @@ without changing the current tree viewport. Every visible node with
 descendants displays a `− replier` badge that collapses that branch and
 preserves the viewport. A collapsed node displays a `+N appels` badge to
 reopen its descendants.
-The depth selector can still be increased to reveal more levels globally.
+The depth control can still be increased to reveal more levels globally.
 The tree is the only call-graph rendering mode. The upper graph toolbar shows
 `Centrer`, zoom, fit, selection reset, layout, and node-rendering actions in
 the architecture view. In the call-graph view it keeps centering and zoom and

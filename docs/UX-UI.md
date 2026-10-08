@@ -50,6 +50,77 @@ it hides navigation content while retaining its header controls and leaves the
 graph workspace unchanged. On constrained viewports, the panel uses one bounded
 scroll region so the graph remains visible while users inspect details.
 
+## Widget inventory and shared contract
+
+A widget is a bounded interface surface that owns one user task. Widgets MUST
+use the same visual grammar for their title, controls, body, status, empty
+state, and actions. A widget MUST NOT duplicate another widget's complete
+content or hide a resource inspector inside a different widget.
+
+Each widget MAY contain the following regions, in this order when present:
+
+- **Header:** title, optional context label, and the primary close or collapse
+  action.
+- **Controls:** filters, view selectors, search, or contextual actions that
+  affect the widget body.
+- **Body:** the graph, list, summary, evidence, or analysis content owned by
+  the widget.
+- **Footer:** secondary actions, source navigation, counts, or status details.
+
+The header identifies the widget's subject once. Controls use the shared
+segmented-control and button treatment. Lists use the same row height, padding,
+hover treatment, selected treatment, and status-pill vocabulary. Empty and
+error states explain what is unavailable and what the user can do next.
+
+### Widget families
+
+| Widget | Purpose | Required content | Interaction contract |
+| --- | --- | --- | --- |
+| Navigation widget | Switch between graph, flow, resource, contract, and diagnostics views. | View groups, active view, and collapse control. | Changes the workspace view and clears incompatible transient details. It does not contain resource facts. |
+| Graph workspace widget | Provide the primary visual reading surface for architecture or one selected call tree. | Graph canvas, rendered nodes, relations, camera controls, and view-specific controls. | Pan, zoom, fit, and selection affect the current projection only. The graph remains visible while supporting widgets change. |
+| Graph context widget | Expose the controls and summary needed to interpret the current graph. | Search or filters, layout and display actions, counts, and the active selection summary. The mutually exclusive architecture view modes (`Graphe statique`, `Vue par couches`, `Vue par modules`) MUST be grouped and labelled as one control. | May be collapsed. Actions change the projection or transient state without duplicating the graph hierarchy. |
+| Resource catalogue widget | Browse indexed topics, Mongo collections, routes, contracts, or persistence resources. | Search or filters, compact rows, resource type, and relevant counts or status. | Selecting a resource opens the dedicated introspection window. Resource details MUST NOT expand inline in the catalogue. |
+| Details widget | Show the selected graph element's immediate context and available analysis actions. | Identity, summary, relations, evidence, and actions for focus, modules, code flows, or source navigation. | It is contextual and may be hidden when an introspection window opens. It does not compete with the modal identity header. |
+| Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, description, ownership, relations, evidence, breadcrumb, and back or close action. | Opens as a dedicated window. Related resources remain selectable and update the same inspection history. |
+| Flow catalogue widget | Select a persisted code flow or flow group for call-graph analysis. | Compact flow rows, description, trigger, protocol, status, and summary statistics. | Selecting a row replaces the selected flow graph. Full details are shown in the selected-flow view, not in every row. |
+| Call-tree context widget | Explain and control the selected hierarchical call graph. | Flow identity, trigger event, depth, expand-all, and tree-specific status. | Collapsed by default. It controls the tree without repeating its nodes or arcs. |
+| Tooltip widget | Provide concise evidence for a hovered node, arc, row, or control. | Subject identity, relevant relation facts, and available status or type. | Appears on hover or focus and does not become a second navigation surface. It MUST NOT infer missing facts. |
+| Legend widget | Explain stable graph colours, shapes, strokes, and badges. | One entry per visual semantic and a concise label. | Collapsed by default. It explains the graph and does not replace node or arc tooltips. |
+| Analysis status widget | Report a transient selected port or arc and its related evidence. | Selected endpoint or arc, protocol, related resources, and a clear action. | Highlights the current analysis state without changing the graph data, camera, or persisted selection. |
+
+### Shared states and visual rules
+
+All widgets MUST support the states that apply to their content using the same
+visual vocabulary:
+
+- **Default:** the widget is available without an active selection.
+- **Hover or focus:** the target is discoverable and has not been selected.
+- **Selected:** the target drives the widget or graph context and remains
+  visibly distinct from hover.
+- **Expanded:** additional content is visible after an explicit disclosure
+  action. The widget retains its identity and position.
+- **Empty:** no matching or indexed content exists; the state explains why.
+- **Unavailable:** an action cannot be applied in the current context and is
+  visibly disabled rather than silently ignored.
+
+Widget surfaces MUST use the shared border, radius, background, text, muted
+text, focus, and selection tokens. Type or protocol colours MAY remain local
+only when they encode graph semantics or an indexed status. Titles, controls,
+rows, tags, and action placement MUST remain consistent across widget families.
+
+An interactive resource has one selection contract wherever it appears. In the
+Architecture view, resource nodes and Topic relation arcs are selectable;
+HTTP and Mongo relation arcs remain tooltip-only. In the selected call tree,
+visible nodes and supported HTTP or Kafka arcs expose their analysis or
+inspection action. A tooltip MUST never suggest that an element is selectable
+when the current widget does not support that action.
+
+When a selection opens an introspection widget, the originating catalogue or
+details widget keeps its state but does not render a second full inspector
+inside itself. The introspection header owns the resource identity, breadcrumb,
+back action, and close action. This rule applies equally to microservices,
+topics, routes, Mongo collections, DTOs, JPA entities, and persistence classes.
+
 ## Visual language
 
 Microservices and resources use compact cards with a shared rendered geometry.
@@ -157,9 +228,20 @@ A service is rendered once per call occurrence. The same microservice may
 therefore appear in several branches. Occurrences use local render identifiers,
 while labels and actions resolve to the persisted microservice.
 
-The tree exposes a global depth selector with 3, 5, and 8 levels and a
-left-to-right or top-to-bottom orientation. The current default is depth 3 and
-left-to-right. A branch stops at the configured depth. An input endpoint already
+The `+N appels` count belongs to the occurrence, not to the microservice name.
+It MUST be derived from the occurrence's incoming endpoint and associated flow,
+so two occurrences of the same microservice MAY display different hidden-call
+counts.
+
+The tree uses the node background as a recurrence scale for microservices:
+neutral for one occurrence, light accent for two, medium accent for three, and
+strong accent for four or more. The border continues to identify the node type.
+The node tooltip MUST state the exact recurrence count.
+
+The tree uses a fixed left-to-right orientation and an incremental depth control
+from 1 to 8 levels. The current default is depth 3. The `−` and `+` controls
+change one level at a time. A branch stops at the configured depth. An input
+endpoint already
 present on the current branch becomes a terminal cycle occurrence and is not
 expanded. Reusing a service name with a different input port is not by itself a
 cycle.
@@ -171,7 +253,8 @@ nœuds` expands the visible tree using the current global depth limit.
 
 The tree workspace supports drag-to-pan and bounded zoom from 0.5x to 4x.
 Clicking a service occurrence keeps its selection action. The tree context
-widget identifies the projection and controls without repeating the hierarchy.
+widget identifies the projection, displays the indexed trigger event, and
+controls the tree without repeating the hierarchy.
 
 Node tooltips MUST show the occurrence level, cycle state, microservice, and
 available IN and OUT ports with their associated Java methods. Arc tooltips

@@ -756,6 +756,7 @@
           const context = document.getElementById("graph-mode-context");
           const contextCopy = document.getElementById("graph-mode-context-copy");
           const title = document.getElementById("graph-mode-context-title");
+          const triggerLabel = document.getElementById("graph-mode-context-trigger");
           const pathLabel = document.getElementById("graph-mode-context-path");
           const help = document.getElementById("graph-mode-context-help");
           const clear = document.getElementById("analysis-mode-clear");
@@ -776,21 +777,47 @@
             contextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
           }
           if (architectureActions) architectureActions.hidden = callGraphActive;
-          const directionControl = document.getElementById("call-tree-direction-control");
-          if (directionControl) directionControl.hidden = !callGraphActive;
+          const depthControl = document.getElementById("call-tree-depth-control");
+          const depthValue = document.getElementById("call-tree-depth-value");
+          const depthDecrease = document.getElementById("call-tree-depth-decrease");
+          const depthIncrease = document.getElementById("call-tree-depth-increase");
           if (expandAll) expandAll.hidden = !callGraphActive;
+          if (depthControl) depthControl.hidden = !callGraphActive;
+          if (depthValue) depthValue.textContent = String(graphState.callTreeDepth || 3);
+          if (depthDecrease) depthDecrease.disabled = !callGraphActive || graphState.callTreeDepth <= 1;
+          if (depthIncrease) depthIncrease.disabled = !callGraphActive || graphState.callTreeDepth >= 8;
           if (contextCollapse) contextCollapse.hidden = !callGraphActive;
           if (!callGraphActive) {
             title.textContent = "Graphe d’architecture";
+            if (triggerLabel) {
+              triggerLabel.hidden = true;
+              triggerLabel.textContent = "";
+            }
             help.textContent = "Actions rapides sur la vue du graphe.";
             if (clear) clear.hidden = true;
             return;
           }
           title.textContent = "Arbre d’appel";
-          if (pathLabel) {
           const selectedFlows = (graphData.code_flows || []).filter(flow => (
             flow.id === graphState.selectedCodeFlowId
           ));
+          const selectedFlow = selectedFlows[0];
+          const trigger = selectedFlow?.steps?.[0];
+          if (triggerLabel) {
+            const triggerKind = ({
+              http_entry: "Entrée HTTP",
+              message_entry: "Entrée message",
+              cron_entry: "Déclencheur Cron",
+            })[trigger?.kind] || "Déclencheur";
+            triggerLabel.hidden = !trigger;
+            triggerLabel.textContent = trigger
+              ? `${triggerKind} · ${trigger.name || "Événement inconnu"}`
+              : "";
+            triggerLabel.title = trigger
+              ? "Événement déclencheur du graphe d’appel sélectionné"
+              : "";
+          }
+          if (pathLabel) {
             const portsByEndpointId = new Map(
               graphData.nodes.flatMap(node => (node.ports || []).map(port => [port.endpoint_id, port]))
             );
@@ -1106,7 +1133,6 @@
           box.append(title);
           graphLayersOverlay.append(box);
         });
-        if (!showProjectGroups.checked) return;
         const namespaceGroupEntries = [...namespaces.entries()];
         (graphData.groups || []).forEach(group => {
           const children = group.children || [];

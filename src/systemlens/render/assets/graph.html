@@ -141,20 +141,6 @@
           <button id="layout-noverlap" class="layout-option" type="button" aria-pressed="false" title="Écarter les nœuds qui se chevauchent">Éviter les chevauchements</button>
         </div>
       </fieldset>
-      <fieldset class="layout-controls">
-        <legend>Conteneurs</legend>
-        <label class="relation-filter" title="Afficher les répertoires qui regroupent plusieurs projets"><input id="show-project-groups" type="checkbox" checked aria-label="Afficher les groupes de projets">Groupes de projets</label>
-      </fieldset>
-      <details class="path-controls">
-        <summary>Comparer les itinéraires</summary>
-        <div class="path-row">
-          <p class="path-help">Saisissez un itinéraire dans la recherche, puis utilisez cette action pour comparer les chemins simples entre son premier et son dernier microservice.</p>
-          <div class="path-actions">
-            <button id="show-simple-paths" type="button" aria-label="Lister les chemins simples entre les deux microservices" title="Lister les chemins simples entre les deux microservices">Chemins simples</button>
-            <label class="path-lock" title="Conserver l’itinéraire lors de la sélection d’un nœud"><input id="path-lock" type="checkbox" aria-label="Verrouiller l’itinéraire">Verrouiller</label>
-          </div>
-        </div>
-      </details>
       </details>
       <p id="layout-status" class="layout-status" role="status">Chargement du graphe…</p>
     </div>
@@ -233,6 +219,7 @@
   <div id="graph-mode-context" class="graph-mode-context" hidden>
     <div id="graph-mode-context-copy" class="graph-mode-context-copy">
       <strong id="graph-mode-context-title"></strong>
+      <span id="graph-mode-context-trigger" class="graph-mode-context-trigger" hidden></span>
       <span id="graph-mode-context-help"></span>
     </div>
     <div class="graph-mode-context-actions">
@@ -242,12 +229,8 @@
         <button id="zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer" title="Réduire l’échelle de la vue">−</button>
       </div>
       <div id="architecture-context-actions" class="architecture-context-actions">
-        <div class="graph-control-group fit-controls" role="group" aria-label="Cadrage">
-          <button id="fit-view" class="graph-action-label fit-mode" type="button" aria-label="Afficher tout le graphe" title="Afficher tout le graphe" aria-pressed="false">Tout le graphe</button>
-          <button id="fit-readable" class="graph-action-label fit-mode is-active" type="button" aria-label="Afficher une vue lisible" title="Afficher une vue lisible" aria-pressed="true">Vue lisible</button>
-        </div>
         <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled>Réinitialiser</button>
-        <div class="graph-control-group view-controls" role="group" aria-label="Vue principale">
+        <div class="graph-control-group view-controls" role="group" aria-label="Mode de visualisation · un seul choix" title="Mode de visualisation · un seul choix">
           <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe statique</button>
           <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Vue par couches</button>
           <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Vue par modules</button>
@@ -258,9 +241,12 @@
         </div>
       </div>
       <button id="analysis-mode-expand-all" class="graph-action-label graph-secondary-action" type="button" title="Déplier tous les niveaux de l’arbre d’appel" hidden>Déplier tous les nœuds</button>
-      <label id="call-tree-direction-control" class="graph-tree-control" title="Choisir la direction de lecture de l’arbre d’appel" hidden>Orientation
-        <select id="call-tree-direction" aria-label="Orientation de l’arbre d’appels" title="Choisir l’orientation de l’arbre"><option value="lr" selected>Gauche à droite</option><option value="tb">Haut en bas</option></select>
-      </label>
+      <div id="call-tree-depth-control" class="call-tree-depth-control" role="group" aria-label="Nombre de niveaux de l’arbre d’appel" hidden>
+        <span class="call-tree-depth-label">Niveaux</span>
+        <button id="call-tree-depth-decrease" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de moins" title="Afficher un niveau de moins">−</button>
+        <output id="call-tree-depth-value" class="call-tree-depth-value" aria-live="polite">3</output>
+        <button id="call-tree-depth-increase" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de plus" title="Afficher un niveau de plus">+</button>
+      </div>
       <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" title="Effacer l’arc ou le port actuellement analysé" hidden>Réinitialiser l’analyse</button>
       <button id="analysis-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy" title="Réduire la toolbar">Réduire</button>
     </div>

@@ -632,7 +632,7 @@ def test_graph_html_uses_one_workspace_viewport_for_canvas_and_overlays() -> Non
     document = render_graph_html({}, [])
 
     assert 'class="graph-control-group view-controls"' in document
-    assert 'aria-label="Vue principale"' in document
+    assert 'aria-label="Mode de visualisation · un seul choix"' in document
     assert '>Graphe statique</button>' in document
     assert '>Vue par couches</button>' in document
     assert '>Vue par modules</button>' in document
@@ -689,6 +689,9 @@ def test_graph_uses_persisted_mongodb_relation_evidence_when_available() -> None
     assert "--ui-title: #24355f;" in document
     assert "--ui-title: #bac7ff;" in document
     assert "/* One visual charter for every widget." in document
+    assert ".graph-mode-context {" in document
+    assert "border: 1px solid var(--ui-accent-border);" in document
+    assert "background: var(--ui-control);" in document
     assert "/* Ergonomic shell: make the first reading path obvious" in document
     assert "background-size: 32px 32px, 32px 32px" in document
     assert ".toolbar {\n      top: 18px;" in document
@@ -909,8 +912,14 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert 'anchor.title = `${direction === "in" ? "Port d’entrée" : "Port de sortie"} · ${port.label}`' in document
     assert "occurrence.children.map(child => treePort" in document
     assert "label.append(title);" in document
-    assert 'id="call-tree-depth"' not in document
-    assert 'id="call-tree-direction"' in document
+    assert 'id="call-tree-depth-control"' in document
+    assert 'id="call-tree-depth-decrease"' in document
+    assert 'id="call-tree-depth-increase"' in document
+    assert 'id="call-tree-depth-value"' in document
+    assert "function adjustCallTreeDepth(delta)" in document
+    assert "function syncCallTreeDepthControl()" in document
+    assert "Math.max(1, Math.min(8" in document
+    assert 'id="call-tree-direction"' not in document
     assert 'id="analysis-mode-expand-all"' in document
     assert 'id="analysis-ports-toggle"' not in document
     assert "function expandAllCallTree()" in document
@@ -919,7 +928,6 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "Type de message : ${messageTypes.join" in document
     assert "const showContext = graphState.viewMode === \"architecture\" || active;" in document
     assert "const callGraphActive = active && graphState.viewMode === \"call-graph\";" in document
-    assert "if (directionControl) directionControl.hidden = !callGraphActive;" in document
     assert 'id="architecture-context-actions"' in document
     assert 'id="zoom-out"' in document
     assert 'id="zoom-in"' in document
@@ -934,6 +942,17 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert 'callTreeDepth: 3' in document
     assert "hiddenChildrenCount" in document
     assert "graph-call-tree-more-badge" in document
+    assert "const treeTrigger = selectedFlow?.steps?.[0] || null;" in document
+    assert "graph-node-trigger-badge" in document
+    assert "Événement déclencheur du graphe d’appel sélectionné" in document
+    assert "const occurrenceCounts = new Map();" in document
+    assert "Appelé ${occurrenceCount} fois dans l’arbre" in document
+    assert "is-frequency-2" in document
+    assert "is-frequency-3" in document
+    assert "is-frequency-4" in document
+    assert "const childrenByInputEndpoint = new Map();" in document
+    assert "childrenByInputEndpoint.get(inputEndpointId)" in document
+    assert "const childrenByRootService = new Map();" in document
     assert "callTreeExpanded" in document
     assert "callTreeCollapsed" in document
     assert "graphState.callTreeExpanded.add(occurrence.pathKey)" in document
@@ -1333,10 +1352,15 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="request-reply-tab"' not in document
     assert 'id="build-tab"' not in document
     assert 'class="graph-control-group zoom-controls"' in document
-    assert 'class="graph-control-group fit-controls"' in document
     assert 'class="graph-control-group render-controls"' in document
-    assert '>Tout le graphe</button>' in document
-    assert '>Vue lisible</button>' in document
+    assert 'id="fit-view"' not in document
+    assert 'id="fit-readable"' not in document
+    assert 'id="show-project-groups"' not in document
+    assert '>Groupes de projets</label>' not in document
+    assert 'Comparer les itinéraires' not in document
+    assert 'id="show-simple-paths"' not in document
+    assert 'id="path-lock"' not in document
+    assert 'const graphVisible = !showingFlows || showingFlowGraph;' in document
     assert '>Cartes</button>' in document
     assert '>Symboles</button>' in document
     assert 'renderMode: "cards"' in document
@@ -1637,6 +1661,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "analysisContextCollapsed: true" in document
     assert "graphState.analysisContextCollapsed = true;" in document
     assert 'id="graph-mode-context-copy"' in document
+    assert 'id="graph-mode-context-trigger"' in document
+    assert 'http_entry: "Entrée HTTP"' in document
+    assert 'message_entry: "Entrée message"' in document
+    assert 'cron_entry: "Déclencheur Cron"' in document
     assert 'if ((tab === "graph" || tab === "flows") && !showingFlowGraph) {' in document
     assert 'if (tab === "graph") {' in document
     assert 'applyLayout(graphState.activeLayout);' in document
@@ -1773,6 +1801,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert document.index('id="quick-search"') < document.index('id="architecture-context-actions"')
     graph_panel_start = document.index('id="graph-panel"')
     assert graph_panel_start < document.index('id="quick-search"')
+    assert document.index('id="graph-mode-context"') < document.index('id="architecture-context-actions"')
+    assert 'role="group" aria-label="Mode de visualisation · un seul choix"' in document
     assert "@media (max-width: 1024px)" in document
     assert "--accent: #3156d3" in document
     assert "backdrop-filter: blur(18px)" in document

@@ -5,7 +5,6 @@
     const search = document.getElementById("search");
     const resetButton = document.getElementById("reset");
     const searchStatus = document.getElementById("search-status");
-    const pathLock = document.getElementById("path-lock");
     const graphTab = document.getElementById("graph-tab");
     const microservicesTab = document.getElementById("microservices-tab");
     const contractsTab = document.getElementById("contracts-tab");

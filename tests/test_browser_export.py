@@ -1256,12 +1256,18 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         page.locator("#graph-call-tree").wait_for(state="visible")
         assert page.locator("#graph-call-tree .graph-call-tree-node").count() >= 3
         assert page.locator("#graph").get_attribute("class") == "is-call-tree-hidden"
-        assert page.locator("#call-tree-depth-control").count() == 0
+        depth_control = page.locator("#call-tree-depth-control")
+        assert depth_control.count() == 1
+        assert page.locator("#call-tree-depth-value").inner_text() == "3"
+        page.locator("#call-tree-depth-decrease").click()
+        assert page.locator("#call-tree-depth-value").inner_text() == "2"
+        page.locator("#call-tree-depth-increase").click()
+        assert page.locator("#call-tree-depth-value").inner_text() == "3"
         page.locator("#graph-call-tree .graph-call-tree-node").first.hover()
         page.locator("#graph-flow-tooltips .graph-entity-tooltip").wait_for(state="visible")
         page.locator("#graph-call-tree .graph-call-tree-edge").first.hover()
         page.locator("#graph-flow-tooltips .graph-edge-tooltip").wait_for(state="visible")
-        page.locator("#call-tree-direction").select_option("tb")
+        assert page.locator("#call-tree-direction").count() == 0
         assert page.locator("#graph-call-tree .graph-call-tree-node").count() >= 3
         page.keyboard.press("Escape")
         assert page.locator("#graph-flow-tooltips .graph-arc-tooltip").count() == 0
@@ -1391,12 +1397,12 @@ def test_primary_view_selector_opens_each_view_directly() -> None:
             "() => document.querySelector('#graph')?.dataset.relationCount === '300'"
         )
 
-        view_controls = page.get_by_role("group", name="Vue principale")
+        view_controls = page.get_by_role("group", name="Mode de visualisation")
         assert view_controls.is_visible()
         assert view_controls.get_by_role("button").all_text_contents() == [
                 "Graphe statique", "Vue par couches", "Vue par modules",
         ]
-        assert page.locator(".graph-actions").bounding_box() is not None
+        assert page.locator(".graph-mode-context-actions").bounding_box() is not None
         widget_metrics = page.evaluate(
             """() => {
                 const styles = selector => [...document.querySelectorAll(selector)]
