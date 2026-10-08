@@ -80,6 +80,10 @@ terminal unknown-continuation occurrence. Tree construction also stops at
 5,000 occurrences and exposes the remaining child count on the boundary node.
 This bounds pathological cyclic or highly branching flows while preserving
 repeated services that use distinct indexed input ports.
+Duplicate evidence for the same causal relation is removed before transitions
+are indexed. The identity is the protocol, source endpoint, target endpoint,
+and topic or route. Distinct endpoint pairs on the same topic remain distinct,
+because they may represent different producer or consumer contracts.
 The tree projection is an independent overlay. Its background captures
 primary-pointer drags and translates the tree canvas, while service cards keep
 pointer interaction for selection. The graph context widget exposes the mode

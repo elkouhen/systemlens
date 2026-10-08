@@ -69,6 +69,7 @@ def _index_call_graph_inputs(
                 output_order_by_endpoint.setdefault(endpoint.id, (flow_index, step.order))
 
     edges_by_output: dict[str, list[GraphEdge]] = {}
+    seen_edges: set[tuple[str, str, str | None, str]] = set()
     for edge in edges:
         source_role = (edge.from_endpoint.system, edge.from_endpoint.role)
         target_role = (
@@ -79,6 +80,15 @@ def _index_call_graph_inputs(
             source_role in {("rest", "call"), ("kafka", "produce")}
             and target_role in {("rest", "serve"), ("kafka", "consume")}
         ):
+            edge_key = (
+                edge.kind,
+                edge.from_endpoint.id,
+                edge.to_endpoint.id if edge.to_endpoint is not None else None,
+                edge.from_endpoint.topic,
+            )
+            if edge_key in seen_edges:
+                continue
+            seen_edges.add(edge_key)
             edges_by_output.setdefault(edge.from_endpoint.id, []).append(edge)
 
     def edge_sort_key(edge: GraphEdge) -> tuple[int, str, str, str, str]:

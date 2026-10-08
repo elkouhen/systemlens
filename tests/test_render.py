@@ -1048,6 +1048,24 @@ def test_export_builds_one_call_graph_from_all_flows() -> None:
             assert min(orders) == 1
     assert set(graph["triggers"]) == {"orders", "payments", "inventory"}
 
+    indexed_graph = _networkx_call_graph(
+        flows,
+        {"orders": [producer], "payments": [first_consumer], "inventory": [second_consumer]},
+        [
+            GraphEdge("kafka", "orders", "payments", producer, first_consumer),
+            GraphEdge("kafka", "orders", "payments", producer, first_consumer),
+            GraphEdge("kafka", "orders", "inventory", producer, second_consumer),
+        ],
+        root_flow_ids={"orders-flow"},
+        include_occurrences=False,
+    )
+    order_transitions = indexed_graph["call_tree"]["transitions"]["orders-flow"]
+    assert len(order_transitions) == 2
+    assert {
+        (transition["edge"]["target"], transition["edge"]["label"])
+        for transition in order_transitions
+    } == {("payments", "orders.created"), ("inventory", "orders.created")}
+
 
 def test_call_tree_follows_causal_flow_occurrences_and_unknown_leaves() -> None:
     orders_out = replace(_kafka_endpoint("produce", "OrderCreated", "Orders.java"), id="orders-out")
