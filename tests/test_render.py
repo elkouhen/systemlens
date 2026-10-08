@@ -1033,11 +1033,13 @@ def test_export_builds_one_call_graph_from_all_flows() -> None:
         {"source": "orders", "target": "inventory", "order": 1},
         {"source": "orders", "target": "payments", "order": 2},
     ]
-    occurrences = graph["call_tree"]["occurrences"]
+    selected_flow = next(flow for flow in data["code_flows"] if flow["id"] == "orders-flow")
+    selected_graph = _flow_call_graph(data, selected_flow)
+    occurrences = selected_graph["call_tree"]["occurrences"]
     occurrence_by_id = {occurrence["id"]: occurrence for occurrence in occurrences}
     roots = [
         occurrence for occurrence in occurrences
-        if occurrence["id"] in graph["call_tree"]["root_occurrence_ids"]
+        if occurrence["id"] in selected_graph["call_tree"]["root_occurrence_ids"]
     ]
     assert [occurrence["name"] for occurrence in roots] == ["orders"]
     assert {

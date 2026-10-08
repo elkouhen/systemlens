@@ -105,7 +105,8 @@ def render_graph_html(
     ]
     call_graph_index = _index_call_graph_inputs(export_flows, endpoints_by_service, flow_edges)
     view_model["all_flows_call_graph"] = _networkx_call_graph(
-        export_flows, endpoints_by_service, flow_edges, index=call_graph_index
+        export_flows, endpoints_by_service, flow_edges, index=call_graph_index,
+        include_occurrences=False,
     )
     port_labels = {
         str(port["endpoint_id"]): str(port["label"])
@@ -137,7 +138,14 @@ def render_graph_html(
         if call_graph_id is None:
             call_graph_id = f"call-graph-{len(call_graphs) + 1}"
             graph_ids_by_digest[graph_digest] = call_graph_id
-            call_graphs[call_graph_id] = call_graph
+            call_graphs[call_graph_id] = _networkx_call_graph(
+                export_flows,
+                endpoints_by_service,
+                flow_edges,
+                root_flow_ids={flow.id},
+                index=call_graph_index,
+                include_occurrences=True,
+            )
         export_flow_items.append((flow, equivalent_count, call_graph_id))
 
     serialized_code_flows = [

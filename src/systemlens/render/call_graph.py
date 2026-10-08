@@ -174,6 +174,7 @@ def _networkx_call_graph(
     edges: list[GraphEdge],
     root_flow_ids: set[str] | None = None,
     index: _CallGraphIndex | None = None,
+    include_occurrences: bool = True,
 ) -> dict[str, object]:
     """Build the port graph by following internal flow outputs.
 
@@ -443,11 +444,15 @@ def _networkx_call_graph(
                 break
         return occurrence_id
 
-    root_occurrence_ids = [
-        build_tree_occurrence(flow_id, 0, frozenset(), frozenset(), flow_id)
-        for flow_id in root_flow_ids_for_tree
-        if flow_id in flow_by_id
-    ]
+    root_occurrence_ids = (
+        [
+            build_tree_occurrence(flow_id, 0, frozenset(), frozenset(), flow_id)
+            for flow_id in root_flow_ids_for_tree
+            if flow_id in flow_by_id
+        ]
+        if include_occurrences
+        else []
+    )
 
     if nx.is_directed_acyclic_graph(graph):
         component_order = list(nx.lexicographical_topological_sort(graph))
@@ -507,7 +512,8 @@ def _distinct_export_flows(
     ] = {}
     for flow in flows:
         call_graph = _networkx_call_graph(
-            flows, endpoints_by_service, edges, root_flow_ids={flow.id}
+            flows, endpoints_by_service, edges, root_flow_ids={flow.id},
+            include_occurrences=False,
         )
         graph_nodes = cast(list[str], call_graph["nodes"])
         graph_edges = cast(list[dict[str, str]], call_graph["edges"])
@@ -719,7 +725,7 @@ def _all_export_flows(
             flow,
             _networkx_call_graph(
                 flows, endpoints_by_service, edges,
-                root_flow_ids={flow.id}, index=index,
+                root_flow_ids={flow.id}, index=index, include_occurrences=False,
             ),
             1,
         )
