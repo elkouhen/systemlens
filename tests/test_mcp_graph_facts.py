@@ -15,6 +15,7 @@ from systemlens.delivery.mcp import (
     list_graph_facts,
     remove_graph_fact,
 )
+from systemlens.storage.sqlite import Store
 
 RUNNER = CliRunner()
 FIXTURE = Path(__file__).parent / "fixtures" / "endpoint_index_repo"
@@ -136,3 +137,47 @@ def test_export_facts_round_trips_mcp_ids_and_source_endpoints(
     assert imported["inserted"] == 1
     assert imported["updated"] == len(manifest["nodes"]) + len(manifest["edges"]) - 1
     assert {fact["id"] for fact in list_graph_facts()} >= {node["id"], edge["id"]}
+
+
+def test_import_graph_facts_bootstraps_empty_repository_without_indexing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURE, repo)
+    monkeypatch.chdir(repo)
+    assert RUNNER.invoke(app, ["init"]).exit_code == 0
+    manifest = {
+        "format": "systemlens-ai-graph-v1",
+        "generated_by": {"namespace": "direct-analysis"},
+        "mode": "complete",
+        "nodes": [{"id": "orders", "kind": "service", "name": "orders"}],
+        "edges": [],
+        "endpoints": [{
+            "id": "orders-out", "service": "orders", "role": "produce",
+            "system": "kafka", "topic": "orders.created", "path": "README.md",
+            "start_line": 1, "end_line": 1, "snippet": "publish",
+        }],
+        "flows": [{
+            "id": "orders-flow", "module": "orders", "method": "Orders.publish",
+            "path": "README.md", "start_line": 1, "end_line": 1,
+            "status": "potential", "confidence": "high",
+            "reason": "direct source evidence",
+            "steps": [{
+                "order": 1, "kind": "message_publish", "name": "orders.created",
+                "path": "README.md", "start_line": 1, "end_line": 1,
+                "endpoint_id": "orders-out",
+            }],
+        }],
+    }
+    path = repo / "facts.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    result = RUNNER.invoke(app, ["import-facts", "facts.json"])
+
+    assert result.exit_code == 0, result.output
+    assert "Prochaine étape" in result.output
+    assert (repo / ".systemlens" / "findings.db").is_file()
+    assert len(list_graph_facts()) == 1
+    with Store(repo, readonly=True) as store:
+        assert len(store.all_endpoints()) == 1
+        assert len(store.all_code_flows()) == 1

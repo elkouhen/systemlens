@@ -1,5 +1,9 @@
 # Product requirements: SystemLens
 
+This document owns the product aspect: users, purpose, scope, outcomes, and
+success measures. It does not define command contracts, implementation details,
+or HTML interaction rules.
+
 ## Product summary
 
 SystemLens provides a local architecture inventory for Java and Spring

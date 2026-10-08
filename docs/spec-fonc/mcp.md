@@ -3,15 +3,15 @@
 Parent: [Functional specification](../SPEC-FONC.md).
 
 
-The MCP server exposes a deliberately small control surface for the
-index-then-enrich workflow. It no longer mirrors every read-only CLI command:
+The MCP server exposes a deliberately small control surface for indexed and
+direct-analysis enrichment. It no longer mirrors every read-only CLI command:
 
 | Tool | Purpose |
 |---|---|
 | `index_repository` | Index or refresh the current repository; preserves graph enrichment facts. |
 | `graph_fact_exists` | Check a semantic node/edge fact before proposing it. |
 | `add_graph_fact` | Add a user assertion or an agent-produced assertion from the companion skill, with confidence and optional relative evidence; rejects semantic duplicates. |
-| `import_graph_facts` | Validate and atomically upsert a `systemlens-ai-graph-v1` manifest into one enrichment namespace, optionally removing stale facts for a complete snapshot. |
+| `import_graph_facts` | Validate and atomically upsert a `systemlens-ai-graph-v1` manifest into one enrichment namespace, optionally removing stale facts for a complete snapshot. It may bootstrap the empty schema after `systemlens init`; it does not index source files. |
 | `remove_graph_fact` | Remove an assertion previously added through MCP; never removes extracted source facts. |
 | `list_graph_facts` | List the persisted enrichment layer. |
 | `architecture_graph` | Return the complete generic dependency graph (services, APIs, Topics, Data resources and external resources) merged with persisted enrichment facts. |
@@ -32,8 +32,14 @@ value for an existing AI fact. A partial manifest never removes facts; a
 manifest with `mode=complete` (or an explicit `complete=true`) removes stale
 facts only from that namespace. Source-derived facts are stored separately and
 are never overwritten. The import is transactional and returns inserted,
-updated and removed counts.
+updated and removed counts. A repository needs only `systemlens init` before
+this operation; the importer does not run source extractors.
 
 For generic middleware, use `kind=data_schema` or `kind=message_channel`, set
 `technology` to the concrete implementation, and put provider-specific facts
 such as database/schema/table, exchange/queue or partition in `metadata`.
+
+A manifest may also contain `endpoints` and ordered `flows`. The importer
+persists these direct-analysis projections only when the repository has no
+indexed source endpoints or modules. The HTML export can then render the
+selected flow and causal call tree from the imported evidence.

@@ -6,7 +6,11 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from systemlens.application.architecture_inventory import load_architecture_inventory
-from systemlens.application.ai_graph import AiGraphError, load_fact_manifest
+from systemlens.application.ai_graph import (
+    AiGraphError,
+    load_direct_flow_manifest,
+    load_fact_manifest,
+)
 from systemlens.infrastructure.config import load_config
 from systemlens.application.dependency_analysis import (
     DependencyEdge,
@@ -16,7 +20,7 @@ from systemlens.application.dependency_analysis import (
 )
 from systemlens.indexing.service import IndexReport, index_repo
 from systemlens.domain.models import GraphFact
-from systemlens.infrastructure.paths import db_path
+from systemlens.infrastructure.paths import config_path, db_path
 from systemlens.storage.sqlite import Store
 
 mcp = FastMCP("systemlens")
@@ -32,6 +36,11 @@ def _repo_root() -> Path:
 def _require_index(repo_root: Path) -> None:
     if not db_path(repo_root).is_file():
         raise RuntimeError("Index absent. Lancez d'abord index_repository.")
+
+
+def _require_config(repo_root: Path) -> None:
+    if not config_path(repo_root).is_file():
+        raise RuntimeError("Configuration absente. Lancez d'abord systemlens init.")
 
 
 def _validate_path(path: str | None) -> str | None:
@@ -173,9 +182,14 @@ def add_graph_fact(
 def import_graph_facts(
     manifest_path: str, namespace: str | None = None, complete: bool | None = None,
 ) -> dict[str, object]:
-    """Validate and atomically upsert an AI fact manifest into SQLite."""
+    """Validate and atomically upsert an AI fact manifest into SQLite.
+
+    A configured repository may import facts before source indexing. Opening a
+    writable Store creates the compatible empty schema without running an
+    extractor.
+    """
     repo_root = _repo_root()
-    _require_index(repo_root)
+    _require_config(repo_root)
     candidate = Path(manifest_path)
     if candidate.is_absolute() or ".." in candidate.parts:
         raise ValueError("manifest_path doit être relatif au projet, sans '..'.")
@@ -184,12 +198,18 @@ def import_graph_facts(
         raise ValueError("manifest_path doit rester dans le projet.")
     try:
         facts, resolved_namespace, manifest_complete = load_fact_manifest(path, namespace=namespace)
+        endpoints, flows = load_direct_flow_manifest(path)
     except AiGraphError as exc:
         raise ValueError(str(exc)) from exc
     replace_stale = manifest_complete if complete is None else complete
     inserted = updated = 0
     with Store(repo_root) as store:
         with store.transaction():
+            if (endpoints or flows) and (store.all_endpoints() or store.all_modules()):
+                raise ValueError(
+                    "Les flux directs ne peuvent être importés que dans un dépôt "
+                    "sans index source."
+                )
             existing = {fact.id for fact in store.graph_facts_by_namespace(resolved_namespace)}
             for fact in facts:
                 if fact.id in existing:
@@ -200,9 +220,15 @@ def import_graph_facts(
             removed = store.delete_graph_facts_not_in(
                 resolved_namespace, {fact.id for fact in facts}
             ) if replace_stale else 0
+            if endpoints:
+                store.replace_endpoints_for_files([], endpoints)
+            if flows:
+                store.replace_code_flows(flows)
+                store.set_meta("code_flow_snapshot_status", "complete")
     return {
         "namespace": resolved_namespace, "inserted": inserted, "updated": updated,
-        "removed": removed, "facts": len(facts), "complete": replace_stale,
+        "removed": removed, "facts": len(facts), "endpoints": len(endpoints),
+        "flows": len(flows), "complete": replace_stale,
     }
 
 

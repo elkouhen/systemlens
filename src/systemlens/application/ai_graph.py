@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from systemlens.domain.graph import GraphEdge
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
 from systemlens.domain.models import GraphFact, MessageEndpoint, compute_endpoint_id
 
 
@@ -23,6 +24,13 @@ _STATUSES = {"confirmed", "proposed", "ambiguous", "unresolved"}
 _CONFIDENCES = {"high", "medium", "low", "unknown"}
 _FACT_NODE_KINDS = _NODE_KINDS | {"data_schema", "message_channel"}
 _FACT_EDGE_KINDS = _EDGE_KINDS | {"serves", "calls", "reads", "writes", "publishes", "consumes", "provides"}
+
+
+def _relative_path(value: Any, field: str) -> str:
+    path = _required_string(value, field)
+    if Path(path).is_absolute() or "\\" in path or ".." in Path(path).parts:
+        raise AiGraphError(f"{field} doit être un chemin relatif au projet.")
+    return path
 
 
 class AiGraphError(ValueError):
@@ -293,6 +301,120 @@ def load_fact_manifest(
     if document.get("mode", "partial") not in {"partial", "complete"}:
         raise AiGraphError("mode doit être 'partial' ou 'complete'.")
     return facts, resolved_namespace, complete
+
+
+def load_direct_flow_manifest(
+    path: Path,
+) -> tuple[list[MessageEndpoint], list[CodeFlow]]:
+    """Load optional direct-analysis endpoints and ordered flows.
+
+    The graph manifest keeps topology facts and source-evidenced flow
+    projections in one versioned handoff. This loader is used only by the
+    import path and never runs a source extractor.
+    """
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AiGraphError(f"Impossible de lire le manifeste {path}: {exc}") from exc
+    if not isinstance(document, dict) or document.get("format") != MANIFEST_FORMAT:
+        raise AiGraphError(f"format attendu: {MANIFEST_FORMAT}")
+    raw_endpoints = document.get("endpoints", [])
+    raw_flows = document.get("flows", [])
+    if not isinstance(raw_endpoints, list) or not isinstance(raw_flows, list):
+        raise AiGraphError("endpoints et flows doivent être des listes.")
+
+    endpoints: list[MessageEndpoint] = []
+    endpoint_ids: set[str] = set()
+    for index, raw in enumerate(raw_endpoints):
+        if not isinstance(raw, dict):
+            raise AiGraphError(f"endpoints[{index}] doit être un objet.")
+        endpoint_id = _required_string(raw.get("id"), f"endpoints[{index}].id")
+        if endpoint_id in endpoint_ids:
+            raise AiGraphError(f"identifiant d'endpoint dupliqué: {endpoint_id}")
+        system = _required_string(raw.get("system"), f"endpoints[{index}].system")
+        role = _required_string(raw.get("role"), f"endpoints[{index}].role")
+        topic = _required_string(raw.get("topic"), f"endpoints[{index}].topic")
+        service = _required_string(raw.get("service"), f"endpoints[{index}].service")
+        path_value = _relative_path(raw.get("path"), f"endpoints[{index}].path")
+        start_line = raw.get("start_line")
+        end_line = raw.get("end_line", start_line)
+        if not isinstance(start_line, int) or start_line < 1:
+            raise AiGraphError(f"endpoints[{index}].start_line doit être positif.")
+        if not isinstance(end_line, int) or end_line < start_line:
+            raise AiGraphError(f"endpoints[{index}].end_line est invalide.")
+        endpoint = MessageEndpoint(
+            id=endpoint_id, role=role, system=system, topic=topic,
+            topic_dynamic=bool(raw.get("topic_dynamic", False)), source="manifest",
+            framework=raw.get("framework") if isinstance(raw.get("framework"), str) else "direct-analysis",
+            path=path_value, start_line=start_line, end_line=end_line,
+            snippet=str(raw.get("snippet", "direct-analysis")), module=service,
+            qualified_name=raw.get("qualified_name") if isinstance(raw.get("qualified_name"), str) else None,
+            message_type=raw.get("message_type") if isinstance(raw.get("message_type"), str) else None,
+            topic_display=raw.get("topic_display") if isinstance(raw.get("topic_display"), str) else None,
+        )
+        try:
+            endpoint.validate_semantics()
+        except ValueError as exc:
+            raise AiGraphError(f"endpoints[{index}]: {exc}") from exc
+        endpoints.append(endpoint)
+        endpoint_ids.add(endpoint_id)
+
+    flows: list[CodeFlow] = []
+    flow_ids: set[str] = set()
+    for index, raw in enumerate(raw_flows):
+        if not isinstance(raw, dict):
+            raise AiGraphError(f"flows[{index}] doit être un objet.")
+        flow_id = _required_string(raw.get("id"), f"flows[{index}].id")
+        if flow_id in flow_ids:
+            raise AiGraphError(f"identifiant de flux dupliqué: {flow_id}")
+        module = _required_string(raw.get("module"), f"flows[{index}].module")
+        method = _required_string(raw.get("method"), f"flows[{index}].method")
+        flow_path = _relative_path(raw.get("path"), f"flows[{index}].path")
+        start_line = raw.get("start_line")
+        end_line = raw.get("end_line", start_line)
+        if not isinstance(start_line, int) or start_line < 1:
+            raise AiGraphError(f"flows[{index}].start_line doit être positif.")
+        if not isinstance(end_line, int) or end_line < start_line:
+            raise AiGraphError(f"flows[{index}].end_line est invalide.")
+        raw_steps = raw.get("steps")
+        if not isinstance(raw_steps, list) or not raw_steps:
+            raise AiGraphError(f"flows[{index}].steps doit être une liste non vide.")
+        steps: list[CodeFlowStep] = []
+        for step_index, step in enumerate(raw_steps):
+            if not isinstance(step, dict):
+                raise AiGraphError(f"flows[{index}].steps[{step_index}] doit être un objet.")
+            order = step.get("order")
+            step_start = step.get("start_line")
+            step_end = step.get("end_line", step_start)
+            if not isinstance(order, int) or order < 1:
+                raise AiGraphError(f"flows[{index}].steps[{step_index}].order est invalide.")
+            if not isinstance(step_start, int) or step_start < 1 or not isinstance(step_end, int) or step_end < step_start:
+                raise AiGraphError(f"flows[{index}].steps[{step_index}] contient des lignes invalides.")
+            step_endpoint_id: str | None = step.get("endpoint_id")
+            if step_endpoint_id is not None:
+                step_endpoint_id = _required_string(step_endpoint_id, f"flows[{index}].steps[{step_index}].endpoint_id")
+                if step_endpoint_id not in endpoint_ids:
+                    raise AiGraphError(f"flows[{index}].steps[{step_index}] référence un endpoint inconnu.")
+            steps.append(CodeFlowStep(
+                order=order,
+                kind=_required_string(step.get("kind"), f"flows[{index}].steps[{step_index}].kind"),
+                name=_required_string(step.get("name"), f"flows[{index}].steps[{step_index}].name"),
+                path=_relative_path(step.get("path"), f"flows[{index}].steps[{step_index}].path"),
+                start_line=step_start, end_line=step_end, endpoint_id=step_endpoint_id,
+                operation=step.get("operation") if isinstance(step.get("operation"), str) else None,
+            ))
+        flows.append(CodeFlow(
+            id=flow_id, module=module, method=method, path=flow_path,
+            start_line=start_line, end_line=end_line,
+            status=_required_string(raw.get("status", "potential"), f"flows[{index}].status"),
+            confidence=_required_string(raw.get("confidence", "medium"), f"flows[{index}].confidence"),
+            reason=_required_string(raw.get("reason", "direct source analysis"), f"flows[{index}].reason"),
+            steps=tuple(sorted(steps, key=lambda step: step.order)),
+            reconciliation=_required_string(raw.get("reconciliation", "complete"), f"flows[{index}].reconciliation"),
+            alternative_count=int(raw.get("alternative_count", 1)),
+        ))
+        flow_ids.add(flow_id)
+    return endpoints, flows
 
 
 def load_ai_graph(path: Path) -> tuple[dict[str, list[MessageEndpoint]], list[GraphEdge], dict[str, list[str]], list[str]]:

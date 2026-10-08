@@ -63,6 +63,13 @@ entry cannot overwrite another fact through SQLite conflict handling.
 `architecture_graph` merges both layers using the generic dependency node/edge
 shape, preserving API and MongoDB associations.
 
+The same `systemlens-ai-graph-v1` manifest may contain optional `endpoints` and
+ordered `flows` for direct source analysis. The importer stores manifest
+endpoints with `source=manifest` and persists the ordered `CodeFlow` records
+only when the source snapshot has no indexed endpoints or modules. This keeps
+direct flow projections separate from deterministic source facts while making
+the selected-flow HTML view available without running source indexing.
+
 The `export facts` command serializes a `graph_facts` namespace as the
 `systemlens-ai-graph-v1` manifest. It preserves the stored ID, evidence,
 status, confidence, pass and revision metadata, and arbitrary metadata. A

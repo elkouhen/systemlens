@@ -37,14 +37,14 @@ responsibilities:
 | Repository | Responsibility | Main output |
 |---|---|---|
 | `systemlens` | Index Java/Spring source evidence and visualize the persisted model. | SQLite index, CLI/MCP results, interactive HTML graphs |
-| `systemlens-skill` | Enrich an indexed model with reviewable AI explanations, flow descriptions, and complementary facts. | Reports, flow descriptions, versioned AI fact manifests |
+| `systemlens-skill` | Analyze source directly, create reviewable facts and flows, and import them without source indexing. | Versioned AI fact manifests and HTML exports |
 | `systemlens-observability-lab` | Run test applications, deploy the complete Kubernetes/Elastic environment, and validate instrumentation and observability. | Deployed workloads, telemetry checks, reproducible integration fixtures |
 
-Use them in this order: create the deterministic SystemLens index, ask the
-skill to perform a bounded enrichment or audit, then use the observability lab
-to validate the application and its telemetry in a complete Kubernetes
-environment. The lab is also the reference fixture for cross-repository
-SystemLens compatibility checks.
+Use either the direct-analysis skill workflow or the deterministic index-first
+workflow. The direct workflow reads source code with the agent, imports a
+reviewable JSON manifest, and exports HTML without running `systemlens index`.
+The indexed workflow builds the local source snapshot before enrichment. Use
+the observability lab to validate runtime behavior and telemetry separately.
 
 ## Install
 
@@ -113,8 +113,8 @@ OpenAPI, AsyncAPI, and indexed DTO views. In `Flux de code`, check several
 flows to view their call graphs together in independent side-by-side panels.
 The comparison button can also open the current selection explicitly.
 
-For the recommended end-to-end workflow, first establish this deterministic
-baseline, then add the optional companion skill for bounded AI enrichment:
+For direct source analysis, add the companion skill and follow its manifest
+workflow:
 
 ```bash
 npx skills add elkouhen/systemlens-skill
@@ -377,8 +377,9 @@ RabbitMQ, SQS, or other middleware facts.
 | An interactive overview and examples | [Documentation site](docs/index.html) |
 | CLI, MCP, and HTML-export behaviour | [Functional specification](docs/SPEC-FONC.md) |
 | Extraction, storage, and layout design | [Technical specification](docs/SPEC-TECH.md) |
+| Product scope and success measures | [Product requirements](docs/PRD.md) |
+| Package ownership and code navigation | [Code architecture guide](docs/ARCHITECTURE.md) |
 | HTML export UX/UI rules | [UX/UI rules](docs/UX-UI.md) |
-| A maintainer's code-navigation guide | [Architecture map](docs/ARCHITECTURE.md) |
 | Test coverage, levels, and validation commands | [Test strategy and validation report](docs/TESTING.md) |
 | The rationale for durable design choices | [ADRs](docs/ADR.md) |
 | AI graph manifest format | [AI graph manifest](docs/AI-GRAPH.md) |

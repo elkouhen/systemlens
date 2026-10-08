@@ -1,30 +1,35 @@
 # Documentation index
 
-SystemLens keeps product intent, observable behavior, implementation constraints,
-and architecture decisions in separate documents. Start with the document that
-owns the question, then follow its links to implementation evidence.
+SystemLens keeps each cross-cutting aspect in one owner document. Start with
+the aspect document, then follow its links to detailed sections, code, and
+tests. A detail page may explain one part of an aspect, but it does not create
+a second source of truth.
 
-## Choose a document
+## Aspect documents
 
-| Question | Start here |
+| Aspect | Owner | Owns | Does not own |
+|---|---|---|---|
+| Product | [Product requirements](PRD.md) | Users, purpose, scope, outcomes, and success measures | Command syntax, data structures, or visual rules |
+| Functional behavior | [Functional specification](SPEC-FONC.md) | CLI, MCP, export behavior, extraction contracts, and compatibility | Internal module boundaries or visual styling |
+| Technical design | [Technical specification](SPEC-TECH.md) | Architecture constraints, persistence, data contracts, algorithms, and verification | Product scope or interaction semantics |
+| Code structure | [Code architecture guide](ARCHITECTURE.md) | Package ownership, dependency direction, and maintainer navigation | Public behavior and persisted data contracts |
+| UX/UI | [UX/UI rules](UX-UI.md) | Visible presentation, widgets, selection, inspection, layout, and camera behavior | Extraction, persistence, and product scope |
+
+## Supporting documents
+
+| Need | Document |
 |---|---|
-| What problem does SystemLens solve? | [Product requirements](PRD.md) |
-| Which commands, MCP tools, and exports are public? | [Functional specification](SPEC-FONC.md) |
-| How do indexing, storage, extraction, and rendering work? | [Technical specification](SPEC-TECH.md) |
-| What are the UX/UI rules for the HTML export? | [UX/UI rules](UX-UI.md) |
-| Why was an architectural choice made? | [Architecture decisions](ADR.md) |
-| How should maintainers navigate the code? | [Architecture map](ARCHITECTURE.md) |
-| How are tests organized and validated? | [Test strategy and validation report](TESTING.md) |
-| What does the AI graph manifest contain? | [AI graph manifest](AI-GRAPH.md) |
-| How are internal flows diagnosed? | [Internal flow diagnosis](DIAGNOSE-INTERNAL-FLOWS.md) |
-| How do I run a full CodeQL index and describe flows? | [Full CodeQL indexing and flow descriptions](prompts/full-index-codeql-flow-descriptions.md) |
+| Why a durable architectural choice was made | [Architecture decisions](ADR.md) |
+| How tests are organized and validated | [Test strategy and validation report](TESTING.md) |
+| What the AI graph manifest contains | [AI graph manifest](AI-GRAPH.md) |
+| How internal flows are diagnosed | [Internal flow diagnosis](DIAGNOSE-INTERNAL-FLOWS.md) |
+| How to run a full CodeQL index and describe flows | [Full CodeQL indexing and flow descriptions](prompts/full-index-codeql-flow-descriptions.md) |
 
-## Source ownership
+## Change rules
 
-The PRD owns product scope and success measures. The functional specification
-owns observable behavior. The [UX/UI rules](UX-UI.md) own visible presentation
-and interaction semantics. The technical specification owns implementation
-constraints and persisted data contracts. ADRs own durable decisions.
+The owner table above is the responsibility map. When a change crosses several
+aspects, update each owner document in the same change. Do not copy the same
+rule into a second owner document. Link to the owner instead.
 
 ## Terminology
 

@@ -1,5 +1,10 @@
 # Code architecture guide
 
+This document owns the code-structure aspect: package ownership, dependency
+direction, execution paths, and maintainer navigation. Public behavior belongs
+to the functional specification; persisted data and algorithms belong to the
+technical specification.
+
 This guide is the starting point for maintainers. It complements the detailed
 contracts in `SPEC-TECH.md`: read this document to find the right ownership
 boundary, then read the relevant specification before changing behaviour.

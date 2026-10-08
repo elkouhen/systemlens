@@ -1,5 +1,10 @@
 # UX/UI rules
 
+This document owns the UX/UI aspect: visible presentation, widgets, selection,
+inspection, layout, camera behavior, and interaction semantics. Product scope,
+domain contracts, and implementation algorithms belong to their respective
+aspect documents.
+
 This document is the normative UX/UI contract for the generated HTML export.
 It defines how the Explorer communicates indexed architecture facts, how users
 navigate the graph, and how the interface behaves in light, dark, and

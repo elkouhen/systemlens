@@ -1,5 +1,9 @@
 # Functional specification: systemlens
 
+This document owns observable behavior: CLI, MCP, export, extraction, and
+compatibility contracts. It does not define internal package ownership or the
+global visual language.
+
 This page routes readers to the observable contract. The detailed sections live
 in `docs/spec-fonc/` so each topic can be read and reviewed independently.
 
@@ -21,17 +25,6 @@ The section files are normative for the behavior they own.
 
 The extraction rules include interface calls through inherited implementations
 and declared method return types, with explicit fallback confidence limits.
-
-## Contract ownership
-
-The functional specification owns CLI, MCP, export domain behavior, and
-compatibility behavior. The [UX/UI rules](UX-UI.md) own visible presentation,
-layout affordances, and interaction semantics. The technical specification
-owns implementation constraints, persistence, algorithms, and internal data shape.
-
-When a change crosses both contracts, update both entry points and their
-owning section files. Keep product intent in [PRD](PRD.md) and durable design
-choices in [ADRs](ADR.md).
 
 ## Detailed sections
 

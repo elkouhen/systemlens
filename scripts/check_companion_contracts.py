@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import shutil
+import sqlite3
 import subprocess
 import tempfile
 from pathlib import Path
@@ -80,7 +81,7 @@ def _copy_lab_application(lab_root: Path, destination: Path) -> None:
         raise FileNotFoundError(f"Java laboratory application not found: {source}")
 
     def ignore(directory: str, names: list[str]) -> set[str]:
-        ignored = {"target", ".git"}.intersection(names)
+        ignored = {"target", ".git", ".systemlens"}.intersection(names)
         if Path(directory).name == ".systemlens":
             ignored.update({"findings.db", "findings.db-shm", "findings.db-wal"}.intersection(names))
         return ignored
@@ -88,20 +89,35 @@ def _copy_lab_application(lab_root: Path, destination: Path) -> None:
     shutil.copytree(source, destination, ignore=ignore)
 
 
-def _validate_lab(systemlens: Path, lab_root: Path) -> None:
+def _validate_lab(systemlens: Path, lab_root: Path, skill_root: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="systemlens-companion-contract-") as temporary:
         application = Path(temporary) / "supermarket-demo"
         _copy_lab_application(lab_root, application)
-        _run([str(systemlens), "doctor"], cwd=application)
-        _run([str(systemlens), "index"], cwd=application)
-        flows = json.loads(_run([str(systemlens), "flows", "--json"], cwd=application).stdout)
-        if not isinstance(flows, list) or not flows:
-            raise ValueError("The Java laboratory must produce at least one potential code flow")
+        manifest = skill_root / "examples" / "supermarket-direct-analysis.json"
+        shutil.copy2(manifest, application / manifest.name)
+        _run([str(systemlens), "version"], cwd=application)
+        _run([str(systemlens), "init"], cwd=application)
+        _run([
+            str(systemlens), "import-facts", manifest.name,
+            "--namespace", "direct-analysis", "--complete",
+        ], cwd=application)
         output = Path(temporary) / "architecture.html"
         _run([str(systemlens), "export", "microservices", "--html", str(output)], cwd=application)
         document = output.read_text(encoding="utf-8")
         if '<script id="graph-data" type="application/json">' not in document:
             raise ValueError("The laboratory HTML export does not contain graph data")
+        with sqlite3.connect(application / ".systemlens" / "findings.db") as connection:
+            counts = dict(connection.execute(
+                "SELECT 'indexed_endpoints', COUNT(*) FROM endpoints WHERE source != 'manifest' "
+                "UNION ALL SELECT 'modules', COUNT(*) FROM modules "
+                "UNION ALL SELECT 'graph_facts', COUNT(*) FROM graph_facts "
+                "UNION ALL SELECT 'code_flows', COUNT(*) FROM code_flows"
+            ).fetchall())
+        if counts["indexed_endpoints"] != 0 or counts["modules"] != 0:
+            raise ValueError("The direct-analysis workflow unexpectedly indexed source facts")
+        if counts["graph_facts"] == 0 or counts["code_flows"] == 0:
+            raise ValueError("The direct-analysis workflow imported no graph facts or flows")
+            raise ValueError("The direct-analysis workflow imported no graph facts")
 
 
 def main() -> None:
@@ -120,10 +136,14 @@ def main() -> None:
     arguments = parser.parse_args()
 
     _validate_skill(arguments.skill_root.resolve())
-    _validate_lab(arguments.systemlens.resolve(), arguments.lab_root.resolve())
+    _validate_lab(
+        arguments.systemlens.resolve(),
+        arguments.lab_root.resolve(),
+        arguments.skill_root.resolve(),
+    )
     print(
-        "Companion contracts validated: skill metadata/links/JSON and Java "
-        "laboratory index/export."
+        "Companion contracts validated: skill metadata/links/JSON and direct "
+        "fact import/HTML export on the Java laboratory."
     )
 
 

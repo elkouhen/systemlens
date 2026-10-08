@@ -46,6 +46,8 @@ the SQLite source inventory.
       "evidence": [{"path": "relative/path", "start_line": 1, "end_line": 2, "quote": "optional short quote"}]
     }
   ],
+  "endpoints": [],
+  "flows": [],
   "mode": "partial | complete"
 }
 ```
@@ -67,6 +69,14 @@ SystemLens renders `confirmed` and `proposed` relations. It does not render
 quality panel with their reason. `confidence` describes the AI analysis and
 `status` describes whether the claim is safe to draw. A low-confidence claim
 may be proposed, but must remain visibly attributable to the AI manifest.
+
+The optional `endpoints` and `flows` arrays support direct source analysis
+without a SystemLens source index. An endpoint records its service, role,
+protocol, channel, relative evidence path, and line range. A flow records its
+service, method, status, confidence, reason, and ordered steps. Each step may
+reference an endpoint ID. `import-facts` persists these arrays only in an
+empty source snapshot, so the call-graph export remains separate from indexed
+source facts.
 
 The HTML adapter maps `service` and `external_service` to service nodes,
 `event` to a service/topic/service path, and `collection` to the existing

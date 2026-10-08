@@ -1,5 +1,9 @@
 # Technical specification: systemlens
 
+This document owns implementation constraints: package architecture,
+persistence, data contracts, algorithms, and verification. It does not define
+product scope, public command behavior, or visual interaction semantics.
+
 This page routes readers to the implementation contract. The detailed sections
 live in `docs/spec-tech/` so architecture, storage, algorithms, and verification
 can evolve without one oversized specification.
@@ -17,11 +21,6 @@ can evolve without one oversized specification.
 | Visible HTML presentation or interaction | [UX/UI rules](UX-UI.md) |
 | SQLite schema or migrations | [Persistence](spec-tech/persistence.md) |
 | Validation and quality gates | [Verification](spec-tech/verification.md) |
-
-The functional specification owns observable CLI, MCP, and export domain
-behavior. The [UX/UI rules](UX-UI.md) own visible HTML presentation and
-interaction semantics. This specification owns implementation constraints and
-persisted data contracts. [ADRs](ADR.md) own durable architectural choices.
 
 The indexing section specifies Java signature identity, inherited interface
 implementations, and declared return types used by the call-graph fallback.
