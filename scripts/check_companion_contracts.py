@@ -40,6 +40,10 @@ def _run(
         raise TimeoutError(
             f"Command timed out after {timeout_seconds}s: {rendered}"
         ) from error
+    except subprocess.CalledProcessError as error:
+        rendered = " ".join(command)
+        details = (error.stderr or error.stdout or "").strip()
+        raise RuntimeError(f"Command failed: {rendered}\n{details}") from error
 
 
 def _validate_skill(skill_root: Path) -> None:
@@ -89,16 +93,36 @@ def _copy_lab_application(lab_root: Path, destination: Path) -> None:
     shutil.copytree(source, destination, ignore=ignore)
 
 
-def _validate_lab(systemlens: Path, lab_root: Path, skill_root: Path) -> None:
+def _validate_lab(
+    systemlens: Path,
+    codeql: Path,
+    lab_root: Path,
+    skill_root: Path,
+) -> None:
     with tempfile.TemporaryDirectory(prefix="systemlens-companion-contract-") as temporary:
         application = Path(temporary) / "supermarket-demo"
         _copy_lab_application(lab_root, application)
         manifest = skill_root / "examples" / "supermarket-direct-analysis.json"
-        shutil.copy2(manifest, application / manifest.name)
+        manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
+        manifest_data.pop("endpoints", None)
+        manifest_data.pop("flows", None)
+        enrichment_manifest = application / "supermarket-enrichment.json"
+        enrichment_manifest.write_text(
+            json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8"
+        )
         _run([str(systemlens), "version"], cwd=application)
         _run([str(systemlens), "init"], cwd=application)
+        (application / ".codeql").mkdir()
         _run([
-            str(systemlens), "import-facts", manifest.name,
+            str(codeql), "database", "create", ".codeql/systemlens-java",
+            "--language=java", "--source-root=.", "--build-mode=none",
+        ], cwd=application)
+        _run([
+            str(systemlens), "index", "--full", "--call-graph-engine", "codeql",
+            "--codeql-database", ".codeql/systemlens-java",
+        ], cwd=application)
+        _run([
+            str(systemlens), "import-facts", enrichment_manifest.name,
             "--namespace", "direct-analysis", "--complete",
         ], cwd=application)
         output = Path(temporary) / "architecture.html"
@@ -113,11 +137,10 @@ def _validate_lab(systemlens: Path, lab_root: Path, skill_root: Path) -> None:
                 "UNION ALL SELECT 'graph_facts', COUNT(*) FROM graph_facts "
                 "UNION ALL SELECT 'code_flows', COUNT(*) FROM code_flows"
             ).fetchall())
-        if counts["indexed_endpoints"] != 0 or counts["modules"] != 0:
-            raise ValueError("The direct-analysis workflow unexpectedly indexed source facts")
+        if counts["indexed_endpoints"] == 0 or counts["modules"] == 0:
+            raise ValueError("The CodeQL-backed workflow indexed no source facts")
         if counts["graph_facts"] == 0 or counts["code_flows"] == 0:
-            raise ValueError("The direct-analysis workflow imported no graph facts or flows")
-            raise ValueError("The direct-analysis workflow imported no graph facts")
+            raise ValueError("The CodeQL-backed workflow produced no graph facts or flows")
 
 
 def main() -> None:
@@ -133,17 +156,25 @@ def main() -> None:
         type=Path,
         default=ROOT / ".venv" / "bin" / "systemlens",
     )
+    parser.add_argument(
+        "--codeql",
+        type=Path,
+        default=shutil.which("codeql"),
+    )
     arguments = parser.parse_args()
 
     _validate_skill(arguments.skill_root.resolve())
+    if arguments.codeql is None:
+        raise FileNotFoundError("CodeQL CLI not found; install it before validation")
     _validate_lab(
         arguments.systemlens.resolve(),
+        arguments.codeql.resolve(),
         arguments.lab_root.resolve(),
         arguments.skill_root.resolve(),
     )
     print(
-        "Companion contracts validated: skill metadata/links/JSON and direct "
-        "fact import/HTML export on the Java laboratory."
+        "Companion contracts validated: skill metadata/links/JSON, CodeQL-backed "
+        "indexing, complementary fact import, and HTML export on the Java laboratory."
     )
 
 
