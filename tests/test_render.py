@@ -961,6 +961,11 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "callTreeExpanded" in document
     assert "callTreeCollapsed" in document
     assert "graphState.callTreeExpanded.add(occurrence.pathKey)" in document
+    assert "callTreeSelectedPathKey" in document
+    assert 'if (event.shiftKey) {' in document
+    assert "graphState.callTreeSelectedPathKey = occurrence.pathKey" in document
+    assert "const isSelectedOccurrence = graphState.callTreeSelectedPathKey === occurrence.pathKey;" in document
+    assert 'isSelectedOccurrence ? " is-selected" : ""' in document
     assert "const camera = captureCallTreeCamera()" in document
     assert "renderCallTreeOverlay(camera)" in document
     assert "Afficher le niveau suivant" in document
@@ -1499,8 +1504,12 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'Comparer les itinéraires' not in document
     assert 'id="show-simple-paths"' not in document
     assert 'id="path-lock"' not in document
-    assert 'Boolean(originalEvent?.shiftKey)' in document
+    assert 'if (!originalEvent?.shiftKey) return;' in document
     assert 'if (!event.shiftKey) return;' in document
+    assert 'const activateArchitectureNode = shiftKey =>' in document
+    assert 'if (!shiftKey) return;' in document
+    assert 'activateArchitectureNode(event.shiftKey);' in document
+    assert 'if (!originalEvent?.shiftKey) return;' in document
     assert 'const graphVisible = !showingFlows || showingFlowGraph;' in document
     assert '>Cartes</button>' in document
     assert '>Symboles</button>' in document

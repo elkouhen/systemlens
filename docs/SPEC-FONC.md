@@ -1,6 +1,6 @@
 # Functional specification: systemlens
 
-This document owns observable behavior: CLI, MCP, export, extraction, and
+This document owns observable behavior: CLI, export, extraction, and
 compatibility contracts. It does not define internal package ownership or the
 global visual language.
 
@@ -17,7 +17,7 @@ in `docs/spec-fonc/` so each topic can be read and reviewed independently.
 | Change export behavior | [HTML export](spec-fonc/html-export.md), [XLSX diagnostic export](spec-fonc/xlsx-export.md), [port rendering](spec-fonc/port-rendering.md), and [placement](spec-fonc/placement.md) |
 | Change graph views | [Layered view](spec-fonc/layered-view.md) and [module rendering](spec-fonc/modules.md) |
 | Change HTML presentation or interaction | [UX/UI rules](UX-UI.md) |
-| Change incremental indexing or MCP | [Incrementality](spec-fonc/incrementality.md) and [MCP](spec-fonc/mcp.md) |
+| Change incremental indexing | [Incrementality](spec-fonc/incrementality.md) |
 | Check a limitation | [Boundaries](spec-fonc/boundaries.md) |
 
 The keywords **MUST** and **MUST NOT** identify compatibility requirements.
@@ -38,6 +38,5 @@ and declared method return types, with explicit fallback confidence limits.
 - [Layered view](spec-fonc/layered-view.md)
 - [Module rendering](spec-fonc/modules.md)
 - [Incrementality and freshness](spec-fonc/incrementality.md)
-- [MCP](spec-fonc/mcp.md)
 - [Boundaries](spec-fonc/boundaries.md)
 - [UX/UI rules](UX-UI.md)

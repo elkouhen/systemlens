@@ -181,7 +181,7 @@
       if (link.kind === "jpa") return RELATION_COLORS.jpa;
       if (link.direction === "incoming") return RELATION_COLORS.kafkaConsume;
       if (link.direction === "data_access") return RELATION_COLORS.mongodb;
-      if (link.kind.startsWith("mcp_") && ["reads", "writes", "uses"].includes(link.label)) return RELATION_COLORS.mongodb;
+      if (link.kind.startsWith("enrichment_") && ["reads", "writes", "uses"].includes(link.label)) return RELATION_COLORS.mongodb;
       return RELATION_COLORS.kafkaPublish;
     }
     let network;
@@ -228,6 +228,7 @@
       callGraphDisplayMode: "tree",
       callTreeDepth: 1,
       callTreeZoom: 1,
+      callTreeSelectedPathKey: null,
       callTreeVisibleNodeCount: 0,
       callTreeVisibleEdgeCount: 0,
     };

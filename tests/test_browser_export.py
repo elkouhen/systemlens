@@ -303,23 +303,23 @@ def _complex_dataset_document() -> str:
         producer = services[index % len(services)]
         consumer = services[(index + 1) % len(services)]
         links.extend([
-            {"source": producer["id"], "target": topic["id"], "kind": "mcp_publishes", "label": "publishes"},
-            {"source": topic["id"], "target": consumer["id"], "kind": "mcp_consumes", "label": "consumes"},
+            {"source": producer["id"], "target": topic["id"], "kind": "enrichment_publishes", "label": "publishes"},
+            {"source": topic["id"], "target": consumer["id"], "kind": "enrichment_consumes", "label": "consumes"},
         ])
     for index in range(30):
         collection = resources[100 + index]
         first = services[(index * 3) % len(services)]
         second = services[(index * 3 + 1) % len(services)]
         links.extend([
-            {"source": first["id"], "target": collection["id"], "kind": "mcp_writes", "label": "writes"},
-            {"source": second["id"], "target": collection["id"], "kind": "mcp_reads", "label": "reads"},
+            {"source": first["id"], "target": collection["id"], "kind": "enrichment_writes", "label": "writes"},
+            {"source": second["id"], "target": collection["id"], "kind": "enrichment_reads", "label": "reads"},
         ])
     for index in range(40):
         topic = resources[(index * 7) % 100]
         producer = services[(index * 5 + 2) % len(services)]
         links.append({
             "source": producer["id"], "target": topic["id"],
-            "kind": "mcp_publishes", "label": "publishes",
+            "kind": "enrichment_publishes", "label": "publishes",
         })
     assert len(resources) == 130
     assert len(links) == 300

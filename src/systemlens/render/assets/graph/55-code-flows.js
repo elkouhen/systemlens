@@ -294,6 +294,7 @@
         ? [
             graphState.selectedCodeFlowId,
             graphState.callTreeDepth,
+            graphState.callTreeSelectedPathKey || "",
             [...graphState.callTreeExpanded].sort().join(","),
             [...graphState.callTreeCollapsed].sort().join(","),
             Math.round(viewport.width),
@@ -840,7 +841,8 @@
         const frequencyClass = occurrenceCount >= 4 ? "is-frequency-4"
           : occurrenceCount === 3 ? "is-frequency-3"
             : occurrenceCount === 2 ? "is-frequency-2" : "";
-        node.className = `graph-call-tree-node${frequencyClass ? ` ${frequencyClass}` : ""}${occurrence.cycle ? " is-cycle" : ""}`;
+        const isSelectedOccurrence = graphState.callTreeSelectedPathKey === occurrence.pathKey;
+        node.className = `graph-call-tree-node${frequencyClass ? ` ${frequencyClass}` : ""}${occurrence.cycle ? " is-cycle" : ""}${isSelectedOccurrence ? " is-selected" : ""}`;
         const original = nodeIdForCodeFlowResource(occurrence.name, "microservice");
         const originalNode = original ? nodeDataById.get(original) : null;
         node.style.setProperty("--card-accent", originalNode?.color || "#64748b");
@@ -947,10 +949,14 @@
         });
         node.addEventListener("mouseleave", () => { node.classList.remove("is-hovered"); clearTreeTooltip(); });
         node.addEventListener("click", event => {
-          if (!event.shiftKey) return;
           event.preventDefault();
           event.stopPropagation();
-          openCallTreeNodeInspector(originalNode);
+          if (event.shiftKey) {
+            openCallTreeNodeInspector(originalNode);
+            return;
+          }
+          graphState.callTreeSelectedPathKey = occurrence.pathKey;
+          renderCallTreeOverlay(captureCallTreeCamera());
         });
         canvas.append(node);
       });
@@ -1084,7 +1090,7 @@
       for (const step of steps.slice(1)) {
         if (step.kind === "http_call") {
           const candidate = uniqueTopologyLink(step.endpoint_id, nodes.at(-1));
-          if (!candidate || !["rest", "mcp_http"].includes(candidate.link.kind) || !addHop(candidate)) return null;
+          if (!candidate || !["rest", "enrichment_http"].includes(candidate.link.kind) || !addHop(candidate)) return null;
           if (inputEndpointId && internalOutputsByInput.get(inputEndpointId)?.has(step.endpoint_id)) {
             localLinks.push({ input_endpoint_id: inputEndpointId, output_endpoint_id: step.endpoint_id });
           }
@@ -1157,6 +1163,7 @@
       graphState.callTreeDepth = 1;
       graphState.callTreeExpanded = new Set();
       graphState.callTreeCollapsed = new Set();
+      graphState.callTreeSelectedPathKey = null;
       graphState.callTreeZoom = 1;
       // The owning module is the consumer for an input-triggered flow. The
       // visual root must follow the exported call-graph path instead: it is

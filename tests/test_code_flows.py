@@ -738,6 +738,8 @@ def test_flows_calculate_reuses_index_after_ai_fact_import(tmp_path: Path, monke
         "<version>1.0.0</version></project>",
         encoding="utf-8",
     )
+    monkeypatch.chdir(repo)
+    assert RUNNER.invoke(app, ["init"]).exit_code == 0
     with Store(repo) as store:
         index_repo(
             repo,
@@ -762,11 +764,10 @@ def test_flows_calculate_reuses_index_after_ai_fact_import(tmp_path: Path, monke
         }),
         encoding="utf-8",
     )
-    monkeypatch.chdir(repo)
     imported = RUNNER.invoke(app, [
         "import-facts", "facts.json", "--namespace", "ai-boundaries"
     ])
-    assert imported.exit_code == 0
+    assert imported.exit_code == 0, f"{imported.output}\n{imported.exception!r}"
 
     result = RUNNER.invoke(app, ["flows", "calculate", "--json"])
 

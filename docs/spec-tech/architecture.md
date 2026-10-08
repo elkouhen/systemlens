@@ -10,7 +10,7 @@ The pipeline is deliberately local:
 ```text
 repository files → file hashes → Tree-sitter Java AST extractors
                  → endpoints/modules/properties → SQLite facts and relations
-                 → CLI, MCP, graph and audit views
+                 → CLI, graph and audit views
 ```
 
 When explicitly enabled with `--kubernetes`, indexing also invokes the local
@@ -73,7 +73,7 @@ avoids cycles and duplicate work. Architecture snapshots also expose indexed
 lookups for modules, endpoints, collections, and relations so catalog queries
 do not rescan the complete inventory for every object.
 
-`delivery/cli.py`, `delivery/mcp.py`, and the standard-library local HTTP server
+`delivery/cli.py` and the standard-library local HTTP server
 in `delivery/web.py` are delivery layers over the domain modules. Shared CLI
 option resolution, manifest validation, progress reporting, and architecture
 output formatting live in `delivery/cli_support.py`. REST route normalization

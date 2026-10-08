@@ -10,12 +10,12 @@ impact paths, and unresolved facts before they change or review a system.
 Source code is neither sent to a service nor analysed by an external engine.
 
 **Start here:** install SystemLens, initialise the repository, run an index,
-then inspect the result through MCP, the CLI, or the HTML export.
+then inspect the result through the CLI or the HTML export.
 
 ## Scope
 
 This repository owns the local SystemLens product: deterministic indexing,
-source evidence, the CLI, the MCP server, persisted flows, and HTML exports.
+source evidence, the CLI, persisted flows, and HTML exports.
 It does not own agent prompts or the observability environment.
 
 The companion `systemlens-skill` is optional: it lets an agent perform a
@@ -36,13 +36,13 @@ responsibilities:
 
 | Repository | Responsibility | Main output |
 |---|---|---|
-| `systemlens` | Index Java/Spring source evidence and visualize the persisted model. | SQLite index, CLI/MCP results, interactive HTML graphs |
-| `systemlens-skill` | Analyze source directly, create reviewable facts and flows, and import them without source indexing. | Versioned AI fact manifests and HTML exports |
+| `systemlens` | Index Java/Spring source evidence and visualize the persisted model. | SQLite index, CLI results, interactive HTML graphs |
+| `systemlens-skill` | Index with CodeQL and SystemLens, analyze source directly, and import complementary facts through the CLI. | Versioned AI fact manifests and HTML exports |
 | `systemlens-observability-lab` | Run test applications, deploy the complete Kubernetes/Elastic environment, and validate instrumentation and observability. | Deployed workloads, telemetry checks, reproducible integration fixtures |
 
 Use either the direct-analysis skill workflow or the deterministic index-first
 workflow. The direct workflow reads source code with the agent, imports a
-reviewable JSON manifest, and exports HTML without running `systemlens index`.
+reviewable JSON manifest, and exports HTML through the SystemLens CLI.
 The indexed workflow builds the local source snapshot before enrichment. Use
 the observability lab to validate runtime behavior and telemetry separately.
 
@@ -192,7 +192,7 @@ pipeline stage associated with the verdict.
 
 | Goal | Use |
 |---|---|
-| Give a coding agent architecture context | `systemlens mcp` |
+| Give a coding agent architecture context | `systemlens export microservices --json` and `systemlens export facts …` |
 | Investigate one service or integration in a terminal | Catalog and `analyze` commands |
 | Review the whole topology visually | `systemlens export microservices --html …` |
 | Browse the persisted graph locally | `systemlens web` |
@@ -281,7 +281,7 @@ across supported coding-agent harnesses. Install APM, then run:
 apm install
 ```
 
-The manifest currently contains no external agent or MCP dependency; the
+The manifest currently contains no external agent or server dependency; the
 repository's `AGENTS.md` remains the source of project instructions. The
 following project checks are also available through APM:
 
@@ -337,49 +337,18 @@ guessed internal link. The selected local method-call engine (CodeQL by default)
 additionally extends potential code flows across statically resolved
 Java method calls; these flows are kept separate from asserted topology relations.
 
-## Connect an MCP client
-
-Start the stdio server from an initialized repository:
-
-```bash
-systemlens mcp
-```
-
-For example, register it in an MCP client configuration as:
-
-```json
-{
-  "mcpServers": {
-    "systemlens": {
-      "command": "systemlens",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-The MCP control surface is deliberately small:
-
-- `index_repository` refreshes source-derived facts.
-- `architecture_graph` reads the merged architecture graph.
-- `graph_fact_exists`, `add_graph_fact`, `remove_graph_fact`, and
-  `list_graph_facts` manage the separate, persistent enrichment layer.
-
-Graph enrichment never modifies or deletes source evidence. Use `data_schema`
-and `message_channel` nodes with a `technology` field for SQL, Redis,
-RabbitMQ, SQS, or other middleware facts.
-
 ## Documentation map
 
 | Read this when you need… | Document |
 |---|---|
 | A map of documentation ownership and reading paths | [Documentation index](docs/README.md) |
 | An interactive overview and examples | [Documentation site](docs/index.html) |
-| CLI, MCP, and HTML-export behaviour | [Functional specification](docs/SPEC-FONC.md) |
+| CLI and HTML-export behaviour | [Functional specification](docs/SPEC-FONC.md) |
 | Extraction, storage, and layout design | [Technical specification](docs/SPEC-TECH.md) |
 | Product scope and success measures | [Product requirements](docs/PRD.md) |
 | Package ownership and code navigation | [Code architecture guide](docs/ARCHITECTURE.md) |
 | HTML export UX/UI rules | [UX/UI rules](docs/UX-UI.md) |
+| Canonical project vocabulary | [Glossary](docs/glossary.md) |
 | Test coverage, levels, and validation commands | [Test strategy and validation report](docs/TESTING.md) |
 | The rationale for durable design choices | [ADRs](docs/ADR.md) |
 | AI graph manifest format | [AI graph manifest](docs/AI-GRAPH.md) |

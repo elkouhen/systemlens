@@ -7,7 +7,7 @@ from systemlens.application.search import SearchHit, Summary, get_context
 
 
 class FindingHit(TypedDict):
-    """Shape returned by `systemlens search --json` and the `search_findings` MCP tool."""
+    """Shape returned by `systemlens search --json`."""
 
     id: str
     rule_id: str
@@ -30,7 +30,7 @@ class RuleCount(TypedDict):
 
 
 class FindingsSummary(TypedDict):
-    """Shape returned by `systemlens summary --json` and the `findings_summary` MCP tool."""
+    """Shape returned by `systemlens summary --json`."""
 
     by_severity: dict[str, int]
     top_rules: list[RuleCount]
@@ -109,5 +109,4 @@ def render_summary_json(result: Summary) -> FindingsSummary:
         top_rules=[RuleCount(rule_id=r, count=c) for r, c in result.top_rules],
         by_top_level_dir=result.by_top_level_dir,
     )
-
 

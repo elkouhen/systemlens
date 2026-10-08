@@ -59,7 +59,7 @@ paths are relative to the analyzed project root and must not contain secrets or
 absolute machine paths.
 
 `storage_id` is emitted only by `export facts`. It preserves the identifier of
-an existing enrichment fact, including facts created through MCP. Agents may
+an existing enrichment fact. Agents may
 omit it; the importer then derives the identifier from the namespace, fact
 type, and manifest ID. Exported reference nodes identify source objects used by
 an enrichment edge so the edge can be imported without losing its endpoints.
@@ -107,8 +107,7 @@ systemlens import-facts architecture.ai-graph.pass-002.json \
 The command upserts facts by `(namespace, fact_type, id)`. Re-importing a
 revised fact replaces its evidence, status, confidence and metadata. Use
 `--complete` only for a full snapshot of that namespace; partial passes leave
-unmentioned facts untouched. The equivalent MCP tool is
-`import_graph_facts(manifest_path, namespace, complete)`.
+unmentioned facts untouched.
 
 To export persisted enrichment facts as a manifest that can be reviewed,
 completed, and imported again, use:

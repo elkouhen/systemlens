@@ -43,7 +43,7 @@ modules must live in the package that owns their responsibility:
 | `scanner/` | Java/Spring endpoint extractors and their public facade |
 | `storage/` | SQLite schema, migrations, codecs and fact persistence |
 | `infrastructure/` | Local configuration and state-path resolution |
-| `delivery/` | CLI, MCP and local HTTP adapters |
+| `delivery/` | CLI and local HTTP adapters |
 | `render/` | Text, JSON, HTML and LikeC4 output projections |
 
 The `render/` package (formerly the single `render.py` file, still imported as
@@ -68,7 +68,6 @@ bottom; `Store` is the only component that owns the SQLite database.
 ```mermaid
 flowchart TD
     CLI["CLI: index_cmd"] --> Config["load_config"]
-    MCP["MCP: incremental reindex"] --> Config
     Config --> Store["Store"]
     Store --> Indexer["indexing.service.index_repo"]
     Indexer --> ModuleDiscovery["discovery.build.modules.discover_modules"]
@@ -97,7 +96,6 @@ the other.
 ```mermaid
 flowchart TD
     CLI["CLI: microservices / export / analyze"] --> InventoryLoader
-    MCP["MCP: graph / dependency_graph"] --> InventoryLoader
     InventoryLoader["application.architecture_inventory.load_architecture_inventory"] --> Store["Store (read-only)"]
     InventoryLoader --> Federation["application.workspace: discover + load"]
     Store --> Catalog["application.architecture.build_catalog"]
@@ -147,7 +145,7 @@ concept.
 
 ### Reading a call site
 
-Start at its adapter decorator (`@app.command` or `@mcp.tool`), follow the
+Start at its adapter decorator (`@app.command`), follow the
 first non-private application function, then stop at either a query module or
 `indexing.service.index_repo`. Private helpers only refine the behaviour of their owner;
 they are not cross-module entry points.
@@ -157,7 +155,7 @@ they are not cross-module entry points.
 | Need to change | Start in |
 |---|---|
 | CLI parsing, option validation, exit code | `delivery/cli.py` |
-| MCP tool signature or transport concern | `delivery/mcp.py` |
+| CLI command signature or transport concern | `delivery/cli.py` |
 | A user query over the architecture inventory | `application/architecture.py`, `application/flow.py`, or `application/dependency_analysis.py` |
 | Shared CLI/web graph selection | `application/architecture_projection.py` |
 | Java AST endpoint extraction | `scanner/` package (`__init__.py` re-exports the public surface) |
@@ -239,7 +237,7 @@ source extraction.
 
 1. Entry points adapt input and output; they do not implement discovery
    algorithms.
-2. Discovery modules return models or typed facts and never import CLI, MCP,
+2. Discovery modules return models or typed facts and never import CLI,
    rendering, or persistence adapters.
 3. Use a named public function for a cross-package dependency. Do not import a
    name beginning with `_` from another package. Within the
@@ -252,7 +250,7 @@ source extraction.
    if needed), not in query or discovery code.
 6. Import module inventory dataclasses from `domain/module_inventory.py`.
    The `module_types/`, `modules/`, `store/`, `cli/`, `web/`, `simpleweb/`,
-   `mcp_server/`, and `architecture_projection/` packages exist only as
+   `architecture_projection/` packages exist only as
    compatibility import surfaces; production code must use the owning package.
 7. Keep the package root free of flat implementation modules. The architecture
    boundary test permits only `src/systemlens/__init__.py` at that level.
@@ -280,7 +278,7 @@ Set `SYSTEMLENS_TRACE=1` to print stage-timing lines
 (`SYSTEMLENS_TRACE ts=<monotonic> stage=<name> ...`) to stderr from the CLI,
 indexing service, Java parser, build discovery, and domain graph. This is an
 internal debugging aid for slow-index investigations; it never changes
-persisted facts, CLI/MCP output, or any documented contract.
+persisted facts, CLI output, or any documented contract.
 
 ## Maintenance focus
 
@@ -288,5 +286,5 @@ persisted facts, CLI/MCP output, or any documented contract.
 `render/graph_view_model.py` remain large implementation modules inside clear
 ownership packages. Further splits should stay within those packages and keep
 their existing public facades stable. Refactor behind named public contracts
-and focused tests; behavioural CLI and MCP specifications remain the
+and focused tests; behavioural CLI specifications remain the
 compatibility gate.

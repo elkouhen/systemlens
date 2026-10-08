@@ -16,7 +16,7 @@ while still making its reasoning inspectable.
 
 `export facts FILE --namespace NAME` serializes one persisted enrichment
 namespace back to the same manifest format. It preserves the stored fact ID in
-the optional `storage_id` field, so MCP-created facts remain stable across an
+the optional `storage_id` field, so imported facts remain stable across an
 export and re-import. Edges whose endpoints are source-derived receive
 reference nodes in the manifest; this keeps the edge importable without
 claiming that the reference node was extracted from the source. The command

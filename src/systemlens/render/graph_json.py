@@ -44,7 +44,7 @@ class GraphEdgeInfo(TypedDict):
 
 
 class GraphResult(TypedDict):
-    """Shape returned by `systemlens export microservices --json` and the MCP `graph` tool.
+    """Shape returned by `systemlens export microservices --json`.
 
     `services`/`nodes`/`edges` restent vides tant qu'aucune donnée
     inter-module n'est disponible : ni fédération explicite

@@ -335,7 +335,7 @@ def _cached_module_identity(repo_root_str: str, pom_path_str: str) -> str:
 
 def clear_caches() -> None:
     """BACKLOG-16 P2 : à appeler en tête de chaque indexation dans un
-    process long-vivant (serveur MCP) — `_cached_module_name` est caché par
+    processus long-vivant — `_cached_module_name` est caché par
     chemin de pom.xml pour toute la durée du process, un artifactId modifié
     entre deux `systemlens index` resterait sinon périmé."""
     _cached_module_name.cache_clear()

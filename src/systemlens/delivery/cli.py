@@ -97,7 +97,7 @@ from systemlens.render import (
 from systemlens.render.debug_xlsx import write_debug_xlsx
 from systemlens.infrastructure.paths import config_path, db_path
 from systemlens.storage.sqlite import Store, StoreError
-from systemlens.delivery.mcp import import_graph_facts as import_graph_facts_mcp
+from systemlens.application.graph_facts import import_graph_facts
 from systemlens.application.workspace import (
     discover_maven_services,
     load_federation,
@@ -3160,8 +3160,8 @@ def import_facts_cmd(
 ) -> None:
     """Valider et réconcilier un manifeste JSON dans la base locale."""
     try:
-        result = import_graph_facts_mcp(
-            manifest_path.as_posix(), namespace=namespace, complete=complete
+        result = import_graph_facts(
+            Path.cwd(), manifest_path, namespace=namespace, complete=complete
         )
     except (ValueError, RuntimeError) as exc:
         typer.echo(str(exc), err=True)
@@ -3171,21 +3171,6 @@ def import_facts_cmd(
         "Prochaine étape : systemlens flows calculate",
         err=True,
     )
-
-
-@app.command(name="mcp")
-def mcp_cmd() -> None:
-    """Lance le serveur MCP (stdio) exposant l'architecture du repo courant.
-
-    Enregistrement client (ex. Claude Code), à ajouter à la config MCP :
-
-    {"mcpServers": {"systemlens": {"command": "systemlens", "args": ["mcp"]}}}
-
-    Exemple : `systemlens mcp`.
-    """
-    from systemlens.delivery.mcp import mcp as fastmcp_app
-
-    fastmcp_app.run()
 
 
 if __name__ == "__main__":

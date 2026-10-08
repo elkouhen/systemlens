@@ -1,8 +1,8 @@
-"""Load one consistent architecture inventory for CLI and MCP queries.
+"""Load one consistent architecture inventory for CLI queries.
 
 The index of the current repository and a read-only workspace federation are
 two transport details for the same application use case.  Keeping their
-normalisation here prevents graph, audit and MCP tools from each rebuilding a
+normalisation here prevents graph, audit and export paths from each rebuilding a
 slightly different view of modules, endpoints and warnings.
 """
 

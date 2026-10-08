@@ -19,7 +19,7 @@ _MODULE_GRAPH_HTML_TEMPLATE = (
 
 
 class EndpointHit(TypedDict):
-    """Shape returned by the `list_endpoints` MCP tool and project inventory views."""
+    """Shape returned by endpoint inventory views."""
 
     id: str
     role: str
@@ -121,7 +121,7 @@ class ModuleDetail(ModuleSummary):
 
 class WorkspaceResult(TypedDict):
     """Shape returned by `systemlens microservices [--root ROOT] --json` and the
-    `list_workspace_services` MCP tool (BACKLOG-11 A2)."""
+    workspace service inventory views."""
 
     services: list[WorkspaceServiceInfo]
     warnings: list[str]
@@ -480,7 +480,7 @@ class FlowSiteInfo(TypedDict):
 
 
 class FlowResultInfo(TypedDict):
-    """Shape returned by the `trace_message_flow` MCP tool (BACKLOG-10 K5/K6)."""
+    """Shape returned by message-flow inventory views."""
 
     query: str
     resolved_topic: str

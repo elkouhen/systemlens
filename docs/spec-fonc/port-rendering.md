@@ -296,7 +296,7 @@ Explorer, so domain tabs start directly with their own content. A dedicated,
 compact `Displayed nodes and edges` control lets users independently select
 API, Topic, Data-access and other edge categories, and internal services,
 external services, messaging resources, Data resources and other node
-categories. This filtering applies equally to native and MCP-enriched graph
+categories. This filtering applies equally to native and imported graph
 vocabularies. Placement strategies remain available as advanced controls.
 The toolbar does not expose a separate path-history section. Paths remain
 available from the Explorer search, while itinerary comparison remains in the
@@ -388,10 +388,10 @@ action while details are shown. Architecture counters remain visible as compact
 context indicators. Clearing the selection restores the complete Explorer
 controls. Buttons inside details use the full available width for
 resource and module names rather than inheriting the compact square dimensions
-of toolbar icon buttons. Node selection MUST NOT
-move, zoom, refit, or otherwise alter the camera in any primary view. Selection
-may update emphasis and details, but every node and module retains its current
-screen position.
+of toolbar icon buttons. `Shift + click` on an Architecture node opens its
+introspection window. A plain click on an Architecture node MUST NOT select it,
+open details, or alter the graph state. Introspection MUST NOT move, zoom,
+refit, or otherwise alter the camera in any primary view.
 
 In the layers and modules views, each module exposes a full-width clickable
 header. Selecting that header highlights the module and opens its member list;
@@ -412,8 +412,8 @@ entries identify the workload by kind and name without displaying a namespace
 prefix. Namespace fields MAY remain in the embedded snapshot for compatibility
 and source evidence, but the report's navigable structure uses modules only.
 
-Panning MUST also work when the drag starts on a node card; a simple click on
-the same card MUST continue to select the node.
+Panning MUST also work when the drag starts on a node card. A simple click on
+the same card MUST remain inert unless it includes `Shift`.
 
 Double-clicking MUST NOT change the camera zoom accidentally after a pan;
 zoom remains available through the wheel and the explicit zoom controls.

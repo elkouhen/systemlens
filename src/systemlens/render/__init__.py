@@ -4,7 +4,7 @@ This package used to be a single 5000+ line ``render.py`` module. It is now
 split by rendering concern (see each submodule's docstring), but every name
 that used to be importable as ``systemlens.render.<name>`` remains importable
 from here unchanged — this ``__init__`` is the single public surface other
-modules (``cli``, ``mcp_server``, ``indexer``, tests) depend on.
+modules (``cli``, ``indexer``, tests) depend on.
 """
 
 from systemlens.render.search import (

@@ -96,8 +96,8 @@ def clear_analysis_caches() -> None:
     (package/qualified-name Java, propriétés Spring, champs `@Value`,
     module Maven, service Gradle) — à appeler en tête de chaque
     indexation. Ces caches accélèrent une indexation en cours (un même
-    fichier de config lu plusieurs fois), mais un serveur MCP est un
-    process long-vivant : sans purge, `reindex_findings` reservirait des
+    fichier de config lu plusieurs fois). Chaque nouvelle indexation doit
+    purger ces caches pour éviter de réutiliser un résultat obsolète.
     valeurs résolues avant la modification des fichiers qui a motivé la
     réindexation."""
     _java_qualified_name.cache_clear()

@@ -1197,12 +1197,12 @@ def build_graph_view_model(
                 known_node_ids.add(node_id)
         link = {
             "source": source_id, "target": target_id,
-            "kind": f"mcp_{fact.kind}",
+            "kind": f"enrichment_{fact.kind}",
             "direction": "outgoing",
             "label": fact.relation or fact.kind,
             "confidence": fact.confidence,
             "status": fact.status,
-            "provenance": "MCP graph enrichment",
+            "provenance": "CLI graph enrichment",
             **({"technology": fact.technology} if fact.technology else {}),
             **({"metadata": fact.metadata} if fact.metadata else {}),
         }

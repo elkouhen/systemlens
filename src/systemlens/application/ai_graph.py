@@ -43,7 +43,7 @@ def graph_facts_manifest(
     """Serialize persisted enrichment facts as a re-importable manifest.
 
     The manifest keeps the database identity in ``storage_id``. This is an
-    export-only compatibility field for facts created through MCP, whose IDs
+    export-only compatibility field for imported facts, whose IDs
     are hashes rather than the stable IDs supplied by an AI manifest.
     """
     selected = [fact for fact in facts if fact.namespace == namespace]

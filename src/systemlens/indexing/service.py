@@ -270,7 +270,7 @@ def _index_repo(
     disabled = disabled or frozenset(config.disabled_extractors)
     # BACKLOG-16 P2 : purge les lru_cache d'analyse best-effort (package
     # Java, propriétés Spring, module Maven/Gradle) avant de relire le
-    # repo — nécessaire dans un process long-vivant (serveur MCP) où
+    # repo — nécessaire lorsque plusieurs indexations s'enchaînent dans le même
     # `reindex_findings` doit voir les fichiers tels qu'ils sont maintenant,
     # pas tels qu'un `systemlens index` précédent les avait mémorisés.
     clear_analysis_caches()

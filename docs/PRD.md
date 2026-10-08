@@ -42,7 +42,7 @@ evidence.
 
 | User | Need | Surface |
 |---|---|---|
-| Codebase analyst (primary) | Establish proven dependencies, impact and unresolved facts before a change or review | CLI catalog commands, HTML export, and MCP |
+| Codebase analyst (primary) | Establish proven dependencies, impact and unresolved facts before a change or review | CLI catalog commands and HTML export |
 | Developer | Inspect the evidence behind a service, API, topic, project or architecture module | CLI catalog commands and HTML export |
 | Architect | Review topology, uncertainty and static architecture risks across services | `analyze`, graph export |
 
@@ -56,7 +56,7 @@ the merged model.
 The `coverage`, `indexing-issues`, and `audit` commands provide optional
 diagnostics for inventory completeness, extraction issues, and static topology
 risk. Reindex after an edit. Indexing is incremental, while `--full` refreshes
-every eligible source file. The complete command and MCP contracts belong to
+every eligible source file. The complete command contracts belong to
 the [functional specification](SPEC-FONC.md).
 
 ## Scope boundaries
@@ -100,7 +100,7 @@ the [functional specification](SPEC-FONC.md).
    range. Every non-source enrichment must identify its acquisition origin.
 3. A changed or deleted source file must update or remove its facts on the next
    index run.
-4. The local inventory and its CLI and MCP queries must operate without network
+4. The local inventory and its CLI queries must operate without network
    access once indexing is complete. Kubernetes discovery is an opt-in network
    exception.
 5. Graph, catalog and audit output must make uncertainty visible rather than
@@ -127,7 +127,7 @@ the [functional specification](SPEC-FONC.md).
   latency and error hotspots, determine the completeness of the observation,
   and navigate only to explicitly linked static evidence.
 
-For observable command and MCP contracts, see the
+For observable command contracts, see the
 [functional specification](./SPEC-FONC.md). For implementation details, see
 the [technical specification](./SPEC-TECH.md). Historical decisions,
 including the retired external-analyzer design, remain in

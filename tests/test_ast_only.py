@@ -14,8 +14,6 @@ from systemlens.infrastructure.config import Config
 from systemlens.application.flow import group_endpoints_by_module_for_flow, trace_flow
 from systemlens.domain.graph import build_graph
 from systemlens.indexing.service import index_repo
-from systemlens.application.architecture_inventory import load_architecture_inventory
-from systemlens.delivery.mcp import reindex_architecture
 from systemlens.scanner import (
     infer_framework_endpoints,
     infer_kafka_endpoints,
@@ -845,26 +843,6 @@ def test_incremental_build_identity_change_reattributes_unchanged_endpoints(tmp_
     assert "orders-renamed" in endpoint_modules
     assert "order-service" not in endpoint_modules
     assert "order-service" not in relation_modules
-
-
-@pytest.mark.parametrize("topic_strategy", ["default", "strategy1"])
-def test_mcp_reindex_preserves_the_persisted_topic_strategy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, topic_strategy: str
-) -> None:
-    repo = tmp_path / "repo"
-    shutil.copytree(FIXTURES / "kafka_repo", repo)
-    monkeypatch.chdir(repo)
-    assert RUNNER.invoke(app, ["init"]).exit_code == 0
-
-    with Store(repo) as store:
-        index_repo(repo, Config(), store, topic_strategy=topic_strategy)
-
-    reindex_architecture()
-
-    with Store(repo, readonly=True) as store:
-        assert store.get_meta("topic_strategy") == topic_strategy
-    inventory = load_architecture_inventory(repo)
-    assert inventory.profile.topic_strategy == topic_strategy
 
 
 def test_index_persists_kafka_dto_source_definitions(tmp_path: Path) -> None:

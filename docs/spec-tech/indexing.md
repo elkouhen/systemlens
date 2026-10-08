@@ -5,7 +5,7 @@ Parent: [Technical specification](../SPEC-TECH.md).
 
 `index_repo` performs these steps:
 
-1. Clear parser and discovery caches for long-lived MCP processes.
+1. Clear parser and discovery caches before each indexing pass.
 2. Discover modules unless disabled.
 3. Build the eligible-file hash inventory, respecting include/exclude rules,
    test-source exclusion, Maven test/archetype module exclusion and nested-build

@@ -1384,6 +1384,12 @@
           label.addEventListener("pointerleave", event => {
             if (!label.contains(event.relatedTarget)) flowTooltipOverlay.replaceChildren();
           });
+          const activateArchitectureNode = shiftKey => {
+            if (!shiftKey) return;
+            renderDetails(id);
+            openArchitectureNodeInspector(node, { reset: true });
+            hideInlineDetailsAfterModal();
+          };
           // Cards sit above Sigma's canvas and therefore normally consume the
           // pointer stream. Pan the camera directly when a drag starts on a
           // card, while preserving a plain click for node selection. Keeping
@@ -1404,7 +1410,7 @@
             window.removeEventListener("pointercancel", finishForwardedPointer, true);
             if (!wasDrag) {
               suppressNextCardClick = true;
-              selectNode(id, false, shiftKey);
+              activateArchitectureNode(shiftKey);
             }
           };
           const moveForwardedPointer = event => {
@@ -1458,16 +1464,10 @@
               return;
             }
             if (isResource) {
-              if (!event.shiftKey) {
-                selectNode(id, false, false);
-                return;
-              }
-              renderDetails(id);
-              openArchitectureNodeInspector(node, { reset: true });
-              hideInlineDetailsAfterModal();
+              activateArchitectureNode(event.shiftKey);
               return;
             }
-            selectNode(id, false, event.shiftKey);
+            activateArchitectureNode(event.shiftKey);
           });
           nodeLabelOverlay.append(label);
         });
@@ -2339,7 +2339,8 @@
       renderer.on("leaveEdge", () => flowTooltipOverlay.replaceChildren());
       renderer.on("clickNode", ({ node, event }) => {
         const originalEvent = event?.originalEvent || event;
-        selectNode(node, false, Boolean(originalEvent?.shiftKey));
+        if (!originalEvent?.shiftKey) return;
+        selectNode(node, false, true);
       });
       renderer.on("clickEdge", ({ edge, event }) => {
         if (graphState.selectedCodeFlowId) return;

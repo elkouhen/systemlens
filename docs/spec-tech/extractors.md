@@ -199,7 +199,7 @@ Display filtering first maps persisted node and edge vocabulary to visual
 categories. `kafka_topic` and `message_channel` are messaging nodes;
 `mongodb_collection` and `data_schema` are data nodes. Edge classification
 uses the native kind, its relation label and endpoint kinds so that native
-`rest`/`kafka`/`mongodb` links and enriched `mcp_*` links respond to the same
+`rest`/`kafka`/`mongodb` links and enriched `enrichment_*` links respond to the same
 HTTP, Kafka and data-access selectors. Unrecognized kinds remain conservative
 and independently selectable as `Other`; they are never silently discarded.
 

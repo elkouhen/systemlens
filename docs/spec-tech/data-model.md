@@ -49,18 +49,18 @@ stores the qualified name, root-relative source location, detected roles and
 conservatively resolved entity names. It does not infer a mapper or a runtime
 serialization path.
 
-`GraphFact` is the separate enrichment layer for facts supplied by a user, or
-by an agent operating through the companion SystemLens skill, via MCP. It
+`GraphFact` is the separate enrichment layer for facts supplied by a user or
+by an agent operating through the companion SystemLens skill. It
 supports typed nodes and edges, origin, namespace, status, confidence,
 module, pass/revision metadata, optional relative evidence and a note. The
-`graph_facts` table is not cleared by indexing. `import_graph_facts` validates
+`graph_facts` table is not cleared by indexing. `systemlens import-facts` validates
 and upserts a manifest by `(namespace, fact_type, manifest_id)`; complete
 snapshots can remove stale facts only inside their namespace. Source-derived
-relations remain owned by the indexer and cannot be removed through MCP.
+relations remain owned by the indexer and cannot be removed through fact import.
 Manifest storage IDs must be unique across nodes and edges in one import. A
 duplicate storage ID is rejected before any fact is persisted, so one manifest
 entry cannot overwrite another fact through SQLite conflict handling.
-`architecture_graph` merges both layers using the generic dependency node/edge
+CLI graph exports merge both layers using the generic dependency node/edge
 shape, preserving API and MongoDB associations.
 
 The same `systemlens-ai-graph-v1` manifest may contain optional `endpoints` and
@@ -75,10 +75,10 @@ The `export facts` command serializes a `graph_facts` namespace as the
 status, confidence, pass and revision metadata, and arbitrary metadata. A
 reference node is emitted when an enrichment edge targets an object that has no
 node fact in the same namespace. This export is round-trippable through
-`import_graph_facts`; source-derived facts remain outside this contract.
+`systemlens import-facts`; source-derived facts remain outside this contract.
 
 `AnalysisProfile` carries persisted extraction choices with the loaded
-inventory, currently the `default` or `strategy1` topic convention. CLI, MCP,
+inventory, currently the `default` or `strategy1` topic convention. CLI,
 export, graph, and audit adapters consume this profile. A workspace federation
 retains source profiles and rejects a mixture of incompatible topic strategies.
 

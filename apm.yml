@@ -18,7 +18,6 @@ targets:
 dependencies:
   apm:
     - openai/skills/skills/.curated/playwright
-  mcp: []
 includes: auto
 scripts:
   lint: uv run ruff check src tests
