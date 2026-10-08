@@ -388,8 +388,12 @@
         definition = null,
         flowId = null,
         ancestorFlows = new Set(),
+        flowIds = null,
       ) => {
-        const currentFlowId = definition?.flow_id || flowId;
+        const currentFlowIds = Array.isArray(flowIds) && flowIds.length
+          ? flowIds
+          : (definition?.flow_id || flowId) ? [definition?.flow_id || flowId] : [];
+        const currentFlowId = currentFlowIds[0] || null;
         const currentFlow = currentFlowId ? flowById.get(currentFlowId) : null;
         const occurrence = {
           id: `call-tree-${occurrenceCount++}`,
@@ -401,29 +405,52 @@
           continuationUnknown: Boolean(definition?.continuation_unknown)
             || Boolean(hasCausalTree && currentFlowId && !currentFlow),
           flowId: currentFlowId,
+          flowIds: currentFlowIds,
           hiddenChildrenCount: Number(definition?.hidden_children_count || 0),
           expanded: false,
           collapsed: false,
         };
         const endpointCycle = inputEndpointId && ancestorInputPorts.has(inputEndpointId);
         const fallbackCycle = !inputEndpointId && ancestorNodes.has(name);
-        const flowCycle = currentFlowId && ancestorFlows.has(currentFlowId);
+        const flowCycle = currentFlowIds.some(id => ancestorFlows.has(id));
         if (endpointCycle || fallbackCycle || flowCycle || occurrence.cycle) {
           occurrence.cycle = true;
           return occurrence;
         }
         const outgoing = hasCausalTree
-          ? (causalTransitions[currentFlowId] || []).flatMap(transition => {
-            const targetFlowIds = Array.isArray(transition.target_flow_ids)
-              && transition.target_flow_ids.length
-              ? transition.target_flow_ids
-              : [null];
-            return targetFlowIds.map(targetFlowId => ({
-              edge: transition.edge,
-              index: 0,
-              flowId: targetFlowId,
+          ? (() => {
+            const byRelation = new Map();
+            currentFlowIds.forEach(sourceFlowId => {
+              (causalTransitions[sourceFlowId] || []).forEach(transition => {
+                const edge = transition.edge;
+                const relationKey = [
+                  edge.kind,
+                  edge.endpoint_ids?.[0] || "",
+                  edge.label || "",
+                  edge.endpoint_ids?.[1] || "",
+                  edge.source || "",
+                  edge.target || "",
+                ].join("|");
+                const targetFlowIds = Array.isArray(transition.target_flow_ids)
+                  ? transition.target_flow_ids
+                  : [];
+                const existing = byRelation.get(relationKey);
+                if (existing) {
+                  existing.flowIds = [...new Set([...existing.flowIds, ...targetFlowIds])];
+                } else {
+                  byRelation.set(relationKey, {
+                    edge,
+                    index: byRelation.size,
+                    flowIds: [...new Set(targetFlowIds)],
+                  });
+                }
+              });
+            });
+            return [...byRelation.values()].map(relation => ({
+              ...relation,
+              flowId: relation.flowIds[0] || null,
             }));
-          })
+          })()
           : hasPersistedTree
           ? (definition?.children || [])
             .map(childId => persistedTreeById.get(childId))
@@ -460,8 +487,8 @@
         const nextNodes = new Set(ancestorNodes);
         nextNodes.add(name);
         const nextFlows = new Set(ancestorFlows);
-        if (currentFlowId) nextFlows.add(currentFlowId);
-        outgoing.forEach(({ edge, index, definition: childDefinition, flowId: childFlowId }) => {
+        currentFlowIds.forEach(id => nextFlows.add(id));
+        outgoing.forEach(({ edge, index, definition: childDefinition, flowId: childFlowId, flowIds: childFlowIds }) => {
           const childPathKey = childDefinition?.path_key
             || `${pathKey}>${childFlowId || edge.target}:${edge.endpoint_ids?.[1] || edge.target}`;
           const child = makeOccurrence(
@@ -474,6 +501,7 @@
             childDefinition,
             childFlowId,
             nextFlows,
+            childFlowIds,
           );
           if (edge) child.edge = edge;
           child.edgeIndex = index;
