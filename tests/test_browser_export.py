@@ -1255,6 +1255,10 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert page.locator(".graph-call-path").count() == 0
         page.locator("#graph-call-tree").wait_for(state="visible")
         assert page.locator("#graph-call-tree .graph-call-tree-node").count() >= 3
+        tree_stats = page.locator("#graph-mode-context-stats")
+        tree_stats.wait_for(state="visible")
+        assert "nœud" in tree_stats.inner_text()
+        assert "arc" in tree_stats.inner_text()
         assert page.locator("#graph").get_attribute("class") == "is-call-tree-hidden"
         depth_control = page.locator("#call-tree-depth-control")
         assert depth_control.count() == 1

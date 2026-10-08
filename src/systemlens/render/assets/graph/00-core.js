@@ -222,6 +222,8 @@
       callGraphDisplayMode: "tree",
       callTreeDepth: 3,
       callTreeZoom: 1,
+      callTreeVisibleNodeCount: 0,
+      callTreeVisibleEdgeCount: 0,
     };
     function updateGraphState(patch) {
       Object.assign(graphState, patch);

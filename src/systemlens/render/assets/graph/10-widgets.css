@@ -92,6 +92,8 @@
     .graph-mode-context-copy strong { color: var(--ui-title); font-size: 11px; overflow-wrap: anywhere; }
     .graph-mode-context-copy span { color: var(--ui-muted); }
     .graph-mode-context-trigger { width: fit-content; max-width: 100%; padding: 3px 6px; border: 1px solid var(--ui-accent-border); border-radius: 6px; color: var(--ui-accent-text) !important; background: var(--ui-accent-soft); font-size: 10px; font-weight: 800; overflow-wrap: anywhere; }
+    .graph-mode-context-stats { width: fit-content; max-width: 100%; padding: 3px 6px; border: 1px solid var(--ui-border); border-radius: 6px; color: var(--ui-title) !important; background: var(--ui-control); font-size: 10px; font-weight: 800; overflow-wrap: anywhere; }
+    .graph-mode-context-stats[hidden] { display: none; }
     .graph-mode-context-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
     .architecture-context-actions { display: contents; }
     .architecture-context-actions[hidden] { display: none; }

@@ -1673,6 +1673,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert "graphState.analysisContextCollapsed = true;" in document
     assert 'id="graph-mode-context-copy"' in document
     assert 'id="graph-mode-context-trigger"' in document
+    assert 'id="graph-mode-context-stats"' in document
+    assert 'updateCallTreeStats' in document
     assert 'http_entry: "Entrée HTTP"' in document
     assert 'message_entry: "Entrée message"' in document
     assert 'cron_entry: "Déclencheur Cron"' in document

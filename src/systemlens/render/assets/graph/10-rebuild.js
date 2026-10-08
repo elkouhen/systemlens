@@ -799,6 +799,7 @@
           const contextCopy = document.getElementById("graph-mode-context-copy");
           const title = document.getElementById("graph-mode-context-title");
           const triggerLabel = document.getElementById("graph-mode-context-trigger");
+          const stats = document.getElementById("graph-mode-context-stats");
           const pathLabel = document.getElementById("graph-mode-context-path");
           const help = document.getElementById("graph-mode-context-help");
           const clear = document.getElementById("analysis-mode-clear");
@@ -830,6 +831,10 @@
           if (depthIncrease) depthIncrease.disabled = !callGraphActive || graphState.callTreeDepth >= 8;
           if (contextCollapse) contextCollapse.hidden = !callGraphActive;
           if (!callGraphActive) {
+            if (stats) {
+              stats.hidden = true;
+              stats.textContent = "";
+            }
             title.textContent = "Graphe d’architecture";
             if (triggerLabel) {
               triggerLabel.hidden = true;
@@ -839,6 +844,10 @@
             if (clear) clear.hidden = true;
             return;
           }
+          updateCallTreeStats(
+            graphState.callTreeVisibleNodeCount || 0,
+            graphState.callTreeVisibleEdgeCount || 0,
+          );
           title.textContent = "Arbre d’appel";
           const selectedFlows = (graphData.code_flows || []).filter(flow => (
             flow.id === graphState.selectedCodeFlowId

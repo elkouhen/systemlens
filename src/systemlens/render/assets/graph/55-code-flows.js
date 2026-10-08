@@ -15,6 +15,19 @@
     let callTreePan = null;
     let callTreePanBound = false;
     let callTreeRenderSignature = "";
+
+    function updateCallTreeStats(nodeCount = 0, edgeCount = 0) {
+      graphState.callTreeVisibleNodeCount = nodeCount;
+      graphState.callTreeVisibleEdgeCount = edgeCount;
+      const stats = document.getElementById("graph-mode-context-stats");
+      if (!stats) return;
+      const active = Boolean(graphState.selectedCodeFlowId)
+        && graphState.viewMode === "call-graph";
+      stats.hidden = !active;
+      stats.textContent = active
+        ? `Arbre : ${nodeCount} nœud${nodeCount === 1 ? "" : "s"} · ${edgeCount} arc${edgeCount === 1 ? "" : "s"}`
+        : "";
+    }
     function codeFlowStepLabel(kind) {
       return ({
         http_entry: "Entrée HTTP",
@@ -295,6 +308,7 @@
         .forEach(element => element?.classList.toggle("is-call-tree-hidden", treeActive));
       if (!treeActive) {
         graphCallTreeOverlay.replaceChildren();
+        updateCallTreeStats();
         return;
       }
       const selectedFlows = (graphData.code_flows || []).filter(flow => (
@@ -422,6 +436,7 @@
       ));
       if (!rootsTree.length) {
         graphCallTreeOverlay.textContent = "Aucun appel interservice résolu.";
+        updateCallTreeStats();
         return;
       }
       const treeTrigger = selectedFlow?.steps?.[0] || null;
@@ -441,6 +456,11 @@
         occurrence.children.forEach(collect);
       };
       rootsTree.forEach(collect);
+      const visibleTreeEdgeCount = allOccurrences.reduce(
+        (count, occurrence) => count + occurrence.children.length,
+        0,
+      );
+      updateCallTreeStats(allOccurrences.length, visibleTreeEdgeCount);
       const occurrenceCounts = new Map();
       allOccurrences.forEach(occurrence => {
         occurrenceCounts.set(occurrence.name, (occurrenceCounts.get(occurrence.name) || 0) + 1);
