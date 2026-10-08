@@ -28,6 +28,15 @@ Mutable selection, view, layout, and camera state is held in one
 scheduler (`requestGraphRender`) so canvas and HTML overlays observe one
 coalesced render cycle.
 
+The static architecture placement uses a deterministic force-style solver. For
+graphs up to 180 visible nodes it retains a 720-iteration budget. Larger
+graphs use an adaptive budget of `max(120, round(130000 / n))` iterations,
+where `n` is the number of connected layout nodes. Each iteration still has a
+quadratic all-pairs repulsion step, but the adaptive budget prevents the
+constant 720-pass multiplier from dominating large exports. This is a
+performance fallback: large graphs may settle less completely, while links,
+visibility, and persisted architecture facts remain unchanged.
+
 Architecture-module titles are interactive overlay controls. Module selection
 is tracked independently from node selection in `graphState`; it
 uses the visible canonical `cluster_path` values to derive a hierarchy of path

@@ -213,8 +213,15 @@
       const layoutById = new Map(layoutNodes.map(node => [node.id, node]));
       // The layout is deliberately recomputed from the visible dependencies.
       // This prevents hidden relation types from influencing node positions.
-      for (let iteration = 0; iteration < 720; iteration += 1) {
-        const cooling = .14 * (1 - iteration / 720) + .015;
+      // Preserve the settled layout budget for normal graphs, but avoid
+      // multiplying a quadratic all-pairs pass by 720 iterations on very
+      // large exports. The lower bound keeps large graphs readable while the
+      // adaptive budget caps the dominant work at roughly O(n) passes.
+      const iterationCount = layoutNodes.length <= 180
+        ? 720
+        : Math.max(120, Math.round(130000 / layoutNodes.length));
+      for (let iteration = 0; iteration < iterationCount; iteration += 1) {
+        const cooling = .14 * (1 - iteration / iterationCount) + .015;
         for (let i = 0; i < layoutNodes.length; i += 1) {
           for (let j = i + 1; j < layoutNodes.length; j += 1) {
             const a = layoutNodes[i], b = layoutNodes[j];

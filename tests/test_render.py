@@ -1355,6 +1355,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'class="graph-control-group render-controls"' in document
     assert 'id="fit-view"' not in document
     assert 'id="fit-readable"' not in document
+    assert 'const iterationCount = layoutNodes.length <= 180' in document
+    assert 'Math.max(120, Math.round(130000 / layoutNodes.length))' in document
     assert 'id="show-project-groups"' not in document
     assert '>Groupes de projets</label>' not in document
     assert 'Comparer les itinéraires' not in document
