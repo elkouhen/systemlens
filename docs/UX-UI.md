@@ -241,7 +241,8 @@ strong accent for four or more. The border continues to identify the node type.
 The node tooltip MUST state the exact recurrence count.
 
 The tree uses a fixed left-to-right orientation and an incremental depth control
-from 1 to 8 levels. The current default is depth 3. The `−` and `+` controls
+from 1 to 8 levels. The current default is depth 1, showing only the root
+service. The `−` and `+` controls
 change one level at a time. A branch stops at the configured depth. An input
 endpoint already
 present on the current branch becomes a terminal cycle occurrence and is not

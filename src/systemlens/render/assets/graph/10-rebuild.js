@@ -826,7 +826,7 @@
           const depthIncrease = document.getElementById("call-tree-depth-increase");
           if (expandAll) expandAll.hidden = !callGraphActive;
           if (depthControl) depthControl.hidden = !callGraphActive;
-          if (depthValue) depthValue.textContent = String(graphState.callTreeDepth || 3);
+          if (depthValue) depthValue.textContent = String(graphState.callTreeDepth || 1);
           if (depthDecrease) depthDecrease.disabled = !callGraphActive || graphState.callTreeDepth <= 1;
           if (depthIncrease) depthIncrease.disabled = !callGraphActive || graphState.callTreeDepth >= 8;
           if (contextCollapse) contextCollapse.hidden = !callGraphActive;

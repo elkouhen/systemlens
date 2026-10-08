@@ -1254,7 +1254,7 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert page.locator("#graph-tab").get_attribute("aria-selected") == "true"
         assert page.locator(".graph-call-path").count() == 0
         page.locator("#graph-call-tree").wait_for(state="visible")
-        assert page.locator("#graph-call-tree .graph-call-tree-node").count() >= 3
+        assert page.locator("#graph-call-tree .graph-call-tree-node").count() == 1
         tree_stats = page.locator("#graph-mode-context-stats")
         tree_stats.wait_for(state="visible")
         assert "nœud" in tree_stats.inner_text()
@@ -1262,11 +1262,11 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert page.locator("#graph").get_attribute("class") == "is-call-tree-hidden"
         depth_control = page.locator("#call-tree-depth-control")
         assert depth_control.count() == 1
-        assert page.locator("#call-tree-depth-value").inner_text() == "3"
+        assert page.locator("#call-tree-depth-value").inner_text() == "1"
         page.locator("#call-tree-depth-decrease").click()
-        assert page.locator("#call-tree-depth-value").inner_text() == "2"
+        assert page.locator("#call-tree-depth-value").inner_text() == "1"
         page.locator("#call-tree-depth-increase").click()
-        assert page.locator("#call-tree-depth-value").inner_text() == "3"
+        assert page.locator("#call-tree-depth-value").inner_text() == "2"
         page.locator("#graph-call-tree .graph-call-tree-node").first.hover()
         page.locator("#graph-flow-tooltips .graph-entity-tooltip").wait_for(state="visible")
         page.locator("#graph-call-tree .graph-call-tree-edge").first.hover()

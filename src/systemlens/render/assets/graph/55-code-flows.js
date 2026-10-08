@@ -360,7 +360,7 @@
       const rootInputEndpointId = selectedFlow?.steps?.[0]?.endpoint_id || null;
       const maxOccurrences = 5000;
       let occurrenceCount = 0;
-      const maxDepth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 3));
+      const maxDepth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 1));
       const makeOccurrence = (
         name,
         depth,
@@ -875,7 +875,7 @@
       const active = Boolean(graphState.selectedCodeFlowId)
         && graphState.viewMode === "call-graph"
         && graphState.callGraphDisplayMode === "tree";
-      const depth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 3));
+      const depth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 1));
       const depthControl = document.getElementById("call-tree-depth-control");
       const depthValue = document.getElementById("call-tree-depth-value");
       const depthDecrease = document.getElementById("call-tree-depth-decrease");
@@ -887,7 +887,7 @@
     }
     function adjustCallTreeDepth(delta) {
       if (!graphState.selectedCodeFlowId || graphState.callGraphDisplayMode !== "tree") return false;
-      const currentDepth = Number(graphState.callTreeDepth) || 3;
+      const currentDepth = Number(graphState.callTreeDepth) || 1;
       const nextDepth = Math.max(1, Math.min(8, currentDepth + delta));
       if (nextDepth === currentDepth) return false;
       const camera = captureCallTreeCamera();
@@ -1037,7 +1037,7 @@
           .map(link => [`${link.input_endpoint_id}:${link.output_endpoint_id}`, link])).values()],
       };
       const flow = flows[0];
-      graphState.callTreeDepth = 3;
+      graphState.callTreeDepth = 1;
       graphState.callTreeExpanded = new Set();
       graphState.callTreeCollapsed = new Set();
       graphState.callTreeZoom = 1;

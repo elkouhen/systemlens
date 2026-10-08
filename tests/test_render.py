@@ -939,7 +939,7 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert 'title.textContent = "Graphe d’architecture";' in document
     assert "function captureCallTreeCamera()" in document
     assert "function renderCallTreeOverlay(preservedCamera = null)" in document
-    assert 'callTreeDepth: 3' in document
+    assert 'callTreeDepth: 1' in document
     assert "hiddenChildrenCount" in document
     assert "graph-call-tree-more-badge" in document
     assert "const treeTrigger = selectedFlow?.steps?.[0] || null;" in document

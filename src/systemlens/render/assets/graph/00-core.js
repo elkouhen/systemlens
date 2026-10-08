@@ -220,7 +220,7 @@
       maximumCollisionFreeRatio: 100,
       renderMode: "cards",
       callGraphDisplayMode: "tree",
-      callTreeDepth: 3,
+      callTreeDepth: 1,
       callTreeZoom: 1,
       callTreeVisibleNodeCount: 0,
       callTreeVisibleEdgeCount: 0,
