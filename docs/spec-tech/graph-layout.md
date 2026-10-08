@@ -60,11 +60,12 @@ navigation is sourced exclusively from the canonical `cluster_path` value.
 
 The selected call graph is rendered only as a separate hierarchical projection
 of the persisted call-graph snapshot. It does not mutate the architecture
-graph or the persisted node identifiers. Each tree occurrence receives a local
-render identifier, while its label and node actions resolve to the original
-microservice. The tree uses a deterministic depth-first expansion with a
-per-branch ancestry set, a configured depth limit, and a deterministic child
-order inherited from the exported edge order.
+graph or the persisted node identifiers. The export stores a compact causal
+transition index for each flow root. The browser expands that index into local
+occurrences, while labels and node actions resolve to the original
+microservice. The tree uses a deterministic depth-first projection with a
+per-branch ancestry set, a configured depth limit, and the child order from the
+causal transition index.
 
 Tree coordinates are assigned by depth and leaf order. Internal occurrences
 are centered over their visible children, then the complete logical canvas is
@@ -73,13 +74,12 @@ and prevents shared-node identity from collapsing distinct branches. A cycle
 endpoint is retained as a terminal occurrence. Expansion is bounded by the
 configured depth, so rendering cost is O(o + e), where `o` is the number of
 expanded occurrences and `e` is the number of inspected outgoing edges.
-An input-endpoint ancestry set marks a repeated endpoint as a cycle. When an
-edge has no input endpoint, a per-branch service-name ancestry fallback marks
-the repeated service as a cycle instead of recursively expanding it. Tree
-construction also stops at 5,000 occurrences and exposes the remaining child
-count on the boundary node. This bounds pathological cyclic or highly
-branching flows while preserving repeated services that use distinct indexed
-input ports.
+An input-endpoint or flow ancestry set marks a repeated causal occurrence as a
+cycle. A reachable service without a matching consumer flow is retained as a
+terminal unknown-continuation occurrence. Tree construction also stops at
+5,000 occurrences and exposes the remaining child count on the boundary node.
+This bounds pathological cyclic or highly branching flows while preserving
+repeated services that use distinct indexed input ports.
 The tree projection is an independent overlay. Its background captures
 primary-pointer drags and translates the tree canvas, while service cards keep
 pointer interaction for selection. The graph context widget exposes the mode

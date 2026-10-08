@@ -104,10 +104,19 @@ def render_graph_html(
         *graph_edges_from_facts(graph_facts or [], endpoints_by_service),
     ]
     call_graph_index = _index_call_graph_inputs(export_flows, endpoints_by_service, flow_edges)
-    view_model["all_flows_call_graph"] = _networkx_call_graph(
+    all_flows_call_graph = _networkx_call_graph(
         export_flows, endpoints_by_service, flow_edges, index=call_graph_index,
         include_occurrences=False,
     )
+    all_flows_tree = cast(dict[str, object], all_flows_call_graph["call_tree"])
+    view_model["all_flows_call_graph"] = {
+        **all_flows_call_graph,
+        "call_tree": {
+            key: value
+            for key, value in all_flows_tree.items()
+            if key not in {"root_flow_ids", "reachable_flow_ids", "transitions"}
+        },
+    }
     port_labels = {
         str(port["endpoint_id"]): str(port["label"])
         for node in cast(list[dict[str, object]], view_model["nodes"])
@@ -132,20 +141,39 @@ def render_graph_html(
     for flow, call_graph, equivalent_count in _all_export_flows(
         export_flows, endpoints_by_service, edges, index=call_graph_index
     ):
-        graph_json = json.dumps(call_graph, sort_keys=True, separators=(",", ":"))
+        call_tree = cast(dict[str, object], call_graph["call_tree"])
+        graph_identity = {
+            **call_graph,
+            "call_tree": {
+                key: value
+                for key, value in call_tree.items()
+                if key not in {
+                    "root_flow_ids", "reachable_flow_ids", "transitions",
+                    "root_occurrence_ids", "occurrences",
+                }
+            },
+        }
+        graph_json = json.dumps(graph_identity, sort_keys=True, separators=(",", ":"))
         graph_digest = hashlib.sha256(graph_json.encode("utf-8")).hexdigest()
         call_graph_id = graph_ids_by_digest.get(graph_digest)
         if call_graph_id is None:
             call_graph_id = f"call-graph-{len(call_graphs) + 1}"
             graph_ids_by_digest[graph_digest] = call_graph_id
-            call_graphs[call_graph_id] = _networkx_call_graph(
-                export_flows,
-                endpoints_by_service,
-                flow_edges,
-                root_flow_ids={flow.id},
-                index=call_graph_index,
-                include_occurrences=True,
-            )
+            call_graphs[call_graph_id] = {
+                **graph_identity,
+                "call_trees_by_flow": {},
+            }
+            call_graphs[call_graph_id]["call_trees_by_flow"] = {}
+        call_trees_by_flow = cast(
+            dict[str, dict[str, object]],
+            call_graphs[call_graph_id]["call_trees_by_flow"],
+        )
+        compact_tree = cast(dict[str, object], call_graph["call_tree"])
+        call_trees_by_flow[flow.id] = {
+            "root_flow_ids": [flow.id],
+            "reachable_flow_ids": compact_tree["reachable_flow_ids"],
+            "transitions": compact_tree["transitions"],
+        }
         export_flow_items.append((flow, equivalent_count, call_graph_id))
 
     serialized_code_flows = [

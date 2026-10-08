@@ -193,18 +193,26 @@ facts or the individual `CodeFlow` records.
   ],
   "call_tree": {
     "levels": [["order-service"], ["inventory-service"]],
-    "edges": [{"source": "order-service", "target": "inventory-service", "order": 1}],
-    "root_occurrence_ids": ["call-tree-0"],
-    "occurrences": [{
-      "id": "call-tree-0",
-      "flow_id": "flow-id",
-      "name": "order-service",
-      "depth": 0,
-      "path_key": "flow-id",
-      "children": ["call-tree-1"],
-      "cycle": false,
-      "hidden_children_count": 0
-    }]
+    "edges": [{"source": "order-service", "target": "inventory-service", "order": 1}]
+  },
+  "call_trees_by_flow": {
+    "flow-id": {
+      "root_flow_ids": ["flow-id"],
+      "reachable_flow_ids": ["flow-id"],
+      "transitions": {
+        "flow-id": [{
+          "edge": {
+            "source": "order-service",
+            "target": "inventory-service",
+            "kind": "rest",
+            "label": "POST /api/reservations",
+            "order": 1,
+            "endpoint_ids": ["out-endpoint-id", "in-endpoint-id"]
+          },
+          "target_flow_ids": ["inventory-flow-id"]
+        }]
+      }
+    }
   },
   "edges": [{
     "source": "order-service",
@@ -229,17 +237,18 @@ facts or the individual `CodeFlow` records.
 deterministic display order. `traversal_levels` groups services by directed
 reachability; its first level is the graph root set. `call_tree` is the
 compact tree projection used for service-level layout and may omit an arc when
-the full graph contains a fan-out, fan-in or cycle. `root_occurrence_ids` and
-`occurrences` form the causal tree used by the browser call-tree projection.
-Each occurrence identifies one reached flow instance. Its `children` list
-contains occurrence IDs, and an occurrence edge stores the parent integration
-edge and target input endpoint. `cycle` marks a repeated flow occurrence that
-must not be expanded. `hidden_children_count` records children omitted by the
-bounded export traversal. `edges` is the complete service-level graph. Each
-edge is directed from caller or publisher to callee or consumer, and `order`
-is the one-based display order within that graph. `endpoint_ids` preserves the
-concrete input and output endpoint evidence used to render ports and arc
-labels.
+the full graph contains a fan-out, fan-in or cycle. `call_trees_by_flow` stores
+one causal transition index for each exported flow root, so equivalent service
+graphs do not make different events share a root. `root_flow_ids` identifies
+the event roots, `reachable_flow_ids` bounds the traversal, and each transition
+stores its integration edge plus the matching target flow IDs. An empty target
+flow list represents a reachable target with no indexed consumer flow; the
+browser renders it as an unknown leaf. The browser creates local occurrences
+from this index and applies its cycle and depth rules. `edges` is the complete
+service-level graph. Each edge is directed from caller or publisher to callee
+or consumer, and `order` is the one-based display order within that graph.
+`endpoint_ids` preserves the concrete input and output endpoint evidence used
+to render ports and arc labels.
 
 `triggers` maps each participating service to the flow entries that can start
 the propagation. A trigger kind is one of `http_entry`, `message_entry` or

@@ -25,6 +25,7 @@ from systemlens.domain.module_inventory import (
 )
 from systemlens.discovery.build.modules import discover_modules
 from systemlens.render import _vscode_file_uri, render_graph_html
+from systemlens.render.call_graph import _networkx_call_graph
 from systemlens.render.graph_view_model import build_graph_view_model
 from systemlens.storage.sqlite import Store
 
@@ -954,6 +955,8 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "childrenByInputEndpoint.get(inputEndpointId)" in document
     assert "callGraph?.call_tree?.occurrences" in document
     assert "root_occurrence_ids" in document
+    assert "call_trees_by_flow" in document
+    assert "continuationUnknown" in document
     assert "const childrenByRootService = new Map();" in document
     assert "callTreeExpanded" in document
     assert "callTreeCollapsed" in document
@@ -1035,23 +1038,117 @@ def test_export_builds_one_call_graph_from_all_flows() -> None:
     ]
     selected_flow = next(flow for flow in data["code_flows"] if flow["id"] == "orders-flow")
     selected_graph = _flow_call_graph(data, selected_flow)
-    occurrences = selected_graph["call_tree"]["occurrences"]
-    occurrence_by_id = {occurrence["id"]: occurrence for occurrence in occurrences}
-    roots = [
-        occurrence for occurrence in occurrences
-        if occurrence["id"] in selected_graph["call_tree"]["root_occurrence_ids"]
-    ]
-    assert [occurrence["name"] for occurrence in roots] == ["orders"]
-    assert {
-        occurrence_by_id[child_id]["name"]
-        for child_id in roots[0]["children"]
-    } == {"payments", "inventory"}
+    selected_tree = selected_graph["call_trees_by_flow"][selected_flow["id"]]
+    assert selected_tree["root_flow_ids"] == [selected_flow["id"]]
+    assert set(selected_tree["transitions"]) == {selected_flow["id"], "payments-flow", "inventory-flow"}
     assert [edge["order"] for edge in graph["edges"]] == [1, 2]
     for flow in data["code_flows"]:
         orders = [edge["order"] for edge in _flow_call_graph(data, flow)["edges"]]
         if orders:
             assert min(orders) == 1
     assert set(graph["triggers"]) == {"orders", "payments", "inventory"}
+
+
+def test_call_tree_follows_causal_flow_occurrences_and_unknown_leaves() -> None:
+    orders_out = replace(_kafka_endpoint("produce", "OrderCreated", "Orders.java"), id="orders-out")
+    payments_in = replace(_kafka_endpoint("consume", "OrderCreated", "Payments.java"), id="payments-in")
+    payments_out = replace(_kafka_endpoint("produce", "PaymentSettled", "Payments.java"), id="payments-out")
+    settlement_in = replace(_kafka_endpoint("consume", "PaymentSettled", "Settlement.java"), id="settlement-in")
+    flows = [
+        CodeFlow(
+            id="orders-flow-one", module="orders", method="Orders.one",
+            path="Orders.java", start_line=1, end_line=2,
+            status="potential", confidence="medium", reason="test",
+            steps=(
+                CodeFlowStep(1, "cron_entry", "cron-one", "Orders.java", 1, 1),
+                CodeFlowStep(2, "message_publish", "orders.created", "Orders.java", 2, 2, orders_out.id),
+            ),
+        ),
+        CodeFlow(
+            id="orders-flow-two", module="orders", method="Orders.two",
+            path="Orders.java", start_line=4, end_line=5,
+            status="potential", confidence="medium", reason="test",
+            steps=(
+                CodeFlowStep(1, "cron_entry", "cron-two", "Orders.java", 4, 4),
+                CodeFlowStep(2, "message_publish", "orders.created", "Orders.java", 5, 5, orders_out.id),
+            ),
+        ),
+        CodeFlow(
+            id="payments-flow", module="payments", method="Payments.consume",
+            path="Payments.java", start_line=1, end_line=2,
+            status="potential", confidence="medium", reason="test",
+            steps=(
+                CodeFlowStep(1, "message_entry", "orders.created", "Payments.java", 1, 1, payments_in.id),
+                CodeFlowStep(2, "message_publish", "payments.settled", "Payments.java", 2, 2, payments_out.id),
+            ),
+        ),
+        CodeFlow(
+            id="settlement-flow", module="settlement", method="Settlement.consume",
+            path="Settlement.java", start_line=1, end_line=1,
+            status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "message_entry", "payments.settled", "Settlement.java", 1, 1, settlement_in.id),),
+        ),
+    ]
+    endpoints = {
+        "orders": [replace(orders_out, module=None)],
+        "payments": [replace(payments_in, module=None), replace(payments_out, module=None)],
+        "settlement": [replace(settlement_in, module=None)],
+    }
+    edges = [
+        GraphEdge("kafka", "orders", "payments", orders_out, payments_in),
+        GraphEdge("kafka", "payments", "settlement", payments_out, settlement_in),
+    ]
+    data = _html_graph_data(render_graph_html(endpoints, edges, code_flows=flows))
+    first_flow = next(flow for flow in data["code_flows"] if flow["id"] == "orders-flow-one")
+    second_flow = next(flow for flow in data["code_flows"] if flow["id"] == "orders-flow-two")
+    first_graph = _networkx_call_graph(
+        flows, endpoints, edges, root_flow_ids={first_flow["id"]}, include_occurrences=True,
+    )
+    second_graph = _networkx_call_graph(
+        flows, endpoints, edges, root_flow_ids={second_flow["id"]}, include_occurrences=True,
+    )
+    first_tree = first_graph["call_tree"]
+    second_tree = second_graph["call_tree"]
+    first_root_id = first_tree["root_occurrence_ids"][0]
+    second_root_id = second_tree["root_occurrence_ids"][0]
+    first_root_occurrence = next(
+        occurrence for occurrence in first_tree["occurrences"] if occurrence["id"] == first_root_id
+    )
+    second_root_occurrence = next(
+        occurrence for occurrence in second_tree["occurrences"] if occurrence["id"] == second_root_id
+    )
+    assert first_root_occurrence["flow_id"] == "orders-flow-one"
+    assert second_root_occurrence["flow_id"] == "orders-flow-two"
+    first_by_id = {occurrence["id"]: occurrence for occurrence in first_tree["occurrences"]}
+    first_root = first_by_id[first_tree["root_occurrence_ids"][0]]
+    first_children = [first_by_id[child_id] for child_id in first_root["children"]]
+    assert [child["name"] for child in first_children] == ["payments"]
+    payments = first_children[0]
+    settlement = first_by_id[payments["children"][0]]
+    assert settlement["name"] == "settlement"
+    assert settlement["cycle"] is False
+    assert settlement["edge"]["source"] == "payments"
+    assert settlement["edge"]["target"] == "settlement"
+
+    unknown_data = _html_graph_data(render_graph_html(
+        {"orders": endpoints["orders"], "payments": endpoints["payments"][:1]},
+        edges[:1],
+        code_flows=flows[:2],
+    ))
+    unknown_flow = unknown_data["code_flows"][0]
+    unknown_tree = _networkx_call_graph(
+        flows[:2],
+        {"orders": endpoints["orders"], "payments": endpoints["payments"][:1]},
+        edges[:1],
+        root_flow_ids={unknown_flow["id"]},
+        include_occurrences=True,
+    )["call_tree"]
+    unknown_by_id = {occurrence["id"]: occurrence for occurrence in unknown_tree["occurrences"]}
+    unknown_root = unknown_by_id[unknown_tree["root_occurrence_ids"][0]]
+    unknown_child = unknown_by_id[unknown_root["children"][0]]
+    assert unknown_child["name"] == "payments"
+    assert unknown_child["continuation_unknown"] is True
+    assert unknown_child["cycle"] is False
 
 
 def test_call_graph_follows_exact_target_endpoints_for_downstream_flows() -> None:

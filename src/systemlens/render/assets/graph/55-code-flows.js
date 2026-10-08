@@ -368,6 +368,13 @@
         ? callGraph.call_tree.root_occurrence_ids
         : [];
       const hasPersistedTree = persistedTreeRootIds.some(rootId => persistedTreeById.has(rootId));
+      const causalTransitions = callGraph?.call_tree?.transitions;
+      const causalRootFlowIds = Array.isArray(callGraph?.call_tree?.root_flow_ids)
+        ? callGraph.call_tree.root_flow_ids
+        : [];
+      const hasCausalTree = Boolean(
+        causalTransitions && causalRootFlowIds.length,
+      );
       const maxOccurrences = 5000;
       let occurrenceCount = 0;
       const maxDepth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 1));
@@ -379,7 +386,11 @@
         pathKey = name,
         ancestorNodes = new Set(),
         definition = null,
+        flowId = null,
+        ancestorFlows = new Set(),
       ) => {
+        const currentFlowId = definition?.flow_id || flowId;
+        const currentFlow = currentFlowId ? flowById.get(currentFlowId) : null;
         const occurrence = {
           id: `call-tree-${occurrenceCount++}`,
           name,
@@ -387,17 +398,33 @@
           depth,
           children: [],
           cycle: Boolean(definition?.cycle),
+          continuationUnknown: Boolean(definition?.continuation_unknown)
+            || Boolean(hasCausalTree && currentFlowId && !currentFlow),
+          flowId: currentFlowId,
           hiddenChildrenCount: Number(definition?.hidden_children_count || 0),
           expanded: false,
           collapsed: false,
         };
         const endpointCycle = inputEndpointId && ancestorInputPorts.has(inputEndpointId);
         const fallbackCycle = !inputEndpointId && ancestorNodes.has(name);
-        if (endpointCycle || fallbackCycle || occurrence.cycle) {
+        const flowCycle = currentFlowId && ancestorFlows.has(currentFlowId);
+        if (endpointCycle || fallbackCycle || flowCycle || occurrence.cycle) {
           occurrence.cycle = true;
           return occurrence;
         }
-        const outgoing = hasPersistedTree
+        const outgoing = hasCausalTree
+          ? (causalTransitions[currentFlowId] || []).flatMap(transition => {
+            const targetFlowIds = Array.isArray(transition.target_flow_ids)
+              && transition.target_flow_ids.length
+              ? transition.target_flow_ids
+              : [null];
+            return targetFlowIds.map(targetFlowId => ({
+              edge: transition.edge,
+              index: 0,
+              flowId: targetFlowId,
+            }));
+          })
+          : hasPersistedTree
           ? (definition?.children || [])
             .map(childId => persistedTreeById.get(childId))
             .filter(Boolean)
@@ -432,9 +459,11 @@
         if (inputEndpointId) nextInputPorts.add(inputEndpointId);
         const nextNodes = new Set(ancestorNodes);
         nextNodes.add(name);
-        outgoing.forEach(({ edge, index, definition: childDefinition }) => {
+        const nextFlows = new Set(ancestorFlows);
+        if (currentFlowId) nextFlows.add(currentFlowId);
+        outgoing.forEach(({ edge, index, definition: childDefinition, flowId: childFlowId }) => {
           const childPathKey = childDefinition?.path_key
-            || `${pathKey}>${edge.endpoint_ids?.[1] || edge.target}`;
+            || `${pathKey}>${childFlowId || edge.target}:${edge.endpoint_ids?.[1] || edge.target}`;
           const child = makeOccurrence(
             childDefinition?.name || edge.target,
             depth + 1,
@@ -443,6 +472,8 @@
             childPathKey,
             nextNodes,
             childDefinition,
+            childFlowId,
+            nextFlows,
           );
           if (edge) child.edge = edge;
           child.edgeIndex = index;
@@ -450,7 +481,22 @@
         });
         return occurrence;
       };
-      const rootsTree = hasPersistedTree
+      const rootsTree = hasCausalTree
+        ? causalRootFlowIds
+          .map(flowId => flowById.get(flowId))
+          .filter(Boolean)
+          .map(rootFlow => makeOccurrence(
+            rootFlow.module,
+            0,
+            new Set(),
+            rootFlow.steps?.[0]?.endpoint_id || null,
+            rootFlow.id,
+            new Set(),
+            null,
+            rootFlow.id,
+            new Set(),
+          ))
+        : hasPersistedTree
         ? persistedTreeRootIds
           .map(rootId => persistedTreeById.get(rootId))
           .filter(Boolean)
@@ -633,8 +679,12 @@
       };
       const treeOccurrenceTooltipLines = occurrence => {
         const lines = [
-          occurrence.cycle ? "Microservice · cycle détecté" : "Microservice",
-          `Niveau ${occurrence.depth + 1}${occurrence.cycle ? " · expansion arrêtée" : ""}`,
+          occurrence.cycle
+            ? "Microservice · cycle détecté"
+            : occurrence.continuationUnknown
+              ? "Microservice · suite inconnue"
+              : "Microservice",
+          `Niveau ${occurrence.depth + 1}${occurrence.cycle || occurrence.continuationUnknown ? " · expansion arrêtée" : ""}`,
         ];
         const occurrenceCount = occurrenceCounts.get(occurrence.name) || 1;
         if (occurrenceCount > 1) lines.push(`Appelé ${occurrenceCount} fois dans l’arbre`);
@@ -775,6 +825,8 @@
         kind.className = "graph-node-card-kind";
         kind.textContent = occurrence.cycle
           ? "Microservice · cycle"
+          : occurrence.continuationUnknown
+            ? "Microservice · suite inconnue"
           : occurrence.hiddenChildrenCount
             ? `Microservice · +${occurrence.hiddenChildrenCount} appels`
             : "Microservice";
@@ -850,6 +902,8 @@
         }
         node.title = occurrence.cycle
           ? `${occurrence.name} · cycle détecté`
+          : occurrence.continuationUnknown
+            ? `${occurrence.name} · suite inconnue`
           : `${occurrence.name} · occurrence ${occurrence.id}`;
         const point = position(occurrence);
         node.style.left = `${point.x}px`;

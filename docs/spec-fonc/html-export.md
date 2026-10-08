@@ -90,11 +90,11 @@ navigation action.
 
 The exported `call_graphs` map describes service-level propagation for one flow
 or flow group. Each graph contains participating nodes, deterministic order,
-traversal levels, a compact call tree, a causal occurrence tree, complete
-directed edges with display orders and endpoint identifiers, and service
-triggers. The first traversal level is the root set. Selecting a call graph
-keeps the root, arc order and trigger metadata visible; the export does not
-merge distinct flows into one undifferentiated edge.
+traversal levels, a compact call tree, per-flow causal transition indexes,
+complete directed edges with display orders and endpoint identifiers, and
+service triggers. The first traversal level is the root set. Selecting a call
+graph keeps the root, arc order and trigger metadata visible; the export does
+not merge distinct flows into one undifferentiated edge.
 
 When a single code flow is selected, the graph displays the selected directed
 call graph as a hierarchy of call occurrences. A microservice is therefore
@@ -107,9 +107,9 @@ occurrence. The `−` and `+` controls change one level at a time.
 When a branch reaches the configured depth, expansion stops. When a branch
 reaches an input endpoint already displayed on the current branch, the
 occurrence is rendered as a cycle endpoint and is not expanded further. A
-repeated service using a different input port is therefore not marked as a
-cycle solely because its name is repeated. The existing network
-projection remains available when the tree depth is increased.
+reachable target without an indexed consumer flow is rendered as a leaf with
+an unknown continuation. A repeated service using a different input port is
+therefore not marked as a cycle solely because its name is repeated.
 At the depth boundary, the node displays the number of hidden child calls;
 clicking that `+N appels` badge reveals one additional level for that branch
 without changing the current tree viewport. Every visible node with

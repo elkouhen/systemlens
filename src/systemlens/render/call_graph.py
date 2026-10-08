@@ -181,7 +181,9 @@ def _networkx_call_graph(
     Candidate arcs are built from flow-associated OUT ports. Traversal starts
     at trigger flows and follows each OUT-to-IN arc to the flow triggered by
     its target IN port. This keeps fan-in, fan-out and cycles while avoiding
-    unrelated flows.
+    unrelated flows. When ``include_occurrences`` is true, the result also
+    contains a causal occurrence tree rooted at each requested flow. A target
+    without a matching consumer flow is retained as an unknown leaf.
     """
     index = index or _index_call_graph_inputs(flows, endpoints_by_service, edges)
     service_by_endpoint = index.service_by_endpoint
@@ -235,7 +237,7 @@ def _networkx_call_graph(
     queued_flow_ids = set(frontier)
     root_modules: list[str] = []
     for flow_id in frontier:
-        current_flow = flow_by_id.get(flow_id)
+        current_flow = flow_by_id.get(flow_id) if flow_id is not None else None
         if current_flow and current_flow.module and current_flow.module not in root_modules:
             root_modules.append(current_flow.module)
     traversal_tree.add_nodes_from(root_modules)
@@ -353,20 +355,60 @@ def _networkx_call_graph(
                     traversal_tree.edges[module, _target, graph_edge_key]["order"] = next_edge_order
                 next_edge_order += 1
 
+    def serialize_tree_edge(edge: GraphEdge) -> dict[str, object]:
+        source_id = edge.from_endpoint.id
+        target_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
+        source_service = service_by_endpoint.get(source_id, "")
+        target_service = service_by_endpoint.get(target_id, "") if target_id else ""
+        graph_data = graph.get_edge_data(source_service, target_service) or {}
+        edge_key = next(
+            (
+                key for key, data in graph_data.items()
+                if data.get("endpoint_ids") == [source_id, target_id]
+            ),
+            None,
+        )
+        return {
+            "source": source_service,
+            "target": target_service,
+            "kind": edge.kind,
+            "label": edge.from_endpoint.topic_display or edge.from_endpoint.topic,
+            "order": int(graph_data.get(edge_key, {}).get("order", 0))
+            if edge_key is not None else 0,
+            "endpoint_ids": [source_id, target_id],
+        }
+
+    causal_transitions: dict[str, list[dict[str, object]]] = {}
+    for flow_id in sorted(visited_flow_ids):
+        transitions: list[dict[str, object]] = []
+        for _endpoint_id, endpoint_transitions in flow_transitions.get(flow_id, ()):
+            for edge, target_flow_ids in endpoint_transitions:
+                transitions.append({
+                    "edge": serialize_tree_edge(edge),
+                    "target_flow_ids": list(target_flow_ids),
+                })
+        causal_transitions[flow_id] = transitions
+
     tree_occurrences: list[dict[str, object]] = []
     tree_occurrence_limit = 5000
 
     def build_tree_occurrence(
-        flow_id: str,
+        flow_id: str | None,
         depth: int,
         ancestor_flow_ids: frozenset[str],
         ancestor_input_endpoint_ids: frozenset[str],
         path_key: str,
         edge: GraphEdge | None = None,
     ) -> str:
-        current_flow = flow_by_id.get(flow_id)
+        current_flow = flow_by_id.get(flow_id) if flow_id is not None else None
         occurrence_id = f"call-tree-{len(tree_occurrences)}"
-        current_module = current_flow.module if current_flow else ""
+        current_module = (
+            current_flow.module
+            if current_flow
+            else service_by_endpoint.get(edge.to_endpoint.id, "")
+            if edge is not None and edge.to_endpoint is not None
+            else ""
+        )
         input_endpoint_id = (
             edge.to_endpoint.id
             if edge is not None and edge.to_endpoint is not None
@@ -385,42 +427,29 @@ def _networkx_call_graph(
             "children": [],
             "cycle": flow_id in ancestor_flow_ids or endpoint_cycle,
             "hidden_children_count": 0,
+            "continuation_unknown": current_flow is None,
         }
         if edge is not None:
-            source_id = edge.from_endpoint.id
             target_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
-            graph_data = graph.get_edge_data(
-                edge.from_endpoint.module,
-                edge.to_endpoint.module if edge.to_endpoint is not None else "",
-            ) or {}
-            edge_key = next(
-                (
-                    key for key, data in graph_data.items()
-                    if data.get("endpoint_ids") == [source_id, target_id]
-                ),
-                None,
-            )
-            edge_order = graph_data.get(edge_key, {}).get("order", 0) if edge_key is not None else 0
-            occurrence["edge"] = {
-                "source": edge.from_endpoint.module,
-                "target": edge.to_endpoint.module if edge.to_endpoint is not None else "",
-                "kind": edge.kind,
-                "label": edge.from_endpoint.topic_display or edge.from_endpoint.topic,
-                "order": int(edge_order),
-                "endpoint_ids": [source_id, target_id],
-            }
+            occurrence["edge"] = serialize_tree_edge(edge)
             occurrence["input_endpoint_id"] = target_id
         tree_occurrences.append(occurrence)
         if occurrence["cycle"] or current_flow is None:
             return occurrence_id
+        assert flow_id is not None
         transitions = flow_transitions.get(flow_id, ())
-        child_candidates = [
+        child_candidates: list[tuple[GraphEdge, str | None]] = [
             (transition_edge, target_flow_id)
             for _endpoint_id, endpoint_transitions in transitions
             for transition_edge, target_flow_ids in endpoint_transitions
             for target_flow_id in target_flow_ids
-            if target_flow_id in flow_by_id
         ]
+        child_candidates.extend(
+            (transition_edge, None)
+            for _endpoint_id, endpoint_transitions in transitions
+            for transition_edge, target_flow_ids in endpoint_transitions
+            if not target_flow_ids
+        )
         if len(tree_occurrences) >= tree_occurrence_limit:
             occurrence["hidden_children_count"] = len(child_candidates)
             return occurrence_id
@@ -429,12 +458,13 @@ def _networkx_call_graph(
         children = cast(list[str], occurrence["children"])
         for index, (child_edge, target_flow_id) in enumerate(child_candidates):
             target_endpoint_id = child_edge.to_endpoint.id if child_edge.to_endpoint is not None else ""
-            child_path_key = f"{path_key}>{target_flow_id}:{target_endpoint_id}:{index}"
+            target_service = service_by_endpoint.get(target_endpoint_id, "")
+            child_path_key = f"{path_key}>{target_flow_id or target_service}:{target_endpoint_id}:{index}"
             child_id = build_tree_occurrence(
                 target_flow_id,
                 depth + 1,
                 next_flow_ids,
-                next_input_endpoint_ids | ({target_endpoint_id} if target_endpoint_id else set()),
+                next_input_endpoint_ids | ({input_endpoint_id} if input_endpoint_id else set()),
                 child_path_key,
                 child_edge,
             )
@@ -474,6 +504,9 @@ def _networkx_call_graph(
                     keys=True, data=True
                 )
             ],
+            "root_flow_ids": list(root_flow_ids_for_tree),
+            "reachable_flow_ids": sorted(visited_flow_ids),
+            "transitions": causal_transitions,
             "root_occurrence_ids": root_occurrence_ids,
             "occurrences": tree_occurrences,
         },

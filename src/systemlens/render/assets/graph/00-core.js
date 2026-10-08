@@ -19,9 +19,15 @@
       }
     })());
     function callGraphForFlow(flow) {
-      return graphData.call_graphs?.[flow?.call_graph_id]
+      const graph = graphData.call_graphs?.[flow?.call_graph_id]
         || flow?.call_graph
         || graphData.all_flows_call_graph;
+      const flowTree = graph?.call_trees_by_flow?.[flow?.id];
+      if (!graph || !flowTree) return graph;
+      return {
+        ...graph,
+        call_tree: { ...(graph.call_tree || {}), ...flowTree },
+      };
     }
     function callGraphForFlows(flows) {
       const graphs = flows.map(callGraphForFlow).filter(Boolean);

@@ -244,10 +244,10 @@ The tree uses a fixed left-to-right orientation and an incremental depth control
 from 1 to 8 levels. The current default is depth 1, showing only the root
 service. The `−` and `+` controls
 change one level at a time. A branch stops at the configured depth. An input
-endpoint already
-present on the current branch becomes a terminal cycle occurrence and is not
-expanded. Reusing a service name with a different input port is not by itself a
-cycle.
+endpoint or flow already present on the current branch becomes a terminal cycle
+occurrence and is not expanded. A reachable microservice without an indexed
+consumer flow remains a terminal occurrence labelled `suite inconnue`. Reusing
+a service name with a different input port is not by itself a cycle.
 
 Nodes at the depth boundary expose the number of hidden calls. `+N appels`
 expands one more level for that branch without changing the viewport. Expanded
