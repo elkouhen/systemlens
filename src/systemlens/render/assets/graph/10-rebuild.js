@@ -1343,6 +1343,7 @@
           const finishForwardedPointer = event => {
             if (!forwardedPointer) return;
             const wasDrag = forwardedPointer.moved;
+            const shiftKey = forwardedPointer.shiftKey;
             forwardedPointer = null;
             suppressNextCardClick = wasDrag;
             nodeLabelOverlay.style.pointerEvents = "none";
@@ -1352,7 +1353,7 @@
             window.removeEventListener("pointercancel", finishForwardedPointer, true);
             if (!wasDrag) {
               suppressNextCardClick = true;
-              selectNode(id);
+              selectNode(id, false, shiftKey);
             }
           };
           const moveForwardedPointer = event => {
@@ -1379,6 +1380,7 @@
               pointerId: event.pointerId,
               startX: event.clientX,
               startY: event.clientY,
+              shiftKey: event.shiftKey,
               moved: false,
               cameraState: renderer.getCamera().getState(),
             };
@@ -1405,12 +1407,16 @@
               return;
             }
             if (isResource) {
+              if (!event.shiftKey) {
+                selectNode(id, false, false);
+                return;
+              }
               renderDetails(id);
               openArchitectureNodeInspector(node, { reset: true });
               hideInlineDetailsAfterModal();
               return;
             }
-            selectNode(id);
+            selectNode(id, false, event.shiftKey);
           });
           nodeLabelOverlay.append(label);
         });
@@ -1436,6 +1442,7 @@
             hitArea.addEventListener("pointerleave", () => flowTooltipOverlay.replaceChildren());
             if (link.kind === "kafka") {
               hitArea.addEventListener("click", event => {
+                if (!event.shiftKey) return;
                 inspectArchitectureLink(link);
                 event.preventDefault();
                 event.stopPropagation();
@@ -2279,9 +2286,14 @@
         showDependencyTooltip(link, clientX, clientY);
       });
       renderer.on("leaveEdge", () => flowTooltipOverlay.replaceChildren());
-      renderer.on("clickNode", ({ node }) => selectNode(node));
+      renderer.on("clickNode", ({ node, event }) => {
+        const originalEvent = event?.originalEvent || event;
+        selectNode(node, false, Boolean(originalEvent?.shiftKey));
+      });
       renderer.on("clickEdge", ({ edge, event }) => {
         if (graphState.selectedCodeFlowId) return;
+        const originalEvent = event?.originalEvent || event;
+        if (!originalEvent?.shiftKey) return;
         const match = String(edge).match(/^edge(?:-hit)?-(\d+)$/);
         const link = match ? visibleLinks[Number(match[1])] : null;
         if (!link || link.kind !== "kafka") return;

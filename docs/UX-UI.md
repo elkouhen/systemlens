@@ -148,7 +148,9 @@ selection.
 ## Navigation, selection, and inspection
 
 Selecting a microservice, Topic, Mongo collection, or any other indexed
-resource focuses its graph card and opens a dedicated introspection window.
+resource focuses its graph card. Opening its dedicated introspection window
+requires `Shift + click` on the node or relation. A plain click remains the
+selection and analysis gesture and MUST NOT open the introspection window.
 The introspection MUST NOT render as a nested sub-widget inside the left
 navigation widget. Relations in the introspection window remain interactive
 and open the target while preserving a breadcrumb path. The header back action

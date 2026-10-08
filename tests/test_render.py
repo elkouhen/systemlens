@@ -1360,6 +1360,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'Comparer les itinéraires' not in document
     assert 'id="show-simple-paths"' not in document
     assert 'id="path-lock"' not in document
+    assert 'Boolean(originalEvent?.shiftKey)' in document
+    assert 'if (!event.shiftKey) return;' in document
     assert 'const graphVisible = !showingFlows || showingFlowGraph;' in document
     assert '>Cartes</button>' in document
     assert '>Symboles</button>' in document

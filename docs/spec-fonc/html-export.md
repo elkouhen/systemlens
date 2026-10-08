@@ -124,7 +124,8 @@ adds the tree controls and `Déplier tous les nœuds`; it does not repeat the
 call hierarchy. The context widget is collapsed by default and can be
 expanded with `Développer`. Dragging the empty tree
 workspace pans the tree, while clicking a service occurrence keeps its
-selection action. Hovering a service occurrence displays its level and cycle
+selection action. `Shift + click` on a service occurrence or call arc opens
+its dedicated introspection window. Hovering a service occurrence displays its level and cycle
 state. The service occurrence tooltip also displays its IN and OUT ports with
 the associated Java methods. Hovering an arc displays its order, source,
 target, protocol, indexed relation label and message type when available.

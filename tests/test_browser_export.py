@@ -45,7 +45,7 @@ def test_service_inspector_shows_persisted_jpa_entity() -> None:
         page = context.new_page()
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
-        page.locator(".graph-node-card-label").filter(has_text="payment").click()
+        page.locator(".graph-node-card-label").filter(has_text="payment").click(modifiers=["Shift"])
         assert page.locator("#inspector-modal").is_visible()
         assert page.locator("#details").is_hidden()
         assert page.locator("#inspector-body").get_by_text("Entités JPA déclarées").is_visible()
@@ -153,7 +153,7 @@ def test_graph_node_opens_called_route_in_inspection_modal() -> None:
         page.wait_for_function(
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 0"
         )
-        page.locator(".graph-node-card-label").filter(has_text="order-service").click(force=True)
+        page.locator(".graph-node-card-label").filter(has_text="order-service").click(force=True, modifiers=["Shift"])
         called_route = page.locator(
             "#inspector-body [data-inspector-kind='route'][data-inspector-route='POST /api/reservations']"
         )
@@ -177,7 +177,7 @@ def test_architecture_arc_opens_node_inspection_modal() -> None:
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
         hit_area = page.locator("#graph-port-paths .graph-dependency-hit-area").first
-        hit_area.click(force=True)
+        hit_area.click(force=True, modifiers=["Shift"])
         assert page.locator("#inspector-title").inner_text().startswith(("Topic ·", "Route HTTP ·", "Microservice ·"))
         context.close()
         browser.close()
@@ -197,15 +197,15 @@ def test_call_tree_nodes_and_kafka_arcs_open_node_inspection_modal() -> None:
         page.set_content(document, wait_until="load")
         page.locator("#flows-mode-tab").click()
         page.locator(".code-flow-item").first.click()
-        page.locator(".graph-call-tree-node").first.click()
+        page.locator(".graph-call-tree-node").first.click(modifiers=["Shift"])
         assert page.locator("#inspector-title").inner_text().startswith("Microservice ·")
         page.locator("#inspector-close").click()
         http_label = page.locator(".graph-call-tree-edge-label.is-clickable").filter(has_text="HTTP").first
-        http_label.click()
+        http_label.click(modifiers=["Shift"])
         assert page.locator("#inspector-title").inner_text().startswith("Route HTTP ·")
         page.locator("#inspector-close").click()
         topic_label = page.locator(".graph-call-tree-edge-label.is-clickable").filter(has_text="Kafka").first
-        topic_label.click()
+        topic_label.click(modifiers=["Shift"])
         assert page.locator("#inspector-title").inner_text().startswith("Topic ·")
         context.close()
         browser.close()
@@ -1581,16 +1581,13 @@ def test_selection_and_render_mode_preserve_graph_framing() -> None:
         _assert_node_centers_unchanged(graph_centers, _node_centers(page))
 
         selected = page.locator(".graph-node-card-label").first
-        selected.dispatch_event("click")
-        page.locator("#inspector-modal").wait_for(state="visible")
-        assert page.locator("#details").is_hidden()
+        selected.click()
+        assert page.locator("#inspector-modal").is_hidden()
         page.wait_for_timeout(100)
         assert selected.locator(".graph-node-card-name").evaluate(
             "name => getComputedStyle(name).visibility"
         ) == "visible"
-        _assert_node_centers_unchanged(graph_centers, _node_centers(page))
 
-        page.locator("#inspector-close").click()
         page.locator("#render-cards").click()
         page.wait_for_function("() => document.querySelector('#graph')?.dataset.renderMode === 'cards'")
         _assert_node_centers_unchanged(graph_centers, _node_centers(page))
@@ -1631,8 +1628,8 @@ def test_selection_and_render_mode_preserve_graph_framing() -> None:
                 "cards => cards.sort((left, right) => "
                 "right.getBoundingClientRect().y - left.getBoundingClientRect().y)[0].dataset.nodeId"
             )
-            page.locator(f'.graph-node-card-label[data-node-id="{bottom_node_id}"]').dispatch_event(
-                "click"
+            page.locator(f'.graph-node-card-label[data-node-id="{bottom_node_id}"]').click(
+                modifiers=["Shift"]
             )
             page.locator("#inspector-modal").wait_for(state="visible")
             page.wait_for_timeout(350)

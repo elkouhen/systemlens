@@ -635,11 +635,13 @@
           if (topicNode || callTreeRoute) {
             line.style.cursor = "pointer";
             line.addEventListener("click", event => {
+              if (!event.shiftKey) return;
               event.preventDefault();
               event.stopPropagation();
               openCallTreeEdgeInspector(child.edge);
             });
             edgeHit.addEventListener("click", event => {
+              if (!event.shiftKey) return;
               event.preventDefault();
               event.stopPropagation();
               openCallTreeEdgeInspector(child.edge);
@@ -655,6 +657,7 @@
           if (topicNode || callTreeRoute) {
             label.classList.add("is-clickable");
             label.addEventListener("click", event => {
+              if (!event.shiftKey) return;
               event.preventDefault();
               event.stopPropagation();
               openCallTreeEdgeInspector(child.edge);
@@ -777,6 +780,7 @@
         });
         node.addEventListener("mouseleave", () => { node.classList.remove("is-hovered"); clearTreeTooltip(); });
         node.addEventListener("click", event => {
+          if (!event.shiftKey) return;
           event.preventDefault();
           event.stopPropagation();
           openCallTreeNodeInspector(originalNode);
