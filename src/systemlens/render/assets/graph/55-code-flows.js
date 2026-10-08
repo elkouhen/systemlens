@@ -14,6 +14,7 @@
     const codeFlowsTitle = document.getElementById("code-flows-title");
     let callTreePan = null;
     let callTreePanBound = false;
+    let callTreeRenderSignature = "";
     function codeFlowStepLabel(kind) {
       return ({
         http_entry: "Entrée HTTP",
@@ -275,6 +276,19 @@
       const active = Boolean(graphState.selectedCodeFlowId)
         && graphState.viewMode === "call-graph";
       const treeActive = active;
+      const viewport = graphCallTreeOverlay.getBoundingClientRect();
+      const treeSignature = treeActive
+        ? [
+            graphState.selectedCodeFlowId,
+            graphState.callTreeDepth,
+            [...graphState.callTreeExpanded].sort().join(","),
+            [...graphState.callTreeCollapsed].sort().join(","),
+            Math.round(viewport.width),
+            Math.round(viewport.height),
+          ].join("|")
+        : "inactive";
+      if (!preservedCamera && treeSignature === callTreeRenderSignature) return;
+      callTreeRenderSignature = treeSignature;
       graphCallTreeOverlay.hidden = !treeActive;
       document.getElementById("graph")?.classList.toggle("is-call-tree-hidden", treeActive);
       [graphLayersOverlay, graphGroupsOverlay, portPathOverlay, nodeLabelOverlay]
@@ -330,9 +344,17 @@
       const roots = nodes.filter(node => !incoming.has(node));
       const rootNames = roots.length ? roots : nodes.slice(0, 1);
       const rootInputEndpointId = selectedFlow?.steps?.[0]?.endpoint_id || null;
+      const maxOccurrences = 5000;
       let occurrenceCount = 0;
       const maxDepth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 3));
-      const makeOccurrence = (name, depth, ancestorInputPorts, inputEndpointId = null, pathKey = name) => {
+      const makeOccurrence = (
+        name,
+        depth,
+        ancestorInputPorts,
+        inputEndpointId = null,
+        pathKey = name,
+        ancestorNodes = new Set(),
+      ) => {
         const occurrence = {
           id: `call-tree-${occurrenceCount++}`,
           name,
@@ -344,7 +366,9 @@
           expanded: false,
           collapsed: false,
         };
-        if (inputEndpointId && ancestorInputPorts.has(inputEndpointId)) {
+        const endpointCycle = inputEndpointId && ancestorInputPorts.has(inputEndpointId);
+        const fallbackCycle = !inputEndpointId && ancestorNodes.has(name);
+        if (endpointCycle || fallbackCycle) {
           occurrence.cycle = true;
           return occurrence;
         }
@@ -358,6 +382,10 @@
         const collapsed = graphState.callTreeCollapsed.has(pathKey);
         occurrence.expanded = expanded;
         occurrence.collapsed = collapsed;
+        if (occurrenceCount >= maxOccurrences) {
+          occurrence.hiddenChildrenCount = outgoing.length;
+          return occurrence;
+        }
         if (collapsed) {
           occurrence.hiddenChildrenCount = outgoing.length;
           return occurrence;
@@ -368,6 +396,8 @@
         }
         const nextInputPorts = new Set(ancestorInputPorts);
         if (inputEndpointId) nextInputPorts.add(inputEndpointId);
+        const nextNodes = new Set(ancestorNodes);
+        nextNodes.add(name);
         outgoing.forEach(({ edge, index }) => {
           const childPathKey = `${pathKey}>${edge.endpoint_ids?.[1] || edge.target}`;
           const child = makeOccurrence(
@@ -376,6 +406,7 @@
             nextInputPorts,
             edge.endpoint_ids?.[1],
             childPathKey,
+            nextNodes,
           );
           child.edge = edge;
           child.edgeIndex = index;
@@ -425,7 +456,6 @@
       const logicalHeight = direction === "lr"
         ? Math.max(1, leafIndex) * gapY
         : (Math.max(...allOccurrences.map(item => item.x)) + 1) * gapY;
-      const viewport = graphCallTreeOverlay.getBoundingClientRect();
       const scale = Math.min(1, (viewport.width - 32) / logicalWidth, (viewport.height - 32) / logicalHeight);
       const offsetX = Math.max(16, (viewport.width - logicalWidth * scale) / 2);
       const offsetY = Math.max(16, (viewport.height - logicalHeight * scale) / 2);

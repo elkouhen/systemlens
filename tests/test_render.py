@@ -962,7 +962,8 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert 'more.textContent = canCollapse ? "− replier"' in document
     assert 'graphState.callTreeExpanded.delete(occurrence.pathKey)' in document
     assert 'graphState.callTreeCollapsed.add(occurrence.pathKey)' in document
-    assert "const makeOccurrence = (name, depth, ancestorInputPorts, inputEndpointId = null, pathKey = name)" in document
+    assert "const makeOccurrence = (" in document
+    assert "ancestorNodes = new Set()," in document
     assert "ancestorInputPorts.has(inputEndpointId)" in document
     assert "edge.endpoint_ids?.[1]" in document
     assert "function zoomCallTree(factor, anchorX = null, anchorY = null)" in document
@@ -1359,6 +1360,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'Math.max(120, Math.round(130000 / layoutNodes.length))' in document
     assert 'const useSpatialRepulsion = layoutNodes.length > 180' in document
     assert 'const repulsionCellSize = 1.25' in document
+    assert 'let callTreeRenderSignature = ""' in document
+    assert 'if (!preservedCamera && treeSignature === callTreeRenderSignature) return;' in document
+    assert 'const maxOccurrences = 5000;' in document
+    assert 'const fallbackCycle = !inputEndpointId && ancestorNodes.has(name);' in document
     assert 'id="show-project-groups"' not in document
     assert '>Groupes de projets</label>' not in document
     assert 'Comparer les itinéraires' not in document

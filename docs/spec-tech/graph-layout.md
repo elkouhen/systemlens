@@ -73,12 +73,23 @@ and prevents shared-node identity from collapsing distinct branches. A cycle
 endpoint is retained as a terminal occurrence. Expansion is bounded by the
 configured depth, so rendering cost is O(o + e), where `o` is the number of
 expanded occurrences and `e` is the number of inspected outgoing edges.
+An input-endpoint ancestry set marks a repeated endpoint as a cycle. When an
+edge has no input endpoint, a per-branch service-name ancestry fallback marks
+the repeated service as a cycle instead of recursively expanding it. Tree
+construction also stops at 5,000 occurrences and exposes the remaining child
+count on the boundary node. This bounds pathological cyclic or highly
+branching flows while preserving repeated services that use distinct indexed
+input ports.
 The tree projection is an independent overlay. Its background captures
 primary-pointer drags and translates the tree canvas, while service cards keep
 pointer interaction for selection. The graph context widget exposes the mode
-and controls without duplicating the tree hierarchy.
-The tree canvas also supports wheel and button zoom from 0.5x to 4x without
-changing persisted graph coordinates.
+and controls without duplicating the tree hierarchy. The tree canvas also
+supports wheel and button zoom from 0.5x to 4x without changing persisted
+graph coordinates. Tree DOM construction is keyed by the selected flow,
+depth, expanded or collapsed branch paths, and overlay viewport; camera
+refreshes reuse the existing tree when that signature is unchanged. This
+avoids rebuilding every node, arc, port, and tooltip during ordinary canvas
+refreshes.
 
 The shared card size remains stable during navigation. Camera fitting starts
 from Sigma's native complete overview. In the plain graph, `All nodes` uses

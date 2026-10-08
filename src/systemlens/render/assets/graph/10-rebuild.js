@@ -785,7 +785,9 @@
       renderOverlays = () => {
         const renderGeneration = ++overlayRenderGeneration;
         const isCurrentRender = () => renderGeneration === overlayRenderGeneration;
-        renderCallTreeOverlay();
+        const callTreeActive = Boolean(graphState.selectedCodeFlowId)
+          && graphState.viewMode === "call-graph";
+        if (callTreeActive || !graphCallTreeOverlay?.hidden) renderCallTreeOverlay();
         nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         portPathOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
         const nodePoints = new Map();
