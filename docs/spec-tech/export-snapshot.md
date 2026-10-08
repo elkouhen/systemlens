@@ -113,6 +113,9 @@ flow transitions grouped by output endpoint, default roots, and trigger
 metadata. Each root still gets its own traversal because its reachable graph,
 edge discovery order, and call tree can differ; the optimization removes
 repeated global scans without collapsing distinct persisted flow graphs.
+Each graph also carries a causal occurrence tree rooted at the selected flow.
+The browser uses that tree for hierarchical rendering, so it does not combine
+unrelated service-level arcs into additional branches.
 The port gesture is isolated from the card drag and node-selection handlers, so
 analysis never changes the graph view or camera and does not persist data.
 Every visible SVG arc has a transparent, wider hit-area path layered above it;

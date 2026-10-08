@@ -90,11 +90,11 @@ navigation action.
 
 The exported `call_graphs` map describes service-level propagation for one flow
 or flow group. Each graph contains participating nodes, deterministic order,
-traversal levels, a compact call tree, complete directed edges with display
-orders and endpoint identifiers, and service triggers. The first traversal
-level is the root set. Selecting a call graph keeps the root, arc order and
-trigger metadata visible; the export does not merge distinct flows into one
-undifferentiated edge.
+traversal levels, a compact call tree, a causal occurrence tree, complete
+directed edges with display orders and endpoint identifiers, and service
+triggers. The first traversal level is the root set. Selecting a call graph
+keeps the root, arc order and trigger metadata visible; the export does not
+merge distinct flows into one undifferentiated edge.
 
 When a single code flow is selected, the graph displays the selected directed
 call graph as a hierarchy of call occurrences. A microservice is therefore
@@ -102,8 +102,8 @@ rendered once per occurrence in the expanded tree, so the same service may
 appear in several branches.
 
 The tree mode uses a fixed left-to-right orientation and an incremental depth
-control from 1 to 8 levels. The default is depth 3. The `−` and `+` controls
-change one level at a time.
+control from 1 to 8 levels. The default is depth 1, showing only the root
+occurrence. The `−` and `+` controls change one level at a time.
 When a branch reaches the configured depth, expansion stops. When a branch
 reaches an input endpoint already displayed on the current branch, the
 occurrence is rendered as a cycle endpoint and is not expanded further. A

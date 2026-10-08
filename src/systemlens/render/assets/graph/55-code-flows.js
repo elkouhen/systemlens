@@ -358,6 +358,16 @@
       const roots = nodes.filter(node => !incoming.has(node));
       const rootNames = roots.length ? roots : nodes.slice(0, 1);
       const rootInputEndpointId = selectedFlow?.steps?.[0]?.endpoint_id || null;
+      const persistedTreeOccurrences = Array.isArray(callGraph?.call_tree?.occurrences)
+        ? callGraph.call_tree.occurrences
+        : [];
+      const persistedTreeById = new Map(
+        persistedTreeOccurrences.map(occurrence => [occurrence.id, occurrence]),
+      );
+      const persistedTreeRootIds = Array.isArray(callGraph?.call_tree?.root_occurrence_ids)
+        ? callGraph.call_tree.root_occurrence_ids
+        : [];
+      const hasPersistedTree = persistedTreeRootIds.some(rootId => persistedTreeById.has(rootId));
       const maxOccurrences = 5000;
       let occurrenceCount = 0;
       const maxDepth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 1));
@@ -368,6 +378,7 @@
         inputEndpointId = null,
         pathKey = name,
         ancestorNodes = new Set(),
+        definition = null,
       ) => {
         const occurrence = {
           id: `call-tree-${occurrenceCount++}`,
@@ -375,23 +386,32 @@
           pathKey,
           depth,
           children: [],
-          cycle: false,
-          hiddenChildrenCount: 0,
+          cycle: Boolean(definition?.cycle),
+          hiddenChildrenCount: Number(definition?.hidden_children_count || 0),
           expanded: false,
           collapsed: false,
         };
         const endpointCycle = inputEndpointId && ancestorInputPorts.has(inputEndpointId);
         const fallbackCycle = !inputEndpointId && ancestorNodes.has(name);
-        if (endpointCycle || fallbackCycle) {
+        if (endpointCycle || fallbackCycle || occurrence.cycle) {
           occurrence.cycle = true;
           return occurrence;
         }
-        const outgoing = inputEndpointId
-          ? (childrenByInputEndpoint.get(inputEndpointId) || [])
-          : (childrenByRootService.get(name) || []).filter(({ edge }) => (
-            !rootInputEndpointId
-            || outputEndpointIdsByFlow.get(selectedFlow?.id)?.has(edge.endpoint_ids?.[0])
-          ));
+        const outgoing = hasPersistedTree
+          ? (definition?.children || [])
+            .map(childId => persistedTreeById.get(childId))
+            .filter(Boolean)
+            .map((childDefinition, index) => ({
+              definition: childDefinition,
+              edge: childDefinition.edge || null,
+              index,
+            }))
+          : inputEndpointId
+            ? (childrenByInputEndpoint.get(inputEndpointId) || [])
+            : (childrenByRootService.get(name) || []).filter(({ edge }) => (
+              !rootInputEndpointId
+              || outputEndpointIdsByFlow.get(selectedFlow?.id)?.has(edge.endpoint_ids?.[0])
+            ));
         const expanded = graphState.callTreeExpanded.has(pathKey);
         const collapsed = graphState.callTreeCollapsed.has(pathKey);
         occurrence.expanded = expanded;
@@ -412,28 +432,43 @@
         if (inputEndpointId) nextInputPorts.add(inputEndpointId);
         const nextNodes = new Set(ancestorNodes);
         nextNodes.add(name);
-        outgoing.forEach(({ edge, index }) => {
-          const childPathKey = `${pathKey}>${edge.endpoint_ids?.[1] || edge.target}`;
+        outgoing.forEach(({ edge, index, definition: childDefinition }) => {
+          const childPathKey = childDefinition?.path_key
+            || `${pathKey}>${edge.endpoint_ids?.[1] || edge.target}`;
           const child = makeOccurrence(
-            edge.target,
+            childDefinition?.name || edge.target,
             depth + 1,
             nextInputPorts,
-            edge.endpoint_ids?.[1],
+            childDefinition?.input_endpoint_id || edge.endpoint_ids?.[1],
             childPathKey,
             nextNodes,
+            childDefinition,
           );
-          child.edge = edge;
+          if (edge) child.edge = edge;
           child.edgeIndex = index;
           occurrence.children.push(child);
         });
         return occurrence;
       };
-      const rootsTree = rootNames.map(name => makeOccurrence(
-        name,
-        0,
-        new Set(),
-        rootNames.length === 1 ? rootInputEndpointId : null,
-      ));
+      const rootsTree = hasPersistedTree
+        ? persistedTreeRootIds
+          .map(rootId => persistedTreeById.get(rootId))
+          .filter(Boolean)
+          .map(definition => makeOccurrence(
+            definition.name,
+            0,
+            new Set(),
+            definition.input_endpoint_id || null,
+            definition.path_key || definition.name,
+            new Set(),
+            definition,
+          ))
+        : rootNames.map(name => makeOccurrence(
+          name,
+          0,
+          new Set(),
+          rootNames.length === 1 ? rootInputEndpointId : null,
+        ));
       if (!rootsTree.length) {
         graphCallTreeOverlay.textContent = "Aucun appel interservice résolu.";
         updateCallTreeStats();

@@ -952,6 +952,8 @@ def test_graph_html_flux_lists_persisted_inter_service_code_flows() -> None:
     assert "is-frequency-4" in document
     assert "const childrenByInputEndpoint = new Map();" in document
     assert "childrenByInputEndpoint.get(inputEndpointId)" in document
+    assert "callGraph?.call_tree?.occurrences" in document
+    assert "root_occurrence_ids" in document
     assert "const childrenByRootService = new Map();" in document
     assert "callTreeExpanded" in document
     assert "callTreeCollapsed" in document
@@ -1031,6 +1033,17 @@ def test_export_builds_one_call_graph_from_all_flows() -> None:
         {"source": "orders", "target": "inventory", "order": 1},
         {"source": "orders", "target": "payments", "order": 2},
     ]
+    occurrences = graph["call_tree"]["occurrences"]
+    occurrence_by_id = {occurrence["id"]: occurrence for occurrence in occurrences}
+    roots = [
+        occurrence for occurrence in occurrences
+        if occurrence["id"] in graph["call_tree"]["root_occurrence_ids"]
+    ]
+    assert [occurrence["name"] for occurrence in roots] == ["orders"]
+    assert {
+        occurrence_by_id[child_id]["name"]
+        for child_id in roots[0]["children"]
+    } == {"payments", "inventory"}
     assert [edge["order"] for edge in graph["edges"]] == [1, 2]
     for flow in data["code_flows"]:
         orders = [edge["order"] for edge in _flow_call_graph(data, flow)["edges"]]

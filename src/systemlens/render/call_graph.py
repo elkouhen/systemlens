@@ -227,6 +227,7 @@ def _networkx_call_graph(
     if not frontier:
         # A cycle without an external trigger has no natural flow root.
         frontier = sorted(root_flow_ids or trigger_flow_ids or flow_by_id)
+    root_flow_ids_for_tree = tuple(frontier)
     traversal_levels: list[list[str]] = []
     expanded_output_ids: set[str] = set()
     visited_flow_ids: set[str] = set()
@@ -351,6 +352,103 @@ def _networkx_call_graph(
                     traversal_tree.edges[module, _target, graph_edge_key]["order"] = next_edge_order
                 next_edge_order += 1
 
+    tree_occurrences: list[dict[str, object]] = []
+    tree_occurrence_limit = 5000
+
+    def build_tree_occurrence(
+        flow_id: str,
+        depth: int,
+        ancestor_flow_ids: frozenset[str],
+        ancestor_input_endpoint_ids: frozenset[str],
+        path_key: str,
+        edge: GraphEdge | None = None,
+    ) -> str:
+        current_flow = flow_by_id.get(flow_id)
+        occurrence_id = f"call-tree-{len(tree_occurrences)}"
+        current_module = current_flow.module if current_flow else ""
+        input_endpoint_id = (
+            edge.to_endpoint.id
+            if edge is not None and edge.to_endpoint is not None
+            else None
+        )
+        endpoint_cycle = bool(
+            input_endpoint_id
+            and input_endpoint_id in ancestor_input_endpoint_ids
+        )
+        occurrence: dict[str, object] = {
+            "id": occurrence_id,
+            "flow_id": flow_id,
+            "name": current_module,
+            "depth": depth,
+            "path_key": path_key,
+            "children": [],
+            "cycle": flow_id in ancestor_flow_ids or endpoint_cycle,
+            "hidden_children_count": 0,
+        }
+        if edge is not None:
+            source_id = edge.from_endpoint.id
+            target_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
+            graph_data = graph.get_edge_data(
+                edge.from_endpoint.module,
+                edge.to_endpoint.module if edge.to_endpoint is not None else "",
+            ) or {}
+            edge_key = next(
+                (
+                    key for key, data in graph_data.items()
+                    if data.get("endpoint_ids") == [source_id, target_id]
+                ),
+                None,
+            )
+            edge_order = graph_data.get(edge_key, {}).get("order", 0) if edge_key is not None else 0
+            occurrence["edge"] = {
+                "source": edge.from_endpoint.module,
+                "target": edge.to_endpoint.module if edge.to_endpoint is not None else "",
+                "kind": edge.kind,
+                "label": edge.from_endpoint.topic_display or edge.from_endpoint.topic,
+                "order": int(edge_order),
+                "endpoint_ids": [source_id, target_id],
+            }
+            occurrence["input_endpoint_id"] = target_id
+        tree_occurrences.append(occurrence)
+        if occurrence["cycle"] or current_flow is None:
+            return occurrence_id
+        transitions = flow_transitions.get(flow_id, ())
+        child_candidates = [
+            (transition_edge, target_flow_id)
+            for _endpoint_id, endpoint_transitions in transitions
+            for transition_edge, target_flow_ids in endpoint_transitions
+            for target_flow_id in target_flow_ids
+            if target_flow_id in flow_by_id
+        ]
+        if len(tree_occurrences) >= tree_occurrence_limit:
+            occurrence["hidden_children_count"] = len(child_candidates)
+            return occurrence_id
+        next_flow_ids = ancestor_flow_ids | {flow_id}
+        next_input_endpoint_ids = ancestor_input_endpoint_ids
+        children = cast(list[str], occurrence["children"])
+        for index, (child_edge, target_flow_id) in enumerate(child_candidates):
+            target_endpoint_id = child_edge.to_endpoint.id if child_edge.to_endpoint is not None else ""
+            child_path_key = f"{path_key}>{target_flow_id}:{target_endpoint_id}:{index}"
+            child_id = build_tree_occurrence(
+                target_flow_id,
+                depth + 1,
+                next_flow_ids,
+                next_input_endpoint_ids | ({target_endpoint_id} if target_endpoint_id else set()),
+                child_path_key,
+                child_edge,
+            )
+            children.append(child_id)
+            if len(tree_occurrences) >= tree_occurrence_limit:
+                occurrence["hidden_children_count"] = len(child_candidates) - index - 1
+                break
+        return occurrence_id
+
+    root_occurrence_ids = [
+        build_tree_occurrence(flow_id, 0, frozenset(), frozenset(), flow_id)
+        for flow_id in root_flow_ids_for_tree
+        if flow_id in flow_by_id
+    ]
+
     if nx.is_directed_acyclic_graph(graph):
         component_order = list(nx.lexicographical_topological_sort(graph))
     else:
@@ -371,6 +469,8 @@ def _networkx_call_graph(
                     keys=True, data=True
                 )
             ],
+            "root_occurrence_ids": root_occurrence_ids,
+            "occurrences": tree_occurrences,
         },
         "edges": [
             {
