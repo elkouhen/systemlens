@@ -220,17 +220,50 @@
       const iterationCount = layoutNodes.length <= 180
         ? 720
         : Math.max(120, Math.round(130000 / layoutNodes.length));
+      const useSpatialRepulsion = layoutNodes.length > 180;
+      const repulsionCellSize = 1.25;
       for (let iteration = 0; iteration < iterationCount; iteration += 1) {
         const cooling = .14 * (1 - iteration / iterationCount) + .015;
-        for (let i = 0; i < layoutNodes.length; i += 1) {
-          for (let j = i + 1; j < layoutNodes.length; j += 1) {
-            const a = layoutNodes[i], b = layoutNodes[j];
-            const dx = b.x - a.x || (i < j ? .001 : -.001);
-            const dy = b.y - a.y || .001;
-            const distance2 = dx * dx + dy * dy + .012;
-            const strength = 1.25 / distance2;
-            a.vx -= dx * strength; a.vy -= dy * strength;
-            b.vx += dx * strength; b.vy += dy * strength;
+        if (useSpatialRepulsion) {
+          const cells = new Map();
+          layoutNodes.forEach((node, index) => {
+            const cellX = Math.floor(node.x / repulsionCellSize);
+            const cellY = Math.floor(node.y / repulsionCellSize);
+            const key = `${cellX}:${cellY}`;
+            const bucket = cells.get(key);
+            if (bucket) bucket.push(index);
+            else cells.set(key, [index]);
+          });
+          layoutNodes.forEach((node, index) => {
+            const cellX = Math.floor(node.x / repulsionCellSize);
+            const cellY = Math.floor(node.y / repulsionCellSize);
+            for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+              for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+                const neighbors = cells.get(`${cellX + offsetX}:${cellY + offsetY}`) || [];
+                neighbors.forEach(neighborIndex => {
+                  if (neighborIndex === index) return;
+                  const neighbor = layoutNodes[neighborIndex];
+                  const dx = neighbor.x - node.x || (neighborIndex < index ? .001 : -.001);
+                  const dy = neighbor.y - node.y || .001;
+                  const distance2 = dx * dx + dy * dy + .012;
+                  const strength = 1.25 / distance2;
+                  node.vx -= dx * strength;
+                  node.vy -= dy * strength;
+                });
+              }
+            }
+          });
+        } else {
+          for (let i = 0; i < layoutNodes.length; i += 1) {
+            for (let j = i + 1; j < layoutNodes.length; j += 1) {
+              const a = layoutNodes[i], b = layoutNodes[j];
+              const dx = b.x - a.x || (i < j ? .001 : -.001);
+              const dy = b.y - a.y || .001;
+              const distance2 = dx * dx + dy * dy + .012;
+              const strength = 1.25 / distance2;
+              a.vx -= dx * strength; a.vy -= dy * strength;
+              b.vx += dx * strength; b.vy += dy * strength;
+            }
           }
         }
         links.forEach(link => {

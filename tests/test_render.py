@@ -1357,6 +1357,8 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'id="fit-readable"' not in document
     assert 'const iterationCount = layoutNodes.length <= 180' in document
     assert 'Math.max(120, Math.round(130000 / layoutNodes.length))' in document
+    assert 'const useSpatialRepulsion = layoutNodes.length > 180' in document
+    assert 'const repulsionCellSize = 1.25' in document
     assert 'id="show-project-groups"' not in document
     assert '>Groupes de projets</label>' not in document
     assert 'Comparer les itinéraires' not in document
