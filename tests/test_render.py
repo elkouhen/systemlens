@@ -1873,6 +1873,10 @@ enum PaymentStatus { AUTHORIZED, DECLINED }
     assert 'title.textContent = service?.name || topic?.name || "Relation";' in document
     assert 'const showDependencyTooltip = (link, clientX, clientY) =>' in document
     assert 'graph-dependency-hit-area' in document
+    assert 'graph-architecture-arrow' in document
+    assert 'graph-architecture-path' in document
+    assert 'pointAtCardBoundary' in document
+    assert 'path.setAttribute("marker-end", "url(#graph-architecture-arrow)")' in document
     assert 'stroke-width: 24px' in document
     assert 'hitArea.addEventListener("pointermove"' in document
     assert 'network.addEdgeWithKey(`edge-hit-${index}`' in document

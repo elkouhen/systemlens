@@ -144,7 +144,9 @@ separate area so “no indexed dependency” is not confused with “missing”.
 The same graph vocabulary MUST be used in architecture and selected-flow views:
 cards, relation strokes, port labels, badges, selection halos, and protocol
 colours retain their meaning. Architecture topology arcs and selected-flow
-arcs use a fixed two-pixel screen stroke.
+arcs use a fixed two-pixel screen stroke. Architecture arcs display an arrowhead
+just before the target node so their direction remains visible when cards
+overlap the underlying graph layer.
 
 Light and dark themes MUST preserve contrast, hierarchy, protocol meaning, and
 selection state. Theme changes MUST NOT alter indexed data, graph structure, or

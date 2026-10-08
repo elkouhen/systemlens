@@ -1477,10 +1477,64 @@
         portPathOverlay.replaceChildren();
         if (graphState.renderMode !== "symbols" && !graphState.selectedCodeFlowId) {
           const svgNamespace = "http://www.w3.org/2000/svg";
+          const marker = document.createElementNS(svgNamespace, "marker");
+          marker.id = "graph-architecture-arrow";
+          marker.setAttribute("viewBox", "0 0 8 8");
+          marker.setAttribute("refX", "7");
+          marker.setAttribute("refY", "4");
+          marker.setAttribute("markerWidth", "6");
+          marker.setAttribute("markerHeight", "6");
+          marker.setAttribute("orient", "auto");
+          const arrow = document.createElementNS(svgNamespace, "path");
+          arrow.setAttribute("d", "M 0 0 L 8 4 L 0 8 z");
+          arrow.setAttribute("fill", "context-stroke");
+          marker.append(arrow);
+          const definitions = document.createElementNS(svgNamespace, "defs");
+          definitions.append(marker);
+          portPathOverlay.append(definitions);
+          const overlayBounds = portPathOverlay.getBoundingClientRect();
+          const architectureObstacleById = new Map(
+            [...nodeLabelOverlay.querySelectorAll(".graph-node-card-label")].map(card => {
+              const bounds = card.getBoundingClientRect();
+              return [card.dataset.nodeId, {
+                left: bounds.left - overlayBounds.left,
+                top: bounds.top - overlayBounds.top,
+                right: bounds.right - overlayBounds.left,
+                bottom: bounds.bottom - overlayBounds.top,
+              }];
+            })
+          );
+          const pointAtCardBoundary = (center, toward, bounds, offset) => {
+            if (!bounds) return center;
+            const dx = toward.x - center.x;
+            const dy = toward.y - center.y;
+            const length = Math.hypot(dx, dy) || 1;
+            const unitX = dx / length;
+            const unitY = dy / length;
+            const halfWidth = Math.max((bounds.right - bounds.left) / 2, 1);
+            const halfHeight = Math.max((bounds.bottom - bounds.top) / 2, 1);
+            const boundaryScale = 1 / Math.max(Math.abs(dx) / halfWidth, Math.abs(dy) / halfHeight, .001);
+            return [
+              center.x + dx * boundaryScale + unitX * offset,
+              center.y + dy * boundaryScale + unitY * offset,
+            ];
+          };
           visibleLinks.forEach(link => {
             const source = nodePoints.get(link.source);
             const target = nodePoints.get(link.target);
             if (!source || !target) return;
+            const sourceBounds = architectureObstacleById.get(link.source);
+            const targetBounds = architectureObstacleById.get(link.target);
+            const start = pointAtCardBoundary(source, target, sourceBounds, 4);
+            const end = pointAtCardBoundary(target, source, targetBounds, -4);
+            const path = document.createElementNS(svgNamespace, "path");
+            path.classList.add("graph-architecture-path");
+            if (link.kind === "rest") path.classList.add("is-rest");
+            if (link.kind === "kafka") path.classList.add("is-kafka");
+            path.style.setProperty("--graph-relation-color", relationColor(link));
+            path.setAttribute("d", `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`);
+            path.setAttribute("marker-end", "url(#graph-architecture-arrow)");
+            portPathOverlay.append(path);
             const hitArea = document.createElementNS(svgNamespace, "path");
             hitArea.classList.add("graph-dependency-hit-area");
             hitArea.setAttribute("d", `M ${source.x} ${source.y} L ${target.x} ${target.y}`);
