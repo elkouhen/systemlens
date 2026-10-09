@@ -46,7 +46,7 @@
       const mode = showingMicroservices
         ? "contracts"
         : showingFlows
-        ? "flows"
+        ? "architecture"
         : showingContractView
           ? "contracts"
           : showingIssues

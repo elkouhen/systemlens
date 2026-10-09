@@ -32,7 +32,7 @@
     </div>
     <div class="toolbar-mode-tabs" role="tablist" aria-label="Modes de navigation">
       <button id="architecture-mode-tab" class="toolbar-mode-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="architecture-tabs-group">Architecture</button>
-      <button id="flows-mode-tab" class="toolbar-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-tabs-group">Flux</button>
+      <button id="flows-mode-tab" class="toolbar-mode-tab legacy-resource-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-tabs-group">Flux</button>
       <button id="contracts-mode-tab" class="toolbar-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="contracts-tabs-group">Ressources</button>
       <button id="diagnostics-mode-tab" class="toolbar-mode-tab legacy-resource-tab" type="button" role="tab" aria-selected="false" aria-controls="diagnostics-tabs-group">Diagnostics</button>
     </div>
@@ -41,6 +41,7 @@
         <span id="architecture-tabs-title" class="toolbar-tab-group-title">Vues d’architecture</span>
         <div class="toolbar-tabs" role="tablist" aria-label="Vues d'architecture">
           <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel" title="Configurer et afficher le graphe">Graphe</button>
+          <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux de code</button>
           <button id="microservices-tab" class="toolbar-tab legacy-resource-tab" type="button" role="tab" aria-selected="false" aria-controls="microservices-panel">Catalogue</button>
           <button id="kafka-tab" class="toolbar-tab legacy-resource-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Topics</button>
           <button id="routes-tab" class="toolbar-tab legacy-resource-tab" type="button" role="tab" aria-selected="false" aria-controls="routes-panel">Routes</button>
@@ -49,9 +50,6 @@
       </section>
       <section id="flows-tabs-group" class="toolbar-tab-group" aria-labelledby="flows-tabs-title" hidden>
         <span id="flows-tabs-title" class="toolbar-tab-group-title">Vues des flux</span>
-        <div class="toolbar-tabs" role="tablist" aria-label="Flux de code">
-          <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux de code</button>
-        </div>
       </section>
       <section id="contracts-tabs-group" class="toolbar-tab-group" aria-labelledby="contracts-tabs-title" hidden>
         <span id="contracts-tabs-title" class="toolbar-tab-group-title">Vues des contrats</span>
