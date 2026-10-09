@@ -217,7 +217,7 @@
     modeTabs.flows.addEventListener("click", () => setToolbarTab("flows"));
     modeTabs.contracts.addEventListener("click", () => openResourceCatalogue("openapi_contract"));
     modeTabs.diagnostics.addEventListener("click", () => setToolbarTab("issues"));
-    inventoryStatus.addEventListener("click", () => setToolbarTab("issues"));
+    inventoryStatus.addEventListener("click", () => openResourceCatalogue("diagnostic"));
     [
       relationHttp,
       relationKafka,

@@ -11,6 +11,7 @@
       ["mongodb_collection", "Collections"],
       ["jpa_entity", "Entités JPA"],
       ["dto", "DTOs"],
+      ["diagnostic", "Diagnostics"],
       ["other", "Autres"],
     ]);
     let resourceCatalogueEntries = [];
@@ -92,6 +93,14 @@
         service: dto.service || dto.owner || "",
         meta: `${dto.fields?.length || 0} champ(s) · ${dto.topics?.length || 0} topic(s)`,
       }));
+      (graphData.indexing_issues || []).forEach((issue, index) => entries.push({
+        id: `diagnostic:${issue.id || index}`,
+        kind: "diagnostic",
+        name: issue.message || issue.category || "Fait à vérifier",
+        meta: `${issue.severity === "warning" ? "À corriger" : "À vérifier"} · ${issue.category || "Indexation"}`,
+        source: issue.location || issue.path,
+        description: issue.message || issue.category || "Problème d’indexation",
+      }));
       const seen = new Set();
       return entries.filter(entry => {
         if (seen.has(entry.id)) return false;
@@ -113,7 +122,7 @@
       resourceCatalogueEntries = buildResourceCatalogueEntries();
       const counts = new Map();
       resourceCatalogueEntries.forEach(entry => counts.set(entry.kind, (counts.get(entry.kind) || 0) + 1));
-      ["all", "microservice", "http_route", "openapi_contract", "asyncapi_contract", "kafka_topic", "mongodb_collection", "jpa_entity", "dto", "other"].forEach(kind => {
+      ["all", "microservice", "http_route", "openapi_contract", "asyncapi_contract", "kafka_topic", "mongodb_collection", "jpa_entity", "dto", "diagnostic", "other"].forEach(kind => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "resource-catalogue-category";
@@ -139,7 +148,7 @@
       const outgoing = entry.node ? graphData.links.filter(link => link.source === entry.node.id).length : 0;
       title.textContent = entry.name;
       copy.replaceChildren();
-      const kind = document.createElement("span"); kind.className = "resource-catalogue-preview-kind"; kind.textContent = nodeKindLabel(entry.node || { kind: entry.kind });
+      const kind = document.createElement("span"); kind.className = "resource-catalogue-preview-kind"; kind.textContent = resourceCatalogueKindLabels.get(entry.kind) || nodeKindLabel(entry.node || { kind: entry.kind });
       const stats = document.createElement("span"); stats.className = "resource-catalogue-preview-stats"; stats.textContent = entry.meta || `${incoming} entrée(s) · ${outgoing} sortie(s)`;
       copy.append(kind, stats);
       resourceCataloguePreview.querySelectorAll(".resource-catalogue-preview-owner, .resource-catalogue-preview-source").forEach(item => item.remove());
@@ -154,7 +163,9 @@
       const kind = resourceKindFilter?.value || "all";
       const service = resourceServiceFilter?.value || "all";
       const visible = resourceCatalogueEntries.filter(entry => resourceCatalogueEntryMatches(entry, kind, query, service));
-      microservicesTitle.textContent = `Catalogue des ressources (${visible.length}/${resourceCatalogueEntries.length})`;
+      microservicesTitle.textContent = kind === "diagnostic"
+        ? `Diagnostics (${visible.length}/${resourceCatalogueEntries.length})`
+        : `Catalogue des ressources (${visible.length}/${resourceCatalogueEntries.length})`;
       if (resourceCatalogueSummary) resourceCatalogueSummary.textContent = `${visible.length} ressource${visible.length > 1 ? "s" : ""} affichée${visible.length > 1 ? "s" : "e"}`;
       microservicesEmpty.hidden = visible.length > 0;
       visible.forEach(entry => {
