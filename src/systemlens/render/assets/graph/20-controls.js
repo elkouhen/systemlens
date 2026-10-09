@@ -58,6 +58,7 @@
     const microservicesFilter = document.getElementById("microservices-filter");
     const resourceKindFilter = document.getElementById("resource-kind-filter");
     const resourceCatalogueSummary = document.getElementById("resource-catalogue-summary");
+    const resourceCataloguePreview = document.getElementById("resource-catalogue-preview");
     const microservicesTitle = document.getElementById("microservices-title");
     const microserviceVisibilityList = document.getElementById("microservice-visibility-list");
     const microserviceVisibilityReset = document.getElementById("microservice-visibility-reset");

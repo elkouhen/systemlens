@@ -67,6 +67,8 @@ def test_resource_catalogue_updates_docked_preview() -> None:
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
         page.locator("#contracts-mode-tab").click()
+        page.locator("#microservices-list .reference-action").first.click()
+        assert page.locator("#resource-catalogue-preview").get_attribute("class").endswith("has-selection")
         page.locator("#microservices-list .reference-title").filter(has_text="order-service").click()
         assert page.locator("#inspector-modal").is_hidden()
         assert page.locator("#resource-catalogue-preview-title").inner_text() == "order-service"
