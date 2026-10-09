@@ -752,6 +752,13 @@
       inspectorModal.hidden = true;
       inspectorBody.replaceChildren();
       inspectorBody.className = "inspector-body";
+      if (resourceCataloguePreview) {
+        resourceCataloguePreview.classList.remove("has-selection");
+        document.getElementById("resource-catalogue-preview-title").textContent = "Aucune ressource sélectionnée";
+        document.getElementById("resource-catalogue-preview-copy").textContent = "Sélectionnez une ligne dans le catalogue pour afficher son contexte, ses relations et sa source.";
+        resourceCataloguePreview.querySelectorAll(".resource-catalogue-preview-owner, .resource-catalogue-preview-source").forEach(item => item.remove());
+        microservicesList?.querySelectorAll(".is-selected").forEach(item => item.classList.remove("is-selected"));
+      }
       dtoNavigation.splice(0);
       mongoNavigation.splice(0);
       architectureInspectorHistory.splice(0);
