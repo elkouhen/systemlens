@@ -1,0 +1,278 @@
+/* Obsidian component skin. Resource and protocol colours belong to the graph. */
+:root[data-theme="dark"] {
+  --ink: #ecf2f9;
+  --muted: #94a3b8;
+  --line: #233040;
+  --surface: #101823;
+  --surface-solid: #101823;
+  --surface-soft: #131e2b;
+  --accent: #67e8f9;
+  --accent-soft: #102e39;
+  --accent-line: #305965;
+  --widget-border: #233040;
+  --widget-surface: #131e2b;
+  --widget-surface-strong: #172331;
+  --ui-title: #ecf2f9;
+  --ui-text: #d4deeb;
+  --ui-muted: #94a3b8;
+  --ui-accent-text: #67e8f9;
+  --ui-on-accent: #081b22;
+  --ui-panel: #101823;
+  --ui-widget: #131e2b;
+  --ui-control: #172331;
+  --ui-selected: #67e8f9;
+  --ui-selected-hover: #a5f3fc;
+  --ui-accent-soft: #102e39;
+  --ui-accent-soft-hover: #193c48;
+  --ui-accent-border: #305965;
+  --ui-border: #233040;
+  --ui-divider: #233040;
+  --ui-focus: rgba(103, 232, 249, .18);
+  --panel-radius: 14px;
+  --widget-radius: 10px;
+  --control-radius: 7px;
+  color: var(--ui-text);
+  background: #0b1018;
+}
+:root[data-theme="dark"] body { background: #0b1018; }
+:root[data-theme="dark"] #graph,
+:root[data-theme="dark"] #graph-call-tree {
+  background-color: #0b1018;
+  background-image: radial-gradient(rgba(113, 137, 160, .17) .8px, transparent .8px);
+  background-size: 20px 20px;
+}
+:root[data-theme="dark"] .toolbar,
+:root[data-theme="dark"] .legend,
+:root[data-theme="dark"] .inspector-dialog {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--panel-radius);
+  background: var(--ui-panel);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .3);
+}
+:root[data-theme="dark"] .toolbar-header,
+:root[data-theme="dark"] .inspector-header {
+  background: var(--ui-panel);
+  border-bottom-color: var(--ui-border);
+}
+:root[data-theme="dark"] .brand-mark {
+  border: 1px solid var(--ui-accent-border);
+  border-radius: 9px;
+  color: var(--ui-selected);
+  background: var(--ui-accent-soft);
+  box-shadow: none;
+  font-weight: 600;
+}
+:root[data-theme="dark"] .brand strong { color: var(--ui-title); letter-spacing: -.035em; }
+:root[data-theme="dark"] .toolbar-tabs,
+:root[data-theme="dark"] .graph-context,
+:root[data-theme="dark"] .graph-summary-item {
+  border-color: var(--ui-border);
+  background: var(--ui-widget);
+  border-radius: var(--widget-radius);
+}
+:root[data-theme="dark"] .toolbar-tab,
+:root[data-theme="dark"] .toolbar-mode-tab { font-weight: 600; }
+:root[data-theme="dark"] .toolbar .toolbar-mode-tab.is-active,
+:root[data-theme="dark"] .toolbar .toolbar-tab.is-active {
+  color: var(--ui-accent-text) !important;
+  background: var(--ui-accent-soft) !important;
+  box-shadow: inset 0 -2px var(--ui-selected);
+}
+:root[data-theme="dark"] .toolbar input:not([type="checkbox"]) {
+  color: var(--ui-text);
+  background: #0b1018;
+  border-color: var(--ui-border);
+  border-radius: var(--control-radius);
+}
+:root[data-theme="dark"] input[type="checkbox"] { accent-color: var(--ui-selected); }
+:root[data-theme="dark"] .indexing-issues-header,
+:root[data-theme="dark"] .references-header,
+:root[data-theme="dark"] .details-header,
+:root[data-theme="dark"] .path-details-header,
+:root[data-theme="dark"] .route-inspector-summary {
+  background: var(--ui-widget);
+  border-radius: var(--widget-radius);
+}
+:root[data-theme="dark"] .references-title,
+:root[data-theme="dark"] .details-title,
+:root[data-theme="dark"] .path-details-title,
+:root[data-theme="dark"] .inspector-title { color: var(--ui-title); font-weight: 600; letter-spacing: -.025em; }
+:root[data-theme="dark"] .reference-item,
+:root[data-theme="dark"] .code-flow-item,
+:root[data-theme="dark"] .service-kafka-item,
+:root[data-theme="dark"] .port-flow,
+:root[data-theme="dark"] .dto-section,
+:root[data-theme="dark"] .details-group {
+  border-radius: var(--widget-radius);
+  box-shadow: none;
+}
+:root[data-theme="dark"] .reference-item:hover,
+:root[data-theme="dark"] .code-flow-item:hover { border-color: var(--ui-accent-border); }
+:root[data-theme="dark"] .code-flow-item.is-selected {
+  border-color: var(--ui-selected);
+  box-shadow: 0 0 0 2px var(--ui-focus);
+}
+:root[data-theme="dark"] .graph-mode-context {
+  color: var(--ui-text);
+  border-color: var(--ui-border);
+  background: var(--ui-panel);
+}
+:root[data-theme="dark"] .graph-node-card-label,
+:root[data-theme="dark"] .graph-node-card-label.is-resource,
+:root[data-theme="dark"] .graph-call-tree-node {
+  color: var(--ui-title);
+  background: #131e2b;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .22);
+}
+:root[data-theme="dark"] .graph-node-card-label .graph-node-card-kind,
+:root[data-theme="dark"] .graph-call-tree-node .graph-node-card-kind { color: var(--ui-muted); font-weight: 500; }
+:root[data-theme="dark"] .graph-node-card-name { color: var(--ui-title); font-weight: 600; }
+:root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: var(--ui-title); background: #101823; }
+:root[data-theme="dark"] .graph-node-card-label.is-selected,
+:root[data-theme="dark"] .graph-call-tree-node.is-selected {
+  outline: 2px solid var(--ui-selected);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px var(--ui-focus), 0 8px 24px rgba(0, 0, 0, .25);
+}
+/* Repeated occurrences retain a stepped fill; cycles retain their warning. */
+:root[data-theme="dark"] .graph-call-tree-node.is-frequency-2 { background: #1b2a38; }
+:root[data-theme="dark"] .graph-call-tree-node.is-frequency-3 { background: #26394b; }
+:root[data-theme="dark"] .graph-call-tree-node.is-frequency-4 { background: #334b60; }
+:root[data-theme="dark"] .graph-call-tree-node.is-cycle { color: #fcd68d; border-color: #d97706; background: #342719; }
+:root[data-theme="dark"] .graph-call-tree-edge-label { fill: var(--ui-text); stroke: #0b1018; }
+:root[data-theme="dark"] .graph-call-tree-more-badge {
+  color: var(--ui-accent-text);
+  border-color: var(--ui-accent-border);
+  background: var(--ui-panel);
+}
+:root[data-theme="dark"] .graph-layer-title {
+  color: var(--ui-text);
+  background: var(--ui-panel);
+  border-left: 2px solid var(--layer-accent, #64748b);
+}
+:root[data-theme="dark"] .graph-entity-tooltip,
+:root[data-theme="dark"] .graph-edge-tooltip,
+:root[data-theme="dark"] .graph-port-tooltip,
+:root[data-theme="dark"] .graph-arc-tooltip,
+:root[data-theme="dark"] #graph-flow-tooltips .graph-call-tree-entity-tooltip {
+  color: var(--ui-text);
+  border: 1px solid var(--ui-accent-border);
+  background: var(--ui-panel);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
+}
+:root[data-theme="dark"] .graph-entity-tooltip::after,
+:root[data-theme="dark"] .graph-edge-tooltip::after,
+:root[data-theme="dark"] .graph-port-tooltip::after,
+:root[data-theme="dark"] .graph-arc-tooltip::after,
+:root[data-theme="dark"] #graph-flow-tooltips .graph-call-tree-entity-tooltip::after {
+  border-color: var(--ui-accent-border);
+  background: var(--ui-panel);
+}
+:root[data-theme="dark"] #graph-flow-tooltips .graph-call-tree-entity-tooltip-kind { color: var(--ui-accent-text); }
+:root[data-theme="dark"] #graph-flow-tooltips .graph-call-tree-entity-tooltip-detail { color: var(--ui-muted); }
+:root[data-theme="dark"] .inspector-modal { background: rgba(4, 9, 15, .72); }
+:root[data-theme="dark"] .inspector-body code,
+:root[data-theme="dark"] .code-flow-step code,
+:root[data-theme="dark"] .details-section code {
+  color: var(--ui-accent-text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+:root[data-theme="dark"] .inspector-body pre {
+  background: #0b1018;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--widget-radius);
+  padding: 12px;
+}
+:root[data-theme="dark"] .inspector-source-link {
+  color: var(--ui-accent-text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+:root[data-theme="dark"] .resource-catalogue-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr);
+  gap: 10px;
+  margin-bottom: 8px;
+}
+:root[data-theme="dark"] .resource-catalogue-summary {
+  color: var(--ui-muted);
+  font-size: 12px;
+  margin: 8px 0 14px;
+}
+
+/* The catalogue is a workspace view, not a graph overlay. */
+body.catalogue-active { overflow: auto; }
+body.catalogue-active #graph,
+body.catalogue-active #graph-layers,
+body.catalogue-active #graph-groups,
+body.catalogue-active #graph-port-paths,
+body.catalogue-active #graph-node-labels { visibility: hidden; }
+body.catalogue-active .toolbar {
+  top: 0;
+  left: 0;
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  overflow: auto;
+  padding: 18px 30px 30px;
+  border: 0;
+  border-radius: 0;
+  background: var(--ui-panel);
+}
+body.catalogue-active .toolbar-header,
+body.catalogue-active .toolbar-mode-tabs,
+body.catalogue-active .toolbar-tab-groups { max-width: 1380px; width: 100%; margin-inline: auto; }
+body.catalogue-active .toolbar-mode-tabs { height: 40px; align-self: start; }
+body.catalogue-active .toolbar-tab-groups { align-self: start; }
+body.catalogue-active #microservices-panel {
+  max-width: 1380px;
+  width: 100%;
+  margin: 18px auto 0;
+  padding: 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  background: var(--ui-surface, #101823);
+}
+body.catalogue-active #microservices-panel .references-header { max-width: none; }
+body.catalogue-active #microservices-panel .resource-catalogue-section {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px 22px;
+  align-items: start;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-filters {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-widget);
+}
+body.catalogue-active #microservices-panel .resource-catalogue-summary {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+  padding: 10px 0 0;
+}
+body.catalogue-active #microservices-panel .references-list {
+  grid-column: 2;
+  grid-row: 2;
+}
+body.catalogue-active #microservices-panel .references-empty {
+  grid-column: 2;
+  grid-row: 2;
+}
+body.catalogue-active #microservices-panel .references-list {
+  max-height: calc(100vh - 360px);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+body.catalogue-active #microservices-panel .reference-item {
+  min-height: 76px;
+  align-items: center;
+}
+body.catalogue-active #microservices-panel .reference-item .reference-action {
+  min-width: 60px;
+}

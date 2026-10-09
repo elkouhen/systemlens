@@ -1,9 +1,15 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SystemLens graph</title>
+  <script>
+    try {
+      const savedTheme = localStorage.getItem("systemlens:graph-theme");
+      if (savedTheme === "light" || savedTheme === "dark") document.documentElement.dataset.theme = savedTheme;
+    } catch (_error) { /* Obsidian also works without browser storage. */ }
+  </script>
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/graphology/0.25.4/graphology.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/sigma.js/2.4.0/sigma.min.js"></script>
@@ -35,7 +41,7 @@
         <span id="architecture-tabs-title" class="toolbar-tab-group-title">Vues d’architecture</span>
         <div class="toolbar-tabs" role="tablist" aria-label="Vues d'architecture">
           <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel" title="Configurer et afficher le graphe">Graphe</button>
-          <button id="microservices-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="microservices-panel">Microservices</button>
+          <button id="microservices-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="microservices-panel">Catalogue</button>
           <button id="kafka-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="kafka-panel">Topics</button>
           <button id="routes-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="routes-panel">Routes</button>
           <button id="collections-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="collections-panel">Collections</button>
@@ -146,11 +152,11 @@
     </div>
     <div id="microservices-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="microservices-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker">Architecture déployée</p>
-        <h2 id="microservices-title" class="references-title">Microservices</h2>
-        <p class="references-description">Recherchez un microservice indexé et ouvrez-le dans le graphe.</p>
+        <p class="references-kicker">Ressources indexées</p>
+        <h2 id="microservices-title" class="references-title">Catalogue des ressources</h2>
+        <p class="references-description">Filtrez les ressources par type ou microservice, puis ouvrez leur contexte dans le graphe.</p>
       </div>
-      <section class="references-section"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher un microservice par nom" autocomplete="off" aria-label="Rechercher un microservice par nom"><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucun microservice ne correspond à ce filtre.</p></section>
+      <section class="references-section resource-catalogue-section"><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher une ressource ou un service" autocomplete="off" aria-label="Rechercher une ressource ou un service"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="other">Autres ressources</option></select></div><p id="resource-catalogue-summary" class="resource-catalogue-summary" role="status"></p><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucune ressource ne correspond à ces filtres.</p></section>
     </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
       <div class="indexing-issues-header">

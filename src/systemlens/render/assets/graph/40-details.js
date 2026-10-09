@@ -15,6 +15,7 @@
     });
     function setToolbarTab(tab, options = {}) {
       graphState.analysisContextCollapsed = true;
+      document.body.classList.toggle("catalogue-active", tab === "microservices");
       const { showingGraph, showingFlows, graphVisible, resetView } = graphViewLifecycle.activate(tab, options);
       // The two navigation surfaces have different meanings: Graphe is the
       // static architecture view, while Flux de code only becomes a graph
@@ -381,21 +382,26 @@
     function renderMicroservices() {
       microservicesList.replaceChildren();
       const query = microservicesFilter.value.trim().toLocaleLowerCase();
-      const microservices = graphData.nodes
-        .filter(node => node.kind === "microservice")
+      const kind = resourceKindFilter?.value || "all";
+      const resources = graphData.nodes
+        .filter(node => kind === "all"
+          || (kind === "other"
+            ? !["microservice", "kafka_topic", "message_channel", "mongodb_collection", "jpa_entity"].includes(node.kind)
+            : kind === "kafka_topic" ? ["kafka_topic", "message_channel"].includes(node.kind) : node.kind === kind))
         .slice()
         .sort((left, right) => left.name.localeCompare(right.name));
-      const visibleMicroservices = microservices.filter(node => (
-        !query || `${node.name} ${nodeKindLabel(node)}`.toLocaleLowerCase().includes(query)
+      const visibleResources = resources.filter(node => (
+        !query || `${node.name} ${nodeKindLabel(node)} ${node.owner || ""} ${node.service || ""}`.toLocaleLowerCase().includes(query)
       ));
-      microservicesTitle.textContent = `Microservices (${visibleMicroservices.length}/${microservices.length})`;
-      microservicesEmpty.hidden = visibleMicroservices.length > 0;
-      visibleMicroservices.forEach(node => {
+      microservicesTitle.textContent = `Catalogue des ressources (${visibleResources.length}/${resources.length})`;
+      if (resourceCatalogueSummary) resourceCatalogueSummary.textContent = `${visibleResources.length} ressource${visibleResources.length > 1 ? "s" : ""} affichée${visibleResources.length > 1 ? "s" : "e"}`;
+      microservicesEmpty.hidden = visibleResources.length > 0;
+      visibleResources.forEach(node => {
         const incoming = graphData.links.filter(link => link.target === node.id).length;
         const outgoing = graphData.links.filter(link => link.source === node.id).length;
         microservicesList.append(architectureNodeReference(
           node,
-          `${nodeKindLabel(node)} · ${incoming} entrée${incoming > 1 ? "s" : ""} · ${outgoing} sortie${outgoing > 1 ? "s" : ""}`,
+          `${nodeKindLabel(node)}${node.owner || node.service ? ` · ${node.owner || node.service}` : ""} · ${incoming} entrée${incoming > 1 ? "s" : ""} · ${outgoing} sortie${outgoing > 1 ? "s" : ""}`,
         ));
       });
     }

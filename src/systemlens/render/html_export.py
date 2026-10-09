@@ -37,6 +37,7 @@ _GRAPH_STYLE_FILENAMES = (
     "20-presentation.css",
     "30-charter.css",
     "40-ergonomics.css",
+    "50-obsidian.css",
 )
 _GRAPH_STYLE_MODULES = tuple(_ASSET_ROOT / "graph" / name for name in _GRAPH_STYLE_FILENAMES)
 _GRAPH_CSS = "".join(

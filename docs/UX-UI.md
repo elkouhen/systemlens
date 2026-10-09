@@ -55,6 +55,13 @@ it hides navigation content while retaining its header controls and leaves the
 graph workspace unchanged. On constrained viewports, the panel uses one bounded
 scroll region so the graph remains visible while users inspect details.
 
+The resource catalogue MUST present one searchable list across indexed
+microservices and architecture resources. A type selector MUST filter the list
+without changing the graph or persisted selection. Each row MUST expose the
+resource kind and relationship counts when available; selecting a row MUST
+open the shared inspector so the catalogue remains a browsing surface rather
+than a second details panel.
+
 ## Widget inventory and shared contract
 
 A widget is a bounded interface surface that owns one user task. Widgets MUST
@@ -151,6 +158,21 @@ overlap the underlying graph layer.
 Light and dark themes MUST preserve contrast, hierarchy, protocol meaning, and
 selection state. Theme changes MUST NOT alter indexed data, graph structure, or
 selection.
+
+Obsidian is the default dark presentation for the architecture workspace.
+It uses a graphite canvas (`#0b1018`), slate panels (`#101823`), neutral cards
+(`#131e2b`), and a glacier-cyan interaction accent (`#67e8f9`). A subtle dot
+grid provides orientation without competing with graph relations.
+
+Navigation, catalogues, tooltips, and inspectors share these surfaces and
+compact rounded controls. Cyan identifies interface selection and actions;
+resource outlines, protocol strokes, and warning states retain their semantic
+colours. Evidence uses a monospace font on a recessed surface.
+
+The workspace opens in Obsidian when no valid theme preference exists,
+regardless of the operating-system theme. An explicitly saved light or dark
+preference takes precedence and survives reopening an export where browser
+storage is available. The light presentation remains selectable.
 
 ## Navigation, selection, and inspection
 

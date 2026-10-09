@@ -25,10 +25,16 @@ const graphViewLifecycle = (() => {
   function setGraphVisibility(visible) {
     graphSurfaces().forEach(element => {
       if (!element) return;
-      element.hidden = !visible;
+      const surfaceVisible = visible && (
+        element !== graphCallTreeOverlay || graphState.viewMode === "call-graph"
+      );
+      element.hidden = !surfaceVisible;
       // SVG/canvas overlays have author-level display rules. Keep the
       // transition deterministic even when those rules override [hidden].
-      element.style.display = visible ? "" : "none";
+      element.style.display = surfaceVisible ? "" : "none";
+      if (visible && element !== graphCallTreeOverlay) {
+        element.classList.remove("is-call-tree-hidden");
+      }
     });
     if (!visible && graphFlowStatus) graphFlowStatus.hidden = true;
   }

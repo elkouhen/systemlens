@@ -103,6 +103,7 @@ def test_topic_catalogue_opens_node_inspection_modal() -> None:
         assert page.locator("#inspector-body").get_by_text("Relations", exact=True).is_visible()
         page.locator("#inspector-close").click()
         graph_topic = page.locator(".graph-node-card-label").filter(has_text="supermarket.stock.restock-requested").first
+        assert page.locator("#graph-call-tree").is_hidden()
         graph_topic.click(modifiers=["Shift"])
         assert page.locator("#inspector-modal").is_visible()
         assert page.locator("#inspector-title").inner_text().startswith("Topic ·")
@@ -445,6 +446,51 @@ def _code_flow_document() -> str:
         ],
         code_flows=[flow],
     )
+
+
+@pytest.mark.slow
+def test_obsidian_default_and_saved_theme_preserve_graph_state() -> None:
+    with sync_playwright() as playwright:
+        browser = _launch_visual_browser(playwright)
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 850}, color_scheme="light"
+        )
+        page = context.new_page()
+        document = _code_flow_document()
+        page.route(
+            "http://systemlens.test/",
+            lambda route: route.fulfill(body=document, content_type="text/html"),
+        )
+        page.goto("http://systemlens.test/")
+        page.locator(".graph-node-card-label").first.wait_for()
+        assert page.locator("html").get_attribute("data-theme") == "dark"
+        assert page.locator("#graph").evaluate(
+            "element => getComputedStyle(element).backgroundColor"
+        ) == "rgb(11, 16, 24)"
+        assert page.locator(".graph-node-card-label").first.evaluate(
+            "element => getComputedStyle(element).backgroundColor"
+        ) == "rgb(19, 30, 43)"
+        node_count = page.locator(".graph-node-card-label").count()
+        page.locator("#theme-toggle").click()
+        assert page.locator("html").get_attribute("data-theme") == "light"
+        assert page.locator(".graph-node-card-label").count() == node_count
+        page.reload()
+        page.locator(".graph-node-card-label").first.wait_for()
+        assert page.locator("html").get_attribute("data-theme") == "light"
+        page.locator("#theme-toggle").click()
+        page.locator("#flows-mode-tab").click()
+        page.locator(".code-flow-item").click()
+        page.locator("#graph-call-tree").wait_for(state="visible")
+        selected_flow = page.locator(".code-flow-item.is-selected").inner_text()
+        for _ in range(2):
+            page.locator("#theme-toggle").click()
+            assert page.locator(".code-flow-item.is-selected").inner_text() == selected_flow
+            assert page.locator("#graph-call-tree").is_visible()
+        page.reload()
+        page.locator(".graph-node-card-label").first.wait_for()
+        assert page.locator("html").get_attribute("data-theme") == "dark"
+        context.close()
+        browser.close()
 
 
 def _chrome_executable(playwright: Playwright) -> str | None:
@@ -1157,7 +1203,7 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
             }"""
         )
         assert metrics["light"]["cardBackground"] == "rgb(244, 247, 251)"
-        assert metrics["dark"]["cardBackground"] == "rgb(20, 34, 56)"
+        assert metrics["dark"]["cardBackground"] == "rgb(19, 30, 43)"
         assert min(metrics["light"]["contrasts"]) >= 4.5
         assert min(metrics["dark"]["contrasts"]) >= 4.5
         assert metrics["noHorizontalOverflow"], metrics["overflowWidths"]

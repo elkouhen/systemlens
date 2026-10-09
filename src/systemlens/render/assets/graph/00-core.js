@@ -73,12 +73,12 @@
       try { return localStorage.getItem(themeStorageKey); } catch (_error) { return null; }
     })();
     const preferredTheme = storedTheme === "light" || storedTheme === "dark" ? storedTheme
-      : (window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      : "dark";
     document.documentElement.dataset.theme = preferredTheme;
     function updateThemeToggle() {
       const isDark = document.documentElement.dataset.theme === "dark";
-      themeToggle.textContent = isDark ? "☼ Clair" : "☾ Sombre";
-      themeToggle.title = isDark ? "Passer au thème clair" : "Passer au thème sombre";
+      themeToggle.textContent = isDark ? "☼ Clair" : "☾ Obsidian";
+      themeToggle.title = isDark ? "Passer au thème clair" : "Passer au thème Obsidian";
       themeToggle.setAttribute("aria-label", themeToggle.title);
     }
     themeToggle.addEventListener("click", () => {

@@ -258,6 +258,7 @@
     jpaReferencesFilter.addEventListener("input", renderReferences);
     mongoClassReferencesFilter.addEventListener("input", renderReferences);
     microservicesFilter.addEventListener("input", renderMicroservices);
+    resourceKindFilter?.addEventListener("change", renderMicroservices);
     collectionsFilter.addEventListener("input", renderCollections);
     renderIndexingIssues();
     renderReferences();

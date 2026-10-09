@@ -7,6 +7,10 @@ The consolidated presentation and interaction contract is maintained in
 catalogue behavior, and evidence semantics; it does not duplicate the global
 visual language or camera contract.
 
+New browser sessions open in the Obsidian dark theme. The theme control retains
+the user's explicit light or dark preference where local storage is available.
+The palette and shared component treatment follow [UX/UI rules](../UX-UI.md).
+
 
 Microservice cards in the Explorer view remain compact rectangles. A card with
 persisted internal code flows displays their count, so services with discovered
@@ -38,7 +42,7 @@ separate visual node for every route.
 
 The architecture navigation exposes four top-level areas: Architecture, Flux
 de code, Contrats, and Diagnostics. Architecture provides separate views for
-the graph, the microservice list, the topic catalogue, and the collection
+the graph, the resource catalogue, the topic catalogue, and the collection
 catalogue, plus the HTTP route list. Contrats provides separate views for
 OpenAPI, AsyncAPI, indexed DTOs, JPA entities, and Mongo persistence classes.
 Routes are grouped by
@@ -55,6 +59,13 @@ When a selected HTTP route has REST DTO evidence on its provider microservice,
 the route details list the DTO names, roles, and source locations. Topic
 details list associated Kafka DTOs, and Mongo collection details list their
 associated persistence classes.
+
+The resource catalogue is the primary cross-resource browser. It lists indexed
+microservices and architecture resources in one searchable view, with a type
+filter for microservices, topics, collections, JPA entities, and other indexed
+resources. Selecting a row opens the existing architecture inspector and keeps
+the graph available as the contextual view; filtering changes only the
+catalogue projection and does not alter persisted facts.
 
 Selecting a microservice, topic, or Mongo collection from its Architecture
 catalogue switches the graph to the selected node and opens the graphical
