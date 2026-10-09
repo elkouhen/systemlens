@@ -2072,7 +2072,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         <p class="references-description">Parcours ordonnés issus du code source. Ils décrivent un comportement potentiel, pas une trace runtime.</p>
         <p id="code-flow-selection-help" class="code-flow-selection-help">Cliquez sur un flux pour ouvrir son graphe d’appel.</p>
       </div>
-    <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Filtrer par service, méthode ou déclencheur" autocomplete="off" aria-label="Filtrer les flux de code"><input id="code-flow-message-type" class="code-flow-message-type-filter" type="search" placeholder="Filtrer par type de message Kafka" list="code-flow-message-types" autocomplete="off" aria-label="Filtrer par type de message Kafka"><datalist id="code-flow-message-types"></datalist><select id="code-flow-confidence" class="code-flow-scope-filter" aria-label="Niveau de confiance"><option value="all">Toutes confiances</option><option value="high">Confiance élevée</option><option value="medium">Confiance moyenne</option><option value="low">Confiance faible</option></select><select id="code-flow-kind" class="code-flow-scope-filter" aria-label="Type de flux"><option value="all">Tous protocoles</option><option value="http">HTTP</option><option value="kafka">Kafka</option><option value="mixed">Mixte</option></select><button id="code-flow-cycles" class="code-flow-cycle-filter" type="button" aria-pressed="false">Cycles uniquement</button><button id="code-flow-filter-reset" class="code-flow-filter-reset" type="button">Effacer les filtres</button></div><p id="code-flow-filter-summary" class="code-flow-filter-summary"></p><p id="code-flows-summary" class="code-flows-summary"></p><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux de code indexé.</p></section>
+    <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Rechercher un service ou un topic" autocomplete="off" aria-label="Rechercher un service ou un topic dans les flux de code"></div><p id="code-flow-filter-summary" class="code-flow-filter-summary"></p><p id="code-flows-summary" class="code-flows-summary"></p><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux de code indexé.</p></section>
     </div>
     <div id="contracts-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="contracts-tab" hidden>
       <div class="references-header">
@@ -9231,10 +9231,6 @@ const graphViewLifecycle = (() => {
     function activeCodeFlowFilters() {
       const filters = [];
       if (codeFlowFilter.value.trim()) filters.push("recherche");
-      if (codeFlowMessageType.value.trim()) filters.push("type de message");
-      if (codeFlowConfidence.value !== "all") filters.push(codeFlowConfidence.options[codeFlowConfidence.selectedIndex]?.text || "confiance");
-      if (codeFlowKind.value !== "all") filters.push(codeFlowKind.options[codeFlowKind.selectedIndex]?.text || "protocole");
-      if (codeFlowCycles.getAttribute("aria-pressed") === "true") filters.push("cycles");
       return filters;
     }
 
@@ -9243,15 +9239,10 @@ const graphViewLifecycle = (() => {
       codeFlowFilterSummary.textContent = filters.length
         ? `${filters.length} filtre${filters.length > 1 ? "s" : ""} actif${filters.length > 1 ? "s" : ""} · ${filters.join(" · ")}`
         : "Aucun filtre additionnel";
-      codeFlowFilterReset.disabled = filters.length === 0;
     }
 
     function resetCodeFlowFilters() {
       codeFlowFilter.value = "";
-      codeFlowMessageType.value = "";
-      codeFlowConfidence.value = "all";
-      codeFlowKind.value = "all";
-      codeFlowCycles.setAttribute("aria-pressed", "false");
       renderCodeFlows();
     }
 
@@ -9271,7 +9262,7 @@ const graphViewLifecycle = (() => {
     const messageTypes = [...new Set(graphData.nodes.flatMap(node => (
       (node.ports || []).map(port => port.message_type).filter(Boolean)
     )))].sort((left, right) => left.localeCompare(right));
-    codeFlowMessageTypes.replaceChildren(...messageTypes.map(messageType => {
+    codeFlowMessageTypes?.replaceChildren(...messageTypes.map(messageType => {
       const option = document.createElement("option");
       option.value = messageType;
       return option;
@@ -10511,10 +10502,6 @@ const graphViewLifecycle = (() => {
 
     function renderCodeFlows() {
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
-      const cyclesOnly = codeFlowCycles.getAttribute("aria-pressed") === "true";
-      const confidence = codeFlowConfidence.value;
-      const kind = codeFlowKind.value;
-      const messageTypeQuery = codeFlowMessageType.value.trim().toLocaleLowerCase();
       const visible = codeFlows.filter(flow => {
         const haystack = [
           flow.id,
@@ -10523,42 +10510,17 @@ const graphViewLifecycle = (() => {
           flow.reason,
           ...(flow.steps || []).flatMap(step => [step.kind, step.name, step.path]),
         ].join(" ").toLocaleLowerCase();
-        const protocols = codeFlowProtocols(flow);
-        const kindMatches = kind === "all"
-          || (kind === "mixed" && protocols.size > 1)
-          || protocols.has(kind);
-        const messageTypeMatches = !messageTypeQuery
-          || [...messageTypesForCodeFlow(flow)].some(messageType => (
-            messageType.toLocaleLowerCase().includes(messageTypeQuery)
-          ));
-        return (!query || haystack.includes(query))
-          && (!cyclesOnly || flow.status === "cycle")
-          && (confidence === "all" || flow.confidence === confidence)
-          && kindMatches
-          && messageTypeMatches;
+        return !query || haystack.includes(query);
       });
       codeFlowsList.replaceChildren(...visible.sort(sortCodeFlows).map(codeFlowItem));
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
       codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} sur ${codeFlows.length} · cliquez sur un flux pour ouvrir son graphe d’appel.`;
-      const cycleCount = codeFlows.filter(flow => flow.status === "cycle").length;
-      codeFlowCycles.textContent = `Cycles uniquement (${cycleCount})`;
-      codeFlowCycles.disabled = cycleCount === 0;
       updateCodeFlowFilterSummary();
-      codeFlowsTitle.textContent = cyclesOnly
-        ? `Cycles détectés (${visible.length})`
-        : `Flux de code (${visible.length}/${codeFlows.length})`;
+      codeFlowsTitle.textContent = `Flux de code (${visible.length}/${codeFlows.length})`;
     }
 
     codeFlowFilter.addEventListener("input", renderCodeFlows);
-    codeFlowConfidence.addEventListener("change", renderCodeFlows);
-    codeFlowKind.addEventListener("change", renderCodeFlows);
-    codeFlowMessageType.addEventListener("input", renderCodeFlows);
-    codeFlowCycles.addEventListener("click", () => {
-      codeFlowCycles.setAttribute("aria-pressed", String(codeFlowCycles.getAttribute("aria-pressed") !== "true"));
-      renderCodeFlows();
-    });
-    codeFlowFilterReset.addEventListener("click", resetCodeFlowFilters);
     document.getElementById("flows-panel").addEventListener("systemlens:flows-open", renderCodeFlows);
     renderCodeFlows();
 

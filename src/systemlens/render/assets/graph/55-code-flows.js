@@ -120,10 +120,6 @@
     function activeCodeFlowFilters() {
       const filters = [];
       if (codeFlowFilter.value.trim()) filters.push("recherche");
-      if (codeFlowMessageType.value.trim()) filters.push("type de message");
-      if (codeFlowConfidence.value !== "all") filters.push(codeFlowConfidence.options[codeFlowConfidence.selectedIndex]?.text || "confiance");
-      if (codeFlowKind.value !== "all") filters.push(codeFlowKind.options[codeFlowKind.selectedIndex]?.text || "protocole");
-      if (codeFlowCycles.getAttribute("aria-pressed") === "true") filters.push("cycles");
       return filters;
     }
 
@@ -132,15 +128,10 @@
       codeFlowFilterSummary.textContent = filters.length
         ? `${filters.length} filtre${filters.length > 1 ? "s" : ""} actif${filters.length > 1 ? "s" : ""} · ${filters.join(" · ")}`
         : "Aucun filtre additionnel";
-      codeFlowFilterReset.disabled = filters.length === 0;
     }
 
     function resetCodeFlowFilters() {
       codeFlowFilter.value = "";
-      codeFlowMessageType.value = "";
-      codeFlowConfidence.value = "all";
-      codeFlowKind.value = "all";
-      codeFlowCycles.setAttribute("aria-pressed", "false");
       renderCodeFlows();
     }
 
@@ -160,7 +151,7 @@
     const messageTypes = [...new Set(graphData.nodes.flatMap(node => (
       (node.ports || []).map(port => port.message_type).filter(Boolean)
     )))].sort((left, right) => left.localeCompare(right));
-    codeFlowMessageTypes.replaceChildren(...messageTypes.map(messageType => {
+    codeFlowMessageTypes?.replaceChildren(...messageTypes.map(messageType => {
       const option = document.createElement("option");
       option.value = messageType;
       return option;
@@ -1400,10 +1391,6 @@
 
     function renderCodeFlows() {
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
-      const cyclesOnly = codeFlowCycles.getAttribute("aria-pressed") === "true";
-      const confidence = codeFlowConfidence.value;
-      const kind = codeFlowKind.value;
-      const messageTypeQuery = codeFlowMessageType.value.trim().toLocaleLowerCase();
       const visible = codeFlows.filter(flow => {
         const haystack = [
           flow.id,
@@ -1412,41 +1399,16 @@
           flow.reason,
           ...(flow.steps || []).flatMap(step => [step.kind, step.name, step.path]),
         ].join(" ").toLocaleLowerCase();
-        const protocols = codeFlowProtocols(flow);
-        const kindMatches = kind === "all"
-          || (kind === "mixed" && protocols.size > 1)
-          || protocols.has(kind);
-        const messageTypeMatches = !messageTypeQuery
-          || [...messageTypesForCodeFlow(flow)].some(messageType => (
-            messageType.toLocaleLowerCase().includes(messageTypeQuery)
-          ));
-        return (!query || haystack.includes(query))
-          && (!cyclesOnly || flow.status === "cycle")
-          && (confidence === "all" || flow.confidence === confidence)
-          && kindMatches
-          && messageTypeMatches;
+        return !query || haystack.includes(query);
       });
       codeFlowsList.replaceChildren(...visible.sort(sortCodeFlows).map(codeFlowItem));
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
       codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} sur ${codeFlows.length} · cliquez sur un flux pour ouvrir son graphe d’appel.`;
-      const cycleCount = codeFlows.filter(flow => flow.status === "cycle").length;
-      codeFlowCycles.textContent = `Cycles uniquement (${cycleCount})`;
-      codeFlowCycles.disabled = cycleCount === 0;
       updateCodeFlowFilterSummary();
-      codeFlowsTitle.textContent = cyclesOnly
-        ? `Cycles détectés (${visible.length})`
-        : `Flux de code (${visible.length}/${codeFlows.length})`;
+      codeFlowsTitle.textContent = `Flux de code (${visible.length}/${codeFlows.length})`;
     }
 
     codeFlowFilter.addEventListener("input", renderCodeFlows);
-    codeFlowConfidence.addEventListener("change", renderCodeFlows);
-    codeFlowKind.addEventListener("change", renderCodeFlows);
-    codeFlowMessageType.addEventListener("input", renderCodeFlows);
-    codeFlowCycles.addEventListener("click", () => {
-      codeFlowCycles.setAttribute("aria-pressed", String(codeFlowCycles.getAttribute("aria-pressed") !== "true"));
-      renderCodeFlows();
-    });
-    codeFlowFilterReset.addEventListener("click", resetCodeFlowFilters);
     document.getElementById("flows-panel").addEventListener("systemlens:flows-open", renderCodeFlows);
     renderCodeFlows();
