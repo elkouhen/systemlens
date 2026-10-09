@@ -275,6 +275,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-copy {
   line-height: 1.5;
 }
 body.catalogue-active #microservices-panel .resource-catalogue-filters { display: grid; gap: 10px; }
+body.catalogue-active #microservices-panel .resource-catalogue-filters select { display: none; }
 body.catalogue-active #microservices-panel .resource-catalogue-results { min-width: 0; }
 body.catalogue-active #microservices-panel .resource-catalogue-table-head {
   display: grid;
