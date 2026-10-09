@@ -447,6 +447,10 @@
     }
     function architectureNodeReference(node, meta) {
       const item = referenceItem(nodeDisplayName(node), meta, "Voir", () => {
+        if (document.body.classList.contains("catalogue-active")) {
+          renderCataloguePreview(node);
+          return;
+        }
         setToolbarTab("graph");
         selectNode(node.id);
       });
@@ -455,6 +459,31 @@
         if (!event.target.closest("button, a")) item.querySelector("button")?.click();
       });
       return item;
+    }
+    function renderCataloguePreview(node) {
+      if (!resourceCataloguePreview) return;
+      const title = document.getElementById("resource-catalogue-preview-title");
+      const copy = document.getElementById("resource-catalogue-preview-copy");
+      const incoming = graphData.links.filter(link => link.target === node.id).length;
+      const outgoing = graphData.links.filter(link => link.source === node.id).length;
+      title.textContent = nodeDisplayName(node);
+      copy.replaceChildren();
+      const kind = document.createElement("span");
+      kind.className = "resource-catalogue-preview-kind";
+      kind.textContent = nodeKindLabel(node);
+      const stats = document.createElement("span");
+      stats.className = "resource-catalogue-preview-stats";
+      stats.textContent = `${incoming} entrée${incoming > 1 ? "s" : ""} · ${outgoing} sortie${outgoing > 1 ? "s" : ""}`;
+      copy.append(kind, stats);
+      const owner = node.owner || node.service || node.project_namespace;
+      resourceCataloguePreview.querySelectorAll(".resource-catalogue-preview-owner").forEach(item => item.remove());
+      if (owner) {
+        const ownerLine = document.createElement("p");
+        ownerLine.className = "resource-catalogue-preview-owner";
+        ownerLine.textContent = `Propriétaire · ${owner}`;
+        resourceCataloguePreview.append(ownerLine);
+      }
+      resourceCataloguePreview.classList.add("has-selection");
     }
     function createDetailsGroup(title, open = true) {
       const group = document.createElement("details");

@@ -240,6 +240,54 @@ body.catalogue-active #microservices-panel .resource-catalogue-section {
   gap: 16px 22px;
   align-items: start;
 }
+body.catalogue-active #microservices-panel .resource-catalogue-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 280px;
+  gap: 18px;
+  align-items: start;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-sidebar,
+body.catalogue-active #microservices-panel .resource-catalogue-preview {
+  min-height: 220px;
+  padding: 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-widget);
+}
+body.catalogue-active #microservices-panel .resource-catalogue-sidebar h3,
+body.catalogue-active #microservices-panel .resource-catalogue-preview h3 {
+  margin: 0 0 14px;
+  color: var(--ui-title);
+  font-size: 14px;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-sidebar-help,
+body.catalogue-active #microservices-panel .resource-catalogue-preview-copy {
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-filters { display: grid; gap: 10px; }
+body.catalogue-active #microservices-panel .resource-catalogue-results { min-width: 0; }
+body.catalogue-active #microservices-panel .resource-catalogue-preview-kicker {
+  color: var(--ui-accent-text);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-preview-kind,
+body.catalogue-active #microservices-panel .resource-catalogue-preview-stats {
+  display: block;
+  margin-top: 10px;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-preview-owner {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-border);
+  color: var(--ui-text);
+  font-size: 12px;
+}
 body.catalogue-active #microservices-panel .resource-catalogue-filters {
   grid-column: 1;
   display: flex;

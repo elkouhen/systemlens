@@ -1762,6 +1762,54 @@ body.catalogue-active #microservices-panel .resource-catalogue-section {
   gap: 16px 22px;
   align-items: start;
 }
+body.catalogue-active #microservices-panel .resource-catalogue-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 280px;
+  gap: 18px;
+  align-items: start;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-sidebar,
+body.catalogue-active #microservices-panel .resource-catalogue-preview {
+  min-height: 220px;
+  padding: 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-widget);
+}
+body.catalogue-active #microservices-panel .resource-catalogue-sidebar h3,
+body.catalogue-active #microservices-panel .resource-catalogue-preview h3 {
+  margin: 0 0 14px;
+  color: var(--ui-title);
+  font-size: 14px;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-sidebar-help,
+body.catalogue-active #microservices-panel .resource-catalogue-preview-copy {
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-filters { display: grid; gap: 10px; }
+body.catalogue-active #microservices-panel .resource-catalogue-results { min-width: 0; }
+body.catalogue-active #microservices-panel .resource-catalogue-preview-kicker {
+  color: var(--ui-accent-text);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-preview-kind,
+body.catalogue-active #microservices-panel .resource-catalogue-preview-stats {
+  display: block;
+  margin-top: 10px;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-preview-owner {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-border);
+  color: var(--ui-text);
+  font-size: 12px;
+}
 body.catalogue-active #microservices-panel .resource-catalogue-filters {
   grid-column: 1;
   display: flex;
@@ -1933,7 +1981,11 @@ body.catalogue-active #microservices-panel .reference-item .reference-action {
         <h2 id="microservices-title" class="references-title">Catalogue des ressources</h2>
         <p class="references-description">Filtrez les ressources par type ou microservice, puis ouvrez leur contexte dans le graphe.</p>
       </div>
-      <section class="references-section resource-catalogue-section"><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher une ressource ou un service" autocomplete="off" aria-label="Rechercher une ressource ou un service"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="other">Autres ressources</option></select></div><p id="resource-catalogue-summary" class="resource-catalogue-summary" role="status"></p><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucune ressource ne correspond à ces filtres.</p></section>
+      <div class="resource-catalogue-layout">
+        <aside class="resource-catalogue-sidebar"><h3>Types de ressources</h3><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher…" autocomplete="off" aria-label="Rechercher une ressource ou un service"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="other">Autres ressources</option></select></div><p class="resource-catalogue-sidebar-help">Sélectionnez un type ou recherchez un nom pour réduire l’inventaire.</p></aside>
+        <section class="references-section resource-catalogue-results"><p id="resource-catalogue-summary" class="resource-catalogue-summary" role="status"></p><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucune ressource ne correspond à ces filtres.</p></section>
+        <aside id="resource-catalogue-preview" class="resource-catalogue-preview"><p class="resource-catalogue-preview-kicker">Aperçu de la ressource</p><h3 id="resource-catalogue-preview-title">Aucune ressource sélectionnée</h3><p id="resource-catalogue-preview-copy">Sélectionnez une ligne dans le catalogue pour afficher son contexte, ses relations et sa source.</p></aside>
+      </div>
     </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
       <div class="indexing-issues-header">
@@ -5137,6 +5189,7 @@ body.catalogue-active #microservices-panel .reference-item .reference-action {
     const microservicesFilter = document.getElementById("microservices-filter");
     const resourceKindFilter = document.getElementById("resource-kind-filter");
     const resourceCatalogueSummary = document.getElementById("resource-catalogue-summary");
+    const resourceCataloguePreview = document.getElementById("resource-catalogue-preview");
     const microservicesTitle = document.getElementById("microservices-title");
     const microserviceVisibilityList = document.getElementById("microservice-visibility-list");
     const microserviceVisibilityReset = document.getElementById("microservice-visibility-reset");
@@ -6457,6 +6510,10 @@ body.catalogue-active #microservices-panel .reference-item .reference-action {
     }
     function architectureNodeReference(node, meta) {
       const item = referenceItem(nodeDisplayName(node), meta, "Voir", () => {
+        if (document.body.classList.contains("catalogue-active")) {
+          renderCataloguePreview(node);
+          return;
+        }
         setToolbarTab("graph");
         selectNode(node.id);
       });
@@ -6465,6 +6522,31 @@ body.catalogue-active #microservices-panel .reference-item .reference-action {
         if (!event.target.closest("button, a")) item.querySelector("button")?.click();
       });
       return item;
+    }
+    function renderCataloguePreview(node) {
+      if (!resourceCataloguePreview) return;
+      const title = document.getElementById("resource-catalogue-preview-title");
+      const copy = document.getElementById("resource-catalogue-preview-copy");
+      const incoming = graphData.links.filter(link => link.target === node.id).length;
+      const outgoing = graphData.links.filter(link => link.source === node.id).length;
+      title.textContent = nodeDisplayName(node);
+      copy.replaceChildren();
+      const kind = document.createElement("span");
+      kind.className = "resource-catalogue-preview-kind";
+      kind.textContent = nodeKindLabel(node);
+      const stats = document.createElement("span");
+      stats.className = "resource-catalogue-preview-stats";
+      stats.textContent = `${incoming} entrée${incoming > 1 ? "s" : ""} · ${outgoing} sortie${outgoing > 1 ? "s" : ""}`;
+      copy.append(kind, stats);
+      const owner = node.owner || node.service || node.project_namespace;
+      resourceCataloguePreview.querySelectorAll(".resource-catalogue-preview-owner").forEach(item => item.remove());
+      if (owner) {
+        const ownerLine = document.createElement("p");
+        ownerLine.className = "resource-catalogue-preview-owner";
+        ownerLine.textContent = `Propriétaire · ${owner}`;
+        resourceCataloguePreview.append(ownerLine);
+      }
+      resourceCataloguePreview.classList.add("has-selection");
     }
     function createDetailsGroup(title, open = true) {
       const group = document.createElement("details");
