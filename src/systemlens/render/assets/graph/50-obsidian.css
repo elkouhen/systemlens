@@ -238,7 +238,7 @@ body.catalogue-active #microservices-panel {
 body.catalogue-active #microservices-panel .references-header { max-width: none; }
 body.catalogue-active #microservices-panel .resource-catalogue-layout {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 280px;
+  grid-template-columns: 200px minmax(0, 1fr) 240px;
   gap: 18px;
   align-items: start;
 }
@@ -291,7 +291,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-table-head {
   grid-column: 2;
   grid-row: 2;
   width: 100%;
-  grid-template-columns: minmax(0, 1fr) 180px 74px;
+  grid-template-columns: minmax(0, 1fr) 180px 150px;
   gap: 10px;
   padding: 0 12px 8px;
   border-bottom: 1px solid var(--ui-border);
@@ -347,7 +347,7 @@ body.catalogue-active #microservices-panel .reference-item .reference-action {
   min-width: 60px;
 }
 body.catalogue-active #microservices-panel .resource-catalogue-row {
-  grid-template-columns: minmax(0, 1fr) 180px 74px;
+  grid-template-columns: minmax(0, 1fr) 180px 150px;
   min-height: 58px;
   border-width: 0 0 1px;
   border-radius: 0;
