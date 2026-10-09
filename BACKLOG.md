@@ -83,12 +83,12 @@ until their checks pass. Task identifiers are local backlog identifiers.
 | CAT-02: Application shell and screen lifecycle | P0 | CAT-01 | In progress |
 | CAT-03: Resource catalogue projection | P0 | CAT-01 | In progress |
 | CAT-04: Category and service filters | P0 | CAT-02, CAT-03 | In progress |
-| CAT-05: Central resource table | P0 | CAT-04 | Open |
-| CAT-06: Persistent resource inspector | P0 | CAT-03, CAT-05 | Open |
+| CAT-05: Central resource table | P0 | CAT-04 | In progress |
+| CAT-06: Persistent resource inspector | P0 | CAT-03, CAT-05 | In progress |
 | CAT-07: Navigation continuity and legacy migration | P0 | CAT-02, CAT-06 | Open |
-| CAT-08: Visual fidelity and constrained layouts | P0 | CAT-04, CAT-05, CAT-06, CAT-07 | Open |
-| CAT-09: Browser regression coverage | P0 | CAT-07, CAT-08 | Open |
-| CAT-10: Generated exports and delivery evidence | P0 | CAT-09 | Open |
+| CAT-08: Visual fidelity and constrained layouts | P0 | CAT-04, CAT-05, CAT-06, CAT-07 | In progress |
+| CAT-09: Browser regression coverage | P0 | CAT-07, CAT-08 | In progress |
+| CAT-10: Generated exports and delivery evidence | P0 | CAT-09 | In progress |
 
 ### CAT-01: Define the screen and interaction contract
 

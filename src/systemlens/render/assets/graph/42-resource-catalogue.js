@@ -159,6 +159,8 @@
       microservicesEmpty.hidden = visible.length > 0;
       visible.forEach(entry => {
         const item = referenceItem(entry.method ? `${entry.method} ${entry.name}` : entry.name, entry.meta || `${resourceCatalogueKindLabels.get(entry.kind) || "Ressource"} · ${entry.service || ""}`, "Voir", () => {
+          microservicesList.querySelectorAll(".is-selected").forEach(selected => selected.classList.remove("is-selected"));
+          item.classList.add("is-selected");
           renderResourceCataloguePreview(entry);
           if (entry.node) return;
         });

@@ -1796,6 +1796,18 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-copy {
 }
 body.catalogue-active #microservices-panel .resource-catalogue-filters { display: grid; gap: 10px; }
 body.catalogue-active #microservices-panel .resource-catalogue-results { min-width: 0; }
+body.catalogue-active #microservices-panel .resource-catalogue-table-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px 74px;
+  gap: 10px;
+  padding: 0 12px 8px;
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
 body.catalogue-active #microservices-panel .resource-catalogue-preview-kicker {
   color: var(--ui-accent-text);
   font-size: 10px;
@@ -1851,6 +1863,10 @@ body.catalogue-active #microservices-panel .resource-catalogue-row {
 }
 body.catalogue-active #microservices-panel .resource-catalogue-row:hover {
   background: var(--ui-accent-soft);
+}
+body.catalogue-active #microservices-panel .resource-catalogue-row.is-selected {
+  background: var(--ui-accent-soft);
+  box-shadow: inset 3px 0 0 var(--ui-selected);
 }
 body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
   margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--ui-border);
@@ -2006,7 +2022,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       </div>
       <div class="resource-catalogue-layout">
         <aside class="resource-catalogue-sidebar"><h3>Types de ressources</h3><div id="resource-catalogue-categories" class="resource-catalogue-categories"></div><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher…" autocomplete="off" aria-label="Rechercher une ressource ou un service"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="http_route">Routes HTTP</option><option value="openapi_contract">Contrats OpenAPI</option><option value="asyncapi_contract">Contrats AsyncAPI</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="dto">DTOs</option><option value="other">Autres ressources</option></select><select id="resource-service-filter" class="reference-filter-input" aria-label="Filtrer par microservice"><option value="all">Tous les microservices</option></select></div><p class="resource-catalogue-sidebar-help">Sélectionnez un type ou recherchez un nom pour réduire l’inventaire.</p></aside>
-        <section class="references-section resource-catalogue-results"><p id="resource-catalogue-summary" class="resource-catalogue-summary" role="status"></p><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucune ressource ne correspond à ces filtres.</p></section>
+        <section class="references-section resource-catalogue-results"><p id="resource-catalogue-summary" class="resource-catalogue-summary" role="status"></p><div class="resource-catalogue-table-head" aria-hidden="true"><span>Ressource</span><span>Propriétaire / relations</span><span>Action</span></div><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucune ressource ne correspond à ces filtres.</p></section>
         <aside id="resource-catalogue-preview" class="resource-catalogue-preview"><p class="resource-catalogue-preview-kicker">Aperçu de la ressource</p><h3 id="resource-catalogue-preview-title">Aucune ressource sélectionnée</h3><p id="resource-catalogue-preview-copy">Sélectionnez une ligne dans le catalogue pour afficher son contexte, ses relations et sa source.</p></aside>
       </div>
     </div>
@@ -7533,6 +7549,8 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       microservicesEmpty.hidden = visible.length > 0;
       visible.forEach(entry => {
         const item = referenceItem(entry.method ? `${entry.method} ${entry.name}` : entry.name, entry.meta || `${resourceCatalogueKindLabels.get(entry.kind) || "Ressource"} · ${entry.service || ""}`, "Voir", () => {
+          microservicesList.querySelectorAll(".is-selected").forEach(selected => selected.classList.remove("is-selected"));
+          item.classList.add("is-selected");
           renderResourceCataloguePreview(entry);
           if (entry.node) return;
         });
