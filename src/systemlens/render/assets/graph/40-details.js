@@ -98,7 +98,7 @@
       collectionsPanel.hidden = !showingCollections;
       persistencePanel.hidden = !showingPersistence;
       flowsPanel.hidden = !showingFlows;
-      graphLegend.hidden = !graphVisible;
+      graphLegend.hidden = !showingGraph;
       if (showingFlows) flowsPanel.dispatchEvent(new Event("systemlens:flows-open"));
     }
     function renderIndexingIssues() {
