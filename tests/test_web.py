@@ -3,6 +3,7 @@ from pathlib import Path
 
 from systemlens.application.architecture_inventory import AnalysisProfile, ArchitectureInventory
 from systemlens.domain.models import ArchitectureRelation, MessageEndpoint
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
 from systemlens.delivery.web import SystemLensWebApplication
 
 
@@ -83,3 +84,41 @@ def test_web_architecture_excludes_edges_to_test_microservices(
     assert status is HTTPStatus.OK
     assert captured["services"] == {"caller-service": [endpoint]}
     assert captured["edges"] == []
+
+
+def test_web_architecture_passes_persisted_code_flows_to_renderer(
+    tmp_path: Path, monkeypatch
+) -> None:
+    endpoint = MessageEndpoint(
+        id="input", role="serve", system="rest", topic="GET /orders",
+        topic_dynamic=False, source="code", framework="spring",
+        path="src/Orders.java", start_line=4, end_line=4, snippet="",
+        module="orders",
+    )
+    flow = CodeFlow(
+        id="flow-1", module="orders", method="Orders.handle",
+        path="src/Orders.java", start_line=4, end_line=8, status="complete",
+        confidence="high", reason="codeql", steps=(
+            CodeFlowStep(0, "in", "GET /orders", endpoint.path, 4, 4, "input"),
+            CodeFlowStep(1, "out", "orders-db", endpoint.path, 8, 8),
+        ),
+    )
+    inventory = ArchitectureInventory(
+        endpoints_by_service={"orders": [endpoint]}, endpoints_by_module={},
+        findings_by_service={}, endpoints=[endpoint], findings=[], modules=[],
+        modules_by_service={}, module_dependencies=[], relations=[], diagnostics=[],
+        warnings=[], source_roots=[], profile=AnalysisProfile(), code_flows=[flow],
+    )
+    captured: dict[str, object] = {}
+    monkeypatch.setattr("systemlens.delivery.web.db_path", lambda _root: tmp_path / "findings.db")
+    (tmp_path / "findings.db").touch()
+    monkeypatch.setattr("systemlens.delivery.web.load_architecture_inventory", lambda *_args, **_kwargs: inventory)
+    monkeypatch.setattr(
+        "systemlens.delivery.web.render_graph_html",
+        lambda *_args, **kwargs: captured.update(kwargs) or "<html>",
+    )
+
+    status, _document = SystemLensWebApplication(tmp_path).document("/architecture")
+
+    assert status is HTTPStatus.OK
+    assert captured["code_flows"] == [flow]

@@ -32,6 +32,12 @@ when the extraction reaches its timeout, and commits a partial-snapshot checkpoi
 `codeql_call_graph_edge_count` records the number of persisted edges. This
 checkpoint is independent from the later flow-join cursor.
 
+CodeQL is a local executable invoked by the indexer when the configured call
+graph engine is enabled. The temporary CodeQL database is an analysis input;
+the persisted `codeql_methods` and `codeql_call_edges` tables are the durable
+SystemLens projections used by exports and flow reconstruction. Exports never
+reopen the temporary database or reparse source files.
+
 With `index --module NAME --refresh-codeql-view`, the method projection is
 refreshed only for source paths below the selected module. Existing rows for
 other modules are retained, while the call-edge graph remains global so helper

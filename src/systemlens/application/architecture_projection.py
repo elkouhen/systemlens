@@ -1,6 +1,7 @@
 """Application projection shared by CLI and web architecture exports."""
 
 from dataclasses import dataclass
+import re
 
 from systemlens.application.architecture_inventory import ArchitectureInventory, is_deployable_service
 from systemlens.domain.graph import GraphEdge, graph_edges_from_relations
@@ -21,7 +22,8 @@ class ArchitectureGraphProjection:
 def is_exportable_microservice(name: str) -> bool:
     """Exclude test fixtures and unresolved build-property service names."""
     normalized = name.casefold()
-    return "test" not in normalized and not (
+    is_test_artifact = bool(re.search(r"(?:^|[-_.])(test|tests|fixture)(?:[-_.]|$)", normalized))
+    return not is_test_artifact and not (
         name.startswith("${") and name.endswith("}")
     )
 

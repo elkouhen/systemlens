@@ -25,7 +25,11 @@ from systemlens.render.graph_json import (
     render_graph_json,
     render_graph_text,
 )
-from systemlens.render.html_export import render_graph_html
+from systemlens.render.html_export import (
+    GraphExportInput,
+    render_graph_html,
+    render_graph_html_input,
+)
 from systemlens.render.likec4_export import (
     ComplexityRanking,
     render_graph_likec4,
@@ -75,6 +79,8 @@ __all__ = [
     "render_graph_json",
     "render_graph_text",
     "render_graph_html",
+    "GraphExportInput",
+    "render_graph_html_input",
     "ComplexityRanking",
     "render_graph_likec4",
     "EndpointHit",

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from html import escape
 from pathlib import Path
 from typing import Iterable
 from zipfile import ZIP_DEFLATED, ZipFile
-from xml.sax.saxutils import escape
 
 from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
 from systemlens.domain.models import MessageEndpoint

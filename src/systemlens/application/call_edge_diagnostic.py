@@ -557,7 +557,7 @@ def list_call_edges(
         str(cast_mapping(item["caller"]).get("qualified_method", "")),
         str(cast_mapping(item["callee"]).get("qualified_method", "")),
         str(item["path"]),
-        int(item["line"]),
+        int(str(cast_mapping(item).get("line", 0))),
     ))
     return {
         "kind": "call_edges",

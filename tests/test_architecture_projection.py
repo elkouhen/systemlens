@@ -92,3 +92,44 @@ def test_graph_projection_can_hide_module_details_without_hiding_services() -> N
     assert list(projection.services_by_name) == ["orders"]
     assert projection.modules_by_service == {}
     assert projection.collections_by_service == {}
+
+
+def test_graph_projection_keeps_business_names_containing_test() -> None:
+    modules = {
+        name: _module(name, starts_application=True)
+        for name in ("attestation-service", "contest-service")
+    }
+    endpoints = {name: [_endpoint(name)] for name in modules}
+    inventory = ArchitectureInventory(
+        endpoints_by_service=endpoints,
+        endpoints_by_module=endpoints,
+        findings_by_service={},
+        endpoints=[item for values in endpoints.values() for item in values],
+        findings=[], modules=list(modules.values()), modules_by_service=modules,
+        module_dependencies=[], relations=[], diagnostics=[], warnings=[],
+        source_roots=[], profile=AnalysisProfile(),
+    )
+
+    projection = project_architecture_graph(inventory, include_module_details=True)
+
+    assert set(projection.services_by_name) == set(modules)
+
+
+def test_graph_projection_excludes_test_artifact_and_placeholder() -> None:
+    service = _module("orders", starts_application=True)
+    endpoints = {
+        "orders": [_endpoint("orders")],
+        "test-fixture": [_endpoint("test-fixture")],
+        "${SERVICE_NAME}": [_endpoint("${SERVICE_NAME}")],
+    }
+    inventory = ArchitectureInventory(
+        endpoints_by_service=endpoints, endpoints_by_module=endpoints,
+        findings_by_service={}, endpoints=[item for values in endpoints.values() for item in values],
+        findings=[], modules=[service], modules_by_service={"orders": service},
+        module_dependencies=[], relations=[], diagnostics=[], warnings=[],
+        source_roots=[], profile=AnalysisProfile(),
+    )
+
+    projection = project_architecture_graph(inventory, include_module_details=True)
+
+    assert list(projection.services_by_name) == ["orders"]

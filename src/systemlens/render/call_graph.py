@@ -12,6 +12,10 @@ from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 
 
+EdgeTransition = tuple[GraphEdge, tuple[str, ...]]
+FlowTransitions = tuple[tuple[str, tuple[EdgeTransition, ...]], ...]
+
+
 @dataclass(frozen=True)
 class _CallGraphIndex:
     endpoint_by_id: dict[str, MessageEndpoint]
@@ -26,9 +30,7 @@ class _CallGraphIndex:
     trigger_flow_ids: set[str]
     default_root_flow_ids: tuple[str, ...]
     triggers: dict[str, list[dict[str, object]]]
-    flow_transitions: dict[
-        str, tuple[tuple[str, tuple[tuple[GraphEdge, tuple[str, ...]], ...]], ...]
-    ]
+    flow_transitions: dict[str, FlowTransitions]
 
 
 def _index_call_graph_inputs(
@@ -37,16 +39,12 @@ def _index_call_graph_inputs(
     edges: list[GraphEdge],
 ) -> _CallGraphIndex:
     """Build immutable lookup indexes shared by every exported flow graph."""
-    endpoint_by_id = {
-        endpoint.id: endpoint
-        for service_endpoints in endpoints_by_service.values()
-        for endpoint in service_endpoints
-    }
-    service_by_endpoint = {
-        endpoint.id: service
-        for service, service_endpoints in endpoints_by_service.items()
-        for endpoint in service_endpoints
-    }
+    endpoint_by_id: dict[str, MessageEndpoint] = {}
+    service_by_endpoint: dict[str, str] = {}
+    for service, service_endpoints in endpoints_by_service.items():
+        for endpoint in service_endpoints:
+            endpoint_by_id[endpoint.id] = endpoint
+            service_by_endpoint[endpoint.id] = service
     service_order = {
         service: index for index, service in enumerate(sorted(endpoints_by_service))
     }
@@ -63,10 +61,11 @@ def _index_call_graph_inputs(
         for step in flow.steps:
             if not step.endpoint_id:
                 continue
-            endpoint = endpoint_by_id.get(step.endpoint_id)
-            if endpoint and endpoint.role in {"call", "produce"}:
-                output_endpoint_ids_by_flow.setdefault(flow.id, set()).add(endpoint.id)
-                output_order_by_endpoint.setdefault(endpoint.id, (flow_index, step.order))
+            output_endpoint = endpoint_by_id.get(step.endpoint_id)
+            if output_endpoint is None or output_endpoint.role not in {"call", "produce"}:
+                continue
+            output_endpoint_ids_by_flow.setdefault(flow.id, set()).add(output_endpoint.id)
+            output_order_by_endpoint.setdefault(output_endpoint.id, (flow_index, step.order))
 
     edges_by_output: dict[str, list[GraphEdge]] = {}
     seen_edges: set[tuple[str, str, str | None, str]] = set()
@@ -108,13 +107,23 @@ def _index_call_graph_inputs(
     trigger_kinds = {"http_entry", "message_entry", "cron_entry"}
     trigger_flow_ids_by_endpoint: dict[str, list[str]] = {}
     trigger_flow_ids: set[str] = set()
+    triggers: dict[str, list[dict[str, object]]] = {}
     for flow in ordered_flows:
         if not flow.steps or flow.steps[0].kind not in trigger_kinds:
             continue
         trigger_flow_ids.add(flow.id)
-        endpoint_id = flow.steps[0].endpoint_id
+        trigger = flow.steps[0]
+        endpoint_id = trigger.endpoint_id
         if endpoint_id:
             trigger_flow_ids_by_endpoint.setdefault(endpoint_id, []).append(flow.id)
+        trigger_service = service_by_endpoint.get(endpoint_id) if endpoint_id else flow.module
+        if trigger_service:
+            triggers.setdefault(trigger_service, []).append({
+                "flow_id": flow.id,
+                "kind": trigger.kind,
+                "name": trigger.name,
+                "endpoint_id": endpoint_id,
+            })
 
     incoming_flow_ids = {
         target_flow_id
@@ -126,37 +135,18 @@ def _index_call_graph_inputs(
         )
     }
     default_root_flow_ids = tuple(sorted(trigger_flow_ids - incoming_flow_ids))
-    triggers: dict[str, list[dict[str, object]]] = {}
-    for flow in ordered_flows:
-        if not flow.steps or flow.steps[0].kind not in trigger_kinds:
-            continue
-        trigger = flow.steps[0]
-        trigger_service = (
-            service_by_endpoint.get(trigger.endpoint_id)
-            if trigger.endpoint_id else flow.module
-        )
-        if trigger_service:
-            triggers.setdefault(trigger_service, []).append({
-                "flow_id": flow.id,
-                "kind": trigger.kind,
-                "name": trigger.name,
-                "endpoint_id": trigger.endpoint_id,
-            })
-
-    flow_transitions: dict[
-        str, tuple[tuple[str, tuple[tuple[GraphEdge, tuple[str, ...]], ...]], ...]
-    ] = {}
+    flow_transitions: dict[str, FlowTransitions] = {}
     for flow in ordered_flows:
         if not flow.module:
             continue
-        transitions: list[tuple[str, tuple[tuple[GraphEdge, tuple[str, ...]], ...]]] = []
+        transitions: list[tuple[str, tuple[EdgeTransition, ...]]] = []
         for endpoint_id in sorted(
             output_endpoint_ids_by_flow.get(flow.id, set()),
             key=lambda item: (output_order_by_endpoint[item], item),
         ):
             if service_by_endpoint.get(endpoint_id) != flow.module:
                 continue
-            endpoint_transitions: list[tuple[GraphEdge, tuple[str, ...]]] = []
+            endpoint_transitions: list[EdgeTransition] = []
             for edge in edges_by_output.get(endpoint_id, []):
                 target_endpoint_id = edge.to_endpoint.id if edge.to_endpoint is not None else None
                 target_module = service_by_endpoint.get(target_endpoint_id) if target_endpoint_id else None
@@ -171,10 +161,19 @@ def _index_call_graph_inputs(
         flow_transitions[flow.id] = tuple(transitions)
 
     return _CallGraphIndex(
-        endpoint_by_id, service_by_endpoint, service_order, ordered_flows, flow_by_id,
-        output_endpoint_ids_by_flow, output_order_by_endpoint, edges_by_output,
-        trigger_flow_ids_by_endpoint, trigger_flow_ids, default_root_flow_ids,
-        triggers, flow_transitions,
+        endpoint_by_id=endpoint_by_id,
+        service_by_endpoint=service_by_endpoint,
+        service_order=service_order,
+        ordered_flows=ordered_flows,
+        flow_by_id=flow_by_id,
+        output_endpoint_ids_by_flow=output_endpoint_ids_by_flow,
+        output_order_by_endpoint=output_order_by_endpoint,
+        edges_by_output=edges_by_output,
+        trigger_flow_ids_by_endpoint=trigger_flow_ids_by_endpoint,
+        trigger_flow_ids=trigger_flow_ids,
+        default_root_flow_ids=default_root_flow_ids,
+        triggers=triggers,
+        flow_transitions=flow_transitions,
     )
 
 
@@ -553,10 +552,11 @@ def _distinct_export_flows(
         tuple[tuple[str, ...], tuple[tuple[str, str, str, str], ...]],
         list[tuple[CodeFlow, dict[str, object]]],
     ] = {}
+    index = _index_call_graph_inputs(flows, endpoints_by_service, edges)
     for flow in flows:
         call_graph = _networkx_call_graph(
             flows, endpoints_by_service, edges, root_flow_ids={flow.id},
-            include_occurrences=False,
+            index=index, include_occurrences=False,
         )
         graph_nodes = cast(list[str], call_graph["nodes"])
         graph_edges = cast(list[dict[str, str]], call_graph["edges"])
@@ -715,10 +715,10 @@ def _distinct_export_flows(
 
     fusion_groups: dict[tuple[str, str, str | None], list[int]] = {}
     fusion_roles: dict[tuple[str, str, str | None], set[bool]] = {}
-    for index, item in enumerate(distinct):
+    for flow_index, item in enumerate(distinct):
         key = fragment_key(item)
         if key is not None:
-            fusion_groups.setdefault(key[:3], []).append(index)
+            fusion_groups.setdefault(key[:3], []).append(flow_index)
             fusion_roles.setdefault(key[:3], set()).add(key[3])
     fused: set[int] = set()
     fused_distinct: list[tuple[CodeFlow, dict[str, object], int]] = []

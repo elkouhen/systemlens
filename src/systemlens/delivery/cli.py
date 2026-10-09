@@ -77,6 +77,7 @@ from systemlens.discovery.build.modules import (
     discover_modules,
 )
 from systemlens.render import (
+    GraphExportInput,
     GraphResult,
     render_endpoints_json,
     render_endpoints_text,
@@ -94,6 +95,7 @@ from systemlens.render import (
     render_modules_list_json,
     render_modules_list_text,
 )
+
 from systemlens.render.debug_xlsx import write_debug_xlsx
 from systemlens.infrastructure.paths import config_path, db_path
 from systemlens.storage.sqlite import Store, StoreError
@@ -114,6 +116,27 @@ from systemlens.delivery.cli_support import (
     option_root as _option_root,
     trace_index as _trace_index,
 )
+
+
+def _render_graph_html_input(export_input: GraphExportInput) -> str:
+    """Keep the CLI renderer seam patchable while using one typed input."""
+    options = dict(export_input.options)
+    positional = [
+        options.pop("collections_by_service", None),
+        options.pop("modules_by_service", None),
+        options.pop("indexing_warnings", None),
+        options.pop("build_modules", None),
+        options.pop("module_dependencies", None),
+        options.pop("source_roots", None),
+        options.pop("findings_by_service", None),
+        options.pop("root_path", None),
+    ]
+    return render_graph_html(
+        export_input.endpoints_by_service,
+        export_input.edges,
+        *positional,
+        **options,
+    )
 
 app = typer.Typer(
     help=(
@@ -1860,20 +1883,22 @@ def _write_call_graph_progress_html(
             f"OUT [{format_methods(checkpoint.project_output_methods)}]. "
             "Ce graphe est provisoire et incomplet."
         )
-    html = render_graph_html(
+    html = _render_graph_html_input(GraphExportInput(
         projection.services_by_name,
         projection.edges,
-        projection.collections_by_service,
-        projection.modules_by_service,
-        [warning],
-        checkpoint.modules,
-        source_roots=[repo_root],
-        root_path=repo_root,
-        architecture_relations=checkpoint.relations,
-        integration_methods=checkpoint.integration_methods,
-        code_flows=checkpoint.code_flows,
-        progress_notice=warning,
-    )
+        {
+            "collections_by_service": projection.collections_by_service,
+            "modules_by_service": projection.modules_by_service,
+            "indexing_warnings": [warning],
+            "build_modules": checkpoint.modules,
+            "source_roots": [repo_root],
+            "root_path": repo_root,
+            "architecture_relations": checkpoint.relations,
+            "integration_methods": checkpoint.integration_methods,
+            "code_flows": checkpoint.code_flows,
+            "progress_notice": warning,
+        },
+    ))
     temporary = destination.with_name(f".{destination.name}.tmp")
     temporary.write_text(html, encoding="utf-8")
     temporary.replace(destination)
@@ -2185,30 +2210,31 @@ def export_microservices_cmd(
         if not configured_root_path.is_absolute():
             configured_root_path = Path.cwd() / configured_root_path
         html.write_text(
-            render_graph_html(
+            _render_graph_html_input(GraphExportInput(
                 graph_data.services_by_name,
                 graph_data.edges,
-                graph_data.collections_by_service,
-                graph_data.modules_by_service,
-                graph_data.warnings,
-                graph_data.build_modules,
-                graph_data.module_dependencies,
-                graph_data.source_roots,
-                None,
-                root_path or configured_root_path,
-                request_reply_strategy1=graph_data.strategy1,
-                strategy1=graph_data.strategy1,
-                diagnostics=graph_data.diagnostics,
-                kafka_dto_definitions=graph_data.kafka_dto_definitions,
-                openapi_contracts=graph_data.openapi_contracts,
-                    asyncapi_contracts=getattr(graph_data, "asyncapi_contracts", None),
-                graph_facts=getattr(graph_data, "graph_facts", []),
-                architecture_relations=getattr(graph_data, "architecture_relations", []),
-                code_flows=getattr(graph_data, "code_flows", []),
-                integration_methods=getattr(graph_data, "integration_methods", []),
-                codeql_call_edges=getattr(graph_data, "codeql_call_edges", []),
-                flow_descriptions=getattr(graph_data, "flow_descriptions", {}),
-            ),
+                {
+                    "collections_by_service": graph_data.collections_by_service,
+                    "modules_by_service": graph_data.modules_by_service,
+                    "indexing_warnings": graph_data.warnings,
+                    "build_modules": graph_data.build_modules,
+                    "module_dependencies": graph_data.module_dependencies,
+                    "source_roots": graph_data.source_roots,
+                    "root_path": root_path or configured_root_path,
+                    "request_reply_strategy1": graph_data.strategy1,
+                    "strategy1": graph_data.strategy1,
+                    "diagnostics": graph_data.diagnostics,
+                    "kafka_dto_definitions": graph_data.kafka_dto_definitions,
+                    "openapi_contracts": graph_data.openapi_contracts,
+                    "asyncapi_contracts": getattr(graph_data, "asyncapi_contracts", None),
+                    "graph_facts": getattr(graph_data, "graph_facts", []),
+                    "architecture_relations": getattr(graph_data, "architecture_relations", []),
+                    "code_flows": getattr(graph_data, "code_flows", []),
+                    "integration_methods": getattr(graph_data, "integration_methods", []),
+                    "codeql_call_edges": getattr(graph_data, "codeql_call_edges", []),
+                    "flow_descriptions": getattr(graph_data, "flow_descriptions", {}),
+                },
+            )),
             encoding="utf-8",
         )
     else:

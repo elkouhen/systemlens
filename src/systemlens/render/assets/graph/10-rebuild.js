@@ -785,6 +785,10 @@
       renderOverlays = () => {
         const renderGeneration = ++overlayRenderGeneration;
         const isCurrentRender = () => renderGeneration === overlayRenderGeneration;
+        if (graphState.viewMode === "empty") {
+          graphViewLifecycle.clearOverlays();
+          return;
+        }
         const callTreeActive = Boolean(graphState.selectedCodeFlowId)
           && graphState.viewMode === "call-graph";
         if (callTreeActive || !graphCallTreeOverlay?.hidden) renderCallTreeOverlay();

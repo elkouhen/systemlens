@@ -619,7 +619,18 @@
       svg.setAttribute("height", String(logicalHeight));
       svg.setAttribute("aria-hidden", "true");
       const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-      defs.innerHTML = '<marker id="graph-call-tree-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#7c3aed"></path></marker>';
+      const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+      marker.setAttribute("id", "graph-call-tree-arrow");
+      marker.setAttribute("markerWidth", "8");
+      marker.setAttribute("markerHeight", "8");
+      marker.setAttribute("refX", "7");
+      marker.setAttribute("refY", "4");
+      marker.setAttribute("orient", "auto");
+      const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      arrow.setAttribute("d", "M0,0 L8,4 L0,8 z");
+      arrow.setAttribute("fill", "#7c3aed");
+      marker.append(arrow);
+      defs.append(marker);
       svg.append(defs);
       const edgeDisplayLabel = edge => {
         const protocol = edge.kind === "kafka" ? "Kafka" : edge.kind === "rest" ? "HTTP" : edge.kind || "Appel";
@@ -1360,7 +1371,11 @@
       codeFlowStats(flow).forEach(([label, value]) => {
         const stat = document.createElement("span");
         stat.className = "code-flow-stat";
-        stat.innerHTML = `<strong>${value}</strong><small>${label}</small>`;
+        const valueElement = document.createElement("strong");
+        valueElement.textContent = value;
+        const labelElement = document.createElement("small");
+        labelElement.textContent = label;
+        stat.append(valueElement, labelElement);
         stats.append(stat);
       });
       if (path) {

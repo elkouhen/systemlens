@@ -126,112 +126,88 @@
       .map(node => node.name)
       .filter(Boolean)
       .sort((left, right) => left.localeCompare(right));
-    const persistHiddenMicroservices = () => {
-      try {
-        localStorage.setItem(hiddenMicroservicesStorageKey, JSON.stringify([...hiddenMicroservices].sort()));
-      } catch (_error) { /* optional preference */ }
-    };
-    const renderMicroserviceVisibility = () => {
-      if (!microserviceVisibilityList) return;
-      microserviceVisibilityList.replaceChildren();
-      const query = (microserviceVisibilityFilter?.value || "").trim().toLocaleLowerCase();
-      const hiddenNames = microserviceNames.filter(name => hiddenMicroservices.has(name));
-      const matchingNames = query
-        ? microserviceNames.filter(name => name.toLocaleLowerCase().includes(query))
-        : hiddenNames;
-      if (microserviceVisibilitySummary) {
-        const hiddenCount = microserviceNames.filter(name => hiddenMicroservices.has(name)).length;
-        microserviceVisibilitySummary.textContent = query
-          ? `${matchingNames.length} résultat${matchingNames.length > 1 ? "s" : ""} · ${hiddenCount} caché${hiddenCount > 1 ? "s" : ""}`
-          : hiddenCount
-            ? `${hiddenCount} microservice${hiddenCount > 1 ? "s" : ""} caché${hiddenCount > 1 ? "s" : ""}`
-            : "Aucun microservice caché";
-      }
-      if (!matchingNames.length) {
-        const empty = document.createElement("p");
-        empty.className = "microservice-visibility-empty";
-        empty.textContent = query ? "Aucun microservice correspondant." : "Utilisez la recherche pour en cacher un.";
-        microserviceVisibilityList.append(empty);
-      }
-      matchingNames.forEach(name => {
-        const label = document.createElement("label");
-        label.className = "microservice-visibility-item";
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.checked = !hiddenMicroservices.has(name);
-        input.setAttribute("aria-label", `Afficher ${name}`);
-        input.addEventListener("change", () => {
-          if (input.checked) hiddenMicroservices.delete(name);
-          else hiddenMicroservices.add(name);
-          persistHiddenMicroservices();
-          renderMicroserviceVisibility();
-          rebuildGraph();
+    function createVisibilityController({
+      names, hiddenItems, storageKey, list, filter, summary, reset,
+      itemLabel, emptyLabel, emptySearchLabel,
+    }) {
+      const persist = () => {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify([...hiddenItems].sort()));
+        } catch (_error) { /* optional preference */ }
+      };
+      const render = () => {
+        if (!list) return;
+        list.replaceChildren();
+        const query = (filter?.value || "").trim().toLocaleLowerCase();
+        const hiddenNames = names.filter(name => hiddenItems.has(name));
+        const matchingNames = query
+          ? names.filter(name => name.toLocaleLowerCase().includes(query))
+          : hiddenNames;
+        if (summary) {
+          const hiddenCount = hiddenNames.length;
+          summary.textContent = query
+            ? `${matchingNames.length} résultat${matchingNames.length > 1 ? "s" : ""} · ${hiddenCount} caché${hiddenCount > 1 ? "s" : ""}`
+            : hiddenCount
+              ? `${hiddenCount} ${itemLabel}${hiddenCount > 1 ? "s" : ""} caché${hiddenCount > 1 ? "s" : ""}`
+              : `Aucun ${itemLabel} caché`;
+        }
+        if (!matchingNames.length) {
+          const empty = document.createElement("p");
+          empty.className = "microservice-visibility-empty";
+          empty.textContent = query ? emptyLabel : emptySearchLabel;
+          list.append(empty);
+        }
+        matchingNames.forEach(name => {
+          const label = document.createElement("label");
+          label.className = "microservice-visibility-item";
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.checked = !hiddenItems.has(name);
+          input.setAttribute("aria-label", `Afficher ${name}`);
+          input.addEventListener("change", () => {
+            if (input.checked) hiddenItems.delete(name);
+            else hiddenItems.add(name);
+            persist();
+            render();
+            rebuildGraph();
+          });
+          label.append(input, document.createTextNode(name));
+          list.append(label);
         });
-        label.append(input, document.createTextNode(name));
-        microserviceVisibilityList.append(label);
+      };
+      reset?.addEventListener("click", () => {
+        hiddenItems.clear();
+        persist();
+        render();
+        rebuildGraph();
       });
-    };
-    microserviceVisibilityReset?.addEventListener("click", () => {
-      hiddenMicroservices.clear();
-      persistHiddenMicroservices();
-      renderMicroserviceVisibility();
-      rebuildGraph();
+      filter?.addEventListener("input", render);
+      render();
+    }
+    createVisibilityController({
+      names: microserviceNames,
+      hiddenItems: hiddenMicroservices,
+      storageKey: hiddenMicroservicesStorageKey,
+      list: microserviceVisibilityList,
+      filter: microserviceVisibilityFilter,
+      summary: microserviceVisibilitySummary,
+      reset: microserviceVisibilityReset,
+      itemLabel: "microservice",
+      emptyLabel: "Aucun microservice correspondant.",
+      emptySearchLabel: "Utilisez la recherche pour en cacher un.",
     });
-    microserviceVisibilityFilter?.addEventListener("input", renderMicroserviceVisibility);
-    renderMicroserviceVisibility();
-    const persistHiddenTopics = () => {
-      try {
-        localStorage.setItem(hiddenTopicsStorageKey, JSON.stringify([...hiddenTopics].sort()));
-      } catch (_error) { /* optional preference */ }
-    };
-    const renderTopicVisibility = () => {
-      if (!topicVisibilityList) return;
-      topicVisibilityList.replaceChildren();
-      const query = (topicVisibilityFilter?.value || "").trim().toLocaleLowerCase();
-      const hiddenNames = topicNames.filter(name => hiddenTopics.has(name));
-      const matchingNames = query
-        ? topicNames.filter(name => name.toLocaleLowerCase().includes(query))
-        : hiddenNames;
-      if (topicVisibilitySummary) {
-        const hiddenCount = hiddenNames.length;
-        topicVisibilitySummary.textContent = query
-          ? `${matchingNames.length} résultat${matchingNames.length > 1 ? "s" : ""} · ${hiddenCount} caché${hiddenCount > 1 ? "s" : ""}`
-          : hiddenCount
-            ? `${hiddenCount} topic${hiddenCount > 1 ? "s" : ""} caché${hiddenCount > 1 ? "s" : ""}`
-            : "Aucun topic caché";
-      }
-      if (!matchingNames.length) {
-        const empty = document.createElement("p");
-        empty.className = "microservice-visibility-empty";
-        empty.textContent = query ? "Aucun topic correspondant." : "Utilisez la recherche pour en cacher un.";
-        topicVisibilityList.append(empty);
-      }
-      matchingNames.forEach(name => {
-        const label = document.createElement("label");
-        label.className = "microservice-visibility-item";
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.checked = !hiddenTopics.has(name);
-        input.setAttribute("aria-label", `Afficher ${name}`);
-        input.addEventListener("change", () => {
-          if (input.checked) hiddenTopics.delete(name);
-          else hiddenTopics.add(name);
-          persistHiddenTopics();
-          renderTopicVisibility();
-          rebuildGraph();
-        });
-        label.append(input, document.createTextNode(name));
-        topicVisibilityList.append(label);
-      });
-    };
-    topicVisibilityReset?.addEventListener("click", () => {
-      hiddenTopics.clear();
-      persistHiddenTopics();
-      renderTopicVisibility();
-      rebuildGraph();
+    createVisibilityController({
+      names: topicNames,
+      hiddenItems: hiddenTopics,
+      storageKey: hiddenTopicsStorageKey,
+      list: topicVisibilityList,
+      filter: topicVisibilityFilter,
+      summary: topicVisibilitySummary,
+      reset: topicVisibilityReset,
+      itemLabel: "topic",
+      emptyLabel: "Aucun topic correspondant.",
+      emptySearchLabel: "Utilisez la recherche pour en cacher un.",
     });
-    topicVisibilityFilter?.addEventListener("input", renderTopicVisibility);
-    renderTopicVisibility();
     function restoreInitialNodePositions() {
       network.forEachNode(node => {
         const position = initialNodePositions.get(node);

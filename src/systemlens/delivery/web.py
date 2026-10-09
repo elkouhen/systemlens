@@ -23,8 +23,17 @@ from systemlens.application.architecture_projection import project_architecture_
 from systemlens.infrastructure.config import ConfigError, init_config, load_config
 from systemlens.indexing.service import index_repo
 from systemlens.infrastructure.paths import db_path
-from systemlens.render import render_graph_html
+from systemlens.render import GraphExportInput, render_graph_html
 from systemlens.storage.sqlite import Store, StoreError
+
+
+def _render_graph_html_input(export_input: GraphExportInput) -> str:
+    """Keep the web adapter's renderer seam patchable in functional tests."""
+    return render_graph_html(
+        export_input.endpoints_by_service,
+        export_input.edges,
+        **dict(export_input.options),
+    )
 
 Document: TypeAlias = tuple[HTTPStatus, str]
 
@@ -61,27 +70,29 @@ class SystemLensWebApplication:
         projection = project_architecture_graph(
             inventory, include_module_details=True
         )
-        document = render_graph_html(
+        document = _render_graph_html_input(GraphExportInput(
             projection.services_by_name,
             projection.edges,
-            projection.collections_by_service,
-            projection.modules_by_service,
-            inventory.warnings,
-            inventory.modules,
-            inventory.module_dependencies,
-            inventory.source_roots,
-            None,
-            self.root,
-            request_reply_strategy1=inventory.strategy1,
-            strategy1=inventory.strategy1,
-            diagnostics=inventory.diagnostics,
-            kafka_dto_definitions=inventory.kafka_dto_definitions,
-            openapi_contracts=inventory.openapi_contracts,
-            asyncapi_contracts=inventory.asyncapi_contracts,
-            architecture_relations=inventory.relations,
-            integration_methods=projection.integration_methods,
-            codeql_call_edges=inventory.codeql_call_edges,
-        )
+            {
+                "collections_by_service": projection.collections_by_service,
+                "modules_by_service": projection.modules_by_service,
+                "indexing_warnings": inventory.warnings,
+                "build_modules": inventory.modules,
+                "module_dependencies": inventory.module_dependencies,
+                "source_roots": inventory.source_roots,
+                "root_path": self.root,
+                "request_reply_strategy1": inventory.strategy1,
+                "strategy1": inventory.strategy1,
+                "diagnostics": inventory.diagnostics,
+                "kafka_dto_definitions": inventory.kafka_dto_definitions,
+                "openapi_contracts": inventory.openapi_contracts,
+                "asyncapi_contracts": inventory.asyncapi_contracts,
+                "architecture_relations": inventory.relations,
+                "code_flows": inventory.code_flows,
+                "integration_methods": projection.integration_methods,
+                "codeql_call_edges": inventory.codeql_call_edges,
+            },
+        ))
         return HTTPStatus.OK, document
 
     def _create_architecture_index(self) -> Document:

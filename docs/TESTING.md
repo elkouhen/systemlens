@@ -87,6 +87,12 @@ verify a distinct layout or complexity contract.
 
 ## Validation commands
 
+Pull requests use `.github/workflows/quality.yml` as the automated quality
+gate. It runs lint, type checking, the default tests, architecture checks,
+Bandit, Semgrep, coverage, and the browser acceptance suite with its pinned
+Playwright browser. A skipped local prerequisite does not count as a passing
+CI result.
+
 Run the default checks after a Python change:
 
 ```bash
@@ -107,6 +113,14 @@ Run the external-runtime tests when their prerequisites are installed:
 ```bash
 uv run pytest -m slow tests/test_codeql_inheritance.py
 SYSTEMLENS_CHROME_BIN=/path/to/chrome uv run pytest -m slow tests/test_browser_export.py
+```
+
+The reference benchmark reports indexing duration, peak memory, database size,
+and persisted fact counts for a repository with an existing SystemLens
+configuration:
+
+```bash
+uv run python scripts/benchmark_index.py /path/to/repository --json
 ```
 
 The CodeQL run requires the local CLI and its pinned Java pack. The browser run

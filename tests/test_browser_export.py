@@ -1094,6 +1094,21 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         page.locator("#flows-mode-tab").click()
         page.locator(".code-flow-item").wait_for(state="visible")
         assert page.locator("#flows-tab").get_attribute("aria-selected") == "true"
+        for overlay_id in (
+            "graph",
+            "graph-layers",
+            "graph-groups",
+            "graph-port-paths",
+            "graph-node-labels",
+            "graph-call-tree",
+            "graph-flow-tooltips",
+        ):
+            assert page.locator(f"#{overlay_id}").is_hidden(), overlay_id
+        assert page.locator(
+            "#graph-port-paths .graph-architecture-path, "
+            "#graph-port-paths .graph-port-path, "
+            "#graph-port-paths .graph-call-path"
+        ).count() == 0
 
         assert page.locator(".code-flow-step").count() == 0
         assert page.locator(".code-flow-reason").count() == 1
@@ -1156,6 +1171,13 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         trigger_badge = page.locator("#graph-call-tree .graph-node-trigger-badge")
         assert trigger_badge.count() == 1
         assert "Kafka" in trigger_badge.inner_text()
+        page.locator("#architecture-mode-tab").click()
+        page.locator("#graph").wait_for(state="visible")
+        assert page.locator("#graph-call-tree").is_hidden()
+        page.locator("#flows-mode-tab").click()
+        page.locator(".code-flow-item").wait_for(state="visible")
+        assert page.locator("#graph").is_hidden()
+        assert page.locator("#graph-port-paths .graph-architecture-path").count() == 0
         context.close()
         browser.close()
 

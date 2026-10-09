@@ -24,6 +24,9 @@ can evolve without one oversized specification.
 
 The indexing section specifies Java signature identity, inherited interface
 implementations, and declared return types used by the call-graph fallback.
+HTML delivery adapters pass a typed `GraphExportInput` snapshot to the renderer;
+the legacy `render_graph_html` argument surface remains available for
+compatibility.
 
 ## Detailed sections
 

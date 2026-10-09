@@ -6,8 +6,9 @@ import json
 import hashlib
 from base64 import b64encode
 from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import cast
+from typing import Any, cast, Mapping
 
 from systemlens.domain.graph import GraphEdge, graph_edges_from_facts
 from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
@@ -30,11 +31,29 @@ from systemlens.render._graph_view_helpers import _vscode_file_uri
 
 _ASSET_ROOT = Path(__file__).parent / "assets"
 _GRAPH_HTML_TEMPLATE = (_ASSET_ROOT / "graph.html").read_text(encoding="utf-8")
-_GRAPH_STYLE_MODULES = tuple(sorted((_ASSET_ROOT / "graph").glob("*.css")))
+_GRAPH_STYLE_FILENAMES = (
+    "00-graph.css",
+    "10-widgets.css",
+    "20-presentation.css",
+    "30-charter.css",
+    "40-ergonomics.css",
+)
+_GRAPH_STYLE_MODULES = tuple(_ASSET_ROOT / "graph" / name for name in _GRAPH_STYLE_FILENAMES)
 _GRAPH_CSS = "".join(
     path.read_text(encoding="utf-8") for path in _GRAPH_STYLE_MODULES
 )
-_GRAPH_JS_MODULES = tuple(sorted((_ASSET_ROOT / "graph").glob("*.js")))
+_GRAPH_JS_FILENAMES = (
+    "00-core.js",
+    "10-rebuild.js",
+    "20-controls.js",
+    "30-layouts.js",
+    "40-details.js",
+    "45-view-lifecycle.js",
+    "50-paths.js",
+    "55-code-flows.js",
+    "60-bootstrap.js",
+)
+_GRAPH_JS_MODULES = tuple(_ASSET_ROOT / "graph" / name for name in _GRAPH_JS_FILENAMES)
 _GRAPH_JS = "\n".join(path.read_text(encoding="utf-8") for path in _GRAPH_JS_MODULES)
 _LAYER_GEOMETRY_JS = (_ASSET_ROOT / "layer_geometry.js").read_text(encoding="utf-8")
 _ASYNCAPI_WEB_COMPONENT_JS = (
@@ -47,6 +66,24 @@ _ASYNCAPI_WEB_COMPONENT_CSS_IMPORT_PATH = (
     "data:text/css;base64,"
     + b64encode(_ASYNCAPI_WEB_COMPONENT_CSS.encode("utf-8")).decode("ascii")
 )
+
+
+@dataclass(frozen=True)
+class GraphExportInput:
+    """Complete snapshot input shared by delivery adapters and the HTML renderer."""
+
+    endpoints_by_service: dict[str, list[MessageEndpoint]]
+    edges: list[GraphEdge]
+    options: Mapping[str, Any] = field(default_factory=dict)
+
+
+def render_graph_html_input(export_input: GraphExportInput) -> str:
+    """Render one typed snapshot while retaining the legacy function surface."""
+    return render_graph_html(
+        export_input.endpoints_by_service,
+        export_input.edges,
+        **dict(export_input.options),
+    )
 
 
 def render_graph_html(

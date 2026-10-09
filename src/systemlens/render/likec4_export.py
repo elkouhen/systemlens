@@ -83,11 +83,11 @@ def _complexity_ranking(relation_counts: dict[str, int]) -> dict[str, Complexity
 
     rankings: dict[str, ComplexityRanking] = {}
     offset = 0
-    for level, group_size in zip(("low", "medium", "high"), group_sizes):
-        typed_level: Literal["low", "medium", "high"] = level  # type: ignore[assignment]
+    levels: tuple[Literal["low", "medium", "high"], ...] = ("low", "medium", "high")
+    for level, group_size in zip(levels, group_sizes):
         for rank, node_id in enumerate(ranked_nodes[offset:offset + group_size], start=offset + 1):
             rankings[node_id] = {
-                "level": typed_level,
+                "level": level,
                 "rank": rank,
                 "population": len(ranked_nodes),
                 "tier_start": offset + 1,

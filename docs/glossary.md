@@ -14,6 +14,8 @@ documentation, CLI, and generated graph exports.
 | Call graph | Persisted service-level graph derived from one selected flow, with ordered causal edges and flow metadata. |
 | Call tree | Hierarchical rendering of one call graph. A microservice may appear more than once when reached through different occurrences. |
 | Method call graph | Code-level method relationships resolved by CodeQL or an equivalent engine. Do not use this term for an architecture or flow graph. |
+| Local analysis | Analysis executed on the user's machine, including AST extraction and an optional local CodeQL invocation. |
+| Potential static flow | A source-backed path inferred from indexed methods and calls. It does not assert runtime execution. |
 | Node | Graph vertex representing a microservice or resource. Use `nœud` in user-facing French text. |
 | Edge | Relation in the graph, whether persisted or displayed. Use this term instead of `arc`. |
 | Relation | Semantic dependency or communication between two architectural elements. An edge is its graph representation. |

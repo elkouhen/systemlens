@@ -15,54 +15,11 @@
     });
     function setToolbarTab(tab, options = {}) {
       graphState.analysisContextCollapsed = true;
-      const showingGraph = tab === "graph";
-      const showingFlows = tab === "flows";
-      const showingFlowGraph = showingFlows && options.showFlowGraph === true;
-      // Architecture catalogues remain contextual views over the same graph:
-      // changing to Microservices, Topics, Routes, or another architecture
-      // sub-view must not make the graph disappear behind the toolbar.
-      const graphVisible = !showingFlows || showingFlowGraph;
-      if (showingGraph) graphState.viewMode = "architecture";
-      else if (showingFlowGraph) graphState.viewMode = "call-graph";
-      else if (showingFlows) graphState.viewMode = "empty";
-      // The graph canvas and its overlays are fixed-position siblings of the
-      // toolbar panels, so hiding graphPanel alone does not hide the rendered
-      // architecture behind the Flux de code list.
-      [
-        graphCanvas,
-        document.getElementById("graph-layers"),
-        document.getElementById("graph-groups"),
-        document.getElementById("graph-port-paths"),
-        document.getElementById("graph-node-labels"),
-        document.getElementById("graph-flow-tooltips"),
-      ].forEach(element => { if (element) element.hidden = !graphVisible; });
-      if (!graphVisible && graphFlowStatus) graphFlowStatus.hidden = true;
+      const { showingGraph, showingFlows, graphVisible, resetView } = graphViewLifecycle.activate(tab, options);
       // The two navigation surfaces have different meanings: Graphe is the
       // static architecture view, while Flux de code only becomes a graph
       // after the user explicitly selects a flow from its list.
-      if ((tab === "graph" || tab === "flows") && !showingFlowGraph) {
-        graphState.selectedId = null;
-        graphState.selectedClusterKey = null;
-        graphState.relatedNodes = null;
-        graphState.relatedEdges = null;
-        graphState.dependencyFocusOnly = false;
-        graphState.analysisPortEndpointId = null;
-        graphState.selectedCodeFlowId = null;
-        graphState.callGraphDisplayMode = "network";
-        graphState.selectedCallGraphEdgeKey = null;
-        graphState.pathMicroserviceOrder = new Map();
-        graphState.codeFlowTreeCoordinates = new Map();
-        graphState.relatedLocalPortLinks = new Set();
-        graphState.codeFlowRootNodeId = null;
-        dependencyFocusOnly.checked = false;
-        dependencyAnalysisControls.disabled = true;
-        dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
-        dependencyFocusOnly.disabled = true;
-        graphState.codeFlowTrigger = null;
-        graphState.viewMode = tab === "graph" ? "architecture" : "empty";
-        delete graphCanvas.dataset.selectedCodeFlow;
-        delete graphCanvas.dataset.selectedCallGraphArc;
-        delete graphCanvas.dataset.flowFocusRatio;
+      if (resetView) {
         // The Flux de code panel is hidden behind the toolbar and does not
         // need a graph rebuild. Rebuild only when returning to Graphe, after
         // the static view has become visible again.

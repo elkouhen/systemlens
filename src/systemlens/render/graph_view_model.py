@@ -796,7 +796,9 @@ def build_graph_view_model(
         for endpoint in grouped_endpoints:
             dynamic_kafka_nodes[endpoint.id] = node_id
         if static_node is not None:
-            static_node.setdefault("dynamic_endpoint_ids", []).extend(
+            dynamic_endpoint_ids = static_node.setdefault("dynamic_endpoint_ids", [])
+            assert isinstance(dynamic_endpoint_ids, list)
+            dynamic_endpoint_ids.extend(
                 endpoint.id for endpoint in grouped_endpoints
             )
             continue

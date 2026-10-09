@@ -6,7 +6,8 @@ import os
 from functools import lru_cache
 from pathlib import Path
 import re
-from xml.etree.ElementTree import Element
+# Element is used only for annotations; parsing is performed by defusedxml below.
+from xml.etree.ElementTree import Element  # nosec B405
 
 from defusedxml import ElementTree as ET
 

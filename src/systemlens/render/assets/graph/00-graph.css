@@ -16,6 +16,7 @@
     * { box-sizing: border-box; }
     body { margin: 0; overflow: hidden; }
     #graph { background: #f8fafc; touch-action: none; }
+    #graph[hidden], #graph-layers[hidden], #graph-groups[hidden], #graph-port-paths[hidden], #graph-node-labels[hidden], #graph-call-tree[hidden], #graph-flow-tooltips[hidden] { display: none !important; }
     /* Keep Sigma's canvas in a dedicated background layer. The workspace
        controls must remain above it, regardless of DOM order. */
     /* Sigma and every HTML overlay must share the same containing rectangle.

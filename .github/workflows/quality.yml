@@ -1,0 +1,38 @@
+name: Quality gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --group dev --frozen
+      - run: uv run ruff check src tests
+      - run: uv run mypy
+      - run: uv run pytest
+      - run: uv run pytest tests/test_architecture_rules.py -q
+      - run: uv run bandit -r src -s B101,B404,B603,B105
+      - run: uv run semgrep scan --metrics off --config .semgrep.yml src
+      - run: uv run coverage run -m pytest
+      - run: uv run coverage report
+
+  browser-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --group dev --frozen
+      - run: uv run playwright install --with-deps chromium
+      - run: uv run pytest -m slow tests/test_browser_export.py

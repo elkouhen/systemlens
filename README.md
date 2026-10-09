@@ -7,7 +7,9 @@ SystemLens indexes REST integrations, Topics, Data resources, Maven/Gradle proje
 contracts, and derived architecture relations in a local
 SQLite database. It gives analysts, developers, and architects dependencies,
 impact paths, and unresolved facts before they change or review a system.
-Source code is neither sent to a service nor analysed by an external engine.
+Source code stays on the user's machine. AST extraction runs in SystemLens,
+and CodeQL may run locally for interprocedural method-call analysis; neither
+path sends source code to a hosted analysis service.
 
 **Start here:** install SystemLens, initialise the repository, run an index,
 then inspect the result through the CLI or the HTML export.
