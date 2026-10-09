@@ -76,6 +76,7 @@ def test_resource_catalogue_updates_docked_preview() -> None:
         assert page.locator("#microservices-panel").is_visible()
         page.locator("#microservices-list .resource-catalogue-inspect").first.click()
         assert page.locator("#inspector-modal").is_visible()
+        assert page.locator("#inspector-body").get_by_text("Relations", exact=True).is_visible()
         page.locator("#inspector-close").click()
         context.close()
         browser.close()

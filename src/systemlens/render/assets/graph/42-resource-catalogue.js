@@ -193,6 +193,7 @@
           inspect.title = "Ouvrir les détails d’introspection";
           inspect.addEventListener("click", event => {
             event.stopPropagation();
+            selectNode(inspectTarget.id, false, false);
             openArchitectureNodeInspector(inspectTarget, { reset: true });
           });
           actionGroup.append(inspect);
