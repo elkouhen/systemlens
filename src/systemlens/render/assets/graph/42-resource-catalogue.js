@@ -195,6 +195,7 @@
             event.stopPropagation();
             selectNode(inspectTarget.id, false, false);
             openArchitectureNodeInspector(inspectTarget, { reset: true });
+            hideInlineDetailsAfterModal();
           });
           actionGroup.append(inspect);
         }
