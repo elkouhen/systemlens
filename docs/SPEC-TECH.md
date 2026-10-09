@@ -28,6 +28,13 @@ HTML delivery adapters pass a typed `GraphExportInput` snapshot to the renderer;
 the legacy `render_graph_html` argument surface remains available for
 compatibility.
 
+The HTML resource catalogue is a projection of that persisted snapshot. Its
+browser module builds stable entries for graph resources, HTTP routes, indexed
+contracts, DTOs and persistence descriptions. It does not parse source files,
+guess owners, or create facts that are absent from the snapshot. Filtering is a
+view operation over the projection and keeps source evidence attached to each
+entry.
+
 ## Detailed sections
 
 - [Architecture](spec-tech/architecture.md)

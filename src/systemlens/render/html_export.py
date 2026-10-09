@@ -49,6 +49,7 @@ _GRAPH_JS_FILENAMES = (
     "20-controls.js",
     "30-layouts.js",
     "40-details.js",
+    "42-resource-catalogue.js",
     "45-view-lifecycle.js",
     "50-paths.js",
     "55-code-flows.js",

@@ -55,7 +55,7 @@ def test_service_inspector_shows_persisted_jpa_entity() -> None:
 
 
 @pytest.mark.slow
-def test_architecture_catalogue_opens_node_inspection_modal() -> None:
+def test_resource_catalogue_updates_docked_preview() -> None:
     document = _current_simple_dataset_document()
     with sync_playwright() as playwright:
         try:
@@ -68,15 +68,34 @@ def test_architecture_catalogue_opens_node_inspection_modal() -> None:
         page.set_content(document, wait_until="load")
         page.locator("#microservices-tab").click()
         page.locator("#microservices-list .reference-title").filter(has_text="order-service").click()
-        assert page.locator("#inspector-modal").is_visible()
-        assert page.locator("#inspector-title").inner_text().startswith("Microservice ·")
-        assert page.locator("#inspector-body .architecture-node-inspector").is_visible()
-        relation = page.locator("#inspector-body .architecture-node-inspector [data-model-node-id]").first
-        assert relation.is_visible()
-        relation.click()
-        assert page.locator("#inspector-title").inner_text().startswith(("Topic ·", "Collection ·", "Microservice ·"))
-        page.locator("#inspector-back").click()
-        assert page.locator("#inspector-title").inner_text().startswith("Microservice ·")
+        assert page.locator("#inspector-modal").is_hidden()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "order-service"
+        assert page.locator("#resource-catalogue-preview").get_by_text("Microservice", exact=True).is_visible()
+        assert page.locator("#microservices-panel").is_visible()
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_resource_catalogue_filters_routes_and_services() -> None:
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1200, "height": 800})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator("#microservices-tab").click()
+        assert page.locator("#resource-catalogue-categories button").count() == 10
+        assert page.locator("#microservices-list .reference-item").count() > 0
+        page.locator("#resource-kind-filter").select_option("kafka_topic")
+        topic_count = page.locator("#microservices-list .reference-item").count()
+        assert topic_count > 0
+        page.locator("#microservices-filter").fill("topic")
+        assert page.locator("#microservices-list .reference-item").count() <= topic_count
         context.close()
         browser.close()
 
@@ -124,8 +143,7 @@ def test_microservice_called_route_opens_target_route_inspector() -> None:
         page = context.new_page()
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
-        page.locator("#microservices-tab").click()
-        page.locator("#microservices-list .reference-title").filter(has_text="order-service").click()
+        page.locator(".graph-node-card-label").filter(has_text="order-service").click(modifiers=["Shift"])
         called_routes = page.locator(
             "#inspector-body .architecture-node-inspector "
             "[data-inspector-kind='route'][data-inspector-route='POST /api/reservations']"

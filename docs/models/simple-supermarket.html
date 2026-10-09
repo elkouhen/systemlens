@@ -1756,12 +1756,6 @@ body.catalogue-active #microservices-panel {
   background: var(--ui-surface, #101823);
 }
 body.catalogue-active #microservices-panel .references-header { max-width: none; }
-body.catalogue-active #microservices-panel .resource-catalogue-section {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 16px 22px;
-  align-items: start;
-}
 body.catalogue-active #microservices-panel .resource-catalogue-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr) 280px;
@@ -1782,6 +1776,18 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview h3 {
   color: var(--ui-title);
   font-size: 14px;
 }
+body.catalogue-active .resource-catalogue-categories { display: grid; gap: 4px; margin-bottom: 16px; }
+body.catalogue-active .resource-catalogue-category {
+  display: flex; justify-content: space-between; align-items: center;
+  width: 100%; min-height: 30px; padding: 0 9px; border: 1px solid transparent;
+  border-radius: 7px; color: var(--ui-text); background: transparent; text-align: left;
+  font-size: 12px;
+}
+body.catalogue-active .resource-catalogue-category:hover,
+body.catalogue-active .resource-catalogue-category:focus-visible {
+  border-color: var(--ui-accent-border); color: var(--ui-accent-text); background: var(--ui-accent-soft);
+}
+body.catalogue-active .resource-catalogue-category small { color: var(--ui-muted); }
 body.catalogue-active #microservices-panel .resource-catalogue-sidebar-help,
 body.catalogue-active #microservices-panel .resource-catalogue-preview-copy {
   color: var(--ui-muted);
@@ -1810,17 +1816,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-owner {
   color: var(--ui-text);
   font-size: 12px;
 }
-body.catalogue-active #microservices-panel .resource-catalogue-filters {
-  grid-column: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0;
-  padding: 16px;
-  border: 1px solid var(--ui-border);
-  border-radius: 10px;
-  background: var(--ui-widget);
-}
 body.catalogue-active #microservices-panel .resource-catalogue-summary {
   grid-column: 2;
   grid-row: 1;
@@ -1837,7 +1832,7 @@ body.catalogue-active #microservices-panel .references-empty {
 }
 body.catalogue-active #microservices-panel .references-list {
   max-height: calc(100vh - 360px);
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: 1fr;
 }
 body.catalogue-active #microservices-panel .reference-item {
   min-height: 76px;
@@ -1845,6 +1840,34 @@ body.catalogue-active #microservices-panel .reference-item {
 }
 body.catalogue-active #microservices-panel .reference-item .reference-action {
   min-width: 60px;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-row {
+  grid-template-columns: minmax(0, 1fr) 74px;
+  min-height: 58px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-row:hover {
+  background: var(--ui-accent-soft);
+}
+body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--ui-border);
+  color: var(--ui-muted); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 980px) {
+  body.catalogue-active #microservices-panel .resource-catalogue-layout { grid-template-columns: 190px minmax(0, 1fr); }
+  body.catalogue-active #microservices-panel .resource-catalogue-preview { grid-column: 1 / -1; min-height: 140px; }
+}
+@media (max-width: 700px) {
+  body.catalogue-active .toolbar { padding: 12px; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout { grid-template-columns: 1fr; }
+  body.catalogue-active #microservices-panel .resource-catalogue-sidebar,
+  body.catalogue-active #microservices-panel .resource-catalogue-results,
+  body.catalogue-active #microservices-panel .resource-catalogue-preview { grid-column: 1; }
+  body.catalogue-active #microservices-panel .references-list { grid-template-columns: 1fr; max-height: 45vh; }
 }
 </style>
 </head>
@@ -1982,7 +2005,7 @@ body.catalogue-active #microservices-panel .reference-item .reference-action {
         <p class="references-description">Filtrez les ressources par type ou microservice, puis ouvrez leur contexte dans le graphe.</p>
       </div>
       <div class="resource-catalogue-layout">
-        <aside class="resource-catalogue-sidebar"><h3>Types de ressources</h3><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher…" autocomplete="off" aria-label="Rechercher une ressource ou un service"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="other">Autres ressources</option></select></div><p class="resource-catalogue-sidebar-help">Sélectionnez un type ou recherchez un nom pour réduire l’inventaire.</p></aside>
+        <aside class="resource-catalogue-sidebar"><h3>Types de ressources</h3><div id="resource-catalogue-categories" class="resource-catalogue-categories"></div><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher…" autocomplete="off" aria-label="Rechercher une ressource ou un service"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="http_route">Routes HTTP</option><option value="openapi_contract">Contrats OpenAPI</option><option value="asyncapi_contract">Contrats AsyncAPI</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="dto">DTOs</option><option value="other">Autres ressources</option></select><select id="resource-service-filter" class="reference-filter-input" aria-label="Filtrer par microservice"><option value="all">Tous les microservices</option></select></div><p class="resource-catalogue-sidebar-help">Sélectionnez un type ou recherchez un nom pour réduire l’inventaire.</p></aside>
         <section class="references-section resource-catalogue-results"><p id="resource-catalogue-summary" class="resource-catalogue-summary" role="status"></p><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucune ressource ne correspond à ces filtres.</p></section>
         <aside id="resource-catalogue-preview" class="resource-catalogue-preview"><p class="resource-catalogue-preview-kicker">Aperçu de la ressource</p><h3 id="resource-catalogue-preview-title">Aucune ressource sélectionnée</h3><p id="resource-catalogue-preview-copy">Sélectionnez une ligne dans le catalogue pour afficher son contexte, ses relations et sa source.</p></aside>
       </div>
@@ -5189,7 +5212,6 @@ body.catalogue-active #microservices-panel .reference-item .reference-action {
     const microservicesFilter = document.getElementById("microservices-filter");
     const resourceKindFilter = document.getElementById("resource-kind-filter");
     const resourceCatalogueSummary = document.getElementById("resource-catalogue-summary");
-    const resourceCataloguePreview = document.getElementById("resource-catalogue-preview");
     const microservicesTitle = document.getElementById("microservices-title");
     const microserviceVisibilityList = document.getElementById("microservice-visibility-list");
     const microserviceVisibilityReset = document.getElementById("microservice-visibility-reset");
@@ -7349,6 +7371,180 @@ body.catalogue-active #microservices-panel .reference-item .reference-action {
       ));
       appendDtoInspectorSection("Consommateurs non résolus", unresolvedConsumers);
     }
+
+// Ordered source module: 42-resource-catalogue.js
+    const resourceCatalogueCategories = document.getElementById("resource-catalogue-categories");
+    const resourceServiceFilter = document.getElementById("resource-service-filter");
+    const resourceCatalogueKindLabels = new Map([
+      ["all", "Toutes"],
+      ["microservice", "Microservices"],
+      ["http_route", "Routes HTTP"],
+      ["openapi_contract", "Contrats OpenAPI"],
+      ["asyncapi_contract", "Contrats AsyncAPI"],
+      ["kafka_topic", "Topics"],
+      ["mongodb_collection", "Collections"],
+      ["jpa_entity", "Entités JPA"],
+      ["dto", "DTOs"],
+      ["other", "Autres"],
+    ]);
+    let resourceCatalogueEntries = [];
+    function resourceCatalogueOwner(entry) {
+      return entry.service || entry.owner || "";
+    }
+    function buildResourceCatalogueEntries() {
+      const entries = [];
+      graphData.nodes.forEach(node => {
+        const base = {
+          id: node.id,
+          kind: node.kind,
+          name: nodeDisplayName(node),
+          service: node.kind === "microservice" ? node.name : node.owner || node.service || "",
+          node,
+          inspect: () => architectureNodeReference(node, "Voir"),
+        };
+        entries.push(base);
+        if (node.kind !== "microservice") return;
+        (node.resources || []).forEach(resource => {
+          const match = String(resource).match(/^(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+(.+)$/);
+          if (!match) return;
+          entries.push({
+            id: `route:${node.name}:${match[1]}:${match[2]}`,
+            kind: "http_route",
+            name: match[2],
+            service: node.name,
+            method: match[1],
+            source: node.openapi_files?.[0],
+            meta: `${node.name} · route exposée`,
+            ownerNode: node,
+          });
+        });
+        (node.http_routes || []).forEach(route => entries.push({
+          id: `route:${node.name}:${route.method || ""}:${route.route || route.path || ""}`,
+          kind: "http_route",
+          name: route.route || route.path || "Route HTTP",
+          service: node.name,
+          method: route.method || "HTTP",
+          source: route.location || route.path,
+          meta: `${node.name} · ${route.consumers?.length || route.callers?.length || 0} client(s)`,
+          ownerNode: node,
+        }));
+        (node.openapi_contracts || []).forEach(contract => entries.push({
+          id: `openapi:${node.name}:${contract.path}`,
+          kind: "openapi_contract",
+          name: contract.path,
+          service: node.name,
+          source: contract.path,
+          meta: `${node.name} · ${contract.resources?.length || 0} ressource(s)`,
+          ownerNode: node,
+        }));
+        (node.asyncapi_contracts || []).forEach(contract => entries.push({
+          id: `asyncapi:${node.name}:${contract.path}`,
+          kind: "asyncapi_contract",
+          name: contract.path,
+          service: node.name,
+          source: contract.path,
+          meta: `${node.name} · contrat de messages`,
+          ownerNode: node,
+        }));
+      });
+      (graphData.resource_descriptions || []).forEach(item => {
+        const kind = item.kind === "mongo_persistence_class" ? "other" : item.kind;
+        entries.push({
+          id: item.id || `${kind}:${item.qualified_name || item.name}`,
+          kind,
+          name: item.name || item.qualified_name || "Ressource",
+          service: item.owner || item.service || "",
+          source: item.source?.path,
+          meta: `${item.owner || item.service || ""} · ${item.attributes?.length || 0} champ(s)`,
+          description: item.qualified_name,
+        });
+      });
+      (graphData.kafka_dtos || []).forEach(dto => entries.push({
+        id: `dto:${dto.id || dto.name}`,
+        kind: "dto",
+        name: dto.name || dtoLabel(dto),
+        service: dto.service || dto.owner || "",
+        meta: `${dto.fields?.length || 0} champ(s) · ${dto.topics?.length || 0} topic(s)`,
+      }));
+      const seen = new Set();
+      return entries.filter(entry => {
+        if (seen.has(entry.id)) return false;
+        seen.add(entry.id);
+        return true;
+      }).sort((left, right) => left.name.localeCompare(right.name));
+    }
+    function resourceCatalogueEntryMatches(entry, kind, query, service) {
+      const kindMatch = kind === "all" || (kind === "kafka_topic"
+        ? ["kafka_topic", "message_channel"].includes(entry.kind)
+        : kind === "other" ? !resourceCatalogueKindLabels.has(entry.kind) : entry.kind === kind);
+      const serviceMatch = service === "all" || resourceCatalogueOwner(entry) === service;
+      const queryMatch = !query || `${entry.name} ${entry.kind} ${entry.service} ${entry.description || ""}`.toLocaleLowerCase().includes(query);
+      return kindMatch && serviceMatch && queryMatch;
+    }
+    function renderResourceCatalogueControls() {
+      if (!resourceCatalogueCategories || !resourceServiceFilter) return;
+      resourceCatalogueCategories.replaceChildren();
+      resourceCatalogueEntries = buildResourceCatalogueEntries();
+      const counts = new Map();
+      resourceCatalogueEntries.forEach(entry => counts.set(entry.kind, (counts.get(entry.kind) || 0) + 1));
+      ["all", "microservice", "http_route", "openapi_contract", "asyncapi_contract", "kafka_topic", "mongodb_collection", "jpa_entity", "dto", "other"].forEach(kind => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "resource-catalogue-category";
+        button.dataset.kind = kind;
+        button.textContent = resourceCatalogueKindLabels.get(kind);
+        const count = document.createElement("small");
+        count.textContent = kind === "all" ? resourceCatalogueEntries.length : counts.get(kind) || 0;
+        button.append(count);
+        button.addEventListener("click", () => {
+          resourceKindFilter.value = kind;
+          renderResourceCatalogue();
+        });
+        resourceCatalogueCategories.append(button);
+      });
+      const services = [...new Set(resourceCatalogueEntries.map(resourceCatalogueOwner).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      resourceServiceFilter.replaceChildren(new Option("Tous les microservices", "all"), ...services.map(service => new Option(service, service)));
+    }
+    function renderResourceCataloguePreview(entry) {
+      if (!resourceCataloguePreview) return;
+      const title = document.getElementById("resource-catalogue-preview-title");
+      const copy = document.getElementById("resource-catalogue-preview-copy");
+      const incoming = entry.node ? graphData.links.filter(link => link.target === entry.node.id).length : 0;
+      const outgoing = entry.node ? graphData.links.filter(link => link.source === entry.node.id).length : 0;
+      title.textContent = entry.name;
+      copy.replaceChildren();
+      const kind = document.createElement("span"); kind.className = "resource-catalogue-preview-kind"; kind.textContent = nodeKindLabel(entry.node || { kind: entry.kind });
+      const stats = document.createElement("span"); stats.className = "resource-catalogue-preview-stats"; stats.textContent = entry.meta || `${incoming} entrée(s) · ${outgoing} sortie(s)`;
+      copy.append(kind, stats);
+      resourceCataloguePreview.querySelectorAll(".resource-catalogue-preview-owner, .resource-catalogue-preview-source").forEach(item => item.remove());
+      if (resourceCatalogueOwner(entry)) { const owner = document.createElement("p"); owner.className = "resource-catalogue-preview-owner"; owner.textContent = `Propriétaire · ${resourceCatalogueOwner(entry)}`; resourceCataloguePreview.append(owner); }
+      if (entry.source) { const source = document.createElement("p"); source.className = "resource-catalogue-preview-source"; source.textContent = `Source · ${entry.source}`; resourceCataloguePreview.append(source); }
+      resourceCataloguePreview.classList.add("has-selection");
+    }
+    function renderResourceCatalogue() {
+      microservicesList.replaceChildren();
+      if (!resourceCatalogueEntries.length) renderResourceCatalogueControls();
+      const query = microservicesFilter.value.trim().toLocaleLowerCase();
+      const kind = resourceKindFilter?.value || "all";
+      const service = resourceServiceFilter?.value || "all";
+      const visible = resourceCatalogueEntries.filter(entry => resourceCatalogueEntryMatches(entry, kind, query, service));
+      microservicesTitle.textContent = `Catalogue des ressources (${visible.length}/${resourceCatalogueEntries.length})`;
+      if (resourceCatalogueSummary) resourceCatalogueSummary.textContent = `${visible.length} ressource${visible.length > 1 ? "s" : ""} affichée${visible.length > 1 ? "s" : "e"}`;
+      microservicesEmpty.hidden = visible.length > 0;
+      visible.forEach(entry => {
+        const item = referenceItem(entry.method ? `${entry.method} ${entry.name}` : entry.name, entry.meta || `${resourceCatalogueKindLabels.get(entry.kind) || "Ressource"} · ${entry.service || ""}`, "Voir", () => {
+          renderResourceCataloguePreview(entry);
+          if (entry.node) return;
+        });
+        item.classList.add("architecture-resource-reference", "resource-catalogue-row");
+        item.addEventListener("click", event => { if (!event.target.closest("button, a")) item.querySelector("button")?.click(); });
+        microservicesList.append(item);
+      });
+    }
+    resourceKindFilter?.addEventListener("change", renderResourceCatalogue);
+    resourceServiceFilter?.addEventListener("change", renderResourceCatalogue);
+    microservicesFilter.addEventListener("input", renderResourceCatalogue);
+    renderResourceCatalogueControls();
 
 // Ordered source module: 45-view-lifecycle.js
 // Owns the boundary between the architecture projection and the flow views.
@@ -10526,12 +10722,12 @@ const graphViewLifecycle = (() => {
     });
     jpaReferencesFilter.addEventListener("input", renderReferences);
     mongoClassReferencesFilter.addEventListener("input", renderReferences);
-    microservicesFilter.addEventListener("input", renderMicroservices);
-    resourceKindFilter?.addEventListener("change", renderMicroservices);
+    microservicesFilter.addEventListener("input", renderResourceCatalogue);
+    resourceKindFilter?.addEventListener("change", renderResourceCatalogue);
     collectionsFilter.addEventListener("input", renderCollections);
     renderIndexingIssues();
     renderReferences();
-    renderMicroservices();
+    renderResourceCatalogue();
     renderTopics();
     renderCollections();
     restoreState();

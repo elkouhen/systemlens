@@ -257,12 +257,12 @@
     });
     jpaReferencesFilter.addEventListener("input", renderReferences);
     mongoClassReferencesFilter.addEventListener("input", renderReferences);
-    microservicesFilter.addEventListener("input", renderMicroservices);
-    resourceKindFilter?.addEventListener("change", renderMicroservices);
+    microservicesFilter.addEventListener("input", renderResourceCatalogue);
+    resourceKindFilter?.addEventListener("change", renderResourceCatalogue);
     collectionsFilter.addEventListener("input", renderCollections);
     renderIndexingIssues();
     renderReferences();
-    renderMicroservices();
+    renderResourceCatalogue();
     renderTopics();
     renderCollections();
     restoreState();

@@ -798,3 +798,22 @@ fallback edges at possible dispatch and low flow confidence.
 **Consequences:** Sibling implementations no longer enter one concrete flow,
 while base-typed fields retain explicit alternatives. Runtime bean selection,
 generic substitution that cannot be proven, and reflection remain unresolved.
+
+## ADR-44: The resource catalogue is a snapshot projection
+
+**Status:** Accepted.
+
+**Context:** The HTML export needs one browsing surface for resources that are
+represented by graph nodes and resources that remain attached to service
+metadata, such as HTTP routes and contracts.
+
+**Decision:** Build the resource catalogue from the persisted architecture
+snapshot during export. Give each entry a stable identity, evidence reference,
+kind and association metadata. Keep the catalogue filters and docked inspector
+in the browser layer. Do not re-parse source files, infer owners or create
+graph nodes for resources that have no persisted graph node.
+
+**Consequences:** The catalogue remains deterministic and offline, but it can
+only show resources present in the snapshot. Extractor changes are required
+when a missing resource is a data-quality problem. Existing graph and modal
+inspection paths remain available outside the catalogue workspace.

@@ -234,12 +234,6 @@ body.catalogue-active #microservices-panel {
   background: var(--ui-surface, #101823);
 }
 body.catalogue-active #microservices-panel .references-header { max-width: none; }
-body.catalogue-active #microservices-panel .resource-catalogue-section {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 16px 22px;
-  align-items: start;
-}
 body.catalogue-active #microservices-panel .resource-catalogue-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr) 280px;
@@ -260,6 +254,18 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview h3 {
   color: var(--ui-title);
   font-size: 14px;
 }
+body.catalogue-active .resource-catalogue-categories { display: grid; gap: 4px; margin-bottom: 16px; }
+body.catalogue-active .resource-catalogue-category {
+  display: flex; justify-content: space-between; align-items: center;
+  width: 100%; min-height: 30px; padding: 0 9px; border: 1px solid transparent;
+  border-radius: 7px; color: var(--ui-text); background: transparent; text-align: left;
+  font-size: 12px;
+}
+body.catalogue-active .resource-catalogue-category:hover,
+body.catalogue-active .resource-catalogue-category:focus-visible {
+  border-color: var(--ui-accent-border); color: var(--ui-accent-text); background: var(--ui-accent-soft);
+}
+body.catalogue-active .resource-catalogue-category small { color: var(--ui-muted); }
 body.catalogue-active #microservices-panel .resource-catalogue-sidebar-help,
 body.catalogue-active #microservices-panel .resource-catalogue-preview-copy {
   color: var(--ui-muted);
@@ -288,17 +294,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-owner {
   color: var(--ui-text);
   font-size: 12px;
 }
-body.catalogue-active #microservices-panel .resource-catalogue-filters {
-  grid-column: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0;
-  padding: 16px;
-  border: 1px solid var(--ui-border);
-  border-radius: 10px;
-  background: var(--ui-widget);
-}
 body.catalogue-active #microservices-panel .resource-catalogue-summary {
   grid-column: 2;
   grid-row: 1;
@@ -315,7 +310,7 @@ body.catalogue-active #microservices-panel .references-empty {
 }
 body.catalogue-active #microservices-panel .references-list {
   max-height: calc(100vh - 360px);
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: 1fr;
 }
 body.catalogue-active #microservices-panel .reference-item {
   min-height: 76px;
@@ -323,4 +318,32 @@ body.catalogue-active #microservices-panel .reference-item {
 }
 body.catalogue-active #microservices-panel .reference-item .reference-action {
   min-width: 60px;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-row {
+  grid-template-columns: minmax(0, 1fr) 74px;
+  min-height: 58px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-row:hover {
+  background: var(--ui-accent-soft);
+}
+body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--ui-border);
+  color: var(--ui-muted); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 980px) {
+  body.catalogue-active #microservices-panel .resource-catalogue-layout { grid-template-columns: 190px minmax(0, 1fr); }
+  body.catalogue-active #microservices-panel .resource-catalogue-preview { grid-column: 1 / -1; min-height: 140px; }
+}
+@media (max-width: 700px) {
+  body.catalogue-active .toolbar { padding: 12px; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout { grid-template-columns: 1fr; }
+  body.catalogue-active #microservices-panel .resource-catalogue-sidebar,
+  body.catalogue-active #microservices-panel .resource-catalogue-results,
+  body.catalogue-active #microservices-panel .resource-catalogue-preview { grid-column: 1; }
+  body.catalogue-active #microservices-panel .references-list { grid-template-columns: 1fr; max-height: 45vh; }
 }

@@ -67,15 +67,16 @@ resources. Selecting a row opens the existing architecture inspector and keeps
 the graph available as the contextual view; filtering changes only the
 catalogue projection and does not alter persisted facts.
 
-Selecting a microservice, topic, or Mongo collection from its Architecture
-catalogue switches the graph to the selected node and opens the graphical
-inspector component with that node's description widget. The inspector can be
-closed without clearing the graph focus. Relations to other graph nodes are
-interactive and reopen the same inspector on the target model element, so the
-architecture catalogue supports multi-step navigation through the model. The
-inspector displays the visited path, makes previous architecture elements
-selectable in the breadcrumb, and provides a back action to return to the
-previous model element without closing the component.
+Selecting a microservice, topic, or Mongo collection from a specialized
+Architecture view switches the graph to the selected node and opens the
+graphical inspector component with that node's description widget. The
+inspector can be closed without clearing the graph focus. Selecting a resource
+from the cross-resource catalogue updates its docked inspector and keeps the
+filtered result list visible. Relations to other graph nodes remain interactive
+and reopen the same inspector on the target model element. The inspector
+displays the visited path, makes previous architecture elements selectable in
+the breadcrumb, and provides a back action to return to the previous model
+element without closing the component.
 
 Nested DTO and Mongo persistence-class inspections use the same header back
 action as all other inspector navigation; they do not add a second in-body
