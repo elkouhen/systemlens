@@ -1800,6 +1800,9 @@ body.catalogue-active #microservices-panel .resource-catalogue-filters { display
 body.catalogue-active #microservices-panel .resource-catalogue-results { min-width: 0; }
 body.catalogue-active #microservices-panel .resource-catalogue-table-head {
   display: grid;
+  grid-column: 2;
+  grid-row: 2;
+  width: 100%;
   grid-template-columns: minmax(0, 1fr) 180px 74px;
   gap: 10px;
   padding: 0 12px 8px;
@@ -1838,11 +1841,11 @@ body.catalogue-active #microservices-panel .resource-catalogue-summary {
 }
 body.catalogue-active #microservices-panel .references-list {
   grid-column: 2;
-  grid-row: 2;
+  grid-row: 3;
 }
 body.catalogue-active #microservices-panel .references-empty {
   grid-column: 2;
-  grid-row: 2;
+  grid-row: 3;
 }
 body.catalogue-active #microservices-panel .references-list {
   max-height: calc(100vh - 360px);
@@ -1856,12 +1859,19 @@ body.catalogue-active #microservices-panel .reference-item .reference-action {
   min-width: 60px;
 }
 body.catalogue-active #microservices-panel .resource-catalogue-row {
-  grid-template-columns: minmax(0, 1fr) 74px;
+  grid-template-columns: minmax(0, 1fr) 180px 74px;
   min-height: 58px;
   border-width: 0 0 1px;
   border-radius: 0;
   box-shadow: none;
   background: transparent;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-row .reference-meta {
+  min-width: 0;
+  color: var(--ui-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 body.catalogue-active #microservices-panel .resource-catalogue-row:hover {
   background: var(--ui-accent-soft);
@@ -7561,6 +7571,9 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           if (entry.node) return;
         });
         item.classList.add("architecture-resource-reference", "resource-catalogue-row");
+        const text = item.firstElementChild;
+        const meta = text?.querySelector(".reference-meta");
+        if (text && meta) item.insertBefore(meta, item.lastElementChild);
         item.addEventListener("click", event => { if (!event.target.closest("button, a")) item.querySelector("button")?.click(); });
         microservicesList.append(item);
       });

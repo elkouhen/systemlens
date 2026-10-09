@@ -165,6 +165,9 @@
           if (entry.node) return;
         });
         item.classList.add("architecture-resource-reference", "resource-catalogue-row");
+        const text = item.firstElementChild;
+        const meta = text?.querySelector(".reference-meta");
+        if (text && meta) item.insertBefore(meta, item.lastElementChild);
         item.addEventListener("click", event => { if (!event.target.closest("button, a")) item.querySelector("button")?.click(); });
         microservicesList.append(item);
       });
