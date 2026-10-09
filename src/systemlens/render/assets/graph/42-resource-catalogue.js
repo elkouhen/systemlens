@@ -103,12 +103,22 @@
         source: issue.location || issue.path,
         description: issue.message || issue.category || "Problème d’indexation",
       }));
-      const seen = new Set();
-      return entries.filter(entry => {
-        if (seen.has(entry.id)) return false;
-        seen.add(entry.id);
-        return true;
-      }).sort((left, right) => left.name.localeCompare(right.name));
+      const merged = new Map();
+      entries.forEach(entry => {
+        const identity = entry.kind === "dto"
+          ? `dto:${entry.service || ""}:${entry.name}`
+          : entry.id;
+        const previous = merged.get(identity);
+        if (!previous) {
+          merged.set(identity, entry);
+          return;
+        }
+        if ((entry.meta || "").length > (previous.meta || "").length) previous.meta = entry.meta;
+        previous.source ||= entry.source;
+        previous.dtoName ||= entry.dtoName;
+        previous.description ||= entry.description;
+      });
+      return [...merged.values()].sort((left, right) => left.name.localeCompare(right.name));
     }
     function resourceCatalogueEntryMatches(entry, kind, query, service) {
       const kindMatch = kind === "all" || (kind === "kafka_topic"
