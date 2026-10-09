@@ -66,7 +66,7 @@ def test_resource_catalogue_updates_docked_preview() -> None:
         page = context.new_page()
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
-        page.locator("#microservices-tab").click()
+        page.locator("#contracts-mode-tab").click()
         page.locator("#microservices-list .reference-title").filter(has_text="order-service").click()
         assert page.locator("#inspector-modal").is_hidden()
         assert page.locator("#resource-catalogue-preview-title").inner_text() == "order-service"
@@ -88,7 +88,7 @@ def test_resource_catalogue_filters_routes_and_services() -> None:
         page = context.new_page()
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
-        page.locator("#microservices-tab").click()
+        page.locator("#contracts-mode-tab").click()
         assert page.locator("#resource-catalogue-categories button").count() == 10
         assert page.locator("#microservices-list .reference-item").count() > 0
         page.locator("#resource-kind-filter").select_option("kafka_topic")
@@ -112,7 +112,7 @@ def test_topic_catalogue_uses_shared_resource_inspector() -> None:
         page = context.new_page()
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
-        page.locator("#microservices-tab").click()
+        page.locator("#contracts-mode-tab").click()
         page.locator("#resource-kind-filter").select_option("kafka_topic")
         topic = page.locator("#microservices-list .reference-title").first
         topic.wait_for(state="visible")
