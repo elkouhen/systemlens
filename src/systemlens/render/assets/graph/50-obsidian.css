@@ -361,6 +361,16 @@ body.catalogue-active #microservices-panel .resource-catalogue-row .reference-me
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
+body.catalogue-active #microservices-panel .resource-catalogue-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-actions .reference-action {
+  min-width: 60px;
+  white-space: nowrap;
+}
 body.catalogue-active #microservices-panel .resource-catalogue-row:hover {
   background: var(--ui-accent-soft);
 }

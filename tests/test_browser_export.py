@@ -74,6 +74,9 @@ def test_resource_catalogue_updates_docked_preview() -> None:
         assert page.locator("#resource-catalogue-preview-title").inner_text() == "order-service"
         assert page.locator("#resource-catalogue-preview").get_by_text("Microservice", exact=True).is_visible()
         assert page.locator("#microservices-panel").is_visible()
+        page.locator("#microservices-list .resource-catalogue-inspect").first.click()
+        assert page.locator("#inspector-modal").is_visible()
+        page.locator("#inspector-close").click()
         context.close()
         browser.close()
 

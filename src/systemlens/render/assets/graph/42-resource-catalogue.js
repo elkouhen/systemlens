@@ -179,6 +179,24 @@
         const text = item.firstElementChild;
         const meta = text?.querySelector(".reference-meta");
         if (text && meta) item.insertBefore(meta, item.lastElementChild);
+        const action = item.querySelector(".reference-action");
+        const actionGroup = document.createElement("div");
+        actionGroup.className = "resource-catalogue-actions";
+        action?.replaceWith(actionGroup);
+        if (action) actionGroup.append(action);
+        const inspectTarget = entry.node || entry.ownerNode;
+        if (inspectTarget) {
+          const inspect = document.createElement("button");
+          inspect.type = "button";
+          inspect.className = "reference-action resource-catalogue-inspect";
+          inspect.textContent = "Inspecter";
+          inspect.title = "Ouvrir les détails d’introspection";
+          inspect.addEventListener("click", event => {
+            event.stopPropagation();
+            openArchitectureNodeInspector(inspectTarget, { reset: true });
+          });
+          actionGroup.append(inspect);
+        }
         item.addEventListener("click", event => { if (!event.target.closest("button, a")) item.querySelector("button")?.click(); });
         microservicesList.append(item);
       });
