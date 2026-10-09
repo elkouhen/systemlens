@@ -84,6 +84,7 @@
           source: item.source?.path,
           meta: `${item.owner || item.service || ""} · ${item.attributes?.length || 0} champ(s)`,
           description: item.qualified_name,
+          dtoName: kind === "dto" ? (item.id || item.qualified_name || item.name) : undefined,
         });
       });
       (graphData.kafka_dtos || []).forEach(dto => entries.push({
@@ -92,6 +93,7 @@
         name: dto.name || dtoLabel(dto),
         service: dto.service || dto.owner || "",
         meta: `${dto.fields?.length || 0} champ(s) · ${dto.topics?.length || 0} topic(s)`,
+        dtoName: dto.id || dto.name || dtoLabel(dto),
       }));
       (graphData.indexing_issues || []).forEach((issue, index) => entries.push({
         id: `diagnostic:${issue.id || index}`,
@@ -185,7 +187,7 @@
         action?.replaceWith(actionGroup);
         if (action) actionGroup.append(action);
         const inspectTarget = entry.node || entry.ownerNode;
-        if (inspectTarget) {
+        if (entry.dtoName || inspectTarget) {
           const inspect = document.createElement("button");
           inspect.type = "button";
           inspect.className = "reference-action resource-catalogue-inspect";
@@ -193,9 +195,13 @@
           inspect.title = "Ouvrir les détails d’introspection";
           inspect.addEventListener("click", event => {
             event.stopPropagation();
-            selectNode(inspectTarget.id, false, false);
-            openArchitectureNodeInspector(inspectTarget, { reset: true });
-            hideInlineDetailsAfterModal();
+            if (entry.dtoName) {
+              openDtoInspector(entry.dtoName);
+            } else {
+              selectNode(inspectTarget.id, false, false);
+              openArchitectureNodeInspector(inspectTarget, { reset: true });
+              hideInlineDetailsAfterModal();
+            }
           });
           actionGroup.append(inspect);
         }
