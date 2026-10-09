@@ -203,19 +203,19 @@
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
     microservicesTab.addEventListener("click", () => setToolbarTab("microservices"));
-    routesTab.addEventListener("click", () => setToolbarTab("routes"));
-    contractsTab.addEventListener("click", () => setToolbarTab("contracts"));
-    asyncApiTab.addEventListener("click", () => setToolbarTab("asyncapi"));
-    dtoContractTab.addEventListener("click", () => setToolbarTab("dto-contracts"));
-    jpaTab.addEventListener("click", () => setToolbarTab("jpa"));
-    kafkaTab.addEventListener("click", () => setToolbarTab("kafka"));
-    collectionsTab.addEventListener("click", () => setToolbarTab("collections"));
-    persistenceTab.addEventListener("click", () => setToolbarTab("persistence"));
+    kafkaTab.addEventListener("click", () => openResourceCatalogue("kafka_topic"));
+    collectionsTab.addEventListener("click", () => openResourceCatalogue("mongodb_collection"));
+    persistenceTab.addEventListener("click", () => openResourceCatalogue("mongodb_collection"));
+    routesTab.addEventListener("click", () => openResourceCatalogue("http_route"));
+    contractsTab.addEventListener("click", () => openResourceCatalogue("openapi_contract"));
+    asyncApiTab.addEventListener("click", () => openResourceCatalogue("asyncapi_contract"));
+    dtoContractTab.addEventListener("click", () => openResourceCatalogue("dto"));
+    jpaTab.addEventListener("click", () => openResourceCatalogue("jpa_entity"));
     issuesTab.addEventListener("click", () => setToolbarTab("issues"));
     flowsTab.addEventListener("click", () => setToolbarTab("flows"));
     modeTabs.architecture.addEventListener("click", () => setToolbarTab("graph"));
     modeTabs.flows.addEventListener("click", () => setToolbarTab("flows"));
-    modeTabs.contracts.addEventListener("click", () => setToolbarTab("contracts"));
+    modeTabs.contracts.addEventListener("click", () => openResourceCatalogue("openapi_contract"));
     modeTabs.diagnostics.addEventListener("click", () => setToolbarTab("issues"));
     inventoryStatus.addEventListener("click", () => setToolbarTab("issues"));
     [

@@ -169,6 +169,11 @@
         microservicesList.append(item);
       });
     }
+    function openResourceCatalogue(kind = "all") {
+      if (resourceKindFilter) resourceKindFilter.value = kind;
+      setToolbarTab("microservices");
+      renderResourceCatalogue();
+    }
     resourceKindFilter?.addEventListener("change", renderResourceCatalogue);
     resourceServiceFilter?.addEventListener("change", renderResourceCatalogue);
     microservicesFilter.addEventListener("input", renderResourceCatalogue);

@@ -200,6 +200,8 @@
 }
 
 /* The catalogue is a workspace view, not a graph overlay. */
+.legacy-resource-tab { display: none !important; }
+
 body.catalogue-active { overflow: auto; }
 body.catalogue-active #graph,
 body.catalogue-active #graph-layers,

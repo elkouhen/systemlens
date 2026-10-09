@@ -101,7 +101,7 @@ def test_resource_catalogue_filters_routes_and_services() -> None:
 
 
 @pytest.mark.slow
-def test_topic_catalogue_opens_node_inspection_modal() -> None:
+def test_topic_catalogue_uses_shared_resource_inspector() -> None:
     document = _current_simple_dataset_document()
     with sync_playwright() as playwright:
         try:
@@ -112,15 +112,14 @@ def test_topic_catalogue_opens_node_inspection_modal() -> None:
         page = context.new_page()
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
-        page.locator("#kafka-tab").click()
-        topic = page.locator("#topics-list .reference-title").first
+        page.locator("#microservices-tab").click()
+        page.locator("#resource-kind-filter").select_option("kafka_topic")
+        topic = page.locator("#microservices-list .reference-title").first
         topic.wait_for(state="visible")
         topic.click()
-        assert page.locator("#inspector-modal").is_visible()
-        assert page.locator("#inspector-title").inner_text().startswith("Topic ·")
-        assert page.locator("#details").is_hidden()
-        assert page.locator("#inspector-body").get_by_text("Relations", exact=True).is_visible()
-        page.locator("#inspector-close").click()
+        assert page.locator("#inspector-modal").is_hidden()
+        assert page.locator("#resource-catalogue-preview").is_visible()
+        assert page.locator("#resource-catalogue-preview .resource-catalogue-preview-kind").inner_text() == "Topic Kafka"
         graph_topic = page.locator(".graph-node-card-label").filter(has_text="supermarket.stock.restock-requested").first
         assert page.locator("#graph-call-tree").is_hidden()
         graph_topic.click(modifiers=["Shift"])
