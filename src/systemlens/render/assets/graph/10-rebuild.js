@@ -992,18 +992,10 @@
         };
         updateAnalysisModeIndicator();
         if (graphState.selectedCodeFlowId) return;
-        const selectedFlows = (graphData.code_flows || []).filter(flow => (
-          flow.id === graphState.selectedCodeFlowId
-        ));
-        const referencedCodeFlowPortIds = new Set([
-          ...selectedFlows.flatMap(flow => (flow.steps || []).map(step => step.endpoint_id)),
-          ...(selectedCallGraph?.edges || []).flatMap(edge => edge.endpoint_ids || []),
-        ].filter(Boolean));
         network.forEachNode((id, attributes) => {
           if (
             (!callGraphOnly && !isVisibleNodeId(id))
             || (!callGraphOnly && attributes.hidden)
-            || (graphState.selectedCodeFlowId && !graphState.relatedNodes?.has(id))
           ) return;
           // graphToViewport is Sigma's public conversion and includes its
           // current camera, normalization and aspect-ratio handling. The
@@ -1012,7 +1004,6 @@
           const point = graphPointToViewport({ x: attributes.x, y: attributes.y });
           const node = nodeDataById.get(id);
           if (!node || !point) return;
-          if (graphState.selectedCodeFlowId && node.kind !== "microservice") return;
           nodePoints.set(id, point);
         });
         const adaptiveLabels = adaptiveSymbolLabelPlacements(nodePoints);
@@ -1290,92 +1281,6 @@
             triggerBadge.textContent = `${triggerLabel} · ${trigger.name}`;
             triggerBadge.title = "Déclencheur du graphe d’appel sélectionné";
             label.append(triggerBadge);
-          }
-          const portsByDirection = { in: [], out: [] };
-          if (graphState.selectedCodeFlowId) {
-          (node.ports || []).filter(port => (
-            port.label
-            && referencedCodeFlowPortIds.has(port.endpoint_id)
-          )).forEach(port => {
-            portsByDirection[port.direction]?.push(port);
-          });
-          Object.entries(portsByDirection).forEach(([portDirection, ports]) => ports.forEach((port, index) => {
-            const anchor = document.createElement("span");
-            const portProtocol = port.system === "kafka" ? "kafka" : port.system === "rest" ? "http" : "unknown";
-            anchor.className = `graph-node-port-reference is-${portDirection} is-${portProtocol}`;
-            anchor.dataset.endpointId = port.endpoint_id;
-            anchor.classList.toggle(
-              "is-analysis-selected",
-              graphState.analysisPortEndpointId === port.endpoint_id,
-            );
-            anchor.title = "Analyser l’arc associé à ce port";
-            // Keep the graph anchor compact. The full endpoint presentation
-            // remains in the tooltip and the inspector.
-            anchor.style.setProperty("--port-offset", `${(index + 1) / (ports.length + 1) * 100}%`);
-            anchor.textContent = callGraphPortLabel(port, portDirection);
-            const direction = portDirection === "in" ? "Entrée" : "Sortie";
-            const showPortTooltip = () => {
-              const tooltip = document.createElement("span");
-              tooltip.className = "graph-port-tooltip";
-              const title = document.createElement("strong");
-              title.textContent = `${callGraphPortLabel(port, portDirection)} · ${direction} · ${port.label}`;
-              tooltip.append(title);
-              const protocol = document.createElement("span");
-              protocol.className = "graph-port-tooltip-meta";
-              protocol.textContent = port.type || "Endpoint";
-              const qualifiedMethod = String(port.method || "").trim();
-              const separator = qualifiedMethod.lastIndexOf("::");
-              const ownerSeparator = separator >= 0 ? separator : qualifiedMethod.lastIndexOf(".");
-              const javaClass = document.createElement("span");
-              javaClass.className = "graph-port-tooltip-meta";
-              javaClass.textContent = `Classe Java : ${ownerSeparator > 0 ? qualifiedMethod.slice(0, ownerSeparator) : "Classe inconnue"}`;
-              const javaMethod = document.createElement("span");
-              javaMethod.className = "graph-port-tooltip-meta";
-              javaMethod.textContent = `Méthode Java : ${ownerSeparator > 0 ? qualifiedMethod.slice(ownerSeparator + (separator >= 0 ? 2 : 1)) : qualifiedMethod || "Méthode inconnue"}`;
-              const endpoint = document.createElement("span");
-              endpoint.className = "graph-port-tooltip-topic";
-              const isTopicMessage = /kafka|topic|message/i.test(`${port.type} ${port.name}`);
-              endpoint.textContent = isTopicMessage
-                ? `${portDirection === "in" ? "Topic en entrée (consommé)" : "Topic en sortie (publié)"} : ${port.name}`
-                : `${port.system === "rest" ? "Ressource HTTP" : "Ressource"} : ${port.name}`;
-              const evidence = document.createElement("code");
-              evidence.textContent = `${port.path || "Source inconnue"}${port.line ? `:${port.line}` : ""}`;
-              tooltip.append(title, protocol, javaClass, javaMethod, endpoint, evidence);
-              if (port.message_type) {
-                const messageType = document.createElement("span");
-                messageType.className = "graph-port-tooltip-type";
-                messageType.textContent = `Type de message : ${port.message_type}`;
-                tooltip.append(messageType);
-              } else if (port.message_type_warning) {
-                const messageType = document.createElement("span");
-                messageType.className = "graph-port-tooltip-warning";
-                messageType.textContent = `⚠ ${port.message_type_warning}`;
-                tooltip.append(messageType);
-              }
-              if (port.target) {
-                const target = document.createElement("span");
-                target.className = "graph-port-tooltip-section";
-                target.textContent = `Cible résolue : ${port.target.service} · ${port.target.label} · ${port.target.name}`;
-                tooltip.append(target);
-              }
-              flowTooltipOverlay.replaceChildren(tooltip);
-              const bounds = anchor.getBoundingClientRect();
-              const tooltipBounds = tooltip.getBoundingClientRect();
-              const preferredLeft = bounds.left + bounds.width / 2 - tooltipBounds.width / 2;
-              const left = Math.max(8, Math.min(window.innerWidth - tooltipBounds.width - 8, preferredLeft));
-              const below = bounds.bottom + tooltipBounds.height + 10 <= window.innerHeight;
-              tooltip.dataset.placement = below ? "bottom" : "top";
-              tooltip.style.setProperty("--tooltip-arrow-left", `${Math.max(10, Math.min(tooltipBounds.width - 10, bounds.left + bounds.width / 2 - left))}px`);
-              tooltip.style.left = `${left}px`;
-              tooltip.style.top = `${below ? bounds.bottom + 10 : Math.max(8, bounds.top - tooltipBounds.height - 10)}px`;
-            };
-            anchor.addEventListener("pointerenter", showPortTooltip);
-            anchor.addEventListener("pointerleave", () => flowTooltipOverlay.replaceChildren());
-            anchor.addEventListener("click", event => {
-              toggleAnalysisEndpoint(port.endpoint_id, event);
-            });
-            label.append(anchor);
-          }));
           }
           label.addEventListener("pointerenter", event => {
             if (event.target.closest?.(".graph-node-port-reference")) return;
