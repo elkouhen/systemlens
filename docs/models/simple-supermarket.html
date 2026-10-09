@@ -6146,7 +6146,9 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       const showingCollections = tab === "collections";
       const showingPersistence = tab === "persistence";
       const showingContractView = showingContracts || showingAsyncApi || showingDtoContracts || showingJpa || showingPersistence;
-      const mode = showingFlows
+      const mode = showingMicroservices
+        ? "contracts"
+        : showingFlows
         ? "flows"
         : showingContractView
           ? "contracts"
@@ -6158,7 +6160,9 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         button.classList.toggle("is-active", active);
         button.setAttribute("aria-selected", String(active));
       });
-      Object.entries(modeGroups).forEach(([name, group]) => { group.hidden = name !== mode; });
+      Object.entries(modeGroups).forEach(([name, group]) => {
+        group.hidden = name !== mode || (showingMicroservices && name === "contracts");
+      });
       graphTab.classList.toggle("is-active", showingGraph);
       graphTab.setAttribute("aria-selected", String(showingGraph));
       microservicesTab.classList.toggle("is-active", showingMicroservices);
