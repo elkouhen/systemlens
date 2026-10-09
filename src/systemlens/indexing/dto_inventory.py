@@ -177,30 +177,34 @@ def materialize_kafka_dto_definitions(
     candidates: dict[str, _JavaDtoCandidate] = {}
     source_contexts: dict[str, tuple[str, frozenset[str]]] = {}
     for module in modules:
-        source_root = module.path / "src" / "main" / "java"
-        if not source_root.is_dir():
-            continue
-        for java_path in source_root.glob("**/*.java"):
-            try:
-                source = java_path.read_text(encoding="utf-8", errors="replace")
-            except OSError:
+        source_roots = [
+            module.path / "src" / "main" / "java",
+            module.path / "target" / "generated-sources",
+        ]
+        for source_root in source_roots:
+            if not source_root.is_dir():
                 continue
-            package, imports = _java_package_and_imports(source)
-            for dto_name in _java_project_dto_names(source):
-                qualified_name = f"{package}.{dto_name}" if package else dto_name
-                candidates.setdefault(
-                    qualified_name,
-                    _JavaDtoCandidate(
-                        qualified_name=qualified_name,
-                        name=dto_name,
-                        source_path=str(java_path.relative_to(module.path)),
-                        source=source,
-                        package=package,
-                        imports=imports,
-                        module=module_identity(module),
-                    ),
-                )
-                source_contexts.setdefault(qualified_name, (package, imports))
+            for java_path in source_root.glob("**/*.java"):
+                try:
+                    source = java_path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                package, imports = _java_package_and_imports(source)
+                for dto_name in _java_project_dto_names(source):
+                    qualified_name = f"{package}.{dto_name}" if package else dto_name
+                    candidates.setdefault(
+                        qualified_name,
+                        _JavaDtoCandidate(
+                            qualified_name=qualified_name,
+                            name=dto_name,
+                            source_path=str(java_path.relative_to(module.path)),
+                            source=source,
+                            package=package,
+                            imports=imports,
+                            module=module_identity(module),
+                        ),
+                    )
+                    source_contexts.setdefault(qualified_name, (package, imports))
 
     candidates_by_name: dict[str, list[_JavaDtoCandidate]] = {}
     for indexed_candidate in candidates.values():

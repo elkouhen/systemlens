@@ -176,10 +176,12 @@ unresolved results remain unknown.
 Strategy1 also enables the `getXxxServiceUrl()` REST target-name convention;
 without it, SystemLens uses only an explicit URL or `lb://` service target.
 
-The graph export exposes only the indexed Java payload-type identities linked
-to Kafka endpoints. It does not resolve Java DTO fields or enums from source
-roots at render time; recursive DTO inspection requires a future persisted
-schema contract.
+Kafka DTO materialization resolves payload declarations from production Java
+sources and from `target/generated-sources` when generated contracts are
+present. It persists declared fields, enum values and nested DTO references
+before export; the renderer never reparses source files. Missing or ambiguous
+payload declarations remain unresolved with empty fields and explicit source
+absence.
 
 When persisted architecture relations are available, the HTML topology projects
 their source evidence and confidence for MongoDB reads and writes. The older

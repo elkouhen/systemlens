@@ -44,6 +44,35 @@ def _write_java(module_path: Path, package: str, name: str, declaration: str) ->
     )
 
 
+def _write_generated_java(module_path: Path, package: str, name: str, declaration: str) -> None:
+    directory = module_path / "target" / "generated-sources" / "asyncapi" / Path(*package.split("."))
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{name}.java").write_text(
+        f"package {package}; {declaration}", encoding="utf-8"
+    )
+
+
+def test_materialize_kafka_dtos_reads_generated_source_fields(tmp_path: Path) -> None:
+    _write_generated_java(
+        tmp_path,
+        "com.generated",
+        "OrderCreated",
+        "public class OrderCreated { private String orderId; private Integer quantity; }",
+    )
+
+    definitions = materialize_kafka_dto_definitions(
+        {"orders": [_endpoint("com.generated.OrderCreated")]}, [_module(tmp_path)]
+    )
+
+    assert definitions[0]["fields"] == [
+        {"type": "String", "name": "orderId"},
+        {"type": "Integer", "name": "quantity"},
+    ]
+    assert definitions[0]["source"] == (
+        "target/generated-sources/asyncapi/com/generated/OrderCreated.java"
+    )
+
+
 def test_materialize_kafka_dtos_follows_conservative_nested_references(
     tmp_path: Path,
 ) -> None:
