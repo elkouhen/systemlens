@@ -1724,6 +1724,8 @@
 /* The catalogue is a workspace view, not a graph overlay. */
 .legacy-resource-tab { display: none !important; }
 body:not(.catalogue-active) #graph-context .dependency-actions { display: none !important; }
+body:not(.catalogue-active) #architecture-tabs-group .toolbar-tabs { display: flex; flex-wrap: wrap; justify-content: flex-start; }
+body:not(.catalogue-active) #architecture-tabs-group .toolbar-tab { flex: 0 0 auto; min-width: max-content; }
 
 body.catalogue-active { overflow: auto; }
 body.catalogue-active #graph,
