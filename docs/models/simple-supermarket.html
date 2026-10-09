@@ -10752,7 +10752,11 @@ const graphViewLifecycle = (() => {
       rebuildGraph();
       applyLayout(graphState.activeLayout);
     });
-    document.getElementById("inspector-close").addEventListener("click", closeInspector);
+    document.getElementById("inspector-close").addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeInspector();
+    });
     inspectorBack.addEventListener("click", goBackInspector);
     inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });
     window.addEventListener("keydown", event => { if (event.key === "Escape" && !inspectorModal.hidden) closeInspector(); });
