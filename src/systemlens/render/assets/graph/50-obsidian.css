@@ -274,7 +274,16 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-copy {
   font-size: 12px;
   line-height: 1.5;
 }
-body.catalogue-active #microservices-panel .resource-catalogue-filters { display: grid; gap: 10px; }
+body.catalogue-active #microservices-panel .resource-catalogue-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-filters .reference-filter-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
 body.catalogue-active #microservices-panel .resource-catalogue-filters select { display: none; }
 body.catalogue-active #microservices-panel .resource-catalogue-results { min-width: 0; }
 body.catalogue-active #microservices-panel .resource-catalogue-table-head {
