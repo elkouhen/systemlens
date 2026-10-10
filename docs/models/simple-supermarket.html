@@ -1226,7 +1226,7 @@
       border-radius: 12px;
       background: rgba(255, 255, 255, .82);
     }
-    #graph-panel > .graph-mode-context {
+    #architecture-toolbar > .graph-mode-context {
       position: static;
       inset: auto;
       width: auto;
@@ -1240,11 +1240,11 @@
       backdrop-filter: none;
       pointer-events: auto;
     }
-    #graph-panel > .graph-mode-context > * { pointer-events: auto; }
-    #graph-panel > .graph-mode-context .graph-mode-context-copy { display: none; }
-    #graph-panel > .graph-mode-context .graph-mode-context-actions { gap: 6px; }
-    #graph-panel > .graph-mode-context .architecture-context-actions { display: contents; }
-    #graph-panel > .graph-mode-context .view-controls {
+    #architecture-toolbar > .graph-mode-context > * { pointer-events: auto; }
+    #architecture-toolbar > .graph-mode-context .graph-mode-context-copy { display: none; }
+    #architecture-toolbar > .graph-mode-context .graph-mode-context-actions { gap: 6px; }
+    #architecture-toolbar > .graph-mode-context .architecture-context-actions { display: contents; }
+    #architecture-toolbar > .graph-mode-context .view-controls {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       flex: 1 1 100%;
@@ -1252,21 +1252,21 @@
       width: 100%;
       min-width: 0 !important;
     }
-    #graph-panel > .graph-mode-context .render-controls { flex: 1 1 100%; order: -1; }
-    #graph-panel > .graph-mode-context .graph-secondary-action {
+    #architecture-toolbar > .graph-mode-context .render-controls { flex: 1 1 100%; order: -1; }
+    #architecture-toolbar > .graph-mode-context .graph-secondary-action {
       min-height: 38px;
       padding-inline: 12px;
       font-size: 12px;
       font-weight: 750;
     }
-    #graph-panel > .graph-mode-context #analysis-mode-center {
+    #architecture-toolbar > .graph-mode-context #analysis-mode-center {
       flex: 0 0 92px;
       width: 92px !important;
       min-width: 92px !important;
       white-space: nowrap;
     }
-    #graph-panel > .graph-mode-context .view-controls button,
-    #graph-panel > .graph-mode-context .render-controls button {
+    #architecture-toolbar > .graph-mode-context .view-controls button,
+    #architecture-toolbar > .graph-mode-context .render-controls button {
       min-height: 38px;
       min-width: 0;
       width: 100%;
@@ -1274,7 +1274,7 @@
       font-size: 12px;
       font-weight: 750;
     }
-    #graph-panel > .graph-mode-context .zoom-controls button {
+    #architecture-toolbar > .graph-mode-context .zoom-controls button {
       width: 38px;
       min-width: 38px;
       padding: 0;
@@ -10662,7 +10662,7 @@ const graphViewLifecycle = (() => {
     const toolbar = document.getElementById("architecture-toolbar");
     const toolbarCollapse = document.getElementById("toolbar-collapse");
     const graphModeContext = document.getElementById("graph-mode-context");
-    if (graphPanel && graphModeContext) graphPanel.insertBefore(graphModeContext, graphContext);
+    if (toolbar && graphModeContext && graphPanel) toolbar.insertBefore(graphModeContext, graphPanel);
     const graphFilterSummary = document.getElementById("graph-filter-summary");
     const graphFilterControls = [
       relationHttp, relationKafka, relationMongodb, relationOther,

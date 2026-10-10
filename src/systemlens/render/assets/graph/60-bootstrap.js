@@ -44,7 +44,7 @@
     const toolbar = document.getElementById("architecture-toolbar");
     const toolbarCollapse = document.getElementById("toolbar-collapse");
     const graphModeContext = document.getElementById("graph-mode-context");
-    if (graphPanel && graphModeContext) graphPanel.insertBefore(graphModeContext, graphContext);
+    if (toolbar && graphModeContext && graphPanel) toolbar.insertBefore(graphModeContext, graphPanel);
     const graphFilterSummary = document.getElementById("graph-filter-summary");
     const graphFilterControls = [
       relationHttp, relationKafka, relationMongodb, relationOther,
