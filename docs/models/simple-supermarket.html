@@ -2038,8 +2038,8 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     #graph-mode-context .render-controls { flex: 1 1 100%; order: -1; }
     #graph-mode-context .view-controls button, #graph-mode-context .render-controls button { min-height: 38px; min-width: 0; width: 100%; padding-inline: 10px; font-size: 12px; font-weight: 750; }
     #graph-mode-context .zoom-controls button, #flow-mode-context .zoom-controls button { width: 38px; min-width: 38px; height: 42px !important; padding: 0; font-size: 20px; }
-    #flow-mode-context #flow-mode-expand-all { flex: 0 0 166px; width: 166px !important; min-width: 166px !important; white-space: nowrap; }
-    #flow-mode-context #flow-call-tree-depth-control { flex: 0 0 132px; width: 132px; min-width: 132px; min-height: 42px; box-sizing: border-box; }
+    #flow-mode-context #flow-mode-expand-all { flex: 0 0 176px; width: 176px !important; min-width: 176px !important; white-space: nowrap; }
+    #flow-mode-context #flow-call-tree-depth-control { flex: 0 0 220px; width: 220px; min-width: 220px; min-height: 42px; box-sizing: border-box; }
     #flow-mode-context #flow-context-collapse { flex: 0 0 112px; width: 112px !important; min-width: 112px !important; white-space: nowrap; }
 </style>
 </head>
@@ -2282,9 +2282,9 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         <button id="flow-zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer dans l’arbre d’appel" title="Augmenter l’échelle de l’arbre d’appel">+</button>
         <button id="flow-zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer dans l’arbre d’appel" title="Réduire l’échelle de l’arbre d’appel">−</button>
       </div>
-      <button id="flow-mode-expand-all" class="graph-action-label graph-secondary-action" type="button" title="Déplier tous les niveaux de l’arbre d’appel" hidden>Déplier tous les nœuds</button>
+      <button id="flow-mode-expand-all" class="graph-action-label graph-secondary-action" type="button" title="Déplier tous les niveaux du graphe d’appel" hidden>Déplier tout le graphe</button>
       <div id="flow-call-tree-depth-control" class="call-tree-depth-control" role="group" aria-label="Nombre de niveaux de l’arbre d’appel" hidden>
-        <span class="call-tree-depth-label">Niveaux</span>
+        <span class="call-tree-depth-label">Déplier jusqu’au niveau</span>
         <button id="flow-call-tree-depth-decrease" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de moins" title="Afficher un niveau de moins">−</button>
         <output id="flow-call-tree-depth-value" class="call-tree-depth-value" aria-live="polite">1</output>
         <button id="flow-call-tree-depth-increase" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de plus" title="Afficher un niveau de plus">+</button>
