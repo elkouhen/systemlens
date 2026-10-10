@@ -39,6 +39,8 @@
       search.value = "";
       pathStops.splice(0, pathStops.length);
       graphState.selectedCodeFlowId = null;
+      graphState.selectedDiagnosticId = null;
+      graphState.diagnosticFocusSnapshot = null;
       graphState.viewMode = "architecture";
       graphState.callGraphDisplayMode = "tree";
       graphState.callTreeZoom = 1;
@@ -1267,6 +1269,8 @@
         relatedEdges: null,
         relatedLocalPortLinks: new Set(),
         selectedCodeFlowId: null,
+        selectedDiagnosticId: null,
+        diagnosticFocusSnapshot: null,
         viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
         codeFlowRootNodeId: null,
@@ -1291,6 +1295,8 @@
       graphState.relatedEdges = new Set();
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
+      graphState.selectedDiagnosticId = null;
+      graphState.diagnosticFocusSnapshot = null;
       graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
       graphState.codeFlowRootNodeId = null;
@@ -1368,6 +1374,8 @@
       updateSelectedNodeDependencyScope(id);
       graphState.relatedLocalPortLinks = new Set();
       graphState.selectedCodeFlowId = null;
+      graphState.selectedDiagnosticId = null;
+      graphState.diagnosticFocusSnapshot = null;
       graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
       graphState.codeFlowRootNodeId = null;

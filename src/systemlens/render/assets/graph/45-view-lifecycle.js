@@ -47,6 +47,8 @@ const graphViewLifecycle = (() => {
     graphState.dependencyFocusOnly = false;
     graphState.analysisPortEndpointId = null;
     graphState.selectedCodeFlowId = null;
+    graphState.selectedDiagnosticId = null;
+    graphState.diagnosticFocusSnapshot = null;
     graphState.callGraphDisplayMode = "network";
     graphState.selectedCallGraphEdgeKey = null;
     graphState.pathMicroserviceOrder = new Map();

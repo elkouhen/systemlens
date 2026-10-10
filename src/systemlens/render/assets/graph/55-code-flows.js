@@ -1425,7 +1425,8 @@
       const items = flowDiagnostics.filter(item => visibleIds.has(item.flow_id));
       flowDiagnosticsList.replaceChildren(...items.map(item => {
         const row = document.createElement("li");
-        row.className = `code-flow-item flow-diagnostic-item is-${item.classification}`;
+        row.className = `code-flow-item flow-diagnostic-item is-${item.classification}${item.id === graphState.selectedDiagnosticId ? " is-selected" : ""}`;
+        row.dataset.diagnosticId = item.id;
         const title = document.createElement("div");
         title.className = "reference-title code-flow-title";
         title.textContent = `${item.severity} · ${item.resource || "Ressource inconnue"}`;
@@ -1443,7 +1444,7 @@
         row.append(title, meta, detail);
         row.addEventListener("click", () => {
           const flow = codeFlows.find(candidate => candidate.id === item.flow_id);
-          if (flow) showCodeFlow(flow);
+          if (flow) focusFlowDiagnostic(item, flow);
         });
         return row;
       }));
@@ -1451,6 +1452,43 @@
       flowDiagnosticsSummary.textContent = items.length
         ? `${items.length} problème${items.length > 1 ? "s" : ""} · chaque paire écriture/lecture est affichée séparément`
         : "Aucun problème détecté dans les flux affichés.";
+    }
+
+    function focusFlowDiagnostic(diagnostic, flow) {
+      if (!diagnostic || !flow) return;
+      if (graphState.selectedDiagnosticId !== diagnostic.id) {
+        graphState.diagnosticFocusSnapshot = {
+          selectedCallGraphEdgeKey: graphState.selectedCallGraphEdgeKey,
+          callTreeExpanded: [...graphState.callTreeExpanded],
+          callTreeCollapsed: [...graphState.callTreeCollapsed],
+          callTreeDepth: graphState.callTreeDepth,
+          callTreeZoom: graphState.callTreeZoom,
+        };
+      }
+      if (graphState.selectedCodeFlowId !== flow.id) showCodeFlow(flow);
+      graphState.selectedDiagnosticId = diagnostic.id;
+      graphState.callTreeDepth = Math.max(Number(graphState.callTreeDepth) || 1, 8);
+      graphState.callTreeExpanded = new Set();
+      graphState.callTreeCollapsed = new Set();
+      rebuildGraph();
+      renderFlowDiagnostics([flow]);
+      requestAnimationFrame(() => document.querySelector(`[data-diagnostic-id="${CSS.escape(diagnostic.id)}"]`)?.scrollIntoView({ block: "nearest" }));
+    }
+
+    function restoreDiagnosticFullView() {
+      const snapshot = graphState.diagnosticFocusSnapshot;
+      graphState.selectedDiagnosticId = null;
+      graphState.diagnosticFocusSnapshot = null;
+      if (snapshot) {
+        graphState.selectedCallGraphEdgeKey = snapshot.selectedCallGraphEdgeKey;
+        graphState.callTreeExpanded = new Set(snapshot.callTreeExpanded || []);
+        graphState.callTreeCollapsed = new Set(snapshot.callTreeCollapsed || []);
+        graphState.callTreeDepth = snapshot.callTreeDepth || 1;
+        graphState.callTreeZoom = snapshot.callTreeZoom || 1;
+      }
+      rebuildGraph();
+      const selectedFlow = codeFlows.find(flow => flow.id === graphState.selectedCodeFlowId);
+      if (selectedFlow) renderFlowDiagnostics([selectedFlow]);
     }
 
     function renderCodeFlows() {

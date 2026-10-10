@@ -468,6 +468,8 @@
           relatedNodes: null,
           relatedEdges: null,
           selectedCodeFlowId: null,
+          selectedDiagnosticId: null,
+          diagnosticFocusSnapshot: null,
           viewMode: "architecture",
           selectedCallGraphEdgeKey: null,
           pathMicroserviceOrder: new Map(),

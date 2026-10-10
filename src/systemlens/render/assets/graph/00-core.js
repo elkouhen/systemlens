@@ -168,6 +168,8 @@
       relatedLocalPortLinks: new Set(),
       analysisPortEndpointId: null,
       selectedCodeFlowId: null,
+      selectedDiagnosticId: null,
+      diagnosticFocusSnapshot: null,
       selectedCallGraphEdgeKey: null,
       analysisContextCollapsed: true,
       codeFlowRootNodeId: null,

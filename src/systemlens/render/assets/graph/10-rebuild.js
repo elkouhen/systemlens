@@ -810,6 +810,7 @@
           const flowHelp = document.getElementById("flow-mode-context-help");
           const consistencyLane = document.getElementById("flow-consistency-lane");
           const expandAll = document.getElementById("flow-mode-expand-all");
+          const diagnosticFullView = document.getElementById("flow-diagnostic-full-view");
           const flowCenter = document.getElementById("flow-mode-center");
           const flowZoomIn = document.getElementById("flow-zoom-in");
           const flowZoomOut = document.getElementById("flow-zoom-out");
@@ -833,6 +834,7 @@
           const depthDecrease = document.getElementById("flow-call-tree-depth-decrease");
           const depthIncrease = document.getElementById("flow-call-tree-depth-increase");
           if (expandAll) expandAll.hidden = !callGraphActive;
+          if (diagnosticFullView) diagnosticFullView.hidden = !callGraphActive || !graphState.selectedDiagnosticId;
           if (depthControl) depthControl.hidden = !callGraphActive;
           if (depthValue) depthValue.textContent = String(graphState.callTreeDepth || 1);
           if (depthDecrease) depthDecrease.disabled = !callGraphActive || graphState.callTreeDepth <= 1;
@@ -866,6 +868,7 @@
           const trigger = selectedFlow?.steps?.[0];
           const selectedDiagnostics = (graphData.flow_diagnostics || []).filter(item => (
             item.flow_id === graphState.selectedCodeFlowId
+            && (!graphState.selectedDiagnosticId || item.id === graphState.selectedDiagnosticId)
           ));
           if (selectedDiagnostics.length) {
             const riskCount = selectedDiagnostics.filter(item => item.classification === "potential_risk").length;
@@ -2040,7 +2043,13 @@
           portPathOverlay.append(hitArea);
           return hitArea;
         };
-        selectedCallGraphLinks.forEach(({ link, index, edgeKey }) => {
+      const selectedDiagnostic = (graphData.flow_diagnostics || []).find(item => (
+        item.id === graphState.selectedDiagnosticId
+      ));
+      const diagnosticEndpointIds = value => new Set(selectedDiagnostic?.[value] || []);
+      const asyncDiagnosticEndpoints = diagnosticEndpointIds("async_endpoint_ids");
+      const syncDiagnosticEndpoints = diagnosticEndpointIds("sync_endpoint_ids");
+      selectedCallGraphLinks.forEach(({ link, index, edgeKey }) => {
           if (!isCurrentRender()) return;
           const routed = callGraphPath(link, edgeKey, index);
           if (!routed) return;
@@ -2074,6 +2083,14 @@
             path.classList.add("is-keyboard-selected");
           }
           if (link.kind === "kafka") path.classList.add("is-kafka");
+          if (selectedDiagnostic) {
+            const endpoints = new Set(link.endpoint_ids || []);
+            const isAsync = [...endpoints].some(endpointId => asyncDiagnosticEndpoints.has(endpointId));
+            const isSync = [...endpoints].some(endpointId => syncDiagnosticEndpoints.has(endpointId));
+            path.classList.toggle("is-diagnostic-async", isAsync);
+            path.classList.toggle("is-diagnostic-sync", isSync);
+            path.classList.toggle("is-diagnostic-muted", !isAsync && !isSync);
+          }
           if ((link.endpoint_ids || []).includes(graphState.analysisPortEndpointId)) {
             path.classList.add("is-analysis-selected");
           }
@@ -2085,6 +2102,14 @@
           arcLabel.classList.add("graph-call-label");
           arcLabel.dataset.renderGeneration = String(renderGeneration);
           if (link.kind === "rest") arcLabel.classList.add("is-rest");
+          if (selectedDiagnostic) {
+            const endpoints = new Set(link.endpoint_ids || []);
+            const isAsync = [...endpoints].some(endpointId => asyncDiagnosticEndpoints.has(endpointId));
+            const isSync = [...endpoints].some(endpointId => syncDiagnosticEndpoints.has(endpointId));
+            arcLabel.classList.toggle("is-diagnostic-async", isAsync);
+            arcLabel.classList.toggle("is-diagnostic-sync", isSync);
+            arcLabel.classList.toggle("is-diagnostic-muted", !isAsync && !isSync);
+          }
           arcLabel.dataset.arcKey = resolvedEdgeKey;
           arcLabel.dataset.sourceNode = link.source;
           arcLabel.dataset.targetNode = link.target;

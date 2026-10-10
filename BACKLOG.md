@@ -1,337 +1,223 @@
-# Asynchronous write and synchronous read backlog
+# Call-flow diagnostic focus backlog
 
-Detect and visualize a synchronous read that depends on an asynchronous write
-whose completion is not guaranteed before the read. The result is a potential
-consistency risk supported by source evidence, never a claim about an observed
-runtime failure.
+Selecting a consistency problem must reveal its asynchronous write branch and
+synchronous read branch directly in the selected call graph. The user must see
+their common trigger, affected data, and missing completion guarantee.
 
-Status: in progress. The snapshot contract, conservative detector, export field,
-Flux problem list, and focused unit tests are implemented. Java extraction of
-the new evidence and full browser validation remain open.
-Implemented slice: `CodeFlowStep` now accepts nullable branch/data/causal
-metadata; `flow_consistency` emits deterministic pair diagnostics; exports
-include `flow_diagnostics`; and Flux renders one row per diagnostic. The current
-indexer still emits only the existing Mongo write evidence, so real read/write
-coverage is incomplete until ASR-03 is delivered.
+Status: in progress. Diagnostic endpoint export, click focus state, branch styling,
+and `Vue complète` are implemented. Exact occurrence mapping, browser validation,
+and source-backed branch extraction remain open.
 Tracking: this file only; do not create GitHub tickets.
-Owner: implementing developer; product owner reviews the visual acceptance.
+Owner: implementing developer. Visual acceptance: product owner.
+Documentation language: English. Visible interface labels: French.
 
-## Story and scope
+Implemented slice: `flow_diagnostics` now carries async and sync endpoint
+identities when the persisted steps provide them. The Flux list selects a
+diagnostic, captures the call-tree state, expands the selected tree, adds
+`is-diagnostic-async` and `is-diagnostic-sync` styling to matching arcs, and
+restores the captured state through `Vue complète`. Steps without endpoint
+identities remain explicitly unavailable for arc highlighting.
 
-As an architect inspecting a selected call flow, I want to see where a
-synchronous read can overtake a causally related asynchronous write, so I can
-locate the missing completion guarantee and inspect the supporting code.
+## Scope and evidence
 
-Illustrative scenario: a request publishes an update command and continues
-through HTTP to read the affected record. A consumer performs the write.
-Publication before the read does not establish write completion before the read.
-
-The analysis must preserve the common trigger, the asynchronous write branch,
-and the synchronous read branch. It must distinguish a proven key relationship
-from access to the same collection with an unknown key.
-
-The read may occur in a later request, callback, or event-triggered treatment.
-Require source-backed causal links between treatments; a shared business key
-alone does not establish causality. Unsupported links remain explicit unknowns.
-
-A selected flow may have several diagnostics. Users must be able to identify
-each affected read, inspect one diagnostic at a time, and return to the complete
-flow without losing their camera or expansion state.
-
-Scope includes persisted evidence, bounded static analysis, export diagnostics,
-and visualization in the selected Flux view. Runtime trace collection,
-automatic application fixes, and generic architecture smells are excluded.
+This backlog covers diagnostic selection, exported path evidence, graph focus,
+and restoration of the full view. Automatic extraction of new Java data-flow
+evidence, runtime traces, and application fixes are outside this task.
 CDN dependencies, ARIA semantics, and keyboard navigation remain deferred.
 
-## Constraints and design questions
+The [diagnostic model](src/systemlens/application/flow_consistency.py) exposes
+flow identity and read/write step numbers. The
+[call-graph projection](src/systemlens/render/call_graph.py) carries endpoint
+transitions and occurrence information. The work must connect these identities
+before the browser can highlight the correct service occurrences.
 
-[ADR-27](docs/ADR.md#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth)
-limits asynchronous composition and excludes producer flows with a later external
-effect from linear composition. The implementation must examine that constraint
-because the target story requires preserving both continuations.
+The [Flux renderer](src/systemlens/render/assets/graph/55-code-flows.js) and
+[graph rebuild module](src/systemlens/render/assets/graph/10-rebuild.js) present
+diagnostic summaries. Their summaries alone do not establish branch witnesses.
+The proposed behavior below is an implementation target, not a shipped claim.
 
-[ADR-40](docs/ADR.md#adr-40-preserve-complete-service-arcs-in-selected-flow-graphs)
-preserves source-backed branches and endpoint identities. Rendering order and
-reachability alone must not become evidence of execution order or data dependence.
+Use the [checkout fixture](examples/checkout-single-call-graph.json) and its
+[generator](scripts/generate_checkout_call_graph.py) as the primary synthetic
+acceptance scenario. Its root is `checkout-root`; the scenario declares the
+write path `[1, 8, 10]` and read path `[1, 14, 15]`.
+These numbers identify fixture interactions, not runtime timestamps.
 
-Follow the [technical specification](docs/SPEC-TECH.md) and
-[functional specification](docs/SPEC-FONC.md). Exports consume the persisted
-snapshot; they must not reparse source code. Store evidence paths relative to
-the indexed project and preserve compatibility with existing SQLite indexes.
+## Target interaction
 
-The proposed design adds a branch-aware diagnostic alongside existing flows.
-This costs additional evidence storage and analysis time, but preserves existing
-flow consumers. Extending the existing flow contract is an alternative to assess
-in task ASR-01; silently changing linear flow semantics is unacceptable.
+1. The user selects a flow and sees its problems with local identifiers `P1`,
+   `P2`, and so on, including badges on the affected read occurrences.
+2. Clicking a problem or its badge selects that problem and expands the paths
+   needed to show the common trigger, publication, expected write, and read.
+3. The graph displays the asynchronous branch in orange and the synchronous
+   branch in blue. Other calls remain visible with reduced emphasis.
+4. A compact detail shows the data identity, symbolic key, expected operation,
+   classification, confidence, guarantee assessment, and source references.
+5. `Précédent` and `Suivant` select another problem in the filtered list.
+6. `Vue complète` restores the camera and expansion state captured before focus.
+
+Path emphasis must not create an execution edge from the write to the read.
+Both branches may execute independently after their common trigger. The read
+badge states a potential risk: `Peut lire avant la fin de l’écriture`.
+
+Orange identifies the branch containing an asynchronous boundary. Dashed arcs
+identify asynchronous transport; HTTP segments within that branch remain solid.
+Labels identify write and read roles so interpretation does not depend on color.
+
+Focus preserves surrounding calls to keep the problem in context. A separate
+isolated subgraph was considered, but would require users to reconstruct that
+context. The selected approach costs additional occurrence mapping and camera
+state management, covered by the tasks below.
 
 ## Delivery order
 
-All tasks are required for this story. P0 establishes sound evidence and
-classification; P1 delivers the user-facing diagnosis and release validation.
-
-| Task | Priority | Dependencies | Deliverable |
+| Task | Priority | Depends on | Deliverable |
 |---|---|---|---|
-| ASR-01 | P0 | None | Evidence audit and contract decision |
-| ASR-02 | P0 | ASR-01 | Acceptance fixtures |
-| ASR-03 | P0 | ASR-01, ASR-02 | Data-access and causal evidence |
-| ASR-04 | P0 | ASR-03 | Persistence and snapshot compatibility |
-| ASR-05 | P0 | ASR-04 | Bounded branch analysis |
-| ASR-06 | P0 | ASR-05 | Completion guarantees and classification |
-| ASR-07 | P1 | ASR-06 | Export diagnostic contract |
-| ASR-08 | P1 | ASR-07 | Diagnostic list in Flux |
-| ASR-09 | P1 | ASR-08 | Two-branch visualization and evidence |
-| ASR-10 | P1 | ASR-09 | Browser validation and synchronized model |
+| FOCUS-01 | P0 | None | Branch witness contract |
+| FOCUS-02 | P0 | FOCUS-01 | Export and occurrence mapping |
+| FOCUS-03 | P0 | FOCUS-02 | Selection and restoration state |
+| FOCUS-04 | P0 | FOCUS-02, FOCUS-03 | In-graph branch highlighting |
+| FOCUS-05 | P1 | FOCUS-03, FOCUS-04 | Problem list, badges, and details |
+| FOCUS-06 | P1 | FOCUS-01 | Representative fixtures |
+| FOCUS-07 | P1 | FOCUS-04, FOCUS-05, FOCUS-06 | Browser validation and exports |
 
-## Tasks and acceptance criteria
+P0 items establish correct path selection. P1 items complete the interaction
+and its verification. All items are required to deliver this task.
 
-### ASR-01: Audit evidence and define the diagnostic contract
+## FOCUS-01: Define branch witnesses
 
-- [x] Inspect the flow domain, indexing, storage, and call-graph projection.
-- [ ] Record which facts support access kind, data identity, key propagation,
-      call-site order, branch compatibility, and completion guarantees.
-- [ ] List missing facts and the extraction work needed to obtain them.
-- [x] Define a rule identifier and a diagnostic contract with stable IDs,
-      branch step references, common trigger, resource and key evidence,
-      confidence, classification, limitations, and snapshot completeness.
-- [ ] Include expected operation/version identity, causal links across treatments,
-      read occurrence identity, query overlap evidence, and path variants.
-- [x] Record the branch representation decision in a new ADR, including its
-      relationship to ADR-27. Preserve accepted decision history.
-- [x] Specify the intended behavior in the functional and technical specifications.
+- [ ] Audit diagnostic IDs, flow IDs, endpoint IDs, transition IDs, and rendered
+      occurrence IDs across import, persistence, export, and browser rendering.
+- [ ] Define a stable diagnostic identity and branch witnesses containing the
+      root flow, common prefix, causal split, ordered transitions, and terminal
+      read/write references. Include the owning handler occurrence for each access.
+- [ ] Represent source evidence, expected operation/version, data identity,
+      symbolic key, classification, confidence, and missing evidence explicitly.
+- [ ] Separate complete, partial, unavailable, and truncated witness coverage.
+      Preserve ambiguity and variant-specific paths and guarantees.
+- [ ] Define additive compatibility for old snapshots and manifests. Run any
+      required migration before the indexing transaction.
+- [ ] Update the authoritative sections linked from [SPEC-TECH](docs/SPEC-TECH.md)
+      and [SPEC-FONC](docs/SPEC-FONC.md). Record durable representation decisions
+      in a new [ADR](docs/ADR.md), preserving accepted entries.
 
-Acceptance: a reviewer can distinguish stored facts from proposed enrichment.
-Every required field has a producer or an explicit unknown state. The contract
-can express two branches without claiming that consumer completion precedes HTTP.
+Acceptance: two occurrences of the same service remain distinguishable.
+A step number or service name alone cannot establish a highlight target.
+Missing witnesses produce an explicit unavailable or partial focus state.
 
-### ASR-02: Build positive, negative, and incomplete fixtures
+## FOCUS-02: Preserve witnesses through export
 
-- [ ] Add a minimal Java/Spring fixture that publishes an update and then reads
-      the same business key through a synchronous call.
-- [ ] Include the consumer write and evidence linking the command key to the read.
-- [ ] Add variants for a proven different key, unrelated roots, mutually exclusive
-      branches, and a read that precedes publication.
-- [ ] Add a correlated completion response after commit, a broker acknowledgement,
-      and a fixed delay as distinct synchronization cases.
-- [ ] Add unknown resource targets, unknown keys, unresolved dispatch, cycles,
-      partial indexing, and traversal-limit cases.
-- [ ] Add a causally linked later request and callback, plus an unrelated request
-      using the same business key as a negative case.
-- [ ] Add successive writes to the same key and a confirmation of the older write.
-- [ ] Add filtered-list and aggregate reads affected by an asynchronous write,
-      plus a provably disjoint query as a negative case.
-- [x] Add multiple diagnostics in one flow: distinct reads of the same data,
-      different data targets, and equivalent paths for one write/read pair.
+- [ ] Carry branch evidence through the fact importer and persisted snapshot.
+      Export must succeed without source files and must not reparse them.
+- [ ] Resolve witnesses to existing call-graph transitions using exact endpoint
+      and occurrence identities; never select an arbitrary shortest path.
+- [ ] Preserve mappings through flow aggregation, deduplication, repeated calls,
+      fan-out, fan-in, cycles, and collapsed occurrences.
+- [ ] Associate diagnostics with their selected root graph, including diagnostics
+      originating in reachable handler fragments. Deduplicate equivalent pairs.
+- [ ] Export mappings for badges, shared prefixes, read/write occurrences, and
+      available path variants. Retain distinct expected writes and reads.
+- [ ] Use indexed lookups and bounded traversal. Name limits, report truncation,
+      and document complexity; do not enumerate every possible path.
+- [ ] Validate relative evidence paths and keep runtime values and secrets out
+      of persisted keys, fixtures, and exports.
 
-| Fixture | Expected outcome |
-|---|---|
-| Asynchronous command followed by a causally related read without completion evidence | Potential risk |
-| Broker acknowledgement or fixed delay only | Potential risk |
-| Confirmation of an older write to the same key | Potential risk |
-| Expected write completion and visibility established before the read | Guarantee identified |
-| Cache or projection freshness unresolved | Insufficient evidence |
-| Causal link, resource identity, or query overlap unresolved | Insufficient evidence |
-| Proven independent treatments or disjoint data access | Not applicable |
+Acceptance: exported witnesses select exactly the declared fixture branches.
+Repeated runs produce the same mapping. An unresolved segment remains unknown;
+it is never replaced with a plausible graph edge.
 
-Risk fixtures must establish causality, overlapping data access, and compatible
-paths. Missing prerequisites change the result to insufficient evidence.
+## FOCUS-03: Implement focus state and restoration
 
-Acceptance: each fixture declares its expected classification and evidence.
-The positive fixture demonstrates both possible execution orders; it does not
-require reproducing a runtime race to pass the static-analysis test.
+- [ ] Store selected flow, selected diagnostic, selected variant, and the full-view
+      camera and expansion snapshot in the Flux state owner.
+- [ ] Capture the snapshot once when entering diagnostic focus. Switching
+      problems must not overwrite it with an already focused state.
+- [ ] On selection, expand only the ancestors needed to reveal both branches.
+      Center their combined bounds while keeping labels readable.
+- [ ] Preserve selection through layout refreshes and cancel stale render work
+      when the user selects another diagnostic before rendering finishes.
+- [ ] Make `Vue complète` restore zoom, pan, expanded and collapsed occurrences,
+      and remove every diagnostic emphasis.
+- [ ] Clear focus on flow changes or leaving Flux. Filtering out the selected
+      problem restores the full view; entering another flow starts fresh state.
 
-### ASR-03: Extract data identity and causal relationships
+Acceptance: selecting P1, then P2, then `Vue complète` restores the original
+view. Rapid clicks cannot apply a highlight from the previous flow.
 
-- [ ] Capture read/write operations, method and call-site identity, source location,
-      target resource identity, and supported key expressions.
-- [ ] Resolve table or collection ownership using proven mappings and namespace
-      context. Retain unresolved aliases instead of merging names heuristically.
-- [ ] Track supported key propagation through request parameters, message payloads,
-      method arguments, and repository calls. Never persist runtime key values.
-- [ ] Represent publication and synchronous continuation under their common trigger.
-- [ ] Preserve supported causal links across later requests, callbacks, and events,
-      including operation/version propagation and the expected write relationship.
-- [ ] Represent point reads, filtered lists, and aggregates. Determine whether the
-      write can affect the query result, or explicitly report unknown overlap.
-- [ ] Preserve execution-order evidence and branch conditions where available;
-      mark unknown order or feasibility explicitly.
+## FOCUS-04: Highlight both branches in the graph
 
-Acceptance: same resource names in different stores remain distinct.
-Proven unequal keys exclude the risk only for disjoint point accesses.
-List and aggregate reads require query overlap analysis; unresolved overlap
-remains a review candidate. Unknown keys remain review candidates.
-Source line order alone does not prove interprocedural or asynchronous ordering.
+- [ ] Emphasize the common prefix and mark the causal split.
+- [ ] Render the asynchronous write branch in orange and the synchronous read
+      branch in blue, with transport-specific line styles defined above.
+- [ ] Attach `Écriture attendue` and `Lecture à risque` labels to the exact
+      access occurrences. Where accesses have no graph node, add anchored
+      annotations without creating invented service dependencies.
+- [ ] Attenuate unrelated nodes and calls while retaining their context.
+      Avoid highlighting every occurrence of a service by its name.
+- [ ] Preserve existing protocol labels, inspections, zoom, and pan.
+- [ ] Show unknown segments and traversal limits explicitly. Never render a
+      disconnected path as a complete witness.
+- [ ] Integrate a compact focus legend in Flux. Retain the architecture legend's
+      existing scope and remove focus styling when returning to Architecture.
 
-### ASR-04: Persist evidence and preserve existing indexes
+Acceptance: both inventory occurrences in the checkout scenario are distinct;
+the write and read each receive their own marker. No arrow suggests guaranteed
+write-before-read ordering. Shared segments remain legible in both themes.
 
-- [ ] Add the required domain structures, serialization, and additive migrations.
-- [ ] Run migrations before the indexing transaction and preserve old snapshots.
-- [ ] Include extraction profile changes in diagnostic invalidation and rebuilds.
-- [ ] Expose snapshot completeness and unsupported evidence through read adapters.
-- [ ] Validate relative evidence paths and absence of credentials or secret values.
+## FOCUS-05: Connect the list, badges, and explanation
 
-Acceptance: an old index remains readable and reports unavailable analysis where
-necessary. Reindexing refreshes affected results. Export succeeds with source
-files unavailable and does not silently reparse them.
+- [ ] Show `Problèmes du flux · N` for the selected flow only. Assign stable local
+      display IDs independently of severity; filtering must not renumber them.
+- [ ] Count potential risks and review candidates separately. Present guarantees
+      outside the problem count and explain missing analysis coverage.
+- [ ] Add read-occurrence badges; collapsed nodes show unique problem counts.
+      A shared badge opens a choice restricted to that occurrence's problems.
+- [ ] Make list selection and badge selection activate the same focus action.
+- [ ] Provide classification and data filters, visible/total counts, and
+      `Précédent`/`Suivant` with disabled end states and the current position.
+- [ ] Show branch evidence, symbolic key/query overlap, expected operation,
+      guarantee assessment, confidence, and source links for the active problem.
+- [ ] Replace redundant summary banners with the active explanation. Use precise
+      wording for insufficient evidence and guarantees rather than calling them risks.
+- [ ] Define no-selection, no-problem, old-export, partial-witness, unavailable,
+      and filter-empty states. An empty list must not claim the flow is safe.
 
-### ASR-05: Analyze the asynchronous and synchronous branches
+Acceptance: P1 and P2 focus different read occurrences and update the detail
+together. If focus is unavailable, the explanation states which evidence is
+missing and does not highlight an unrelated path.
 
-- [ ] Find source-backed publication-to-consumer-to-write paths and synchronous
-      reads under a common trigger or linked through supported causal evidence.
-- [ ] Join candidates by resource identity and point-key or query overlap evidence.
-- [ ] Require evidence that publication can precede the related read; distinguish
-      structural reachability from compatible execution paths.
-- [ ] Preserve fan-out and cycles without inventing an edge from write to read.
-- [ ] Use indexed lookups and bounded traversal rather than enumerating all paths.
-- [ ] Define configurable or named limits, deterministic ordering, deduplication,
-      complexity expectations, and explicit truncation reporting.
-- [ ] Group equivalent paths for the same causal context, expected write occurrence,
-      read occurrence, and affected data into one diagnostic with path variants.
-- [ ] Keep distinct reads and distinct expected writes as separate diagnostics,
-      even when they access the same data. Preserve variant-specific guarantees.
+## FOCUS-06: Extend fixtures and regression cases
 
-Acceptance: the positive fixture produces one diagnostic with both branch
-witnesses. Unrelated roots and proven exclusive branches produce no risk.
-Unknown feasibility yields insufficient evidence. Repeated runs are deterministic.
+- [ ] Enrich the checkout fixture with exact witness references derived from
+      its declared interactions and handler occurrences. Keep it synthetic.
+- [ ] Add a multi-problem fixture with distinct reads in the same service,
+      shared prefixes, and one read affected by multiple expected writes.
+- [ ] Add equivalent path variants, a cycle, a collapsed branch, ambiguous
+      mapping, missing endpoints, truncation, and an old manifest without witnesses.
+- [ ] Include a guarantee and insufficient evidence alongside potential risks
+      to test counts, labels, and focus availability.
+- [ ] Test import, persistence, export, and diagnostic-to-occurrence mapping.
+      Assert exact branch membership and exclusion of unrelated calls.
 
-### ASR-06: Evaluate completion guarantees and classify findings
+Acceptance: the fixtures fail if service-name matching highlights every
+inventory occurrence or if equivalent paths inflate a problem count.
 
-- [ ] Recognize only supported, source-backed guarantees that apply to the same
-      expected operation or version and establish completion before the read.
-- [ ] Reject confirmation of a previous write to the same key as evidence for
-      the expected write. A matching business key alone is insufficient.
-- [ ] Check that an application completion response follows the relevant commit;
-      waiting on publication or receiving a broker acknowledgement is insufficient.
-- [ ] Treat fixed delays as timing assumptions, not completion guarantees.
-- [x] Separate classification from confidence using the outcomes below.
-- [ ] Record unrecognized synchronization and replica/read-model visibility limits.
+## FOCUS-07: Validate the visible interaction and regenerate models
 
-| Outcome | Required interpretation |
-|---|---|
-| Potential risk | Related write and read established; no applicable completion guarantee identified in analyzed evidence |
-| Insufficient evidence | Causality, identity, branch feasibility, ordering, or analysis coverage is unresolved |
-| Guarantee identified | Supported evidence orders completion before the read, within the stated visibility scope |
-| Not applicable | Proven disjoint data access, unrelated causes, or incompatible execution paths |
+- [ ] Add browser tests that click P1 and P2 and inspect highlighted arcs,
+      occurrence badges, expanded ancestors, and the selected explanation.
+- [ ] Verify `Vue complète`, filtering, flow changes, rapid selection, and
+      leaving Flux. Check camera restoration within renderer precision.
+- [ ] Run the focused tests, Ruff, and the applicable contract checks prescribed
+      by [AGENTS.md](AGENTS.md). Run the Chrome browser suite when available.
+- [ ] Capture and inspect screenshots of the complete graph, P1 focus, P2 focus,
+      and restored view in light and dark themes, including a constrained viewport.
+- [ ] Regenerate the checkout HTML from its JSON and verify the actual generated
+      file in the browser. Keep the generator and fixture reproducible.
+- [ ] If the supermarket export is regenerated, synchronize `architecture-ia.html`
+      with `docs/models/simple-supermarket.html` as required by AGENTS.md.
+- [ ] Document any unavailable browser prerequisite and unverified behavior.
+      Do not mark visual acceptance complete from string-level checks alone.
 
-Acceptance: absence of a recognized guarantee never becomes proof that none
-exists. A commit acknowledgement alone does not establish visibility on an
-unproven replica or separate read model. UI wording never claims a proven race.
-An unresolved variant cannot be hidden by a guaranteed variant of the same
-diagnostic. Expose variant outcomes and retain any supported potential risk.
-
-### ASR-07: Export diagnostics from the persisted snapshot
-
-- [x] Add an additive diagnostic field to the graph export JSON model.
-- [ ] Include stable diagnostic and step IDs, branch witnesses, source references,
-      data/key matching evidence, guarantee evidence, and coverage limitations.
-- [ ] Preserve endpoint identity through aggregation and flow deduplication.
-- [ ] Export diagnostic-to-read mappings and path variants so collapsed nodes and
-      repeated service occurrences preserve all associated diagnostics.
-- [ ] Define behavior for missing diagnostics, old exports, and partial snapshots.
-- [ ] Keep rule evaluation outside browser presentation code.
-
-Acceptance: exports contain enough evidence to reproduce the explanation without
-source access. Existing consumers remain compatible. Missing analysis is distinct
-from a completed analysis with no findings.
-
-### ASR-08: Present points to examine in the Flux view
-
-- [x] Add a "Problèmes du flux · N" panel below the call-flow controls, with one
-      row per diagnostic and a total computed after path deduplication.
-- [ ] Give each diagnostic a flow-local display identifier such as P1 or P2.
-      These identifiers indicate neither severity nor backlog priority; keep them
-      stable while filtering or navigating the same exported flow.
-- [ ] Show the affected data, writing and reading services, classification,
-      confidence, and the missing or identified guarantee.
-- [ ] Separate insufficient evidence from potential risks in the presentation.
-- [ ] Expose guarantees separately from the problem count. Exclude not-applicable
-      results from the problem list; show incomplete coverage independently.
-- [ ] Provide filters by classification and affected data, with visible/total counts.
-- [ ] Expand the selected row to explain causal links, key/query overlap,
-      expected operation/version, guarantee assessment, and source evidence.
-- [ ] Add "Précédent" and "Suivant" over the filtered diagnostic list, showing
-      current position and disabling navigation at either end.
-- [ ] Define empty, unavailable, incomplete, and no-selection states.
-- [ ] Reset diagnostic selection when changing flows or leaving the Flux view.
-
-Acceptance: selecting a flow exposes only its diagnostics. The list explains
-that the read may occur before the asynchronous write completes. Architecture
-controls do not appear in Flux, and Flux diagnostics do not leak into Architecture.
-Selecting successive diagnostics updates the explanation and graph together.
-Filtering out the selected diagnostic clears its focus and restores the full
-flow. An empty result from incomplete analysis must never imply that the flow is safe.
-
-### ASR-09: Visualize the causal split and supporting evidence
-
-- [ ] In the complete graph, add a diagnostic-count badge at each affected read.
-      Collapsed service nodes show unique associated diagnostic counts.
-- [ ] Clicking a badge selects its sole diagnostic or filters the list to its
-      associated diagnostics when several problems affect the same read.
-- [ ] On diagnostic selection, reveal the common trigger or cross-treatment causal
-      links and both branch witnesses. Highlight only the selected diagnostic.
-- [ ] Attenuate unrelated paths and label the operations "Écriture attendue" and
-      "Lecture à risque" for a risk, or "Lecture à examiner" for uncertain evidence.
-- [ ] Mark asynchronous edges with dashed lines and synchronous calls with solid
-      lines; label the distinction without relying on color alone.
-- [ ] Add read/write badges and highlight the shared data target or proven mapping.
-- [ ] Place the warning at the read and expose the synchronization gap explanation.
-- [ ] Distinguish inferred uncertainty overlays from indexed dependency edges.
-- [ ] Open file/line evidence and key propagation details from the diagnostic.
-- [ ] Fit the highlighted paths in the viewport and provide a return to the full
-      selected flow, restoring its camera and expansion state.
-- [ ] Label that return action "Vue complète". Save the full-flow state before
-      the first diagnostic focus; previous/next navigation must not overwrite it.
-- [ ] Allow inspection of grouped path variants while keeping their uncertainty
-      and guarantee assessments distinct.
-
-Acceptance: the visualization never numbers asynchronous completion and the read
-as a guaranteed total order. Repeated service occurrences retain their step IDs.
-The user can inspect both branches, the common data, and the reason for the risk.
-Multiple diagnoses on the same read remain individually selectable. Service
-aggregation must not move a warning onto an unrelated read occurrence.
-
-### ASR-10: Verify interactions and deliver the laboratory model
-
-- [ ] Run focused extractor, detector, persistence, migration, and export tests
-      against every ASR-02 fixture, including negative cases.
-- [ ] Add browser regression tests for diagnostic selection, both highlighted
-      branches, evidence inspection, flow switching, and state restoration.
-- [ ] Verify a flow with several diagnostics: counts, shared-read badges,
-      filtering, previous/next boundaries, grouped variants, and stable IDs.
-- [ ] Verify that only one diagnostic is highlighted and that "Vue complète"
-      restores the state saved before navigating across several diagnostics.
-- [ ] Check graph/Flux toolbar separation and camera/expansion controls.
-- [ ] Capture and inspect dark/light screenshots at desktop and constrained widths.
-- [ ] Capture the selected diagnostic with both branches visible and a return to
-      Architecture with no residual diagnostic controls.
-- [ ] Capture the complete multi-diagnostic flow, two successive diagnostic
-      selections, and the restored full flow. Inspect each rendered capture.
-- [ ] Run Ruff, mypy, the full default test suite, and the Chrome browser suite.
-- [ ] Run `uv run python scripts/check_companion_contracts.py` using temporary
-      fixtures; this check must not mutate the laboratory index.
-- [ ] Validate the story on the supermarket model. Add a dedicated fixture if its
-      existing facts do not establish the required causal/key relationship.
-- [ ] Generate the laboratory `architecture-ia.html`, synchronize its
-      `architecture.html` viewing copy, and copy the POC export to
-      `docs/models/simple-supermarket.html`.
-- [ ] Confirm exports use the current source assets and contain the same diagnostics.
-- [ ] Update affected specification sections and companion guidance if its workflow
-      or public contracts change; review the final documentation.
-
-Acceptance: record commands, results, screenshot paths, inspected UI states, and
-any unavailable prerequisite here. Static HTML assertions alone cannot validate
-interaction or visual acceptance. No screenshot or browser check may be claimed
-when it was skipped.
-
-## Definition of done
-
-- [ ] All required tasks satisfy their acceptance criteria.
-- [ ] Positive and negative cases validate the evidence and classification rules.
-- [ ] Later causal treatments, stale confirmations, and query overlap cases have
-      explicit expected outcomes and passing regression tests.
-- [ ] Multiple diagnostics remain distinguishable without highlighting all paths
-      simultaneously or merging different expected writes and read occurrences.
-- [ ] Unknown data and incomplete analysis remain visible as limitations.
-- [ ] The selected diagnostic displays the asynchronous write and synchronous
-      read together, with source evidence and no invented completion ordering.
-- [ ] Browser tests and inspected screenshots validate the delivered laboratory HTML.
-- [ ] Documentation and generated models match the implementation.
+Acceptance: screenshots and browser assertions demonstrate that selecting a
+problem reveals its two exact branches and that returning to the full graph
+restores the previous view. Complete this backlog only after all criteria pass.

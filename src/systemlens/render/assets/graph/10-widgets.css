@@ -250,6 +250,10 @@
     .flow-consistency-card.is-guarantee_identified { border-color: #22c55e; color: #166534; background: #f0fdf4; }
     .flow-consistency-card.is-insufficient_evidence { border-color: #94a3b8; color: #475569; background: #f8fafc; }
     .flow-consistency-arrow { color: currentColor; font-size: 15px; }
+    .graph-call-path.is-diagnostic-async { stroke: #f59e0b !important; stroke-width: 4px !important; stroke-dasharray: 9 5; opacity: 1; }
+    .graph-call-path.is-diagnostic-sync { stroke: #38bdf8 !important; stroke-width: 4px !important; opacity: 1; }
+    .graph-call-path.is-diagnostic-muted { opacity: .16; }
+    .graph-call-label.is-diagnostic-muted { opacity: .25; }
     .code-flow-steps { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
     .code-flow-step { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; padding: 8px 9px; border: 1px solid #e2e8f0; border-radius: var(--control-radius); color: #334155; background: #fff; }
     .code-flow-step::before { display: none; }

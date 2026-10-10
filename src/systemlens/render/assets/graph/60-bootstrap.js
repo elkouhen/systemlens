@@ -10,6 +10,8 @@
         relatedEdges: null,
         analysisPortEndpointId: null,
         selectedCodeFlowId: null,
+        selectedDiagnosticId: null,
+        diagnosticFocusSnapshot: null,
         viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
         pathMicroserviceOrder: new Map(),
@@ -38,6 +40,7 @@
     const graphModeCenter = document.getElementById("graph-mode-center");
     const flowModeCenter = document.getElementById("flow-mode-center");
     const flowModeExpandAll = document.getElementById("flow-mode-expand-all");
+    const flowDiagnosticFullView = document.getElementById("flow-diagnostic-full-view");
     const flowTreeDepthDecrease = document.getElementById("flow-call-tree-depth-decrease");
     const flowTreeDepthIncrease = document.getElementById("flow-call-tree-depth-increase");
     const toolbar = document.getElementById("architecture-toolbar");
@@ -85,6 +88,9 @@
     flowModeCenter?.addEventListener("click", centerFlow);
     flowModeExpandAll?.addEventListener("click", () => {
       expandAllCallTree();
+    });
+    flowDiagnosticFullView?.addEventListener("click", () => {
+      restoreDiagnosticFullView();
     });
     flowTreeDepthDecrease?.addEventListener("click", () => {
       adjustCallTreeDepth(-1);

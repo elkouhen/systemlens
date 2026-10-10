@@ -262,10 +262,22 @@ def render_graph_html(
         for flow, equivalent_count, call_graph_id in export_flow_items
     ]
     view_model["code_flows"] = serialized_code_flows
-    view_model["flow_diagnostics"] = [
-        diagnostic.as_dict()
-        for diagnostic in diagnose_flow_consistency_snapshot(export_flows)
-    ]
+    exported_diagnostics: list[dict[str, object]] = []
+    flow_by_id = {flow.id: flow for flow in export_flows}
+    for diagnostic in diagnose_flow_consistency_snapshot(export_flows):
+        item = diagnostic.as_dict()
+        flow = flow_by_id.get(diagnostic.flow_id)
+        if flow is not None:
+            item["async_endpoint_ids"] = [
+                step.endpoint_id for step in flow.steps
+                if step.endpoint_id and (step.branch or "").lower() in {"async", "event", "callback"}
+            ]
+            item["sync_endpoint_ids"] = [
+                step.endpoint_id for step in flow.steps
+                if step.endpoint_id and (step.branch or "sync").lower() in {"sync", "synchronous", "blocking"}
+            ]
+        exported_diagnostics.append(item)
+    view_model["flow_diagnostics"] = exported_diagnostics
     view_model["flow_descriptions"] = {
         str(flow_id): str(description)
         for flow_id, description in (flow_descriptions or {}).items()
