@@ -1,0 +1,108 @@
+{
+  "format": "systemlens-ai-graph-v1",
+  "generated_by": {
+    "namespace": "async-consistency-fixture",
+    "pass": "001"
+  },
+  "mode": "partial",
+  "description": "Synthetic source-backed flow snapshot for async write/sync read diagnostics.",
+  "nodes": [
+    {"id": "orders", "kind": "service", "name": "orders"},
+    {"id": "orders-db", "kind": "data_schema", "name": "orders", "technology": "postgresql"},
+    {"id": "orders-topic", "kind": "message_channel", "name": "orders.update", "technology": "kafka"}
+  ],
+  "edges": [
+    {"id": "orders-publishes-update", "source": "orders", "target": "orders-topic", "kind": "publishes", "relation": "publishes", "confidence": "high"},
+    {"id": "orders-writes-db", "source": "orders", "target": "orders-db", "kind": "writes", "relation": "writes", "confidence": "medium"}
+  ],
+  "flows": [
+    {
+      "id": "flow-order-update-risk",
+      "module": "orders",
+      "method": "OrdersController.updateAndRead",
+      "path": "src/orders/OrdersController.java",
+      "start_line": 18,
+      "end_line": 42,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "The request publishes an update and then reads the same order synchronously.",
+      "steps": [
+        {"order": 1, "kind": "http_entry", "name": "PUT /orders/{id}", "path": "src/orders/OrdersController.java", "start_line": 18, "end_line": 18, "branch": "sync"},
+        {"order": 2, "kind": "message_publish", "name": "orders.update", "path": "src/orders/OrdersController.java", "start_line": 27, "end_line": 27, "branch": "async", "resource": "orders", "key": "request.orderId", "causal_id": "order-update-42", "expected_version": "v2"},
+        {"order": 3, "kind": "data_write", "name": "orders", "path": "src/orders/OrderConsumer.java", "start_line": 31, "end_line": 31, "branch": "async", "resource": "orders", "key": "request.orderId", "causal_id": "order-update-42", "expected_version": "v2", "completion": "ack_only"},
+        {"order": 4, "kind": "data_read", "name": "orders", "path": "src/orders/OrdersController.java", "start_line": 35, "end_line": 35, "branch": "sync", "resource": "orders", "key": "request.orderId", "causal_id": "order-update-42", "expected_version": "v2", "query_shape": "point"}
+      ],
+      "expected_diagnostics": ["potential_risk"]
+    },
+    {
+      "id": "flow-order-update-two-risks",
+      "module": "orders",
+      "method": "OrdersController.updateAndBuildSummary",
+      "path": "src/orders/OrdersController.java",
+      "start_line": 50,
+      "end_line": 88,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "Two synchronous reads can overtake two asynchronous writes in the same request.",
+      "steps": [
+        {"order": 1, "kind": "http_entry", "name": "POST /orders/{id}/summary", "path": "src/orders/OrdersController.java", "start_line": 50, "end_line": 50},
+        {"order": 2, "kind": "data_write", "name": "orders", "path": "src/orders/OrderWriter.java", "start_line": 61, "end_line": 61, "branch": "async", "resource": "orders", "key": "request.orderId", "causal_id": "summary-42", "expected_version": "v4", "completion": "ack_only"},
+        {"order": 3, "kind": "data_write", "name": "order_lines", "path": "src/orders/LineWriter.java", "start_line": 65, "end_line": 65, "branch": "async", "resource": "order_lines", "key": "request.orderId", "causal_id": "summary-42", "expected_version": "v4", "completion": "fixed_delay"},
+        {"order": 4, "kind": "data_read", "name": "orders", "path": "src/orders/SummaryReader.java", "start_line": 74, "end_line": 74, "branch": "sync", "resource": "orders", "key": "request.orderId", "causal_id": "summary-42", "expected_version": "v4", "query_shape": "point"},
+        {"order": 5, "kind": "data_read", "name": "order_lines", "path": "src/orders/SummaryReader.java", "start_line": 78, "end_line": 78, "branch": "sync", "resource": "order_lines", "key": "request.orderId", "causal_id": "summary-42", "expected_version": "v4", "query_shape": "point"}
+      ],
+      "expected_diagnostics": ["potential_risk", "potential_risk"]
+    },
+    {
+      "id": "flow-order-update-guaranteed",
+      "module": "orders",
+      "method": "OrdersController.updateAfterCommit",
+      "path": "src/orders/OrdersController.java",
+      "start_line": 92,
+      "end_line": 118,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "The write completion and visibility guarantee precede the read.",
+      "steps": [
+        {"order": 1, "kind": "http_entry", "name": "PUT /orders/{id}/consistent", "path": "src/orders/OrdersController.java", "start_line": 92, "end_line": 92},
+        {"order": 2, "kind": "data_write", "name": "orders", "path": "src/orders/OrderWriter.java", "start_line": 101, "end_line": 101, "branch": "async", "resource": "orders", "key": "request.orderId", "causal_id": "consistent-42", "expected_version": "v5", "completion": "visible"},
+        {"order": 3, "kind": "data_read", "name": "orders", "path": "src/orders/OrderReader.java", "start_line": 114, "end_line": 114, "branch": "sync", "resource": "orders", "key": "request.orderId", "causal_id": "consistent-42", "expected_version": "v5", "query_shape": "point"}
+      ],
+      "expected_diagnostics": ["guarantee_identified"]
+    },
+    {
+      "id": "flow-order-update-unknown-causality",
+      "module": "orders",
+      "method": "OrdersController.readAfterCallback",
+      "path": "src/orders/OrdersController.java",
+      "start_line": 122,
+      "end_line": 151,
+      "status": "potential",
+      "confidence": "low",
+      "reason": "The write and read use the same resource, but the callback link is unresolved.",
+      "steps": [
+        {"order": 1, "kind": "http_entry", "name": "GET /orders/{id}", "path": "src/orders/OrdersController.java", "start_line": 122, "end_line": 122},
+        {"order": 2, "kind": "data_write", "name": "orders", "path": "src/orders/OrderCallback.java", "start_line": 133, "end_line": 133, "branch": "async", "resource": "orders", "key": "request.orderId", "causal_id": "callback-unknown", "expected_version": "v6"},
+        {"order": 3, "kind": "data_read", "name": "orders", "path": "src/orders/OrdersController.java", "start_line": 146, "end_line": 146, "branch": "sync", "resource": "orders", "key": "request.orderId", "causal_id": "request-unknown", "expected_version": "v6", "query_shape": "point"}
+      ],
+      "expected_diagnostics": ["insufficient_evidence"]
+    },
+    {
+      "id": "flow-order-update-disjoint-key",
+      "module": "orders",
+      "method": "OrdersController.updateAndReadOtherOrder",
+      "path": "src/orders/OrdersController.java",
+      "start_line": 156,
+      "end_line": 180,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "The asynchronous write and synchronous read target proven different keys.",
+      "steps": [
+        {"order": 1, "kind": "http_entry", "name": "PUT /orders/{id}/other", "path": "src/orders/OrdersController.java", "start_line": 156, "end_line": 156},
+        {"order": 2, "kind": "data_write", "name": "orders", "path": "src/orders/OrderWriter.java", "start_line": 165, "end_line": 165, "branch": "async", "resource": "orders", "key": "request.orderId", "causal_id": "disjoint-42", "expected_version": "v2"},
+        {"order": 3, "kind": "data_read", "name": "orders", "path": "src/orders/OrderReader.java", "start_line": 176, "end_line": 176, "branch": "sync", "resource": "orders", "key": "request.otherOrderId", "causal_id": "disjoint-42", "expected_version": "v2", "query_shape": "point"}
+      ],
+      "expected_diagnostics": []
+    }
+  ]
+}

@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from systemlens.application.flow_consistency import (
     diagnose_flow_consistency,
     diagnose_flow_consistency_snapshot,
@@ -84,3 +87,22 @@ def test_distinct_pairs_are_reported_independently() -> None:
         )
     ])
     assert [(item.write_step, item.read_step) for item in diagnostics] == [(2, 4), (3, 5)]
+def test_checked_in_fact_base_matches_expected_classifications() -> None:
+    manifest = json.loads(
+        (Path(__file__).parents[1] / "examples" / "async-write-sync-read-facts.json")
+        .read_text(encoding="utf-8")
+    )
+    flows = []
+    for raw in manifest["flows"]:
+        flows.append(CodeFlow(
+            id=raw["id"], module=raw["module"], method=raw["method"], path=raw["path"],
+            start_line=raw["start_line"], end_line=raw["end_line"], status=raw["status"],
+            confidence=raw["confidence"], reason=raw["reason"],
+            steps=tuple(CodeFlowStep(**step) for step in raw["steps"]),
+        ))
+    actual = {
+        flow.id: [item.classification for item in diagnose_flow_consistency(flow)]
+        for flow in flows
+    }
+    expected = {raw["id"]: raw["expected_diagnostics"] for raw in manifest["flows"]}
+    assert actual == expected
