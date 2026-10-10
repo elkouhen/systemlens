@@ -816,7 +816,7 @@
           const callGraphActive = active && (
             graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree"
           );
-          const architectureActive = graphState.viewMode === "architecture";
+          const architectureActive = graphState.viewMode === "architecture" && !callGraphActive;
           graphContext.hidden = !architectureActive;
           flowContext.hidden = !callGraphActive;
           graphContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
