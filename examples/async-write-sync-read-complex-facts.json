@@ -1,0 +1,1516 @@
+{
+  "format": "systemlens-ai-graph-v1",
+  "generated_by": {
+    "namespace": "async-consistency-complex",
+    "pass": "001"
+  },
+  "mode": "partial",
+  "description": "Synthetic complex model: 5 services, 20 HTTP/Kafka interactions and consistency diagnostics.",
+  "nodes": [
+    {
+      "id": "orders",
+      "kind": "service",
+      "name": "orders"
+    },
+    {
+      "id": "inventory",
+      "kind": "service",
+      "name": "inventory"
+    },
+    {
+      "id": "payments",
+      "kind": "service",
+      "name": "payments"
+    },
+    {
+      "id": "shipping",
+      "kind": "service",
+      "name": "shipping"
+    },
+    {
+      "id": "notifications",
+      "kind": "service",
+      "name": "notifications"
+    },
+    {
+      "id": "orders.created",
+      "kind": "topic",
+      "name": "orders.created",
+      "technology": "kafka"
+    },
+    {
+      "id": "orders.updated",
+      "kind": "topic",
+      "name": "orders.updated",
+      "technology": "kafka"
+    },
+    {
+      "id": "inventory.reserved",
+      "kind": "topic",
+      "name": "inventory.reserved",
+      "technology": "kafka"
+    },
+    {
+      "id": "inventory.released",
+      "kind": "topic",
+      "name": "inventory.released",
+      "technology": "kafka"
+    },
+    {
+      "id": "payments.authorized",
+      "kind": "topic",
+      "name": "payments.authorized",
+      "technology": "kafka"
+    },
+    {
+      "id": "payments.failed",
+      "kind": "topic",
+      "name": "payments.failed",
+      "technology": "kafka"
+    },
+    {
+      "id": "shipping.requested",
+      "kind": "topic",
+      "name": "shipping.requested",
+      "technology": "kafka"
+    },
+    {
+      "id": "shipping.created",
+      "kind": "topic",
+      "name": "shipping.created",
+      "technology": "kafka"
+    },
+    {
+      "id": "notifications.send",
+      "kind": "topic",
+      "name": "notifications.send",
+      "technology": "kafka"
+    },
+    {
+      "id": "orders.reconciled",
+      "kind": "topic",
+      "name": "orders.reconciled",
+      "technology": "kafka"
+    },
+    {
+      "id": "db:orders",
+      "kind": "collection",
+      "name": "orders",
+      "technology": "postgresql"
+    },
+    {
+      "id": "db:inventory",
+      "kind": "collection",
+      "name": "inventory",
+      "technology": "postgresql"
+    },
+    {
+      "id": "db:payments",
+      "kind": "collection",
+      "name": "payments",
+      "technology": "postgresql"
+    },
+    {
+      "id": "db:shipments",
+      "kind": "collection",
+      "name": "shipments",
+      "technology": "postgresql"
+    },
+    {
+      "id": "db:notifications",
+      "kind": "collection",
+      "name": "notifications",
+      "technology": "postgresql"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "source": "orders",
+      "target": "inventory",
+      "kind": "http",
+      "relation": "/inventory/reserve",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-2",
+      "source": "orders",
+      "target": "payments",
+      "kind": "http",
+      "relation": "/payments/authorize",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-3",
+      "source": "orders",
+      "target": "shipping",
+      "kind": "http",
+      "relation": "/shipping/quote",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-4",
+      "source": "orders",
+      "target": "notifications",
+      "kind": "http",
+      "relation": "/notifications/preview",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-5",
+      "source": "inventory",
+      "target": "orders",
+      "kind": "http",
+      "relation": "/orders/reservation",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-6",
+      "source": "payments",
+      "target": "orders",
+      "kind": "http",
+      "relation": "/orders/payment-status",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-7",
+      "source": "shipping",
+      "target": "inventory",
+      "kind": "http",
+      "relation": "/inventory/availability",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-8",
+      "source": "shipping",
+      "target": "notifications",
+      "kind": "http",
+      "relation": "/notifications/shipping",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-9",
+      "source": "notifications",
+      "target": "orders",
+      "kind": "http",
+      "relation": "/orders/notification-status",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-10",
+      "source": "inventory",
+      "target": "shipping",
+      "kind": "http",
+      "relation": "/shipping/release",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-11",
+      "source": "orders",
+      "target": "orders.created",
+      "kind": "event",
+      "relation": "publishes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-12",
+      "source": "orders.created",
+      "target": "inventory",
+      "kind": "event",
+      "relation": "consumes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-13",
+      "source": "orders",
+      "target": "orders.updated",
+      "kind": "event",
+      "relation": "publishes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-14",
+      "source": "orders.updated",
+      "target": "inventory",
+      "kind": "event",
+      "relation": "consumes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-15",
+      "source": "inventory",
+      "target": "inventory.reserved",
+      "kind": "event",
+      "relation": "publishes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-16",
+      "source": "inventory.reserved",
+      "target": "payments",
+      "kind": "event",
+      "relation": "consumes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-17",
+      "source": "inventory",
+      "target": "inventory.released",
+      "kind": "event",
+      "relation": "publishes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-18",
+      "source": "inventory.released",
+      "target": "shipping",
+      "kind": "event",
+      "relation": "consumes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-19",
+      "source": "payments",
+      "target": "payments.authorized",
+      "kind": "event",
+      "relation": "publishes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-20",
+      "source": "payments.authorized",
+      "target": "shipping",
+      "kind": "event",
+      "relation": "consumes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-21",
+      "source": "payments",
+      "target": "payments.failed",
+      "kind": "event",
+      "relation": "publishes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-22",
+      "source": "payments.failed",
+      "target": "notifications",
+      "kind": "event",
+      "relation": "consumes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-23",
+      "source": "shipping",
+      "target": "shipping.requested",
+      "kind": "event",
+      "relation": "publishes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-24",
+      "source": "shipping.requested",
+      "target": "shipping",
+      "kind": "event",
+      "relation": "consumes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-25",
+      "source": "shipping",
+      "target": "shipping.created",
+      "kind": "event",
+      "relation": "publishes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-26",
+      "source": "shipping.created",
+      "target": "notifications",
+      "kind": "event",
+      "relation": "consumes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-27",
+      "source": "notifications",
+      "target": "notifications.send",
+      "kind": "event",
+      "relation": "publishes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-28",
+      "source": "notifications.send",
+      "target": "notifications",
+      "kind": "event",
+      "relation": "consumes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-29",
+      "source": "orders",
+      "target": "orders.reconciled",
+      "kind": "event",
+      "relation": "publishes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-30",
+      "source": "orders.reconciled",
+      "target": "orders",
+      "kind": "event",
+      "relation": "consumes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-31",
+      "source": "orders",
+      "target": "db:orders",
+      "kind": "data",
+      "relation": "writes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-32",
+      "source": "orders",
+      "target": "db:orders",
+      "kind": "data",
+      "relation": "reads",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-33",
+      "source": "inventory",
+      "target": "db:inventory",
+      "kind": "data",
+      "relation": "writes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-34",
+      "source": "inventory",
+      "target": "db:inventory",
+      "kind": "data",
+      "relation": "reads",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-35",
+      "source": "payments",
+      "target": "db:payments",
+      "kind": "data",
+      "relation": "writes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-36",
+      "source": "payments",
+      "target": "db:payments",
+      "kind": "data",
+      "relation": "reads",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-37",
+      "source": "shipping",
+      "target": "db:shipments",
+      "kind": "data",
+      "relation": "writes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-38",
+      "source": "shipping",
+      "target": "db:shipments",
+      "kind": "data",
+      "relation": "reads",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-39",
+      "source": "notifications",
+      "target": "db:notifications",
+      "kind": "data",
+      "relation": "writes",
+      "confidence": "high"
+    },
+    {
+      "id": "edge-40",
+      "source": "notifications",
+      "target": "db:notifications",
+      "kind": "data",
+      "relation": "reads",
+      "confidence": "high"
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "ep-create-order-entry",
+      "service": "orders",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /create-order",
+      "path": "src/orders/OrdersFlow.java",
+      "start_line": 20,
+      "end_line": 20,
+      "snippet": "serve POST /create-order"
+    },
+    {
+      "id": "ep-create-order-publish",
+      "service": "orders",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "orders.created",
+      "path": "src/orders/OrdersFlow.java",
+      "start_line": 24,
+      "end_line": 24,
+      "snippet": "produce orders.created"
+    },
+    {
+      "id": "ep-create-order-consume",
+      "service": "inventory",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "orders.created",
+      "path": "src/inventory/InventoryFlow.java",
+      "start_line": 29,
+      "end_line": 29,
+      "snippet": "consume orders.created"
+    },
+    {
+      "id": "ep-create-order-http",
+      "service": "orders",
+      "role": "call",
+      "system": "rest",
+      "topic": "/inventory/status",
+      "path": "src/orders/OrdersFlow.java",
+      "start_line": 34,
+      "end_line": 34,
+      "snippet": "call /inventory/status"
+    },
+    {
+      "id": "ep-reserve-stock-entry",
+      "service": "inventory",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /reserve-stock",
+      "path": "src/inventory/InventoryFlow.java",
+      "start_line": 40,
+      "end_line": 40,
+      "snippet": "serve POST /reserve-stock"
+    },
+    {
+      "id": "ep-reserve-stock-publish",
+      "service": "inventory",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "inventory.reserved",
+      "path": "src/inventory/InventoryFlow.java",
+      "start_line": 44,
+      "end_line": 44,
+      "snippet": "produce inventory.reserved"
+    },
+    {
+      "id": "ep-reserve-stock-consume",
+      "service": "payments",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "inventory.reserved",
+      "path": "src/payments/PaymentsFlow.java",
+      "start_line": 49,
+      "end_line": 49,
+      "snippet": "consume inventory.reserved"
+    },
+    {
+      "id": "ep-reserve-stock-http",
+      "service": "inventory",
+      "role": "call",
+      "system": "rest",
+      "topic": "/payments/status",
+      "path": "src/inventory/InventoryFlow.java",
+      "start_line": 54,
+      "end_line": 54,
+      "snippet": "call /payments/status"
+    },
+    {
+      "id": "ep-authorize-payment-entry",
+      "service": "payments",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /authorize-payment",
+      "path": "src/payments/PaymentsFlow.java",
+      "start_line": 60,
+      "end_line": 60,
+      "snippet": "serve POST /authorize-payment"
+    },
+    {
+      "id": "ep-authorize-payment-publish",
+      "service": "payments",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "payments.authorized",
+      "path": "src/payments/PaymentsFlow.java",
+      "start_line": 64,
+      "end_line": 64,
+      "snippet": "produce payments.authorized"
+    },
+    {
+      "id": "ep-authorize-payment-consume",
+      "service": "shipping",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "payments.authorized",
+      "path": "src/shipping/ShippingFlow.java",
+      "start_line": 69,
+      "end_line": 69,
+      "snippet": "consume payments.authorized"
+    },
+    {
+      "id": "ep-authorize-payment-http",
+      "service": "payments",
+      "role": "call",
+      "system": "rest",
+      "topic": "/shipping/status",
+      "path": "src/payments/PaymentsFlow.java",
+      "start_line": 74,
+      "end_line": 74,
+      "snippet": "call /shipping/status"
+    },
+    {
+      "id": "ep-request-shipping-entry",
+      "service": "shipping",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /request-shipping",
+      "path": "src/shipping/ShippingFlow.java",
+      "start_line": 80,
+      "end_line": 80,
+      "snippet": "serve POST /request-shipping"
+    },
+    {
+      "id": "ep-request-shipping-publish",
+      "service": "shipping",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "shipping.requested",
+      "path": "src/shipping/ShippingFlow.java",
+      "start_line": 84,
+      "end_line": 84,
+      "snippet": "produce shipping.requested"
+    },
+    {
+      "id": "ep-request-shipping-consume",
+      "service": "shipping",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "shipping.requested",
+      "path": "src/shipping/ShippingFlow.java",
+      "start_line": 89,
+      "end_line": 89,
+      "snippet": "consume shipping.requested"
+    },
+    {
+      "id": "ep-request-shipping-http",
+      "service": "shipping",
+      "role": "call",
+      "system": "rest",
+      "topic": "/shipping/status",
+      "path": "src/shipping/ShippingFlow.java",
+      "start_line": 94,
+      "end_line": 94,
+      "snippet": "call /shipping/status"
+    },
+    {
+      "id": "ep-notify-payment-failure-entry",
+      "service": "notifications",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /notify-payment-failure",
+      "path": "src/notifications/NotificationsFlow.java",
+      "start_line": 100,
+      "end_line": 100,
+      "snippet": "serve POST /notify-payment-failure"
+    },
+    {
+      "id": "ep-notify-payment-failure-publish",
+      "service": "notifications",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "notifications.send",
+      "path": "src/notifications/NotificationsFlow.java",
+      "start_line": 104,
+      "end_line": 104,
+      "snippet": "produce notifications.send"
+    },
+    {
+      "id": "ep-notify-payment-failure-consume",
+      "service": "notifications",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "notifications.send",
+      "path": "src/notifications/NotificationsFlow.java",
+      "start_line": 109,
+      "end_line": 109,
+      "snippet": "consume notifications.send"
+    },
+    {
+      "id": "ep-notify-payment-failure-http",
+      "service": "notifications",
+      "role": "call",
+      "system": "rest",
+      "topic": "/notifications/status",
+      "path": "src/notifications/NotificationsFlow.java",
+      "start_line": 114,
+      "end_line": 114,
+      "snippet": "call /notifications/status"
+    },
+    {
+      "id": "ep-reconcile-order-entry",
+      "service": "orders",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /reconcile-order",
+      "path": "src/orders/OrdersFlow.java",
+      "start_line": 120,
+      "end_line": 120,
+      "snippet": "serve POST /reconcile-order"
+    },
+    {
+      "id": "ep-reconcile-order-publish",
+      "service": "orders",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "orders.reconciled",
+      "path": "src/orders/OrdersFlow.java",
+      "start_line": 124,
+      "end_line": 124,
+      "snippet": "produce orders.reconciled"
+    },
+    {
+      "id": "ep-reconcile-order-consume",
+      "service": "orders",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "orders.reconciled",
+      "path": "src/orders/OrdersFlow.java",
+      "start_line": 129,
+      "end_line": 129,
+      "snippet": "consume orders.reconciled"
+    },
+    {
+      "id": "ep-reconcile-order-http",
+      "service": "orders",
+      "role": "call",
+      "system": "rest",
+      "topic": "/orders/status",
+      "path": "src/orders/OrdersFlow.java",
+      "start_line": 134,
+      "end_line": 134,
+      "snippet": "call /orders/status"
+    },
+    {
+      "id": "ep-release-stock-entry",
+      "service": "inventory",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /release-stock",
+      "path": "src/inventory/InventoryFlow.java",
+      "start_line": 140,
+      "end_line": 140,
+      "snippet": "serve POST /release-stock"
+    },
+    {
+      "id": "ep-release-stock-publish",
+      "service": "inventory",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "inventory.released",
+      "path": "src/inventory/InventoryFlow.java",
+      "start_line": 144,
+      "end_line": 144,
+      "snippet": "produce inventory.released"
+    },
+    {
+      "id": "ep-release-stock-consume",
+      "service": "shipping",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "inventory.released",
+      "path": "src/shipping/ShippingFlow.java",
+      "start_line": 149,
+      "end_line": 149,
+      "snippet": "consume inventory.released"
+    },
+    {
+      "id": "ep-release-stock-http",
+      "service": "inventory",
+      "role": "call",
+      "system": "rest",
+      "topic": "/shipping/status",
+      "path": "src/inventory/InventoryFlow.java",
+      "start_line": 154,
+      "end_line": 154,
+      "snippet": "call /shipping/status"
+    },
+    {
+      "id": "ep-shipping-created-entry",
+      "service": "shipping",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /shipping-created",
+      "path": "src/shipping/ShippingFlow.java",
+      "start_line": 160,
+      "end_line": 160,
+      "snippet": "serve POST /shipping-created"
+    },
+    {
+      "id": "ep-shipping-created-publish",
+      "service": "shipping",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "shipping.created",
+      "path": "src/shipping/ShippingFlow.java",
+      "start_line": 164,
+      "end_line": 164,
+      "snippet": "produce shipping.created"
+    },
+    {
+      "id": "ep-shipping-created-consume",
+      "service": "notifications",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "shipping.created",
+      "path": "src/notifications/NotificationsFlow.java",
+      "start_line": 169,
+      "end_line": 169,
+      "snippet": "consume shipping.created"
+    },
+    {
+      "id": "ep-shipping-created-http",
+      "service": "shipping",
+      "role": "call",
+      "system": "rest",
+      "topic": "/notifications/status",
+      "path": "src/shipping/ShippingFlow.java",
+      "start_line": 174,
+      "end_line": 174,
+      "snippet": "call /notifications/status"
+    }
+  ],
+  "flows": [
+    {
+      "id": "complex-create-order",
+      "module": "orders",
+      "method": "OrdersFlow.create-order",
+      "path": "src/orders/OrdersFlow.java",
+      "start_line": 20,
+      "end_line": 38,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "Synthetic create-order flow with HTTP and Kafka continuations.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /create-order",
+          "path": "src/orders/OrdersFlow.java",
+          "start_line": 20,
+          "end_line": 20,
+          "endpoint_id": "ep-create-order-entry",
+          "branch": "sync"
+        },
+        {
+          "order": 2,
+          "kind": "message_publish",
+          "name": "orders.created",
+          "path": "src/orders/OrdersFlow.java",
+          "start_line": 24,
+          "end_line": 24,
+          "endpoint_id": "ep-create-order-publish",
+          "branch": "async",
+          "resource": "orders",
+          "key": "request.id",
+          "causal_id": "causal-create-order",
+          "expected_version": "v1"
+        },
+        {
+          "order": 3,
+          "kind": "message_entry",
+          "name": "orders.created",
+          "path": "src/inventory/InventoryFlow.java",
+          "start_line": 29,
+          "end_line": 29,
+          "endpoint_id": "ep-create-order-consume",
+          "branch": "async",
+          "causal_id": "causal-create-order"
+        },
+        {
+          "order": 4,
+          "kind": "data_write",
+          "name": "orders",
+          "path": "src/inventory/InventoryRepository.java",
+          "start_line": 31,
+          "end_line": 31,
+          "branch": "async",
+          "resource": "orders",
+          "key": "request.id",
+          "causal_id": "causal-create-order",
+          "expected_version": "v1",
+          "completion": "ack_only"
+        },
+        {
+          "order": 5,
+          "kind": "http_call",
+          "name": "/inventory/status",
+          "path": "src/orders/OrdersFlow.java",
+          "start_line": 34,
+          "end_line": 34,
+          "endpoint_id": "ep-create-order-http",
+          "branch": "sync"
+        },
+        {
+          "order": 6,
+          "kind": "data_read",
+          "name": "orders",
+          "path": "src/orders/OrdersFlow.java",
+          "start_line": 36,
+          "end_line": 36,
+          "branch": "sync",
+          "resource": "orders",
+          "key": "request.id",
+          "causal_id": "causal-create-order",
+          "expected_version": "v1",
+          "query_shape": "point"
+        }
+      ],
+      "expected_diagnostics": [
+        "potential_risk"
+      ]
+    },
+    {
+      "id": "complex-reserve-stock",
+      "module": "inventory",
+      "method": "InventoryFlow.reserve-stock",
+      "path": "src/inventory/InventoryFlow.java",
+      "start_line": 40,
+      "end_line": 58,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "Synthetic reserve-stock flow with HTTP and Kafka continuations.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /reserve-stock",
+          "path": "src/inventory/InventoryFlow.java",
+          "start_line": 40,
+          "end_line": 40,
+          "endpoint_id": "ep-reserve-stock-entry",
+          "branch": "sync"
+        },
+        {
+          "order": 2,
+          "kind": "message_publish",
+          "name": "inventory.reserved",
+          "path": "src/inventory/InventoryFlow.java",
+          "start_line": 44,
+          "end_line": 44,
+          "endpoint_id": "ep-reserve-stock-publish",
+          "branch": "async",
+          "resource": "inventory",
+          "key": "request.id",
+          "causal_id": "causal-reserve-stock",
+          "expected_version": "v2"
+        },
+        {
+          "order": 3,
+          "kind": "message_entry",
+          "name": "inventory.reserved",
+          "path": "src/payments/PaymentsFlow.java",
+          "start_line": 49,
+          "end_line": 49,
+          "endpoint_id": "ep-reserve-stock-consume",
+          "branch": "async",
+          "causal_id": "causal-reserve-stock"
+        },
+        {
+          "order": 4,
+          "kind": "data_write",
+          "name": "inventory",
+          "path": "src/payments/PaymentsRepository.java",
+          "start_line": 51,
+          "end_line": 51,
+          "branch": "async",
+          "resource": "inventory",
+          "key": "request.id",
+          "causal_id": "causal-reserve-stock",
+          "expected_version": "v2",
+          "completion": "fixed_delay"
+        },
+        {
+          "order": 5,
+          "kind": "http_call",
+          "name": "/payments/status",
+          "path": "src/inventory/InventoryFlow.java",
+          "start_line": 54,
+          "end_line": 54,
+          "endpoint_id": "ep-reserve-stock-http",
+          "branch": "sync"
+        },
+        {
+          "order": 6,
+          "kind": "data_read",
+          "name": "inventory",
+          "path": "src/inventory/InventoryFlow.java",
+          "start_line": 56,
+          "end_line": 56,
+          "branch": "sync",
+          "resource": "inventory",
+          "key": "request.id",
+          "causal_id": "causal-reserve-stock",
+          "expected_version": "v2",
+          "query_shape": "point"
+        }
+      ],
+      "expected_diagnostics": [
+        "potential_risk"
+      ]
+    },
+    {
+      "id": "complex-authorize-payment",
+      "module": "payments",
+      "method": "PaymentsFlow.authorize-payment",
+      "path": "src/payments/PaymentsFlow.java",
+      "start_line": 60,
+      "end_line": 78,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "Synthetic authorize-payment flow with HTTP and Kafka continuations.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /authorize-payment",
+          "path": "src/payments/PaymentsFlow.java",
+          "start_line": 60,
+          "end_line": 60,
+          "endpoint_id": "ep-authorize-payment-entry",
+          "branch": "sync"
+        },
+        {
+          "order": 2,
+          "kind": "message_publish",
+          "name": "payments.authorized",
+          "path": "src/payments/PaymentsFlow.java",
+          "start_line": 64,
+          "end_line": 64,
+          "endpoint_id": "ep-authorize-payment-publish",
+          "branch": "async",
+          "resource": "payments",
+          "key": "request.id",
+          "causal_id": "causal-authorize-payment",
+          "expected_version": "v3"
+        },
+        {
+          "order": 3,
+          "kind": "message_entry",
+          "name": "payments.authorized",
+          "path": "src/shipping/ShippingFlow.java",
+          "start_line": 69,
+          "end_line": 69,
+          "endpoint_id": "ep-authorize-payment-consume",
+          "branch": "async",
+          "causal_id": "causal-authorize-payment"
+        },
+        {
+          "order": 4,
+          "kind": "data_write",
+          "name": "payments",
+          "path": "src/shipping/ShippingRepository.java",
+          "start_line": 71,
+          "end_line": 71,
+          "branch": "async",
+          "resource": "payments",
+          "key": "request.id",
+          "causal_id": "causal-authorize-payment",
+          "expected_version": "v3",
+          "completion": "visible"
+        },
+        {
+          "order": 5,
+          "kind": "http_call",
+          "name": "/shipping/status",
+          "path": "src/payments/PaymentsFlow.java",
+          "start_line": 74,
+          "end_line": 74,
+          "endpoint_id": "ep-authorize-payment-http",
+          "branch": "sync"
+        },
+        {
+          "order": 6,
+          "kind": "data_read",
+          "name": "payments",
+          "path": "src/payments/PaymentsFlow.java",
+          "start_line": 76,
+          "end_line": 76,
+          "branch": "sync",
+          "resource": "payments",
+          "key": "request.id",
+          "causal_id": "causal-authorize-payment",
+          "expected_version": "v3",
+          "query_shape": "point"
+        }
+      ],
+      "expected_diagnostics": [
+        "guarantee_identified"
+      ]
+    },
+    {
+      "id": "complex-request-shipping",
+      "module": "shipping",
+      "method": "ShippingFlow.request-shipping",
+      "path": "src/shipping/ShippingFlow.java",
+      "start_line": 80,
+      "end_line": 98,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "Synthetic request-shipping flow with HTTP and Kafka continuations.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /request-shipping",
+          "path": "src/shipping/ShippingFlow.java",
+          "start_line": 80,
+          "end_line": 80,
+          "endpoint_id": "ep-request-shipping-entry",
+          "branch": "sync"
+        },
+        {
+          "order": 2,
+          "kind": "message_publish",
+          "name": "shipping.requested",
+          "path": "src/shipping/ShippingFlow.java",
+          "start_line": 84,
+          "end_line": 84,
+          "endpoint_id": "ep-request-shipping-publish",
+          "branch": "async",
+          "resource": "shipments",
+          "key": "request.id",
+          "causal_id": "causal-request-shipping",
+          "expected_version": "v4"
+        },
+        {
+          "order": 3,
+          "kind": "message_entry",
+          "name": "shipping.requested",
+          "path": "src/shipping/ShippingFlow.java",
+          "start_line": 89,
+          "end_line": 89,
+          "endpoint_id": "ep-request-shipping-consume",
+          "branch": "async",
+          "causal_id": "causal-request-shipping"
+        },
+        {
+          "order": 4,
+          "kind": "data_write",
+          "name": "shipments",
+          "path": "src/shipping/ShippingRepository.java",
+          "start_line": 91,
+          "end_line": 91,
+          "branch": "async",
+          "resource": "shipments",
+          "key": "request.id",
+          "causal_id": "causal-request-shipping",
+          "expected_version": "v4",
+          "completion": "ack_only"
+        },
+        {
+          "order": 5,
+          "kind": "http_call",
+          "name": "/shipping/status",
+          "path": "src/shipping/ShippingFlow.java",
+          "start_line": 94,
+          "end_line": 94,
+          "endpoint_id": "ep-request-shipping-http",
+          "branch": "sync"
+        },
+        {
+          "order": 6,
+          "kind": "data_read",
+          "name": "shipments",
+          "path": "src/shipping/ShippingFlow.java",
+          "start_line": 96,
+          "end_line": 96,
+          "branch": "sync",
+          "resource": "shipments",
+          "key": "request.id",
+          "causal_id": "causal-request-shipping",
+          "expected_version": "v4",
+          "query_shape": "point"
+        }
+      ],
+      "expected_diagnostics": [
+        "potential_risk"
+      ]
+    },
+    {
+      "id": "complex-notify-payment-failure",
+      "module": "notifications",
+      "method": "NotificationsFlow.notify-payment-failure",
+      "path": "src/notifications/NotificationsFlow.java",
+      "start_line": 100,
+      "end_line": 118,
+      "status": "potential",
+      "confidence": "low",
+      "reason": "Synthetic notify-payment-failure flow with HTTP and Kafka continuations.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /notify-payment-failure",
+          "path": "src/notifications/NotificationsFlow.java",
+          "start_line": 100,
+          "end_line": 100,
+          "endpoint_id": "ep-notify-payment-failure-entry",
+          "branch": "sync"
+        },
+        {
+          "order": 2,
+          "kind": "message_publish",
+          "name": "notifications.send",
+          "path": "src/notifications/NotificationsFlow.java",
+          "start_line": 104,
+          "end_line": 104,
+          "endpoint_id": "ep-notify-payment-failure-publish",
+          "branch": "async",
+          "resource": "notifications",
+          "key": "request.id",
+          "causal_id": "causal-notify-payment-failure",
+          "expected_version": "v5"
+        },
+        {
+          "order": 3,
+          "kind": "message_entry",
+          "name": "notifications.send",
+          "path": "src/notifications/NotificationsFlow.java",
+          "start_line": 109,
+          "end_line": 109,
+          "endpoint_id": "ep-notify-payment-failure-consume",
+          "branch": "async",
+          "causal_id": "causal-notify-payment-failure"
+        },
+        {
+          "order": 4,
+          "kind": "data_write",
+          "name": "notifications",
+          "path": "src/notifications/NotificationsRepository.java",
+          "start_line": 111,
+          "end_line": 111,
+          "branch": "async",
+          "resource": "notifications",
+          "key": "request.id",
+          "causal_id": "causal-notify-payment-failure",
+          "expected_version": "v5",
+          "completion": "unknown"
+        },
+        {
+          "order": 5,
+          "kind": "http_call",
+          "name": "/notifications/status",
+          "path": "src/notifications/NotificationsFlow.java",
+          "start_line": 114,
+          "end_line": 114,
+          "endpoint_id": "ep-notify-payment-failure-http",
+          "branch": "sync"
+        },
+        {
+          "order": 6,
+          "kind": "data_read",
+          "name": "notifications",
+          "path": "src/notifications/NotificationsFlow.java",
+          "start_line": 116,
+          "end_line": 116,
+          "branch": "sync",
+          "resource": "notifications",
+          "key": "request.id",
+          "causal_id": "unresolved-causal-link",
+          "expected_version": "v5",
+          "query_shape": "point"
+        }
+      ],
+      "expected_diagnostics": [
+        "insufficient_evidence"
+      ]
+    },
+    {
+      "id": "complex-reconcile-order",
+      "module": "orders",
+      "method": "OrdersFlow.reconcile-order",
+      "path": "src/orders/OrdersFlow.java",
+      "start_line": 120,
+      "end_line": 138,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "Synthetic reconcile-order flow with HTTP and Kafka continuations.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /reconcile-order",
+          "path": "src/orders/OrdersFlow.java",
+          "start_line": 120,
+          "end_line": 120,
+          "endpoint_id": "ep-reconcile-order-entry",
+          "branch": "sync"
+        },
+        {
+          "order": 2,
+          "kind": "message_publish",
+          "name": "orders.reconciled",
+          "path": "src/orders/OrdersFlow.java",
+          "start_line": 124,
+          "end_line": 124,
+          "endpoint_id": "ep-reconcile-order-publish",
+          "branch": "async",
+          "resource": "orders",
+          "key": "request.id",
+          "causal_id": "causal-reconcile-order",
+          "expected_version": "v6"
+        },
+        {
+          "order": 3,
+          "kind": "message_entry",
+          "name": "orders.reconciled",
+          "path": "src/orders/OrdersFlow.java",
+          "start_line": 129,
+          "end_line": 129,
+          "endpoint_id": "ep-reconcile-order-consume",
+          "branch": "async",
+          "causal_id": "causal-reconcile-order"
+        },
+        {
+          "order": 4,
+          "kind": "data_write",
+          "name": "orders",
+          "path": "src/orders/OrdersRepository.java",
+          "start_line": 131,
+          "end_line": 131,
+          "branch": "async",
+          "resource": "orders",
+          "key": "request.id",
+          "causal_id": "causal-reconcile-order",
+          "expected_version": "v6",
+          "completion": "old_write_confirmation"
+        },
+        {
+          "order": 5,
+          "kind": "http_call",
+          "name": "/orders/status",
+          "path": "src/orders/OrdersFlow.java",
+          "start_line": 134,
+          "end_line": 134,
+          "endpoint_id": "ep-reconcile-order-http",
+          "branch": "sync"
+        },
+        {
+          "order": 6,
+          "kind": "data_read",
+          "name": "orders",
+          "path": "src/orders/OrdersFlow.java",
+          "start_line": 136,
+          "end_line": 136,
+          "branch": "sync",
+          "resource": "orders",
+          "key": "request.id",
+          "causal_id": "causal-reconcile-order",
+          "expected_version": "v6",
+          "query_shape": "point"
+        }
+      ],
+      "expected_diagnostics": [
+        "potential_risk"
+      ]
+    },
+    {
+      "id": "complex-release-stock",
+      "module": "inventory",
+      "method": "InventoryFlow.release-stock",
+      "path": "src/inventory/InventoryFlow.java",
+      "start_line": 140,
+      "end_line": 158,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "Synthetic release-stock flow with HTTP and Kafka continuations.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /release-stock",
+          "path": "src/inventory/InventoryFlow.java",
+          "start_line": 140,
+          "end_line": 140,
+          "endpoint_id": "ep-release-stock-entry",
+          "branch": "sync"
+        },
+        {
+          "order": 2,
+          "kind": "message_publish",
+          "name": "inventory.released",
+          "path": "src/inventory/InventoryFlow.java",
+          "start_line": 144,
+          "end_line": 144,
+          "endpoint_id": "ep-release-stock-publish",
+          "branch": "async",
+          "resource": "inventory",
+          "key": "request.id",
+          "causal_id": "causal-release-stock",
+          "expected_version": "v7"
+        },
+        {
+          "order": 3,
+          "kind": "message_entry",
+          "name": "inventory.released",
+          "path": "src/shipping/ShippingFlow.java",
+          "start_line": 149,
+          "end_line": 149,
+          "endpoint_id": "ep-release-stock-consume",
+          "branch": "async",
+          "causal_id": "causal-release-stock"
+        },
+        {
+          "order": 4,
+          "kind": "data_write",
+          "name": "inventory",
+          "path": "src/shipping/ShippingRepository.java",
+          "start_line": 151,
+          "end_line": 151,
+          "branch": "async",
+          "resource": "inventory",
+          "key": "request.id",
+          "causal_id": "causal-release-stock",
+          "expected_version": "v7",
+          "completion": "ack_only"
+        },
+        {
+          "order": 5,
+          "kind": "http_call",
+          "name": "/shipping/status",
+          "path": "src/inventory/InventoryFlow.java",
+          "start_line": 154,
+          "end_line": 154,
+          "endpoint_id": "ep-release-stock-http",
+          "branch": "sync"
+        },
+        {
+          "order": 6,
+          "kind": "data_read",
+          "name": "inventory",
+          "path": "src/inventory/InventoryFlow.java",
+          "start_line": 156,
+          "end_line": 156,
+          "branch": "sync",
+          "resource": "inventory",
+          "key": "request.id",
+          "causal_id": "causal-release-stock",
+          "expected_version": "v7",
+          "query_shape": "point"
+        }
+      ],
+      "expected_diagnostics": [
+        "potential_risk"
+      ]
+    },
+    {
+      "id": "complex-shipping-created",
+      "module": "shipping",
+      "method": "ShippingFlow.shipping-created",
+      "path": "src/shipping/ShippingFlow.java",
+      "start_line": 160,
+      "end_line": 178,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "Synthetic shipping-created flow with HTTP and Kafka continuations.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /shipping-created",
+          "path": "src/shipping/ShippingFlow.java",
+          "start_line": 160,
+          "end_line": 160,
+          "endpoint_id": "ep-shipping-created-entry",
+          "branch": "sync"
+        },
+        {
+          "order": 2,
+          "kind": "message_publish",
+          "name": "shipping.created",
+          "path": "src/shipping/ShippingFlow.java",
+          "start_line": 164,
+          "end_line": 164,
+          "endpoint_id": "ep-shipping-created-publish",
+          "branch": "async",
+          "resource": "shipments",
+          "key": "request.id",
+          "causal_id": "causal-shipping-created",
+          "expected_version": "v8"
+        },
+        {
+          "order": 3,
+          "kind": "message_entry",
+          "name": "shipping.created",
+          "path": "src/notifications/NotificationsFlow.java",
+          "start_line": 169,
+          "end_line": 169,
+          "endpoint_id": "ep-shipping-created-consume",
+          "branch": "async",
+          "causal_id": "causal-shipping-created"
+        },
+        {
+          "order": 4,
+          "kind": "data_write",
+          "name": "shipments",
+          "path": "src/notifications/NotificationsRepository.java",
+          "start_line": 171,
+          "end_line": 171,
+          "branch": "async",
+          "resource": "shipments",
+          "key": "request.id",
+          "causal_id": "causal-shipping-created",
+          "expected_version": "v8",
+          "completion": "ack_only"
+        },
+        {
+          "order": 5,
+          "kind": "http_call",
+          "name": "/notifications/status",
+          "path": "src/shipping/ShippingFlow.java",
+          "start_line": 174,
+          "end_line": 174,
+          "endpoint_id": "ep-shipping-created-http",
+          "branch": "sync"
+        },
+        {
+          "order": 6,
+          "kind": "data_read",
+          "name": "shipments",
+          "path": "src/shipping/ShippingFlow.java",
+          "start_line": 176,
+          "end_line": 176,
+          "branch": "sync",
+          "resource": "shipments",
+          "key": "request.id",
+          "causal_id": "causal-shipping-created",
+          "expected_version": "v8",
+          "query_shape": "point"
+        }
+      ],
+      "expected_diagnostics": [
+        "potential_risk"
+      ]
+    }
+  ]
+}
