@@ -517,6 +517,7 @@
       if (context.codeFlow && flowsTab?.getAttribute("aria-selected") === "true") {
         document.getElementById("graph-mode-context")?.setAttribute("hidden", "");
         document.getElementById("flow-mode-context")?.removeAttribute("hidden");
+        document.getElementById("architecture-toolbar")?.scrollTo({ top: 0, behavior: "instant" });
       }
       graphState.callTreeZoom = 1;
       graphState.selectedCallGraphEdgeKey = null;
