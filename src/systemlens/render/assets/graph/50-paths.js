@@ -514,6 +514,10 @@
       graphState.callTreeCollapsed = new Set();
       graphState.viewMode = context.codeFlow ? "call-graph" : "architecture";
       graphState.callGraphDisplayMode = "tree";
+      if (context.codeFlow && flowsTab?.getAttribute("aria-selected") === "true") {
+        document.getElementById("graph-mode-context")?.setAttribute("hidden", "");
+        document.getElementById("flow-mode-context")?.removeAttribute("hidden");
+      }
       graphState.callTreeZoom = 1;
       graphState.selectedCallGraphEdgeKey = null;
       graphCanvas.removeAttribute("data-selected-call-graph-arc");
