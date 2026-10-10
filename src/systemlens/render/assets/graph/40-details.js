@@ -94,7 +94,7 @@
       const graphModeContext = document.getElementById("graph-mode-context");
       const flowModeContext = document.getElementById("flow-mode-context");
       if (graphModeContext) graphModeContext.hidden = !showingGraph;
-      if (flowModeContext) flowModeContext.hidden = !(showingFlows && showingFlowGraph);
+      if (flowModeContext) flowModeContext.hidden = !showingFlows;
       issuesPanel.hidden = !showingIssues;
       contractsPanel.hidden = !showingContracts;
       asyncApiContractPanel.hidden = !showingAsyncApi;

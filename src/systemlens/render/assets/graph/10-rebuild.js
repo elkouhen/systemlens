@@ -817,8 +817,9 @@
             graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree"
           );
           const architectureActive = graphState.viewMode === "architecture" && !callGraphActive;
+          const flowsTabActive = document.getElementById("flows-tab")?.getAttribute("aria-selected") === "true";
           graphContext.hidden = !architectureActive;
-          flowContext.hidden = !callGraphActive;
+          flowContext.hidden = !(callGraphActive || flowsTabActive);
           graphContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
           flowContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
           graphTitle.textContent = "Graphe d’architecture";
@@ -839,6 +840,8 @@
           if (depthDecrease) depthDecrease.disabled = !callGraphActive || graphState.callTreeDepth <= 1;
           if (depthIncrease) depthIncrease.disabled = !callGraphActive || graphState.callTreeDepth >= 8;
           if (!callGraphActive) {
+            flowTitle.textContent = "Flux de code";
+            flowHelp.textContent = "Sélectionnez un flux pour ouvrir son arbre d’appel.";
             if (flowStats) {
               flowStats.hidden = true;
               flowStats.textContent = "";
