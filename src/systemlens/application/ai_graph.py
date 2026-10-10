@@ -402,6 +402,13 @@ def load_direct_flow_manifest(
                 path=_relative_path(step.get("path"), f"flows[{index}].steps[{step_index}].path"),
                 start_line=step_start, end_line=step_end, endpoint_id=step_endpoint_id,
                 operation=step.get("operation") if isinstance(step.get("operation"), str) else None,
+                branch=step.get("branch") if isinstance(step.get("branch"), str) else None,
+                resource=step.get("resource") if isinstance(step.get("resource"), str) else None,
+                key=step.get("key") if isinstance(step.get("key"), str) else None,
+                causal_id=step.get("causal_id") if isinstance(step.get("causal_id"), str) else None,
+                expected_version=step.get("expected_version") if isinstance(step.get("expected_version"), str) else None,
+                completion=step.get("completion") if isinstance(step.get("completion"), str) else None,
+                query_shape=step.get("query_shape") if isinstance(step.get("query_shape"), str) else None,
             ))
         flows.append(CodeFlow(
             id=flow_id, module=module, method=method, path=flow_path,

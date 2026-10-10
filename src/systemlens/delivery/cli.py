@@ -11,6 +11,7 @@ from systemlens.application.ai_graph import (
     AiGraphError,
     graph_facts_manifest,
     load_ai_graph,
+    load_direct_flow_manifest,
     load_fact_manifest,
 )
 from systemlens.application.architecture import (
@@ -1992,6 +1993,7 @@ def _load_microservice_graph(
 
 
 def _load_ai_graph(path: Path) -> _MicroserviceGraphData:
+    direct_endpoints, direct_flows = load_direct_flow_manifest(path)
     try:
         services, edges, collections, issues = load_ai_graph(path)
         graph_facts: list[GraphFact] = []
@@ -2007,8 +2009,10 @@ def _load_ai_graph(path: Path) -> _MicroserviceGraphData:
             if fact.status in {"ambiguous", "unresolved"}
         ]
     result = render_graph_json(list(services), edges, [], warnings=issues, cross_module_data_available=True)
+    for endpoint in direct_endpoints:
+        services.setdefault(endpoint.module or endpoint.topic, []).append(endpoint)
     return _MicroserviceGraphData(
-        services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, None, graph_facts, [], [], [], []
+        services, edges, collections, {}, [], [], [], issues, [], False, result, None, None, None, graph_facts, direct_flows, [], [], []
     )
 
 
