@@ -809,7 +809,9 @@
           const flowPath = document.getElementById("flow-mode-context-path");
           const flowHelp = document.getElementById("flow-mode-context-help");
           const expandAll = document.getElementById("flow-mode-expand-all");
-          const contextCollapse = document.getElementById("flow-context-collapse");
+          const flowCenter = document.getElementById("flow-mode-center");
+          const flowZoomIn = document.getElementById("flow-zoom-in");
+          const flowZoomOut = document.getElementById("flow-zoom-out");
           if (!graphContext || !flowContext || !graphTitle || !graphHelp || !flowTitle || !flowHelp) return;
           const active = Boolean(graphState.selectedCodeFlowId);
           const callGraphActive = active && (
@@ -820,14 +822,11 @@
           graphContext.hidden = !architectureActive;
           flowContext.hidden = !flowsTabActive;
           graphContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
-          flowContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
           graphTitle.textContent = "Graphe d’architecture";
           graphHelp.textContent = "Actions rapides sur la vue du graphe.";
-          if (contextCollapse) {
-            contextCollapse.hidden = !callGraphActive;
-            contextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
-            contextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
-          }
+          if (flowCenter) flowCenter.hidden = !callGraphActive;
+          if (flowZoomIn) flowZoomIn.hidden = !callGraphActive;
+          if (flowZoomOut) flowZoomOut.hidden = !callGraphActive;
           const depthControl = document.getElementById("flow-call-tree-depth-control");
           const depthValue = document.getElementById("flow-call-tree-depth-value");
           const depthDecrease = document.getElementById("flow-call-tree-depth-decrease");
