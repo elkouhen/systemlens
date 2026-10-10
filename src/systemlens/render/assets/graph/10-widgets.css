@@ -242,6 +242,9 @@
     .code-flow-method { display: block; color: #475569; font: 600 9px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
     .code-flow-topology-notice { margin: 0; padding: 6px 7px; border-left: 3px solid #d97706; border-radius: 4px; color: #92400e; background: #fffbeb; font-size: 10px; font-weight: 650; line-height: 1.35; }
     .code-flow-reason { display: -webkit-box; margin: 0; overflow: hidden; color: #64748b; font-size: 10px; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+    .code-flow-step-strip { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+    .code-flow-step-chip { display: inline-flex; align-items: center; min-height: 22px; padding: 3px 6px; border: 1px solid var(--ui-border); border-radius: 6px; color: var(--ui-muted); background: var(--ui-control); font-size: 9px; font-weight: 700; }
+    .code-flow-step-chip.is-diagnostic-read { border-color: #f59e0b; color: #92400e; background: #fffbeb; box-shadow: inset 3px 0 #f59e0b; }
     .code-flow-steps { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
     .code-flow-step { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; padding: 8px 9px; border: 1px solid #e2e8f0; border-radius: var(--control-radius); color: #334155; background: #fff; }
     .code-flow-step::before { display: none; }

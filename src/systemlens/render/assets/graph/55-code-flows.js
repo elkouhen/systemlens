@@ -1376,6 +1376,28 @@
         stat.append(valueElement, labelElement);
         stats.append(stat);
       });
+      const diagnostics = flowDiagnostics.filter(item => item.flow_id === flow.id);
+      let stepStrip = null;
+      if (diagnostics.length) {
+        stepStrip = document.createElement("div");
+        stepStrip.className = "code-flow-step-strip";
+        const diagnosticLabels = new Map(diagnostics.map((diagnostic, index) => [diagnostic.id, `P${index + 1}`]));
+        (flow.steps || []).forEach(step => {
+          const stepElement = document.createElement("span");
+          stepElement.className = `code-flow-step-chip is-${step.kind}`;
+          const related = diagnostics.filter(item => item.read_step === step.order);
+          stepElement.textContent = related.length
+            ? `${codeFlowStepLabel(step.kind)} · ${related.map(item => diagnosticLabels.get(item.id)).join(", ")}`
+            : codeFlowStepLabel(step.kind);
+          if (related.length) {
+            stepElement.classList.add("is-diagnostic-read");
+            stepElement.title = related.map(item => (
+              `${item.severity} · ${item.classification} · ${item.resource || "ressource inconnue"}`
+            )).join("\n");
+          }
+          stepStrip.append(stepElement);
+        });
+      }
       if (path) {
         item.tabIndex = 0;
         item.addEventListener("click", () => showCodeFlow(flow));
@@ -1393,6 +1415,7 @@
       item.addEventListener("focus", () => showCodeFlowItemTooltip(flow, item));
       item.addEventListener("blur", hideCodeFlowItemTooltip);
       item.append(header, meta, description, stats);
+      if (stepStrip) item.append(stepStrip);
       return item;
     }
 

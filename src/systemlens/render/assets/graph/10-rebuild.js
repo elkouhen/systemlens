@@ -859,6 +859,16 @@
           ));
           const selectedFlow = selectedFlows[0];
           const trigger = selectedFlow?.steps?.[0];
+          const selectedDiagnostics = (graphData.flow_diagnostics || []).filter(item => (
+            item.flow_id === graphState.selectedCodeFlowId
+          ));
+          if (selectedDiagnostics.length) {
+            const riskCount = selectedDiagnostics.filter(item => item.classification === "potential_risk").length;
+            const incompleteCount = selectedDiagnostics.filter(item => item.classification === "insufficient_evidence").length;
+            flowHelp.textContent = `${selectedDiagnostics.length} problème${selectedDiagnostics.length > 1 ? "s" : ""} dans ce flux · ${riskCount} risque${riskCount > 1 ? "s" : ""}${incompleteCount ? ` · ${incompleteCount} preuve${incompleteCount > 1 ? "s" : ""} incomplète${incompleteCount > 1 ? "s" : ""}` : ""}`;
+          } else {
+            flowHelp.textContent = "Aucun problème de cohérence détecté dans ce flux.";
+          }
           if (flowTrigger) {
             const triggerKind = ({
               http_entry: "Entrée HTTP",

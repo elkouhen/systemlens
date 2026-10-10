@@ -576,6 +576,9 @@
     .code-flow-method { display: block; color: #475569; font: 600 9px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
     .code-flow-topology-notice { margin: 0; padding: 6px 7px; border-left: 3px solid #d97706; border-radius: 4px; color: #92400e; background: #fffbeb; font-size: 10px; font-weight: 650; line-height: 1.35; }
     .code-flow-reason { display: -webkit-box; margin: 0; overflow: hidden; color: #64748b; font-size: 10px; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+    .code-flow-step-strip { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+    .code-flow-step-chip { display: inline-flex; align-items: center; min-height: 22px; padding: 3px 6px; border: 1px solid var(--ui-border); border-radius: 6px; color: var(--ui-muted); background: var(--ui-control); font-size: 9px; font-weight: 700; }
+    .code-flow-step-chip.is-diagnostic-read { border-color: #f59e0b; color: #92400e; background: #fffbeb; box-shadow: inset 3px 0 #f59e0b; }
     .code-flow-steps { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
     .code-flow-step { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; padding: 8px 9px; border: 1px solid #e2e8f0; border-radius: var(--control-radius); color: #334155; background: #fff; }
     .code-flow-step::before { display: none; }
@@ -3734,6 +3737,16 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           ));
           const selectedFlow = selectedFlows[0];
           const trigger = selectedFlow?.steps?.[0];
+          const selectedDiagnostics = (graphData.flow_diagnostics || []).filter(item => (
+            item.flow_id === graphState.selectedCodeFlowId
+          ));
+          if (selectedDiagnostics.length) {
+            const riskCount = selectedDiagnostics.filter(item => item.classification === "potential_risk").length;
+            const incompleteCount = selectedDiagnostics.filter(item => item.classification === "insufficient_evidence").length;
+            flowHelp.textContent = `${selectedDiagnostics.length} problème${selectedDiagnostics.length > 1 ? "s" : ""} dans ce flux · ${riskCount} risque${riskCount > 1 ? "s" : ""}${incompleteCount ? ` · ${incompleteCount} preuve${incompleteCount > 1 ? "s" : ""} incomplète${incompleteCount > 1 ? "s" : ""}` : ""}`;
+          } else {
+            flowHelp.textContent = "Aucun problème de cohérence détecté dans ce flux.";
+          }
           if (flowTrigger) {
             const triggerKind = ({
               http_entry: "Entrée HTTP",
@@ -10634,6 +10647,28 @@ const graphViewLifecycle = (() => {
         stat.append(valueElement, labelElement);
         stats.append(stat);
       });
+      const diagnostics = flowDiagnostics.filter(item => item.flow_id === flow.id);
+      let stepStrip = null;
+      if (diagnostics.length) {
+        stepStrip = document.createElement("div");
+        stepStrip.className = "code-flow-step-strip";
+        const diagnosticLabels = new Map(diagnostics.map((diagnostic, index) => [diagnostic.id, `P${index + 1}`]));
+        (flow.steps || []).forEach(step => {
+          const stepElement = document.createElement("span");
+          stepElement.className = `code-flow-step-chip is-${step.kind}`;
+          const related = diagnostics.filter(item => item.read_step === step.order);
+          stepElement.textContent = related.length
+            ? `${codeFlowStepLabel(step.kind)} · ${related.map(item => diagnosticLabels.get(item.id)).join(", ")}`
+            : codeFlowStepLabel(step.kind);
+          if (related.length) {
+            stepElement.classList.add("is-diagnostic-read");
+            stepElement.title = related.map(item => (
+              `${item.severity} · ${item.classification} · ${item.resource || "ressource inconnue"}`
+            )).join("\n");
+          }
+          stepStrip.append(stepElement);
+        });
+      }
       if (path) {
         item.tabIndex = 0;
         item.addEventListener("click", () => showCodeFlow(flow));
@@ -10651,6 +10686,7 @@ const graphViewLifecycle = (() => {
       item.addEventListener("focus", () => showCodeFlowItemTooltip(flow, item));
       item.addEventListener("blur", hideCodeFlowItemTooltip);
       item.append(header, meta, description, stats);
+      if (stepStrip) item.append(stepStrip);
       return item;
     }
 
