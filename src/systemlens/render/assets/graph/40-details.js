@@ -88,6 +88,13 @@
       microservicesPanel.hidden = !showingMicroservices;
       quickSearch.hidden = !showingGraph;
       graphContext.hidden = !showingGraph;
+      // Keep the mode-specific graph toolbars aligned with the selected tab.
+      // The Flux list has no graph controls; they only appear after a flow
+      // explicitly opens its call graph.
+      const graphModeContext = document.getElementById("graph-mode-context");
+      const flowModeContext = document.getElementById("flow-mode-context");
+      if (graphModeContext) graphModeContext.hidden = !showingGraph;
+      if (flowModeContext) flowModeContext.hidden = !(showingFlows && showingFlowGraph);
       issuesPanel.hidden = !showingIssues;
       contractsPanel.hidden = !showingContracts;
       asyncApiContractPanel.hidden = !showingAsyncApi;

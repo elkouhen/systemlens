@@ -6241,6 +6241,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     }
     const nodesByNormalizedName = new Map();
 // Ordered source module: 40-details.js
+// Ordered source module: 40-details.js
     function normalizeNodeName(name) {
       return name.trim().replace(/\\s+/g, " ").toLocaleLowerCase();
     }
@@ -6330,6 +6331,13 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       microservicesPanel.hidden = !showingMicroservices;
       quickSearch.hidden = !showingGraph;
       graphContext.hidden = !showingGraph;
+      // Keep the mode-specific graph toolbars aligned with the selected tab.
+      // The Flux list has no graph controls; they only appear after a flow
+      // explicitly opens its call graph.
+      const graphModeContext = document.getElementById("graph-mode-context");
+      const flowModeContext = document.getElementById("flow-mode-context");
+      if (graphModeContext) graphModeContext.hidden = !showingGraph;
+      if (flowModeContext) flowModeContext.hidden = !(showingFlows && showingFlowGraph);
       issuesPanel.hidden = !showingIssues;
       contractsPanel.hidden = !showingContracts;
       asyncApiContractPanel.hidden = !showingAsyncApi;
@@ -7540,7 +7548,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       ));
       appendDtoInspectorSection("Consommateurs non résolus", unresolvedConsumers);
     }
-
 // Ordered source module: 42-resource-catalogue.js
     const resourceCatalogueCategories = document.getElementById("resource-catalogue-categories");
     const resourceServiceFilter = document.getElementById("resource-service-filter");
