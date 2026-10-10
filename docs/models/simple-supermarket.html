@@ -2289,7 +2289,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         <output id="flow-call-tree-depth-value" class="call-tree-depth-value" aria-live="polite">1</output>
         <button id="flow-call-tree-depth-increase" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de plus" title="Afficher un niveau de plus">+</button>
       </div>
-      <button id="flow-mode-clear" class="graph-action-label graph-secondary-action" type="button" title="Effacer l’arc ou le port actuellement analysé" hidden>Réinitialiser l’analyse</button>
       <button id="flow-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="flow-mode-context-copy" title="Réduire la toolbar des flux">Réduire</button>
     </div>
   </div>
@@ -3694,10 +3693,9 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           const flowStats = document.getElementById("flow-mode-context-stats");
           const flowPath = document.getElementById("flow-mode-context-path");
           const flowHelp = document.getElementById("flow-mode-context-help");
-          const clear = document.getElementById("flow-mode-clear");
           const expandAll = document.getElementById("flow-mode-expand-all");
           const contextCollapse = document.getElementById("flow-context-collapse");
-          if (!graphContext || !flowContext || !graphTitle || !graphHelp || !flowTitle || !flowHelp || !clear) return;
+          if (!graphContext || !flowContext || !graphTitle || !graphHelp || !flowTitle || !flowHelp) return;
           const active = Boolean(graphState.selectedCodeFlowId);
           const callGraphActive = active && (
             graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree"
@@ -3710,7 +3708,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           flowContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
           graphTitle.textContent = "Graphe d’architecture";
           graphHelp.textContent = "Actions rapides sur la vue du graphe.";
-          clear.hidden = !callGraphActive;
           if (contextCollapse) {
             contextCollapse.hidden = !callGraphActive;
             contextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
@@ -3843,7 +3840,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           flowHelp.textContent = graphState.analysisPortEndpointId
             ? "Arc associé sélectionné · cliquez sur un autre arc ou port pour changer"
             : "Cliquez sur un port ou un arc pour afficher sa relation";
-          clear.hidden = !graphState.analysisPortEndpointId;
         }
         const toggleAnalysisEndpoint = (endpointId, event) => {
           if (!endpointId) return;
@@ -10722,7 +10718,6 @@ const graphViewLifecycle = (() => {
     }
     const renderCardsButton = document.getElementById("render-cards");
     const renderSymbolsButton = document.getElementById("render-symbols");
-    const analysisModeClear = document.getElementById("flow-mode-clear");
     const graphModeCenter = document.getElementById("graph-mode-center");
     const flowModeCenter = document.getElementById("flow-mode-center");
     const flowModeExpandAll = document.getElementById("flow-mode-expand-all");
@@ -10764,10 +10759,6 @@ const graphViewLifecycle = (() => {
       toolbarCollapse.setAttribute("title", collapsed ? "Développer le panneau" : "Réduire le panneau");
       toolbarCollapse.textContent = collapsed ? "›" : "‹";
       updateWorkspaceViewport(true);
-    });
-    analysisModeClear?.addEventListener("click", () => {
-      graphState.analysisPortEndpointId = null;
-      requestGraphRender();
     });
     const centerFlow = () => {
       if (!graphState.relatedNodes?.size) return;
