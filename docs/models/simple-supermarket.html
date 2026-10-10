@@ -2265,7 +2265,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
           <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
       </div>
-      <button id="graph-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy" title="Réduire la toolbar du graphe">Réduire</button>
     </div>
   </div>
   <div id="flow-mode-context" class="mode-context flow-mode-context" hidden>
@@ -10719,7 +10718,6 @@ const graphViewLifecycle = (() => {
     const flowModeExpandAll = document.getElementById("flow-mode-expand-all");
     const flowTreeDepthDecrease = document.getElementById("flow-call-tree-depth-decrease");
     const flowTreeDepthIncrease = document.getElementById("flow-call-tree-depth-increase");
-    const graphContextCollapse = document.getElementById("graph-context-collapse");
     const toolbar = document.getElementById("architecture-toolbar");
     const toolbarCollapse = document.getElementById("toolbar-collapse");
     const graphModeContext = document.getElementById("graph-mode-context");
@@ -10778,7 +10776,6 @@ const graphViewLifecycle = (() => {
       control?.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
       if (control) control.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
     };
-    graphContextCollapse?.addEventListener("click", () => toggleContextCollapse(graphModeContext, graphContextCollapse));
     function updateFitModeControls(mode) {
       [
         [null, "overview"],

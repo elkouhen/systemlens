@@ -40,7 +40,6 @@
     const flowModeExpandAll = document.getElementById("flow-mode-expand-all");
     const flowTreeDepthDecrease = document.getElementById("flow-call-tree-depth-decrease");
     const flowTreeDepthIncrease = document.getElementById("flow-call-tree-depth-increase");
-    const graphContextCollapse = document.getElementById("graph-context-collapse");
     const toolbar = document.getElementById("architecture-toolbar");
     const toolbarCollapse = document.getElementById("toolbar-collapse");
     const graphModeContext = document.getElementById("graph-mode-context");
@@ -99,7 +98,6 @@
       control?.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
       if (control) control.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
     };
-    graphContextCollapse?.addEventListener("click", () => toggleContextCollapse(graphModeContext, graphContextCollapse));
     function updateFitModeControls(mode) {
       [
         [null, "overview"],
