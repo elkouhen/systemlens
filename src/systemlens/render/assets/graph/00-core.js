@@ -136,37 +136,6 @@
         option.label = nodeKindSuggestion(node);
         nodeSuggestions.append(option);
       });
-    const graphSummary = document.getElementById("graph-summary");
-    const summaryCounts = {
-      microservices: graphData.nodes.filter(node => node.kind === "microservice").length,
-      channels: graphData.nodes.filter(node => ["kafka_topic", "message_channel"].includes(node.kind)).length,
-      dataResources: graphData.nodes.filter(node => ["mongodb_collection", "data_schema"].includes(node.kind)).length,
-    };
-    const indexingIssueCount = Array.isArray(graphData.indexing_issues)
-      ? graphData.indexing_issues.length
-      : 0;
-    const summaryItems = [
-      `${summaryCounts.microservices} service${summaryCounts.microservices > 1 ? "s" : ""}`,
-      `${summaryCounts.channels} message${summaryCounts.channels > 1 ? "s" : ""}`,
-      `${summaryCounts.dataResources} donnée${summaryCounts.dataResources > 1 ? "s" : ""}`,
-      ...(() => {
-        const count = graphData.nodes.filter(node => node.kind === "jpa_entity").length;
-        return count ? [`${count} entité${count > 1 ? "s" : ""} JPA`] : [];
-      })(),
-      `${graphData.links.length} relation${graphData.links.length > 1 ? "s" : ""}`,
-      ...(isolatedNodeIds.size
-        ? [`${isolatedNodeIds.size} ressource${isolatedNodeIds.size > 1 ? "s" : ""} isolée${isolatedNodeIds.size > 1 ? "s" : ""}`]
-        : []),
-      indexingIssueCount
-        ? `Qualité : ${indexingIssueCount} signal${indexingIssueCount > 1 ? "s" : ""} d’indexation`
-        : "Qualité : aucun signal d’indexation",
-    ];
-    summaryItems.forEach(text => {
-      const item = document.createElement("span");
-      item.className = "graph-summary-item";
-      item.textContent = text;
-      graphSummary.append(item);
-    });
     const RELATION_COLORS = Object.freeze({
       http: "#D55E00",
       kafkaPublish: "#009E73",

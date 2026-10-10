@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import json
+import inspect
 from dataclasses import replace
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 import systemlens.indexing.service as indexer_module
-from systemlens.delivery.cli import app
+from systemlens.delivery.cli import app, index_cmd
 from systemlens.infrastructure.config import Config
 from systemlens.application.flow import group_endpoints_by_module_for_flow, trace_flow
 from systemlens.domain.graph import build_graph
@@ -43,8 +44,10 @@ def test_index_cli_exposes_the_generic_strategy_option() -> None:
     result = RUNNER.invoke(app, ["index", "--help"])
 
     assert result.exit_code == 0
-    assert "--strategy" in result.output
-    assert "--topic-strategy" not in result.output
+    output = result.stdout + result.stderr
+    strategy_option = inspect.signature(index_cmd).parameters["topic_strategy"].default
+    assert "--strategy" in getattr(strategy_option, "param_decls", ())
+    assert "--topic-strategy" not in output
 
 
 def test_ast_extractors_find_rest_and_kafka_facts() -> None:

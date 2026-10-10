@@ -42,6 +42,7 @@
             method: match[1],
             source: node.openapi_files?.[0],
             meta: `${node.name} · route exposée`,
+          route: { route: match[0] },
             ownerNode: node,
           });
         });
@@ -53,6 +54,7 @@
           method: route.method || "HTTP",
           source: route.location || route.path,
           meta: `${node.name} · ${route.consumers?.length || route.callers?.length || 0} client(s)`,
+          route,
           ownerNode: node,
         }));
         (node.openapi_contracts || []).forEach(contract => entries.push({
@@ -62,6 +64,7 @@
           service: node.name,
           source: contract.path,
           meta: `${node.name} · ${contract.resources?.length || 0} ressource(s)`,
+          contract,
           ownerNode: node,
         }));
         (node.asyncapi_contracts || []).forEach(contract => entries.push({
@@ -71,6 +74,7 @@
           service: node.name,
           source: contract.path,
           meta: `${node.name} · contrat de messages`,
+          contract,
           ownerNode: node,
         }));
       });
@@ -174,6 +178,11 @@
       const query = microservicesFilter.value.trim().toLocaleLowerCase();
       const kind = resourceKindFilter?.value || "all";
       const service = resourceServiceFilter?.value || "all";
+      resourceCatalogueCategories?.querySelectorAll(".resource-catalogue-category").forEach(button => {
+        const active = button.dataset.kind === kind;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
       const visible = resourceCatalogueEntries.filter(entry => resourceCatalogueEntryMatches(entry, kind, query, service));
       microservicesTitle.textContent = kind === "diagnostic"
         ? `Diagnostics (${visible.length}/${resourceCatalogueEntries.length})`
@@ -181,12 +190,12 @@
       if (resourceCatalogueSummary) resourceCatalogueSummary.textContent = `${visible.length} ressource${visible.length > 1 ? "s" : ""} affichée${visible.length > 1 ? "s" : "e"}`;
       microservicesEmpty.hidden = visible.length > 0;
       visible.forEach(entry => {
-        const item = referenceItem(entry.method ? `${entry.method} ${entry.name}` : entry.name, entry.meta || `${resourceCatalogueKindLabels.get(entry.kind) || "Ressource"} · ${entry.service || ""}`, "Voir", () => {
+        const selectResource = () => {
           microservicesList.querySelectorAll(".is-selected").forEach(selected => selected.classList.remove("is-selected"));
           item.classList.add("is-selected");
           renderResourceCataloguePreview(entry);
-          if (entry.node) return;
-        });
+        };
+        const item = referenceItem(entry.method ? `${entry.method} ${entry.name}` : entry.name, entry.meta || `${resourceCatalogueKindLabels.get(entry.kind) || "Ressource"} · ${entry.service || ""}`, "", selectResource);
         item.classList.add("architecture-resource-reference", "resource-catalogue-row");
         const text = item.firstElementChild;
         const meta = text?.querySelector(".reference-meta");
@@ -195,9 +204,8 @@
         const actionGroup = document.createElement("div");
         actionGroup.className = "resource-catalogue-actions";
         action?.replaceWith(actionGroup);
-        if (action) actionGroup.append(action);
         const inspectTarget = entry.node || entry.ownerNode;
-        if (entry.dtoName || inspectTarget) {
+        if (entry.dtoName || entry.contract || inspectTarget) {
           const inspect = document.createElement("button");
           inspect.type = "button";
           inspect.className = "reference-action resource-catalogue-inspect";
@@ -207,6 +215,12 @@
             event.stopPropagation();
             if (entry.dtoName) {
               openDtoInspector(entry.dtoName);
+            } else if (entry.kind === "openapi_contract") {
+              openOpenApiContract(entry.contract);
+            } else if (entry.kind === "asyncapi_contract") {
+              openAsyncApiContract(entry.contract);
+            } else if (entry.kind === "http_route") {
+              openHttpRouteInspector(inspectTarget, entry.route);
             } else {
               selectNode(inspectTarget.id, false, false);
               openArchitectureNodeInspector(inspectTarget, { reset: true });
@@ -214,8 +228,10 @@
             }
           });
           actionGroup.append(inspect);
+        } else {
+          actionGroup.remove();
         }
-        item.addEventListener("click", event => { if (!event.target.closest("button, a")) item.querySelector("button")?.click(); });
+        item.addEventListener("click", event => { if (!event.target.closest("button, a")) selectResource(); });
         microservicesList.append(item);
       });
     }

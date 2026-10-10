@@ -43,6 +43,26 @@
     const analysisContextCollapse = document.getElementById("analysis-context-collapse");
     const toolbar = document.getElementById("architecture-toolbar");
     const toolbarCollapse = document.getElementById("toolbar-collapse");
+    const graphModeContext = document.getElementById("graph-mode-context");
+    if (graphPanel && graphModeContext) graphPanel.insertBefore(graphModeContext, graphContext);
+    const graphFilterSummary = document.getElementById("graph-filter-summary");
+    const graphFilterControls = [
+      relationHttp, relationKafka, relationMongodb, relationOther,
+      nodeMicroservice, nodeExternalMicroservice, nodeKafkaTopic,
+      nodeMongodbCollection, nodeOther,
+    ];
+    function updateGraphFilterSummary() {
+      if (!graphFilterSummary) return;
+      const hiddenCategories = graphFilterControls.filter(control => !control.checked).length;
+      const hiddenResources = hiddenMicroservices.size + hiddenTopics.size;
+      const parts = [];
+      if (hiddenCategories) parts.push(`${hiddenCategories} catégorie${hiddenCategories > 1 ? "s" : ""}`);
+      if (hiddenResources) parts.push(`${hiddenResources} ressource${hiddenResources > 1 ? "s" : ""}`);
+      graphFilterSummary.textContent = parts.length ? `${parts.join(" · ")} masquée${hiddenCategories + hiddenResources > 1 ? "s" : ""}` : "Tous affichés";
+    }
+    graphFilterControls.forEach(control => control.addEventListener("change", updateGraphFilterSummary));
+    window.addEventListener("systemlens:filters-changed", updateGraphFilterSummary);
+    updateGraphFilterSummary();
     graphCanvas.dataset.renderMode = graphState.renderMode;
     toolbarCollapse?.addEventListener("click", () => {
       const collapsed = toolbar?.classList.toggle("is-collapsed") || false;
@@ -50,6 +70,7 @@
       toolbarCollapse.setAttribute("aria-label", collapsed ? "Développer le panneau" : "Réduire le panneau");
       toolbarCollapse.setAttribute("title", collapsed ? "Développer le panneau" : "Réduire le panneau");
       toolbarCollapse.textContent = collapsed ? "›" : "‹";
+      updateWorkspaceViewport(true);
     });
     analysisModeClear?.addEventListener("click", () => {
       graphState.analysisPortEndpointId = null;
@@ -198,11 +219,15 @@
     });
     document.getElementById("inspector-close").addEventListener("click", event => {
       event.preventDefault();
-      event.stopPropagation();
+      event.stopImmediatePropagation();
       closeInspector();
     });
     inspectorBack.addEventListener("click", goBackInspector);
-    inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });
+    inspectorModal.addEventListener("pointerdown", event => event.stopPropagation());
+    inspectorModal.addEventListener("click", event => {
+      event.stopPropagation();
+      if (event.target === inspectorModal) closeInspector();
+    });
     window.addEventListener("keydown", event => { if (event.key === "Escape" && !inspectorModal.hidden) closeInspector(); });
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
@@ -219,7 +244,7 @@
     flowsTab.addEventListener("click", () => setToolbarTab("flows"));
     modeTabs.architecture.addEventListener("click", () => setToolbarTab("graph"));
     modeTabs.flows.addEventListener("click", () => setToolbarTab("flows"));
-    modeTabs.contracts.addEventListener("click", () => openResourceCatalogue("openapi_contract"));
+    modeTabs.contracts.addEventListener("click", () => openResourceCatalogue("all"));
     modeTabs.diagnostics.addEventListener("click", () => setToolbarTab("issues"));
     inventoryStatus.addEventListener("click", () => openResourceCatalogue("diagnostic"));
     [
@@ -276,7 +301,12 @@
     setToolbarTab("graph");
     function updateWorkspaceViewport(refit = false) {
       const root = document.documentElement;
-      root.style.setProperty("--workspace-left", "0px");
+      const toolbarBounds = toolbar?.getBoundingClientRect();
+      const compactViewport = window.innerWidth <= 720;
+      const reservedLeft = toolbar?.classList.contains("is-collapsed") || compactViewport
+        ? 0
+        : Math.min((toolbarBounds?.width || 0) + (toolbarBounds?.left || 0) + 24, window.innerWidth * .48);
+      root.style.setProperty("--workspace-left", `${Math.round(reservedLeft)}px`);
       root.style.setProperty("--workspace-right", "0px");
       root.style.setProperty("--workspace-top", "0px");
       root.style.setProperty("--workspace-bottom", "0px");

@@ -183,6 +183,7 @@
         persist();
         render();
         rebuildGraph();
+        window.dispatchEvent(new Event("systemlens:filters-changed"));
       });
       filter?.addEventListener("input", render);
       render();

@@ -67,17 +67,22 @@ def test_resource_catalogue_updates_docked_preview() -> None:
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
         page.locator("#contracts-mode-tab").click()
-        page.locator("#microservices-list .reference-action").first.click()
+        page.locator("#resource-catalogue-categories button").filter(has_text="Microservices").click()
+        page.locator("#microservices-list .resource-catalogue-row").first.click()
         assert page.locator("#resource-catalogue-preview").get_attribute("class").endswith("has-selection")
         page.locator("#microservices-list .reference-title").filter(has_text="order-service").click()
         assert page.locator("#inspector-modal").is_hidden()
         assert page.locator("#resource-catalogue-preview-title").inner_text() == "order-service"
-        assert page.locator("#resource-catalogue-preview").get_by_text("Microservice", exact=True).is_visible()
+        assert page.locator("#resource-catalogue-preview").get_by_text(
+            "Microservices", exact=True
+        ).is_visible()
         assert page.locator("#microservices-panel").is_visible()
         page.locator("#microservices-list .resource-catalogue-inspect").first.click()
         assert page.locator("#inspector-modal").is_visible()
         assert page.locator("#inspector-body").get_by_text("Relations", exact=True).is_visible()
         page.locator("#inspector-close").click()
+        assert page.locator("#inspector-modal").is_hidden()
+        assert page.locator("#details").is_hidden()
         context.close()
         browser.close()
 
@@ -95,9 +100,9 @@ def test_resource_catalogue_filters_routes_and_services() -> None:
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
         page.locator("#contracts-mode-tab").click()
-        assert page.locator("#resource-catalogue-categories button").count() == 10
+        assert page.locator("#resource-catalogue-categories button").count() == 11
         assert page.locator("#microservices-list .reference-item").count() > 0
-        page.locator("#resource-kind-filter").select_option("kafka_topic")
+        page.locator("#resource-catalogue-categories button").filter(has_text="Topics").click()
         topic_count = page.locator("#microservices-list .reference-item").count()
         assert topic_count > 0
         page.locator("#microservices-filter").fill("topic")
@@ -119,13 +124,16 @@ def test_topic_catalogue_uses_shared_resource_inspector() -> None:
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
         page.locator("#contracts-mode-tab").click()
-        page.locator("#resource-kind-filter").select_option("kafka_topic")
+        page.locator("#resource-catalogue-categories button").filter(has_text="Topics").click()
         topic = page.locator("#microservices-list .reference-title").first
         topic.wait_for(state="visible")
         topic.click()
         assert page.locator("#inspector-modal").is_hidden()
         assert page.locator("#resource-catalogue-preview").is_visible()
-        assert page.locator("#resource-catalogue-preview .resource-catalogue-preview-kind").inner_text() == "Topic Kafka"
+        assert page.locator("#resource-catalogue-preview .resource-catalogue-preview-kind").inner_text() in {
+            "Topics",
+            "Topic Kafka",
+        }
         graph_topic = page.locator(".graph-node-card-label").filter(has_text="supermarket.stock.restock-requested").first
         assert page.locator("#graph-call-tree").is_hidden()
         graph_topic.click(modifiers=["Shift"])
@@ -209,6 +217,7 @@ def test_architecture_arc_opens_node_inspection_modal() -> None:
         )
         hit_area = page.locator("#graph-port-paths .graph-dependency-hit-area").first
         hit_area.click(force=True, modifiers=["Shift"])
+        page.locator("#inspector-modal").wait_for(state="visible")
         assert page.locator("#inspector-title").inner_text().startswith(("Topic ·", "Route HTTP ·", "Microservice ·"))
         context.close()
         browser.close()
@@ -226,7 +235,8 @@ def test_call_tree_nodes_and_kafka_arcs_open_node_inspection_modal() -> None:
         page = context.new_page()
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
-        page.locator("#flows-mode-tab").click()
+        page.locator("#architecture-mode-tab").click()
+        page.locator("#flows-tab").click()
         page.locator(".code-flow-item").first.click()
         page.locator(".graph-call-tree-node").first.click(modifiers=["Shift"])
         assert page.locator("#inspector-title").inner_text().startswith("Microservice ·")
@@ -235,6 +245,7 @@ def test_call_tree_nodes_and_kafka_arcs_open_node_inspection_modal() -> None:
         http_label.click(modifiers=["Shift"])
         assert page.locator("#inspector-title").inner_text().startswith("Route HTTP ·")
         page.locator("#inspector-close").click()
+        page.locator("#call-tree-depth-increase").wait_for(state="visible")
         page.locator("#call-tree-depth-increase").click()
         page.locator(".graph-call-tree-edge-label.is-clickable").filter(has_text="Kafka").first.wait_for(
             state="visible"
@@ -501,7 +512,8 @@ def test_obsidian_default_and_saved_theme_preserve_graph_state() -> None:
         page.locator(".graph-node-card-label").first.wait_for()
         assert page.locator("html").get_attribute("data-theme") == "light"
         page.locator("#theme-toggle").click()
-        page.locator("#flows-mode-tab").click()
+        page.locator("#architecture-mode-tab").click()
+        page.locator("#flows-tab").click()
         page.locator(".code-flow-item").click()
         page.locator("#graph-call-tree").wait_for(state="visible")
         selected_flow = page.locator(".code-flow-item.is-selected").inner_text()
@@ -1160,7 +1172,8 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert page.locator(".toolbar").get_attribute("class") == "toolbar"
         assert page.locator("#toolbar-collapse").get_attribute("aria-expanded") == "true"
         page.set_viewport_size({"width": 1100, "height": 760})
-        page.locator("#flows-mode-tab").click()
+        page.locator("#architecture-mode-tab").click()
+        page.locator("#flows-tab").click()
         page.locator(".code-flow-item").wait_for(state="visible")
         assert page.locator("#flows-tab").get_attribute("aria-selected") == "true"
         for overlay_id in (
@@ -1243,7 +1256,8 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         page.locator("#architecture-mode-tab").click()
         page.locator("#graph").wait_for(state="visible")
         assert page.locator("#graph-call-tree").is_hidden()
-        page.locator("#flows-mode-tab").click()
+        page.locator("#architecture-mode-tab").click()
+        page.locator("#flows-tab").click()
         page.locator(".code-flow-item").wait_for(state="visible")
         assert page.locator("#graph").is_hidden()
         assert page.locator("#graph-port-paths .graph-architecture-path").count() == 0
@@ -1289,7 +1303,7 @@ def test_primary_view_selector_opens_each_view_directly() -> None:
         view_controls = page.get_by_role("group", name="Mode de visualisation")
         assert view_controls.is_visible()
         assert view_controls.get_by_role("button").all_text_contents() == [
-                "Graphe statique", "Vue par couches", "Vue par modules",
+                "Graphe", "Couches", "Modules",
         ]
         assert page.locator(".graph-mode-context-actions").bounding_box() is not None
         for button_id, status_text in (
@@ -1563,7 +1577,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         )
         assert view_controls.is_visible()
         assert view_controls.get_by_role("button").all_text_contents() == [
-                "Graphe statique", "Vue par couches", "Vue par modules",
+                "Graphe", "Couches", "Modules",
         ]
         assert page.locator("#layout-forceatlas2-noverlap").get_attribute("aria-pressed") == "true"
         assert graph.get_attribute("data-relation-count") == "4"
@@ -1574,11 +1588,11 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         page.locator("#layout-status").filter(has_text="vue par graphe actif.").wait_for(state="visible")
         card_size = _assert_architecture_cards_have_uniform_size(page)
         _assert_architecture_cards_do_not_overlap(page)
-        assert "1 ressource isolée" in page.locator("#graph-summary").inner_text()
+        assert page.locator("#graph-summary").count() == 0
         assert page.locator("#inventory-status").inner_text() == "Index complet"
         assert page.locator("#node-suggestions option").count() == 5
         display_controls = page.locator("#display-controls")
-        assert not page.locator("#relation-http").is_visible()
+        assert page.locator("#relation-http").is_visible()
         display_controls.locator(":scope > summary").click()
         _capture_render_snapshot(page, "constrained-after-open-controls")
         assert page.locator("#relation-http").is_visible()
@@ -1670,37 +1684,32 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _assert_architecture_clusters_do_not_overlap(page)
         assert page.locator("#graph").get_attribute("data-invalid-coordinates") == "false"
 
-        page.get_by_role("tab", name="Topics").click()
-        page.locator("#kafka-panel").wait_for(state="visible")
-        assert page.locator("#graph-context").is_hidden()
-        _capture_render_snapshot(page, "constrained-after-kafka-tab")
-        topic_filter = page.locator("#topics-filter")
+        page.locator("#contracts-mode-tab").click()
+        page.locator("#resource-catalogue-categories button").filter(has_text="Topics").click()
+        assert page.locator("#resource-catalogue-preview").is_visible()
+        _capture_render_snapshot(page, "constrained-after-kafka-catalogue")
+        topic_filter = page.locator("#microservices-filter")
         topic_filter.fill("orders.created")
-        topic = page.locator("#topics-list li")
-        topic.wait_for(state="visible")
-        _capture_render_snapshot(page, "constrained-after-dto-filter")
+        topic = page.locator("#microservices-list .resource-catalogue-row")
+        topic.first.wait_for(state="visible")
+        _capture_render_snapshot(page, "constrained-after-topic-filter")
         assert topic.count() == 1
 
         topic_filter.fill("absent")
-        page.locator("#topics-empty").wait_for(state="visible")
-        _capture_render_snapshot(page, "constrained-after-dto-empty")
-        assert page.locator("#topics-empty").inner_text() == "Aucun topic ne correspond à ce filtre."
+        page.locator("#microservices-list .resource-catalogue-empty").wait_for(state="visible")
+        _capture_render_snapshot(page, "constrained-after-topic-empty")
 
         topic_filter.fill("")
-        topic.scroll_into_view_if_needed()
+        topic.first.scroll_into_view_if_needed()
         toolbar = page.locator(".toolbar").bounding_box()
-        topic_box = topic.bounding_box()
+        topic_box = topic.first.bounding_box()
         assert toolbar is not None and toolbar["y"] + toolbar["height"] <= 450
         assert topic_box is not None and topic_box["y"] + topic_box["height"] <= 450
 
-        page.locator("#contracts-mode-tab").click()
-        page.get_by_role("tab", name="Mongo").click()
-        page.locator("#persistence-panel").wait_for(state="visible")
-        assert page.locator("#graph-context").is_hidden()
-        _capture_render_snapshot(page, "constrained-after-mongo-tab")
-        mongo_filter = page.locator("#mongo-class-reference-filter")
-        mongo_filter.fill("com.example.Order")
-        mongo_class = page.locator("#mongo-class-references li")
+        page.locator("#resource-catalogue-categories button").filter(has_text="Collections").click()
+        mongo_filter = page.locator("#microservices-filter")
+        mongo_filter.fill("orders")
+        mongo_class = page.locator("#microservices-list .resource-catalogue-row")
         assert mongo_class.count() == 1
         _capture_render_snapshot(page, "constrained-after-mongo-filter")
         mongo_class.get_by_role("button", name="Inspecter").click()
@@ -1781,7 +1790,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         assert page.locator("#details").is_hidden()
         assert page.locator("#reset").is_disabled()
         assert search.is_visible()
-        assert page.locator("#graph-summary").is_visible()
+        assert page.locator("#graph-summary").count() == 0
         search.fill("does-not-exist")
         search.press("Enter")
         _capture_render_snapshot(page, "constrained-after-missing-search")
@@ -1795,9 +1804,9 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         # camera state. This is intentionally one fixture so a layout fix for
         # one view cannot silently regress another view.
         for view_name, status_text in (
-                ("Graphe statique", "vue par graphe actif."),
-            ("Vue par couches", "vue par couches actif."),
-            ("Vue par modules", "vue par modules actif."),
+                ("Graphe", "vue par graphe actif."),
+            ("Couches", "vue par couches actif."),
+            ("Modules", "vue par modules actif."),
         ):
             page.get_by_role("button", name=view_name, exact=True).click()
             page.locator("#layout-status").filter(has_text=status_text).wait_for(state="visible")

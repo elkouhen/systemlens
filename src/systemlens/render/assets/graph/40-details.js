@@ -750,6 +750,7 @@
     }
     function closeInspector() {
       inspectorModal.hidden = true;
+      hideInlineDetailsAfterModal();
       inspectorBody.replaceChildren();
       inspectorBody.className = "inspector-body";
       if (resourceCataloguePreview) {

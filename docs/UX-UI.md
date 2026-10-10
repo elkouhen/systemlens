@@ -35,11 +35,11 @@ The HTML export MUST open on the Explorer with the architecture graph visible.
 The workspace consists of grouped navigation, a compact control surface, a
 graph area, contextual details, and an on-demand legend or inspector.
 
-Navigation MUST keep graph views together and resource views together. The
-graph group contains Architecture, Flux de code, and Diagnostics. The resource
-group contains Ressources, OpenAPI, Messages, and Données. The current export
-may expose additional contract and persistence views, but each view MUST have
-one clear active state.
+Navigation MUST keep the two primary workspaces stable: Architecture and
+Ressources. Architecture exposes Graphe and Flux de code. Ressources opens one
+catalogue containing all indexed resource types, including Diagnostics; type
+categories and filters refine that list without introducing a second top-level
+navigation surface. Each workspace and local view MUST have one clear active state.
 
 The legend is collapsed by default. The context widget is collapsed by default
 for a selected call tree and can be opened with `Développer`. Secondary widgets
@@ -56,10 +56,12 @@ graph workspace unchanged. On constrained viewports, the panel uses one bounded
 scroll region so the graph remains visible while users inspect details.
 
 The resource catalogue MUST present one searchable list across indexed
-microservices and architecture resources. A type selector MUST filter the list
-without changing the graph or persisted selection. Each row MUST expose the
-resource kind and relationship counts when available; selecting a row MUST
-open the shared inspector so the catalogue remains a browsing surface rather
+microservices and architecture resources. Its search control MUST remain above
+the category list and results. Opening Ressources MUST initially show all
+resource types; category selection and filters refine the same list without
+changing the graph or persisted selection. Each row MUST expose the resource
+kind and relationship counts when available; selecting a row MUST open the
+shared inspector so the catalogue remains a browsing surface rather
 than a second details panel.
 
 ## Widget inventory and shared contract

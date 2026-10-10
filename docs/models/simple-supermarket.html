@@ -351,7 +351,7 @@
     .toolbar-collapse { flex: 0 0 auto; }
     .toolbar strong { color: #172033; font-size: 15px; white-space: nowrap; }
     .toolbar input:not([type="checkbox"]) { height: 34px; padding: 0 10px; border: 1px solid #b9c5d6; border-radius: 6px; color: #172033; background: #fff; font: inherit; font-size: 13px; }
-    .toolbar-mode-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 3px; border: 1px solid var(--ui-border, #d8e0eb); border-radius: 9px; background: var(--ui-widget, #edf2f7); }
+    .toolbar-mode-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; padding: 3px; border: 1px solid var(--ui-border, #d8e0eb); border-radius: 9px; background: var(--ui-widget, #edf2f7); }
     .toolbar .toolbar-mode-tab { width: auto; min-width: 0; height: 30px; padding: 0 6px; border: 0; border-radius: 6px; color: var(--ui-muted, #64748b); background: transparent; font-size: 11px; font-weight: 800; cursor: pointer; }
     .toolbar .toolbar-mode-tab:hover { color: var(--ui-accent-text, #1d4f91); background: var(--ui-control, #fff); }
     .toolbar .toolbar-mode-tab.is-active { color: var(--ui-accent-text, #1d4f91); background: var(--ui-control, #fff); box-shadow: 0 1px 3px rgba(15, 23, 42, .14); }
@@ -406,7 +406,7 @@
     #search { width: 100%; }
     .graph-context { display: grid; gap: 8px; }
     .graph-context[hidden] { display: none; }
-    .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: 444px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: min(680px, calc(100vw - 480px)); max-height: min(24vh, 170px); box-sizing: border-box; padding: 10px 12px; overflow: hidden; border: 1px solid var(--ui-accent-border); border-left: 3px solid var(--ui-selected); border-radius: 12px; color: var(--ui-text); background: var(--ui-panel); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; pointer-events: none; }
+    .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: calc(var(--workspace-left, 0px) + 24px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: min(680px, calc(100vw - var(--workspace-left, 0px) - 48px)); max-height: min(24vh, 170px); box-sizing: border-box; padding: 10px 12px; overflow: hidden; border: 1px solid var(--ui-accent-border); border-left: 3px solid var(--ui-selected); border-radius: 12px; color: var(--ui-text); background: var(--ui-panel); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; pointer-events: none; }
     .graph-mode-context > * { pointer-events: auto; }
     .graph-mode-context.is-architecture-toolbar .graph-mode-context-copy { pointer-events: none; }
     .graph-mode-context.is-architecture-toolbar .graph-mode-context-actions { pointer-events: none; }
@@ -1226,6 +1226,60 @@
       border-radius: 12px;
       background: rgba(255, 255, 255, .82);
     }
+    #graph-panel > .graph-mode-context {
+      position: static;
+      inset: auto;
+      width: auto;
+      max-height: none;
+      margin: 2px 0 0;
+      padding: 10px 0 0;
+      border-width: 1px 0 0;
+      border-radius: 0;
+      box-shadow: none;
+      background: transparent;
+      backdrop-filter: none;
+      pointer-events: auto;
+    }
+    #graph-panel > .graph-mode-context > * { pointer-events: auto; }
+    #graph-panel > .graph-mode-context .graph-mode-context-copy { display: none; }
+    #graph-panel > .graph-mode-context .graph-mode-context-actions { gap: 6px; }
+    #graph-panel > .graph-mode-context .architecture-context-actions { display: contents; }
+    #graph-panel > .graph-mode-context .view-controls {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      flex: 1 1 100%;
+      order: -2;
+      width: 100%;
+      min-width: 0 !important;
+    }
+    #graph-panel > .graph-mode-context .render-controls { flex: 1 1 100%; order: -1; }
+    #graph-panel > .graph-mode-context .graph-secondary-action {
+      min-height: 38px;
+      padding-inline: 12px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+    #graph-panel > .graph-mode-context #analysis-mode-center {
+      flex: 0 0 92px;
+      width: 92px !important;
+      min-width: 92px !important;
+      white-space: nowrap;
+    }
+    #graph-panel > .graph-mode-context .view-controls button,
+    #graph-panel > .graph-mode-context .render-controls button {
+      min-height: 38px;
+      min-width: 0;
+      width: 100%;
+      padding-inline: 10px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+    #graph-panel > .graph-mode-context .zoom-controls button {
+      width: 38px;
+      min-width: 38px;
+      padding: 0;
+      font-size: 20px;
+    }
     .graph-context {
       gap: 10px;
       padding: 10px;
@@ -1248,16 +1302,18 @@
     .graph-mode-context.is-architecture-toolbar .architecture-context-actions .graph-control-group button,
     .graph-mode-context.is-architecture-toolbar .architecture-context-actions > .graph-action-label {
       width: auto;
-      height: 27px !important;
-      padding: 0 8px;
+      height: 42px !important;
+      min-height: 42px !important;
+      padding: 0 12px;
       border: 1px solid var(--ui-accent-border);
       border-radius: 7px !important;
       color: var(--ui-accent-text);
       background: var(--ui-control);
       box-shadow: none;
-      font-size: 10px;
+      font-size: 13px !important;
+      line-height: 1.15;
     }
-    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .zoom-controls button { width: 27px; padding: 0; font-size: 16px; }
+    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .zoom-controls button { width: 42px; min-width: 42px; height: 42px !important; padding: 0; font-size: 21px !important; }
     .graph-mode-context.is-architecture-toolbar .architecture-context-actions .graph-control-group button:hover,
     .graph-mode-context.is-architecture-toolbar .architecture-context-actions > .graph-action-label:hover { border-color: var(--ui-selected); background: var(--ui-accent-soft-hover); }
     .graph-mode-context .zoom-controls { display: contents; border: 0; background: transparent; }
@@ -1277,6 +1333,8 @@
       padding-left: 11px;
       border-radius: 14px;
     }
+    .display-controls > summary, .advanced-controls > summary, .advanced-tools > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .graph-filter-summary { color: var(--ui-muted); font-size: 10px; font-weight: 650; letter-spacing: 0; text-transform: none; }
     .display-controls > summary, .advanced-controls > summary, .advanced-tools > summary { min-height: 42px; }
     .legend {
       right: 20px;
@@ -1430,6 +1488,23 @@
     .path-lock { min-height: 32px; border-radius: 9px; }
     .layout-option,
     .resource-analysis-actions button { min-height: 42px; border-radius: 10px; }
+    .layout-option {
+      min-height: 42px !important;
+      padding: 0 12px !important;
+      border: 1px solid var(--ui-accent-border) !important;
+      border-radius: 7px !important;
+      color: var(--ui-accent-text) !important;
+      background: var(--ui-control) !important;
+      font-size: 13px !important;
+      font-weight: 750;
+      line-height: 1.15;
+    }
+    .layout-option.is-active {
+      border-color: var(--ui-selected) !important;
+      color: var(--ui-on-accent) !important;
+      background: var(--ui-selected) !important;
+      box-shadow: 0 2px 6px rgba(49, 86, 211, .25);
+    }
     .layout-status,
     .dependency-analysis-help { padding: 2px 3px; line-height: 1.5; }
     .path-controls,
@@ -1741,7 +1816,7 @@ body.catalogue-active .toolbar {
   height: 100vh;
   max-height: none;
   overflow: auto;
-  padding: 18px 30px 30px;
+  padding: 14px 18px 24px;
   border: 0;
   border-radius: 0;
   background: var(--ui-panel);
@@ -1754,17 +1829,17 @@ body.catalogue-active .toolbar-tab-groups { align-self: start; }
 body.catalogue-active #microservices-panel {
   max-width: 1380px;
   width: 100%;
-  margin: 18px auto 0;
-  padding: 20px;
+  margin: 12px auto 0;
+  padding: 16px;
   border: 1px solid var(--ui-border);
   border-radius: 14px;
-  background: var(--ui-surface, #101823);
+  background: var(--ui-panel);
 }
 body.catalogue-active #microservices-panel .references-header { max-width: none; }
 body.catalogue-active #microservices-panel .resource-catalogue-layout {
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr) 240px;
-  gap: 18px;
+  grid-template-columns: 220px minmax(0, 1fr) 260px;
+  gap: 14px;
   align-items: start;
 }
 body.catalogue-active #microservices-panel .resource-catalogue-sidebar,
@@ -1775,6 +1850,9 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview {
   border-radius: 10px;
   background: var(--ui-widget);
 }
+body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) .resource-catalogue-preview { display: none; }
+body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) { grid-template-columns: 220px minmax(0, 1fr); }
+body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) .resource-catalogue-results { grid-column: 2; }
 body.catalogue-active #microservices-panel .resource-catalogue-sidebar h3,
 body.catalogue-active #microservices-panel .resource-catalogue-preview h3 {
   margin: 0 0 14px;
@@ -1792,7 +1870,11 @@ body.catalogue-active .resource-catalogue-category:hover,
 body.catalogue-active .resource-catalogue-category:focus-visible {
   border-color: var(--ui-accent-border); color: var(--ui-accent-text); background: var(--ui-accent-soft);
 }
+body.catalogue-active .resource-catalogue-category.is-active {
+  border-color: var(--ui-accent-border); color: var(--ui-on-accent); background: var(--ui-selected); font-weight: 800;
+}
 body.catalogue-active .resource-catalogue-category small { color: var(--ui-muted); }
+body.catalogue-active .resource-catalogue-category.is-active small { color: inherit; opacity: .8; }
 body.catalogue-active #microservices-panel .resource-catalogue-sidebar-help,
 body.catalogue-active #microservices-panel .resource-catalogue-preview-copy {
   color: var(--ui-muted);
@@ -1804,16 +1886,20 @@ body.catalogue-active #microservices-panel .resource-catalogue-filters {
   grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
+body.catalogue-active #microservices-panel .resource-catalogue-filters { margin-bottom: 12px; }
 body.catalogue-active #microservices-panel .resource-catalogue-filters .reference-filter-input {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
 }
 body.catalogue-active #microservices-panel .resource-catalogue-filters select { display: none; }
-body.catalogue-active #microservices-panel .resource-catalogue-results { min-width: 0; }
+body.catalogue-active #microservices-panel .resource-catalogue-results {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
 body.catalogue-active #microservices-panel .resource-catalogue-table-head {
   display: grid;
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 2;
   width: 100%;
   grid-template-columns: minmax(0, 1fr) 180px 150px;
@@ -1847,17 +1933,17 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-owner {
   font-size: 12px;
 }
 body.catalogue-active #microservices-panel .resource-catalogue-summary {
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 1;
   margin: 0;
   padding: 10px 0 0;
 }
 body.catalogue-active #microservices-panel .references-list {
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 3;
 }
 body.catalogue-active #microservices-panel .references-empty {
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 3;
 }
 body.catalogue-active #microservices-panel .references-list {
@@ -1909,7 +1995,8 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
   overflow-wrap: anywhere;
 }
 @media (max-width: 980px) {
-  body.catalogue-active #microservices-panel .resource-catalogue-layout { grid-template-columns: 190px minmax(0, 1fr); }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout,
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) { grid-template-columns: 190px minmax(0, 1fr); }
   body.catalogue-active #microservices-panel .resource-catalogue-preview { grid-column: 1 / -1; min-height: 140px; }
 }
 @media (max-width: 700px) {
@@ -1997,11 +2084,10 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
               <span id="dependency-analysis-help" class="dependency-analysis-help">Sélectionnez un nœud pour activer cette analyse.</span>
             </fieldset>
         </div>
-        <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
         <button id="inventory-status" class="inventory-status" type="button" hidden></button>
       </section>
       <details id="display-controls" class="display-controls">
-        <summary>Filtres du graphe</summary>
+        <summary><span>Visibilité</span><span id="graph-filter-summary" class="graph-filter-summary">Tous affichés</span></summary>
         <div class="display-filter-groups">
           <fieldset class="relation-filters">
             <legend>Types d’arêtes</legend>
@@ -2020,8 +2106,8 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           </fieldset>
         </div>
       </details>
-      <details id="microservice-visibility-controls" class="display-controls">
-        <summary>Ressources visibles</summary>
+      <details id="microservice-visibility-controls" class="display-controls graph-resource-visibility">
+        <summary>Ressources masquées</summary>
         <h3 class="visibility-subtitle">Microservices</h3>
         <p class="path-help">Décochez un microservice pour le masquer du graphe et de ses relations.</p>
         <input id="microservice-visibility-filter" class="reference-filter-input" type="search" placeholder="Rechercher un microservice" autocomplete="off" aria-label="Rechercher un microservice à masquer">
@@ -2036,7 +2122,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         <button id="topic-visibility-reset" class="microservice-visibility-reset" type="button">Tout réafficher</button>
       </details>
       <details id="advanced-controls" class="advanced-controls">
-        <summary>Actions avancées</summary>
+        <summary>Plus d’options</summary>
       <fieldset class="layout-controls">
         <legend>Placement des nœuds</legend>
         <div class="layout-options layout-strategy-options" role="group" aria-label="Choix du placement des nœuds">
@@ -2054,7 +2140,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         <p class="references-description">Filtrez les ressources par type ou microservice, puis ouvrez leur contexte dans le graphe.</p>
       </div>
       <div class="resource-catalogue-layout">
-        <aside class="resource-catalogue-sidebar"><h3>Types de ressources</h3><div id="resource-catalogue-categories" class="resource-catalogue-categories"></div><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher…" autocomplete="off" aria-label="Rechercher une ressource ou un service"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="http_route">Routes HTTP</option><option value="openapi_contract">Contrats OpenAPI</option><option value="asyncapi_contract">Contrats AsyncAPI</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="dto">DTOs</option><option value="diagnostic">Diagnostics</option><option value="other">Autres ressources</option></select><select id="resource-service-filter" class="reference-filter-input" aria-label="Filtrer par microservice"><option value="all">Tous les microservices</option></select></div><p class="resource-catalogue-sidebar-help">Sélectionnez un type ou recherchez un nom pour réduire l’inventaire.</p></aside>
+        <aside class="resource-catalogue-sidebar"><h3>Types de ressources</h3><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher une ressource ou un service" autocomplete="off" aria-label="Rechercher une ressource ou un service"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="http_route">Routes HTTP</option><option value="openapi_contract">Contrats OpenAPI</option><option value="asyncapi_contract">Contrats AsyncAPI</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="dto">DTOs</option><option value="diagnostic">Diagnostics</option><option value="other">Autres ressources</option></select><select id="resource-service-filter" class="reference-filter-input" aria-label="Filtrer par microservice"><option value="all">Tous les microservices</option></select></div><div id="resource-catalogue-categories" class="resource-catalogue-categories"></div><p class="resource-catalogue-sidebar-help">Sélectionnez un type ou recherchez un nom pour réduire l’inventaire.</p></aside>
         <section class="references-section resource-catalogue-results"><p id="resource-catalogue-summary" class="resource-catalogue-summary" role="status"></p><div class="resource-catalogue-table-head" aria-hidden="true"><span>Ressource</span><span>Propriétaire / relations</span><span>Action</span></div><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucune ressource ne correspond à ces filtres.</p></section>
         <aside id="resource-catalogue-preview" class="resource-catalogue-preview"><p class="resource-catalogue-preview-kicker">Aperçu de la ressource</p><h3 id="resource-catalogue-preview-title">Aucune ressource sélectionnée</h3><p id="resource-catalogue-preview-copy">Sélectionnez une ligne dans le catalogue pour afficher son contexte, ses relations et sa source.</p></aside>
       </div>
@@ -2139,9 +2225,9 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       <div id="architecture-context-actions" class="architecture-context-actions">
         <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled>Réinitialiser</button>
         <div class="graph-control-group view-controls" role="group" aria-label="Mode de visualisation · un seul choix" title="Mode de visualisation · un seul choix">
-          <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe statique</button>
-          <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Vue par couches</button>
-          <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Vue par modules</button>
+          <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe</button>
+          <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
+          <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
         </div>
         <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
           <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
@@ -2332,37 +2418,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         option.label = nodeKindSuggestion(node);
         nodeSuggestions.append(option);
       });
-    const graphSummary = document.getElementById("graph-summary");
-    const summaryCounts = {
-      microservices: graphData.nodes.filter(node => node.kind === "microservice").length,
-      channels: graphData.nodes.filter(node => ["kafka_topic", "message_channel"].includes(node.kind)).length,
-      dataResources: graphData.nodes.filter(node => ["mongodb_collection", "data_schema"].includes(node.kind)).length,
-    };
-    const indexingIssueCount = Array.isArray(graphData.indexing_issues)
-      ? graphData.indexing_issues.length
-      : 0;
-    const summaryItems = [
-      `${summaryCounts.microservices} service${summaryCounts.microservices > 1 ? "s" : ""}`,
-      `${summaryCounts.channels} message${summaryCounts.channels > 1 ? "s" : ""}`,
-      `${summaryCounts.dataResources} donnée${summaryCounts.dataResources > 1 ? "s" : ""}`,
-      ...(() => {
-        const count = graphData.nodes.filter(node => node.kind === "jpa_entity").length;
-        return count ? [`${count} entité${count > 1 ? "s" : ""} JPA`] : [];
-      })(),
-      `${graphData.links.length} relation${graphData.links.length > 1 ? "s" : ""}`,
-      ...(isolatedNodeIds.size
-        ? [`${isolatedNodeIds.size} ressource${isolatedNodeIds.size > 1 ? "s" : ""} isolée${isolatedNodeIds.size > 1 ? "s" : ""}`]
-        : []),
-      indexingIssueCount
-        ? `Qualité : ${indexingIssueCount} signal${indexingIssueCount > 1 ? "s" : ""} d’indexation`
-        : "Qualité : aucun signal d’indexation",
-    ];
-    summaryItems.forEach(text => {
-      const item = document.createElement("span");
-      item.className = "graph-summary-item";
-      item.textContent = text;
-      graphSummary.append(item);
-    });
     const RELATION_COLORS = Object.freeze({
       http: "#D55E00",
       kafkaPublish: "#009E73",
@@ -5386,6 +5441,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         persist();
         render();
         rebuildGraph();
+        window.dispatchEvent(new Event("systemlens:filters-changed"));
       });
       filter?.addEventListener("input", render);
       render();
@@ -6885,6 +6941,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     }
     function closeInspector() {
       inspectorModal.hidden = true;
+      hideInlineDetailsAfterModal();
       inspectorBody.replaceChildren();
       inspectorBody.className = "inspector-body";
       if (resourceCataloguePreview) {
@@ -7477,6 +7534,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
             method: match[1],
             source: node.openapi_files?.[0],
             meta: `${node.name} · route exposée`,
+          route: { route: match[0] },
             ownerNode: node,
           });
         });
@@ -7488,6 +7546,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           method: route.method || "HTTP",
           source: route.location || route.path,
           meta: `${node.name} · ${route.consumers?.length || route.callers?.length || 0} client(s)`,
+          route,
           ownerNode: node,
         }));
         (node.openapi_contracts || []).forEach(contract => entries.push({
@@ -7497,6 +7556,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           service: node.name,
           source: contract.path,
           meta: `${node.name} · ${contract.resources?.length || 0} ressource(s)`,
+          contract,
           ownerNode: node,
         }));
         (node.asyncapi_contracts || []).forEach(contract => entries.push({
@@ -7506,6 +7566,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           service: node.name,
           source: contract.path,
           meta: `${node.name} · contrat de messages`,
+          contract,
           ownerNode: node,
         }));
       });
@@ -7609,6 +7670,11 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       const query = microservicesFilter.value.trim().toLocaleLowerCase();
       const kind = resourceKindFilter?.value || "all";
       const service = resourceServiceFilter?.value || "all";
+      resourceCatalogueCategories?.querySelectorAll(".resource-catalogue-category").forEach(button => {
+        const active = button.dataset.kind === kind;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
       const visible = resourceCatalogueEntries.filter(entry => resourceCatalogueEntryMatches(entry, kind, query, service));
       microservicesTitle.textContent = kind === "diagnostic"
         ? `Diagnostics (${visible.length}/${resourceCatalogueEntries.length})`
@@ -7616,12 +7682,12 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       if (resourceCatalogueSummary) resourceCatalogueSummary.textContent = `${visible.length} ressource${visible.length > 1 ? "s" : ""} affichée${visible.length > 1 ? "s" : "e"}`;
       microservicesEmpty.hidden = visible.length > 0;
       visible.forEach(entry => {
-        const item = referenceItem(entry.method ? `${entry.method} ${entry.name}` : entry.name, entry.meta || `${resourceCatalogueKindLabels.get(entry.kind) || "Ressource"} · ${entry.service || ""}`, "Voir", () => {
+        const selectResource = () => {
           microservicesList.querySelectorAll(".is-selected").forEach(selected => selected.classList.remove("is-selected"));
           item.classList.add("is-selected");
           renderResourceCataloguePreview(entry);
-          if (entry.node) return;
-        });
+        };
+        const item = referenceItem(entry.method ? `${entry.method} ${entry.name}` : entry.name, entry.meta || `${resourceCatalogueKindLabels.get(entry.kind) || "Ressource"} · ${entry.service || ""}`, "", selectResource);
         item.classList.add("architecture-resource-reference", "resource-catalogue-row");
         const text = item.firstElementChild;
         const meta = text?.querySelector(".reference-meta");
@@ -7630,9 +7696,8 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         const actionGroup = document.createElement("div");
         actionGroup.className = "resource-catalogue-actions";
         action?.replaceWith(actionGroup);
-        if (action) actionGroup.append(action);
         const inspectTarget = entry.node || entry.ownerNode;
-        if (entry.dtoName || inspectTarget) {
+        if (entry.dtoName || entry.contract || inspectTarget) {
           const inspect = document.createElement("button");
           inspect.type = "button";
           inspect.className = "reference-action resource-catalogue-inspect";
@@ -7642,6 +7707,12 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
             event.stopPropagation();
             if (entry.dtoName) {
               openDtoInspector(entry.dtoName);
+            } else if (entry.kind === "openapi_contract") {
+              openOpenApiContract(entry.contract);
+            } else if (entry.kind === "asyncapi_contract") {
+              openAsyncApiContract(entry.contract);
+            } else if (entry.kind === "http_route") {
+              openHttpRouteInspector(inspectTarget, entry.route);
             } else {
               selectNode(inspectTarget.id, false, false);
               openArchitectureNodeInspector(inspectTarget, { reset: true });
@@ -7649,8 +7720,10 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
             }
           });
           actionGroup.append(inspect);
+        } else {
+          actionGroup.remove();
         }
-        item.addEventListener("click", event => { if (!event.target.closest("button, a")) item.querySelector("button")?.click(); });
+        item.addEventListener("click", event => { if (!event.target.closest("button, a")) selectResource(); });
         microservicesList.append(item);
       });
     }
@@ -10588,6 +10661,26 @@ const graphViewLifecycle = (() => {
     const analysisContextCollapse = document.getElementById("analysis-context-collapse");
     const toolbar = document.getElementById("architecture-toolbar");
     const toolbarCollapse = document.getElementById("toolbar-collapse");
+    const graphModeContext = document.getElementById("graph-mode-context");
+    if (graphPanel && graphModeContext) graphPanel.insertBefore(graphModeContext, graphContext);
+    const graphFilterSummary = document.getElementById("graph-filter-summary");
+    const graphFilterControls = [
+      relationHttp, relationKafka, relationMongodb, relationOther,
+      nodeMicroservice, nodeExternalMicroservice, nodeKafkaTopic,
+      nodeMongodbCollection, nodeOther,
+    ];
+    function updateGraphFilterSummary() {
+      if (!graphFilterSummary) return;
+      const hiddenCategories = graphFilterControls.filter(control => !control.checked).length;
+      const hiddenResources = hiddenMicroservices.size + hiddenTopics.size;
+      const parts = [];
+      if (hiddenCategories) parts.push(`${hiddenCategories} catégorie${hiddenCategories > 1 ? "s" : ""}`);
+      if (hiddenResources) parts.push(`${hiddenResources} ressource${hiddenResources > 1 ? "s" : ""}`);
+      graphFilterSummary.textContent = parts.length ? `${parts.join(" · ")} masquée${hiddenCategories + hiddenResources > 1 ? "s" : ""}` : "Tous affichés";
+    }
+    graphFilterControls.forEach(control => control.addEventListener("change", updateGraphFilterSummary));
+    window.addEventListener("systemlens:filters-changed", updateGraphFilterSummary);
+    updateGraphFilterSummary();
     graphCanvas.dataset.renderMode = graphState.renderMode;
     toolbarCollapse?.addEventListener("click", () => {
       const collapsed = toolbar?.classList.toggle("is-collapsed") || false;
@@ -10595,6 +10688,7 @@ const graphViewLifecycle = (() => {
       toolbarCollapse.setAttribute("aria-label", collapsed ? "Développer le panneau" : "Réduire le panneau");
       toolbarCollapse.setAttribute("title", collapsed ? "Développer le panneau" : "Réduire le panneau");
       toolbarCollapse.textContent = collapsed ? "›" : "‹";
+      updateWorkspaceViewport(true);
     });
     analysisModeClear?.addEventListener("click", () => {
       graphState.analysisPortEndpointId = null;
@@ -10743,11 +10837,15 @@ const graphViewLifecycle = (() => {
     });
     document.getElementById("inspector-close").addEventListener("click", event => {
       event.preventDefault();
-      event.stopPropagation();
+      event.stopImmediatePropagation();
       closeInspector();
     });
     inspectorBack.addEventListener("click", goBackInspector);
-    inspectorModal.addEventListener("click", event => { if (event.target === inspectorModal) closeInspector(); });
+    inspectorModal.addEventListener("pointerdown", event => event.stopPropagation());
+    inspectorModal.addEventListener("click", event => {
+      event.stopPropagation();
+      if (event.target === inspectorModal) closeInspector();
+    });
     window.addEventListener("keydown", event => { if (event.key === "Escape" && !inspectorModal.hidden) closeInspector(); });
     layoutButtons.forEach((button, layout) => button.addEventListener("click", () => applyLayout(layout)));
     graphTab.addEventListener("click", () => setToolbarTab("graph"));
@@ -10764,7 +10862,7 @@ const graphViewLifecycle = (() => {
     flowsTab.addEventListener("click", () => setToolbarTab("flows"));
     modeTabs.architecture.addEventListener("click", () => setToolbarTab("graph"));
     modeTabs.flows.addEventListener("click", () => setToolbarTab("flows"));
-    modeTabs.contracts.addEventListener("click", () => openResourceCatalogue("openapi_contract"));
+    modeTabs.contracts.addEventListener("click", () => openResourceCatalogue("all"));
     modeTabs.diagnostics.addEventListener("click", () => setToolbarTab("issues"));
     inventoryStatus.addEventListener("click", () => openResourceCatalogue("diagnostic"));
     [
@@ -10821,7 +10919,12 @@ const graphViewLifecycle = (() => {
     setToolbarTab("graph");
     function updateWorkspaceViewport(refit = false) {
       const root = document.documentElement;
-      root.style.setProperty("--workspace-left", "0px");
+      const toolbarBounds = toolbar?.getBoundingClientRect();
+      const compactViewport = window.innerWidth <= 720;
+      const reservedLeft = toolbar?.classList.contains("is-collapsed") || compactViewport
+        ? 0
+        : Math.min((toolbarBounds?.width || 0) + (toolbarBounds?.left || 0) + 24, window.innerWidth * .48);
+      root.style.setProperty("--workspace-left", `${Math.round(reservedLeft)}px`);
       root.style.setProperty("--workspace-right", "0px");
       root.style.setProperty("--workspace-top", "0px");
       root.style.setProperty("--workspace-bottom", "0px");

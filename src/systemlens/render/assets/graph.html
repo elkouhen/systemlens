@@ -98,11 +98,10 @@
               <span id="dependency-analysis-help" class="dependency-analysis-help">Sélectionnez un nœud pour activer cette analyse.</span>
             </fieldset>
         </div>
-        <div id="graph-summary" class="graph-summary" aria-label="Synthese de l'architecture"></div>
         <button id="inventory-status" class="inventory-status" type="button" hidden></button>
       </section>
       <details id="display-controls" class="display-controls">
-        <summary>Filtres du graphe</summary>
+        <summary><span>Visibilité</span><span id="graph-filter-summary" class="graph-filter-summary">Tous affichés</span></summary>
         <div class="display-filter-groups">
           <fieldset class="relation-filters">
             <legend>Types d’arêtes</legend>
@@ -121,8 +120,8 @@
           </fieldset>
         </div>
       </details>
-      <details id="microservice-visibility-controls" class="display-controls">
-        <summary>Ressources visibles</summary>
+      <details id="microservice-visibility-controls" class="display-controls graph-resource-visibility">
+        <summary>Ressources masquées</summary>
         <h3 class="visibility-subtitle">Microservices</h3>
         <p class="path-help">Décochez un microservice pour le masquer du graphe et de ses relations.</p>
         <input id="microservice-visibility-filter" class="reference-filter-input" type="search" placeholder="Rechercher un microservice" autocomplete="off" aria-label="Rechercher un microservice à masquer">
@@ -137,7 +136,7 @@
         <button id="topic-visibility-reset" class="microservice-visibility-reset" type="button">Tout réafficher</button>
       </details>
       <details id="advanced-controls" class="advanced-controls">
-        <summary>Actions avancées</summary>
+        <summary>Plus d’options</summary>
       <fieldset class="layout-controls">
         <legend>Placement des nœuds</legend>
         <div class="layout-options layout-strategy-options" role="group" aria-label="Choix du placement des nœuds">
@@ -155,7 +154,7 @@
         <p class="references-description">Filtrez les ressources par type ou microservice, puis ouvrez leur contexte dans le graphe.</p>
       </div>
       <div class="resource-catalogue-layout">
-        <aside class="resource-catalogue-sidebar"><h3>Types de ressources</h3><div id="resource-catalogue-categories" class="resource-catalogue-categories"></div><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher…" autocomplete="off" aria-label="Rechercher une ressource ou un service"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="http_route">Routes HTTP</option><option value="openapi_contract">Contrats OpenAPI</option><option value="asyncapi_contract">Contrats AsyncAPI</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="dto">DTOs</option><option value="diagnostic">Diagnostics</option><option value="other">Autres ressources</option></select><select id="resource-service-filter" class="reference-filter-input" aria-label="Filtrer par microservice"><option value="all">Tous les microservices</option></select></div><p class="resource-catalogue-sidebar-help">Sélectionnez un type ou recherchez un nom pour réduire l’inventaire.</p></aside>
+        <aside class="resource-catalogue-sidebar"><h3>Types de ressources</h3><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher une ressource ou un service" autocomplete="off" aria-label="Rechercher une ressource ou un service"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="http_route">Routes HTTP</option><option value="openapi_contract">Contrats OpenAPI</option><option value="asyncapi_contract">Contrats AsyncAPI</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="dto">DTOs</option><option value="diagnostic">Diagnostics</option><option value="other">Autres ressources</option></select><select id="resource-service-filter" class="reference-filter-input" aria-label="Filtrer par microservice"><option value="all">Tous les microservices</option></select></div><div id="resource-catalogue-categories" class="resource-catalogue-categories"></div><p class="resource-catalogue-sidebar-help">Sélectionnez un type ou recherchez un nom pour réduire l’inventaire.</p></aside>
         <section class="references-section resource-catalogue-results"><p id="resource-catalogue-summary" class="resource-catalogue-summary" role="status"></p><div class="resource-catalogue-table-head" aria-hidden="true"><span>Ressource</span><span>Propriétaire / relations</span><span>Action</span></div><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucune ressource ne correspond à ces filtres.</p></section>
         <aside id="resource-catalogue-preview" class="resource-catalogue-preview"><p class="resource-catalogue-preview-kicker">Aperçu de la ressource</p><h3 id="resource-catalogue-preview-title">Aucune ressource sélectionnée</h3><p id="resource-catalogue-preview-copy">Sélectionnez une ligne dans le catalogue pour afficher son contexte, ses relations et sa source.</p></aside>
       </div>
@@ -240,9 +239,9 @@
       <div id="architecture-context-actions" class="architecture-context-actions">
         <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled>Réinitialiser</button>
         <div class="graph-control-group view-controls" role="group" aria-label="Mode de visualisation · un seul choix" title="Mode de visualisation · un seul choix">
-          <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe statique</button>
-          <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Vue par couches</button>
-          <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Vue par modules</button>
+          <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe</button>
+          <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
+          <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
         </div>
         <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
           <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>

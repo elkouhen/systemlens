@@ -828,10 +828,12 @@ def test_modules_cli_rejects_removed_root_and_properties_options(tmp_path: Path,
     result = runner.invoke(app, ["projects", "--root", str(tmp_path)])
 
     assert result.exit_code == 2
-    assert "No such option: --root" in result.output
+    output = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout + result.stderr)
+    assert "No such option: --root" in output
     properties = runner.invoke(app, ["projects", "--properties"])
     assert properties.exit_code == 2
-    assert "No such option: --properties" in properties.output
+    output = re.sub(r"\x1b\[[0-9;]*m", "", properties.stdout + properties.stderr)
+    assert "No such option: --properties" in output
 
 
 def test_modules_cli_subcommands_render_endpoints_properties_and_openapi(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
