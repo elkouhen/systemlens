@@ -2277,10 +2277,10 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       <span id="flow-mode-context-help"></span>
     </div>
     <div class="graph-mode-context-actions">
-      <button id="flow-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue des flux" title="Recentrer la vue sur l’arbre d’appel visible">Centrer</button>
+      <button id="flow-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue des flux" title="Recentrer la vue sur l’arbre d’appel visible" hidden>Centrer</button>
       <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom de l’arbre d’appel">
-        <button id="flow-zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer dans l’arbre d’appel" title="Augmenter l’échelle de l’arbre d’appel">+</button>
-        <button id="flow-zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer dans l’arbre d’appel" title="Réduire l’échelle de l’arbre d’appel">−</button>
+        <button id="flow-zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer dans l’arbre d’appel" title="Augmenter l’échelle de l’arbre d’appel" hidden>+</button>
+        <button id="flow-zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer dans l’arbre d’appel" title="Réduire l’échelle de l’arbre d’appel" hidden>−</button>
       </div>
       <button id="flow-mode-expand-all" class="graph-action-label graph-secondary-action" type="button" title="Déplier tous les niveaux du graphe d’appel" hidden>Déplier tout le graphe</button>
       <div id="flow-call-tree-depth-control" class="call-tree-depth-control" role="group" aria-label="Nombre de niveaux de l’arbre d’appel" hidden>
@@ -2289,7 +2289,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         <output id="flow-call-tree-depth-value" class="call-tree-depth-value" aria-live="polite">1</output>
         <button id="flow-call-tree-depth-increase" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de plus" title="Afficher un niveau de plus">+</button>
       </div>
-      <button id="flow-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="flow-mode-context-copy" title="Réduire la toolbar des flux">Réduire</button>
     </div>
   </div>
   <details id="graph-legend" class="legend" aria-label="Légende du graphe">
@@ -3694,7 +3693,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           const flowPath = document.getElementById("flow-mode-context-path");
           const flowHelp = document.getElementById("flow-mode-context-help");
           const expandAll = document.getElementById("flow-mode-expand-all");
-          const contextCollapse = document.getElementById("flow-context-collapse");
           if (!graphContext || !flowContext || !graphTitle || !graphHelp || !flowTitle || !flowHelp) return;
           const active = Boolean(graphState.selectedCodeFlowId);
           const callGraphActive = active && (
@@ -3708,11 +3706,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           flowContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
           graphTitle.textContent = "Graphe d’architecture";
           graphHelp.textContent = "Actions rapides sur la vue du graphe.";
-          if (contextCollapse) {
-            contextCollapse.hidden = !callGraphActive;
-            contextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
-            contextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
-          }
           const depthControl = document.getElementById("flow-call-tree-depth-control");
           const depthValue = document.getElementById("flow-call-tree-depth-value");
           const depthDecrease = document.getElementById("flow-call-tree-depth-decrease");
@@ -10728,7 +10721,6 @@ const graphViewLifecycle = (() => {
     const flowTreeDepthDecrease = document.getElementById("flow-call-tree-depth-decrease");
     const flowTreeDepthIncrease = document.getElementById("flow-call-tree-depth-increase");
     const graphContextCollapse = document.getElementById("graph-context-collapse");
-    const flowContextCollapse = document.getElementById("flow-context-collapse");
     const toolbar = document.getElementById("architecture-toolbar");
     const toolbarCollapse = document.getElementById("toolbar-collapse");
     const graphModeContext = document.getElementById("graph-mode-context");
@@ -10788,7 +10780,6 @@ const graphViewLifecycle = (() => {
       if (control) control.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
     };
     graphContextCollapse?.addEventListener("click", () => toggleContextCollapse(graphModeContext, graphContextCollapse));
-    flowContextCollapse?.addEventListener("click", () => toggleContextCollapse(flowModeContext, flowContextCollapse));
     function updateFitModeControls(mode) {
       [
         [null, "overview"],
