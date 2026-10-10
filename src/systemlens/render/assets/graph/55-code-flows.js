@@ -1188,6 +1188,9 @@
         topologyReconciled: pathResults.every(result => result.reconciled),
       });
       syncCodeFlowSelection();
+      if (flowsTab?.getAttribute("aria-selected") === "true") {
+        requestAnimationFrame(() => document.getElementById("architecture-toolbar")?.scrollTo({ top: 0, behavior: "instant" }));
+      }
     }
 
     function showCodeFlow(flow) {
