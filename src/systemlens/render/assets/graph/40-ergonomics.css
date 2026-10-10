@@ -69,6 +69,7 @@
     #architecture-toolbar > .graph-mode-context .graph-mode-context-copy { display: none; }
     #architecture-toolbar > .graph-mode-context .graph-mode-context-actions { gap: 6px; }
     #architecture-toolbar > .graph-mode-context .architecture-context-actions { display: contents; }
+    #architecture-toolbar > .graph-mode-context .architecture-context-actions[hidden] { display: none !important; }
     #architecture-toolbar > .graph-mode-context .view-controls {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
