@@ -289,6 +289,7 @@
         ? [
             graphState.selectedCodeFlowId,
             graphState.callTreeDepth,
+            graphState.selectedDiagnosticId || "",
             graphState.callTreeSelectedPathKey || "",
             [...graphState.callTreeExpanded].sort().join(","),
             [...graphState.callTreeCollapsed].sort().join(","),
@@ -318,6 +319,22 @@
         (node.ports || []).map(port => [port.endpoint_id, port])
       )));
       const selectedFlow = selectedFlows[0] || null;
+      const selectedDiagnostic = (graphData.flow_diagnostics || []).find(item => (
+        item.id === graphState.selectedDiagnosticId
+      )) || null;
+      const selectedDiagnosticIndex = selectedDiagnostic
+        ? (graphData.flow_diagnostics || [])
+          .filter(item => item.flow_id === selectedDiagnostic.flow_id)
+          .findIndex(item => item.id === selectedDiagnostic.id) + 1
+        : 0;
+      const asyncDiagnosticEndpoints = new Set(selectedDiagnostic?.async_endpoint_ids || []);
+      const syncDiagnosticEndpoints = new Set(selectedDiagnostic?.sync_endpoint_ids || []);
+      const asyncDiagnosticPathEndpoints = new Set(
+        selectedDiagnostic?.async_path_endpoint_ids || selectedDiagnostic?.async_endpoint_ids || [],
+      );
+      const syncDiagnosticPathEndpoints = new Set(
+        selectedDiagnostic?.sync_path_endpoint_ids || selectedDiagnostic?.sync_endpoint_ids || [],
+      );
       const flowById = new Map(codeFlows.map(flow => [flow.id, flow]));
       const flowIdsByOutputEndpoint = new Map();
       const outputEndpointIdsByFlow = new Map();
@@ -573,8 +590,8 @@
       const direction = "lr";
       const gapX = 190;
       const gapY = 105;
-      const cardWidth = 110;
-      const cardHeight = 70;
+      const cardWidth = 150;
+      const cardHeight = 82;
       const logicalWidth = direction === "lr"
         ? (Math.max(...allOccurrences.map(item => item.x)) + 1) * gapX
         : Math.max(1, leafIndex) * gapX;
@@ -785,6 +802,19 @@
           const protocolClass = child.edge.kind === "rest" ? "is-rest" : child.edge.kind === "kafka" ? "is-kafka" : "";
           line.classList.add("graph-call-tree-edge", protocolClass);
           edgeHit.classList.add(protocolClass);
+          const edgeEndpointIds = new Set(child.edge.endpoint_ids || []);
+          const edgeDiagnosticKind = [...edgeEndpointIds].some(endpointId => asyncDiagnosticPathEndpoints.has(endpointId))
+            ? "async"
+            : [...edgeEndpointIds].some(endpointId => syncDiagnosticPathEndpoints.has(endpointId))
+              ? "sync"
+              : null;
+          if (edgeDiagnosticKind) {
+            line.classList.add(`is-diagnostic-${edgeDiagnosticKind}`);
+            edgeHit.classList.add(`is-diagnostic-${edgeDiagnosticKind}`);
+          } else if (selectedDiagnostic) {
+            line.classList.add("is-diagnostic-muted");
+            edgeHit.classList.add("is-diagnostic-muted");
+          }
           const edgeTooltip = treeEdgeTooltip(child.edge);
           line.setAttribute("title", [edgeTooltip.title, ...edgeTooltip.lines].join(" · "));
           line.addEventListener("mouseenter", event => {
@@ -821,9 +851,18 @@
           svg.append(line);
           const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
           label.classList.add("graph-call-tree-edge-label");
+          if (edgeDiagnosticKind) {
+            label.classList.add(`is-diagnostic-${edgeDiagnosticKind}`, "is-diagnostic-badge-label");
+            const diagnosticLabel = edgeDiagnosticKind === "async"
+              ? `P${selectedDiagnosticIndex} · ÉCRITURE ASYNC`
+              : `P${selectedDiagnosticIndex} · LECTURE SYNC`;
+            label.textContent = `${diagnosticLabel} · ${edgeDisplayLabel(child.edge)}`;
+          } else if (selectedDiagnostic) {
+            label.classList.add("is-diagnostic-muted");
+          }
           label.setAttribute("x", String(labelX));
           label.setAttribute("y", String(labelY));
-          label.textContent = edgeDisplayLabel(child.edge);
+          if (!edgeDiagnosticKind) label.textContent = edgeDisplayLabel(child.edge);
           if (topicNode || callTreeRoute) {
             label.classList.add("is-clickable");
             label.addEventListener("click", event => {
@@ -867,6 +906,24 @@
             ? `Microservice · +${occurrence.hiddenChildrenCount} appels`
             : "Microservice";
         node.append(icon, name, kind);
+        const occurrenceInputEndpoint = occurrence.edge?.endpoint_ids?.[1] || null;
+        const occurrenceDiagnosticKind = occurrenceInputEndpoint && asyncDiagnosticEndpoints.has(occurrenceInputEndpoint)
+          ? "async"
+          : occurrenceInputEndpoint && syncDiagnosticEndpoints.has(occurrenceInputEndpoint)
+            ? "sync"
+            : null;
+        if (occurrenceDiagnosticKind) {
+          node.classList.add(`is-diagnostic-${occurrenceDiagnosticKind}`);
+          const diagnosticBadge = document.createElement("span");
+          diagnosticBadge.className = `graph-call-tree-diagnostic-badge is-${occurrenceDiagnosticKind}`;
+          diagnosticBadge.textContent = occurrenceDiagnosticKind === "async"
+            ? `P${selectedDiagnosticIndex} · ÉCRITURE ASYNC`
+            : `P${selectedDiagnosticIndex} · LECTURE SYNC`;
+          diagnosticBadge.title = occurrenceDiagnosticKind === "async"
+            ? "Écriture asynchrone de la donnée signalée"
+            : "Lecture synchrone de la donnée signalée";
+          node.append(diagnosticBadge);
+        }
         if (treeTrigger && occurrence.depth === 0 && occurrence.name === treeTriggerRootName) {
           const triggerKind = ({
             http_entry: ["HTTP", "is-http"],
@@ -1166,6 +1223,8 @@
           .map(link => [`${link.input_endpoint_id}:${link.output_endpoint_id}`, link])).values()],
       };
       const flow = flows[0];
+      graphState.selectedDiagnosticId = null;
+      graphState.diagnosticFocusSnapshot = null;
       graphState.callTreeDepth = 1;
       graphState.callTreeExpanded = new Set();
       graphState.callTreeCollapsed = new Set();

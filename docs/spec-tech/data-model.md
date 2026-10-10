@@ -427,6 +427,19 @@ the CLI flow listing. Graph-arc deduplication remains inside each call graph;
 the export does not collapse equivalent persisted flows or fuse producer and
 consumer fragments into one visible card.
 
+Async-write/sync-read diagnostics pair explicit branch labels and matching
+resources across handlers that are reachable from the same persisted trigger.
+Matching causal IDs support the pair; conflicting IDs or different key
+expressions remain `insufficient_evidence`. A missing branch label is unknown
+and does not classify an access as synchronous. A visibility guarantee requires
+an explicit `visible` completion and the same non-empty expected version on
+both accesses. Each exported diagnostic retains its owning write and read flow
+IDs, operation endpoint IDs, and the endpoint paths from the trigger to each
+operation. The renderer uses those paths to highlight the complete causal
+sequence and keeps each operation badge on its exact access endpoint. Candidate
+pairs are examined across the persisted accesses; the number of comparisons is
+O(W × R), for W async writes and R sync reads in the exported snapshot.
+
 Each persisted `CodeFlow` also carries a `reconciliation` status. `complete`
 means every endpoint step exists in the same snapshot and every cross-service
 effect has a matching persisted topology edge; `partial` means

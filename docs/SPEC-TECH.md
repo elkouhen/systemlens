@@ -38,9 +38,10 @@ entry.
 Flow consistency analysis is also a snapshot projection. `CodeFlowStep` keeps
 optional branch, resource, key, causal identity, expected version, completion,
 and query-shape metadata; old SQLite JSON rows load with these fields unknown.
-The detector produces deterministic pair diagnostics without reparsing source
-files. It reports incomplete evidence instead of treating an empty result as a
-proof of safety, and the HTML layer only presents the exported diagnostics.
+The detector pairs accesses across handlers reachable from one persisted
+trigger, keeps exact endpoint evidence for each pair, and reports incomplete
+evidence instead of treating an empty result as proof of safety. See the
+[flow data model](spec-tech/data-model.md) for its matching rules.
 
 ## Detailed sections
 

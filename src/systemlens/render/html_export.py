@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 from base64 import b64encode
-from collections import Counter
+from collections import Counter, deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast, Mapping
@@ -263,19 +263,52 @@ def render_graph_html(
     ]
     view_model["code_flows"] = serialized_code_flows
     exported_diagnostics: list[dict[str, object]] = []
-    flow_by_id = {flow.id: flow for flow in export_flows}
-    for diagnostic in diagnose_flow_consistency_snapshot(export_flows):
+    causal_reachability: dict[str, set[str]] = {}
+    causal_paths: dict[str, dict[str, tuple[str, ...]]] = {}
+    for call_graph in call_graphs.values():
+        trees = cast(dict[str, dict[str, object]], call_graph.get("call_trees_by_flow", {}))
+        for root_flow_id, tree in trees.items():
+            reachable = tree.get("reachable_flow_ids", [])
+            if isinstance(reachable, list):
+                causal_reachability[root_flow_id] = set(map(str, reachable))
+            transitions = cast(dict[str, list[dict[str, object]]], tree.get("transitions", {}))
+            paths: dict[str, tuple[str, ...]] = {root_flow_id: ()}
+            pending = deque([root_flow_id])
+            while pending:
+                source_flow_id = pending.popleft()
+                for transition in transitions.get(source_flow_id, []):
+                    edge = cast(dict[str, object], transition.get("edge", {}))
+                    edge_endpoint_ids = tuple(map(str, cast(list[object], edge.get("endpoint_ids", []))))
+                    candidate = paths[source_flow_id] + edge_endpoint_ids
+                    targets = cast(list[str], transition.get("target_flow_ids", []))
+                    for target_flow_id in targets:
+                        previous = paths.get(target_flow_id)
+                        if previous is not None and len(previous) <= len(candidate):
+                            continue
+                        paths[target_flow_id] = candidate
+                        pending.append(target_flow_id)
+            causal_paths[root_flow_id] = paths
+    for diagnostic in diagnose_flow_consistency_snapshot(
+        export_flows, causal_reachability, causal_paths,
+    ):
         item = diagnostic.as_dict()
-        flow = flow_by_id.get(diagnostic.flow_id)
-        if flow is not None:
-            item["async_endpoint_ids"] = [
-                step.endpoint_id for step in flow.steps
-                if step.endpoint_id and (step.branch or "").lower() in {"async", "event", "callback"}
-            ]
-            item["sync_endpoint_ids"] = [
-                step.endpoint_id for step in flow.steps
-                if step.endpoint_id and (step.branch or "sync").lower() in {"sync", "synchronous", "blocking"}
-            ]
+        for side, endpoint_id in (
+            ("write", diagnostic.write_endpoint_id),
+            ("read", diagnostic.read_endpoint_id),
+        ):
+            endpoint = endpoint_by_id.get(endpoint_id) if endpoint_id else None
+            if endpoint is not None:
+                item[f"{side}_name"] = endpoint.topic_display or endpoint.topic
+        item["async_endpoint_ids"] = [diagnostic.write_endpoint_id] if diagnostic.write_endpoint_id else []
+        item["sync_endpoint_ids"] = [diagnostic.read_endpoint_id] if diagnostic.read_endpoint_id else []
+        item["async_path_endpoint_ids"] = list(dict.fromkeys((
+            *diagnostic.write_path_endpoint_ids,
+            *((diagnostic.write_endpoint_id,) if diagnostic.write_endpoint_id else ()),
+        )))
+        item["sync_path_endpoint_ids"] = list(dict.fromkeys((
+            *diagnostic.read_path_endpoint_ids,
+            *((diagnostic.read_endpoint_id,) if diagnostic.read_endpoint_id else ()),
+        )))
         exported_diagnostics.append(item)
     view_model["flow_diagnostics"] = exported_diagnostics
     view_model["flow_descriptions"] = {

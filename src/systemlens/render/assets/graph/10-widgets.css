@@ -246,7 +246,9 @@
     .code-flow-step-chip { display: inline-flex; align-items: center; min-height: 22px; padding: 3px 6px; border: 1px solid var(--ui-border); border-radius: 6px; color: var(--ui-muted); background: var(--ui-control); font-size: 9px; font-weight: 700; }
     .code-flow-step-chip.is-diagnostic-read { border-color: #f59e0b; color: #92400e; background: #fffbeb; box-shadow: inset 3px 0 #f59e0b; }
     .flow-consistency-lane { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-top: 6px; }
-    .flow-consistency-card { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 4px 8px; border: 1px solid #f59e0b; border-radius: 8px; color: #78350f; background: #fffbeb; font-size: 10px; font-weight: 700; }
+    .flow-consistency-card { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 4px 8px; border: 1px solid #f59e0b; border-radius: 8px; color: #78350f; background: #fffbeb; font-size: 10px; font-weight: 700; cursor: pointer; }
+    .flow-consistency-card:hover, .flow-consistency-card:focus-visible { box-shadow: 0 0 0 2px rgba(245, 158, 11, .28); outline: none; }
+    .flow-consistency-card.is-selected { outline: 2px solid currentColor; outline-offset: 1px; }
     .flow-consistency-card.is-guarantee_identified { border-color: #22c55e; color: #166534; background: #f0fdf4; }
     .flow-consistency-card.is-insufficient_evidence { border-color: #94a3b8; color: #475569; background: #f8fafc; }
     .flow-consistency-arrow { color: currentColor; font-size: 15px; }
@@ -254,6 +256,21 @@
     .graph-call-path.is-diagnostic-sync { stroke: #38bdf8 !important; stroke-width: 4px !important; opacity: 1; }
     .graph-call-path.is-diagnostic-muted { opacity: .16; }
     .graph-call-label.is-diagnostic-muted { opacity: .25; }
+    .graph-call-label.is-diagnostic-badge-label { paint-order: stroke; stroke: var(--ui-panel, #0f172a); stroke-width: 4px; stroke-linejoin: round; font-size: 11px; font-weight: 950; letter-spacing: .03em; }
+    .graph-call-label.is-diagnostic-badge-label.is-diagnostic-async { fill: #fbbf24; }
+    .graph-call-label.is-diagnostic-badge-label.is-diagnostic-sync { fill: #7dd3fc; }
+    #graph-diagnostic-overlay { position: absolute; z-index: 12; top: 16px; right: 20px; display: grid; gap: 6px; max-width: min(520px, calc(100% - 40px)); padding: 8px 10px; border: 1px solid rgba(148, 163, 184, .35); border-radius: 10px; background: rgba(15, 23, 42, .9); box-shadow: 0 8px 20px rgba(2, 6, 23, .35); pointer-events: none; }
+    #graph-diagnostic-overlay[hidden] { display: none; }
+    .graph-diagnostic-overlay-item { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .graph-diagnostic-badge { padding: 4px 7px; border-radius: 6px; font-size: 10px; font-weight: 900; letter-spacing: .03em; white-space: nowrap; }
+    .graph-diagnostic-badge-async { color: #fef3c7; background: #92400e; }
+    .graph-diagnostic-badge-sync { color: #e0f2fe; background: #075985; }
+    .graph-node-diagnostic-badge { position: static; z-index: 8; display: block; width: fit-content; margin-top: 3px; padding: 3px 5px; border-radius: 5px; font-size: 8px; font-weight: 950; letter-spacing: .02em; white-space: nowrap; pointer-events: none; }
+    .graph-node-diagnostic-badge.is-async { color: #fef3c7; background: #92400e; }
+    .graph-node-diagnostic-badge.is-sync { color: #e0f2fe; background: #075985; }
+    .graph-call-diagnostic-badge { paint-order: stroke; stroke: var(--ui-panel, #0f172a); stroke-width: 5px; stroke-linejoin: round; font-size: 10px; font-weight: 900; letter-spacing: .04em; pointer-events: none; }
+    .graph-call-diagnostic-badge.is-diagnostic-async { fill: #fbbf24; }
+    .graph-call-diagnostic-badge.is-diagnostic-sync { fill: #7dd3fc; }
     .code-flow-steps { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
     .code-flow-step { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; padding: 8px 9px; border: 1px solid #e2e8f0; border-radius: var(--control-radius); color: #334155; background: #fff; }
     .code-flow-step::before { display: none; }

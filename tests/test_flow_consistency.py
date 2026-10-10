@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from systemlens.application.flow_consistency import (
@@ -87,6 +88,88 @@ def test_distinct_pairs_are_reported_independently() -> None:
         )
     ])
     assert [(item.write_step, item.read_step) for item in diagnostics] == [(2, 4), (3, 5)]
+
+
+def test_accesses_in_distinct_handlers_need_a_shared_persisted_root() -> None:
+    write = _flow(CodeFlowStep(
+        1, "data_write", "orders", "Writer.java", 10, 10,
+        endpoint_id="writer-in", branch="async", resource="orders", key="request.orderId",
+        causal_id="request-id", completion="ack_only",
+    ))
+    read = _flow(CodeFlowStep(
+        1, "data_read", "orders", "Reader.java", 20, 20,
+        endpoint_id="reader-in", branch="sync", resource="orders", key="request.orderId",
+        causal_id="request-id",
+    ))
+    write, read = replace(write, id="writer"), replace(read, id="reader")
+    assert diagnose_flow_consistency_snapshot([write, read]) == []
+    diagnostic, = diagnose_flow_consistency_snapshot(
+        [write, read], {"checkout-root": {"writer", "reader"}},
+        {"checkout-root": {
+            "writer": ("checkout-out", "writer-in"),
+            "reader": ("checkout-out", "shipping-event", "reader-in"),
+        }},
+    )
+    assert diagnostic.flow_id == "checkout-root"
+    assert diagnostic.write_flow_id == "writer"
+    assert diagnostic.read_flow_id == "reader"
+    assert diagnostic.write_endpoint_id == "writer-in"
+    assert diagnostic.read_endpoint_id == "reader-in"
+    assert diagnostic.write_path_endpoint_ids == ("checkout-out", "writer-in")
+    assert diagnostic.read_path_endpoint_ids == ("checkout-out", "shipping-event", "reader-in")
+    assert diagnostic.classification == "potential_risk"
+
+
+def test_conflicting_causal_ids_on_reachable_branches_are_insufficient() -> None:
+    write = replace(_flow(CodeFlowStep(
+        1, "data_write", "orders", "Writer.java", 10, 10,
+        branch="async", resource="orders", key="order-1", causal_id="request-a",
+    )), id="writer")
+    read = replace(_flow(CodeFlowStep(
+        1, "data_read", "orders", "Reader.java", 20, 20,
+        branch="sync", resource="orders", key="order-1", causal_id="request-b",
+    )), id="reader")
+    diagnostic, = diagnose_flow_consistency_snapshot(
+        [write, read], {"checkout-root": {"writer", "reader"}},
+    )
+    assert diagnostic.classification == "insufficient_evidence"
+    assert diagnostic.limitation == "identifiants causaux incompatibles"
+
+
+def test_different_key_expressions_are_reported_as_unknown_overlap() -> None:
+    diagnostics = diagnose_flow_consistency(_flow(
+        CodeFlowStep(1, "http_entry", "PUT /orders", "Orders.java", 1, 1),
+        CodeFlowStep(2, "data_write", "orders", "Writer.java", 10, 10,
+                     branch="async", resource="orders", key="request.orderId"),
+        CodeFlowStep(3, "data_read", "orders", "Reader.java", 20, 20,
+                     branch="sync", resource="orders", key="request.otherOrderId"),
+    ))
+    assert len(diagnostics) == 1
+    assert diagnostics[0].classification == "insufficient_evidence"
+    assert diagnostics[0].key is None
+
+
+def test_commit_without_matching_visible_version_is_not_a_guarantee() -> None:
+    diagnostics = diagnose_flow_consistency(_flow(
+        CodeFlowStep(1, "message_entry", "orders.updated", "Orders.java", 1, 1),
+        CodeFlowStep(2, "data_write", "orders", "Writer.java", 10, 10,
+                     branch="async", resource="orders", key="order-1",
+                     expected_version="v2", completion="committed"),
+        CodeFlowStep(3, "data_read", "orders", "Reader.java", 20, 20,
+                     branch="sync", resource="orders", key="order-1"),
+    ))
+    assert diagnostics[0].classification == "potential_risk"
+
+
+def test_unknown_branch_is_not_assumed_to_be_synchronous() -> None:
+    diagnostics = diagnose_flow_consistency(_flow(
+        CodeFlowStep(1, "message_entry", "orders.updated", "Orders.java", 1, 1),
+        CodeFlowStep(2, "data_write", "orders", "Writer.java", 10, 10,
+                     branch="async", resource="orders", key="order-1"),
+        CodeFlowStep(3, "data_read", "orders", "Reader.java", 20, 20,
+                     resource="orders", key="order-1"),
+    ))
+    assert diagnostics == []
 def test_checked_in_fact_base_matches_expected_classifications() -> None:
     manifest = json.loads(
         (Path(__file__).parents[1] / "examples" / "async-write-sync-read-facts.json")

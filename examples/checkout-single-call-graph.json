@@ -1,0 +1,1639 @@
+{
+  "format": "systemlens-ai-graph-v1",
+  "generated_by": {
+    "namespace": "synthetic-checkout-race",
+    "pass": "001"
+  },
+  "mode": "partial",
+  "description": "Synthetic scenario, not extracted source evidence. One checkout root, eleven services, twenty-one interactions.",
+  "nodes": [
+    {
+      "id": "gateway",
+      "name": "gateway",
+      "kind": "service"
+    },
+    {
+      "id": "checkout",
+      "name": "checkout",
+      "kind": "service"
+    },
+    {
+      "id": "customer",
+      "name": "customer",
+      "kind": "service"
+    },
+    {
+      "id": "catalog",
+      "name": "catalog",
+      "kind": "service"
+    },
+    {
+      "id": "pricing",
+      "name": "pricing",
+      "kind": "service"
+    },
+    {
+      "id": "payment",
+      "name": "payment",
+      "kind": "service"
+    },
+    {
+      "id": "reservation",
+      "name": "reservation",
+      "kind": "service"
+    },
+    {
+      "id": "inventory",
+      "name": "inventory",
+      "kind": "service"
+    },
+    {
+      "id": "domain-inventory",
+      "name": "domain-inventory",
+      "kind": "service"
+    },
+    {
+      "id": "shipping",
+      "name": "shipping",
+      "kind": "service"
+    },
+    {
+      "id": "notification",
+      "name": "notification",
+      "kind": "service"
+    }
+  ],
+  "edges": [
+    {
+      "id": "call-01",
+      "source": "gateway",
+      "target": "checkout",
+      "kind": "http",
+      "channel": "POST /checkout",
+      "label": "POST /checkout",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-01.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 0
+      }
+    },
+    {
+      "id": "call-02",
+      "source": "checkout",
+      "target": "customer",
+      "kind": "http",
+      "channel": "GET /customer/profile",
+      "label": "GET /customer/profile",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-02.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 1
+      }
+    },
+    {
+      "id": "call-03",
+      "source": "checkout",
+      "target": "catalog",
+      "kind": "http",
+      "channel": "POST /catalog/validate",
+      "label": "POST /catalog/validate",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-03.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 1
+      }
+    },
+    {
+      "id": "call-04",
+      "source": "catalog",
+      "target": "pricing",
+      "kind": "http",
+      "channel": "POST /pricing/quote",
+      "label": "POST /pricing/quote",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-04.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 3
+      }
+    },
+    {
+      "id": "call-05",
+      "source": "pricing",
+      "target": "customer",
+      "kind": "http",
+      "channel": "GET /customer/discount",
+      "label": "GET /customer/discount",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-05.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 4
+      }
+    },
+    {
+      "id": "call-06",
+      "source": "checkout",
+      "target": "payment",
+      "kind": "http",
+      "channel": "POST /payment/authorize",
+      "label": "POST /payment/authorize",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-06.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 1
+      }
+    },
+    {
+      "id": "call-07",
+      "source": "payment",
+      "target": "customer",
+      "kind": "http",
+      "channel": "GET /customer/billing",
+      "label": "GET /customer/billing",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-07.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 6
+      }
+    },
+    {
+      "id": "call-08",
+      "source": "checkout",
+      "target": "reservation",
+      "kind": "event",
+      "channel": "stock.reserve.commands",
+      "label": "stock.reserve.commands",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-08.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 1
+      }
+    },
+    {
+      "id": "call-09",
+      "source": "reservation",
+      "target": "catalog",
+      "kind": "http",
+      "channel": "GET /catalog/sku",
+      "label": "GET /catalog/sku",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-09.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 8
+      }
+    },
+    {
+      "id": "call-10",
+      "source": "reservation",
+      "target": "inventory",
+      "kind": "event",
+      "channel": "inventory.adjust.commands",
+      "label": "inventory.adjust.commands",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-10.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 8
+      }
+    },
+    {
+      "id": "call-11",
+      "source": "inventory",
+      "target": "domain-inventory",
+      "kind": "event",
+      "channel": "inventory.write.commands",
+      "label": "inventory.write.commands",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-11.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 10
+      }
+    },
+    {
+      "id": "call-12",
+      "source": "inventory",
+      "target": "shipping",
+      "kind": "event",
+      "channel": "inventory.reserved.events",
+      "label": "inventory.reserved.events",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-12.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 10
+      }
+    },
+    {
+      "id": "call-13",
+      "source": "shipping",
+      "target": "customer",
+      "kind": "http",
+      "channel": "GET /customer/address",
+      "label": "GET /customer/address",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-13.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 12
+      }
+    },
+    {
+      "id": "call-14",
+      "source": "shipping",
+      "target": "notification",
+      "kind": "event",
+      "channel": "shipping.prepared.events",
+      "label": "shipping.prepared.events",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-14.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 12
+      }
+    },
+    {
+      "id": "call-15",
+      "source": "checkout",
+      "target": "shipping",
+      "kind": "http",
+      "channel": "POST /shipping/preview",
+      "label": "POST /shipping/preview",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-15.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 1
+      }
+    },
+    {
+      "id": "call-16",
+      "source": "shipping",
+      "target": "domain-inventory",
+      "kind": "http",
+      "channel": "GET /inventory/availability",
+      "label": "GET /inventory/availability",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-16.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 12
+      }
+    },
+    {
+      "id": "call-17",
+      "source": "shipping",
+      "target": "pricing",
+      "kind": "http",
+      "channel": "POST /pricing/shipping",
+      "label": "POST /pricing/shipping",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-17.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 15
+      }
+    },
+    {
+      "id": "call-18",
+      "source": "shipping",
+      "target": "customer",
+      "kind": "http",
+      "channel": "GET /customer/delivery-preferences",
+      "label": "GET /customer/delivery-preferences",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-18.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 15
+      }
+    },
+    {
+      "id": "call-19",
+      "source": "checkout",
+      "target": "notification",
+      "kind": "event",
+      "channel": "checkout.accepted.events",
+      "label": "checkout.accepted.events",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-19.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 1
+      }
+    },
+    {
+      "id": "call-20",
+      "source": "notification",
+      "target": "customer",
+      "kind": "http",
+      "channel": "GET /customer/contact",
+      "label": "GET /customer/contact",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-20.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 19
+      }
+    },
+    {
+      "id": "call-21",
+      "source": "payment",
+      "target": "notification",
+      "kind": "event",
+      "channel": "payment.authorized.events",
+      "label": "payment.authorized.events",
+      "confidence": "medium",
+      "evidence": [
+        {
+          "path": "synthetic/interactions/call-21.java",
+          "start_line": 1
+        }
+      ],
+      "metadata": {
+        "synthetic": true,
+        "parent_interaction": 6
+      }
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "checkout-http-root",
+      "service": "gateway",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /shop/checkout",
+      "path": "synthetic/gateway/entry.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "65a864f3263c6373",
+      "service": "gateway",
+      "role": "call",
+      "system": "rest",
+      "topic": "POST /checkout",
+      "path": "synthetic/interactions/call-01.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "4ce52f2e34061839",
+      "service": "checkout",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /checkout",
+      "path": "synthetic/interactions/call-01.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "8b745b6d6afcd864",
+      "service": "checkout",
+      "role": "call",
+      "system": "rest",
+      "topic": "GET /customer/profile",
+      "path": "synthetic/interactions/call-02.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "efed4a88acc5467b",
+      "service": "customer",
+      "role": "serve",
+      "system": "rest",
+      "topic": "GET /customer/profile",
+      "path": "synthetic/interactions/call-02.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "a079ff54ebab2d75",
+      "service": "checkout",
+      "role": "call",
+      "system": "rest",
+      "topic": "POST /catalog/validate",
+      "path": "synthetic/interactions/call-03.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "33087ad475d03863",
+      "service": "catalog",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /catalog/validate",
+      "path": "synthetic/interactions/call-03.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "fd183cf61a6737e1",
+      "service": "catalog",
+      "role": "call",
+      "system": "rest",
+      "topic": "POST /pricing/quote",
+      "path": "synthetic/interactions/call-04.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "d155f313071a8fad",
+      "service": "pricing",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /pricing/quote",
+      "path": "synthetic/interactions/call-04.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "912883b15e4fe881",
+      "service": "pricing",
+      "role": "call",
+      "system": "rest",
+      "topic": "GET /customer/discount",
+      "path": "synthetic/interactions/call-05.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "298545861f585fba",
+      "service": "customer",
+      "role": "serve",
+      "system": "rest",
+      "topic": "GET /customer/discount",
+      "path": "synthetic/interactions/call-05.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "5e1793e6714fe419",
+      "service": "checkout",
+      "role": "call",
+      "system": "rest",
+      "topic": "POST /payment/authorize",
+      "path": "synthetic/interactions/call-06.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "22b5dbdc7018fb0a",
+      "service": "payment",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /payment/authorize",
+      "path": "synthetic/interactions/call-06.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "79c86ee26651a088",
+      "service": "payment",
+      "role": "call",
+      "system": "rest",
+      "topic": "GET /customer/billing",
+      "path": "synthetic/interactions/call-07.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "a85a722f0fa36086",
+      "service": "customer",
+      "role": "serve",
+      "system": "rest",
+      "topic": "GET /customer/billing",
+      "path": "synthetic/interactions/call-07.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "ec886cbcfa2081f4",
+      "service": "checkout",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "stock.reserve.commands",
+      "path": "synthetic/interactions/call-08.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "b911f919f5705b23",
+      "service": "reservation",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "stock.reserve.commands",
+      "path": "synthetic/interactions/call-08.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "cadff552f0ca477c",
+      "service": "reservation",
+      "role": "call",
+      "system": "rest",
+      "topic": "GET /catalog/sku",
+      "path": "synthetic/interactions/call-09.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "fad5fc59bc2bd3b9",
+      "service": "catalog",
+      "role": "serve",
+      "system": "rest",
+      "topic": "GET /catalog/sku",
+      "path": "synthetic/interactions/call-09.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "410158072d7f3f6c",
+      "service": "reservation",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "inventory.adjust.commands",
+      "path": "synthetic/interactions/call-10.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "c3fd29fb15590a67",
+      "service": "inventory",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "inventory.adjust.commands",
+      "path": "synthetic/interactions/call-10.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "60735dedaa8e2339",
+      "service": "inventory",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "inventory.write.commands",
+      "path": "synthetic/interactions/call-11.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "f89d1ba1d0f0b0ed",
+      "service": "domain-inventory",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "inventory.write.commands",
+      "path": "synthetic/interactions/call-11.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "cf335104a666085e",
+      "service": "inventory",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "inventory.reserved.events",
+      "path": "synthetic/interactions/call-12.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "50a4d83a5d7b5951",
+      "service": "shipping",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "inventory.reserved.events",
+      "path": "synthetic/interactions/call-12.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "b0fdad3051cdca68",
+      "service": "shipping",
+      "role": "call",
+      "system": "rest",
+      "topic": "GET /customer/address",
+      "path": "synthetic/interactions/call-13.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "2b4063daea612888",
+      "service": "customer",
+      "role": "serve",
+      "system": "rest",
+      "topic": "GET /customer/address",
+      "path": "synthetic/interactions/call-13.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "c5ad4a0496c7c2da",
+      "service": "shipping",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "shipping.prepared.events",
+      "path": "synthetic/interactions/call-14.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "e77ae22ad3257973",
+      "service": "notification",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "shipping.prepared.events",
+      "path": "synthetic/interactions/call-14.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "f95845cc9bbb0187",
+      "service": "checkout",
+      "role": "call",
+      "system": "rest",
+      "topic": "POST /shipping/preview",
+      "path": "synthetic/interactions/call-15.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "f855ac1834d58b3c",
+      "service": "shipping",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /shipping/preview",
+      "path": "synthetic/interactions/call-15.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "f15898ae269e3214",
+      "service": "shipping",
+      "role": "call",
+      "system": "rest",
+      "topic": "GET /inventory/availability",
+      "path": "synthetic/interactions/call-16.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "31e18469ad05a9d0",
+      "service": "domain-inventory",
+      "role": "serve",
+      "system": "rest",
+      "topic": "GET /inventory/availability",
+      "path": "synthetic/interactions/call-16.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "f99d3d8dea5095ef",
+      "service": "shipping",
+      "role": "call",
+      "system": "rest",
+      "topic": "POST /pricing/shipping",
+      "path": "synthetic/interactions/call-17.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "d14b1757c5e46d99",
+      "service": "pricing",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /pricing/shipping",
+      "path": "synthetic/interactions/call-17.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "4b5c58f92b361963",
+      "service": "shipping",
+      "role": "call",
+      "system": "rest",
+      "topic": "GET /customer/delivery-preferences",
+      "path": "synthetic/interactions/call-18.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "9704da9d417dfd60",
+      "service": "customer",
+      "role": "serve",
+      "system": "rest",
+      "topic": "GET /customer/delivery-preferences",
+      "path": "synthetic/interactions/call-18.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "ec9be2a9a4eee26f",
+      "service": "checkout",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "checkout.accepted.events",
+      "path": "synthetic/interactions/call-19.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "9ef722769096b405",
+      "service": "notification",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "checkout.accepted.events",
+      "path": "synthetic/interactions/call-19.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "829b46523ebfd16f",
+      "service": "notification",
+      "role": "call",
+      "system": "rest",
+      "topic": "GET /customer/contact",
+      "path": "synthetic/interactions/call-20.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "a6742342d2fa3a0e",
+      "service": "customer",
+      "role": "serve",
+      "system": "rest",
+      "topic": "GET /customer/contact",
+      "path": "synthetic/interactions/call-20.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "e8aaf8f2cde2f2a1",
+      "service": "payment",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "payment.authorized.events",
+      "path": "synthetic/interactions/call-21.java",
+      "start_line": 1,
+      "end_line": 1
+    },
+    {
+      "id": "43931f1fffe9af77",
+      "service": "notification",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "payment.authorized.events",
+      "path": "synthetic/interactions/call-21.java",
+      "start_line": 1,
+      "end_line": 1
+    }
+  ],
+  "flows": [
+    {
+      "id": "checkout-root",
+      "module": "gateway",
+      "method": "gateway.handle0",
+      "path": "synthetic/gateway/entry.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /shop/checkout",
+          "path": "synthetic/gateway/entry.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "checkout-http-root"
+        },
+        {
+          "order": 2,
+          "kind": "http_call",
+          "name": "POST /checkout",
+          "path": "synthetic/interactions/call-01.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "65a864f3263c6373"
+        }
+      ]
+    },
+    {
+      "id": "handler-01",
+      "module": "checkout",
+      "method": "checkout.handle1",
+      "path": "synthetic/interactions/call-01.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /checkout",
+          "path": "synthetic/interactions/call-01.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "4ce52f2e34061839"
+        },
+        {
+          "order": 2,
+          "kind": "http_call",
+          "name": "GET /customer/profile",
+          "path": "synthetic/interactions/call-02.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "8b745b6d6afcd864"
+        },
+        {
+          "order": 3,
+          "kind": "http_call",
+          "name": "POST /catalog/validate",
+          "path": "synthetic/interactions/call-03.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "a079ff54ebab2d75"
+        },
+        {
+          "order": 4,
+          "kind": "http_call",
+          "name": "POST /payment/authorize",
+          "path": "synthetic/interactions/call-06.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "5e1793e6714fe419"
+        },
+        {
+          "order": 5,
+          "kind": "message_publish",
+          "name": "stock.reserve.commands",
+          "path": "synthetic/interactions/call-08.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "ec886cbcfa2081f4"
+        },
+        {
+          "order": 6,
+          "kind": "http_call",
+          "name": "POST /shipping/preview",
+          "path": "synthetic/interactions/call-15.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "f95845cc9bbb0187"
+        },
+        {
+          "order": 7,
+          "kind": "message_publish",
+          "name": "checkout.accepted.events",
+          "path": "synthetic/interactions/call-19.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "ec9be2a9a4eee26f"
+        }
+      ]
+    },
+    {
+      "id": "handler-02",
+      "module": "customer",
+      "method": "customer.handle2",
+      "path": "synthetic/interactions/call-02.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "GET /customer/profile",
+          "path": "synthetic/interactions/call-02.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "efed4a88acc5467b"
+        }
+      ]
+    },
+    {
+      "id": "handler-03",
+      "module": "catalog",
+      "method": "catalog.handle3",
+      "path": "synthetic/interactions/call-03.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /catalog/validate",
+          "path": "synthetic/interactions/call-03.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "33087ad475d03863"
+        },
+        {
+          "order": 2,
+          "kind": "http_call",
+          "name": "POST /pricing/quote",
+          "path": "synthetic/interactions/call-04.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "fd183cf61a6737e1"
+        }
+      ]
+    },
+    {
+      "id": "handler-04",
+      "module": "pricing",
+      "method": "pricing.handle4",
+      "path": "synthetic/interactions/call-04.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /pricing/quote",
+          "path": "synthetic/interactions/call-04.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "d155f313071a8fad"
+        },
+        {
+          "order": 2,
+          "kind": "http_call",
+          "name": "GET /customer/discount",
+          "path": "synthetic/interactions/call-05.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "912883b15e4fe881"
+        }
+      ]
+    },
+    {
+      "id": "handler-05",
+      "module": "customer",
+      "method": "customer.handle5",
+      "path": "synthetic/interactions/call-05.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "GET /customer/discount",
+          "path": "synthetic/interactions/call-05.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "298545861f585fba"
+        }
+      ]
+    },
+    {
+      "id": "handler-06",
+      "module": "payment",
+      "method": "payment.handle6",
+      "path": "synthetic/interactions/call-06.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /payment/authorize",
+          "path": "synthetic/interactions/call-06.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "22b5dbdc7018fb0a"
+        },
+        {
+          "order": 2,
+          "kind": "http_call",
+          "name": "GET /customer/billing",
+          "path": "synthetic/interactions/call-07.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "79c86ee26651a088"
+        },
+        {
+          "order": 3,
+          "kind": "message_publish",
+          "name": "payment.authorized.events",
+          "path": "synthetic/interactions/call-21.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "e8aaf8f2cde2f2a1"
+        }
+      ]
+    },
+    {
+      "id": "handler-07",
+      "module": "customer",
+      "method": "customer.handle7",
+      "path": "synthetic/interactions/call-07.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "GET /customer/billing",
+          "path": "synthetic/interactions/call-07.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "a85a722f0fa36086"
+        }
+      ]
+    },
+    {
+      "id": "handler-08",
+      "module": "reservation",
+      "method": "reservation.handle8",
+      "path": "synthetic/interactions/call-08.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "message_entry",
+          "name": "stock.reserve.commands",
+          "path": "synthetic/interactions/call-08.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "b911f919f5705b23"
+        },
+        {
+          "order": 2,
+          "kind": "http_call",
+          "name": "GET /catalog/sku",
+          "path": "synthetic/interactions/call-09.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "cadff552f0ca477c"
+        },
+        {
+          "order": 3,
+          "kind": "message_publish",
+          "name": "inventory.adjust.commands",
+          "path": "synthetic/interactions/call-10.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "410158072d7f3f6c"
+        }
+      ]
+    },
+    {
+      "id": "handler-09",
+      "module": "catalog",
+      "method": "catalog.handle9",
+      "path": "synthetic/interactions/call-09.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "GET /catalog/sku",
+          "path": "synthetic/interactions/call-09.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "fad5fc59bc2bd3b9"
+        }
+      ]
+    },
+    {
+      "id": "handler-10",
+      "module": "inventory",
+      "method": "inventory.handle10",
+      "path": "synthetic/interactions/call-10.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "message_entry",
+          "name": "inventory.adjust.commands",
+          "path": "synthetic/interactions/call-10.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "c3fd29fb15590a67"
+        },
+        {
+          "order": 2,
+          "kind": "message_publish",
+          "name": "inventory.write.commands",
+          "path": "synthetic/interactions/call-11.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "60735dedaa8e2339"
+        },
+        {
+          "order": 3,
+          "kind": "message_publish",
+          "name": "inventory.reserved.events",
+          "path": "synthetic/interactions/call-12.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "cf335104a666085e"
+        }
+      ]
+    },
+    {
+      "id": "handler-11",
+      "module": "domain-inventory",
+      "method": "domain-inventory.handle11",
+      "path": "synthetic/interactions/call-11.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "message_entry",
+          "name": "inventory.write.commands",
+          "path": "synthetic/interactions/call-11.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "f89d1ba1d0f0b0ed"
+        },
+        {
+          "order": 2,
+          "kind": "data_write",
+          "name": "inventory-primary.stock",
+          "resource": "inventory-primary.stock",
+          "path": "synthetic/inventory/handler-11.java",
+          "start_line": 20,
+          "end_line": 20,
+          "branch": "async",
+          "key": "checkout.sku",
+          "endpoint_id": "f89d1ba1d0f0b0ed",
+          "causal_id": "checkout.requestId",
+          "expected_version": "checkout.reservationOperationId",
+          "query_shape": "point",
+          "completion": "ack_only"
+        }
+      ]
+    },
+    {
+      "id": "handler-12",
+      "module": "shipping",
+      "method": "shipping.handle12",
+      "path": "synthetic/interactions/call-12.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "message_entry",
+          "name": "inventory.reserved.events",
+          "path": "synthetic/interactions/call-12.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "50a4d83a5d7b5951"
+        },
+        {
+          "order": 2,
+          "kind": "http_call",
+          "name": "GET /customer/address",
+          "path": "synthetic/interactions/call-13.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "b0fdad3051cdca68"
+        },
+        {
+          "order": 3,
+          "kind": "message_publish",
+          "name": "shipping.prepared.events",
+          "path": "synthetic/interactions/call-14.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "c5ad4a0496c7c2da"
+        },
+        {
+          "order": 4,
+          "kind": "http_call",
+          "name": "GET /inventory/availability",
+          "path": "synthetic/interactions/call-16.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "f15898ae269e3214"
+        }
+      ]
+    },
+    {
+      "id": "handler-13",
+      "module": "customer",
+      "method": "customer.handle13",
+      "path": "synthetic/interactions/call-13.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "GET /customer/address",
+          "path": "synthetic/interactions/call-13.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "2b4063daea612888"
+        }
+      ]
+    },
+    {
+      "id": "handler-14",
+      "module": "notification",
+      "method": "notification.handle14",
+      "path": "synthetic/interactions/call-14.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "message_entry",
+          "name": "shipping.prepared.events",
+          "path": "synthetic/interactions/call-14.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "e77ae22ad3257973"
+        }
+      ]
+    },
+    {
+      "id": "handler-15",
+      "module": "shipping",
+      "method": "shipping.handle15",
+      "path": "synthetic/interactions/call-15.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /shipping/preview",
+          "path": "synthetic/interactions/call-15.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "f855ac1834d58b3c"
+        },
+        {
+          "order": 2,
+          "kind": "http_call",
+          "name": "POST /pricing/shipping",
+          "path": "synthetic/interactions/call-17.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "f99d3d8dea5095ef"
+        },
+        {
+          "order": 3,
+          "kind": "http_call",
+          "name": "GET /customer/delivery-preferences",
+          "path": "synthetic/interactions/call-18.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "4b5c58f92b361963"
+        }
+      ]
+    },
+    {
+      "id": "handler-16",
+      "module": "domain-inventory",
+      "method": "domain-inventory.handle16",
+      "path": "synthetic/interactions/call-16.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "GET /inventory/availability",
+          "path": "synthetic/interactions/call-16.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "31e18469ad05a9d0"
+        },
+        {
+          "order": 2,
+          "kind": "data_read",
+          "name": "inventory-primary.stock",
+          "resource": "inventory-primary.stock",
+          "path": "synthetic/inventory/handler-16.java",
+          "start_line": 20,
+          "end_line": 20,
+          "branch": "sync",
+          "key": "checkout.sku",
+          "endpoint_id": "31e18469ad05a9d0",
+          "causal_id": "checkout.requestId",
+          "expected_version": "checkout.reservationOperationId",
+          "query_shape": "point",
+          "completion": null
+        }
+      ]
+    },
+    {
+      "id": "handler-17",
+      "module": "pricing",
+      "method": "pricing.handle17",
+      "path": "synthetic/interactions/call-17.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /pricing/shipping",
+          "path": "synthetic/interactions/call-17.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "d14b1757c5e46d99"
+        }
+      ]
+    },
+    {
+      "id": "handler-18",
+      "module": "customer",
+      "method": "customer.handle18",
+      "path": "synthetic/interactions/call-18.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "GET /customer/delivery-preferences",
+          "path": "synthetic/interactions/call-18.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "9704da9d417dfd60"
+        }
+      ]
+    },
+    {
+      "id": "handler-19",
+      "module": "notification",
+      "method": "notification.handle19",
+      "path": "synthetic/interactions/call-19.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "message_entry",
+          "name": "checkout.accepted.events",
+          "path": "synthetic/interactions/call-19.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "9ef722769096b405"
+        },
+        {
+          "order": 2,
+          "kind": "http_call",
+          "name": "GET /customer/contact",
+          "path": "synthetic/interactions/call-20.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "829b46523ebfd16f"
+        }
+      ]
+    },
+    {
+      "id": "handler-20",
+      "module": "customer",
+      "method": "customer.handle20",
+      "path": "synthetic/interactions/call-20.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "GET /customer/contact",
+          "path": "synthetic/interactions/call-20.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "a6742342d2fa3a0e"
+        }
+      ]
+    },
+    {
+      "id": "handler-21",
+      "module": "notification",
+      "method": "notification.handle21",
+      "path": "synthetic/interactions/call-21.java",
+      "start_line": 1,
+      "end_line": 100,
+      "status": "potential",
+      "confidence": "medium",
+      "reason": "Synthetic handler occurrence in the single checkout scenario.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "message_entry",
+          "name": "payment.authorized.events",
+          "path": "synthetic/interactions/call-21.java",
+          "start_line": 1,
+          "end_line": 1,
+          "endpoint_id": "43931f1fffe9af77"
+        }
+      ]
+    }
+  ],
+  "scenario": {
+    "root_flow_id": "checkout-root",
+    "interaction_count": 21,
+    "async_write_path": [
+      1,
+      8,
+      10,
+      11
+    ],
+    "sync_read_path": [
+      1,
+      8,
+      10,
+      12,
+      16
+    ],
+    "publication_before_read": [
+      8,
+      10,
+      11,
+      12,
+      16
+    ],
+    "resource": "inventory-primary.stock",
+    "key_expression": "checkout.sku",
+    "expected_operation": "checkout.reservationOperationId",
+    "problem": "Inventory delegates the write to domain-inventory through Kafka, while inventory also emits an event that leads shipping to read domain-inventory synchronously over HTTP before the async write may be visible.",
+    "ordering": "Sibling continuations branch from their parent handler. Step order is a display order, not a global completion order.",
+    "possible_schedules": [
+      "publish, read old stock, consume, commit",
+      "publish, consume, commit, read updated stock"
+    ]
+  }
+}

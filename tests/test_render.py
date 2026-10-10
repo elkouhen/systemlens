@@ -557,6 +557,77 @@ def test_graph_displays_source_topic_label_without_changing_topic_identity() -> 
     assert data["nodes"]
 
 
+def test_export_flow_diagnostic_retains_cross_handler_causal_paths() -> None:
+    root_entry = replace(_rest_endpoint("serve", "POST /checkout", "Checkout.java"), id="root-in")
+    write_out = replace(_kafka_endpoint("produce", "StockCommand", "Inventory.java"), id="write-out")
+    write_in = replace(_kafka_endpoint("consume", "StockCommand", "DomainInventory.java"), id="write-in")
+    shipping_out = replace(_kafka_endpoint("produce", "StockReserved", "Inventory.java"), id="shipping-out")
+    shipping_in = replace(_kafka_endpoint("consume", "StockReserved", "Shipping.java"), id="shipping-in")
+    read_out = replace(_rest_endpoint("call", "GET /stock", "Shipping.java"), id="read-out")
+    read_in = replace(_rest_endpoint("serve", "GET /stock", "DomainInventory.java"), id="read-in")
+    flows = [
+        CodeFlow(
+            id="root", module="inventory", method="Inventory.reserve", path="Inventory.java",
+            start_line=1, end_line=5, status="potential", confidence="medium", reason="test",
+            steps=(
+                CodeFlowStep(1, "http_entry", "POST /checkout", "Inventory.java", 1, 1, root_entry.id),
+                CodeFlowStep(2, "message_publish", "stock.command", "Inventory.java", 2, 2, write_out.id),
+                CodeFlowStep(3, "message_publish", "stock.reserved", "Inventory.java", 3, 3, shipping_out.id),
+            ),
+        ),
+        CodeFlow(
+            id="write-handler", module="domain-inventory", method="DomainInventory.write",
+            path="DomainInventory.java", start_line=1, end_line=5, status="potential",
+            confidence="medium", reason="test",
+            steps=(
+                CodeFlowStep(1, "message_entry", "stock.command", "DomainInventory.java", 1, 1, write_in.id),
+                CodeFlowStep(2, "data_write", "stock", "DomainInventory.java", 2, 2, write_in.id,
+                             branch="async", resource="stock", key="command.sku", causal_id="request-1"),
+            ),
+        ),
+        CodeFlow(
+            id="shipping-handler", module="shipping", method="Shipping.prepare",
+            path="Shipping.java", start_line=1, end_line=5, status="potential",
+            confidence="medium", reason="test",
+            steps=(
+                CodeFlowStep(1, "message_entry", "stock.reserved", "Shipping.java", 1, 1, shipping_in.id),
+                CodeFlowStep(2, "http_call", "GET /stock", "Shipping.java", 2, 2, read_out.id),
+            ),
+        ),
+        CodeFlow(
+            id="read-handler", module="domain-inventory", method="DomainInventory.read",
+            path="DomainInventory.java", start_line=8, end_line=12, status="potential",
+            confidence="medium", reason="test",
+            steps=(
+                CodeFlowStep(1, "http_entry", "GET /stock", "DomainInventory.java", 8, 8, read_in.id),
+                CodeFlowStep(2, "data_read", "stock", "DomainInventory.java", 9, 9, read_in.id,
+                             branch="sync", resource="stock", key="command.sku", causal_id="request-1"),
+            ),
+        ),
+    ]
+    endpoints = {
+        "inventory": [root_entry, write_out, shipping_out],
+        "domain-inventory": [write_in, read_in],
+        "shipping": [shipping_in, read_out],
+    }
+    edges = [
+        GraphEdge("kafka", "inventory", "domain-inventory", write_out, write_in),
+        GraphEdge("kafka", "inventory", "shipping", shipping_out, shipping_in),
+        GraphEdge("rest", "shipping", "domain-inventory", read_out, read_in),
+    ]
+    data = _html_graph_data(render_graph_html(endpoints, edges, code_flows=flows))
+    diagnostics = data["flow_diagnostics"]
+    assert len(diagnostics) == 1
+    diagnostic = diagnostics[0]
+    assert diagnostic["flow_id"] == "root"
+    assert diagnostic["write_flow_id"] == "write-handler"
+    assert diagnostic["read_flow_id"] == "read-handler"
+    assert diagnostic["async_endpoint_ids"] == ["write-in"]
+    assert diagnostic["sync_endpoint_ids"] == ["read-in"]
+    assert "shipping-out" in diagnostic["sync_path_endpoint_ids"]
+    assert "shipping-in" in diagnostic["sync_path_endpoint_ids"]
+
+
 def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> None:
     endpoint = _rest_endpoint("serve", "POST /orders", "OrderController.java")
     endpoint = replace(endpoint, id="receive-order", qualified_name="com.example.OrderController")

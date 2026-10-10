@@ -29,15 +29,19 @@ and declared method return types, with explicit fallback confidence limits.
 ## Async-write / sync-read diagnostics
 
 The selected Flux view MAY expose consistency diagnostics derived from the
-persisted flow snapshot. A diagnostic pairs an asynchronous `data_write` with a
-synchronous `data_read` only when the snapshot carries causal and data-overlap
-evidence. The wording MUST describe a potential ordering risk, never an
-observed runtime race.
+persisted flow snapshot. A diagnostic pairs an explicitly asynchronous
+`data_write` with an explicitly synchronous `data_read` when both handlers are
+reachable from the same persisted trigger and their resource evidence overlaps.
+The wording MUST describe a potential ordering risk, never an observed runtime
+race.
 
 Each pair is classified as `potential_risk`, `guarantee_identified`,
-`insufficient_evidence`, or omitted as not applicable. Missing keys, causal
-links, query overlap, or visibility guarantees remain explicit limitations.
-Several pairs in one flow are displayed independently. An export without the
+`insufficient_evidence`, or omitted as not applicable. Different key
+expressions, conflicting causal IDs, and incomplete query overlap remain
+explicit limitations. A visibility guarantee requires an explicit visible
+completion and matching non-empty expected versions. Several pairs are listed
+independently. The graph has no diagnostic annotations until the user selects
+a pair, then highlights only that pair's write and read. An export without the
 optional diagnostic array remains a valid older export.
 
 ## Detailed sections

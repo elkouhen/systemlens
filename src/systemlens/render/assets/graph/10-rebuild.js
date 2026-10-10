@@ -840,6 +840,8 @@
           if (depthDecrease) depthDecrease.disabled = !callGraphActive || graphState.callTreeDepth <= 1;
           if (depthIncrease) depthIncrease.disabled = !callGraphActive || graphState.callTreeDepth >= 8;
           if (!callGraphActive) {
+            const graphDiagnosticOverlay = document.getElementById("graph-diagnostic-overlay");
+            if (graphDiagnosticOverlay) graphDiagnosticOverlay.hidden = true;
             flowTitle.textContent = "Flux de code";
             flowHelp.textContent = "Sélectionnez un flux pour ouvrir son arbre d’appel.";
             if (flowStats) {
@@ -868,7 +870,6 @@
           const trigger = selectedFlow?.steps?.[0];
           const selectedDiagnostics = (graphData.flow_diagnostics || []).filter(item => (
             item.flow_id === graphState.selectedCodeFlowId
-            && (!graphState.selectedDiagnosticId || item.id === graphState.selectedDiagnosticId)
           ));
           if (selectedDiagnostics.length) {
             const riskCount = selectedDiagnostics.filter(item => item.classification === "potential_risk").length;
@@ -882,17 +883,26 @@
             consistencyLane.hidden = selectedDiagnostics.length === 0;
             selectedDiagnostics.forEach((diagnostic, index) => {
               const card = document.createElement("div");
-              card.className = `flow-consistency-card is-${diagnostic.classification}`;
+              card.className = `flow-consistency-card is-${diagnostic.classification}${diagnostic.id === graphState.selectedDiagnosticId ? " is-selected" : ""}`;
               const badge = document.createElement("strong");
               badge.textContent = `P${index + 1}`;
               const write = document.createElement("span");
-              write.textContent = `Écriture async · ${diagnostic.resource || "donnée"} · étape ${diagnostic.write_step}`;
+              write.textContent = `Écriture async · ${diagnostic.write_name || diagnostic.write_flow_id} · ${diagnostic.resource || "donnée"} · étape ${diagnostic.write_step}`;
               const arrow = document.createElement("span");
               arrow.className = "flow-consistency-arrow";
               arrow.textContent = "→";
               const read = document.createElement("span");
-              read.textContent = `Lecture sync · étape ${diagnostic.read_step}`;
+              read.textContent = `Lecture sync · ${diagnostic.read_name || diagnostic.read_flow_id} · étape ${diagnostic.read_step}`;
               card.append(badge, write, arrow, read);
+              card.title = "Cliquer pour isoler les deux opérations dans le graphe";
+              card.addEventListener("click", () => {
+                const selectedFlow = (graphData.code_flows || []).find(flow => (
+                  flow.id === graphState.selectedCodeFlowId
+                ));
+                if (selectedFlow && typeof focusFlowDiagnostic === "function") {
+                  focusFlowDiagnostic(diagnostic, selectedFlow);
+                }
+              });
               consistencyLane.append(card);
             });
           }
@@ -2043,12 +2053,6 @@
           portPathOverlay.append(hitArea);
           return hitArea;
         };
-      const selectedDiagnostic = (graphData.flow_diagnostics || []).find(item => (
-        item.id === graphState.selectedDiagnosticId
-      ));
-      const diagnosticEndpointIds = value => new Set(selectedDiagnostic?.[value] || []);
-      const asyncDiagnosticEndpoints = diagnosticEndpointIds("async_endpoint_ids");
-      const syncDiagnosticEndpoints = diagnosticEndpointIds("sync_endpoint_ids");
       selectedCallGraphLinks.forEach(({ link, index, edgeKey }) => {
           if (!isCurrentRender()) return;
           const routed = callGraphPath(link, edgeKey, index);
@@ -2083,14 +2087,6 @@
             path.classList.add("is-keyboard-selected");
           }
           if (link.kind === "kafka") path.classList.add("is-kafka");
-          if (selectedDiagnostic) {
-            const endpoints = new Set(link.endpoint_ids || []);
-            const isAsync = [...endpoints].some(endpointId => asyncDiagnosticEndpoints.has(endpointId));
-            const isSync = [...endpoints].some(endpointId => syncDiagnosticEndpoints.has(endpointId));
-            path.classList.toggle("is-diagnostic-async", isAsync);
-            path.classList.toggle("is-diagnostic-sync", isSync);
-            path.classList.toggle("is-diagnostic-muted", !isAsync && !isSync);
-          }
           if ((link.endpoint_ids || []).includes(graphState.analysisPortEndpointId)) {
             path.classList.add("is-analysis-selected");
           }
@@ -2102,14 +2098,6 @@
           arcLabel.classList.add("graph-call-label");
           arcLabel.dataset.renderGeneration = String(renderGeneration);
           if (link.kind === "rest") arcLabel.classList.add("is-rest");
-          if (selectedDiagnostic) {
-            const endpoints = new Set(link.endpoint_ids || []);
-            const isAsync = [...endpoints].some(endpointId => asyncDiagnosticEndpoints.has(endpointId));
-            const isSync = [...endpoints].some(endpointId => syncDiagnosticEndpoints.has(endpointId));
-            arcLabel.classList.toggle("is-diagnostic-async", isAsync);
-            arcLabel.classList.toggle("is-diagnostic-sync", isSync);
-            arcLabel.classList.toggle("is-diagnostic-muted", !isAsync && !isSync);
-          }
           arcLabel.dataset.arcKey = resolvedEdgeKey;
           arcLabel.dataset.sourceNode = link.source;
           arcLabel.dataset.targetNode = link.target;

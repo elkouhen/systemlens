@@ -96,13 +96,13 @@
       "end_line": 180,
       "status": "potential",
       "confidence": "high",
-      "reason": "The asynchronous write and synchronous read target proven different keys.",
+      "reason": "The asynchronous write and synchronous read use different key expressions, so their overlap is unknown.",
       "steps": [
         {"order": 1, "kind": "http_entry", "name": "PUT /orders/{id}/other", "path": "src/orders/OrdersController.java", "start_line": 156, "end_line": 156},
         {"order": 2, "kind": "data_write", "name": "orders", "path": "src/orders/OrderWriter.java", "start_line": 165, "end_line": 165, "branch": "async", "resource": "orders", "key": "request.orderId", "causal_id": "disjoint-42", "expected_version": "v2"},
         {"order": 3, "kind": "data_read", "name": "orders", "path": "src/orders/OrderReader.java", "start_line": 176, "end_line": 176, "branch": "sync", "resource": "orders", "key": "request.otherOrderId", "causal_id": "disjoint-42", "expected_version": "v2", "query_shape": "point"}
       ],
-      "expected_diagnostics": []
+      "expected_diagnostics": ["insufficient_evidence"]
     }
   ]
 }
