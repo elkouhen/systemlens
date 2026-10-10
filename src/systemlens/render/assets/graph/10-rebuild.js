@@ -823,7 +823,10 @@
             contextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
             contextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
           }
-          if (architectureActions) architectureActions.hidden = callGraphActive;
+          if (architectureActions) {
+            architectureActions.hidden = callGraphActive;
+            architectureActions.style.display = callGraphActive ? "none" : "";
+          }
           const depthControl = document.getElementById("call-tree-depth-control");
           const depthValue = document.getElementById("call-tree-depth-value");
           const depthDecrease = document.getElementById("call-tree-depth-decrease");
