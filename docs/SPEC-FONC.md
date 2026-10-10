@@ -26,6 +26,20 @@ The section files are normative for the behavior they own.
 The extraction rules include interface calls through inherited implementations
 and declared method return types, with explicit fallback confidence limits.
 
+## Async-write / sync-read diagnostics
+
+The selected Flux view MAY expose consistency diagnostics derived from the
+persisted flow snapshot. A diagnostic pairs an asynchronous `data_write` with a
+synchronous `data_read` only when the snapshot carries causal and data-overlap
+evidence. The wording MUST describe a potential ordering risk, never an
+observed runtime race.
+
+Each pair is classified as `potential_risk`, `guarantee_identified`,
+`insufficient_evidence`, or omitted as not applicable. Missing keys, causal
+links, query overlap, or visibility guarantees remain explicit limitations.
+Several pairs in one flow are displayed independently. An export without the
+optional diagnostic array remains a valid older export.
+
 ## Detailed sections
 
 - [Configuration](spec-fonc/configuration.md)

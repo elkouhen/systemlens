@@ -27,6 +27,16 @@ class CodeFlowStep:
     end_line: int
     endpoint_id: str | None = None
     operation: str | None = None
+    # Optional source-evidenced consistency metadata.  These fields are
+    # appended so existing positional constructors and SQLite snapshots keep
+    # loading unchanged.
+    branch: str | None = None
+    resource: str | None = None
+    key: str | None = None
+    causal_id: str | None = None
+    expected_version: str | None = None
+    completion: str | None = None
+    query_shape: str | None = None
 
 
 @dataclass(frozen=True)

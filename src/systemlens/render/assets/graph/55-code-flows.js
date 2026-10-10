@@ -12,6 +12,10 @@
     const codeFlowFilterSummary = document.getElementById("code-flow-filter-summary");
     const codeFlowFilterReset = document.getElementById("code-flow-filter-reset");
     const codeFlowsTitle = document.getElementById("code-flows-title");
+    const flowDiagnostics = Array.isArray(graphData.flow_diagnostics) ? graphData.flow_diagnostics : [];
+    const flowDiagnosticsList = document.getElementById("flow-diagnostics");
+    const flowDiagnosticsEmpty = document.getElementById("flow-diagnostics-empty");
+    const flowDiagnosticsSummary = document.getElementById("flow-diagnostics-summary");
     let callTreePan = null;
     let callTreePanBound = false;
     let callTreeRenderSignature = "";
@@ -1392,6 +1396,40 @@
       return item;
     }
 
+    function renderFlowDiagnostics(visibleFlows) {
+      if (!flowDiagnosticsList || !flowDiagnosticsEmpty || !flowDiagnosticsSummary) return;
+      const visibleIds = new Set(visibleFlows.map(flow => flow.id));
+      const items = flowDiagnostics.filter(item => visibleIds.has(item.flow_id));
+      flowDiagnosticsList.replaceChildren(...items.map(item => {
+        const row = document.createElement("li");
+        row.className = `code-flow-item flow-diagnostic-item is-${item.classification}`;
+        const title = document.createElement("div");
+        title.className = "reference-title code-flow-title";
+        title.textContent = `${item.severity} · ${item.resource || "Ressource inconnue"}`;
+        const meta = document.createElement("div");
+        meta.className = "reference-meta";
+        meta.textContent = `Flux ${item.flow_id} · écriture étape ${item.write_step} → lecture étape ${item.read_step}`;
+        const detail = document.createElement("p");
+        detail.className = "code-flow-reason";
+        const label = item.classification === "potential_risk"
+          ? "Lecture potentiellement antérieure à la visibilité de l’écriture"
+          : item.classification === "guarantee_identified"
+            ? "Garantie de visibilité identifiée"
+            : "Preuves insuffisantes pour conclure";
+        detail.textContent = `${label}. ${item.limitation || item.causal_evidence || ""}`;
+        row.append(title, meta, detail);
+        row.addEventListener("click", () => {
+          const flow = codeFlows.find(candidate => candidate.id === item.flow_id);
+          if (flow) showCodeFlow(flow);
+        });
+        return row;
+      }));
+      flowDiagnosticsEmpty.hidden = items.length > 0;
+      flowDiagnosticsSummary.textContent = items.length
+        ? `${items.length} problème${items.length > 1 ? "s" : ""} · chaque paire écriture/lecture est affichée séparément`
+        : "Aucun problème détecté dans les flux affichés.";
+    }
+
     function renderCodeFlows() {
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
       const visible = codeFlows.filter(flow => {
@@ -1410,6 +1448,7 @@
       codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} sur ${codeFlows.length} · cliquez sur un flux pour ouvrir son graphe d’appel.`;
       updateCodeFlowFilterSummary();
       codeFlowsTitle.textContent = `Flux de code (${visible.length}/${codeFlows.length})`;
+      renderFlowDiagnostics(visible);
     }
 
     codeFlowFilter.addEventListener("input", renderCodeFlows);

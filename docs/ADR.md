@@ -817,3 +817,27 @@ graph nodes for resources that have no persisted graph node.
 only show resources present in the snapshot. Extractor changes are required
 when a missing resource is a data-quality problem. Existing graph and modal
 inspection paths remain available outside the catalogue workspace.
+
+## ADR-45: Diagnose asynchronous writes and synchronous reads as pair evidence
+
+**Status:** Accepted.
+
+**Context:** A selected flow can publish an update asynchronously while a
+causally related continuation reads the affected data synchronously. Linear
+flow order cannot prove that the consumer write has become visible before the
+read, and a single flow can contain several independent read/write pairs.
+
+**Decision:** Keep optional branch-aware evidence on `CodeFlowStep` and derive
+one deterministic diagnostic per distinct asynchronous-write/synchronous-read
+pair. Require a shared causal identity or a persisted common trigger plus
+resource and key/query overlap. Recognize a completion guarantee only when it
+applies to the expected operation/version; acknowledgements and fixed delays
+remain potential risks. Unknown evidence is classified as insufficient rather
+than safe. Export the diagnostics from the persisted snapshot and render them
+only in Flux.
+
+**Consequences:** Existing indexes and flow consumers remain compatible because
+the metadata is additive and nullable. The detector is conservative and does
+not infer missing data-access or causal facts; extractor work is still required
+to populate those fields for real applications. Multiple diagnostics remain
+independently inspectable without changing topology or runtime claims.

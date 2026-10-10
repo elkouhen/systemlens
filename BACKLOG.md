@@ -1,356 +1,337 @@
-# Catalogue screen restructuring backlog
+# Asynchronous write and synchronous read backlog
 
-Implement the selected catalogue layout: a horizontal application header,
-resource filters on the left, a table in the centre, and a persistent inspector
-on the right. Visual acceptance uses the selected screenshot, not the existing
-card-based implementation.
+Detect and visualize a synchronous read that depends on an asynchronous write
+whose completion is not guaranteed before the read. The result is a potential
+consistency risk supported by source evidence, never a claim about an observed
+runtime failure.
 
-| Field | Value |
-|---|---|
-| Status | In progress; catalogue projection and workspace shell are implemented locally, acceptance remains open until the full screen contract passes |
-| Owner | Implementing developer, with product owner reviewing visual fidelity |
-| Audience | Developers and reviewers of the HTML export |
-| Scope | Screen structure, resource browsing, inspection, export verification |
-| Reference | [Selected catalogue screenshot](artifacts/resource-navigation/02-catalogue.png) and [HTML mockup](artifacts/resource-navigation/02-catalogue.html) |
-| Tracking | This file only; no GitHub tickets or project boards |
+Status: in progress. The snapshot contract, conservative detector, export field,
+Flux problem list, and focused unit tests are implemented. Java extraction of
+the new evidence and full browser validation remain open.
+Implemented slice: `CodeFlowStep` now accepts nullable branch/data/causal
+metadata; `flow_consistency` emits deterministic pair diagnostics; exports
+include `flow_diagnostics`; and Flux renders one row per diagnostic. The current
+indexer still emits only the existing Mongo write evidence, so real read/write
+coverage is incomplete until ASR-03 is delivered.
+Tracking: this file only; do not create GitHub tickets.
+Owner: implementing developer; product owner reviews the visual acceptance.
 
-## 1. Grounding and scope
+## Story and scope
 
-The following observations are grounded in source revision `552badb`.
-All target behaviour and dimensions below are planned acceptance requirements,
-not claims that the implementation already satisfies them.
+As an architect inspecting a selected call flow, I want to see where a
+synchronous read can overtake a causally related asynchronous write, so I can
+locate the missing completion guarantee and inspect the supporting code.
 
-| Observed gap | Evidence | Required work |
-|---|---|---|
-| Catalogue remains nested inside the architecture toolbar | [HTML template](src/systemlens/render/assets/graph.html), `microservices-panel` | Separate the application shell and workspace screens |
-| Repeated navigation bars, card grids and overlapping layout overrides differ from the mockup | [Styles](src/systemlens/render/assets/graph/50-obsidian.css), `catalogue-active` rules | Replace the catalogue layout and remove obsolete overrides |
-| Catalogue rows come only from graph nodes | [Resource rendering](src/systemlens/render/assets/graph/40-details.js), `renderMicroservices` | Include routes, contracts and indexed data types |
-| Preview references an undeclared `resourceCataloguePreview` binding in source | [Preview rendering](src/systemlens/render/assets/graph/40-details.js) and [controls](src/systemlens/render/assets/graph/20-controls.js) | Fix initialization and test HTML assembled from current source |
-| Specifications require a separate inspection window and graph switching | [UX rules](docs/UX-UI.md) and [export behaviour](docs/spec-fonc/html-export.md) | Record the approved catalogue exception alongside implementation |
+Illustrative scenario: a request publishes an update command and continues
+through HTTP to read the affected record. A consumer performs the write.
+Publication before the read does not establish write completion before the read.
 
-The selected image defines layout, hierarchy and component treatment. Its
-counts, labels and sample relationships are illustrative; production content
-must come from the persisted snapshot. Remove prototype banners and proposal
-numbers from the application.
+The analysis must preserve the common trigger, the asynchronous write branch,
+and the synchronous read branch. It must distinguish a proven key relationship
+from access to the same collection with an unknown key.
 
-Preserve indexing, SQLite compatibility, evidence confidence and existing CLI
-contracts. Do not infer owners from project namespaces or invent relationships.
-Keep source evidence relative in persistence and resolve local links only at
-export time. CDN changes, ARIA redesign and keyboard-navigation work remain
-deferred under [AGENTS.md](AGENTS.md).
+The read may occur in a later request, callback, or event-triggered treatment.
+Require source-backed causal links between treatments; a shared business key
+alone does not establish causality. Unsupported links remain explicit unknowns.
 
-## 2. Target screens and design choice
+A selected flow may have several diagnostics. Users must be able to identify
+each affected read, inspect one diagnostic at a time, and return to the complete
+flow without losing their camera or expansion state.
 
-> **Why & What: dedicated resource workspace**
->
-> **What:** Introduce a dedicated catalogue screen with a shared inspector
-> mounted in its right-hand region.
->
-> **Why:** The selected layout lets users filter, compare and inspect resources
-> without losing the result list. It does not resolve missing indexed evidence.
->
-> **Alternative considered:** Extending the graph toolbar reuses existing
-> components cheaply, but cannot reproduce the selected screen hierarchy.
->
-> **Fallback:** Keep existing inspector renderers available during migration;
-> do not mark the catalogue complete until the dedicated screen passes review.
+Scope includes persisted evidence, bounded static analysis, export diagnostics,
+and visualization in the selected Flux view. Runtime trace collection,
+automatic application fixes, and generic architecture smells are excluded.
+CDN dependencies, ARIA semantics, and keyboard navigation remain deferred.
 
-| Screen or region | Target behaviour | Migration rule |
-|---|---|---|
-| Shared header | Brand, project context, Architecture, Flux de code, Ressources, Diagnostics, search and theme control | One horizontal navigation level; preserve the default Architecture landing screen |
-| Architecture | Existing graph, layouts, zoom, selection and graph-specific controls | Hide these controls outside the graph screen |
-| Flux de code | Flow catalogue followed by the selected call tree | Preserve flow filters and return behaviour |
-| Ressources | Full-width catalogue below the shared header | Replace the enlarged toolbar and duplicate resource tabs |
-| Catalogue left region | Resource types with counts, then microservice checkboxes | Use visible category rows rather than a type dropdown |
-| Catalogue centre | Breadcrumb, category title, filter chips, HTTP method filter, result table and count | Use table rows rather than a grid of cards |
-| Catalogue right region | Persistent shared inspector with resource identity, relations, contract and source | Selecting a row updates this region without switching screens |
-| Diagnostics | Existing diagnostics list | Preserve content and return navigation |
-| Contract and class details | Reachable through resource categories and inspector links | Preserve OpenAPI, AsyncAPI, DTO, JPA and Mongo inspection capabilities |
+## Constraints and design questions
 
-At the reference viewport of 1440 × 1000, use a header approximately 76 px
-high, outer margins of 30 px, a left region near 218 px and a right region near
-305 px. These targets come from the selected image; the centre fills the
-remaining width. Avoid large unused bands between header, title and results.
+[ADR-27](docs/ADR.md#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth)
+limits asynchronous composition and excludes producer flows with a later external
+effect from linear composition. The implementation must examine that constraint
+because the target story requires preserving both continuations.
 
-## 3. Execution order
+[ADR-40](docs/ADR.md#adr-40-preserve-complete-service-arcs-in-selected-flow-graphs)
+preserves source-backed branches and endpoint identities. Rendering order and
+reachability alone must not become evidence of execution order or data dependence.
 
-Each task includes its implementation and acceptance evidence. Keep tasks open
-until their checks pass. Task identifiers are local backlog identifiers.
+Follow the [technical specification](docs/SPEC-TECH.md) and
+[functional specification](docs/SPEC-FONC.md). Exports consume the persisted
+snapshot; they must not reparse source code. Store evidence paths relative to
+the indexed project and preserve compatibility with existing SQLite indexes.
 
-| Task | Priority | Depends on | Status |
+The proposed design adds a branch-aware diagnostic alongside existing flows.
+This costs additional evidence storage and analysis time, but preserves existing
+flow consumers. Extending the existing flow contract is an alternative to assess
+in task ASR-01; silently changing linear flow semantics is unacceptable.
+
+## Delivery order
+
+All tasks are required for this story. P0 establishes sound evidence and
+classification; P1 delivers the user-facing diagnosis and release validation.
+
+| Task | Priority | Dependencies | Deliverable |
 |---|---|---|---|
-| CAT-01: Screen and interaction contract | P0 | None | In progress |
-| CAT-02: Application shell and screen lifecycle | P0 | CAT-01 | In progress |
-| CAT-03: Resource catalogue projection | P0 | CAT-01 | In progress |
-| CAT-04: Category and service filters | P0 | CAT-02, CAT-03 | In progress |
-| CAT-05: Central resource table | P0 | CAT-04 | In progress |
-| CAT-06: Persistent resource inspector | P0 | CAT-03, CAT-05 | In progress |
-| CAT-07: Navigation continuity and legacy migration | P0 | CAT-02, CAT-06 | Open |
-| CAT-08: Visual fidelity and constrained layouts | P0 | CAT-04, CAT-05, CAT-06, CAT-07 | In progress |
-| CAT-09: Browser regression coverage | P0 | CAT-07, CAT-08 | In progress |
-| CAT-10: Generated exports and delivery evidence | P0 | CAT-09 | In progress |
+| ASR-01 | P0 | None | Evidence audit and contract decision |
+| ASR-02 | P0 | ASR-01 | Acceptance fixtures |
+| ASR-03 | P0 | ASR-01, ASR-02 | Data-access and causal evidence |
+| ASR-04 | P0 | ASR-03 | Persistence and snapshot compatibility |
+| ASR-05 | P0 | ASR-04 | Bounded branch analysis |
+| ASR-06 | P0 | ASR-05 | Completion guarantees and classification |
+| ASR-07 | P1 | ASR-06 | Export diagnostic contract |
+| ASR-08 | P1 | ASR-07 | Diagnostic list in Flux |
+| ASR-09 | P1 | ASR-08 | Two-branch visualization and evidence |
+| ASR-10 | P1 | ASR-09 | Browser validation and synchronized model |
 
-### CAT-01: Define the screen and interaction contract
+## Tasks and acceptance criteria
 
-Goal: give implementation and visual review the same target.
+### ASR-01: Audit evidence and define the diagnostic contract
 
-Files: `docs/UX-UI.md`, `docs/spec-fonc/html-export.md`,
-`docs/SPEC-FONC.md`, and `docs/ADR.md` for the durable workspace decision.
+- [x] Inspect the flow domain, indexing, storage, and call-graph projection.
+- [ ] Record which facts support access kind, data identity, key propagation,
+      call-site order, branch compatibility, and completion guarantees.
+- [ ] List missing facts and the extraction work needed to obtain them.
+- [x] Define a rule identifier and a diagnostic contract with stable IDs,
+      branch step references, common trigger, resource and key evidence,
+      confidence, classification, limitations, and snapshot completeness.
+- [ ] Include expected operation/version identity, causal links across treatments,
+      read occurrence identity, query overlap evidence, and path variants.
+- [x] Record the branch representation decision in a new ADR, including its
+      relationship to ADR-27. Preserve accepted decision history.
+- [x] Specify the intended behavior in the functional and technical specifications.
 
-- [ ] Describe the target screens in chapter 2 and the category taxonomy.
-- [ ] Amend the conflicting rule that every catalogue selection opens a modal
-  or returns to the graph. Scope the docked inspector rule to Ressources.
-- [ ] Define selection, filter, empty-result, missing-evidence and return states.
-- [ ] Preserve the graph inspector behaviour outside Ressources.
+Acceptance: a reviewer can distinguish stored facts from proposed enrichment.
+Every required field has a producer or an explicit unknown state. The contract
+can express two branches without claiming that consumer completion precedes HTTP.
 
-Acceptance: a reviewer can trace every region in the selected screenshot to
-a specified behaviour. Modal-only and graph-switching rules no longer conflict
-with the planned catalogue. Verify through a source-to-spec review.
+### ASR-02: Build positive, negative, and incomplete fixtures
 
-### CAT-02: Separate the application shell from workspace screens
+- [ ] Add a minimal Java/Spring fixture that publishes an update and then reads
+      the same business key through a synchronous call.
+- [ ] Include the consumer write and evidence linking the command key to the read.
+- [ ] Add variants for a proven different key, unrelated roots, mutually exclusive
+      branches, and a read that precedes publication.
+- [ ] Add a correlated completion response after commit, a broker acknowledgement,
+      and a fixed delay as distinct synchronization cases.
+- [ ] Add unknown resource targets, unknown keys, unresolved dispatch, cycles,
+      partial indexing, and traversal-limit cases.
+- [ ] Add a causally linked later request and callback, plus an unrelated request
+      using the same business key as a negative case.
+- [ ] Add successive writes to the same key and a confirmation of the older write.
+- [ ] Add filtered-list and aggregate reads affected by an asynchronous write,
+      plus a provably disjoint query as a negative case.
+- [x] Add multiple diagnostics in one flow: distinct reads of the same data,
+      different data targets, and equivalent paths for one write/read pair.
 
-Goal: make Ressources an independent workspace under the shared header.
+| Fixture | Expected outcome |
+|---|---|
+| Asynchronous command followed by a causally related read without completion evidence | Potential risk |
+| Broker acknowledgement or fixed delay only | Potential risk |
+| Confirmation of an older write to the same key | Potential risk |
+| Expected write completion and visibility established before the read | Guarantee identified |
+| Cache or projection freshness unresolved | Insufficient evidence |
+| Causal link, resource identity, or query overlap unresolved | Insufficient evidence |
+| Proven independent treatments or disjoint data access | Not applicable |
 
-Files: `src/systemlens/render/assets/graph.html`,
-`src/systemlens/render/assets/graph/20-controls.js`,
-`src/systemlens/render/assets/graph/40-details.js`,
-`src/systemlens/render/assets/graph/45-view-lifecycle.js`,
-`src/systemlens/render/assets/graph/60-bootstrap.js`.
+Risk fixtures must establish causality, overlapping data access, and compatible
+paths. Missing prerequisites change the result to insufficient evidence.
 
-- [ ] Move the catalogue outside `architecture-toolbar` into a dedicated root.
-- [ ] Create the shared horizontal header and four screen entry points.
-- [ ] Replace body-class-only switching with explicit workspace activation.
-- [ ] Hide graph canvases, overlays, legend and camera controls in Ressources.
-- [ ] Initialize DOM references before registering handlers. Fix the missing
-  preview binding without relying on stale code embedded in generated HTML.
+Acceptance: each fixture declares its expected classification and evidence.
+The positive fixture demonstrates both possible execution orders; it does not
+require reproducing a runtime race to pass the static-analysis test.
 
-Acceptance: opening Ressources shows only the catalogue workspace. Returning
-to Architecture restores a working graph without duplicate handlers or errors.
-Verify with a browser test switching among all four screens twice.
+### ASR-03: Extract data identity and causal relationships
 
-### CAT-03: Build a complete resource projection from the snapshot
+- [ ] Capture read/write operations, method and call-site identity, source location,
+      target resource identity, and supported key expressions.
+- [ ] Resolve table or collection ownership using proven mappings and namespace
+      context. Retain unresolved aliases instead of merging names heuristically.
+- [ ] Track supported key propagation through request parameters, message payloads,
+      method arguments, and repository calls. Never persist runtime key values.
+- [ ] Represent publication and synchronous continuation under their common trigger.
+- [ ] Preserve supported causal links across later requests, callbacks, and events,
+      including operation/version propagation and the expected write relationship.
+- [ ] Represent point reads, filtered lists, and aggregates. Determine whether the
+      write can affect the query result, or explicitly report unknown overlap.
+- [ ] Preserve execution-order evidence and branch conditions where available;
+      mark unknown order or feasibility explicitly.
 
-Goal: include resources that are not graph nodes, especially HTTP routes.
+Acceptance: same resource names in different stores remain distinct.
+Proven unequal keys exclude the risk only for disjoint point accesses.
+List and aggregate reads require query overlap analysis; unresolved overlap
+remains a review candidate. Unknown keys remain review candidates.
+Source line order alone does not prove interprocedural or asynchronous ordering.
 
-Files: `src/systemlens/render/assets/graph/40-details.js`, proposed
-`src/systemlens/render/assets/graph/42-resource-catalogue.js`,
-`src/systemlens/render/html_export.py`, `docs/SPEC-TECH.md` and its owning
-rendering section. Register the new module in the ordered asset list.
+### ASR-04: Persist evidence and preserve existing indexes
 
-- [ ] Extract a catalogue adapter with stable resource IDs, kind, display name,
-  associated services, evidence references and inspector targets.
-- [ ] Include microservices, HTTP routes, topics, collections, OpenAPI/AsyncAPI
-  contracts, DTOs, JPA entities and Mongo persistence classes.
-- [ ] Reuse existing route grouping and contract/type lookup logic. Deduplicate
-  routes by provider, method and path; preserve genuinely distinct providers.
-- [ ] Distinguish ownership from association. Topic producers and consumers
-  are associated services; project namespaces are not inferred owners.
-- [ ] Index associations once per snapshot rather than rescanning all links
-  for every visible row. Document construction and filtering complexity.
+- [ ] Add the required domain structures, serialization, and additive migrations.
+- [ ] Run migrations before the indexing transaction and preserve old snapshots.
+- [ ] Include extraction profile changes in diagnostic invalidation and rebuilds.
+- [ ] Expose snapshot completeness and unsupported evidence through read adapters.
+- [ ] Validate relative evidence paths and absence of credentials or secret values.
 
-Acceptance: a snapshot with no graph node for a route still lists that route.
-Identical paths from different services remain distinct. Unknown owners stay
-unknown, client counts count unique indexed consumers, and source facts remain
-unchanged. Cover these cases in catalogue and export tests.
+Acceptance: an old index remains readable and reports unavailable analysis where
+necessary. Reindexing refreshes affected results. Export succeeds with source
+files unavailable and does not silently reparse them.
 
-### CAT-04: Implement category navigation and combined filters
+### ASR-05: Analyze the asynchronous and synchronous branches
 
-Goal: reproduce the left-hand navigation and centre filter controls.
+- [ ] Find source-backed publication-to-consumer-to-write paths and synchronous
+      reads under a common trigger or linked through supported causal evidence.
+- [ ] Join candidates by resource identity and point-key or query overlap evidence.
+- [ ] Require evidence that publication can precede the related read; distinguish
+      structural reachability from compatible execution paths.
+- [ ] Preserve fan-out and cycles without inventing an edge from write to read.
+- [ ] Use indexed lookups and bounded traversal rather than enumerating all paths.
+- [ ] Define configurable or named limits, deterministic ordering, deduplication,
+      complexity expectations, and explicit truncation reporting.
+- [ ] Group equivalent paths for the same causal context, expected write occurrence,
+      read occurrence, and affected data into one diagnostic with path variants.
+- [ ] Keep distinct reads and distinct expected writes as separate diagnostics,
+      even when they access the same data. Preserve variant-specific guarantees.
 
-Files: `src/systemlens/render/assets/graph.html`, proposed
-`src/systemlens/render/assets/graph/42-resource-catalogue.js`, and proposed
-`src/systemlens/render/assets/graph/60-catalogue.css`.
+Acceptance: the positive fixture produces one diagnostic with both branch
+witnesses. Unrelated roots and proven exclusive branches produce no risk.
+Unknown feasibility yields insufficient evidence. Repeated runs are deterministic.
 
-- [ ] Render category rows with counts, including an all-resources category.
-- [ ] Add service checkboxes with an explicit all-services state.
-- [ ] Place resource search in the header; combine query, type and service
-  filters using intersection. Multiple selected services use union.
-- [ ] Show removable active filter chips and a reset action. For HTTP routes,
-  add a method selector. Make every visible filter control functional.
-- [ ] Calculate category counts using query and service filters before applying
-  the selected category. Show the final result count beside the table.
+### ASR-06: Evaluate completion guarantees and classify findings
 
-Acceptance: selecting Routes HTTP, inventory-service and POST returns only
-matching routes. Removing a chip restores matching rows. Reset restores the
-full inventory. An unmatched query produces an explicit empty state.
-Verify these sequences in browser tests.
+- [ ] Recognize only supported, source-backed guarantees that apply to the same
+      expected operation or version and establish completion before the read.
+- [ ] Reject confirmation of a previous write to the same key as evidence for
+      the expected write. A matching business key alone is insufficient.
+- [ ] Check that an application completion response follows the relevant commit;
+      waiting on publication or receiving a broker acknowledgement is insufficient.
+- [ ] Treat fixed delays as timing assumptions, not completion guarantees.
+- [x] Separate classification from confidence using the outcomes below.
+- [ ] Record unrecognized synchronization and replica/read-model visibility limits.
 
-### CAT-05: Render the central catalogue as a table
+| Outcome | Required interpretation |
+|---|---|
+| Potential risk | Related write and read established; no applicable completion guarantee identified in analyzed evidence |
+| Insufficient evidence | Causality, identity, branch feasibility, ordering, or analysis coverage is unresolved |
+| Guarantee identified | Supported evidence orders completion before the read, within the stated visibility scope |
+| Not applicable | Proven disjoint data access, unrelated causes, or incompatible execution paths |
 
-Goal: match the reference's compact, aligned resource rows.
+Acceptance: absence of a recognized guarantee never becomes proof that none
+exists. A commit acknowledgement alone does not establish visibility on an
+unproven replica or separate read model. UI wording never claims a proven race.
+An unresolved variant cannot be hidden by a guaranteed variant of the same
+diagnostic. Expose variant outcomes and retain any supported potential risk.
 
-Files: `src/systemlens/render/assets/graph.html`, proposed
-`src/systemlens/render/assets/graph/42-resource-catalogue.js`, proposed
-`src/systemlens/render/assets/graph/60-catalogue.css`.
+### ASR-07: Export diagnostics from the persisted snapshot
 
-- [ ] Replace `reference-item` card grids with a dedicated result table.
-- [ ] For routes, render method badge and path, provider, and indexed client
-  count. For other categories, use resource, service association and type-
-  appropriate counts with explicit column labels.
-- [ ] Use a stable category/name/service order and stable resource identity.
-- [ ] Highlight the selected row in cyan. Clicking anywhere on a row selects
-  it without changing the graph or navigating away.
-- [ ] Retain selection while it remains in the results; clear selection and
-  the inspector when filters remove it. Keep the inspector's empty state visible.
+- [x] Add an additive diagnostic field to the graph export JSON model.
+- [ ] Include stable diagnostic and step IDs, branch witnesses, source references,
+      data/key matching evidence, guarantee evidence, and coverage limitations.
+- [ ] Preserve endpoint identity through aggregation and flow deduplication.
+- [ ] Export diagnostic-to-read mappings and path variants so collapsed nodes and
+      repeated service occurrences preserve all associated diagnostics.
+- [ ] Define behavior for missing diagnostics, old exports, and partial snapshots.
+- [ ] Keep rule evaluation outside browser presentation code.
 
-Acceptance: POST /api/reservations appears as a table row when present in
-the snapshot. Its provider and client count agree with indexed evidence.
-Filtering, clearing and reselecting cannot leave stale details on screen.
-Verify row contents and selection state in the browser.
+Acceptance: exports contain enough evidence to reproduce the explanation without
+source access. Existing consumers remain compatible. Missing analysis is distinct
+from a completed analysis with no findings.
 
-### CAT-06: Mount the shared inspector in the right-hand region
+### ASR-08: Present points to examine in the Flux view
 
-Goal: show usable resource details without hiding the catalogue.
+- [x] Add a "Problèmes du flux · N" panel below the call-flow controls, with one
+      row per diagnostic and a total computed after path deduplication.
+- [ ] Give each diagnostic a flow-local display identifier such as P1 or P2.
+      These identifiers indicate neither severity nor backlog priority; keep them
+      stable while filtering or navigating the same exported flow.
+- [ ] Show the affected data, writing and reading services, classification,
+      confidence, and the missing or identified guarantee.
+- [ ] Separate insufficient evidence from potential risks in the presentation.
+- [ ] Expose guarantees separately from the problem count. Exclude not-applicable
+      results from the problem list; show incomplete coverage independently.
+- [ ] Provide filters by classification and affected data, with visible/total counts.
+- [ ] Expand the selected row to explain causal links, key/query overlap,
+      expected operation/version, guarantee assessment, and source evidence.
+- [ ] Add "Précédent" and "Suivant" over the filtered diagnostic list, showing
+      current position and disabling navigation at either end.
+- [ ] Define empty, unavailable, incomplete, and no-selection states.
+- [ ] Reset diagnostic selection when changing flows or leaving the Flux view.
 
-Files: `src/systemlens/render/assets/graph/40-details.js`,
-`src/systemlens/render/assets/graph/50-paths.js`, proposed
-`src/systemlens/render/assets/graph/42-resource-catalogue.js`,
-`src/systemlens/render/assets/graph.html`.
+Acceptance: selecting a flow exposes only its diagnostics. The list explains
+that the read may occur before the asynchronous write completes. Architecture
+controls do not appear in Flux, and Flux diagnostics do not leak into Architecture.
+Selecting successive diagnostics updates the explanation and graph together.
+Filtering out the selected diagnostic clears its focus and restores the full
+flow. An empty result from incomplete analysis must never imply that the flow is safe.
 
-- [ ] Separate inspector content rendering from its modal container so the
-  catalogue can mount the same content in a persistent right-hand region.
-- [ ] Render identity once, followed by provider or owner, related resources,
-  associated contracts, indexed source evidence and relevant type details.
-- [ ] Preserve working source actions and specialized contract/class viewers.
-- [ ] Support related-resource navigation and back history without discarding
-  catalogue filters. Inspect related items outside the filter without secretly
-  changing it; keep the originating row selected until the user selects another.
-- [ ] Provide an explicit graph action for resources with graph targets.
-  Do not manufacture graph nodes for routes or contracts.
+### ASR-09: Visualize the causal split and supporting evidence
 
-Acceptance: selecting a route exposes its provider, indexed clients, contract
-and source when available. Two successive selections replace all details.
-Back restores the previous inspected resource. Missing evidence is explicit.
-Verify these interactions and assert no page errors from newly generated HTML.
+- [ ] In the complete graph, add a diagnostic-count badge at each affected read.
+      Collapsed service nodes show unique associated diagnostic counts.
+- [ ] Clicking a badge selects its sole diagnostic or filters the list to its
+      associated diagnostics when several problems affect the same read.
+- [ ] On diagnostic selection, reveal the common trigger or cross-treatment causal
+      links and both branch witnesses. Highlight only the selected diagnostic.
+- [ ] Attenuate unrelated paths and label the operations "Écriture attendue" and
+      "Lecture à risque" for a risk, or "Lecture à examiner" for uncertain evidence.
+- [ ] Mark asynchronous edges with dashed lines and synchronous calls with solid
+      lines; label the distinction without relying on color alone.
+- [ ] Add read/write badges and highlight the shared data target or proven mapping.
+- [ ] Place the warning at the read and expose the synchronization gap explanation.
+- [ ] Distinguish inferred uncertainty overlays from indexed dependency edges.
+- [ ] Open file/line evidence and key propagation details from the diagnostic.
+- [ ] Fit the highlighted paths in the viewport and provide a return to the full
+      selected flow, restoring its camera and expansion state.
+- [ ] Label that return action "Vue complète". Save the full-flow state before
+      the first diagnostic focus; previous/next navigation must not overwrite it.
+- [ ] Allow inspection of grouped path variants while keeping their uncertainty
+      and guarantee assessments distinct.
 
-### CAT-07: Preserve navigation and retire duplicate resource screens
+Acceptance: the visualization never numbers asynchronous completion and the read
+as a guaranteed total order. Repeated service occurrences retain their step IDs.
+The user can inspect both branches, the common data, and the reason for the risk.
+Multiple diagnoses on the same read remain individually selectable. Service
+aggregation must not move a warning onto an unrelated read occurrence.
 
-Goal: consolidate entry points without losing existing browsing capabilities.
+### ASR-10: Verify interactions and deliver the laboratory model
 
-Files: `src/systemlens/render/assets/graph/20-controls.js`,
-`src/systemlens/render/assets/graph/40-details.js`,
-`src/systemlens/render/assets/graph/45-view-lifecycle.js`,
-`src/systemlens/render/assets/graph/60-bootstrap.js`,
-`tests/test_browser_export.py`.
+- [ ] Run focused extractor, detector, persistence, migration, and export tests
+      against every ASR-02 fixture, including negative cases.
+- [ ] Add browser regression tests for diagnostic selection, both highlighted
+      branches, evidence inspection, flow switching, and state restoration.
+- [ ] Verify a flow with several diagnostics: counts, shared-read badges,
+      filtering, previous/next boundaries, grouped variants, and stable IDs.
+- [ ] Verify that only one diagnostic is highlighted and that "Vue complète"
+      restores the state saved before navigating across several diagnostics.
+- [ ] Check graph/Flux toolbar separation and camera/expansion controls.
+- [ ] Capture and inspect dark/light screenshots at desktop and constrained widths.
+- [ ] Capture the selected diagnostic with both branches visible and a return to
+      Architecture with no residual diagnostic controls.
+- [ ] Capture the complete multi-diagnostic flow, two successive diagnostic
+      selections, and the restored full flow. Inspect each rendered capture.
+- [ ] Run Ruff, mypy, the full default test suite, and the Chrome browser suite.
+- [ ] Run `uv run python scripts/check_companion_contracts.py` using temporary
+      fixtures; this check must not mutate the laboratory index.
+- [ ] Validate the story on the supermarket model. Add a dedicated fixture if its
+      existing facts do not establish the required causal/key relationship.
+- [ ] Generate the laboratory `architecture-ia.html`, synchronize its
+      `architecture.html` viewing copy, and copy the POC export to
+      `docs/models/simple-supermarket.html`.
+- [ ] Confirm exports use the current source assets and contain the same diagnostics.
+- [ ] Update affected specification sections and companion guidance if its workflow
+      or public contracts change; review the final documentation.
 
-- [ ] Route Topics, Routes, Collections and contract/type entry points to the
-  matching catalogue category, then remove duplicate top-level tabs.
-- [ ] Preserve catalogue query, filters, selection and table scroll position
-  across a visit to Architecture, Flux de code or Diagnostics.
-- [ ] Keep graph state and catalogue state separate; restore graph camera and
-  layout when switching back without a graph-focus action.
-- [ ] Retain nested DTO, entity, OpenAPI and AsyncAPI inspection paths.
+Acceptance: record commands, results, screenshot paths, inspected UI states, and
+any unavailable prerequisite here. Static HTML assertions alone cannot validate
+interaction or visual acceptance. No screenshot or browser check may be claimed
+when it was skipped.
 
-Acceptance: filter a catalogue, inspect an item, visit a flow, then return.
-The filters, selected row and details are retained. Architecture and Diagnostics
-remain usable. Existing interaction tests pass with selectors updated to the
-new entry points rather than assertions removed.
+## Definition of done
 
-### CAT-08: Match the selected image and handle constrained widths
-
-Goal: make the implemented screen visually recognizable as the selected catalogue.
-
-Files: proposed `src/systemlens/render/assets/graph/60-catalogue.css`,
-`src/systemlens/render/assets/graph/50-obsidian.css`,
-`src/systemlens/render/assets/graph.html`, `src/systemlens/render/html_export.py`.
-
-- [ ] Apply the chapter 2 dimensions, continuous column borders, Obsidian
-  surfaces, compact typography, badges and selected-row treatment.
-- [ ] Remove superseded `catalogue-active` toolbar expansion, card-grid and
-  duplicate grid-position rules. Keep general theme tokens reusable.
-- [ ] Keep the results and inspector independently scrollable at desktop width.
-- [ ] At 1024 px, reduce side-region widths while preserving readable rows.
-  At 768 px, put filters above results and offer the inspector as an explicit
-  closable detail surface that returns to the same filtered table.
-- [ ] Preserve readable light-theme surfaces and the saved theme preference.
-
-Acceptance: inspect screenshots at 1440 × 1000, 1024 × 768 and 768 × 1024.
-At desktop width, all three regions remain visible after selection, with no
-graph legend, stacked mode bars, card grid or large blank navigation bands.
-The narrow layout has no clipped actions or page-wide horizontal overflow.
-
-### CAT-09: Add browser regressions and visual comparison evidence
-
-Goal: verify interaction and visual fidelity in HTML assembled from current assets.
-
-Files: `tests/test_browser_export.py`, `tests/test_render.py`,
-`tests/test_web.py`, `artifacts/resource-navigation/`.
-
-- [ ] Generate test HTML from the current renderer; do not use a stale embedded
-  script in a checked-in export as implementation evidence.
-- [ ] Cover combined filters, empty results, selection replacement, related
-  inspection/back, all resource categories, screen return and theme switching.
-- [ ] Fail on catalogue page errors, including undeclared DOM bindings.
-- [ ] Capture the actual route catalogue with POST /api/reservations selected.
-  Compare it side by side with `02-catalogue.png` at the same viewport.
-- [ ] Record the renderer revision, fixture, viewport and browser used. Label
-  differences in real data separately from structural visual mismatches.
-
-Acceptance: interaction checks and visual review both pass. Passing Python
-tests alone is insufficient. Chrome unavailability leaves browser acceptance
-open; it cannot be reported as successful validation.
-
-### CAT-10: Synchronize exports and verify the delivered artifact
-
-Goal: ensure the user opens the artifact containing the verified catalogue.
-
-Files: `docs/models/simple-supermarket.html`,
-`../systemlens-observability-lab/apps/supermarket-demo/architecture-ia.html`,
-`src/systemlens/render/html_export.py`, and the delivery evidence in this file.
-
-- [ ] Regenerate the laboratory POC HTML with current renderer assets and its
-  persisted snapshot. Preserve graph data and avoid a source re-index for styling.
-- [ ] Copy the generated POC export to `docs/models/simple-supermarket.html`
-  following AGENTS.md; verify that the two files are identical.
-- [ ] Check that exports contain no unresolved template markers. Verify the
-  CLI and web paths include the new ordered CSS and JavaScript modules.
-- [ ] Open the exact generated file, exercise the route catalogue and capture
-  it. Record its path, revision and successful checks.
-- [ ] If publication is requested, verify the deployment and the served page.
-  A Git push alone is not evidence that the user-facing page has changed.
-
-Acceptance: POC and documentation exports match; the inspected output comes
-from current source; both route selection and navigation work without page
-errors. Report local verification and deployed verification separately.
-
-## 4. Validation commands and completion gate
-
-Use the project environment. Run focused checks after each implementation task;
-run the complete suite before final delivery because navigation contracts change.
-
-```bash
-uv sync --group dev
-uv run ruff check src tests
-uv run pytest tests/test_render.py tests/test_web.py
-SYSTEMLENS_CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" uv run pytest -m slow tests/test_browser_export.py
-uv run mypy
-uv run pytest
-uv run python scripts/check_companion_contracts.py
-git diff --check
-```
-
-Use the installed Chrome path on other systems. The companion check applies
-when the sibling repositories are present, as specified in AGENTS.md. Record
-missing prerequisites or failures explicitly; do not substitute an unverified
-environment or silently skip a required interaction check.
-
-- [ ] Every task has passing acceptance evidence and updated authoritative docs.
-- [ ] The selected screenshot and actual export have been visually compared.
-- [ ] Routes, contracts and data types are present beyond graph-node resources.
-- [ ] The inspector, source actions and return navigation work in the final file.
-- [ ] Generated HTML and source modules agree; the reviewed change is complete.
-
-## 5. Costs and remaining checks
-
-The dedicated workspace requires separating navigation state and inspector
-rendering from the graph toolbar. Reusing content renderers reduces duplicate
-domain logic, but their modal assumptions must be tested in the docked host.
-Large inventories also require bounded scrolling and reusable lookup maps.
-
-The implementing developer must confirm snapshot coverage for each resource
-category during CAT-03. Missing data stays visible as unavailable evidence;
-extractor expansion requires separate scope. The product owner reviews the
-visual comparison in CAT-09 against the selected image.
-
-This backlog proposes the implementation and acceptance gates. It does not
-declare any catalogue task delivered or any published export verified.
+- [ ] All required tasks satisfy their acceptance criteria.
+- [ ] Positive and negative cases validate the evidence and classification rules.
+- [ ] Later causal treatments, stale confirmations, and query overlap cases have
+      explicit expected outcomes and passing regression tests.
+- [ ] Multiple diagnostics remain distinguishable without highlighting all paths
+      simultaneously or merging different expected writes and read occurrences.
+- [ ] Unknown data and incomplete analysis remain visible as limitations.
+- [ ] The selected diagnostic displays the asynchronous write and synchronous
+      read together, with source evidence and no invented completion ordering.
+- [ ] Browser tests and inspected screenshots validate the delivered laboratory HTML.
+- [ ] Documentation and generated models match the implementation.

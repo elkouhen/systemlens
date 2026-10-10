@@ -12,6 +12,7 @@ from typing import Any, cast, Mapping
 
 from systemlens.domain.graph import GraphEdge, graph_edges_from_facts
 from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
+from systemlens.application.flow_consistency import diagnose_flow_consistency_snapshot
 from systemlens.domain.models import (
     ArchitectureRelation,
     ExtractionDiagnostic,
@@ -247,6 +248,13 @@ def render_graph_html(
                     "endpoint_id": step.endpoint_id,
                     "port_label": port_labels.get(step.endpoint_id) if step.endpoint_id else None,
                     "operation": step.operation,
+                    "branch": step.branch,
+                    "resource": step.resource,
+                    "key": step.key,
+                    "causal_id": step.causal_id,
+                    "expected_version": step.expected_version,
+                    "completion": step.completion,
+                    "query_shape": step.query_shape,
                 }
                 for step in flow.steps
             ],
@@ -254,6 +262,10 @@ def render_graph_html(
         for flow, equivalent_count, call_graph_id in export_flow_items
     ]
     view_model["code_flows"] = serialized_code_flows
+    view_model["flow_diagnostics"] = [
+        diagnostic.as_dict()
+        for diagnostic in diagnose_flow_consistency_snapshot(export_flows)
+    ]
     view_model["flow_descriptions"] = {
         str(flow_id): str(description)
         for flow_id, description in (flow_descriptions or {}).items()

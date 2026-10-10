@@ -35,6 +35,13 @@ guess owners, or create facts that are absent from the snapshot. Filtering is a
 view operation over the projection and keeps source evidence attached to each
 entry.
 
+Flow consistency analysis is also a snapshot projection. `CodeFlowStep` keeps
+optional branch, resource, key, causal identity, expected version, completion,
+and query-shape metadata; old SQLite JSON rows load with these fields unknown.
+The detector produces deterministic pair diagnostics without reparsing source
+files. It reports incomplete evidence instead of treating an empty result as a
+proof of safety, and the HTML layer only presents the exported diagnostics.
+
 ## Detailed sections
 
 - [Architecture](spec-tech/architecture.md)
