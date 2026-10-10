@@ -64,17 +64,17 @@
     #search { width: 100%; }
     .graph-context { display: grid; gap: 8px; }
     .graph-context[hidden] { display: none; }
-    .graph-mode-context { position: fixed; z-index: 9; top: 16px; left: calc(var(--workspace-left, 0px) + 24px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: min(680px, calc(100vw - var(--workspace-left, 0px) - 48px)); max-height: min(24vh, 170px); box-sizing: border-box; padding: 10px 12px; overflow: hidden; border: 1px solid var(--ui-accent-border); border-left: 3px solid var(--ui-selected); border-radius: 12px; color: var(--ui-text); background: var(--ui-panel); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; pointer-events: none; }
-    .graph-mode-context > * { pointer-events: auto; }
-    .graph-mode-context.is-architecture-toolbar .graph-mode-context-copy { pointer-events: none; }
-    .graph-mode-context.is-architecture-toolbar .graph-mode-context-actions { pointer-events: none; }
-    .graph-mode-context.is-architecture-toolbar .graph-mode-context-actions button,
-    .graph-mode-context.is-architecture-toolbar .graph-mode-context-actions select,
-    .graph-mode-context.is-architecture-toolbar .graph-mode-context-actions input { pointer-events: auto; }
-    .graph-mode-context[hidden] { display: none; }
+    .mode-context { position: fixed; z-index: 9; top: 16px; left: calc(var(--workspace-left, 0px) + 24px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: min(680px, calc(100vw - var(--workspace-left, 0px) - 48px)); max-height: min(24vh, 170px); box-sizing: border-box; padding: 10px 12px; overflow: hidden; border: 1px solid var(--ui-accent-border); border-left: 3px solid var(--ui-selected); border-radius: 12px; color: var(--ui-text); background: var(--ui-panel); box-shadow: 0 8px 22px rgba(36, 50, 83, .12); backdrop-filter: blur(10px); font-size: 11px; line-height: 1.35; pointer-events: none; }
+    .mode-context > * { pointer-events: auto; }
+    .mode-context.is-architecture-toolbar .graph-mode-context-copy { pointer-events: none; }
+    .mode-context.is-architecture-toolbar .graph-mode-context-actions { pointer-events: none; }
+    .mode-context.is-architecture-toolbar .graph-mode-context-actions button,
+    .mode-context.is-architecture-toolbar .graph-mode-context-actions select,
+    .mode-context.is-architecture-toolbar .graph-mode-context-actions input { pointer-events: auto; }
+    .mode-context[hidden] { display: none; }
     .graph-mode-context-copy { display: grid; gap: 3px; min-width: 0; min-height: 0; overflow: hidden; }
-    .graph-mode-context.is-collapsed .graph-mode-context-copy { display: none; }
-    .graph-mode-context.is-collapsed { width: auto; }
+    .mode-context.is-collapsed .graph-mode-context-copy { display: none; }
+    .mode-context.is-collapsed { width: auto; }
     .graph-mode-context-path { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; max-width: 100%; max-height: 66px; padding: 1px 4px 2px 0; overflow-y: auto; color: var(--ui-text); font-size: 10px; font-weight: 750; scrollbar-width: thin; }
     .graph-mode-context-path.graph-mode-tree { display: block; }
     .graph-mode-tree-list, .graph-mode-tree-children { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
@@ -95,19 +95,9 @@
     .graph-mode-context-stats { width: fit-content; max-width: 100%; padding: 3px 6px; border: 1px solid var(--ui-border); border-radius: 6px; color: var(--ui-title) !important; background: var(--ui-control); font-size: 10px; font-weight: 800; overflow-wrap: anywhere; }
     .graph-mode-context-stats[hidden] { display: none; }
     .graph-mode-context-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
-    .architecture-context-actions { display: contents; }
-    .architecture-context-actions[hidden] { display: none; }
-    .graph-mode-context .architecture-context-actions .graph-action-label { width: auto; height: 27px; padding: 0 8px; font-size: 10px; font-weight: 700; }
-    .graph-mode-context .architecture-context-actions .zoom-controls button { width: 27px; height: 27px; font-size: 16px; }
-    .graph-mode-context .architecture-context-actions .graph-control-group { padding: 0 2px; }
-    .graph-mode-context .architecture-context-actions .graph-control-group button { height: 27px; font-size: 10px; }
-    .graph-mode-context .architecture-context-actions .view-controls { flex: 1 1 390px; min-width: 330px; gap: 0; padding: 2px; border: 1px solid #aebed4; border-radius: 9px; background: #edf2f7; overflow: hidden; }
-    .graph-mode-context .architecture-context-actions .view-controls button { flex: 1 1 0; min-width: 0; width: auto; padding: 0 8px; border: 0; border-left: 1px solid #cbd6e5; border-radius: 0; color: #52616b; background: transparent; font-weight: 750; white-space: nowrap; }
-    .graph-mode-context .architecture-context-actions .view-controls button:first-child { border-left: 0; }
-    .graph-mode-context .architecture-context-actions .view-controls button:hover { background: rgba(255, 255, 255, .8); }
-    .graph-mode-context.is-architecture-toolbar { padding: 8px 10px; }
-    .graph-mode-context .graph-secondary-action { flex: 0 0 auto; height: 27px; padding: 0 8px; border: 1px solid var(--ui-accent-border); border-radius: 7px; color: var(--ui-accent-text); background: var(--ui-control); font-size: 10px; }
-    .graph-mode-context .graph-secondary-action:hover { border-color: var(--ui-selected); background: var(--ui-accent-soft-hover); }
+    .mode-context.is-architecture-toolbar { padding: 8px 10px; }
+    .mode-context .graph-secondary-action { flex: 0 0 auto; height: 27px; padding: 0 8px; border: 1px solid var(--ui-accent-border); border-radius: 7px; color: var(--ui-accent-text); background: var(--ui-control); font-size: 10px; }
+    .mode-context .graph-secondary-action:hover { border-color: var(--ui-selected); background: var(--ui-accent-soft-hover); }
     .call-tree-depth-control { display: inline-flex; align-items: center; gap: 4px; height: 27px; padding: 0 5px 0 7px; border: 1px solid var(--ui-accent-border); border-radius: 7px; color: var(--ui-muted); background: var(--ui-control); font-size: 9px; font-weight: 750; }
     .call-tree-depth-control[hidden] { display: none; }
     .call-tree-depth-label { white-space: nowrap; }
@@ -116,7 +106,7 @@
     .call-tree-depth-control .graph-secondary-action:disabled { opacity: .4; cursor: not-allowed; }
     .call-tree-depth-value { min-width: 16px; color: var(--ui-title); font-size: 11px; font-weight: 850; text-align: center; }
     @media (max-width: 720px) {
-      .graph-mode-context { top: auto; right: 8px; bottom: 8px; left: 8px; width: auto; }
+      .mode-context { top: auto; right: 8px; bottom: 8px; left: 8px; width: auto; }
     }
     .graph-actions { display: grid; gap: 6px; }
     .graph-action-row { display: flex; align-items: center; gap: 5px; min-width: 0; }

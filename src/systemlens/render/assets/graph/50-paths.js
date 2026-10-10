@@ -420,7 +420,10 @@
       } else if (roomBelowToolbar >= 180) {
         focusArea.top = toolbarRect.bottom - viewport.top + margin;
       }
-      const modeContext = document.getElementById("graph-mode-context");
+      const flowContext = document.getElementById("flow-mode-context");
+      const modeContext = flowContext && !flowContext.hidden
+        ? flowContext
+        : document.getElementById("graph-mode-context");
       if (modeContext && !modeContext.hidden) {
         const contextRect = modeContext.getBoundingClientRect();
         if (contextRect.bottom > focusArea.top && contextRect.top < focusArea.bottom) {

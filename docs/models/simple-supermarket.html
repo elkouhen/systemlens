@@ -2027,6 +2027,20 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
   body.catalogue-active #microservices-panel .resource-catalogue-preview { grid-column: 1; }
   body.catalogue-active #microservices-panel .references-list { grid-template-columns: 1fr; max-height: 45vh; }
 }
+
+    #architecture-toolbar > .mode-context { position: static; inset: auto; width: auto; max-height: none; margin: 2px 0 0; padding: 10px 0 0; border-width: 1px 0 0; border-radius: 0; box-shadow: none; background: transparent; backdrop-filter: none; pointer-events: auto; }
+    #architecture-toolbar > .mode-context > * { pointer-events: auto; }
+    #architecture-toolbar > .mode-context .graph-mode-context-copy { display: none; }
+    #architecture-toolbar > .mode-context .graph-mode-context-actions { gap: 6px; display: flex; }
+    #graph-mode-context .graph-secondary-action, #flow-mode-context .graph-secondary-action { min-height: 38px; padding-inline: 12px; font-size: 12px; font-weight: 750; }
+    #graph-mode-context #graph-mode-center, #flow-mode-context #flow-mode-center { flex: 0 0 92px; width: 92px !important; min-width: 92px !important; white-space: nowrap; }
+    #graph-mode-context .view-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex: 1 1 100%; order: -2; width: 100%; min-width: 0; }
+    #graph-mode-context .render-controls { flex: 1 1 100%; order: -1; }
+    #graph-mode-context .view-controls button, #graph-mode-context .render-controls button { min-height: 38px; min-width: 0; width: 100%; padding-inline: 10px; font-size: 12px; font-weight: 750; }
+    #graph-mode-context .zoom-controls button, #flow-mode-context .zoom-controls button { width: 38px; min-width: 38px; height: 42px !important; padding: 0; font-size: 20px; }
+    #flow-mode-context #flow-mode-expand-all { flex: 0 0 166px; width: 166px !important; min-width: 166px !important; white-space: nowrap; }
+    #flow-mode-context #flow-call-tree-depth-control { flex: 0 0 132px; width: 132px; min-width: 132px; min-height: 42px; box-sizing: border-box; }
+    #flow-mode-context #flow-context-collapse { flex: 0 0 112px; width: 112px !important; min-width: 112px !important; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -2229,7 +2243,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     </div>
     <div id="details" class="is-empty"><div class="details-empty">Sélectionnez un nœud pour isoler ses relations et afficher ses API.</div></div>
   </div>
-  <div id="graph-mode-context" class="graph-mode-context" hidden>
+  <div id="graph-mode-context" class="mode-context graph-mode-context" hidden>
     <div id="graph-mode-context-copy" class="graph-mode-context-copy">
       <strong id="graph-mode-context-title"></strong>
       <span id="graph-mode-context-trigger" class="graph-mode-context-trigger" hidden></span>
@@ -2237,32 +2251,46 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       <span id="graph-mode-context-help"></span>
     </div>
     <div class="graph-mode-context-actions">
-      <button id="analysis-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue" title="Recentrer la vue sur le graphe ou l’arbre visible">Centrer</button>
+      <button id="graph-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue" title="Recentrer la vue sur le graphe visible">Centrer</button>
       <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
-        <button id="zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer" title="Augmenter l’échelle de la vue">+</button>
-        <button id="zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer" title="Réduire l’échelle de la vue">−</button>
+        <button id="graph-zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer" title="Augmenter l’échelle du graphe">+</button>
+        <button id="graph-zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer" title="Réduire l’échelle du graphe">−</button>
       </div>
-      <div id="architecture-context-actions" class="architecture-context-actions">
-        <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled>Réinitialiser</button>
-        <div class="graph-control-group view-controls" role="group" aria-label="Mode de visualisation · un seul choix" title="Mode de visualisation · un seul choix">
+      <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled>Réinitialiser</button>
+      <div class="graph-control-group view-controls" role="group" aria-label="Mode de visualisation · un seul choix" title="Mode de visualisation · un seul choix">
           <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe</button>
           <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
           <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
-        </div>
-        <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
+      </div>
+      <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
           <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
           <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
-        </div>
       </div>
-      <button id="analysis-mode-expand-all" class="graph-action-label graph-secondary-action" type="button" title="Déplier tous les niveaux de l’arbre d’appel" hidden>Déplier tous les nœuds</button>
-      <div id="call-tree-depth-control" class="call-tree-depth-control" role="group" aria-label="Nombre de niveaux de l’arbre d’appel" hidden>
+      <button id="graph-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy" title="Réduire la toolbar du graphe">Réduire</button>
+    </div>
+  </div>
+  <div id="flow-mode-context" class="mode-context flow-mode-context" hidden>
+    <div id="flow-mode-context-copy" class="graph-mode-context-copy">
+      <strong id="flow-mode-context-title"></strong>
+      <span id="flow-mode-context-trigger" class="graph-mode-context-trigger" hidden></span>
+      <span id="flow-mode-context-stats" class="graph-mode-context-stats" hidden></span>
+      <span id="flow-mode-context-help"></span>
+    </div>
+    <div class="graph-mode-context-actions">
+      <button id="flow-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue des flux" title="Recentrer la vue sur l’arbre d’appel visible">Centrer</button>
+      <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom de l’arbre d’appel">
+        <button id="flow-zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer dans l’arbre d’appel" title="Augmenter l’échelle de l’arbre d’appel">+</button>
+        <button id="flow-zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer dans l’arbre d’appel" title="Réduire l’échelle de l’arbre d’appel">−</button>
+      </div>
+      <button id="flow-mode-expand-all" class="graph-action-label graph-secondary-action" type="button" title="Déplier tous les niveaux de l’arbre d’appel" hidden>Déplier tous les nœuds</button>
+      <div id="flow-call-tree-depth-control" class="call-tree-depth-control" role="group" aria-label="Nombre de niveaux de l’arbre d’appel" hidden>
         <span class="call-tree-depth-label">Niveaux</span>
-        <button id="call-tree-depth-decrease" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de moins" title="Afficher un niveau de moins">−</button>
-        <output id="call-tree-depth-value" class="call-tree-depth-value" aria-live="polite">1</output>
-        <button id="call-tree-depth-increase" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de plus" title="Afficher un niveau de plus">+</button>
+        <button id="flow-call-tree-depth-decrease" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de moins" title="Afficher un niveau de moins">−</button>
+        <output id="flow-call-tree-depth-value" class="call-tree-depth-value" aria-live="polite">1</output>
+        <button id="flow-call-tree-depth-increase" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de plus" title="Afficher un niveau de plus">+</button>
       </div>
-      <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" title="Effacer l’arc ou le port actuellement analysé" hidden>Réinitialiser l’analyse</button>
-      <button id="analysis-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy" title="Réduire la toolbar">Réduire</button>
+      <button id="flow-mode-clear" class="graph-action-label graph-secondary-action" type="button" title="Effacer l’arc ou le port actuellement analysé" hidden>Réinitialiser l’analyse</button>
+      <button id="flow-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="flow-mode-context-copy" title="Réduire la toolbar des flux">Réduire</button>
     </div>
   </div>
   <details id="graph-legend" class="legend" aria-label="Légende du graphe">
@@ -2855,6 +2883,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       };
     }
 
+// Ordered source module: 10-rebuild.js
 // Ordered source module: 10-rebuild.js
     let callGraphArcNavigator = { links: [], views: [], activeIndex: null };
     let selectedCallGraphArcVisualTimer = null;
@@ -3656,90 +3685,86 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           return renderer.graphToViewport(graphPoint);
         };
         function updateAnalysisModeIndicator() {
-          const context = document.getElementById("graph-mode-context");
-          const contextCopy = document.getElementById("graph-mode-context-copy");
-          const title = document.getElementById("graph-mode-context-title");
-          const triggerLabel = document.getElementById("graph-mode-context-trigger");
-          const stats = document.getElementById("graph-mode-context-stats");
-          const pathLabel = document.getElementById("graph-mode-context-path");
-          const help = document.getElementById("graph-mode-context-help");
-          const clear = document.getElementById("analysis-mode-clear");
-          const architectureActions = document.getElementById("architecture-context-actions");
-          const expandAll = document.getElementById("analysis-mode-expand-all");
-          const contextCollapse = document.getElementById("analysis-context-collapse");
-          if (!context || !title || !help || !clear) return;
+          const graphContext = document.getElementById("graph-mode-context");
+          const flowContext = document.getElementById("flow-mode-context");
+          const graphTitle = document.getElementById("graph-mode-context-title");
+          const graphHelp = document.getElementById("graph-mode-context-help");
+          const flowTitle = document.getElementById("flow-mode-context-title");
+          const flowTrigger = document.getElementById("flow-mode-context-trigger");
+          const flowStats = document.getElementById("flow-mode-context-stats");
+          const flowPath = document.getElementById("flow-mode-context-path");
+          const flowHelp = document.getElementById("flow-mode-context-help");
+          const clear = document.getElementById("flow-mode-clear");
+          const expandAll = document.getElementById("flow-mode-expand-all");
+          const contextCollapse = document.getElementById("flow-context-collapse");
+          if (!graphContext || !flowContext || !graphTitle || !graphHelp || !flowTitle || !flowHelp || !clear) return;
           const active = Boolean(graphState.selectedCodeFlowId);
           const callGraphActive = active && (
             graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree"
           );
-          const showContext = graphState.viewMode === "architecture" || active;
-          context.hidden = !showContext;
-          context.classList.toggle("is-architecture-toolbar", graphState.viewMode === "architecture" && !callGraphActive);
-          context.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
-          if (contextCopy) contextCopy.id = "graph-mode-context-copy";
+          const architectureActive = graphState.viewMode === "architecture";
+          graphContext.hidden = !architectureActive;
+          flowContext.hidden = !callGraphActive;
+          graphContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
+          flowContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
+          graphTitle.textContent = "Graphe d’architecture";
+          graphHelp.textContent = "Actions rapides sur la vue du graphe.";
+          clear.hidden = !callGraphActive;
           if (contextCollapse) {
-            contextCollapse.hidden = !showContext;
+            contextCollapse.hidden = !callGraphActive;
             contextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
             contextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
           }
-          if (architectureActions) {
-            architectureActions.hidden = callGraphActive;
-            architectureActions.style.display = callGraphActive ? "none" : "";
-          }
-          const depthControl = document.getElementById("call-tree-depth-control");
-          const depthValue = document.getElementById("call-tree-depth-value");
-          const depthDecrease = document.getElementById("call-tree-depth-decrease");
-          const depthIncrease = document.getElementById("call-tree-depth-increase");
+          const depthControl = document.getElementById("flow-call-tree-depth-control");
+          const depthValue = document.getElementById("flow-call-tree-depth-value");
+          const depthDecrease = document.getElementById("flow-call-tree-depth-decrease");
+          const depthIncrease = document.getElementById("flow-call-tree-depth-increase");
           if (expandAll) expandAll.hidden = !callGraphActive;
           if (depthControl) depthControl.hidden = !callGraphActive;
           if (depthValue) depthValue.textContent = String(graphState.callTreeDepth || 1);
           if (depthDecrease) depthDecrease.disabled = !callGraphActive || graphState.callTreeDepth <= 1;
           if (depthIncrease) depthIncrease.disabled = !callGraphActive || graphState.callTreeDepth >= 8;
-          if (contextCollapse) contextCollapse.hidden = !callGraphActive;
           if (!callGraphActive) {
-            if (stats) {
-              stats.hidden = true;
-              stats.textContent = "";
+            if (flowStats) {
+              flowStats.hidden = true;
+              flowStats.textContent = "";
             }
-            title.textContent = "Graphe d’architecture";
-            if (triggerLabel) {
-              triggerLabel.hidden = true;
-              triggerLabel.textContent = "";
+            if (flowTrigger) {
+              flowTrigger.hidden = true;
+              flowTrigger.textContent = "";
             }
-            help.textContent = "Actions rapides sur la vue du graphe.";
-            if (clear) clear.hidden = true;
             return;
           }
           updateCallTreeStats(
             graphState.callTreeVisibleNodeCount || 0,
             graphState.callTreeVisibleEdgeCount || 0,
           );
-          title.textContent = "Arbre d’appel";
+          flowTitle.textContent = "Arbre d’appel";
           const selectedFlows = (graphData.code_flows || []).filter(flow => (
             flow.id === graphState.selectedCodeFlowId
           ));
           const selectedFlow = selectedFlows[0];
           const trigger = selectedFlow?.steps?.[0];
-          if (triggerLabel) {
+          if (flowTrigger) {
             const triggerKind = ({
               http_entry: "Entrée HTTP",
               message_entry: "Entrée message",
               cron_entry: "Déclencheur Cron",
             })[trigger?.kind] || "Déclencheur";
-            triggerLabel.hidden = !trigger;
-            triggerLabel.textContent = trigger
+            flowTrigger.hidden = !trigger;
+            flowTrigger.textContent = trigger
               ? `${triggerKind} · ${trigger.name || "Événement inconnu"}`
               : "";
-            triggerLabel.title = trigger
+            flowTrigger.title = trigger
               ? "Événement déclencheur du graphe d’appel sélectionné"
               : "";
           }
-          if (pathLabel) {
+          if (flowPath) {
             const portsByEndpointId = new Map(
               graphData.nodes.flatMap(node => (node.ports || []).map(port => [port.endpoint_id, port]))
             );
-            pathLabel.replaceChildren();
-            pathLabel.classList.add("graph-mode-tree");
+            flowPath.replaceChildren();
+            flowPath.classList.add("graph-mode-tree");
             const callGraph = selectedCallGraph;
             const edgeList = (callGraph?.edges || []).filter(edge => edge.source !== edge.target);
             const graphNodes = [...new Set([
@@ -3807,12 +3832,12 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
               const tree = document.createElement("ul");
               tree.className = "graph-mode-tree-list";
               treeRoots.forEach(root => tree.append(renderTreeNode(root)));
-              pathLabel.append(tree);
+              flowPath.append(tree);
             } else {
-              pathLabel.textContent = "Parcours de code sélectionné";
+              flowPath.textContent = "Parcours de code sélectionné";
             }
           }
-          help.textContent = graphState.analysisPortEndpointId
+          flowHelp.textContent = graphState.analysisPortEndpointId
             ? "Arc associé sélectionné · cliquez sur un autre arc ou port pour changer"
             : "Cliquez sur un port ou un arc pour afficher sa relation";
           clear.hidden = !graphState.analysisPortEndpointId;
@@ -5280,7 +5305,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       renderer.getCamera().animatedReset({ duration: 0 });
     }
     rebuildGraph();
-
 // Ordered source module: 20-controls.js
     const details = document.getElementById("details");
     const quickSearch = document.getElementById("quick-search");
@@ -5625,6 +5649,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         || owner?.architecture_namespace_path
         || namespaceForNode(node);
 
+// Ordered source module: 30-layouts.js
 // Ordered source module: 30-layouts.js
       return path === "root" ? "ROOT" : path;
     }
@@ -6108,9 +6133,11 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         clearPathControls();
         setDetailsEmpty("Sélectionnez un nœud ou un module pour afficher ses informations.");
       }
-      const zoomOutButton = document.getElementById("zoom-out");
-      zoomOutButton.disabled = false;
-      zoomOutButton.title = "Dézoomer";
+      const zoomOutButton = document.getElementById("graph-zoom-out");
+      if (zoomOutButton) {
+        zoomOutButton.disabled = false;
+        zoomOutButton.title = "Dézoomer";
+      }
       setActiveLayout(layout);
       layoutStatus.textContent = `Calcul de la disposition ${label}…`;
       // Module placement is deterministic and local; it does not need any
@@ -6213,7 +6240,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       layoutStatus.textContent = `${label} actif.`;
     }
     const nodesByNormalizedName = new Map();
-
 // Ordered source module: 40-details.js
     function normalizeNodeName(name) {
       return name.trim().replace(/\\s+/g, " ").toLocaleLowerCase();
@@ -7851,6 +7877,7 @@ const graphViewLifecycle = (() => {
 })();
 
 // Ordered source module: 50-paths.js
+// Ordered source module: 50-paths.js
     let expandedHttpRoute = null;
     function revealDetails() {
       details.classList.remove("is-empty");
@@ -8272,7 +8299,10 @@ const graphViewLifecycle = (() => {
       } else if (roomBelowToolbar >= 180) {
         focusArea.top = toolbarRect.bottom - viewport.top + margin;
       }
-      const modeContext = document.getElementById("graph-mode-context");
+      const flowContext = document.getElementById("flow-mode-context");
+      const modeContext = flowContext && !flowContext.hidden
+        ? flowContext
+        : document.getElementById("graph-mode-context");
       if (modeContext && !modeContext.hidden) {
         const contextRect = modeContext.getBoundingClientRect();
         if (contextRect.bottom > focusArea.top && contextRect.top < focusArea.bottom) {
@@ -9225,7 +9255,7 @@ const graphViewLifecycle = (() => {
       }
       persistState();
     }
-
+// Ordered source module: 55-code-flows.js
 // Ordered source module: 55-code-flows.js
     const codeFlows = Array.isArray(graphData.code_flows) ? graphData.code_flows : [];
     const codeFlowsList = document.getElementById("code-flows");
@@ -9247,7 +9277,7 @@ const graphViewLifecycle = (() => {
     function updateCallTreeStats(nodeCount = 0, edgeCount = 0) {
       graphState.callTreeVisibleNodeCount = nodeCount;
       graphState.callTreeVisibleEdgeCount = edgeCount;
-      const stats = document.getElementById("graph-mode-context-stats");
+      const stats = document.getElementById("flow-mode-context-stats");
       if (!stats) return;
       const active = Boolean(graphState.selectedCodeFlowId)
         && (graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree");
@@ -10229,10 +10259,10 @@ const graphViewLifecycle = (() => {
         && (graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree")
         && graphState.callGraphDisplayMode === "tree";
       const depth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 1));
-      const depthControl = document.getElementById("call-tree-depth-control");
-      const depthValue = document.getElementById("call-tree-depth-value");
-      const depthDecrease = document.getElementById("call-tree-depth-decrease");
-      const depthIncrease = document.getElementById("call-tree-depth-increase");
+      const depthControl = document.getElementById("flow-call-tree-depth-control");
+      const depthValue = document.getElementById("flow-call-tree-depth-value");
+      const depthDecrease = document.getElementById("flow-call-tree-depth-decrease");
+      const depthIncrease = document.getElementById("flow-call-tree-depth-increase");
       if (depthControl) depthControl.hidden = !active;
       if (depthValue) depthValue.textContent = String(depth);
       if (depthDecrease) depthDecrease.disabled = !active || depth <= 1;
@@ -10640,7 +10670,7 @@ const graphViewLifecycle = (() => {
     codeFlowFilter.addEventListener("input", renderCodeFlows);
     document.getElementById("flows-panel").addEventListener("systemlens:flows-open", renderCodeFlows);
     renderCodeFlows();
-
+// Ordered source module: 60-bootstrap.js
 // Ordered source module: 60-bootstrap.js
     function reset() {
       closeInspector();
@@ -10678,16 +10708,22 @@ const graphViewLifecycle = (() => {
     }
     const renderCardsButton = document.getElementById("render-cards");
     const renderSymbolsButton = document.getElementById("render-symbols");
-    const analysisModeClear = document.getElementById("analysis-mode-clear");
-    const analysisModeCenter = document.getElementById("analysis-mode-center");
-    const analysisModeExpandAll = document.getElementById("analysis-mode-expand-all");
-    const callTreeDepthDecrease = document.getElementById("call-tree-depth-decrease");
-    const callTreeDepthIncrease = document.getElementById("call-tree-depth-increase");
-    const analysisContextCollapse = document.getElementById("analysis-context-collapse");
+    const analysisModeClear = document.getElementById("flow-mode-clear");
+    const graphModeCenter = document.getElementById("graph-mode-center");
+    const flowModeCenter = document.getElementById("flow-mode-center");
+    const flowModeExpandAll = document.getElementById("flow-mode-expand-all");
+    const flowTreeDepthDecrease = document.getElementById("flow-call-tree-depth-decrease");
+    const flowTreeDepthIncrease = document.getElementById("flow-call-tree-depth-increase");
+    const graphContextCollapse = document.getElementById("graph-context-collapse");
+    const flowContextCollapse = document.getElementById("flow-context-collapse");
     const toolbar = document.getElementById("architecture-toolbar");
     const toolbarCollapse = document.getElementById("toolbar-collapse");
     const graphModeContext = document.getElementById("graph-mode-context");
-    if (toolbar && graphModeContext && graphPanel) toolbar.insertBefore(graphModeContext, graphPanel);
+    const flowModeContext = document.getElementById("flow-mode-context");
+    if (toolbar && graphPanel) {
+      if (graphModeContext) toolbar.insertBefore(graphModeContext, graphPanel);
+      if (flowModeContext) toolbar.insertBefore(flowModeContext, graphPanel);
+    }
     const graphFilterSummary = document.getElementById("graph-filter-summary");
     const graphFilterControls = [
       relationHttp, relationKafka, relationMongodb, relationOther,
@@ -10719,32 +10755,31 @@ const graphViewLifecycle = (() => {
       graphState.analysisPortEndpointId = null;
       requestGraphRender();
     });
-    analysisModeCenter?.addEventListener("click", () => {
-      if (!graphState.selectedCodeFlowId) {
-        fitCameraToVisibleGraph(renderer, "readable");
-        return;
-      }
+    const centerFlow = () => {
       if (!graphState.relatedNodes?.size) return;
       const orderedNodes = [...(graphState.pathMicroserviceOrder?.keys() || [])];
       const remainingNodes = [...graphState.relatedNodes].filter(id => !orderedNodes.includes(id));
       scheduleFlowCameraFit({ nodes: [...orderedNodes, ...remainingNodes] });
-    });
-    analysisModeExpandAll?.addEventListener("click", () => {
+    };
+    graphModeCenter?.addEventListener("click", () => fitCameraToVisibleGraph(renderer, "readable"));
+    flowModeCenter?.addEventListener("click", centerFlow);
+    flowModeExpandAll?.addEventListener("click", () => {
       expandAllCallTree();
     });
-    callTreeDepthDecrease?.addEventListener("click", () => {
+    flowTreeDepthDecrease?.addEventListener("click", () => {
       adjustCallTreeDepth(-1);
     });
-    callTreeDepthIncrease?.addEventListener("click", () => {
+    flowTreeDepthIncrease?.addEventListener("click", () => {
       adjustCallTreeDepth(1);
     });
-    analysisContextCollapse?.addEventListener("click", () => {
+    const toggleContextCollapse = (context, control) => {
       graphState.analysisContextCollapsed = !graphState.analysisContextCollapsed;
-      const context = document.getElementById("graph-mode-context");
       context?.classList.toggle("is-collapsed", graphState.analysisContextCollapsed);
-      analysisContextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
-      analysisContextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
-    });
+      control?.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
+      if (control) control.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
+    };
+    graphContextCollapse?.addEventListener("click", () => toggleContextCollapse(graphModeContext, graphContextCollapse));
+    flowContextCollapse?.addEventListener("click", () => toggleContextCollapse(flowModeContext, flowContextCollapse));
     function updateFitModeControls(mode) {
       [
         [null, "overview"],
@@ -10823,22 +10858,24 @@ const graphViewLifecycle = (() => {
       graphCanvas.dataset.fitMode = nextMode;
       graphCanvas.dataset.fitRatio = String(targetRenderer.getCamera().getState().ratio);
     }
-    document.getElementById("zoom-in").addEventListener("click", () => {
+    const zoomIn = () => {
       if (zoomCallTree(1.25)) return;
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
       camera.setState({ ...state, ratio: Math.max(.01, state.ratio * .8) });
       requestGraphRender();
-    });
-    document.getElementById("zoom-out").addEventListener("click", () => {
+    };
+    const zoomOut = () => {
       if (zoomCallTree(0.8)) return;
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
       camera.setState({ ...state, ratio: Math.min(graphState.maximumCollisionFreeRatio, state.ratio * 1.25) });
       requestGraphRender();
-    });
+    };
+    ["graph-zoom-in", "flow-zoom-in"].forEach(id => document.getElementById(id)?.addEventListener("click", zoomIn));
+    ["graph-zoom-out", "flow-zoom-out"].forEach(id => document.getElementById(id)?.addEventListener("click", zoomOut));
     renderCardsButton.addEventListener("click", () => setNodeRenderMode("cards"));
     renderSymbolsButton.addEventListener("click", () => setNodeRenderMode("symbols"));
     resetButton.addEventListener("click", reset);

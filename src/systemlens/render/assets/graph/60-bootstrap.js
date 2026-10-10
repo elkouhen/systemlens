@@ -35,16 +35,22 @@
     }
     const renderCardsButton = document.getElementById("render-cards");
     const renderSymbolsButton = document.getElementById("render-symbols");
-    const analysisModeClear = document.getElementById("analysis-mode-clear");
-    const analysisModeCenter = document.getElementById("analysis-mode-center");
-    const analysisModeExpandAll = document.getElementById("analysis-mode-expand-all");
-    const callTreeDepthDecrease = document.getElementById("call-tree-depth-decrease");
-    const callTreeDepthIncrease = document.getElementById("call-tree-depth-increase");
-    const analysisContextCollapse = document.getElementById("analysis-context-collapse");
+    const analysisModeClear = document.getElementById("flow-mode-clear");
+    const graphModeCenter = document.getElementById("graph-mode-center");
+    const flowModeCenter = document.getElementById("flow-mode-center");
+    const flowModeExpandAll = document.getElementById("flow-mode-expand-all");
+    const flowTreeDepthDecrease = document.getElementById("flow-call-tree-depth-decrease");
+    const flowTreeDepthIncrease = document.getElementById("flow-call-tree-depth-increase");
+    const graphContextCollapse = document.getElementById("graph-context-collapse");
+    const flowContextCollapse = document.getElementById("flow-context-collapse");
     const toolbar = document.getElementById("architecture-toolbar");
     const toolbarCollapse = document.getElementById("toolbar-collapse");
     const graphModeContext = document.getElementById("graph-mode-context");
-    if (toolbar && graphModeContext && graphPanel) toolbar.insertBefore(graphModeContext, graphPanel);
+    const flowModeContext = document.getElementById("flow-mode-context");
+    if (toolbar && graphPanel) {
+      if (graphModeContext) toolbar.insertBefore(graphModeContext, graphPanel);
+      if (flowModeContext) toolbar.insertBefore(flowModeContext, graphPanel);
+    }
     const graphFilterSummary = document.getElementById("graph-filter-summary");
     const graphFilterControls = [
       relationHttp, relationKafka, relationMongodb, relationOther,
@@ -76,32 +82,31 @@
       graphState.analysisPortEndpointId = null;
       requestGraphRender();
     });
-    analysisModeCenter?.addEventListener("click", () => {
-      if (!graphState.selectedCodeFlowId) {
-        fitCameraToVisibleGraph(renderer, "readable");
-        return;
-      }
+    const centerFlow = () => {
       if (!graphState.relatedNodes?.size) return;
       const orderedNodes = [...(graphState.pathMicroserviceOrder?.keys() || [])];
       const remainingNodes = [...graphState.relatedNodes].filter(id => !orderedNodes.includes(id));
       scheduleFlowCameraFit({ nodes: [...orderedNodes, ...remainingNodes] });
-    });
-    analysisModeExpandAll?.addEventListener("click", () => {
+    };
+    graphModeCenter?.addEventListener("click", () => fitCameraToVisibleGraph(renderer, "readable"));
+    flowModeCenter?.addEventListener("click", centerFlow);
+    flowModeExpandAll?.addEventListener("click", () => {
       expandAllCallTree();
     });
-    callTreeDepthDecrease?.addEventListener("click", () => {
+    flowTreeDepthDecrease?.addEventListener("click", () => {
       adjustCallTreeDepth(-1);
     });
-    callTreeDepthIncrease?.addEventListener("click", () => {
+    flowTreeDepthIncrease?.addEventListener("click", () => {
       adjustCallTreeDepth(1);
     });
-    analysisContextCollapse?.addEventListener("click", () => {
+    const toggleContextCollapse = (context, control) => {
       graphState.analysisContextCollapsed = !graphState.analysisContextCollapsed;
-      const context = document.getElementById("graph-mode-context");
       context?.classList.toggle("is-collapsed", graphState.analysisContextCollapsed);
-      analysisContextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
-      analysisContextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
-    });
+      control?.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
+      if (control) control.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
+    };
+    graphContextCollapse?.addEventListener("click", () => toggleContextCollapse(graphModeContext, graphContextCollapse));
+    flowContextCollapse?.addEventListener("click", () => toggleContextCollapse(flowModeContext, flowContextCollapse));
     function updateFitModeControls(mode) {
       [
         [null, "overview"],
@@ -180,22 +185,24 @@
       graphCanvas.dataset.fitMode = nextMode;
       graphCanvas.dataset.fitRatio = String(targetRenderer.getCamera().getState().ratio);
     }
-    document.getElementById("zoom-in").addEventListener("click", () => {
+    const zoomIn = () => {
       if (zoomCallTree(1.25)) return;
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
       camera.setState({ ...state, ratio: Math.max(.01, state.ratio * .8) });
       requestGraphRender();
-    });
-    document.getElementById("zoom-out").addEventListener("click", () => {
+    };
+    const zoomOut = () => {
       if (zoomCallTree(0.8)) return;
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
       camera.setState({ ...state, ratio: Math.min(graphState.maximumCollisionFreeRatio, state.ratio * 1.25) });
       requestGraphRender();
-    });
+    };
+    ["graph-zoom-in", "flow-zoom-in"].forEach(id => document.getElementById(id)?.addEventListener("click", zoomIn));
+    ["graph-zoom-out", "flow-zoom-out"].forEach(id => document.getElementById(id)?.addEventListener("click", zoomOut));
     renderCardsButton.addEventListener("click", () => setNodeRenderMode("cards"));
     renderSymbolsButton.addEventListener("click", () => setNodeRenderMode("symbols"));
     resetButton.addEventListener("click", reset);

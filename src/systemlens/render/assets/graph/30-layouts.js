@@ -481,9 +481,11 @@
         clearPathControls();
         setDetailsEmpty("Sélectionnez un nœud ou un module pour afficher ses informations.");
       }
-      const zoomOutButton = document.getElementById("zoom-out");
-      zoomOutButton.disabled = false;
-      zoomOutButton.title = "Dézoomer";
+      const zoomOutButton = document.getElementById("graph-zoom-out");
+      if (zoomOutButton) {
+        zoomOutButton.disabled = false;
+        zoomOutButton.title = "Dézoomer";
+      }
       setActiveLayout(layout);
       layoutStatus.textContent = `Calcul de la disposition ${label}…`;
       // Module placement is deterministic and local; it does not need any

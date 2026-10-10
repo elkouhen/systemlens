@@ -19,7 +19,7 @@
     function updateCallTreeStats(nodeCount = 0, edgeCount = 0) {
       graphState.callTreeVisibleNodeCount = nodeCount;
       graphState.callTreeVisibleEdgeCount = edgeCount;
-      const stats = document.getElementById("graph-mode-context-stats");
+      const stats = document.getElementById("flow-mode-context-stats");
       if (!stats) return;
       const active = Boolean(graphState.selectedCodeFlowId)
         && (graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree");
@@ -1001,10 +1001,10 @@
         && (graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree")
         && graphState.callGraphDisplayMode === "tree";
       const depth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 1));
-      const depthControl = document.getElementById("call-tree-depth-control");
-      const depthValue = document.getElementById("call-tree-depth-value");
-      const depthDecrease = document.getElementById("call-tree-depth-decrease");
-      const depthIncrease = document.getElementById("call-tree-depth-increase");
+      const depthControl = document.getElementById("flow-call-tree-depth-control");
+      const depthValue = document.getElementById("flow-call-tree-depth-value");
+      const depthDecrease = document.getElementById("flow-call-tree-depth-decrease");
+      const depthIncrease = document.getElementById("flow-call-tree-depth-increase");
       if (depthControl) depthControl.hidden = !active;
       if (depthValue) depthValue.textContent = String(depth);
       if (depthDecrease) depthDecrease.disabled = !active || depth <= 1;

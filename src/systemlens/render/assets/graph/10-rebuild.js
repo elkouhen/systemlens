@@ -799,90 +799,86 @@
           return renderer.graphToViewport(graphPoint);
         };
         function updateAnalysisModeIndicator() {
-          const context = document.getElementById("graph-mode-context");
-          const contextCopy = document.getElementById("graph-mode-context-copy");
-          const title = document.getElementById("graph-mode-context-title");
-          const triggerLabel = document.getElementById("graph-mode-context-trigger");
-          const stats = document.getElementById("graph-mode-context-stats");
-          const pathLabel = document.getElementById("graph-mode-context-path");
-          const help = document.getElementById("graph-mode-context-help");
-          const clear = document.getElementById("analysis-mode-clear");
-          const architectureActions = document.getElementById("architecture-context-actions");
-          const expandAll = document.getElementById("analysis-mode-expand-all");
-          const contextCollapse = document.getElementById("analysis-context-collapse");
-          if (!context || !title || !help || !clear) return;
+          const graphContext = document.getElementById("graph-mode-context");
+          const flowContext = document.getElementById("flow-mode-context");
+          const graphTitle = document.getElementById("graph-mode-context-title");
+          const graphHelp = document.getElementById("graph-mode-context-help");
+          const flowTitle = document.getElementById("flow-mode-context-title");
+          const flowTrigger = document.getElementById("flow-mode-context-trigger");
+          const flowStats = document.getElementById("flow-mode-context-stats");
+          const flowPath = document.getElementById("flow-mode-context-path");
+          const flowHelp = document.getElementById("flow-mode-context-help");
+          const clear = document.getElementById("flow-mode-clear");
+          const expandAll = document.getElementById("flow-mode-expand-all");
+          const contextCollapse = document.getElementById("flow-context-collapse");
+          if (!graphContext || !flowContext || !graphTitle || !graphHelp || !flowTitle || !flowHelp || !clear) return;
           const active = Boolean(graphState.selectedCodeFlowId);
           const callGraphActive = active && (
             graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree"
           );
-          const showContext = graphState.viewMode === "architecture" || active;
-          context.hidden = !showContext;
-          context.classList.toggle("is-architecture-toolbar", graphState.viewMode === "architecture" && !callGraphActive);
-          context.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
-          if (contextCopy) contextCopy.id = "graph-mode-context-copy";
+          const architectureActive = graphState.viewMode === "architecture";
+          graphContext.hidden = !architectureActive;
+          flowContext.hidden = !callGraphActive;
+          graphContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
+          flowContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
+          graphTitle.textContent = "Graphe d’architecture";
+          graphHelp.textContent = "Actions rapides sur la vue du graphe.";
+          clear.hidden = !callGraphActive;
           if (contextCollapse) {
-            contextCollapse.hidden = !showContext;
+            contextCollapse.hidden = !callGraphActive;
             contextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
             contextCollapse.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
           }
-          if (architectureActions) {
-            architectureActions.hidden = callGraphActive;
-            architectureActions.style.display = callGraphActive ? "none" : "";
-          }
-          const depthControl = document.getElementById("call-tree-depth-control");
-          const depthValue = document.getElementById("call-tree-depth-value");
-          const depthDecrease = document.getElementById("call-tree-depth-decrease");
-          const depthIncrease = document.getElementById("call-tree-depth-increase");
+          const depthControl = document.getElementById("flow-call-tree-depth-control");
+          const depthValue = document.getElementById("flow-call-tree-depth-value");
+          const depthDecrease = document.getElementById("flow-call-tree-depth-decrease");
+          const depthIncrease = document.getElementById("flow-call-tree-depth-increase");
           if (expandAll) expandAll.hidden = !callGraphActive;
           if (depthControl) depthControl.hidden = !callGraphActive;
           if (depthValue) depthValue.textContent = String(graphState.callTreeDepth || 1);
           if (depthDecrease) depthDecrease.disabled = !callGraphActive || graphState.callTreeDepth <= 1;
           if (depthIncrease) depthIncrease.disabled = !callGraphActive || graphState.callTreeDepth >= 8;
-          if (contextCollapse) contextCollapse.hidden = !callGraphActive;
           if (!callGraphActive) {
-            if (stats) {
-              stats.hidden = true;
-              stats.textContent = "";
+            if (flowStats) {
+              flowStats.hidden = true;
+              flowStats.textContent = "";
             }
-            title.textContent = "Graphe d’architecture";
-            if (triggerLabel) {
-              triggerLabel.hidden = true;
-              triggerLabel.textContent = "";
+            if (flowTrigger) {
+              flowTrigger.hidden = true;
+              flowTrigger.textContent = "";
             }
-            help.textContent = "Actions rapides sur la vue du graphe.";
-            if (clear) clear.hidden = true;
             return;
           }
           updateCallTreeStats(
             graphState.callTreeVisibleNodeCount || 0,
             graphState.callTreeVisibleEdgeCount || 0,
           );
-          title.textContent = "Arbre d’appel";
+          flowTitle.textContent = "Arbre d’appel";
           const selectedFlows = (graphData.code_flows || []).filter(flow => (
             flow.id === graphState.selectedCodeFlowId
           ));
           const selectedFlow = selectedFlows[0];
           const trigger = selectedFlow?.steps?.[0];
-          if (triggerLabel) {
+          if (flowTrigger) {
             const triggerKind = ({
               http_entry: "Entrée HTTP",
               message_entry: "Entrée message",
               cron_entry: "Déclencheur Cron",
             })[trigger?.kind] || "Déclencheur";
-            triggerLabel.hidden = !trigger;
-            triggerLabel.textContent = trigger
+            flowTrigger.hidden = !trigger;
+            flowTrigger.textContent = trigger
               ? `${triggerKind} · ${trigger.name || "Événement inconnu"}`
               : "";
-            triggerLabel.title = trigger
+            flowTrigger.title = trigger
               ? "Événement déclencheur du graphe d’appel sélectionné"
               : "";
           }
-          if (pathLabel) {
+          if (flowPath) {
             const portsByEndpointId = new Map(
               graphData.nodes.flatMap(node => (node.ports || []).map(port => [port.endpoint_id, port]))
             );
-            pathLabel.replaceChildren();
-            pathLabel.classList.add("graph-mode-tree");
+            flowPath.replaceChildren();
+            flowPath.classList.add("graph-mode-tree");
             const callGraph = selectedCallGraph;
             const edgeList = (callGraph?.edges || []).filter(edge => edge.source !== edge.target);
             const graphNodes = [...new Set([
@@ -950,12 +946,12 @@
               const tree = document.createElement("ul");
               tree.className = "graph-mode-tree-list";
               treeRoots.forEach(root => tree.append(renderTreeNode(root)));
-              pathLabel.append(tree);
+              flowPath.append(tree);
             } else {
-              pathLabel.textContent = "Parcours de code sélectionné";
+              flowPath.textContent = "Parcours de code sélectionné";
             }
           }
-          help.textContent = graphState.analysisPortEndpointId
+          flowHelp.textContent = graphState.analysisPortEndpointId
             ? "Arc associé sélectionné · cliquez sur un autre arc ou port pour changer"
             : "Cliquez sur un port ou un arc pour afficher sa relation";
           clear.hidden = !graphState.analysisPortEndpointId;

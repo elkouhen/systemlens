@@ -955,7 +955,7 @@ def _assert_zoom_is_monotonic_and_settles_without_a_release_jump(page) -> None:
         settled_distance = ((settled[1][0] - settled[0][0]) ** 2 + (settled[1][1] - settled[0][1]) ** 2) ** .5 if len(settled) > 1 else 0
         assert settled_distance == pytest.approx(after_distance, rel=0.04)
 
-    page.locator("#zoom-out").click()
+    page.locator("#graph-zoom-out").click()
     page.wait_for_timeout(300)
     restored = _surface_rects(page)
     if after_distance and len(restored) > 1:
@@ -1462,8 +1462,8 @@ def test_complex_dataset_geometry_contract_across_all_views() -> None:
             _assert_architecture_cards_keep_size_after_camera_change(page, card_size)
             _assert_geometry_contract(page, layered=layered)
 
-            page.locator("#zoom-out").click()
-            page.locator("#zoom-out").click()
+            page.locator("#graph-zoom-out").click()
+            page.locator("#graph-zoom-out").click()
             page.wait_for_timeout(300)
             _capture_render_snapshot(page, f"complex-{layout_id.removeprefix('layout-')}-after-zoom-out")
             _assert_architecture_cards_keep_size_after_camera_change(page, card_size)
@@ -1814,13 +1814,13 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
             _assert_architecture_cards_have_uniform_size(page)
             _assert_architecture_cards_do_not_overlap(page)
             for _ in range(2):
-                page.locator("#zoom-out").click()
+                page.locator("#graph-zoom-out").click()
             page.wait_for_timeout(400)
             _capture_render_snapshot(page, f"constrained-{view_name.lower()}-after-zoom-out")
             _assert_architecture_cards_have_uniform_size(page)
             _assert_architecture_cards_do_not_overlap(page)
             for _ in range(2):
-                page.locator("#zoom-in").click()
+                page.locator("#graph-zoom-in").click()
             page.wait_for_timeout(400)
             _capture_render_snapshot(page, f"constrained-{view_name.lower()}-after-zoom-in")
             _assert_architecture_cards_have_uniform_size(page)

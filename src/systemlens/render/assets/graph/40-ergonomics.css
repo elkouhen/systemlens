@@ -51,7 +51,7 @@
       border-radius: 12px;
       background: rgba(255, 255, 255, .82);
     }
-    #architecture-toolbar > .graph-mode-context {
+    #architecture-toolbar > .mode-context {
       position: static;
       inset: auto;
       width: auto;
@@ -65,12 +65,12 @@
       backdrop-filter: none;
       pointer-events: auto;
     }
-    #architecture-toolbar > .graph-mode-context > * { pointer-events: auto; }
-    #architecture-toolbar > .graph-mode-context .graph-mode-context-copy { display: none; }
-    #architecture-toolbar > .graph-mode-context .graph-mode-context-actions { gap: 6px; }
-    #architecture-toolbar > .graph-mode-context .architecture-context-actions { display: contents; }
-    #architecture-toolbar > .graph-mode-context .architecture-context-actions[hidden] { display: none !important; }
-    #architecture-toolbar > .graph-mode-context .view-controls {
+    #architecture-toolbar > .mode-context > * { pointer-events: auto; }
+    #architecture-toolbar > .mode-context .graph-mode-context-copy { display: none; }
+    #architecture-toolbar > .mode-context .graph-mode-context-actions { gap: 6px; }
+    #architecture-toolbar > .mode-context .architecture-context-actions { display: contents; }
+    #architecture-toolbar > .mode-context .architecture-context-actions[hidden] { display: none !important; }
+    #architecture-toolbar > .mode-context .view-controls {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       flex: 1 1 100%;
@@ -78,21 +78,21 @@
       width: 100%;
       min-width: 0 !important;
     }
-    #architecture-toolbar > .graph-mode-context .render-controls { flex: 1 1 100%; order: -1; }
-    #architecture-toolbar > .graph-mode-context .graph-secondary-action {
+    #architecture-toolbar > .mode-context .render-controls { flex: 1 1 100%; order: -1; }
+    #architecture-toolbar > .mode-context .graph-secondary-action {
       min-height: 38px;
       padding-inline: 12px;
       font-size: 12px;
       font-weight: 750;
     }
-    #architecture-toolbar > .graph-mode-context #analysis-mode-center {
+    #architecture-toolbar > .mode-context #analysis-mode-center {
       flex: 0 0 92px;
       width: 92px !important;
       min-width: 92px !important;
       white-space: nowrap;
     }
-    #architecture-toolbar > .graph-mode-context .view-controls button,
-    #architecture-toolbar > .graph-mode-context .render-controls button {
+    #architecture-toolbar > .mode-context .view-controls button,
+    #architecture-toolbar > .mode-context .render-controls button {
       min-height: 38px;
       min-width: 0;
       width: 100%;
@@ -100,26 +100,26 @@
       font-size: 12px;
       font-weight: 750;
     }
-    #architecture-toolbar > .graph-mode-context .zoom-controls button {
+    #architecture-toolbar > .mode-context .zoom-controls button {
       width: 38px;
       min-width: 38px;
       padding: 0;
       font-size: 20px;
     }
-    #architecture-toolbar > .graph-mode-context:not(.is-architecture-toolbar) #analysis-mode-expand-all {
+    #architecture-toolbar > .mode-context:not(.is-architecture-toolbar) #analysis-mode-expand-all {
       flex: 0 0 166px;
       width: 166px !important;
       min-width: 166px !important;
       white-space: nowrap;
     }
-    #architecture-toolbar > .graph-mode-context:not(.is-architecture-toolbar) #call-tree-depth-control {
+    #architecture-toolbar > .mode-context:not(.is-architecture-toolbar) #call-tree-depth-control {
       flex: 0 0 132px;
       width: 132px;
       min-width: 132px;
       min-height: 42px;
       box-sizing: border-box;
     }
-    #architecture-toolbar > .graph-mode-context:not(.is-architecture-toolbar) #analysis-context-collapse {
+    #architecture-toolbar > .mode-context:not(.is-architecture-toolbar) #analysis-context-collapse {
       flex: 0 0 112px;
       width: 112px !important;
       min-width: 112px !important;
@@ -143,9 +143,9 @@
     .graph-actions { gap: 8px; }
     .graph-control-group { border-radius: 12px; }
     .graph-control-group button { border-radius: 9px !important; }
-    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .graph-control-group { display: contents; border: 0; background: transparent; }
-    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .graph-control-group button,
-    .graph-mode-context.is-architecture-toolbar .architecture-context-actions > .graph-action-label {
+    .mode-context.is-architecture-toolbar .architecture-context-actions .graph-control-group { display: contents; border: 0; background: transparent; }
+    .mode-context.is-architecture-toolbar .architecture-context-actions .graph-control-group button,
+    .mode-context.is-architecture-toolbar .architecture-context-actions > .graph-action-label {
       width: auto;
       height: 42px !important;
       min-height: 42px !important;
@@ -158,16 +158,16 @@
       font-size: 13px !important;
       line-height: 1.15;
     }
-    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .zoom-controls button { width: 42px; min-width: 42px; height: 42px !important; padding: 0; font-size: 21px !important; }
-    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .graph-control-group button:hover,
-    .graph-mode-context.is-architecture-toolbar .architecture-context-actions > .graph-action-label:hover { border-color: var(--ui-selected); background: var(--ui-accent-soft-hover); }
-    .graph-mode-context .zoom-controls { display: contents; border: 0; background: transparent; }
-    .graph-mode-context .zoom-controls button { width: 27px; height: 27px !important; padding: 0; border: 1px solid var(--ui-accent-border); border-radius: 7px !important; color: var(--ui-accent-text); background: var(--ui-control); box-shadow: none; font-size: 16px; }
-    .graph-mode-context .zoom-controls button:hover { border-color: var(--ui-selected); background: var(--ui-accent-soft-hover); }
+    .mode-context.is-architecture-toolbar .architecture-context-actions .zoom-controls button { width: 42px; min-width: 42px; height: 42px !important; padding: 0; font-size: 21px !important; }
+    .mode-context.is-architecture-toolbar .architecture-context-actions .graph-control-group button:hover,
+    .mode-context.is-architecture-toolbar .architecture-context-actions > .graph-action-label:hover { border-color: var(--ui-selected); background: var(--ui-accent-soft-hover); }
+    .mode-context .zoom-controls { display: contents; border: 0; background: transparent; }
+    .mode-context .zoom-controls button { width: 27px; height: 27px !important; padding: 0; border: 1px solid var(--ui-accent-border); border-radius: 7px !important; color: var(--ui-accent-text); background: var(--ui-control); box-shadow: none; font-size: 16px; }
+    .mode-context .zoom-controls button:hover { border-color: var(--ui-selected); background: var(--ui-accent-soft-hover); }
     .call-tree-depth-control { min-height: 27px; }
-    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .fit-mode.is-active,
-    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .view-mode.is-active,
-    .graph-mode-context.is-architecture-toolbar .architecture-context-actions .render-mode.is-active {
+    .mode-context.is-architecture-toolbar .architecture-context-actions .fit-mode.is-active,
+    .mode-context.is-architecture-toolbar .architecture-context-actions .view-mode.is-active,
+    .mode-context.is-architecture-toolbar .architecture-context-actions .render-mode.is-active {
       border-color: var(--ui-selected);
       color: var(--ui-on-accent);
       background: var(--ui-selected);
@@ -440,3 +440,28 @@
       .legend { right: 10px; bottom: 10px; width: min(220px, calc(100vw - 20px)); }
       .inspector-dialog { max-height: calc(100vh - 20px); border-radius: 20px; }
     }
+    /* Graph and call-flow toolbars share visual primitives but remain separate
+       contexts so controls cannot leak between views. */
+    #architecture-toolbar > .mode-context { position: static; inset: auto; width: auto; max-height: none; margin: 2px 0 0; padding: 10px 0 0; border-width: 1px 0 0; border-radius: 0; box-shadow: none; background: transparent; backdrop-filter: none; pointer-events: auto; }
+    #architecture-toolbar > .mode-context > * { pointer-events: auto; }
+    #architecture-toolbar > .mode-context .graph-mode-context-copy { display: none; }
+    #architecture-toolbar > .mode-context .graph-mode-context-actions { gap: 6px; }
+    #graph-mode-context .graph-mode-context-actions { display: flex; }
+    #flow-mode-context .graph-mode-context-actions { display: flex; }
+    #graph-mode-context .graph-secondary-action,
+    #flow-mode-context .graph-secondary-action { min-height: 38px; padding-inline: 12px; font-size: 12px; font-weight: 750; }
+    #graph-mode-context #graph-mode-center,
+    #flow-mode-context #flow-mode-center { flex: 0 0 92px; width: 92px !important; min-width: 92px !important; white-space: nowrap; }
+    #graph-mode-context .view-controls,
+    #graph-mode-context .render-controls { min-height: 38px; }
+    #graph-mode-context .view-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex: 1 1 100%; order: -2; width: 100%; min-width: 0; }
+    #graph-mode-context .render-controls { flex: 1 1 100%; order: -1; }
+    #graph-mode-context .view-controls button,
+    #graph-mode-context .render-controls button { min-height: 38px; min-width: 0; width: 100%; padding-inline: 10px; font-size: 12px; font-weight: 750; }
+    #graph-mode-context .zoom-controls button,
+    #flow-mode-context .zoom-controls button { width: 38px; min-width: 38px; padding: 0; font-size: 20px; }
+    #flow-mode-context #flow-mode-expand-all { flex: 0 0 166px; width: 166px !important; min-width: 166px !important; white-space: nowrap; }
+    #flow-mode-context #flow-call-tree-depth-control { flex: 0 0 132px; width: 132px; min-width: 132px; min-height: 42px; box-sizing: border-box; }
+    #flow-mode-context #flow-context-collapse { flex: 0 0 112px; width: 112px !important; min-width: 112px !important; white-space: nowrap; }
+    #graph-mode-context .zoom-controls, #flow-mode-context .zoom-controls { display: contents; border: 0; background: transparent; }
+    #graph-mode-context .zoom-controls button, #flow-mode-context .zoom-controls button { height: 42px !important; border: 1px solid var(--ui-accent-border); border-radius: 7px !important; color: var(--ui-accent-text); background: var(--ui-control); box-shadow: none; }

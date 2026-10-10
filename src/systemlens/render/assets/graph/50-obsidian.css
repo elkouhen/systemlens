@@ -112,7 +112,7 @@
   border-color: var(--ui-selected);
   box-shadow: 0 0 0 2px var(--ui-focus);
 }
-:root[data-theme="dark"] .graph-mode-context {
+:root[data-theme="dark"] .mode-context {
   color: var(--ui-text);
   border-color: var(--ui-border);
   background: var(--ui-panel);

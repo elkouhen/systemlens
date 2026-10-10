@@ -223,7 +223,7 @@
     </div>
     <div id="details" class="is-empty"><div class="details-empty">Sélectionnez un nœud pour isoler ses relations et afficher ses API.</div></div>
   </div>
-  <div id="graph-mode-context" class="graph-mode-context" hidden>
+  <div id="graph-mode-context" class="mode-context graph-mode-context" hidden>
     <div id="graph-mode-context-copy" class="graph-mode-context-copy">
       <strong id="graph-mode-context-title"></strong>
       <span id="graph-mode-context-trigger" class="graph-mode-context-trigger" hidden></span>
@@ -231,32 +231,46 @@
       <span id="graph-mode-context-help"></span>
     </div>
     <div class="graph-mode-context-actions">
-      <button id="analysis-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue" title="Recentrer la vue sur le graphe ou l’arbre visible">Centrer</button>
+      <button id="graph-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue" title="Recentrer la vue sur le graphe visible">Centrer</button>
       <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
-        <button id="zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer" title="Augmenter l’échelle de la vue">+</button>
-        <button id="zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer" title="Réduire l’échelle de la vue">−</button>
+        <button id="graph-zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer" title="Augmenter l’échelle du graphe">+</button>
+        <button id="graph-zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer" title="Réduire l’échelle du graphe">−</button>
       </div>
-      <div id="architecture-context-actions" class="architecture-context-actions">
-        <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled>Réinitialiser</button>
-        <div class="graph-control-group view-controls" role="group" aria-label="Mode de visualisation · un seul choix" title="Mode de visualisation · un seul choix">
+      <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled>Réinitialiser</button>
+      <div class="graph-control-group view-controls" role="group" aria-label="Mode de visualisation · un seul choix" title="Mode de visualisation · un seul choix">
           <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe</button>
           <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
           <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
-        </div>
-        <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
+      </div>
+      <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
           <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
           <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
-        </div>
       </div>
-      <button id="analysis-mode-expand-all" class="graph-action-label graph-secondary-action" type="button" title="Déplier tous les niveaux de l’arbre d’appel" hidden>Déplier tous les nœuds</button>
-      <div id="call-tree-depth-control" class="call-tree-depth-control" role="group" aria-label="Nombre de niveaux de l’arbre d’appel" hidden>
+      <button id="graph-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy" title="Réduire la toolbar du graphe">Réduire</button>
+    </div>
+  </div>
+  <div id="flow-mode-context" class="mode-context flow-mode-context" hidden>
+    <div id="flow-mode-context-copy" class="graph-mode-context-copy">
+      <strong id="flow-mode-context-title"></strong>
+      <span id="flow-mode-context-trigger" class="graph-mode-context-trigger" hidden></span>
+      <span id="flow-mode-context-stats" class="graph-mode-context-stats" hidden></span>
+      <span id="flow-mode-context-help"></span>
+    </div>
+    <div class="graph-mode-context-actions">
+      <button id="flow-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue des flux" title="Recentrer la vue sur l’arbre d’appel visible">Centrer</button>
+      <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom de l’arbre d’appel">
+        <button id="flow-zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer dans l’arbre d’appel" title="Augmenter l’échelle de l’arbre d’appel">+</button>
+        <button id="flow-zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer dans l’arbre d’appel" title="Réduire l’échelle de l’arbre d’appel">−</button>
+      </div>
+      <button id="flow-mode-expand-all" class="graph-action-label graph-secondary-action" type="button" title="Déplier tous les niveaux de l’arbre d’appel" hidden>Déplier tous les nœuds</button>
+      <div id="flow-call-tree-depth-control" class="call-tree-depth-control" role="group" aria-label="Nombre de niveaux de l’arbre d’appel" hidden>
         <span class="call-tree-depth-label">Niveaux</span>
-        <button id="call-tree-depth-decrease" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de moins" title="Afficher un niveau de moins">−</button>
-        <output id="call-tree-depth-value" class="call-tree-depth-value" aria-live="polite">1</output>
-        <button id="call-tree-depth-increase" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de plus" title="Afficher un niveau de plus">+</button>
+        <button id="flow-call-tree-depth-decrease" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de moins" title="Afficher un niveau de moins">−</button>
+        <output id="flow-call-tree-depth-value" class="call-tree-depth-value" aria-live="polite">1</output>
+        <button id="flow-call-tree-depth-increase" class="graph-action-label graph-secondary-action" type="button" aria-label="Afficher un niveau de plus" title="Afficher un niveau de plus">+</button>
       </div>
-      <button id="analysis-mode-clear" class="graph-action-label graph-secondary-action" type="button" title="Effacer l’arc ou le port actuellement analysé" hidden>Réinitialiser l’analyse</button>
-      <button id="analysis-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="graph-mode-context-copy" title="Réduire la toolbar">Réduire</button>
+      <button id="flow-mode-clear" class="graph-action-label graph-secondary-action" type="button" title="Effacer l’arc ou le port actuellement analysé" hidden>Réinitialiser l’analyse</button>
+      <button id="flow-context-collapse" class="graph-action-label graph-secondary-action" type="button" aria-expanded="true" aria-controls="flow-mode-context-copy" title="Réduire la toolbar des flux">Réduire</button>
     </div>
   </div>
   <details id="graph-legend" class="legend" aria-label="Légende du graphe">
