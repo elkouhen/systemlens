@@ -22,7 +22,7 @@
       const stats = document.getElementById("graph-mode-context-stats");
       if (!stats) return;
       const active = Boolean(graphState.selectedCodeFlowId)
-        && graphState.viewMode === "call-graph";
+        && (graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree");
       stats.hidden = !active;
       stats.textContent = active
         ? `Arbre : ${nodeCount} nœud${nodeCount === 1 ? "" : "s"} · ${edgeCount} arc${edgeCount === 1 ? "" : "s"}`
@@ -998,7 +998,7 @@
     }
     function syncCallTreeDepthControl() {
       const active = Boolean(graphState.selectedCodeFlowId)
-        && graphState.viewMode === "call-graph"
+        && (graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree")
         && graphState.callGraphDisplayMode === "tree";
       const depth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 1));
       const depthControl = document.getElementById("call-tree-depth-control");

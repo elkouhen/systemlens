@@ -812,7 +812,9 @@
           const contextCollapse = document.getElementById("analysis-context-collapse");
           if (!context || !title || !help || !clear) return;
           const active = Boolean(graphState.selectedCodeFlowId);
-          const callGraphActive = active && graphState.viewMode === "call-graph";
+          const callGraphActive = active && (
+            graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree"
+          );
           const showContext = graphState.viewMode === "architecture" || active;
           context.hidden = !showContext;
           context.classList.toggle("is-architecture-toolbar", graphState.viewMode === "architecture" && !callGraphActive);
