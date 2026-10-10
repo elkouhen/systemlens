@@ -579,6 +579,11 @@
     .code-flow-step-strip { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
     .code-flow-step-chip { display: inline-flex; align-items: center; min-height: 22px; padding: 3px 6px; border: 1px solid var(--ui-border); border-radius: 6px; color: var(--ui-muted); background: var(--ui-control); font-size: 9px; font-weight: 700; }
     .code-flow-step-chip.is-diagnostic-read { border-color: #f59e0b; color: #92400e; background: #fffbeb; box-shadow: inset 3px 0 #f59e0b; }
+    .flow-consistency-lane { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-top: 6px; }
+    .flow-consistency-card { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 4px 8px; border: 1px solid #f59e0b; border-radius: 8px; color: #78350f; background: #fffbeb; font-size: 10px; font-weight: 700; }
+    .flow-consistency-card.is-guarantee_identified { border-color: #22c55e; color: #166534; background: #f0fdf4; }
+    .flow-consistency-card.is-insufficient_evidence { border-color: #94a3b8; color: #475569; background: #f8fafc; }
+    .flow-consistency-arrow { color: currentColor; font-size: 15px; }
     .code-flow-steps { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
     .code-flow-step { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; padding: 8px 9px; border: 1px solid #e2e8f0; border-radius: var(--control-radius); color: #334155; background: #fff; }
     .code-flow-step::before { display: none; }
@@ -2271,6 +2276,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       <span id="flow-mode-context-stats" class="graph-mode-context-stats" hidden></span>
       <span id="flow-mode-context-help"></span>
     </div>
+    <div id="flow-consistency-lane" class="flow-consistency-lane" hidden aria-label="Chemins de cohérence des données"></div>
     <div class="graph-mode-context-actions">
       <button id="flow-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue des flux" title="Recentrer la vue sur l’arbre d’appel visible" hidden>Centrer</button>
       <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom de l’arbre d’appel">
@@ -3686,6 +3692,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           const flowStats = document.getElementById("flow-mode-context-stats");
           const flowPath = document.getElementById("flow-mode-context-path");
           const flowHelp = document.getElementById("flow-mode-context-help");
+          const consistencyLane = document.getElementById("flow-consistency-lane");
           const expandAll = document.getElementById("flow-mode-expand-all");
           const flowCenter = document.getElementById("flow-mode-center");
           const flowZoomIn = document.getElementById("flow-zoom-in");
@@ -3725,6 +3732,10 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
               flowTrigger.hidden = true;
               flowTrigger.textContent = "";
             }
+            if (consistencyLane) {
+              consistencyLane.hidden = true;
+              consistencyLane.replaceChildren();
+            }
             return;
           }
           updateCallTreeStats(
@@ -3746,6 +3757,25 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
             flowHelp.textContent = `${selectedDiagnostics.length} problème${selectedDiagnostics.length > 1 ? "s" : ""} dans ce flux · ${riskCount} risque${riskCount > 1 ? "s" : ""}${incompleteCount ? ` · ${incompleteCount} preuve${incompleteCount > 1 ? "s" : ""} incomplète${incompleteCount > 1 ? "s" : ""}` : ""}`;
           } else {
             flowHelp.textContent = "Aucun problème de cohérence détecté dans ce flux.";
+          }
+          if (consistencyLane) {
+            consistencyLane.replaceChildren();
+            consistencyLane.hidden = selectedDiagnostics.length === 0;
+            selectedDiagnostics.forEach((diagnostic, index) => {
+              const card = document.createElement("div");
+              card.className = `flow-consistency-card is-${diagnostic.classification}`;
+              const badge = document.createElement("strong");
+              badge.textContent = `P${index + 1}`;
+              const write = document.createElement("span");
+              write.textContent = `Écriture async · ${diagnostic.resource || "donnée"} · étape ${diagnostic.write_step}`;
+              const arrow = document.createElement("span");
+              arrow.className = "flow-consistency-arrow";
+              arrow.textContent = "→";
+              const read = document.createElement("span");
+              read.textContent = `Lecture sync · étape ${diagnostic.read_step}`;
+              card.append(badge, write, arrow, read);
+              consistencyLane.append(card);
+            });
           }
           if (flowTrigger) {
             const triggerKind = ({

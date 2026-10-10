@@ -808,6 +808,7 @@
           const flowStats = document.getElementById("flow-mode-context-stats");
           const flowPath = document.getElementById("flow-mode-context-path");
           const flowHelp = document.getElementById("flow-mode-context-help");
+          const consistencyLane = document.getElementById("flow-consistency-lane");
           const expandAll = document.getElementById("flow-mode-expand-all");
           const flowCenter = document.getElementById("flow-mode-center");
           const flowZoomIn = document.getElementById("flow-zoom-in");
@@ -847,6 +848,10 @@
               flowTrigger.hidden = true;
               flowTrigger.textContent = "";
             }
+            if (consistencyLane) {
+              consistencyLane.hidden = true;
+              consistencyLane.replaceChildren();
+            }
             return;
           }
           updateCallTreeStats(
@@ -868,6 +873,25 @@
             flowHelp.textContent = `${selectedDiagnostics.length} problème${selectedDiagnostics.length > 1 ? "s" : ""} dans ce flux · ${riskCount} risque${riskCount > 1 ? "s" : ""}${incompleteCount ? ` · ${incompleteCount} preuve${incompleteCount > 1 ? "s" : ""} incomplète${incompleteCount > 1 ? "s" : ""}` : ""}`;
           } else {
             flowHelp.textContent = "Aucun problème de cohérence détecté dans ce flux.";
+          }
+          if (consistencyLane) {
+            consistencyLane.replaceChildren();
+            consistencyLane.hidden = selectedDiagnostics.length === 0;
+            selectedDiagnostics.forEach((diagnostic, index) => {
+              const card = document.createElement("div");
+              card.className = `flow-consistency-card is-${diagnostic.classification}`;
+              const badge = document.createElement("strong");
+              badge.textContent = `P${index + 1}`;
+              const write = document.createElement("span");
+              write.textContent = `Écriture async · ${diagnostic.resource || "donnée"} · étape ${diagnostic.write_step}`;
+              const arrow = document.createElement("span");
+              arrow.className = "flow-consistency-arrow";
+              arrow.textContent = "→";
+              const read = document.createElement("span");
+              read.textContent = `Lecture sync · étape ${diagnostic.read_step}`;
+              card.append(badge, write, arrow, read);
+              consistencyLane.append(card);
+            });
           }
           if (flowTrigger) {
             const triggerKind = ({
