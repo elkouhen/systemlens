@@ -6259,7 +6259,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     function setToolbarTab(tab, options = {}) {
       graphState.analysisContextCollapsed = true;
       document.body.classList.toggle("catalogue-active", tab === "microservices");
-      const { showingGraph, showingFlows, graphVisible, resetView } = graphViewLifecycle.activate(tab, options);
+      const { showingGraph, showingFlows, showingFlowGraph, graphVisible, resetView } = graphViewLifecycle.activate(tab, options);
       // The two navigation surfaces have different meanings: Graphe is the
       // static architecture view, while Flux de code only becomes a graph
       // after the user explicitly selects a flow from its list.
