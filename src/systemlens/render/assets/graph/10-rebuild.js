@@ -808,10 +808,9 @@
           const flowStats = document.getElementById("flow-mode-context-stats");
           const flowPath = document.getElementById("flow-mode-context-path");
           const flowHelp = document.getElementById("flow-mode-context-help");
-          const clear = document.getElementById("flow-mode-clear");
           const expandAll = document.getElementById("flow-mode-expand-all");
           const contextCollapse = document.getElementById("flow-context-collapse");
-          if (!graphContext || !flowContext || !graphTitle || !graphHelp || !flowTitle || !flowHelp || !clear) return;
+          if (!graphContext || !flowContext || !graphTitle || !graphHelp || !flowTitle || !flowHelp) return;
           const active = Boolean(graphState.selectedCodeFlowId);
           const callGraphActive = active && (
             graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree"
@@ -824,7 +823,6 @@
           flowContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
           graphTitle.textContent = "Graphe d’architecture";
           graphHelp.textContent = "Actions rapides sur la vue du graphe.";
-          clear.hidden = !callGraphActive;
           if (contextCollapse) {
             contextCollapse.hidden = !callGraphActive;
             contextCollapse.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
@@ -957,7 +955,6 @@
           flowHelp.textContent = graphState.analysisPortEndpointId
             ? "Arc associé sélectionné · cliquez sur un autre arc ou port pour changer"
             : "Cliquez sur un port ou un arc pour afficher sa relation";
-          clear.hidden = !graphState.analysisPortEndpointId;
         }
         const toggleAnalysisEndpoint = (endpointId, event) => {
           if (!endpointId) return;

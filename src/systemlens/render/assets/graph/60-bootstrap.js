@@ -35,7 +35,6 @@
     }
     const renderCardsButton = document.getElementById("render-cards");
     const renderSymbolsButton = document.getElementById("render-symbols");
-    const analysisModeClear = document.getElementById("flow-mode-clear");
     const graphModeCenter = document.getElementById("graph-mode-center");
     const flowModeCenter = document.getElementById("flow-mode-center");
     const flowModeExpandAll = document.getElementById("flow-mode-expand-all");
@@ -77,10 +76,6 @@
       toolbarCollapse.setAttribute("title", collapsed ? "Développer le panneau" : "Réduire le panneau");
       toolbarCollapse.textContent = collapsed ? "›" : "‹";
       updateWorkspaceViewport(true);
-    });
-    analysisModeClear?.addEventListener("click", () => {
-      graphState.analysisPortEndpointId = null;
-      requestGraphRender();
     });
     const centerFlow = () => {
       if (!graphState.relatedNodes?.size) return;
