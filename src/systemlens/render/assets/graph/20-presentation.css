@@ -123,6 +123,12 @@
       min-height: 70px;
       border-width: 2px;
       background: #f8fbff;
+      overflow-wrap: normal;
+    }
+    .graph-node-card-label.is-resource .graph-node-card-name {
+      font-size: 9px;
+      overflow-wrap: normal;
+      word-break: normal;
     }
     .graph-node-card-label.is-resource .graph-node-card-kind {
       color: #315f9b;

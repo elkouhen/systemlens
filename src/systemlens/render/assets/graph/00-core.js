@@ -127,6 +127,21 @@
       nodeKindLabel(node)
     );
     const nodeDisplayName = node => node.display_name || node.name;
+    const appendGraphLabelName = (element, value) => {
+      const text = String(value ?? "");
+      let start = 0;
+      for (let index = 1; index < text.length; index += 1) {
+        const previous = text[index - 1];
+        const current = text[index];
+        const afterSeparator = "._-/".includes(previous);
+        const camelCaseBoundary = /[a-z0-9]/.test(previous) && /[A-Z]/.test(current);
+        if (!afterSeparator && !camelCaseBoundary) continue;
+        element.append(document.createTextNode(text.slice(start, index)));
+        element.append(document.createElement("wbr"));
+        start = index;
+      }
+      element.append(document.createTextNode(text.slice(start)));
+    };
     graphData.nodes
       .slice()
       .sort((left, right) => nodeDisplayName(left).localeCompare(nodeDisplayName(right)))

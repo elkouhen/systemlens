@@ -23,6 +23,29 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.slow
+def test_resource_graph_labels_break_at_name_boundaries() -> None:
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        page.set_content(document, wait_until="load")
+        topic = page.locator(
+            '.graph-node-card-label.is-topic .graph-node-card-name[title="supermarket.order.placed"]'
+        )
+        topic.wait_for(state="visible")
+        assert topic.locator("wbr").count() == 2
+        assert topic.evaluate("element => element.parentElement.offsetWidth") == 110
+        entity = page.locator(
+            '.graph-node-card-label.is-jpa-entity .graph-node-card-name[title="ProductEntity"]'
+        )
+        assert entity.locator("wbr").count() == 1
+        browser.close()
+
+
+@pytest.mark.slow
 def test_call_flow_lists_data_access_on_sibling_path() -> None:
     entry = MessageEndpoint(
         id="orders-entry", role="serve", system="rest", topic="POST /orders",

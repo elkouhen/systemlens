@@ -1270,7 +1270,7 @@
           icon.className = `graph-node-card-icon ${isTopic ? "is-topic" : isDatabase || isJpaEntity ? "is-database" : "is-service"}`;
           const name = document.createElement("span");
           name.className = "graph-node-card-name";
-          name.textContent = nodeDisplayName(node);
+          appendGraphLabelName(name, nodeDisplayName(node));
           name.title = nodeDisplayName(node);
           const kind = document.createElement("span");
           kind.className = "graph-node-card-kind";
