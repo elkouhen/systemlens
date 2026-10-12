@@ -1459,7 +1459,14 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert toolbar_before_selection is not None
         assert page.locator(".code-flow-item.is-selected").count() == 1
         page.locator("#graph-call-tree").wait_for(state="visible")
-        assert page.locator("#graph-call-tree .graph-call-tree-node").count() == 2
+        call_nodes = page.locator("#graph-call-tree .graph-call-tree-node")
+        assert call_nodes.count() == 2
+        source_box = call_nodes.nth(0).bounding_box()
+        target_box = call_nodes.nth(1).bounding_box()
+        edge_label_box = page.locator("#graph-call-tree .graph-call-tree-edge-label").bounding_box()
+        assert source_box and target_box and edge_label_box
+        gap = target_box["x"] - source_box["x"] - source_box["width"]
+        assert gap >= edge_label_box["width"]
         trigger_badge = page.locator("#graph-call-tree .graph-node-trigger-badge")
         assert trigger_badge.count() == 1
         assert "Kafka" in trigger_badge.inner_text()

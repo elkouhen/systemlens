@@ -126,6 +126,12 @@ appear in several branches.
 The tree mode uses a fixed left-to-right orientation and an incremental depth
 control from 1 to 8 levels. The default is depth 1, showing only the root
 occurrence. The `−` and `+` controls change one level at a time.
+The renderer in `src/systemlens/render/assets/graph/55-code-flows.js` sets the
+horizontal distance between levels from the longest visible arc label. It
+reserves an estimated label width, capped at 320 pixels, plus the 150-pixel
+card width and 32 pixels of clearance, with a 280-pixel minimum distance.
+The full tree scales to the available viewport, so deep trees can appear smaller
+and remain zoomable.
 When a branch reaches the configured depth, expansion stops. When a branch
 reaches an input endpoint already displayed on the current branch, the
 occurrence is rendered as a cycle endpoint and is not expanded further. A

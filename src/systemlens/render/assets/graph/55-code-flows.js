@@ -621,11 +621,24 @@
       allOccurrences.forEach(occurrence => {
         occurrenceCounts.set(occurrence.name, (occurrenceCounts.get(occurrence.name) || 0) + 1);
       });
+      const edgeDisplayLabel = edge => {
+        const protocol = edge.kind === "kafka" ? "Kafka" : edge.kind === "rest" ? "HTTP" : edge.kind || "Appel";
+        const prefix = edge.order ? `#${edge.order} · ` : "";
+        const label = edge.label || protocol;
+        const text = `${prefix}${label} · ${protocol}`;
+        return text.length > 58 ? `${text.slice(0, 55)}…` : text;
+      };
       const direction = "lr";
-      const gapX = 190;
       const gapY = 105;
       const cardWidth = 150;
       const cardHeight = 82;
+      const maxEdgeLabelLength = allOccurrences.reduce((maximum, occurrence) => (
+        occurrence.children.reduce((current, child) => (
+          Math.max(current, edgeDisplayLabel(child.edge).length)
+        ), maximum)
+      ), 0);
+      const estimatedEdgeLabelWidth = Math.min(320, maxEdgeLabelLength * 6);
+      const gapX = Math.max(280, cardWidth + estimatedEdgeLabelWidth + 32);
       const logicalWidth = direction === "lr"
         ? (Math.max(...allOccurrences.map(item => item.x)) + 1) * gapX
         : Math.max(1, leafIndex) * gapX;
@@ -678,13 +691,6 @@
       marker.append(arrow);
       defs.append(marker);
       svg.append(defs);
-      const edgeDisplayLabel = edge => {
-        const protocol = edge.kind === "kafka" ? "Kafka" : edge.kind === "rest" ? "HTTP" : edge.kind || "Appel";
-        const prefix = edge.order ? `#${edge.order} · ` : "";
-        const label = edge.label || protocol;
-        const text = `${prefix}${label} · ${protocol}`;
-        return text.length > 58 ? `${text.slice(0, 55)}…` : text;
-      };
       const portsByEndpointId = new Map(
         graphData.nodes.flatMap(node => (node.ports || []).map(port => [port.endpoint_id, port]))
       );
