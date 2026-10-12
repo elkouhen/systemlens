@@ -912,13 +912,27 @@
         supportedSubmitMethods: [],
       });
     }
-    function openAsyncApiContract(contract) {
+    async function openAsyncApiContract(contract) {
       openInspector(`AsyncAPI · ${contract.path}`);
+      const loading = document.createElement("p");
+      loading.className = "dto-summary";
+      loading.textContent = "Chargement du contrat AsyncAPI…";
+      inspectorBody.append(loading);
+      try {
+        await window.systemlensLoadAsyncApi?.();
+      } catch (_) {
+        // The persisted contract remains readable if the optional viewer fails.
+      }
+      if (!loading.isConnected) return;
+      loading.remove();
       if (!contract.spec || !customElements.get("asyncapi-component")) {
         const message = document.createElement("p");
         message.className = "dto-summary";
         message.textContent = "Le composant AsyncAPI officiel n'est pas disponible dans cet export.";
         inspectorBody.append(message);
+        const rawSpec = document.createElement("pre");
+        rawSpec.textContent = JSON.stringify(contract.spec || {}, null, 2);
+        inspectorBody.append(rawSpec);
         return;
       }
       inspectorBody.classList.add("asyncapi-inspector");

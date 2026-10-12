@@ -11,6 +11,12 @@ New browser sessions open in the Obsidian dark theme. The theme control retains
 the user's explicit light or dark preference where local storage is available.
 The palette and shared component treatment follow [UX/UI rules](../UX-UI.md).
 
+The AsyncAPI inspector loads its embedded, compressed viewer when a contract
+is opened and displays a loading message while preparing it. Subsequent
+inspections reuse the viewer. If browser decompression or viewer initialization
+fails, the inspector displays the persisted contract as JSON. Closing or
+switching the inspector cancels the pending display update.
+
 
 Microservice cards in the Explorer view remain compact rectangles. A card with
 persisted internal code flows displays their count, so services with discovered

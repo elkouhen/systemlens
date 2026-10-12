@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import gzip
 from base64 import b64encode
 from collections import Counter
 from dataclasses import dataclass, field
@@ -66,10 +67,14 @@ _ASYNCAPI_WEB_COMPONENT_JS = (
 _ASYNCAPI_WEB_COMPONENT_CSS = (
     _ASSET_ROOT / "vendor" / "asyncapi-react-component-3.1.8.min.css"
 ).read_text(encoding="utf-8")
-_ASYNCAPI_WEB_COMPONENT_CSS_IMPORT_PATH = (
-    "data:text/css;base64,"
-    + b64encode(_ASYNCAPI_WEB_COMPONENT_CSS.encode("utf-8")).decode("ascii")
-)
+_ASYNCAPI_COMPRESSED_ASSETS = b64encode(gzip.compress(
+    json.dumps({"js": _ASYNCAPI_WEB_COMPONENT_JS, "css": _ASYNCAPI_WEB_COMPONENT_CSS},
+               separators=(",", ":")).encode("utf-8"),
+    mtime=0,
+)).decode("ascii")
+_ASYNCAPI_LOADER_JS = (
+    _ASSET_ROOT / "asyncapi_loader.js"
+).read_text(encoding="utf-8")
 
 
 @dataclass(frozen=True)
@@ -365,9 +370,9 @@ def render_graph_html(
     asyncapi_assets = ""
     if asyncapi_contracts:
         asyncapi_assets = (
-            "<script>window.systemlensAsyncApiCssImportPath="
-            f"{json.dumps(_ASYNCAPI_WEB_COMPONENT_CSS_IMPORT_PATH)};</script>"
-            f"<script>{_ASYNCAPI_WEB_COMPONENT_JS}</script>"
+            '<script id="asyncapi-assets" type="application/octet-stream">'
+            f"{_ASYNCAPI_COMPRESSED_ASSETS}</script>"
+            f"<script>{_ASYNCAPI_LOADER_JS}</script>"
         )
     return (
         _GRAPH_HTML_TEMPLATE.replace("__GRAPH_CSS__", _GRAPH_CSS)

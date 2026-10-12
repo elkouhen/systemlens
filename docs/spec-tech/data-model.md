@@ -581,7 +581,11 @@ migrates older snapshots with `unknown`. Schema version 29 adds the
 documents owned by a module and rendered from the persisted snapshot. When an
 export contains at least one such document, it embeds the Apache-2.0 licensed
 AsyncAPI web component (version 3.1.8) and its distributed stylesheet; exports
-without AsyncAPI facts do not carry this payload. Schema
+without AsyncAPI facts do not carry this payload. The HTML renderer stores the
+viewer assets as deterministic gzip data encoded in base64. The browser loads
+them once, on the first contract inspection, using `DecompressionStream`.
+This reduces file size and defers viewer execution, but does not bound graph
+memory usage. The persisted graph JSON remains unchanged. Schema
 version 28 adds the `integration_methods` table for AST method evidence
 and input/output endpoint identifiers. Schema version 27 added the
 `code_flows` table and its module/path indexes. The

@@ -1,4 +1,6 @@
 import json
+import gzip
+from base64 import b64decode
 import re
 from dataclasses import replace
 from pathlib import Path
@@ -1400,9 +1402,14 @@ def test_graph_html_embeds_the_official_asyncapi_component_only_when_needed() ->
         }],
     )
 
-    assert "asyncapi-web-component-3.1.8.js" not in without_contract
-    assert '"asyncapi-component"' in with_contract
-    assert "data:text/css;base64," in with_contract
+    assert 'id="asyncapi-assets"' not in without_contract
+    payload = re.search(r'<script id="asyncapi-assets"[^>]*>(.*?)</script>', with_contract)
+    assert payload is not None
+    assets = json.loads(gzip.decompress(b64decode(payload.group(1))))
+    vendor = Path(__file__).parents[1] / "src/systemlens/render/assets/vendor"
+    assert assets["js"] == (vendor / "asyncapi-web-component-3.1.8.js").read_text()
+    assert assets["css"] == (vendor / "asyncapi-react-component-3.1.8.min.css").read_text()
+    assert len(with_contract) - len(without_contract) < 1_000_000
 
 def test_graph_html_deduplicates_repository_and_module_relative_openapi_paths() -> None:
     module = DiscoveredModule(

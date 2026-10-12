@@ -23,6 +23,50 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.slow
+def test_asyncapi_viewer_loads_lazily_and_preserves_inspector_navigation(tmp_path: Path) -> None:
+    contract = {
+        "module": "orders", "path": "orders.asyncapi.yaml",
+        "spec": {"asyncapi": "3.0.0", "info": {"title": "Orders", "version": "1.0.0"},
+                 "channels": {}},
+    }
+    document = render_graph_html({"orders": []}, [], asyncapi_contracts=[contract])
+    document = document.replace(
+        "async function openAsyncApiContract(contract)",
+        "window.openAsyncApiContract = openAsyncApiContract; "
+        "window.openInspector = openInspector; async function openAsyncApiContract(contract)",
+    )
+    target = tmp_path / "asyncapi.html"
+    target.write_text(document)
+    with sync_playwright() as playwright:
+        browser = _launch_visual_browser(playwright)
+        page = browser.new_page()
+        errors: list[str] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(target.as_uri(), wait_until="load")
+        assert not page.evaluate('!!customElements.get("asyncapi-component")')
+        # Concurrent requests share initialization; navigating away cancels display.
+        page.evaluate("""async contract => {
+            const first = openAsyncApiContract(contract);
+            const second = openAsyncApiContract(contract);
+            openInspector('Another resource');
+            await Promise.all([first, second]);
+        }""", contract)
+        assert page.locator("asyncapi-component").count() == 0
+        assert page.evaluate('!!customElements.get("asyncapi-component")')
+        assert page.locator("#asyncapi-assets").count() == 0
+        page.evaluate("contract => openAsyncApiContract(contract)", contract)
+        assert page.locator("asyncapi-component").count() == 1
+        page.wait_for_function("document.querySelector('asyncapi-component').shadowRoot?.textContent.length > 0")
+        assert not errors
+        page.reload(wait_until="load")
+        page.evaluate("window.DecompressionStream = undefined")
+        page.evaluate("contract => openAsyncApiContract(contract)", contract)
+        assert json.loads(page.locator("#inspector-body pre").inner_text()) == contract["spec"]
+        assert not errors
+        browser.close()
+
+
+@pytest.mark.slow
 def test_resource_graph_labels_break_at_name_boundaries() -> None:
     document = _current_simple_dataset_document()
     with sync_playwright() as playwright:
