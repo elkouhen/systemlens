@@ -21,18 +21,15 @@ from systemlens.domain.code_flows import (
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
-from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod, module_identity
+from systemlens.domain.module_inventory import DiscoveredModule, JpaMethod, MongoMethod, module_identity
+from systemlens.domain.mongo_operations import mongo_action, mongo_facets
 from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 from systemlens.indexing.java_symbols import JavaSymbols
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v26-interface-signatures-and-receivers"
+CODE_FLOW_SIGNATURE = "code-flow-v31-trigger-aware-data-branches"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
-_MONGO_WRITE_OPERATIONS = frozenset({
-    "bulkOps", "findAndModify", "findAndReplace", "insert", "remove", "save",
-    "updateFirst", "updateMulti", "upsert",
-})
 
 
 CodeQLEdge = tuple[IntegrationMethod, CodeQLCall, bool]
@@ -168,6 +165,9 @@ def _deduplicate_code_flows(
 
     def flow_identity(flow: CodeFlow) -> tuple[object, ...]:
         endpoint_steps = [step for step in flow.steps if step.endpoint_id]
+        data_step = (
+            flow.steps[-1] if flow.steps and flow.steps[-1].kind in {"data_read", "data_write"} else None
+        )
         input_endpoint = (
             endpoint_by_id.get(endpoint_steps[0].endpoint_id or "")
             if endpoint_steps
@@ -190,6 +190,8 @@ def _deduplicate_code_flows(
                 endpoint_steps[-1].name if endpoint_steps else None
             ),
             output_endpoint.message_type if output_endpoint else None,
+            (data_step.path, data_step.start_line, data_step.operation)
+            if data_step is not None else None,
             flow.status,
         )
 
@@ -244,8 +246,19 @@ def _endpoint_step(endpoint: MessageEndpoint, order: int) -> CodeFlowStep:
     )
 
 
-def _mongo_step(method: MongoMethod, path: str, order: int) -> CodeFlowStep:
-    operation = "write" if method.operation in _MONGO_WRITE_OPERATIONS else "read"
+def _data_access_branch(trigger_kind: str, *, write: bool) -> str | None:
+    """Classify only async consumer writes and reads on synchronous HTTP paths."""
+    if write and trigger_kind == "message_entry":
+        return "async"
+    if not write and trigger_kind == "http_entry":
+        return "sync"
+    return None
+
+
+def _mongo_step(
+    method: MongoMethod, path: str, order: int, trigger_kind: str,
+) -> CodeFlowStep:
+    operation = "write" if "write" in mongo_facets(method.operation) else "read"
     return CodeFlowStep(
         order=order,
         kind=f"data_{operation}",
@@ -254,6 +267,23 @@ def _mongo_step(method: MongoMethod, path: str, order: int) -> CodeFlowStep:
         start_line=method.line,
         end_line=method.evidence.end_line if method.evidence else method.line,
         operation=method.operation,
+        action=mongo_action(method.operation),
+        branch=_data_access_branch(trigger_kind, write=operation == "write"),
+    )
+
+
+def _jpa_step(method: JpaMethod, path: str, order: int, module: str, trigger_kind: str) -> CodeFlowStep:
+    read = method.operation in {"findById", "findAll", "existsById", "count"}
+    action = "read" if read else (
+        "delete" if method.operation.startswith("delete") else "create_or_update"
+    )
+    return CodeFlowStep(
+        order=order, kind="data_read" if read else "data_write",
+        name=method.entity.rsplit(".", 1)[-1], path=path,
+        start_line=method.line, end_line=method.line,
+        operation=method.operation, action=action,
+        resource=f"jpa:{module}:{method.entity}",
+        branch=_data_access_branch(trigger_kind, write=not read),
     )
 
 
@@ -305,12 +335,16 @@ def materialize_code_flows(
             endpoints_by_path[endpoint.path].append(endpoint)
 
     mongo_by_path_and_method: dict[tuple[str, str, str], list[MongoMethod]] = defaultdict(list)
+    jpa_by_path_and_method: dict[tuple[str, str, str], list[JpaMethod]] = defaultdict(list)
     for module in modules:
         identity = module_identity(module)
         for method in module.mongo_methods:
             if method.owner_method:
                 path = _repository_path(repo_root, module, method.path)
                 mongo_by_path_and_method[(identity, path, method.owner_method)].append(method)
+        for jpa_method in module.jpa_methods:
+            path = _repository_path(repo_root, module, jpa_method.path)
+            jpa_by_path_and_method[(identity, path, jpa_method.owner_method)].append(jpa_method)
 
     flows: list[CodeFlow] = []
 
@@ -364,7 +398,7 @@ def materialize_code_flows(
             scheduled_trigger = _scheduled_trigger_step(method_node, source, path)
             for trigger in triggers:
                 assert trigger.module is not None
-                effects: list[tuple[int, str, MessageEndpoint | MongoMethod]] = [
+                effects: list[tuple[int, str, MessageEndpoint | MongoMethod | JpaMethod]] = [
                     (endpoint.start_line, endpoint.id, endpoint)
                     for endpoint in endpoint_effects
                     if endpoint.id != trigger.id
@@ -374,6 +408,12 @@ def materialize_code_flows(
                     for mongo in mongo_by_path_and_method.get(
                         (trigger.module, path, method_name), ()
                     )
+                    if mongo_facets(mongo.operation) and start_line <= mongo.line <= end_line
+                )
+                effects.extend(
+                    (jpa.line, f"jpa:{jpa.operation}:{jpa.entity}", jpa)
+                    for jpa in jpa_by_path_and_method.get((trigger.module, path, method_name), ())
+                    if start_line <= jpa.line <= end_line
                 )
                 if not effects:
                     continue
@@ -383,7 +423,11 @@ def materialize_code_flows(
                     steps.append(
                         _endpoint_step(effect, order)
                         if isinstance(effect, MessageEndpoint)
-                        else _mongo_step(effect, path, order)
+                        else _mongo_step(
+                            effect, path, order, _endpoint_step(trigger, 1).kind,
+                        )
+                        if isinstance(effect, MongoMethod)
+                        else _jpa_step(effect, path, order, trigger.module, _endpoint_step(trigger, 1).kind)
                     )
                 qualified_method = (
                     f"{trigger.qualified_name}.{method_name}"
@@ -779,6 +823,7 @@ def materialize_codeql_code_flows(
     codeql_edge_confidence: str = "possible",
     persisted_edges: Sequence[CodeQLCallGraphEdge] | None = None,
     persisted_methods: Sequence[PersistedCodeQLMethod] = (),
+    modules: Sequence[DiscoveredModule] = (),
 ) -> list[CodeFlow]:
     """Reconstruct endpoint flows from the internal CodeQL call graph.
 
@@ -796,9 +841,14 @@ def materialize_codeql_code_flows(
     def record_flow(flow: CodeFlow) -> None:
         """Keep one representative while counting distinct route alternatives."""
         endpoint_steps = [step for step in flow.steps if step.endpoint_id]
+        data_step = (
+            flow.steps[-1] if flow.steps and flow.steps[-1].kind in {"data_read", "data_write"} else None
+        )
         key = (
             (endpoint_steps[0].endpoint_id or flow.id) if endpoint_steps else flow.id,
-            (endpoint_steps[-1].endpoint_id or "") if endpoint_steps else "",
+            (endpoint_steps[-1].endpoint_id or "") if len(endpoint_steps) > 1 else
+            f"data:{data_step.path}:{data_step.start_line}:{data_step.operation}"
+            if data_step is not None else "",
             flow.status,
         )
         route_signature = tuple(
@@ -916,6 +966,47 @@ def materialize_codeql_code_flows(
         f"→ CodeQL : graphe d'appels interne construit · {joined_calls} "
         f"arête(s) rattachée(s) à {len(adjacency)} méthode(s) appelante(s)."
     )
+
+    # A Mongo fact belongs to one method only when its source path, owner name,
+    # line and module select a unique persisted method. No source is reopened
+    # when rebuilding flows from an index.
+    graph_methods = {method.id: method for method in methods}
+    graph_methods.update({
+        method.id: IntegrationMethod(
+            id=method.id, module=method.module,
+            qualified_method=method.qualified_method, path=method.path,
+            start_line=method.start_line, end_line=method.end_line,
+            input_endpoint_ids=(), output_endpoint_ids=(),
+        )
+        for method in persisted_methods if method.id not in graph_methods
+    })
+    methods_by_source: dict[tuple[str, str, str], list[IntegrationMethod]] = defaultdict(list)
+    for method in graph_methods.values():
+        parts = method.path.replace("\\", "/").removeprefix("./").split("/")
+        method_name = method.qualified_method.rsplit(".", 1)[-1]
+        for index in range(len(parts)):
+            methods_by_source[(method.module, "/".join(parts[index:]), method_name)].append(method)
+    operations_by_method: dict[str, list[tuple[MongoMethod | JpaMethod, str]]] = defaultdict(list)
+    for discovered in modules:
+        for operation in tuple[MongoMethod | JpaMethod, ...](
+            (*discovered.mongo_methods, *discovered.jpa_methods)
+        ):
+            if not operation.owner_method or (
+                isinstance(operation, MongoMethod) and not mongo_facets(operation.operation)
+            ):
+                continue
+            relative = operation.path.replace("\\", "/").removeprefix("./")
+            candidates = [
+                method for method in methods_by_source.get(
+                    (module_identity(discovered), relative, operation.owner_method), ()
+                )
+                if method.start_line <= operation.line <= method.end_line
+            ]
+            if len(candidates) == 1:
+                operation_owner = candidates[0]
+                operations_by_method[operation_owner.id].append((operation, operation_owner.path))
+    for operations in operations_by_method.values():
+        operations.sort(key=lambda item: (item[0].line, item[0].operation, item[1]))
 
     def report_reverse_chain(
         output_method: IntegrationMethod,
@@ -1160,15 +1251,55 @@ def materialize_codeql_code_flows(
 
             while queue:
                 current, route = queue.popleft()
+                for operation, operation_path in operations_by_method.get(current.id, ()):
+                    steps = [_endpoint_step(trigger, 1)]
+                    for order, (hop, edge, _inferred) in enumerate(route, start=2):
+                        steps.append(CodeFlowStep(
+                            order=order, kind="method_call", name=hop.qualified_method,
+                            path=edge.caller_path, start_line=edge.call_line,
+                            end_line=edge.call_line,
+                        ))
+                    steps.append(
+                        _mongo_step(
+                            operation, operation_path, len(steps) + 1, steps[0].kind,
+                        )
+                        if isinstance(operation, MongoMethod) else
+                        _jpa_step(operation, operation_path, len(steps) + 1, entry.module, steps[0].kind)
+                    )
+                    possible = any(
+                        edge.dispatch_confidence == "possible" or inferred
+                        for _hop, edge, inferred in route
+                    )
+                    record_flow(CodeFlow(
+                        id=compute_code_flow_id(
+                            entry.module, entry.path, entry.qualified_method,
+                            steps[0].kind,
+                            f"{trigger.id}|{operation_path}|{operation.line}|"
+                            f"{operation.operation}",
+                        ),
+                        module=entry.module, method=entry.qualified_method,
+                        path=entry.path, start_line=entry.start_line,
+                        end_line=entry.end_line, status="potential",
+                        confidence="low" if possible else "medium",
+                        reason=(
+                            "A source-backed possible call path reaches this data API attempt."
+                            if possible else
+                            "A source-backed call path reaches this data API attempt."
+                        ),
+                        steps=tuple(steps),
+                    ))
                 if len(route) >= max_hops:
                     remember_terminal(route, "limite de profondeur")
                     continue
-                eligible_targets = [
+                eligible_targets = sorted((
                     (target, call, signature_join)
                     for target, call, signature_join in adjacency.get(current.id, [])
                     if target.id in component
                     and dispatch_matches_entry(entry, current, target)
-                ]
+                ), key=lambda item: (
+                    item[1].caller_path, item[1].call_line, item[0].id,
+                    item[1].dispatch_confidence, item[2],
+                ))
                 if not eligible_targets and (route or not entry.output_endpoint_ids):
                     remember_terminal(route, "aucune suite d'appel")
                 for target, call, signature_join in eligible_targets:

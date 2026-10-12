@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from typing import Iterator, cast
 
@@ -31,6 +32,42 @@ class _CallGraphIndex:
     default_root_flow_ids: tuple[str, ...]
     triggers: dict[str, list[dict[str, object]]]
     flow_transitions: dict[str, FlowTransitions]
+
+
+def _reachable_flow_paths(
+    index: _CallGraphIndex, root_flow_id: str
+) -> dict[str, tuple[str, ...]]:
+    """Follow topology and flows sharing the exact indexed input endpoint.
+
+    A handler can have separate paths to an external output and a data access.
+    Those paths share one trigger but do not become a single linear execution.
+    """
+    if root_flow_id not in index.flow_by_id:
+        return {}
+    paths: dict[str, tuple[str, ...]] = {root_flow_id: ()}
+    pending = deque([root_flow_id])
+    while pending:
+        flow_id = pending.popleft()
+        flow = index.flow_by_id[flow_id]
+        path = paths[flow_id]
+        trigger_id = flow.steps[0].endpoint_id if flow.steps else None
+        siblings = index.trigger_flow_ids_by_endpoint.get(trigger_id or "", ())
+        candidates = [(sibling, path) for sibling in siblings]
+        for _output_id, transitions in index.flow_transitions.get(flow_id, ()):
+            for edge, targets in transitions:
+                if edge.to_endpoint is None:
+                    continue
+                edge_path = path + (edge.from_endpoint.id, edge.to_endpoint.id)
+                candidates.extend((target, edge_path) for target in targets)
+        for target, candidate in candidates:
+            if target not in index.flow_by_id:
+                continue
+            previous = paths.get(target)
+            if previous is not None and len(previous) <= len(candidate):
+                continue
+            paths[target] = candidate
+            pending.append(target)
+    return paths
 
 
 def _index_call_graph_inputs(

@@ -1113,3 +1113,27 @@ def test_generic_interface_keeps_known_parameter_constraints(tmp_path: Path):
     )
     assert len(flows) == 1
     assert flows[0].steps[-1].path == "app/Adapter.java"
+
+
+def test_inherited_final_generic_method_has_source_backed_fallback(tmp_path: Path):
+    sources = {
+        "shared/Base.java": "package shared; public abstract class Base<T> { "
+            "protected final void consumeMessage(T value, String channel) { process(value); } "
+            "protected abstract void process(T value); }",
+        "app/Listener.java": "package app; import shared.Base; "
+            "public class Listener extends Base<String> { "
+            "public void entry(String value) { consumeMessage(value, \"orders\"); } "
+            "protected void process(String value) { output(); } void output() {} }",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    symbols = JavaSymbols(tmp_path, methods, list(sources))
+    assert any(
+        call.caller == "app.Listener.entry"
+        and call.callee == "shared.Base.consumeMessage"
+        for call in symbols.fallback_calls(set())
+    )
+    flows = materialize_codeql_code_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
+    )
+    assert any(flow.steps[0].name.startswith("GET /") and
+               flow.steps[-1].path == "app/Listener.java" for flow in flows)

@@ -353,6 +353,19 @@ class JavaSymbols:
                       )
                       or (candidate.owner, candidate.module) in receiver_bases
                       or candidate.method.id in self.inherited_dispatch.get((receiver_type, receiver_module), set())}
+        for contract in contracts:
+            modifiers = next(
+                (child for child in contract.node.children if child.type == "modifiers"), None
+            )
+            if (
+                contract.concrete and modifiers is not None
+                and re.search(r"\bfinal\b", parser.node_text(
+                    self.units[contract.method.path].source, modifiers
+                ))
+            ):
+                # A final inherited body remains a unique target even when a
+                # generic parameter cannot be resolved to a concrete type.
+                candidates[contract.method.id] = contract
         receiver_modules = {
             self.path_modules.get(candidate_path)
             for candidate_path, _ in self._type_candidates(receiver_type, path)

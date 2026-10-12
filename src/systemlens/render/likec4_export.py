@@ -11,6 +11,7 @@ from typing import Literal, TypedDict
 from systemlens.domain.graph import GraphEdge, external_microservice_names
 from systemlens.domain.models import Finding, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency
+from systemlens.domain.mongo_operations import mongo_facets
 from systemlens.render._graph_view_helpers import _mongodb_collection_nodes, _rest_resources_served
 
 
@@ -43,12 +44,6 @@ def _likec4_identifier_map(prefix: str, names: list[str]) -> dict[str, str]:
 
 def _likec4_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ")
-
-
-_MONGO_WRITE_OPERATIONS = frozenset({
-    "bulkOps", "findAndModify", "findAndReplace", "insert", "remove", "save",
-    "updateFirst", "updateMulti", "upsert",
-})
 
 
 def _complexity_levels(relation_counts: dict[str, int]) -> dict[str, str]:
@@ -264,9 +259,10 @@ def render_graph_likec4(
             continue
         module = module_details.get(service)
         operations = {
-            "writes_data" if method.operation in _MONGO_WRITE_OPERATIONS else "reads_data"
+            "writes_data" if facet == "write" else "reads_data"
             for method in (module.mongo_methods if module else ())
             if method.collection == collection
+            for facet in mongo_facets(method.operation)
         }
         if not operations:
             operations = {"uses_data"}

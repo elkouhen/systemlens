@@ -23,6 +23,123 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.slow
+def test_call_flow_lists_data_access_on_sibling_path() -> None:
+    entry = MessageEndpoint(
+        id="orders-entry", role="serve", system="rest", topic="POST /orders",
+        topic_dynamic=False, source="code", framework="spring-mvc",
+        path="Orders.java", start_line=1, end_line=1, snippet="",
+    )
+    publish = CodeFlow(
+        "a-publish", "orders", "Orders.place", "Orders.java", 1, 3,
+        "potential", "medium", "test", (
+            CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, entry.id),
+            CodeFlowStep(2, "message_publish", "orders.created", "Orders.java", 2, 2),
+        ),
+    )
+    read = CodeFlow(
+        "b-read", "orders", "Orders.place", "Orders.java", 1, 3,
+        "potential", "medium", "test", (
+            CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, entry.id),
+            CodeFlowStep(2, "data_read", "ProductEntity", "Orders.java", 3, 3,
+                         operation="findById", action="read", resource="jpa:orders:ProductEntity"),
+        ),
+    )
+    write = CodeFlow(
+        "c-write", "orders", "Orders.place", "Orders.java", 1, 4,
+        "potential", "medium", "test", (
+            CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, entry.id),
+            CodeFlowStep(2, "data_write", "ProductEntity", "Orders.java", 4, 4,
+                         operation="save", action="create_or_update",
+                         resource="jpa:orders:ProductEntity"),
+        ),
+    )
+    document = render_graph_html({"orders": [entry]}, [], code_flows=[publish, read, write])
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        context = browser.new_context(viewport={"width": 1200, "height": 800})
+        page = context.new_page()
+        page.set_content(document, wait_until="load")
+        page.locator("#architecture-mode-tab").click()
+        page.locator(".graph-node-card-label").filter(has_text="orders").first.hover()
+        service_tooltip = page.locator("#graph-flow-tooltips .graph-entity-tooltip")
+        assert "ProductEntity" not in service_tooltip.inner_text()
+        page.locator("#flows-tab").click()
+        assert page.locator("#code-flows .code-flow-item").count() == 1
+        page.locator(".code-flow-item").first.click()
+        assert page.locator("#flow-data-access-lane").count() == 0
+        assert page.locator("#code-flow-data-summary").count() == 0
+        assert page.locator("#flow-diagnostics").count() == 0
+        assert page.locator(".code-flow-item.is-selected").count() == 1
+        page.locator(".graph-call-tree-node").first.hover()
+        tooltip = page.locator("#graph-flow-tooltips .graph-call-tree-entity-tooltip")
+        assert "Lecture · ProductEntity" in tooltip.inner_text()
+        assert "Création ou modification · ProductEntity" in tooltip.inner_text()
+        assert "Orders.java:3" in tooltip.inner_text()
+        assert page.locator("#code-flows .code-flow-item").count() == 1
+        assert page.locator("#code-flow-show-data-paths").count() == 0
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_flow_view_names_persisted_delete_action() -> None:
+    entry = MessageEndpoint(
+        id="orders-delete", role="serve", system="rest", topic="DELETE /orders",
+        topic_dynamic=False, source="code", framework="spring-mvc",
+        path="Orders.java", start_line=1, end_line=1, snippet="",
+    )
+    flow = CodeFlow(
+        id="mongo-delete", module="orders", method="Orders.delete",
+        path="Orders.java", start_line=1, end_line=3,
+        status="potential", confidence="medium", reason="source invocation",
+        steps=(
+            CodeFlowStep(1, "http_entry", "DELETE /orders", "Orders.java", 1, 1, entry.id),
+            CodeFlowStep(2, "data_write", "orders", "Orders.java", 2, 2,
+                         operation="deleteById", action="delete"),
+        ),
+    )
+    output_flow = CodeFlow(
+        id="orders-output", module="orders", method="Orders.publish",
+        path="Orders.java", start_line=4, end_line=5,
+        status="potential", confidence="medium", reason="source invocation",
+        steps=(
+            CodeFlowStep(1, "http_entry", "DELETE /orders", "Orders.java", 1, 1, entry.id),
+            CodeFlowStep(2, "message_publish", "orders.created", "Orders.java", 5, 5),
+        ),
+    )
+    document = render_graph_html({"orders": [entry]}, [], code_flows=[output_flow, flow])
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1000, "height": 700})
+        page = context.new_page()
+        page.set_content(document, wait_until="load")
+        page.locator("#architecture-mode-tab").click()
+        page.locator(".graph-node-card-label").filter(has_text="orders").first.hover()
+        assert "Suppression · orders" not in page.locator(
+            "#graph-flow-tooltips .graph-entity-tooltip"
+        ).inner_text()
+        page.locator("#flows-tab").click()
+        assert page.locator("#code-flows .code-flow-item").count() == 1
+        assert page.locator("#code-flow-data-summary").count() == 0
+        assert "Suppression de données" not in page.locator(
+            "#code-flows .code-flow-item"
+        ).first.inner_text()
+        page.locator("#code-flows .code-flow-item").first.click()
+        page.locator(".graph-call-tree-node").first.hover()
+        assert "Suppression · orders" in page.locator(
+            "#graph-flow-tooltips .graph-call-tree-entity-tooltip"
+        ).inner_text()
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
 def test_service_inspector_shows_persisted_jpa_entity() -> None:
     module = DiscoveredModule(
         name="payment", path=Path("/project/payment"), build_system="maven",

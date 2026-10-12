@@ -23,6 +23,7 @@ from systemlens.domain.module_inventory import (
     module_identity,
 )
 from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
+from systemlens.domain.mongo_operations import mongo_facets
 from systemlens.render.namespaces import project_namespace, project_namespace_path
 from systemlens.render.software_layers import software_layer
 from systemlens.render._graph_view_helpers import (
@@ -982,10 +983,7 @@ def build_graph_view_model(
     for module in all_modules:
         service = module_identity(module)
         for method in module.mongo_methods:
-            if method.collection and method.operation in {
-                "bulkOps", "findAndModify", "findAndReplace", "insert", "remove",
-                "save", "updateFirst", "updateMulti", "upsert",
-            }:
+            if method.collection and "write" in mongo_facets(method.operation):
                 add_resource_owner(("mongodb_collection", method.collection), service)
     for edge in edges:
         if edge.kind == "kafka" and edge.from_endpoint.topic:

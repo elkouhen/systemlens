@@ -1027,18 +1027,24 @@ def flows_calculate(
             with store.transaction():
                 flow_count = calculate_persisted_flows(store, module=module)
             fact_count = len(store.all_graph_facts())
+            data_path_count = sum(
+                bool(flow.steps) and flow.steps[-1].kind in {"data_read", "data_write"}
+                for flow in store.all_code_flows()
+            )
     except (ConfigError, StoreError, RuntimeError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     result = {
-        "flows": flow_count,
+        "flows": flow_count - data_path_count,
+        "data_access_annotations": data_path_count,
         "facts_loaded": fact_count,
         "indexed_snapshot_reused": True,
     }
     typer.echo(
         json.dumps(result)
         if _option_json(json_output)
-        else f"{flow_count} flux de code potentiel(s) recalculé(s)."
+        else (f"{flow_count - data_path_count} flux d'appel recalculé(s), "
+              f"{data_path_count} annotation(s) d'accès aux données collectée(s).")
     )
 
 

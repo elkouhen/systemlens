@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 from base64 import b64encode
-from collections import Counter, deque
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast, Mapping
@@ -26,6 +26,7 @@ from systemlens.render.call_graph import (
     _all_export_flows,
     _index_call_graph_inputs,
     _networkx_call_graph,
+    _reachable_flow_paths,
 )
 from systemlens.render._graph_view_helpers import _vscode_file_uri
 
@@ -139,13 +140,20 @@ def render_graph_html(
         codeql_call_edges=codeql_call_edges,
     )
     export_flows = list(code_flows or [])
+    call_flows = [
+        flow for flow in export_flows
+        if not flow.steps or flow.steps[-1].kind not in {"data_read", "data_write"}
+    ]
     flow_edges = [
         *edges,
         *graph_edges_from_facts(graph_facts or [], endpoints_by_service),
     ]
     call_graph_index = _index_call_graph_inputs(export_flows, endpoints_by_service, flow_edges)
+    call_graph_index_for_display = _index_call_graph_inputs(
+        call_flows, endpoints_by_service, flow_edges
+    )
     all_flows_call_graph = _networkx_call_graph(
-        export_flows, endpoints_by_service, flow_edges, index=call_graph_index,
+        call_flows, endpoints_by_service, flow_edges, index=call_graph_index_for_display,
         include_occurrences=False,
     )
     all_flows_tree = cast(dict[str, object], all_flows_call_graph["call_tree"])
@@ -179,7 +187,7 @@ def render_graph_html(
     graph_ids_by_digest: dict[str, str] = {}
     export_flow_items: list[tuple[CodeFlow, int, str]] = []
     for flow, call_graph, equivalent_count in _all_export_flows(
-        export_flows, endpoints_by_service, edges, index=call_graph_index
+        call_flows, endpoints_by_service, edges, index=call_graph_index_for_display
     ):
         call_tree = cast(dict[str, object], call_graph["call_tree"])
         graph_identity = {
@@ -248,6 +256,7 @@ def render_graph_html(
                     "endpoint_id": step.endpoint_id,
                     "port_label": port_labels.get(step.endpoint_id) if step.endpoint_id else None,
                     "operation": step.operation,
+                    "action": step.action,
                     "branch": step.branch,
                     "resource": step.resource,
                     "key": step.key,
@@ -265,33 +274,57 @@ def render_graph_html(
     exported_diagnostics: list[dict[str, object]] = []
     causal_reachability: dict[str, set[str]] = {}
     causal_paths: dict[str, dict[str, tuple[str, ...]]] = {}
-    for call_graph in call_graphs.values():
-        trees = cast(dict[str, dict[str, object]], call_graph.get("call_trees_by_flow", {}))
-        for root_flow_id, tree in trees.items():
-            reachable = tree.get("reachable_flow_ids", [])
-            if isinstance(reachable, list):
-                causal_reachability[root_flow_id] = set(map(str, reachable))
-            transitions = cast(dict[str, list[dict[str, object]]], tree.get("transitions", {}))
-            paths: dict[str, tuple[str, ...]] = {root_flow_id: ()}
-            pending = deque([root_flow_id])
-            while pending:
-                source_flow_id = pending.popleft()
-                for transition in transitions.get(source_flow_id, []):
-                    edge = cast(dict[str, object], transition.get("edge", {}))
-                    edge_endpoint_ids = tuple(map(str, cast(list[object], edge.get("endpoint_ids", []))))
-                    candidate = paths[source_flow_id] + edge_endpoint_ids
-                    targets = cast(list[str], transition.get("target_flow_ids", []))
-                    for target_flow_id in targets:
-                        previous = paths.get(target_flow_id)
-                        if previous is not None and len(previous) <= len(candidate):
-                            continue
-                        paths[target_flow_id] = candidate
-                        pending.append(target_flow_id)
-            causal_paths[root_flow_id] = paths
+    flow_by_id = {flow.id: flow for flow in export_flows}
+    data_accesses_by_flow: dict[str, list[dict[str, object]]] = {}
+    for root_flow in call_flows:
+        paths = _reachable_flow_paths(call_graph_index, root_flow.id)
+        causal_reachability[root_flow.id] = set(paths)
+        causal_paths[root_flow.id] = paths
+        accesses: dict[tuple[str, str, int, str | None], dict[str, object]] = {}
+        for reachable_id in sorted(paths):
+            reachable_flow = flow_by_id[reachable_id]
+            for step in reachable_flow.steps:
+                if step.kind not in {"data_read", "data_write"}:
+                    continue
+                site = (reachable_flow.module, step.path, step.start_line, step.operation)
+                accesses.setdefault(site, {
+                    "flow_id": reachable_id,
+                    "module": reachable_flow.module,
+                    "kind": step.kind,
+                    "action": step.action,
+                    "resource": step.resource or step.name,
+                    "path": step.path,
+                    "line": step.start_line,
+                    "confidence": reachable_flow.confidence,
+                    "branch": step.branch,
+                    "trigger_endpoint_id": reachable_flow.steps[0].endpoint_id if reachable_flow.steps else None,
+                })
+        if accesses:
+            data_accesses_by_flow[root_flow.id] = [
+                accesses[site] for site in sorted(accesses)
+            ]
+    view_model["flow_data_accesses"] = data_accesses_by_flow
+    call_flow_ids = {flow.id for flow in call_flows}
     for diagnostic in diagnose_flow_consistency_snapshot(
         export_flows, causal_reachability, causal_paths,
     ):
+        if diagnostic.flow_id not in call_flow_ids:
+            continue
         item = diagnostic.as_dict()
+        for side, flow_id, order in (
+            ("write", diagnostic.write_flow_id, diagnostic.write_step),
+            ("read", diagnostic.read_flow_id, diagnostic.read_step),
+        ):
+            evidence_flow = flow_by_id.get(flow_id)
+            evidence_step = next((step for step in evidence_flow.steps if step.order == order), None) if evidence_flow else None
+            if evidence_flow is not None and evidence_step is not None:
+                item[f"{side}_site"] = {
+                    "module": evidence_flow.module,
+                    "trigger_endpoint_id": evidence_flow.steps[0].endpoint_id if evidence_flow.steps else None,
+                    "path": evidence_step.path,
+                    "line": evidence_step.start_line,
+                    "action": evidence_step.action,
+                }
         for side, endpoint_id in (
             ("write", diagnostic.write_endpoint_id),
             ("read", diagnostic.read_endpoint_id),

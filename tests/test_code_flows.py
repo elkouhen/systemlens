@@ -25,6 +25,7 @@ from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod
 from systemlens.indexing.code_flows import (
     CodeQLCallGraph,
     CodeQLCallGraphEdge,
+    _data_access_branch,
     _deduplicate_code_flows,
     _ensure_unique_code_flow_ids,
     codeql_join_methods_signature,
@@ -42,6 +43,14 @@ from systemlens.storage.sqlite import Store
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RUNNER = CliRunner()
+
+
+def test_data_access_branch_only_marks_async_writes_and_sync_http_reads() -> None:
+    assert _data_access_branch("message_entry", write=True) == "async"
+    assert _data_access_branch("message_entry", write=False) is None
+    assert _data_access_branch("http_entry", write=True) is None
+    assert _data_access_branch("http_entry", write=False) == "sync"
+    assert _data_access_branch("cron_entry", write=True) is None
 
 
 def _endpoint(
@@ -135,6 +144,45 @@ def test_materialize_code_flows_orders_same_method_effects(tmp_path: Path) -> No
     )
 
     assert shifted_flows[0].id == flows[0].id
+
+
+def test_mongo_flow_steps_keep_crud_actions_and_skip_non_effects(tmp_path: Path) -> None:
+    relative_source = "orders/src/main/java/OrderController.java"
+    source = tmp_path / relative_source
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "class OrderController { void place() {\n"
+        "  repo.insertAll(items);\n"
+        "  repo.deleteById(id);\n"
+        "  template.findAndModify(query, update, Order.class);\n"
+        "  template.bulkOps(mode, Order.class);\n"
+        "  template.getCollection(\"orders\");\n"
+        "} }\n",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven",
+        version=None, kind="application", starts_application=True,
+        configuration_example="",
+        mongo_methods=tuple(
+            MongoMethod(operation, "repo", "src/main/java/OrderController.java", line,
+                        "orders", owner_method="place")
+            for operation, line in (
+                ("insertAll", 2), ("deleteById", 3), ("findAndModify", 4),
+                ("bulkOps", 5), ("getCollection", 6),
+            )
+        ),
+    )
+    entry = _endpoint("entry", "serve", "rest", "POST /orders", relative_source, 1)
+
+    flows = materialize_code_flows(tmp_path, [entry], [module])
+
+    assert len(flows) == 1
+    assert [(step.kind, step.action) for step in flows[0].steps[1:]] == [
+        ("data_write", "insert"),
+        ("data_write", "delete"),
+        ("data_write", "read_update"),
+    ]
 
 
 def test_list_code_flows_can_select_internal_flows_of_one_module() -> None:
@@ -774,6 +822,7 @@ def test_flows_calculate_reuses_index_after_ai_fact_import(tmp_path: Path, monke
     assert result.exit_code == 0
     assert json.loads(result.output) == {
         "flows": len(initial_flows),
+            "data_access_annotations": 0,
         "facts_loaded": 1,
         "indexed_snapshot_reused": True,
     }
@@ -1348,7 +1397,7 @@ def test_store_additively_migrates_previous_schema_for_code_flows(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'codeql_call_edges'"
         ).fetchone()
         assert call_edges_table is not None
-        assert store.get_meta("schema_version") == "36"
+        assert store.get_meta("schema_version") == "37"
 
 
 def test_codeql_calls_join_ast_entry_and_output_methods(tmp_path: Path) -> None:
@@ -1959,6 +2008,77 @@ def test_codeql_flow_materialization_bounds_exploration(tmp_path: Path) -> None:
 
     assert len(flows) == 1
     assert stats == {"calls": 1, "joined_calls": 1, "explored_paths": 1}
+
+
+def test_mongo_operations_get_independent_source_backed_paths(tmp_path: Path) -> None:
+    entry_path = "orders/src/Controller.java"
+    helper_path = "orders/src/MongoAdapter.java"
+    output_path = "orders/src/Publisher.java"
+    entry = _endpoint("entry", "serve", "rest", "/reserve", entry_path, 3)
+    output = _endpoint("output", "produce", "kafka", "reserved", output_path, 4)
+    methods = [
+        IntegrationMethod("entry-method", "orders", "com.example.Controller.reserve",
+                          entry_path, 2, 10, (entry.id,), ()),
+        IntegrationMethod("mongo-method", "orders", "com.example.MongoAdapter.save",
+                          helper_path, 2, 6, (), ()),
+        IntegrationMethod("output-method", "orders", "com.example.Publisher.publish",
+                          output_path, 2, 6, (), (output.id,)),
+    ]
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven",
+        version=None, kind="application", starts_application=True,
+        configuration_example="", mongo_methods=(
+            MongoMethod("save", "repository", "src/MongoAdapter.java", 4,
+                        "orders", owner_method="save"),
+            MongoMethod("deleteById", "repository", "src/MongoAdapter.java", 5,
+                        "orders", owner_method="save"),
+        ),
+    )
+    edges = [
+        CodeQLCallGraphEdge("entry-method", "mongo-method", entry_path, 5, "exact"),
+        CodeQLCallGraphEdge("entry-method", "output-method", entry_path, 8, "exact"),
+        CodeQLCallGraphEdge("mongo-method", "entry-method", helper_path, 6, "exact"),
+    ]
+
+    flows = materialize_codeql_code_flows(
+        methods, [entry, output], [], persisted_edges=edges, modules=[module],
+    )
+
+    data_flows = [flow for flow in flows if flow.steps[-1].action]
+    assert len(data_flows) == 2
+    assert {flow.steps[-1].action for flow in data_flows} == {
+        "create_or_update", "delete",
+    }
+    assert all([step.kind for step in flow.steps] == [
+        "http_entry", "method_call", "data_write",
+    ] for flow in data_flows)
+    assert all(flow.steps[-1].path == helper_path for flow in data_flows)
+    output_flows = [flow for flow in flows if flow.steps[-1].endpoint_id == output.id]
+    assert len(output_flows) == 1
+    assert all(step.action is None for step in output_flows[0].steps)
+    summaries = list_code_flows(flows, [entry, output], module="orders")
+    assert len(summaries) == 1
+    assert summaries[0]["output_flow"] == "reserved"
+    assert all(item["input_flow"] == "/reserve" for item in summaries)
+    combined_output = replace(
+        output_flows[0], id="combined-output",
+        steps=(
+            output_flows[0].steps[0],
+            replace(data_flows[0].steps[-1], order=2),
+            replace(output_flows[0].steps[-1], order=3),
+        ),
+    )
+    deduplicated = _deduplicate_code_flows([*flows, combined_output], [entry, output])
+    assert len([flow for flow in deduplicated if flow.steps[-1].endpoint_id == output.id]) == 1
+    assert len([flow for flow in deduplicated if flow.steps[-1].action]) == 2
+
+    ambiguous = replace(module, mongo_methods=module.mongo_methods[:1])
+    duplicate_owner = replace(methods[1], id="overload", start_line=3, end_line=5)
+    ambiguous_flows = materialize_codeql_code_flows(
+        [*methods, duplicate_owner], [entry, output], [],
+        persisted_edges=edges, modules=[ambiguous],
+    )
+    assert not any(step.action for flow in ambiguous_flows for step in flow.steps)
 
 
 def test_ast_fallback_uses_call_arity_to_resolve_output_overloads(tmp_path: Path) -> None:

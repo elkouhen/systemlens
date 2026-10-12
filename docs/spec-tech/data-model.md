@@ -43,6 +43,13 @@ stores these declarations, and one high-confidence `maps` relation links each
 owning module to an entity. The fact identifies a Java mapping declaration;
 it does not identify a physical table, database engine, or read/write call.
 
+`JpaMethod` records a supported call on a field typed as a source-declared
+Spring Data JPA repository. It retains the raw operation, qualified entity,
+receiver, module-relative source path, line, and owner method. The module JSON
+column is additive; older indexes load an empty operation list until reindex.
+Repository and entity resolution must each be unique. A `save` call means a
+create-or-update attempt, not a committed insert or update.
+
 `JpaDto` records a Java DTO related to one or more indexed JPA entities or used
 in a REST controller signature when the module has no OpenAPI contract. It
 stores the qualified name, root-relative source location, detected roles and
@@ -308,18 +315,19 @@ never presented as a complete parse.
 chain of Java methods resolved by the selected method-call engine. Its
 first `CodeFlowStep` is an indexed HTTP/Kafka entry point or a source-evidenced
 `@Scheduled(cron = "...")` trigger; later steps are HTTP calls, Kafka
-publications, or MongoDB reads/writes located within the
-same Tree-sitter `method_declaration`. Steps retain relative evidence paths and
+publications, or MongoDB/JPA reads and writes in the entry method or a reachable
+method. Steps retain relative evidence paths and
 line ranges. Flow identity uses the module, relative path, qualified method,
 and trigger semantics rather than line numbers, so ordinary line movement does
 not replace the logical flow. If overloaded or generated declarations still
 produce the same identity, indexing keeps the first historical ID and adds a
 stable route discriminator to later IDs before persistence. The materializer runs during indexing, while
-`systemlens flows calculate` rebuilds all persisted endpoint flows from the
+`systemlens flows calculate` rebuilds endpoint and data paths from the
 stored integration-method and CodeQL-edge snapshots with the independent
-enrichment topology; neither export nor query runs it. The flow reconstruction
-is linear in the indexed endpoint and Mongo-operation inventory plus
-the traversed AST nodes for Java files that contain eligible endpoints. Maven
+enrichment topology; neither export nor query runs it. The same-method pass
+scans the endpoint and data-operation inventory plus eligible Java AST nodes.
+The directed method-graph pass visits reachable methods and edges per entry
+within the configured hop bound. Maven
 `target/` and Gradle `build/` output trees are excluded from the inventory, so
 copied resources and generated classes cannot duplicate source facts. A
 same-method relation remains `potential` with medium confidence because static
@@ -330,11 +338,41 @@ persisted AST method facts to form interprocedural flows; `method_call` steps ke
 the call-site line. For CodeQL, reachability is computed from indexed output
 methods backwards through their callers until indexed input methods are reached.
 
+Same-method MongoDB steps retain the raw operation and an optional `action`:
+`read`, `insert`, `update`, `delete`, `create_or_update`, or `read_update`.
+The shared classifier in `src/systemlens/domain/mongo_operations.py` derives
+read and write facets for relations and exports. `read_update` creates both
+facets but keeps the existing broad `data_write` step kind. `bulkOps` is a
+builder; it and unsupported operations create no flow or relation effect.
+Older step JSON loads with `action=null`. This action is an API-level attempt,
+not evidence of a committed database change. `flows calculate` still rebuilds
+paths from persisted module inventory, method, and call-edge facts. A MongoDB
+call joins one method only when module, relative source path, owner name, and
+line range identify it uniquely. A bounded directed traversal from each
+indexed entry emits a separate potential path to each reachable operation,
+including calls in helper methods. An operation reached on a sibling branch
+does not become a step of an unrelated endpoint-to-endpoint path. A possible
+dispatch lowers confidence; neither branch execution nor transaction success
+is inferred. The current flow hop bound also bounds these data paths. Without
+a source-backed call edge, only same-method data operations are available.
+
+JPA data steps use `jpa:<module>:<qualified entity>` as their logical resource;
+the action is `read`, `delete`, or `create_or_update`. An HTTP entry labels a
+reached blocking JPA access synchronous, and a Kafka entry labels it
+asynchronous relative to its producer. These labels describe the entry path,
+not transaction completion. A repository call in an ambiguous method or an
+unsupported API creates no step. The operation inventory is persisted and
+`flows calculate` joins it to the stored method and call-edge snapshot.
+
 Without CodeQL, the source symbol index can add receiver-typed calls only when
 one source method matches the receiver and signature. These paths have low
 confidence and source-located `method_call` steps. Ambiguous types or overloads
 produce no path. The pass parses eligible Java sources once per flow rebuild
 and traverses their method invocations; it adds no runtime or cross-service calls.
+For a uniquely inherited `final` method, the source symbol pass retains its
+body as a possible target when generic parameter substitution is unresolved.
+The inferred edge has low confidence and remains in the persisted call graph;
+ambiguous inherited declarations still produce no edge.
 
 The transitive query has no business-level hop or global path limit; the
 configured complete-pass deadline remains the operational safeguard. The legacy
@@ -422,23 +460,45 @@ OUT-to-IN topology: a flow is a root when no persisted flow reaches its input
 endpoint. `flows show` uses the persisted endpoint snapshot to connect an OUT
 endpoint to downstream matching IN endpoints and emits that reachable forest
 as `tree`; cycles and repeated flow IDs are emitted only once.
-Before serialization, HTML export keeps one entry per persisted flow, matching
-the CLI flow listing. Graph-arc deduplication remains inside each call graph;
-the export does not collapse equivalent persisted flows or fuse producer and
-consumer fragments into one visible card.
+HTML export and the CLI flow list expose one entry per persisted integration
+flow or cycle. Data-access terminal paths stay in the compatible SQLite flow
+snapshot as evidence, but do not become selectable call flows. Export builds
+reachability over the full snapshot, then projects deduplicated access sites
+onto visible call roots. A selected call-tree tooltip filters accesses by the
+service occurrence's exact input endpoint; unknown associations stay absent.
+The architecture graph and left widget receive no data-access annotations.
+This projection does not infer a linear order or change persisted flow IDs.
+Call-root reachability retains its existing bounded traversal cost.
 
-Async-write/sync-read diagnostics pair explicit branch labels and matching
-resources across handlers that are reachable from the same persisted trigger.
+An async write is a database write in a Kafka consumer handler reached after a
+message publication. A sync read is a database read on an HTTP entry path.
+Reads in Kafka consumers and writes on other trigger types have no branch
+classification. Async-write/sync-read diagnostics pair these classified sites
+and matching resources across handlers reachable from the same persisted trigger.
 Matching causal IDs support the pair; conflicting IDs or different key
 expressions remain `insufficient_evidence`. A missing branch label is unknown
 and does not classify an access as synchronous. A visibility guarantee requires
 an explicit `visible` completion and the same non-empty expected version on
 both accesses. Each exported diagnostic retains its owning write and read flow
 IDs, operation endpoint IDs, and the endpoint paths from the trigger to each
-operation. The renderer uses those paths to highlight the complete causal
-sequence and keeps each operation badge on its exact access endpoint. Candidate
-pairs are examined across the persisted accesses; the number of comparisons is
-O(W × R), for W async writes and R sync reads in the exported snapshot.
+operation. Export also includes each operation's source path, line, module,
+action, and trigger endpoint as `write_site` or `read_site`. The renderer uses
+the endpoint paths to highlight the causal sequence. It places selectable
+diagnostic badges on call-tree service occurrences only when the operation's
+module and trigger endpoint match that occurrence. Candidate
+pairs are examined across the persisted accesses and reported on each reachable
+call root. The number of pair comparisons is O(W × R), for W async writes and R
+sync reads in the exported snapshot; materializing diagnostics also scales with
+the number of roots that reach each pair.
+When a read precedes a write in one ordered flow, or its call site precedes
+the publication in the same entry source file, the pair is insufficient
+evidence for a stale read after that write. This source-order guard does not
+prove runtime execution order across branches.
+The HTML export projects data sites onto every reachable call root using
+persisted endpoint arcs and flows sharing the exact trigger endpoint. This
+projection does not merge sibling paths into one execution sequence. Its work
+is bounded by the number of exported flow roots times reachable flow edges
+and access steps; it does not reopen Java source files.
 
 Each persisted `CodeFlow` also carries a `reconciliation` status. `complete`
 means every endpoint step exists in the same snapshot and every cross-service

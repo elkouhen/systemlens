@@ -80,6 +80,26 @@ def test_relations_materialize_kafka_http_mongo_and_module_dependency(tmp_path: 
     assert ("microservice", "orders", "depends_on", "module", "shared") in facts
 
 
+def test_mongo_relations_distinguish_delete_read_update_and_builder(tmp_path: Path) -> None:
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven",
+        version=None, kind="application", starts_application=True,
+        configuration_example="",
+        mongo_methods=tuple(
+            MongoMethod(operation, "mongoTemplate", "Store.java", line, "orders")
+            for line, operation in enumerate(
+                ("deleteById", "findAndModify", "bulkOps", "getCollection"), start=1
+            )
+        ),
+    )
+
+    relations = build_architecture_relations([module], [], [])
+
+    assert {(item.relation, item.start_line) for item in relations} == {
+        ("writes", 1), ("reads", 2), ("writes", 2),
+    }
+
+
 def test_strategy1_does_not_create_topic_request_reply_relations(tmp_path: Path) -> None:
     relations = build_architecture_relations(
         [],

@@ -541,6 +541,10 @@
           const topics = [...new Set((node.ports || []).filter(port => /kafka|topic|message/i.test(port.type || "")).map(port => port.name))];
           if (topics.length) addTooltipLine(tooltip, `Messages : ${topics.slice(0, 4).join(", ")}${topics.length > 4 ? "…" : ""}`, "graph-entity-tooltip-detail");
           if (node.technology || node.build_system) addTooltipLine(tooltip, [node.technology, node.build_system].filter(Boolean).join(" · "), "graph-entity-tooltip-detail");
+          const accesses = callGraphOnly && graphState.selectedCodeFlowId
+            ? (graphData.flow_data_accesses?.[graphState.selectedCodeFlowId] || []).filter(access => access.module === node.name)
+            : [];
+          dataAccessTooltipLines(accesses).forEach(line => addTooltipLine(tooltip, line, "graph-entity-tooltip-detail"));
         } else if (node.kind === "kafka_topic") {
           const producers = new Set(graphData.links
             .filter(link => link.kind === "kafka" && link.target === node.id)
@@ -808,7 +812,6 @@
           const flowStats = document.getElementById("flow-mode-context-stats");
           const flowPath = document.getElementById("flow-mode-context-path");
           const flowHelp = document.getElementById("flow-mode-context-help");
-          const consistencyLane = document.getElementById("flow-consistency-lane");
           const expandAll = document.getElementById("flow-mode-expand-all");
           const diagnosticFullView = document.getElementById("flow-diagnostic-full-view");
           const flowCenter = document.getElementById("flow-mode-center");
@@ -852,10 +855,6 @@
               flowTrigger.hidden = true;
               flowTrigger.textContent = "";
             }
-            if (consistencyLane) {
-              consistencyLane.hidden = true;
-              consistencyLane.replaceChildren();
-            }
             return;
           }
           updateCallTreeStats(
@@ -868,44 +867,7 @@
           ));
           const selectedFlow = selectedFlows[0];
           const trigger = selectedFlow?.steps?.[0];
-          const selectedDiagnostics = (graphData.flow_diagnostics || []).filter(item => (
-            item.flow_id === graphState.selectedCodeFlowId
-          ));
-          if (selectedDiagnostics.length) {
-            const riskCount = selectedDiagnostics.filter(item => item.classification === "potential_risk").length;
-            const incompleteCount = selectedDiagnostics.filter(item => item.classification === "insufficient_evidence").length;
-            flowHelp.textContent = `${selectedDiagnostics.length} problème${selectedDiagnostics.length > 1 ? "s" : ""} dans ce flux · ${riskCount} risque${riskCount > 1 ? "s" : ""}${incompleteCount ? ` · ${incompleteCount} preuve${incompleteCount > 1 ? "s" : ""} incomplète${incompleteCount > 1 ? "s" : ""}` : ""}`;
-          } else {
-            flowHelp.textContent = "Aucun problème de cohérence détecté dans ce flux.";
-          }
-          if (consistencyLane) {
-            consistencyLane.replaceChildren();
-            consistencyLane.hidden = selectedDiagnostics.length === 0;
-            selectedDiagnostics.forEach((diagnostic, index) => {
-              const card = document.createElement("div");
-              card.className = `flow-consistency-card is-${diagnostic.classification}${diagnostic.id === graphState.selectedDiagnosticId ? " is-selected" : ""}`;
-              const badge = document.createElement("strong");
-              badge.textContent = `P${index + 1}`;
-              const write = document.createElement("span");
-              write.textContent = `Écriture async · ${diagnostic.write_name || diagnostic.write_flow_id} · ${diagnostic.resource || "donnée"} · étape ${diagnostic.write_step}`;
-              const arrow = document.createElement("span");
-              arrow.className = "flow-consistency-arrow";
-              arrow.textContent = "→";
-              const read = document.createElement("span");
-              read.textContent = `Lecture sync · ${diagnostic.read_name || diagnostic.read_flow_id} · étape ${diagnostic.read_step}`;
-              card.append(badge, write, arrow, read);
-              card.title = "Cliquer pour isoler les deux opérations dans le graphe";
-              card.addEventListener("click", () => {
-                const selectedFlow = (graphData.code_flows || []).find(flow => (
-                  flow.id === graphState.selectedCodeFlowId
-                ));
-                if (selectedFlow && typeof focusFlowDiagnostic === "function") {
-                  focusFlowDiagnostic(diagnostic, selectedFlow);
-                }
-              });
-              consistencyLane.append(card);
-            });
-          }
+          flowHelp.textContent = "Survolez un microservice pour voir ses accès aux données et diagnostics potentiels.";
           if (flowTrigger) {
             const triggerKind = ({
               http_entry: "Entrée HTTP",

@@ -82,6 +82,52 @@ def _flow_call_graph(data: dict[str, object], flow: dict[str, object]) -> dict[s
     return graph
 
 
+def test_export_preserves_specific_data_action_from_persisted_flow(tmp_path: Path) -> None:
+    entry = _rest_endpoint("serve", "DELETE /orders", "Orders.java")
+    flow = CodeFlow(
+        id="mongo-delete", module="orders", method="Orders.delete",
+        path="Orders.java", start_line=1, end_line=3,
+        status="potential", confidence="medium", reason="source invocation",
+        steps=(
+            CodeFlowStep(1, "http_entry", "DELETE /orders", "Orders.java", 1, 1, entry.id),
+            CodeFlowStep(2, "data_write", "orders", "Orders.java", 2, 2,
+                         operation="deleteById", action="delete"),
+        ),
+    )
+    with Store(tmp_path) as store:
+        store.replace_code_flows([flow])
+        persisted = store.all_code_flows()
+
+    call_flow = CodeFlow(
+        id="call", module="orders", method="Orders.delete",
+        path="Orders.java", start_line=1, end_line=3,
+        status="potential", confidence="medium", reason="source invocation",
+        steps=(
+            CodeFlowStep(1, "http_entry", "DELETE /orders", "Orders.java", 1, 1, entry.id),
+            CodeFlowStep(2, "message_publish", "orders.deleted", "Orders.java", 3, 3),
+        ),
+    )
+    data = _html_graph_data(render_graph_html(
+        {"orders": [entry]}, [], code_flows=[call_flow, *persisted],
+    ))
+
+    assert [item["id"] for item in data["code_flows"]] == ["call"]
+    assert data["flow_data_accesses"]["call"][0]["action"] == "delete"
+    assert "service_data_accesses" not in data
+    legacy_steps = [
+        {key: value for key, value in step.__dict__.items() if key != "action"}
+        for step in flow.steps
+    ]
+    with Store(tmp_path) as store:
+        store.conn.execute(
+            "UPDATE code_flows SET steps = ? WHERE id = ?",
+            (json.dumps(legacy_steps), flow.id),
+        )
+        legacy = store.all_code_flows()
+
+    assert legacy[0].steps[1].action is None
+
+
 def test_export_includes_persisted_codeql_call_graph() -> None:
     caller = IntegrationMethod("a", "orders", "Orders.receive", "Orders.java", 1, 4, ("in",), ())
     callee = IntegrationMethod("b", "orders", "Orders.publish", "Orders.java", 5, 7, (), ("out",))
@@ -624,8 +670,62 @@ def test_export_flow_diagnostic_retains_cross_handler_causal_paths() -> None:
     assert diagnostic["read_flow_id"] == "read-handler"
     assert diagnostic["async_endpoint_ids"] == ["write-in"]
     assert diagnostic["sync_endpoint_ids"] == ["read-in"]
+    assert diagnostic["write_site"] == {
+        "module": "domain-inventory", "trigger_endpoint_id": "write-in",
+        "path": "DomainInventory.java", "line": 2, "action": None,
+    }
+    assert diagnostic["read_site"] == {
+        "module": "domain-inventory", "trigger_endpoint_id": "read-in",
+        "path": "DomainInventory.java", "line": 9, "action": None,
+    }
     assert "shipping-out" in diagnostic["sync_path_endpoint_ids"]
     assert "shipping-in" in diagnostic["sync_path_endpoint_ids"]
+
+
+def test_call_graph_enriches_data_siblings_and_pairs_async_write_with_sync_read() -> None:
+    root_in = replace(_rest_endpoint("serve", "POST /orders", "Orders.java"), id="root-in")
+    message_out = replace(_kafka_endpoint("produce", "OrderEvent", "Orders.java"), id="event-out")
+    message_in = replace(_kafka_endpoint("consume", "OrderEvent", "Inventory.java"), id="event-in")
+    unrelated_in = replace(_rest_endpoint("serve", "GET /other", "Other.java"), id="other-in")
+    flows = [
+        CodeFlow("publish", "orders", "Orders.place", "Orders.java", 1, 4,
+                 "potential", "medium", "test", (
+                     CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, root_in.id),
+                     CodeFlowStep(2, "message_publish", "orders.created", "Orders.java", 2, 2, message_out.id),
+                 )),
+        CodeFlow("read", "orders", "Orders.place", "Orders.java", 1, 4,
+                 "potential", "medium", "test", (
+                     CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, root_in.id),
+                     CodeFlowStep(2, "data_read", "orders", "Orders.java", 3, 3,
+                                  branch="sync", resource="orders", key="request.id", action="read"),
+                 )),
+        CodeFlow("write", "inventory", "Inventory.consume", "Inventory.java", 1, 3,
+                 "potential", "medium", "test", (
+                     CodeFlowStep(1, "message_entry", "orders.created", "Inventory.java", 1, 1, message_in.id),
+                     CodeFlowStep(2, "data_write", "orders", "Inventory.java", 2, 2,
+                                  branch="async", resource="orders", key="request.id", action="update"),
+                 )),
+        CodeFlow("unrelated", "orders", "Other.read", "Other.java", 1, 3,
+                 "potential", "medium", "test", (
+                     CodeFlowStep(1, "http_entry", "GET /other", "Other.java", 1, 1, unrelated_in.id),
+                     CodeFlowStep(2, "data_read", "orders", "Other.java", 2, 2,
+                                  branch="sync", resource="orders", key="request.id", action="read"),
+                 )),
+    ]
+    data = _html_graph_data(render_graph_html(
+        {"orders": [root_in, message_out, unrelated_in], "inventory": [message_in]},
+        [GraphEdge("kafka", "orders", "inventory", message_out, message_in)],
+        code_flows=flows,
+    ))
+
+    accesses = data["flow_data_accesses"]["publish"]
+    assert [flow["id"] for flow in data["code_flows"]] == ["publish"]
+    assert {(item["flow_id"], item["action"]) for item in accesses} == {
+        ("read", "read"), ("write", "update"),
+    }
+    assert not any(item["flow_id"] == "unrelated" for item in accesses)
+    assert any(item["flow_id"] == "publish" and item["classification"] == "potential_risk"
+               for item in data["flow_diagnostics"])
 
 
 def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> None:

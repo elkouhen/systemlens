@@ -13,9 +13,6 @@
     const codeFlowFilterReset = document.getElementById("code-flow-filter-reset");
     const codeFlowsTitle = document.getElementById("code-flows-title");
     const flowDiagnostics = Array.isArray(graphData.flow_diagnostics) ? graphData.flow_diagnostics : [];
-    const flowDiagnosticsList = document.getElementById("flow-diagnostics");
-    const flowDiagnosticsEmpty = document.getElementById("flow-diagnostics-empty");
-    const flowDiagnosticsSummary = document.getElementById("flow-diagnostics-summary");
     let callTreePan = null;
     let callTreePanBound = false;
     let callTreeRenderSignature = "";
@@ -43,6 +40,33 @@
         data_read: "Lecture de Data",
         data_write: "Écriture de Data",
       })[kind] || String(kind || "Étape").replaceAll("_", " ");
+    }
+
+    function codeFlowDataActionLabel(step) {
+      return ({
+        read: "Lecture de données",
+        insert: "Insertion de données",
+        update: "Modification de données",
+        delete: "Suppression de données",
+        create_or_update: "Création ou modification de données",
+        read_update: "Lecture et modification de données",
+      })[step.action] || codeFlowStepLabel(step.kind);
+    }
+
+    function dataAccessTooltipLines(accesses) {
+      const items = accesses || [];
+      if (!items.length) return [];
+      const confidenceLabels = { high: "élevée", medium: "moyenne", low: "faible" };
+      const lines = [`Données · ${items.length} accès potentiel${items.length > 1 ? "s" : ""}`];
+      items.forEach(access => {
+        const resource = access.resource?.startsWith("jpa:")
+          ? access.resource.split(":").at(-1).split(".").at(-1)
+          : access.resource || "donnée inconnue";
+        const source = access.path
+          ? ` · ${access.path.split("/").at(-1)}:${access.line}` : "";
+        lines.push(`${codeFlowDataActionLabel(access).replace(" de données", "")} · ${resource}${source} · confiance ${confidenceLabels[access.confidence] || "inconnue"}`);
+      });
+      return lines;
     }
 
     function codeFlowPriority(flow) {
@@ -85,7 +109,7 @@
         ["Microservices", servicesForCodeFlow(flow).length],
         ["Appels", callGraphArcCount(flow)],
         ["Étapes", steps.length],
-        ["Effets", steps.filter(step => ["message_publish", "http_call", "data_write"].includes(step.kind)).length],
+        ["Effets", steps.filter(step => ["message_publish", "http_call", "data_read", "data_write"].includes(step.kind)).length],
       ];
     }
 
@@ -103,13 +127,21 @@
         : trigger.kind === "cron_entry"
           ? "est déclenché par"
           : "reçoit";
+      const dataVerb = ({
+        read: "lire dans",
+        insert: "insérer dans",
+        update: "modifier dans",
+        delete: "supprimer dans",
+        create_or_update: "créer ou modifier dans",
+        read_update: "lire et modifier dans",
+      })[effect.action];
       const effectVerb = effect.kind === "http_call"
         ? "appeler"
         : effect.kind === "message_publish"
           ? "publier"
-          : effect.kind === "data_write"
+          : dataVerb || (effect.kind === "data_write"
             ? "écrire dans"
-            : "lire";
+            : "lire");
       return `Dans ${flow.module}, le flux potentiel ${triggerVerb} ${trigger.name} peut ${effectVerb} ${effect.name}.`;
     }
 
@@ -319,6 +351,9 @@
         (node.ports || []).map(port => [port.endpoint_id, port])
       )));
       const selectedFlow = selectedFlows[0] || null;
+      const selectedFlowDiagnostics = (graphData.flow_diagnostics || []).filter(item => (
+        item.flow_id === graphState.selectedCodeFlowId
+      ));
       const selectedDiagnostic = (graphData.flow_diagnostics || []).find(item => (
         item.id === graphState.selectedDiagnosticId
       )) || null;
@@ -327,8 +362,6 @@
           .filter(item => item.flow_id === selectedDiagnostic.flow_id)
           .findIndex(item => item.id === selectedDiagnostic.id) + 1
         : 0;
-      const asyncDiagnosticEndpoints = new Set(selectedDiagnostic?.async_endpoint_ids || []);
-      const syncDiagnosticEndpoints = new Set(selectedDiagnostic?.sync_endpoint_ids || []);
       const asyncDiagnosticPathEndpoints = new Set(
         selectedDiagnostic?.async_path_endpoint_ids || selectedDiagnostic?.async_endpoint_ids || [],
       );
@@ -729,6 +762,19 @@
           `${port.path}${port.line ? `:${port.line}` : ""}`,
         ], clientX, clientY);
       };
+      const diagnosticAnnotationsForOccurrence = occurrence => {
+        const inputEndpointId = occurrence.edge?.endpoint_ids?.[1]
+          || (occurrence.depth === 0 ? selectedFlow?.steps?.[0]?.endpoint_id : null);
+        if (!inputEndpointId) return [];
+        return selectedFlowDiagnostics.flatMap((diagnostic, index) => (
+          ["write", "read"].flatMap(side => {
+            const site = diagnostic[`${side}_site`];
+            return site?.module === occurrence.name
+              && site.trigger_endpoint_id === inputEndpointId
+              ? [{ diagnostic, index, side }] : [];
+          })
+        ));
+      };
       const treeOccurrenceTooltipLines = occurrence => {
         const lines = [
           occurrence.cycle
@@ -752,6 +798,22 @@
             .join(" | ");
           lines.push(`OUT ${outputText}${outputs.length > 3 ? " …" : ""}`);
         }
+        const dataAccesses = graphData.flow_data_accesses?.[graphState.selectedCodeFlowId] || [];
+        const inputEndpointId = occurrence.edge?.endpoint_ids?.[1]
+          || (occurrence.depth === 0 ? selectedFlow?.steps?.[0]?.endpoint_id : null);
+        lines.push(...dataAccessTooltipLines(dataAccesses.filter(access => (
+          access.module === occurrence.name
+          && access.trigger_endpoint_id === inputEndpointId
+        ))));
+        diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, index, side }) => {
+          const operation = side === "write" ? "Écriture async" : "Lecture sync";
+          const name = side === "write" ? diagnostic.write_name : diagnostic.read_name;
+          const verdict = diagnostic.classification === "potential_risk"
+            ? "risque potentiel"
+            : diagnostic.classification === "guarantee_identified"
+              ? "garantie identifiée" : "preuves insuffisantes";
+          lines.push(`P${index + 1} · ${operation} · ${name || "donnée"} · ${verdict}`);
+        });
         return lines;
       };
       const treeEdgeTooltip = edge => {
@@ -906,24 +968,22 @@
             ? `Microservice · +${occurrence.hiddenChildrenCount} appels`
             : "Microservice";
         node.append(icon, name, kind);
-        const occurrenceInputEndpoint = occurrence.edge?.endpoint_ids?.[1] || null;
-        const occurrenceDiagnosticKind = occurrenceInputEndpoint && asyncDiagnosticEndpoints.has(occurrenceInputEndpoint)
-          ? "async"
-          : occurrenceInputEndpoint && syncDiagnosticEndpoints.has(occurrenceInputEndpoint)
-            ? "sync"
-            : null;
-        if (occurrenceDiagnosticKind) {
-          node.classList.add(`is-diagnostic-${occurrenceDiagnosticKind}`);
+        diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, index, side }) => {
+          const kind = side === "write" ? "async" : "sync";
+          if (diagnostic.id === graphState.selectedDiagnosticId) {
+            node.classList.add(`is-diagnostic-${kind}`);
+          }
           const diagnosticBadge = document.createElement("span");
-          diagnosticBadge.className = `graph-call-tree-diagnostic-badge is-${occurrenceDiagnosticKind}`;
-          diagnosticBadge.textContent = occurrenceDiagnosticKind === "async"
-            ? `P${selectedDiagnosticIndex} · ÉCRITURE ASYNC`
-            : `P${selectedDiagnosticIndex} · LECTURE SYNC`;
-          diagnosticBadge.title = occurrenceDiagnosticKind === "async"
-            ? "Écriture asynchrone de la donnée signalée"
-            : "Lecture synchrone de la donnée signalée";
+          diagnosticBadge.className = `graph-call-tree-diagnostic-badge is-${kind}`;
+          diagnosticBadge.textContent = `P${index + 1} · ${kind === "async" ? "ÉCRITURE ASYNC" : "LECTURE SYNC"}`;
+          diagnosticBadge.title = `${diagnostic.resource || "Donnée"} · cliquer pour isoler ce diagnostic`;
+          diagnosticBadge.addEventListener("click", event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (selectedFlow) focusFlowDiagnostic(diagnostic, selectedFlow);
+          });
           node.append(diagnosticBadge);
-        }
+        });
         if (treeTrigger && occurrence.depth === 0 && occurrence.name === treeTriggerRootName) {
           const triggerKind = ({
             http_entry: ["HTTP", "is-http"],
@@ -1435,28 +1495,6 @@
         stat.append(valueElement, labelElement);
         stats.append(stat);
       });
-      const diagnostics = flowDiagnostics.filter(item => item.flow_id === flow.id);
-      let stepStrip = null;
-      if (diagnostics.length) {
-        stepStrip = document.createElement("div");
-        stepStrip.className = "code-flow-step-strip";
-        const diagnosticLabels = new Map(diagnostics.map((diagnostic, index) => [diagnostic.id, `P${index + 1}`]));
-        (flow.steps || []).forEach(step => {
-          const stepElement = document.createElement("span");
-          stepElement.className = `code-flow-step-chip is-${step.kind}`;
-          const related = diagnostics.filter(item => item.read_step === step.order);
-          stepElement.textContent = related.length
-            ? `${codeFlowStepLabel(step.kind)} · ${related.map(item => diagnosticLabels.get(item.id)).join(", ")}`
-            : codeFlowStepLabel(step.kind);
-          if (related.length) {
-            stepElement.classList.add("is-diagnostic-read");
-            stepElement.title = related.map(item => (
-              `${item.severity} · ${item.classification} · ${item.resource || "ressource inconnue"}`
-            )).join("\n");
-          }
-          stepStrip.append(stepElement);
-        });
-      }
       if (path) {
         item.tabIndex = 0;
         item.addEventListener("click", () => showCodeFlow(flow));
@@ -1474,43 +1512,7 @@
       item.addEventListener("focus", () => showCodeFlowItemTooltip(flow, item));
       item.addEventListener("blur", hideCodeFlowItemTooltip);
       item.append(header, meta, description, stats);
-      if (stepStrip) item.append(stepStrip);
       return item;
-    }
-
-    function renderFlowDiagnostics(visibleFlows) {
-      if (!flowDiagnosticsList || !flowDiagnosticsEmpty || !flowDiagnosticsSummary) return;
-      const visibleIds = new Set(visibleFlows.map(flow => flow.id));
-      const items = flowDiagnostics.filter(item => visibleIds.has(item.flow_id));
-      flowDiagnosticsList.replaceChildren(...items.map(item => {
-        const row = document.createElement("li");
-        row.className = `code-flow-item flow-diagnostic-item is-${item.classification}${item.id === graphState.selectedDiagnosticId ? " is-selected" : ""}`;
-        row.dataset.diagnosticId = item.id;
-        const title = document.createElement("div");
-        title.className = "reference-title code-flow-title";
-        title.textContent = `${item.severity} · ${item.resource || "Ressource inconnue"}`;
-        const meta = document.createElement("div");
-        meta.className = "reference-meta";
-        meta.textContent = `Flux ${item.flow_id} · écriture étape ${item.write_step} → lecture étape ${item.read_step}`;
-        const detail = document.createElement("p");
-        detail.className = "code-flow-reason";
-        const label = item.classification === "potential_risk"
-          ? "Lecture potentiellement antérieure à la visibilité de l’écriture"
-          : item.classification === "guarantee_identified"
-            ? "Garantie de visibilité identifiée"
-            : "Preuves insuffisantes pour conclure";
-        detail.textContent = `${label}. ${item.limitation || item.causal_evidence || ""}`;
-        row.append(title, meta, detail);
-        row.addEventListener("click", () => {
-          const flow = codeFlows.find(candidate => candidate.id === item.flow_id);
-          if (flow) focusFlowDiagnostic(item, flow);
-        });
-        return row;
-      }));
-      flowDiagnosticsEmpty.hidden = items.length > 0;
-      flowDiagnosticsSummary.textContent = items.length
-        ? `${items.length} problème${items.length > 1 ? "s" : ""} · chaque paire écriture/lecture est affichée séparément`
-        : "Aucun problème détecté dans les flux affichés.";
     }
 
     function focusFlowDiagnostic(diagnostic, flow) {
@@ -1530,8 +1532,6 @@
       graphState.callTreeExpanded = new Set();
       graphState.callTreeCollapsed = new Set();
       rebuildGraph();
-      renderFlowDiagnostics([flow]);
-      requestAnimationFrame(() => document.querySelector(`[data-diagnostic-id="${CSS.escape(diagnostic.id)}"]`)?.scrollIntoView({ block: "nearest" }));
     }
 
     function restoreDiagnosticFullView() {
@@ -1546,29 +1546,28 @@
         graphState.callTreeZoom = snapshot.callTreeZoom || 1;
       }
       rebuildGraph();
-      const selectedFlow = codeFlows.find(flow => flow.id === graphState.selectedCodeFlowId);
-      if (selectedFlow) renderFlowDiagnostics([selectedFlow]);
     }
 
     function renderCodeFlows() {
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
       const visible = codeFlows.filter(flow => {
+        const accesses = graphData.flow_data_accesses?.[flow.id] || [];
         const haystack = [
           flow.id,
           flow.module,
           flow.method,
           flow.reason,
           ...(flow.steps || []).flatMap(step => [step.kind, step.name, step.path]),
+          ...accesses.flatMap(access => [access.action, access.resource, access.module]),
         ].join(" ").toLocaleLowerCase();
         return !query || haystack.includes(query);
       });
       codeFlowsList.replaceChildren(...visible.sort(sortCodeFlows).map(codeFlowItem));
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
-      codeFlowsSummary.textContent = `${visible.length} flux affiché${visible.length > 1 ? "s" : ""} sur ${codeFlows.length} · cliquez sur un flux pour ouvrir son graphe d’appel.`;
+      codeFlowsSummary.textContent = `${visible.length} flux d’appel affiché${visible.length > 1 ? "s" : ""} sur ${codeFlows.length}.`;
       updateCodeFlowFilterSummary();
-      codeFlowsTitle.textContent = `Flux de code (${visible.length}/${codeFlows.length})`;
-      renderFlowDiagnostics(visible);
+      codeFlowsTitle.textContent = `Flux de code (${visible.length})`;
     }
 
     codeFlowFilter.addEventListener("input", renderCodeFlows);

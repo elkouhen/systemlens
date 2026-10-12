@@ -55,11 +55,52 @@ summary lists their qualified Java names, and the persisted relation set has a `
 relation with source evidence. It does not infer a table name, JDBC driver,
 database engine, or read/write operation from the annotation.
 
+For Spring Data JPA, indexing resolves a source-declared `JpaRepository`
+interface to one indexed entity, then accepts calls on a field typed as that
+interface. Supported calls are `findById`, `findAll`, `existsById`, `count`,
+`save`, `saveAll`, `saveAndFlush`, `saveAllAndFlush`, and the listed `delete*`
+methods. Reads, deletes, and create-or-update attempts retain the entity and
+source line. Unknown repository types, derived queries, and dynamic calls
+create no operation fact. A reachable HTTP or Kafka entry has a separate
+potential path to each supported JPA call; an entity name is not a table name.
+
+MongoDB calls on a field imported or fully qualified as a Spring Data Mongo
+template or operations interface, or on a resolved Mongo repository field,
+retain their raw API
+operation. Indexed flows classify supported calls as read, insert,
+update, delete, create-or-update, or read-and-update attempts. Deletes and
+multi-item inserts are writes. `save` and `upsert` remain create-or-update;
+`findAndModify` and `findAndReplace` have both read and write facets. A
+`bulkOps` builder, `getCollection`, and `watch` do not create read or write
+effects. A field whose name only resembles a Mongo receiver does not create a
+MongoDB fact. A field on another object is not treated as a field of the
+containing class. Persisted data steps retain the action. HTML export uses
+them as potential annotations in microservice tooltips of selected call
+graphs, while its flow catalogue lists call flows only.
+Unknown collection names remain unresolved.
+
+When the persisted Java call graph uniquely identifies the method containing
+a MongoDB call, each reachable HTTP or Kafka entry also gets a potential flow
+ending at that call. The flow includes the call sites and keeps uncertain
+dispatch at low confidence. These data flows are separate from paths ending
+at an HTTP call or Kafka publication; an operation on a sibling branch is not
+attached to that output path. An ambiguous owner method has no data flow.
+
 The same module inventory records conventional Java DTOs associated with JPA
 entities through imported, same-package or qualified entity references. If the
 module has no OpenAPI file, it also records DTO types used in REST controller
 method parameters or return types. The index preserves source locations and
 does not infer a mapper or a runtime serialization path.
+
+The Flux call view lists data access sites reachable from the selected entry
+through persisted endpoint topology. Paths with the same exact entry endpoint
+may contribute separate annotations. This is a set of possible paths, not a
+linear execution trace. An asynchronous write is a database write in a Kafka
+consumer handler, reached after a message publication. A synchronous read is a
+database read on an HTTP entry path. Reads in Kafka consumers and writes on
+other trigger types have no async/sync branch classification. Consistency
+diagnostics pair only classified async writes and sync reads; missing keys or
+query shape leave a candidate pair as insufficient evidence.
 
 For REST clients, a literal URL or a unique, never-reassigned local string
 base URL is normalized to its route and retains its HTTP host as target
@@ -81,6 +122,9 @@ When CodeQL is disabled or unavailable, a local Java symbol pass may also
 connect an entry to an output through a uniquely resolved receiver type and
 method signature. These source-declared calls remain `potential` with low
 confidence. Ambiguous receivers and overloads remain unresolved.
+An inherited `final` method can be a possible target when its source body is
+unique, even if a generic parameter type cannot be resolved. This covers a
+Kafka handler delegating through a final generic method on its base class.
 
 When a Java method consumes multiple indexed Kafka topics and contains a
 `join` invocation, its same-method flow explanation states that the

@@ -1,223 +1,299 @@
-# Call-flow diagnostic focus backlog
+# Data operations in internal flows
 
-Selecting a consistency problem must reveal its asynchronous write branch and
-synchronous read branch directly in the selected call graph. The user must see
-their common trigger, affected data, and missing completion guarantee.
+This plan proposes source-backed read, insert, update, and delete evidence on
+potential internal flows. The first delivery covers supported MongoDB and
+Spring Data JPA calls. Literal JDBC statements are a later extension. A flow
+must retain an unknown action or resource when the code does not establish it.
 
-Status: in progress. Diagnostic endpoint export, click focus state, branch styling,
-and `Vue complète` are implemented. Exact occurrence mapping, browser validation,
-and source-backed branch extraction remain open.
-Tracking: this file only; do not create GitHub tickets.
-Owner: implementing developer. Visual acceptance: product owner.
-Documentation language: English. Visible interface labels: French.
+Status: in progress. Owner: SystemLens implementer. Reviewers: product owner
+and architecture maintainer. MongoDB classification, typed Spring Data JPA
+CRUD extraction, additive module persistence, interprocedural data paths, and
+call-root data projection are implemented. A dedicated operation table,
+derived JPA queries, record-key tracing, and ordering evidence remain open. The
+[product scope](docs/PRD.md), [functional specification](docs/SPEC-FONC.md),
+and [technical specification](docs/SPEC-TECH.md) remain authoritative.
 
-Implemented slice: `flow_diagnostics` now carries async and sync endpoint
-identities when the persisted steps provide them. The Flux list selects a
-diagnostic, captures the call-tree state, expands the selected tree, adds
-`is-diagnostic-async` and `is-diagnostic-sync` styling to matching arcs, and
-restores the captured state through `Vue complète`. Steps without endpoint
-identities remain explicitly unavailable for arc highlighting.
+## 1. Goal and boundaries
 
-## Scope and evidence
+An analyst should be able to select an HTTP or Kafka entry flow and see which
+data operation a reachable Java method may perform, on which known resource,
+with a source location and an explicit confidence level. A data operation must
+also be visible when the path has no HTTP call or Kafka publication after it.
 
-This backlog covers diagnostic selection, exported path evidence, graph focus,
-and restoration of the full view. Automatic extraction of new Java data-flow
-evidence, runtime traces, and application fixes are outside this task.
-CDN dependencies, ARIA semantics, and keyboard navigation remain deferred.
+An action describes a source-level attempt. `insert` does not prove a row was
+created, `delete` does not prove a row existed, and a potential call path does
+not prove runtime execution. The first delivery does not infer transaction
+commit, cross-service causality, physical JPA table names, or application-level
+business effects. Unsupported persistence APIs remain outside coverage.
 
-The [diagnostic model](src/systemlens/application/flow_consistency.py) exposes
-flow identity and read/write step numbers. The
-[call-graph projection](src/systemlens/render/call_graph.py) carries endpoint
-transitions and occurrence information. The work must connect these identities
-before the browser can highlight the correct service occurrences.
+An operation identity contains the indexed project, source-relative path,
+enclosing method identity, invocation location, technology, raw API operation,
+action, optional resource identity, confidence, and unresolved reason. For
+MongoDB, the resource is a collection. For JPA, it is an entity type; a table
+name appears only with independent, unambiguous mapping evidence. No local
+machine root or secret value enters persisted evidence.
 
-The [Flux renderer](src/systemlens/render/assets/graph/55-code-flows.js) and
-[graph rebuild module](src/systemlens/render/assets/graph/10-rebuild.js) present
-diagnostic summaries. Their summaries alone do not establish branch witnesses.
-The proposed behavior below is an implementation target, not a shipped claim.
+## 2. Baseline evidence
 
-Use the [checkout fixture](examples/checkout-single-call-graph.json) and its
-[generator](scripts/generate_checkout_call_graph.py) as the primary synthetic
-acceptance scenario. Its root is `checkout-root`; the scenario declares the
-write path `[1, 8, 10]` and read path `[1, 14, 15]`.
-These numbers identify fixture interactions, not runtime timestamps.
+The code facts below describe the baseline at commit `cef857b`, before the
+work in section 4 began.
 
-## Target interaction
+| Verified fact | Source | Consequence |
+|---|---|---|
+| MongoDB discovery retains operation name, source line, collection, and a simple owner method name. | [Mongo inventory](src/systemlens/domain/module_inventory.py), [discovery](src/systemlens/discovery/build/modules.py) | The raw action survives extraction, but overloaded owner methods need stronger identity. |
+| The flow materializer maps MongoDB calls to `data_read` or `data_write` and retains the raw operation. It attaches MongoDB steps in the same method as an indexed trigger. | [Flow materializer](src/systemlens/indexing/code_flows.py) | Actions in reached helper methods are missing from the persisted flow. |
+| Delete and multi-item insert methods are discovered but omitted from the separate write lists. The lists include the unexecuted `bulkOps` builder. | [Discovery](src/systemlens/discovery/build/modules.py), [relations](src/systemlens/indexing/relations.py), [LikeC4 export](src/systemlens/render/likec4_export.py) | Deletes and inserts may appear as reads; a batch builder may appear as a write. |
+| JPA inventory records entity declarations, not read or write invocations. | [Data model](docs/spec-tech/data-model.md) | An entity declaration alone cannot prove an operation. |
+| CodeQL methods and call edges are persisted, and `flows calculate` uses the stored snapshot. | [Persistence](docs/spec-tech/persistence.md), [indexing](docs/spec-tech/indexing.md) | Flow reconstruction can join stored operations without parsing Java at export time. |
 
-1. The user selects a flow and sees its problems with local identifiers `P1`,
-   `P2`, and so on, including badges on the affected read occurrences.
-2. Clicking a problem or its badge selects that problem and expands the paths
-   needed to show the common trigger, publication, expected write, and read.
-3. The graph displays the asynchronous branch in orange and the synchronous
-   branch in blue. Other calls remain visible with reduced emphasis.
-4. A compact detail shows the data identity, symbolic key, expected operation,
-   classification, confidence, guarantee assessment, and source references.
-5. `Précédent` and `Suivant` select another problem in the filtered list.
-6. `Vue complète` restores the camera and expansion state captured before focus.
+The accepted [conservative extraction](docs/ADR.md) and
+[snapshot export](docs/spec-tech/export-snapshot.md) rules apply throughout.
+Any new public behavior requires an update to [extraction rules](docs/spec-fonc/extraction-rules.md).
+[Spring Data MongoDB](https://docs.spring.io/spring-data/mongodb/reference/4.5/mongodb/template-crud-operations.html)
+and [Spring Data JPA](https://docs.spring.io/spring-data/jpa/reference/jpa/entity-persistence.html)
+document the conditional behavior of `save`. The [MongoDB bulk API](https://docs.spring.io/spring-data/data-mongo/docs/current/api/org/springframework/data/mongodb/core/BulkOperations.html)
+executes a prepared batch through `execute()`.
 
-Path emphasis must not create an execution edge from the write to the read.
-Both branches may execute independently after their common trigger. The read
-badge states a potential risk: `Peut lire avant la fin de l’écriture`.
+## 3. Proposed representation
 
-Orange identifies the branch containing an asynchronous boundary. Dashed arcs
-identify asynchronous transport; HTTP segments within that branch remain solid.
-Labels identify write and read roles so interpretation does not depend on color.
+> **Why & What - Persist operation facts**
+>
+> **What:** Persist one typed data-operation fact per supported source invocation,
+> separately from the paths that reach it.
+>
+> **Why:** One operation can appear in several potential flows, and a flow
+> rebuild must use the stored snapshot. This does not establish whether the
+> operation ran or committed.
+>
+> **Alternatives considered:** Store actions only on `CodeFlowStep`. That
+> reuses existing JSON but duplicates evidence across flows and loses operations
+> when no flow reaches them.
+>
+> **Fallback:** Keep the existing MongoDB inventory and report that operation
+> coverage is unavailable on older indexes until they are reindexed.
 
-Focus preserves surrounding calls to keep the problem in context. A separate
-isolated subgraph was considered, but would require users to reconstruct that
-context. The selected approach costs additional occurrence mapping and camera
-state management, covered by the tasks below.
+The proposed action vocabulary is `read`, `insert`, `update`, `delete`,
+`create_or_update`, `read_update`, and `unknown`. A separate derived read/write
+facet preserves existing `data_read`, `data_write`, and `reads`/`writes`
+consumers. An unknown action creates no asserted read or write relation.
+`findAndModify` may carry both read and update facets; `save` remains
+`create_or_update` because its outcome depends on entity state.
 
-## Delivery order
+> **Why & What - Reach data terminals**
+>
+> **What:** Join persisted operation facts to source-backed method paths from
+> an indexed HTTP, Kafka, or scheduled entry, even without another output port.
+>
+> **Why:** Endpoint-to-endpoint paths miss a request whose only external effect
+> is a repository call. A reached method remains a potential path, not a
+> statement of execution order across branches.
+>
+> **Alternatives considered:** Annotate existing endpoint-to-endpoint flows
+> only. This is cheaper but hides data-only handlers.
+>
+> **Fallback:** Show same-method operations when CodeQL is unavailable and
+> label the missing interprocedural coverage.
 
-| Task | Priority | Depends on | Deliverable |
-|---|---|---|---|
-| FOCUS-01 | P0 | None | Branch witness contract |
-| FOCUS-02 | P0 | FOCUS-01 | Export and occurrence mapping |
-| FOCUS-03 | P0 | FOCUS-02 | Selection and restoration state |
-| FOCUS-04 | P0 | FOCUS-02, FOCUS-03 | In-graph branch highlighting |
-| FOCUS-05 | P1 | FOCUS-03, FOCUS-04 | Problem list, badges, and details |
-| FOCUS-06 | P1 | FOCUS-01 | Representative fixtures |
-| FOCUS-07 | P1 | FOCUS-04, FOCUS-05, FOCUS-06 | Browser validation and exports |
+The graph answers whether an indexed entry can reach an invocation. It does
+not establish that the invocation runs on every request. Each reached
+operation therefore gets its own potential entry-to-data path, even when an
+HTTP call or Kafka publication is also reachable. An operation annotates an
+entry-to-output path only when its enclosing method belongs to that path's
+source-backed method witness. Neither annotation asserts execution order
+inside a method or across conditional branches.
 
-P0 items establish correct path selection. P1 items complete the interaction
-and its verification. All items are required to deliver this task.
+The source fact owns the operation and its evidence. A flow step references
+that fact and carries the existing broad `kind` plus an optional action.
+Older step JSON loads with an unknown action. A new `data_access` step may
+represent a reached invocation whose effect is unresolved; consumers must
+handle that kind explicitly. Resource identities include technology so an
+entity and a collection with the same name do not become one object.
 
-## FOCUS-01: Define branch witnesses
+## 4. Delivery tasks
 
-- [ ] Audit diagnostic IDs, flow IDs, endpoint IDs, transition IDs, and rendered
-      occurrence IDs across import, persistence, export, and browser rendering.
-- [ ] Define a stable diagnostic identity and branch witnesses containing the
-      root flow, common prefix, causal split, ordered transitions, and terminal
-      read/write references. Include the owning handler occurrence for each access.
-- [ ] Represent source evidence, expected operation/version, data identity,
-      symbolic key, classification, confidence, and missing evidence explicitly.
-- [ ] Separate complete, partial, unavailable, and truncated witness coverage.
-      Preserve ambiguity and variant-specific paths and guarantees.
-- [ ] Define additive compatibility for old snapshots and manifests. Run any
-      required migration before the indexing transaction.
-- [ ] Update the authoritative sections linked from [SPEC-TECH](docs/SPEC-TECH.md)
-      and [SPEC-FONC](docs/SPEC-FONC.md). Record durable representation decisions
-      in a new [ADR](docs/ADR.md), preserving accepted entries.
+### 4.1 Define action and evidence contracts
 
-Acceptance: two occurrences of the same service remain distinguishable.
-A step number or service name alone cannot establish a highlight target.
-Missing witnesses produce an explicit unavailable or partial focus state.
+Files: add `src/systemlens/domain/data_operations.py`; extend
+[flow step model](src/systemlens/domain/code_flows.py) and
+[model tests](tests/test_models.py).
 
-## FOCUS-02: Preserve witnesses through export
+Work: define the action vocabulary, read/write facets, source location,
+qualified method identity, resource identity, confidence, and unknown reason.
+Specify whether a call returns data while writing it. Preserve the current
+step `kind` contract and make new fields optional for older JSON.
 
-- [ ] Carry branch evidence through the fact importer and persisted snapshot.
-      Export must succeed without source files and must not reparse them.
-- [ ] Resolve witnesses to existing call-graph transitions using exact endpoint
-      and occurrence identities; never select an arbitrary shortest path.
-- [ ] Preserve mappings through flow aggregation, deduplication, repeated calls,
-      fan-out, fan-in, cycles, and collapsed occurrences.
-- [ ] Associate diagnostics with their selected root graph, including diagnostics
-      originating in reachable handler fragments. Deduplicate equivalent pairs.
-- [ ] Export mappings for badges, shared prefixes, read/write occurrences, and
-      available path variants. Retain distinct expected writes and reads.
-- [ ] Use indexed lookups and bounded traversal. Name limits, report truncation,
-      and document complexity; do not enumerate every possible path.
-- [ ] Validate relative evidence paths and keep runtime values and secrets out
-      of persisted keys, fixtures, and exports.
+Acceptance: `insert` differs from `create_or_update`; `findAndModify` retains
+both facets; an unsupported call remains unknown. Verify with
+`uv run pytest tests/test_models.py`.
 
-Acceptance: exported witnesses select exactly the declared fixture branches.
-Repeated runs produce the same mapping. An unresolved segment remains unknown;
-it is never replaced with a plausible graph edge.
+### 4.2 Correct MongoDB classification at the source
 
-## FOCUS-03: Implement focus state and restoration
+Files: [Mongo discovery](src/systemlens/discovery/build/modules.py),
+[flow materializer](src/systemlens/indexing/code_flows.py),
+[relations](src/systemlens/indexing/relations.py),
+[LikeC4 export](src/systemlens/render/likec4_export.py),
+[graph view model](src/systemlens/render/graph_view_model.py), and
+[module tests](tests/test_modules.py).
 
-- [ ] Store selected flow, selected diagnostic, selected variant, and the full-view
-      camera and expansion snapshot in the Flux state owner.
-- [ ] Capture the snapshot once when entering diagnostic focus. Switching
-      problems must not overwrite it with an already focused state.
-- [ ] On selection, expand only the ancestors needed to reveal both branches.
-      Center their combined bounds while keeping labels readable.
-- [ ] Preserve selection through layout refreshes and cancel stale render work
-      when the user selects another diagnostic before rendering finishes.
-- [ ] Make `Vue complète` restore zoom, pan, expanded and collapsed occurrences,
-      and remove every diagnostic emphasis.
-- [ ] Clear focus on flow changes or leaving Flux. Filtering out the selected
-      problem restores the full view; entering another flow starts fresh state.
+Work: replace the duplicated write lists with one classifier based on a
+supported receiver type and operation. Classify `insert`/`insertAll`,
+`delete`/`deleteById`/`deleteAll`, reads, updates, and ambiguous saves.
+Treat `getCollection` and `watch` as non-CRUD operations. Treat `bulkOps` as a
+builder; record a batch effect only when a supported `execute()` call is
+resolved. Keep a source fact with unknown collection when the collection
+expression is dynamic.
 
-Acceptance: selecting P1, then P2, then `Vue complète` restores the original
-view. Rapid clicks cannot apply a highlight from the previous flow.
+Acceptance: a delete is never reported as a read, and an unexecuted batch
+builder creates no write. A name-matched variable of an unrelated Java type
+creates no MongoDB fact. Verify with `uv run pytest tests/test_modules.py
+tests/test_relations.py tests/test_code_flows.py`.
 
-## FOCUS-04: Highlight both branches in the graph
+### 4.3 Persist facts and refresh them incrementally
 
-- [ ] Emphasize the common prefix and mark the causal split.
-- [ ] Render the asynchronous write branch in orange and the synchronous read
-      branch in blue, with transport-specific line styles defined above.
-- [ ] Attach `Écriture attendue` and `Lecture à risque` labels to the exact
-      access occurrences. Where accesses have no graph node, add anchored
-      annotations without creating invented service dependencies.
-- [ ] Attenuate unrelated nodes and calls while retaining their context.
-      Avoid highlighting every occurrence of a service by its name.
-- [ ] Preserve existing protocol labels, inspections, zoom, and pan.
-- [ ] Show unknown segments and traversal limits explicitly. Never render a
-      disconnected path as a complete witness.
-- [ ] Integrate a compact focus legend in Flux. Retain the architecture legend's
-      existing scope and remove focus styling when returning to Architecture.
+Files: [SQLite store](src/systemlens/storage/sqlite.py),
+[serialization](src/systemlens/storage/serialization.py),
+[index orchestration](src/systemlens/indexing/service.py), and
+[storage tests](tests/test_storage_uniqueness.py).
 
-Acceptance: both inventory occurrences in the checkout scenario are distinct;
-the write and read each receive their own marker. No arrow suggests guaranteed
-write-before-read ordering. Shared segments remain legible in both themes.
+Work: add a source-path-indexed operation table and an additive migration
+before the index transaction. Replace facts for changed paths, remove facts
+for deleted paths, and bump the extraction and flow signatures. Retain
+root-relative paths. Keep the old MongoDB module JSON readable while the new
+facts become the source of truth for flow actions.
 
-## FOCUS-05: Connect the list, badges, and explanation
+Acceptance: an old SQLite index opens, a reindex produces new facts, and a
+deleted source removes its facts. Repeated indexing produces stable IDs.
+Verify with `uv run pytest tests/test_storage_uniqueness.py
+tests/test_code_flows.py`.
 
-- [ ] Show `Problèmes du flux · N` for the selected flow only. Assign stable local
-      display IDs independently of severity; filtering must not renumber them.
-- [ ] Count potential risks and review candidates separately. Present guarantees
-      outside the problem count and explain missing analysis coverage.
-- [ ] Add read-occurrence badges; collapsed nodes show unique problem counts.
-      A shared badge opens a choice restricted to that occurrence's problems.
-- [ ] Make list selection and badge selection activate the same focus action.
-- [ ] Provide classification and data filters, visible/total counts, and
-      `Précédent`/`Suivant` with disabled end states and the current position.
-- [ ] Show branch evidence, symbolic key/query overlap, expected operation,
-      guarantee assessment, confidence, and source links for the active problem.
-- [ ] Replace redundant summary banners with the active explanation. Use precise
-      wording for insufficient evidence and guarantees rather than calling them risks.
-- [ ] Define no-selection, no-problem, old-export, partial-witness, unavailable,
-      and filter-empty states. An empty list must not claim the flow is safe.
+### 4.4 Extract Spring Data JPA operations
 
-Acceptance: P1 and P2 focus different read occurrences and update the detail
-together. If focus is unavailable, the explanation states which evidence is
-missing and does not highlight an unrelated path.
+Files: add `src/systemlens/discovery/build/data_operations.py`; integrate it
+through [module discovery](src/systemlens/discovery/build/modules.py) and
+[index orchestration](src/systemlens/indexing/service.py). Add focused
+`tests/test_data_operations.py`.
 
-## FOCUS-06: Extend fixtures and regression cases
+Work: resolve repository receiver types and entity generics before classifying
+`find`, `exists`, `save`, `delete`, and supported derived query methods.
+Inspect `@Modifying` plus literal `@Query` and direct `EntityManager` calls
+under explicit rules. Preserve unknown targets for custom repositories,
+dynamic queries, ambiguous overloads, and unmapped types. Do not infer a
+physical table from `@Entity` alone.
 
-- [ ] Enrich the checkout fixture with exact witness references derived from
-      its declared interactions and handler occurrences. Keep it synthetic.
-- [ ] Add a multi-problem fixture with distinct reads in the same service,
-      shared prefixes, and one read affected by multiple expected writes.
-- [ ] Add equivalent path variants, a cycle, a collapsed branch, ambiguous
-      mapping, missing endpoints, truncation, and an old manifest without witnesses.
-- [ ] Include a guarantee and insufficient evidence alongside potential risks
-      to test counts, labels, and focus availability.
-- [ ] Test import, persistence, export, and diagnostic-to-occurrence mapping.
-      Assert exact branch membership and exclusion of unrelated calls.
+Acceptance: one repository call to each supported action yields the correct
+entity and source site. `save` stays create-or-update; an unrelated method
+named `delete` produces no fact. Verify with
+`uv run pytest tests/test_data_operations.py tests/test_modules.py`.
 
-Acceptance: the fixtures fail if service-name matching highlights every
-inventory occurrence or if equivalent paths inflate a problem count.
+### 4.5 Attach operations to internal paths
 
-## FOCUS-07: Validate the visible interaction and regenerate models
+Files: [flow materializer](src/systemlens/indexing/code_flows.py),
+[flow calculation](src/systemlens/application/flow_calculation.py),
+[flow tests](tests/test_code_flows.py), and
+[consistency tests](tests/test_flow_consistency.py).
 
-- [ ] Add browser tests that click P1 and P2 and inspect highlighted arcs,
-      occurrence badges, expanded ancestors, and the selected explanation.
-- [ ] Verify `Vue complète`, filtering, flow changes, rapid selection, and
-      leaving Flux. Check camera restoration within renderer precision.
-- [ ] Run the focused tests, Ruff, and the applicable contract checks prescribed
-      by [AGENTS.md](AGENTS.md). Run the Chrome browser suite when available.
-- [ ] Capture and inspect screenshots of the complete graph, P1 focus, P2 focus,
-      and restored view in light and dark themes, including a constrained viewport.
-- [ ] Regenerate the checkout HTML from its JSON and verify the actual generated
-      file in the browser. Keep the generator and fixture reproducible.
-- [ ] If the supermarket export is regenerated, synchronize `architecture-ia.html`
-      with `docs/models/simple-supermarket.html` as required by AGENTS.md.
-- [ ] Document any unavailable browser prerequisite and unverified behavior.
-      Do not mark visual acceptance complete from string-level checks alone.
+Work: join an operation to a method only when module, relative path,
+qualified signature, and source range identify one persisted method. Keep
+ambiguous matches unresolved. Traverse directed persisted call edges from
+each indexed entry, including a zero-hop same-method path. Sort edges by
+source coordinate and method ID; retain one shortest source-backed witness
+for each entry and operation pair. Reuse the existing 12-hop flow bound,
+report a truncated result when it is reached, and mark unavailable or partial
+CodeQL coverage separately. Do not report an exact alternative count unless
+the traversed alternatives were actually counted. An endpoint flow receives
+an operation only when the operation's method occurs on that specific flow's
+method witness. Calls and data operations within the same method remain
+potentially co-occurring, with no asserted execution order.
 
-Acceptance: screenshots and browser assertions demonstrate that selecting a
-problem reveals its two exact branches and that returning to the full graph
-restores the previous view. Complete this backlog only after all criteria pass.
+Acceptance: a controller calling a helper that calls a repository exposes the
+repository operation with its source site. An operation reached on a sibling
+branch does not annotate an unrelated endpoint path. Two overloaded helpers
+do not share facts. Cycles terminate and depth truncation is visible. A
+CodeQL-free index retains same-method facts and labels any remaining
+interprocedural coverage gap. Verify with
+`uv run pytest tests/test_code_flows.py tests/test_flow_consistency.py`.
+
+### 4.6 Expose and explain the persisted evidence
+
+Files: [HTML export](src/systemlens/render/html_export.py),
+[Flux view](src/systemlens/render/assets/graph/55-code-flows.js),
+[CLI flow view](src/systemlens/application/code_flows.py), and
+[render tests](tests/test_render.py).
+
+Work: expose action, typed resource, confidence, source location, and unknown
+reason from the persisted snapshot. Display read, insert, update, delete, and
+create-or-update as distinct actions. Keep the broad read/write kind for
+existing consumers. Show potential paths and partial coverage explicitly.
+Do not read Java files during export or turn unknown resources into guesses.
+
+Acceptance: CLI and HTML describe the same operation from an index after
+source files are unavailable. An old index remains readable and shows unknown
+action rather than a fabricated insert or delete. Verify with
+`uv run pytest tests/test_render.py tests/test_code_flows.py`; run the slow
+browser export test when Chrome is available.
+
+### 4.7 Validate contracts and companion workflow
+
+Files: update the owning sections linked from
+[functional specification](docs/SPEC-FONC.md) and
+[technical specification](docs/SPEC-TECH.md), plus
+[product requirements](docs/PRD.md) if the supported scope changes. Record
+any durable decision as a new entry in [ADR](docs/ADR.md). Update
+[companion skill](../systemlens-skill/) in the same pass if its workflow or
+examples consume the new facts.
+
+Work: test positive, negative, and ambiguous cases across MongoDB and JPA,
+including old SQLite indexes, incremental removal, CodeQL timeout, and
+CodeQL-free operation. Review whether actions change the existing consistency
+diagnostic and keep its uncertain cases uncertain.
+
+Acceptance: focused tests pass, public JSON remains compatible, and the
+companion contract check passes against a fresh laboratory index. Run
+`uv run ruff check src tests`, `uv run mypy`, `uv run pytest`, and
+`uv run python scripts/check_companion_contracts.py`.
+
+## 5. Later JDBC extension
+
+Add a separate extractor for `JdbcTemplate` and prepared-statement calls with
+literal SQL `SELECT`, `INSERT`, `UPDATE`, and `DELETE` after the first delivery.
+Use physical table identity only for an unambiguous parsed statement. Dynamic
+SQL, stored procedures, ORM-generated SQL, and multiple-statement strings
+remain unknown until independently supported.
+
+Files: extend `src/systemlens/discovery/build/data_operations.py` and add
+JDBC fixtures to `tests/test_data_operations.py`. Acceptance: literal single-
+table statements expose the intended action and table; dynamic SQL stays
+unknown. Verify with `uv run pytest tests/test_data_operations.py`. Its absence
+must be visible in coverage output; section 4 does not cover every Java
+persistence technology.
+
+## 6. Residual risks
+
+Static reachability can over-approximate runtime dispatch and cannot prove a
+transaction committed. A repository method may wrap additional side effects.
+CRUD names alone are insufficient evidence for a custom method, and a known
+method may target an unresolved resource. Each emitted operation therefore
+retains the supporting invocation, method path, and confidence.
+
+The main implementation cost is maintaining one classifier across extraction,
+relations, flow calculation, CLI, and export. The plan accepts that cost to
+avoid conflicting read/write judgments. If typed resolution proves too weak
+on a supported repository, retain unknown evidence and narrow coverage rather
+than promoting a method-name guess to an architecture fact.
+
+## 7. Research and API references
+
+These papers guide the design; none validates SystemLens' proposed operation
+classifier or its persisted call graph. Its precision and coverage require
+project-specific fixtures and evaluation.
+
+- Liang et al., [*Pointer Analysis for Database-Backed Applications*](https://doi.org/10.1145/3729307), PLDI 2025. DBridge models Java database APIs, including JPA and Spring Data JPA, and provides the DB-Micro benchmark. Its Java-to-database value-flow objective is broader than this plan's operation reachability.
+- Reps, Horwitz, and Sagiv, [*Precise Interprocedural Dataflow Analysis via Graph Reachability*](https://doi.org/10.1145/199448.199462), POPL 1995. Valid interprocedural paths respect matching calls and returns. The persisted method-call graph here lacks the control-flow facts needed to claim that precision.
+- Sui et al., [*On the Recall of Static Call Graph Construction in Practice*](https://doi.org/10.1145/3377811.3380441), ICSE 2020. Their Java evaluation motivates explicit missing-edge and partial-coverage reporting.
+- Smaragdakis and Balatsouras, [*Pointer Analysis*](https://doi.org/10.1561/2500000014), Foundations and Trends in Programming Languages, 2015. Receiver and alias resolution trade precision against coverage and cost.
+- Cherry et al., [*Static Analysis of Database Accesses in MongoDB Applications*](https://doi.org/10.1109/SANER2022.2022.00111), SANER 2022. Its MongoDB API extraction and false-positive evaluation concern JavaScript, so its rules do not directly classify Spring Data Java calls.
+
+The [CodeQL Java call-graph guide](https://codeql.github.com/docs/codeql-language-guides/navigating-the-call-graph/)
+defines static and possible virtual targets. [Spring Data JPA query methods](https://docs.spring.io/spring-data/jpa/reference/jpa/query-methods.html)
+define derived deletes and modifying queries. These API contracts determine
+classification rules alongside the research above.

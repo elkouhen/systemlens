@@ -58,6 +58,7 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
             endpoints,
             [],
             module=module,
+            modules=modules,
             persisted_edges=persisted_call_edges,
             persisted_methods=persisted_codeql_methods,
         )

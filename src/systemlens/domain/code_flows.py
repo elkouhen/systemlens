@@ -37,6 +37,7 @@ class CodeFlowStep:
     expected_version: str | None = None
     completion: str | None = None
     query_shape: str | None = None
+    action: str | None = None
 
 
 @dataclass(frozen=True)

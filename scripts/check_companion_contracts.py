@@ -85,7 +85,7 @@ def _copy_lab_application(lab_root: Path, destination: Path) -> None:
         raise FileNotFoundError(f"Java laboratory application not found: {source}")
 
     def ignore(directory: str, names: list[str]) -> set[str]:
-        ignored = {"target", ".git", ".systemlens"}.intersection(names)
+        ignored = {"target", ".git", ".systemlens", ".codeql"}.intersection(names)
         if Path(directory).name == ".systemlens":
             ignored.update({"findings.db", "findings.db-shm", "findings.db-wal"}.intersection(names))
         return ignored
@@ -125,11 +125,45 @@ def _validate_lab(
             str(systemlens), "import-facts", enrichment_manifest.name,
             "--namespace", "direct-analysis", "--complete",
         ], cwd=application)
+        _run([str(systemlens), "flows", "calculate"], cwd=application)
         output = Path(temporary) / "architecture.html"
         _run([str(systemlens), "export", "microservices", "--html", str(output)], cwd=application)
         document = output.read_text(encoding="utf-8")
         if '<script id="graph-data" type="application/json">' not in document:
             raise ValueError("The laboratory HTML export does not contain graph data")
+        graph_data = json.loads(re.search(
+            r'<script id="graph-data" type="application/json">(.*?)</script>',
+            document, re.DOTALL,
+        ).group(1))
+        jpa_steps = [
+            access for accesses in graph_data["flow_data_accesses"].values()
+            for access in accesses
+            if str(access.get("resource") or "").startswith("jpa:")
+        ]
+        if not any(step["action"] == "read" for step in jpa_steps) or not any(
+            step["action"] == "create_or_update" for step in jpa_steps
+        ):
+            raise ValueError("The laboratory HTML export has no JPA read/write annotations")
+        if not any(step["kind"] == "data_write" and step["branch"] == "async"
+                   for step in jpa_steps):
+            raise ValueError("The laboratory HTML export has no asynchronous JPA write annotation")
+        if any(flow["steps"][-1]["kind"] in {"data_read", "data_write"}
+               for flow in graph_data["code_flows"]):
+            raise ValueError("Data access paths are selectable call flows in the HTML export")
+        if not any(
+            len(accesses) > 1 for accesses in graph_data["flow_data_accesses"].values()
+        ):
+            raise ValueError("The laboratory call flows do not expose related data access sites")
+        order_roots = {
+            flow["id"] for flow in graph_data["code_flows"]
+            if flow["steps"][0]["name"] == "POST /api/orders"
+        }
+        if not any(
+            item["flow_id"] in order_roots
+            and item["classification"] == "insufficient_evidence"
+            for item in graph_data["flow_diagnostics"]
+        ):
+            raise ValueError("The order call flow has no conservative async-write/read diagnostic")
         with sqlite3.connect(application / ".systemlens" / "findings.db") as connection:
             counts = dict(connection.execute(
                 "SELECT 'indexed_endpoints', COUNT(*) FROM endpoints WHERE source != 'manifest' "

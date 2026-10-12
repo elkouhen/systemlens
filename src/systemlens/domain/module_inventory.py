@@ -26,6 +26,7 @@ class DiscoveredModule:
     mongo_methods: tuple["MongoMethod", ...] = ()
     mongo_persistence_classes: tuple["MongoPersistenceClass", ...] = ()
     jpa_entities: tuple["JpaEntity", ...] = ()
+    jpa_methods: tuple["JpaMethod", ...] = ()
     jpa_dtos: tuple["JpaDto", ...] = ()
     openapi_files: tuple[str, ...] = ()
     kafka_methods: tuple["KafkaMethod", ...] = ()
@@ -92,6 +93,16 @@ class JpaEntity:
     path: str
     line: int
     fields: tuple[JpaField, ...] = ()
+
+
+@dataclass(frozen=True, order=True)
+class JpaMethod:
+    operation: str
+    entity: str
+    receiver: str
+    path: str
+    line: int
+    owner_method: str
 
 
 @dataclass(frozen=True, order=True)

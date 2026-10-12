@@ -16,7 +16,7 @@ def _endpoint_summary(
     if not endpoint_steps:
         return None, None
     first = endpoints.get(endpoint_steps[0].endpoint_id or "")
-    last = endpoints.get(endpoint_steps[-1].endpoint_id or "")
+    last = endpoints.get(endpoint_steps[-1].endpoint_id or "") if len(endpoint_steps) > 1 else None
     return first, last
 
 
@@ -108,6 +108,10 @@ def list_code_flows(
     publishes_to_topic: bool = False,
     module: str | None = None,
 ) -> list[dict[str, object]]:
+    flows = [
+        flow for flow in flows
+        if not flow.steps or flow.steps[-1].kind not in {"data_read", "data_write"}
+    ]
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints or []}
     flow_index = _build_flow_index(flows, endpoint_by_id)
     root_ids = _flow_root_ids(flows, endpoint_by_id, flow_index)
@@ -154,6 +158,8 @@ def _is_internal_module_flow(
     last_endpoint = endpoints[endpoint_steps[-1].endpoint_id or ""]
     if first_endpoint.role not in {"serve", "consume"}:
         return False
+    if flow.steps[-1].kind in {"data_read", "data_write"}:
+        return False
     if last_endpoint.role not in {"call", "produce"}:
         return False
     involved_modules = {
@@ -189,6 +195,7 @@ def _flow_construction(
             "end_line": step.end_line,
             "endpoint_id": step.endpoint_id,
             "endpoint_module": endpoint.module if endpoint is not None else None,
+            "action": step.action,
         })
     method_calls = [step for step in flow.steps if step.kind == "method_call"]
     endpoint_steps = [step for step in steps if step["port"] in {"IN", "OUT"}]

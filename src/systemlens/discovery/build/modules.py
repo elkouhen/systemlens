@@ -10,6 +10,7 @@ from pathlib import Path
 
 import yaml
 from defusedxml import ElementTree as ET
+from tree_sitter import Node
 
 from systemlens.discovery.java import parser as java_parser
 from systemlens.discovery.build.gradle import discover_gradle_modules, gradle_module_identity
@@ -19,6 +20,7 @@ from systemlens.domain.module_inventory import (
     BlockingPoint,
     DiscoveredModule,
     JpaEntity,
+    JpaMethod,
     JpaDto,
     JpaField,
     JavaArchitectureExtension,
@@ -334,6 +336,18 @@ def _invocation_receiver_and_operation(invocation, source: bytes) -> tuple[str, 
     return receiver_text.rsplit(".", 1)[-1], operation
 
 
+def _enclosing_type_start(node) -> int | None:
+    """Identify the nearest Java type, so equal field names do not cross classes."""
+    current = node.parent
+    while current is not None:
+        if current.type in {
+            "class_declaration", "interface_declaration", "record_declaration", "enum_declaration",
+        }:
+            return current.start_byte
+        current = current.parent
+    return None
+
+
 def _type_identifiers(node, source: bytes) -> list[str]:
     return [
         _node_text(source, child)
@@ -600,20 +614,46 @@ def _extract_java_architecture(
         _trace("module.architecture.error_check.begin", module=module_dir, path=rel)
         has_error = root_node.has_error
         _trace("module.architecture.error_check.end", module=module_dir, path=rel, has_error=has_error)
-        repository_receivers: dict[str, str | None] = {}
+        mongo_imports = {
+            _node_text(source, child).removeprefix("import ").removesuffix(";").strip()
+            for child in root_node.named_children
+            if child.type == "import_declaration"
+        }
+        repository_receivers: dict[tuple[int, str], str | None] = {}
+        template_receivers: set[tuple[int, str]] = set()
         _trace("module.architecture.walk_metadata.begin", module=module_dir, path=rel)
         for node in _walk(root_node):
             if node.type == "field_declaration":
                 if _has_parse_error(node):
+                    continue
+                owner_type = _enclosing_type_start(node)
+                if owner_type is None:
                     continue
                 type_node = node.child_by_field_name("type")
                 if type_node is None:
                     continue
                 type_names = _type_identifiers(type_node, source)
                 type_name = type_names[0].rsplit(".", 1)[-1] if type_names else ""
+                is_mongo_template_type = (
+                    type_name in {
+                        "MongoTemplate", "MongoOperations",
+                        "ReactiveMongoTemplate", "ReactiveMongoOperations",
+                    }
+                    and (
+                        f"org.springframework.data.mongodb.core.{type_name}" in mongo_imports
+                        or "org.springframework.data.mongodb.core.*" in mongo_imports
+                        or _node_text(source, type_node)
+                        == f"org.springframework.data.mongodb.core.{type_name}"
+                    )
+                )
+                if is_mongo_template_type:
+                    for declarator in node.children:
+                        if declarator.type == "variable_declarator":
+                            receiver_node = declarator.child_by_field_name("name")
+                            if receiver_node is not None:
+                                template_receivers.add((owner_type, _node_text(source, receiver_node)))
                 entity = repository_entities.get(type_name) or _repository_entity(type_node, source)
-                is_crud_repository = type_name in {"CrudRepository", "ReactiveCrudRepository"}
-                if entity is None and not is_crud_repository:
+                if entity is None:
                     continue
                 for declarator in node.children:
                     if declarator.type != "variable_declarator":
@@ -622,7 +662,7 @@ def _extract_java_architecture(
                     if receiver_node is None:
                         continue
                     receiver = _node_text(source, receiver_node)
-                    repository_receivers[receiver] = (
+                    repository_receivers[(owner_type, receiver)] = (
                         entity_collections.get(entity) if entity is not None else None
                     )
         _trace("module.architecture.walk_metadata.end", module=module_dir, path=rel)
@@ -682,14 +722,23 @@ def _extract_java_architecture(
             if call is None:
                 continue
             receiver, operation = call
-            is_template = receiver.lower().endswith(("template", "operations"))
-            is_repository = receiver in repository_receivers
+            receiver_node, _operation, _arguments = java_parser.invocation_parts(node, source)
+            if receiver_node is None or _node_text(source, receiver_node) not in {
+                receiver, f"this.{receiver}",
+            }:
+                continue
+            owner_type = _enclosing_type_start(node)
+            if owner_type is None:
+                continue
+            receiver_key = (owner_type, receiver)
+            is_template = receiver_key in template_receivers
+            is_repository = receiver_key in repository_receivers
             if (is_template and operation in _MONGO_TEMPLATE_OPERATIONS) or (
                 is_repository and operation in _REPOSITORY_OPERATIONS
             ):
                 entity = _mongo_entity_class_literal(node, source) if is_template else None
                 collection = (
-                    repository_receivers.get(receiver)
+                    repository_receivers.get(receiver_key)
                     if is_repository
                     else _mongo_collection_literal(node, source)
                 )
@@ -902,6 +951,125 @@ def discover_jpa_entities(
     return tuple(sorted(entities))
 
 
+def discover_jpa_methods(
+    module_dir: Path, module_roots: set[Path], repo_root: Path,
+    entities: tuple[JpaEntity, ...],
+) -> tuple[JpaMethod, ...]:
+    """Resolve CRUD calls through source-declared Spring Data JPA repositories."""
+    files: list[tuple[Path, bytes, Node, str, set[str]]] = []
+    repositories: dict[str, str] = {}
+    entity_names = {entity.qualified_name for entity in entities}
+    parser = _java_parser("jpa_methods")
+    for java_file in _module_files(module_dir, module_roots, "*.java"):
+        parts = java_file.relative_to(module_dir).parts
+        if "test" in parts or "tests" in parts:
+            continue
+        try:
+            source = java_file.read_bytes()
+        except OSError:
+            continue
+        root = parser.parse(source).root_node
+        if root.has_error:
+            continue
+        package = next((
+            java_parser.node_text(source, node).removeprefix("package").removesuffix(";").strip()
+            for node in root.named_children if node.type == "package_declaration"
+        ), "")
+        imports = {
+            java_parser.node_text(source, node).removeprefix("import ").removesuffix(";").strip()
+            for node in root.named_children if node.type == "import_declaration"
+        }
+        files.append((java_file, source, root, package, imports))
+        if "org.springframework.data.jpa.repository.JpaRepository" not in imports:
+            continue
+        for declaration in java_parser.type_declarations(root):
+            if declaration.parent != root or declaration.type != "interface_declaration":
+                continue
+            name = java_parser.declaration_name(declaration, source)
+            body = declaration.child_by_field_name("body")
+            if not name or body is None:
+                continue
+            header = source[declaration.start_byte:body.start_byte].decode("utf-8", errors="replace")
+            match = re.search(r"\bextends\s+JpaRepository\s*<\s*([\w.]+)\s*,", header)
+            if match is None:
+                continue
+            entity_name = match.group(1)
+            candidates = [qualified for qualified in entity_names if (
+                qualified == entity_name if "." in entity_name else
+                qualified.rsplit(".", 1)[-1] == entity_name and (
+                    qualified in imports or qualified == f"{package}.{entity_name}"
+                )
+            )]
+            if len(candidates) == 1:
+                repositories[f"{package}.{name}" if package else name] = candidates[0]
+
+    supported = {
+        "findById", "findAll", "existsById", "count", "save", "saveAll",
+        "saveAndFlush", "saveAllAndFlush", "delete", "deleteById", "deleteAll",
+        "deleteAllById", "deleteAllInBatch", "deleteAllByIdInBatch",
+    }
+    results: set[JpaMethod] = set()
+    for java_file, source, root, package, imports in files:
+        for declaration in java_parser.type_declarations(root):
+            if declaration.parent != root or declaration.type != "class_declaration":
+                continue
+            fields: dict[str, str] = {}
+            for field in java_parser.walk(declaration):
+                if field.type != "field_declaration" or java_parser.enclosing(
+                    field, "class_declaration", "record_declaration", "enum_declaration"
+                ) != declaration:
+                    continue
+                type_node = field.child_by_field_name("type")
+                if type_node is None:
+                    continue
+                type_name = java_parser.node_text(source, type_node).strip()
+                matches = [qualified for qualified in repositories if (
+                    qualified == type_name if "." in type_name else
+                    qualified.rsplit(".", 1)[-1] == type_name and (
+                        qualified in imports or qualified == f"{package}.{type_name}"
+                    )
+                )]
+                if len(matches) != 1:
+                    continue
+                for child in field.children:
+                    if child.type == "variable_declarator":
+                        name_node = child.child_by_field_name("name")
+                        if name_node is not None:
+                            fields[java_parser.node_text(source, name_node)] = repositories[matches[0]]
+            for invocation in java_parser.walk(declaration):
+                if invocation.type != "method_invocation":
+                    continue
+                receiver, operation, _args = java_parser.invocation_parts(invocation, source)
+                if receiver is None or receiver.type != "identifier" or operation not in supported:
+                    continue
+                receiver_name = java_parser.node_text(source, receiver)
+                entity = fields.get(receiver_name)
+                owner = java_parser.enclosing(invocation, "method_declaration")
+                if entity is None or owner is None or java_parser.enclosing(owner, "class_declaration") != declaration:
+                    continue
+                shadowed = any(
+                    java_parser.node_text(source, name_node) == receiver_name
+                    for child in java_parser.walk(owner)
+                    if child.type in {"formal_parameter", "spread_parameter", "local_variable_declaration"}
+                    for name_node in (
+                        child.child_by_field_name("name"),
+                        *(part.child_by_field_name("name") for part in child.children
+                          if part.type == "variable_declarator"),
+                    )
+                    if name_node is not None
+                )
+                if shadowed:
+                    continue
+                owner_name = java_parser.declaration_name(owner, source)
+                if owner_name:
+                    results.add(JpaMethod(
+                        operation, entity, receiver_name,
+                        java_file.relative_to(module_dir).as_posix(),
+                        invocation.start_point.row + 1, owner_name,
+                    ))
+    return tuple(sorted(results))
+
+
 def discover_jpa_dtos(
     module_dir: Path,
     module_roots: set[Path],
@@ -1046,6 +1214,10 @@ def _enrich_module(
         discover_jpa_entities(module.path, module_roots, repo_root)
         if enrich_architecture else ()
     )
+    jpa_methods = (
+        discover_jpa_methods(module.path, module_roots, repo_root, jpa_entities)
+        if enrich_architecture else ()
+    )
 
     openapi_files = _discover_openapi_files(
         module.path,
@@ -1073,6 +1245,7 @@ def _enrich_module(
         **{**module.__dict__, "mongo_collections": collections, "mongo_methods": methods,
            "mongo_persistence_classes": persistence_classes,
            "jpa_entities": jpa_entities,
+           "jpa_methods": jpa_methods,
            "jpa_dtos": jpa_dtos,
            "openapi_files": openapi_files,
            "kafka_methods": kafka_methods, "blocking_points": blocking_points,

@@ -9,6 +9,7 @@ from systemlens.domain.models import ArchitectureRelation, MessageEndpoint, comp
 from systemlens.domain.graph import DEFAULT_REST_TARGET_POLICY, build_graph, group_endpoints_by_module
 from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
+from systemlens.domain.mongo_operations import mongo_facets
 from systemlens.scanner import local_spring_application_names
 
 
@@ -22,10 +23,6 @@ class _RelationEvidence(TypedDict):
     qualified_name: str | None
 
 
-_MONGO_WRITE_OPERATIONS = frozenset({
-    "bulkOps", "findAndModify", "findAndReplace", "insert", "remove", "save",
-    "updateFirst", "updateMulti", "upsert",
-})
 _SPRING_PROPERTY_RE = re.compile(r"\$\{\s*([^}:\s]+)")
 
 
@@ -169,24 +166,11 @@ def build_architecture_relations(
         for method in module.mongo_methods:
             if not method.collection:
                 continue
-            add(_relation(
-                source_kind,
-                identity,
-                "writes" if method.operation in _MONGO_WRITE_OPERATIONS else "reads",
-                "collection",
-                method.collection,
-                origin="code",
-                confidence="high",
-                module=identity,
-                path=method.path,
-                start_line=method.line,
-                end_line=method.line,
-            ))
-            if method.owner_method:
+            for facet in sorted(mongo_facets(method.operation)):
                 add(_relation(
-                    "method",
-                    f"{identity}:{method.owner_method}",
-                    "writes" if method.operation in _MONGO_WRITE_OPERATIONS else "reads",
+                    source_kind,
+                    identity,
+                    "writes" if facet == "write" else "reads",
                     "collection",
                     method.collection,
                     origin="code",
@@ -196,6 +180,20 @@ def build_architecture_relations(
                     start_line=method.line,
                     end_line=method.line,
                 ))
+                if method.owner_method:
+                    add(_relation(
+                        "method",
+                        f"{identity}:{method.owner_method}",
+                        "writes" if facet == "write" else "reads",
+                        "collection",
+                        method.collection,
+                        origin="code",
+                        confidence="high",
+                        module=identity,
+                        path=method.path,
+                        start_line=method.line,
+                        end_line=method.line,
+                    ))
 
     # Inter-service links are materialized from the same conservative graph
     # resolver used by all delivery adapters.  They are snapshot facts, not a

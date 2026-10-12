@@ -648,6 +648,39 @@ def test_modules_resolve_injected_repository_collection_and_this_receiver(tmp_pa
     ]
 
 
+def test_mongo_discovery_requires_supported_receiver_type(tmp_path: Path) -> None:
+    module = tmp_path / "orders"
+    source = module / "src" / "main" / "java" / "Store.java"
+    source.parent.mkdir(parents=True)
+    _write_pom(module / "pom.xml", "orders-api", "1.0.0")
+    source.write_text(
+        "import org.springframework.data.mongodb.core.MongoTemplate;\n"
+        "class Unrelated { String mongoTemplate; "
+        "void store() { mongoTemplate.remove(null); } }\n"
+        "class Store {\n"
+        "  String unrelatedTemplate;\n"
+        "  MongoTemplate mongoTemplate;\n"
+        "  Other other;\n"
+        "  void store() { unrelatedTemplate.delete(); "
+        "other.mongoTemplate.remove(null); mongoTemplate.remove(null); }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    methods = discover_modules(tmp_path)[0].mongo_methods
+
+    assert [(item.operation, item.receiver) for item in methods] == [
+        ("remove", "mongoTemplate"),
+    ]
+    source.write_text(
+        "class MongoTemplate { void remove(Object value) {} }\n"
+        "class Store { MongoTemplate mongoTemplate; "
+        "void store() { mongoTemplate.remove(null); } }\n",
+        encoding="utf-8",
+    )
+    assert discover_modules(tmp_path)[0].mongo_methods == ()
+
+
 def test_modules_infer_mongo_classes_without_document_annotation(tmp_path: Path) -> None:
     module = tmp_path / "customers"
     source = module / "src" / "main" / "java" / "CustomerStore.java"
@@ -1107,7 +1140,35 @@ def test_store_adds_jpa_inventory_to_existing_index(tmp_path: Path) -> None:
     with Store(tmp_path) as store:
         columns = {row["name"] for row in store.conn.execute("PRAGMA table_info(modules)")}
         assert "jpa_entities" in columns
-        assert store.get_meta("schema_version") == "36"
+        assert store.get_meta("schema_version") == "37"
+
+
+def test_jpa_calls_require_typed_spring_data_repository(tmp_path: Path) -> None:
+    module = tmp_path / "inventory"
+    source_dir = module / "src" / "main" / "java" / "example"
+    source_dir.mkdir(parents=True)
+    _write_pom(module / "pom.xml", "inventory", "1.0")
+    (source_dir / "Product.java").write_text(
+        "package example; import jakarta.persistence.Entity; @Entity class Product {}\n"
+    )
+    (source_dir / "ProductRepository.java").write_text(
+        "package example; import org.springframework.data.jpa.repository.JpaRepository; "
+        "interface ProductRepository extends JpaRepository<Product, String> {}\n"
+    )
+    (source_dir / "Adapter.java").write_text(
+        "package example; class Adapter { ProductRepository repository; String other; "
+        "void load() { repository.findById(\"a\"); other.findById(\"a\"); } "
+        "void store() { repository.save(new Product()); } "
+        "void shadow(String repository) { repository.findById(\"a\"); } }\n"
+    )
+
+    with Store(tmp_path) as store:
+        store.replace_modules(discover_modules(tmp_path))
+        methods = store.all_modules()[0].jpa_methods
+    assert [(item.operation, item.entity, item.owner_method) for item in methods] == [
+        ("findById", "example.Product", "load"),
+        ("save", "example.Product", "store"),
+    ]
 
 
 def test_index_repo_materializes_modules_snapshot(

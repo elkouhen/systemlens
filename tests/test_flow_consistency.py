@@ -43,6 +43,18 @@ def test_async_write_then_causal_sync_read_is_a_potential_risk() -> None:
     assert diagnostics[0].severity == "P1"
 
 
+def test_read_before_async_write_is_not_classified_as_stale_read_risk() -> None:
+    diagnostic, = diagnose_flow_consistency(_flow(
+        CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1),
+        CodeFlowStep(2, "data_read", "orders", "Orders.java", 2, 2,
+                     branch="sync", resource="orders", key="order-42"),
+        CodeFlowStep(3, "data_write", "orders", "Orders.java", 3, 3,
+                     branch="async", resource="orders", key="order-42"),
+    ))
+    assert diagnostic.classification == "insufficient_evidence"
+    assert "avant" in (diagnostic.limitation or "")
+
+
 def test_visibility_guarantee_is_not_reported_as_risk() -> None:
     diagnostics = diagnose_flow_consistency(_flow(
         CodeFlowStep(1, "message_entry", "orders.created", "Orders.java", 1, 1),
@@ -118,6 +130,23 @@ def test_accesses_in_distinct_handlers_need_a_shared_persisted_root() -> None:
     assert diagnostic.write_path_endpoint_ids == ("checkout-out", "writer-in")
     assert diagnostic.read_path_endpoint_ids == ("checkout-out", "shipping-event", "reader-in")
     assert diagnostic.classification == "potential_risk"
+
+
+def test_pair_is_reported_on_every_reachable_call_root() -> None:
+    write = replace(_flow(CodeFlowStep(
+        1, "data_write", "orders", "Writer.java", 10, 10,
+        branch="async", resource="orders", key="order-1",
+    )), id="writer")
+    read = replace(_flow(CodeFlowStep(
+        1, "data_read", "orders", "Reader.java", 20, 20,
+        branch="sync", resource="orders", key="order-1",
+    )), id="reader")
+    diagnostics = diagnose_flow_consistency_snapshot(
+        [write, read], {"root-a": {"writer", "reader"}, "root-b": {"writer", "reader"}},
+    )
+    assert [(item.flow_id, item.classification) for item in diagnostics] == [
+        ("root-a", "potential_risk"), ("root-b", "potential_risk"),
+    ]
 
 
 def test_conflicting_causal_ids_on_reachable_branches_are_insufficient() -> None:

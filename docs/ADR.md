@@ -14,7 +14,7 @@ functional or technical contract.
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
 | Indexed contracts and implementation boundaries | [ADR-25](#adr-25-separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26-organize-implementation-modules-by-architectural-ownership) |
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch) |
-| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution) |
+| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -841,3 +841,150 @@ the metadata is additive and nullable. The detector is conservative and does
 not infer missing data-access or causal facts; extractor work is still required
 to populate those fields for real applications. Multiple diagnostics remain
 independently inspectable without changing topology or runtime claims.
+
+## ADR-46: Classify MongoDB API attempts separately from execution paths
+
+**Status:** Accepted.
+
+**Context:** The MongoDB inventory retains raw API names, while flow and
+architecture projections used separate read/write lists. Those lists treated
+deletion as reading and an unexecuted `bulkOps` builder as writing.
+
+**Decision:** Use one MongoDB API classifier for read, insert, update, delete,
+create-or-update, and read-and-update attempts. Derive broad read/write facets
+for existing relations. Keep the specific action optional on persisted flow
+steps so older indexes load unchanged. A builder or collection accessor does
+not create a read/write effect. Source receiver typing gates extraction; an
+API name alone does not identify MongoDB access.
+
+**Consequences:** Same-method MongoDB steps can distinguish insertion from
+deletion while retaining existing broad flow kinds. `read_update` has both
+relation facets but currently uses the broad `data_write` step kind. Old
+snapshots have no action until reindexed. The classifier does not prove that
+the call ran or that a database transaction committed. Reaching operations
+through helper methods still requires the separate persisted-fact join.
+
+## ADR-47: End MongoDB data flows at source-backed operation sites
+
+**Status:** Accepted.
+
+**Context:** HTTP and Kafka entries can reach MongoDB calls through application
+services and persistence adapters. Endpoint-to-endpoint flow reconstruction
+does not include operations on a sibling branch of the call graph.
+
+**Decision:** Join each MongoDB inventory call to a unique persisted method by
+module, relative path, owner name, and source line. Traverse directed call
+edges from each indexed entry and emit a separate potential path ending at the
+operation. Retain call-site evidence and lower confidence for possible dispatch.
+Keep data paths separate from paths ending at an external endpoint.
+
+**Consequences:** Existing indexes can be recalculated without rereading Java
+sources. Calls with ambiguous owners or missing call edges remain absent.
+The method graph does not prove branch execution, operation success, or exact
+create-versus-update behavior for `save`. Data paths add traversal and export
+work proportional to reachable operation sites within the configured hop bound.
+
+## ADR-48: Resolve JPA accesses and project sibling data paths onto call roots
+
+**Status:** Accepted.
+
+**Context:** The call view can show a MongoDB terminal path while a selected
+HTTP-to-Kafka path omits data accesses reachable from the same entry. JPA entity
+declarations alone do not identify repository read or write calls.
+
+**Decision:** Persist supported Spring Data JPA calls only when a typed
+repository and one indexed entity resolve from source. Classify calls as read,
+delete, or create-or-update attempts. Emit a separate potential path from each
+reachable HTTP or Kafka entry to the call site. At export, show the union of
+data sites reachable through persisted endpoint arcs or an identical trigger
+endpoint on the selected call root. Keep the paths separate and use the
+existing pairwise consistency detector only with its required evidence.
+
+**Consequences:** Call inspection can reveal JPA and MongoDB accesses without
+implying that every branch ran. Older SQLite indexes acquire an empty JPA
+operation column through an additive migration and need reindexing for new
+facts. Unsupported repository calls and ambiguous types remain absent.
+Entity identity does not establish a physical table or record key. Static
+reachability alone cannot prove that an asynchronous write became visible
+before a synchronous read.
+
+## ADR-49: Preserve a unique final generic delegation as a possible call
+
+**Status:** Accepted.
+
+**Context:** A Kafka listener can delegate to a `final` method inherited from
+a generic base class. The source symbol join previously required every formal
+parameter type to resolve, so this source-backed call was absent even when the
+body could not be overridden.
+
+**Decision:** When the declared receiver has one compatible inherited `final`
+method with a source body, retain that method as a possible call target despite
+an unresolved generic parameter. Keep all ordinary overload, receiver, and
+source-location checks. Persist the edge with inferred, possible confidence.
+
+**Consequences:** Kafka-to-persistence paths through this delegation can be
+reconstructed without inventing a runtime target. The method body can still
+contain conditional effects, so downstream data paths remain potential. A
+non-final or ambiguous generic method remains unresolved.
+
+## ADR-50: Present data access as call-flow annotations
+
+**Status:** Accepted.
+
+**Context:** Persisting a terminal path for every reachable database call
+increased the apparent number of flows, although those paths are evidence
+about a service rather than additional service-to-service calls.
+
+**Decision:** Keep source-backed data paths in the compatible SQLite snapshot
+for reachability and consistency analysis. CLI flow listing and HTML call-flow
+navigation expose only integration-ending paths and cycles. HTML export
+projects data operations onto the owning microservice and onto reachable call
+roots. A call-tree occurrence shows only operations whose trigger endpoint
+matches its input endpoint. Tooltips label operations as potential.
+
+**Consequences:** Existing indexes remain readable and no source parse occurs
+during export. A data-only trigger has no selectable call-flow card; its
+service-level tooltip still shows indexed operations. Reachability remains
+conservative and branch execution is unproven. The SQLite snapshot still
+contains the internal terminal paths, so storage size is unchanged.
+
+## ADR-51: Scope data-access annotations to selected call graphs
+
+**Status:** Accepted.
+
+**Context:** Service-wide data access lists in the architecture graph lack a
+selected call path and can be mistaken for operations performed by every
+entry. The left widget also competes with the call graph for attention.
+
+**Decision:** Show data-access annotations only in microservice tooltips of a
+selected call graph. Match a call-tree occurrence to access evidence through
+its exact input endpoint. Keep the architecture graph and left flow widget
+free of data-access annotations and consistency cards. Attach each
+diagnostic's source site to the exported pair, then put a selectable badge
+on matching service occurrences in the call graph. This supersedes ADR-50's service-wide
+architecture tooltip projection; its SQLite evidence policy still applies.
+
+**Consequences:** The HTML payload omits the redundant service-wide access
+projection. Accesses without a reachable integration call flow remain stored
+but cannot be displayed in a call graph. A selected call graph shows only
+accesses supported by its persisted trigger and topology.
+
+## ADR-52: Classify async writes by message consumption
+
+**Status:** Accepted.
+
+**Context:** Marking every database operation in a Kafka consumer as async
+made reads appear to have asynchronous consistency semantics. MongoDB access
+facts also lacked branch metadata, so consumer writes could not participate in
+the same diagnostic as JPA writes.
+
+**Decision:** Classify a database write as async when it belongs to a Kafka
+consumer handler. Classify a database read as sync when it belongs to an HTTP
+entry path. Leave reads in message consumers and operations under other trigger
+types unclassified. Apply this rule to JPA and MongoDB operations.
+
+**Consequences:** Consistency diagnostics compare writes performed after
+message consumption with reads on synchronous HTTP paths. The static model
+does not prove that the write was caused by a particular publication or that
+the consumer completed successfully; persisted reachability remains required
+to establish the candidate path.

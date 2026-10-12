@@ -104,10 +104,14 @@ extracted-call count and elapsed duration. Interactive terminals colour phase
 headers in cyan, module progress in yellow and completed work in green; the
 plain text content is unchanged when output is redirected. The indexing output
 ends with compact statistics for each module: the number of `IN` ports, `OUT`
-ports, and internal code flows. A global line then reports the same totals
+ports, call flows, and potential data-access annotations. A global line reports the same totals
 across the indexed repository. Individual port paths and Java implementations
 remain available through the persisted endpoint and module commands rather than
-being printed in the indexing summary. The total duration follows, then a
+being printed in the indexing summary. The flow materialization line separates
+call flows from paths collected as data-access annotations. `flows calculate`
+uses the same split in text output; its JSON result reports `flows` and
+`data_access_annotations` separately. `flows list` returns call flows only.
+The total duration follows, then a
 next-step hint towards the interactive microservice HTML export. Its result
 line is:
 

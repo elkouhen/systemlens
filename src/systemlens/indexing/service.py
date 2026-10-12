@@ -863,6 +863,7 @@ def _index_repo(
                 else:
                     progress_flows = materialize_codeql_code_flows(
                         methods, all_endpoints, calls, repo_root=repo_root,
+                        modules=relation_modules,
                         source_paths=list(current_hashes),
                         max_hops=config.codeql_max_hops,
                         codeql_edge_confidence=config.codeql_edge_confidence,
@@ -1054,6 +1055,7 @@ def _index_repo(
                     )
                     prepared_codeql_flows = materialize_codeql_code_flows(
                         methods, all_endpoints, calls, repo_root=repo_root,
+                        modules=relation_modules,
                         source_paths=list(current_hashes),
                         max_hops=config.codeql_max_hops,
                         codeql_edge_confidence=config.codeql_edge_confidence,
@@ -1233,6 +1235,7 @@ def _index_repo(
             timer.begin("call-graph-join", f"→ {engine_label} : jointure des méthodes et matérialisation des flux...")
             codeql_flows = prepared_codeql_flows if prepared_codeql_flows is not None else materialize_codeql_code_flows(
                 methods, all_endpoints, calls, repo_root=repo_root,
+                modules=relation_modules,
                 source_paths=list(current_hashes),
                 max_hops=config.codeql_max_hops,
                 codeql_edge_confidence=config.codeql_edge_confidence,
@@ -1290,6 +1293,7 @@ def _index_repo(
         ):
             source_candidates = materialize_codeql_code_flows(
                 methods, all_endpoints, [], repo_root=repo_root,
+                modules=relation_modules,
                 source_paths=list(current_hashes),
                 max_hops=config.codeql_max_hops,
                 codeql_edge_confidence=config.codeql_edge_confidence,
@@ -1332,9 +1336,14 @@ def _index_repo(
             store.set_meta("code_flow_snapshot_status", "complete")
             store.delete_meta("codeql_join_signature")
             store.delete_meta("codeql_join_completed_entries")
+        data_path_count = sum(
+            bool(flow.steps) and flow.steps[-1].kind in {"data_read", "data_write"}
+            for flow in flows
+        )
         _report_progress(
             progress,
-            f"→ Indexation : {len(flows)} parcours de code potentiel(s) matérialisé(s).",
+            f"→ Indexation : {len(flows) - data_path_count} flux d'appel "
+            f"et {data_path_count} annotation(s) d'accès aux données collectée(s).",
         )
         timer.end("flows", "matérialisation des flux de code")
     else:
@@ -1354,7 +1363,8 @@ def _index_repo(
     # Keep the end-of-index output useful on large repositories: report one
     # compact line per module instead of flooding the terminal with every port.
     endpoint_by_id = {endpoint.id: endpoint for endpoint in indexed_ports}
-    internal_flows_by_module: Counter[str] = Counter()
+    internal_integrations_by_module: Counter[str] = Counter()
+    internal_data_paths_by_module: Counter[str] = Counter()
     for flow in store.all_code_flows():
         involved_modules = {
             endpoint_by_id[step.endpoint_id].module
@@ -1362,7 +1372,10 @@ def _index_repo(
             if step.endpoint_id in endpoint_by_id and endpoint_by_id[step.endpoint_id].module
         }
         if not involved_modules or involved_modules == {flow.module}:
-            internal_flows_by_module[flow.module] += 1
+            if flow.steps and flow.steps[-1].kind in {"data_read", "data_write"}:
+                internal_data_paths_by_module[flow.module] += 1
+            else:
+                internal_integrations_by_module[flow.module] += 1
     in_by_module = Counter(
         endpoint.module or "<racine>"
         for endpoint in input_ports
@@ -1375,7 +1388,8 @@ def _index_repo(
         {module_identity(module) for module in relation_modules}
         | set(in_by_module)
         | set(out_by_module)
-        | set(internal_flows_by_module)
+        | set(internal_integrations_by_module)
+        | set(internal_data_paths_by_module)
     )
     _report_progress(progress, "→ Indexation : statistiques par module")
     for module_name in module_names:
@@ -1383,13 +1397,15 @@ def _index_repo(
             progress,
             f"  • {module_name} : {in_by_module[module_name]} IN, "
             f"{out_by_module[module_name]} OUT, "
-            f"{internal_flows_by_module[module_name]} flux internes",
+            f"{internal_integrations_by_module[module_name]} flux d'appel, "
+            f"{internal_data_paths_by_module[module_name]} annotations de données",
         )
     _report_progress(
         progress,
         "→ Indexation : statistiques globales : "
         f"{len(input_ports)} IN, {len(output_ports)} OUT, "
-        f"{sum(internal_flows_by_module.values())} flux internes, "
+        f"{sum(internal_integrations_by_module.values())} flux d'appel, "
+        f"{sum(internal_data_paths_by_module.values())} annotations de données, "
         f"{len(module_names)} modules",
     )
     timer.end("statistics", "calcul des statistiques finales")
