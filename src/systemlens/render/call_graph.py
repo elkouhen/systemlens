@@ -790,22 +790,31 @@ def _all_export_flows(
     edges: list[GraphEdge],
     index: _CallGraphIndex | None = None,
 ) -> Iterator[tuple[CodeFlow, dict[str, object], int]]:
-    """Build one HTML entry for every persisted flow.
+    """Build one selectable HTML entry for each uncovered call-flow root.
 
-    The CLI exposes persisted flows individually. The HTML picker follows the
-    same contract; graph-arc deduplication remains inside each call graph.
+    A downstream flow remains in its parent's call tree. When a disconnected
+    cycle has no zero-indegree root, its first stable flow represents it.
     """
     index = index or _index_call_graph_inputs(flows, endpoints_by_service, edges)
     ordered_flows = sorted(
         flows,
         key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id),
     )
-    for flow in ordered_flows:
+    root_ids = set(index.default_root_flow_ids)
+    candidates = [flow for flow in ordered_flows if flow.id in root_ids]
+    candidates.extend(flow for flow in ordered_flows if flow.id not in root_ids)
+    covered: set[str] = set()
+    for flow in candidates:
+        if flow.id in covered:
+            continue
+        call_graph = _networkx_call_graph(
+            flows, endpoints_by_service, edges,
+            root_flow_ids={flow.id}, index=index, include_occurrences=False,
+        )
+        call_tree = cast(dict[str, object], call_graph["call_tree"])
+        covered.update(cast(list[str], call_tree["reachable_flow_ids"]))
         yield (
             flow,
-            _networkx_call_graph(
-                flows, endpoints_by_service, edges,
-                root_flow_ids={flow.id}, index=index, include_occurrences=False,
-            ),
+            call_graph,
             1,
         )

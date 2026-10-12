@@ -363,13 +363,77 @@ def test_export_fuses_kafka_producer_and_consumer_fragments() -> None:
         code_flows=[scheduled, consumer_fragment],
     ))
 
-    assert len(data["code_flows"]) == 2
-    assert {flow["module"] for flow in data["code_flows"]} == {"orders", "inventory"}
-    flow = next(flow for flow in data["code_flows"] if flow["module"] == "orders")
+    assert [flow["id"] for flow in data["code_flows"]] == ["scheduled-flow"]
+    assert [flow["id"] for flow in data["supporting_code_flows"]] == ["consumer-flow"]
+    flow = data["code_flows"][0]
     assert {
         (edge["source"], edge["target"])
             for edge in _flow_call_graph(data, flow)["edges"]
     } == {("orders", "inventory"), ("inventory", "restock")}
+    tree = _flow_call_graph(data, flow)["call_trees_by_flow"][flow["id"]]
+    assert tree["reachable_flow_ids"] == ["consumer-flow", "scheduled-flow"]
+
+
+def test_export_keeps_independent_roots_when_they_share_a_downstream_flow() -> None:
+    first_out = replace(_kafka_endpoint("produce", "OrderCreated", "First.java"), id="first-out")
+    second_out = replace(_kafka_endpoint("produce", "OrderCreated", "Second.java"), id="second-out")
+    consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Worker.java"), id="worker-in")
+    flows = [
+        CodeFlow("first", "first", "First.publish", "First.java", 1, 2,
+                 "potential", "medium", "test", (
+                     CodeFlowStep(1, "cron_entry", "first job", "First.java", 1, 1),
+                     CodeFlowStep(2, "message_publish", "orders.created", "First.java", 2, 2, first_out.id),
+                 )),
+        CodeFlow("second", "second", "Second.publish", "Second.java", 1, 2,
+                 "potential", "medium", "test", (
+                     CodeFlowStep(1, "cron_entry", "second job", "Second.java", 1, 1),
+                     CodeFlowStep(2, "message_publish", "orders.created", "Second.java", 2, 2, second_out.id),
+                 )),
+        CodeFlow("worker", "worker", "Worker.consume", "Worker.java", 1, 1,
+                 "potential", "medium", "test", (
+                     CodeFlowStep(1, "message_entry", "orders.created", "Worker.java", 1, 1, consumer.id),
+                 )),
+    ]
+    data = _html_graph_data(render_graph_html(
+        {"first": [first_out], "second": [second_out], "worker": [consumer]},
+        [GraphEdge("kafka", "first", "worker", first_out, consumer),
+         GraphEdge("kafka", "second", "worker", second_out, consumer)],
+        code_flows=flows,
+    ))
+    assert {flow["id"] for flow in data["code_flows"]} == {"first", "second"}
+    assert [flow["id"] for flow in data["supporting_code_flows"]] == ["worker"]
+    for flow in data["code_flows"]:
+        tree = _flow_call_graph(data, flow)["call_trees_by_flow"][flow["id"]]
+        assert "worker" in tree["reachable_flow_ids"]
+
+
+def test_export_keeps_one_selectable_flow_for_an_isolated_cycle() -> None:
+    a_in = replace(_kafka_endpoint("consume", "A", "A.java"), id="a-in")
+    a_out = replace(_kafka_endpoint("produce", "B", "A.java"), id="a-out")
+    b_in = replace(_kafka_endpoint("consume", "B", "B.java"), id="b-in")
+    b_out = replace(_kafka_endpoint("produce", "A", "B.java"), id="b-out")
+    flows = [
+        CodeFlow("a-flow", "a", "A.handle", "A.java", 1, 2,
+                 "cycle", "medium", "test", (
+                     CodeFlowStep(1, "message_entry", "a.topic", "A.java", 1, 1, a_in.id),
+                     CodeFlowStep(2, "message_publish", "b.topic", "A.java", 2, 2, a_out.id),
+                 )),
+        CodeFlow("b-flow", "b", "B.handle", "B.java", 1, 2,
+                 "cycle", "medium", "test", (
+                     CodeFlowStep(1, "message_entry", "b.topic", "B.java", 1, 1, b_in.id),
+                     CodeFlowStep(2, "message_publish", "a.topic", "B.java", 2, 2, b_out.id),
+                 )),
+    ]
+    data = _html_graph_data(render_graph_html(
+        {"a": [a_in, a_out], "b": [b_in, b_out]},
+        [GraphEdge("kafka", "a", "b", a_out, b_in),
+         GraphEdge("kafka", "b", "a", b_out, a_in)],
+        code_flows=flows,
+    ))
+    assert [flow["id"] for flow in data["code_flows"]] == ["a-flow"]
+    assert [flow["id"] for flow in data["supporting_code_flows"]] == ["b-flow"]
+    tree = _flow_call_graph(data, data["code_flows"][0])["call_trees_by_flow"]["a-flow"]
+    assert tree["reachable_flow_ids"] == ["a-flow", "b-flow"]
 
 
 def test_export_fusion_deduplicates_identical_inter_service_edges() -> None:

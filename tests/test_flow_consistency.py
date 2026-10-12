@@ -102,6 +102,23 @@ def test_distinct_pairs_are_reported_independently() -> None:
     assert [(item.write_step, item.read_step) for item in diagnostics] == [(2, 4), (3, 5)]
 
 
+def test_resource_index_keeps_unknown_resources_and_excludes_unrelated_pairs() -> None:
+    diagnostics = diagnose_flow_consistency(_flow(
+        CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1),
+        CodeFlowStep(2, "data_write", "orders", "Orders.java", 2, 2,
+                     branch="async", resource="orders", key="id"),
+        CodeFlowStep(3, "data_read", "products", "Orders.java", 3, 3,
+                     branch="sync", resource="products", key="id"),
+        CodeFlowStep(4, "data_read", "orders", "Orders.java", 4, 4,
+                     branch="sync", resource="orders", key="id"),
+        CodeFlowStep(5, "data_read", "", "Orders.java", 5, 5,
+                     branch="sync", key="id"),
+    ))
+    assert [(item.read_step, item.classification) for item in diagnostics] == [
+        (4, "potential_risk"), (5, "insufficient_evidence"),
+    ]
+
+
 def test_accesses_in_distinct_handlers_need_a_shared_persisted_root() -> None:
     write = _flow(CodeFlowStep(
         1, "data_write", "orders", "Writer.java", 10, 10,

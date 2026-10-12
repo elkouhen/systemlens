@@ -206,7 +206,13 @@ def render_graph_html(
                 }
             },
         }
-        graph_json = json.dumps(graph_identity, sort_keys=True, separators=(",", ":"))
+        # The trigger catalogue is shared by every root graph in this export.
+        # Hash only the root-specific shape; serializing the full catalogue for
+        # each flow makes this loop quadratic when many triggers are indexed.
+        graph_json = json.dumps(
+            {key: value for key, value in graph_identity.items() if key != "triggers"},
+            sort_keys=True, separators=(",", ":"),
+        )
         graph_digest = hashlib.sha256(graph_json.encode("utf-8")).hexdigest()
         call_graph_id = graph_ids_by_digest.get(graph_digest)
         if call_graph_id is None:
@@ -229,8 +235,10 @@ def render_graph_html(
         }
         export_flow_items.append((flow, equivalent_count, call_graph_id))
 
-    serialized_code_flows = [
-        {
+    def serialize_code_flow(
+        flow: CodeFlow, equivalent_count: int, call_graph_id: str | None,
+    ) -> dict[str, object]:
+        return {
             "id": flow.id,
             "module": flow.module,
             "method": flow.method,
@@ -273,7 +281,15 @@ def render_graph_html(
                 for step in flow.steps
             ],
         }
+
+    serialized_code_flows = [
+        serialize_code_flow(flow, equivalent_count, call_graph_id)
         for flow, equivalent_count, call_graph_id in export_flow_items
+    ]
+    visible_flow_ids = {flow.id for flow, _, _ in export_flow_items}
+    view_model["supporting_code_flows"] = [
+        serialize_code_flow(flow, 1, None)
+        for flow in call_flows if flow.id not in visible_flow_ids
     ]
     view_model["code_flows"] = serialized_code_flows
     exported_diagnostics: list[dict[str, object]] = []
@@ -281,7 +297,7 @@ def render_graph_html(
     causal_paths: dict[str, dict[str, tuple[str, ...]]] = {}
     flow_by_id = {flow.id: flow for flow in export_flows}
     data_accesses_by_flow: dict[str, list[dict[str, object]]] = {}
-    for root_flow in call_flows:
+    for root_flow, _, _ in export_flow_items:
         paths = _reachable_flow_paths(call_graph_index, root_flow.id)
         causal_reachability[root_flow.id] = set(paths)
         causal_paths[root_flow.id] = paths
@@ -309,7 +325,7 @@ def render_graph_html(
                 accesses[site] for site in sorted(accesses)
             ]
     view_model["flow_data_accesses"] = data_accesses_by_flow
-    call_flow_ids = {flow.id for flow in call_flows}
+    call_flow_ids = visible_flow_ids
     for diagnostic in diagnose_flow_consistency_snapshot(
         export_flows, causal_reachability, causal_paths,
     ):

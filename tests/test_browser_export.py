@@ -23,6 +23,32 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.slow
+def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        page.set_content(document, wait_until="load")
+        page.locator("#flows-tab").click()
+        assert page.locator("#code-flows .code-flow-item").count() == 3
+        page.locator("#code-flows .code-flow-item").filter(has_text="GET /api/error").click()
+        page.locator("#flow-call-tree-depth-increase").click()
+        assert page.locator("#graph-call-tree .graph-call-tree-node").filter(
+            has_text="restock-service"
+        ).count() == 1
+        page.locator("#graph-call-tree .graph-call-tree-node").filter(
+            has_text="inventory-service"
+        ).first.hover()
+        assert "ProductEntity" in page.locator(
+            "#graph-flow-tooltips .graph-call-tree-entity-tooltip"
+        ).inner_text()
+        browser.close()
+
+
+@pytest.mark.slow
 def test_asyncapi_viewer_loads_lazily_and_preserves_inspector_navigation(tmp_path: Path) -> None:
     contract = {
         "module": "orders", "path": "orders.asyncapi.yaml",

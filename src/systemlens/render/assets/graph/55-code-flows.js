@@ -368,10 +368,11 @@
       const syncDiagnosticPathEndpoints = new Set(
         selectedDiagnostic?.sync_path_endpoint_ids || selectedDiagnostic?.sync_endpoint_ids || [],
       );
-      const flowById = new Map(codeFlows.map(flow => [flow.id, flow]));
+      const allCallFlows = [...codeFlows, ...(graphData.supporting_code_flows || [])];
+      const flowById = new Map(allCallFlows.map(flow => [flow.id, flow]));
       const flowIdsByOutputEndpoint = new Map();
       const outputEndpointIdsByFlow = new Map();
-      codeFlows.forEach(flow => {
+      allCallFlows.forEach(flow => {
         const outputEndpointIds = new Set((flow.steps || [])
           .map(step => step.endpoint_id)
           .filter(endpointId => treePortsByEndpointId.get(endpointId)?.direction === "out"));

@@ -110,9 +110,13 @@ The exported `call_graphs` map describes service-level propagation for one flow
 or flow group. Each graph contains participating nodes, deterministic order,
 traversal levels, a compact call tree, per-flow causal transition indexes,
 complete directed edges with display orders and endpoint identifiers, and
-service triggers. The first traversal level is the root set. Selecting a call
-graph keeps the root, arc order and trigger metadata visible; the export does
-not merge distinct flows into one undifferentiated edge.
+service triggers. The flow picker lists only paths with no upstream indexed
+call flow, plus one stable entry for each uncovered cycle or disconnected
+component. A downstream flow remains visible inside every selected root that
+reaches it.
+
+The first traversal level is the root set. Selecting a call graph keeps its
+arc order and trigger metadata visible.
 
 When a single code flow is selected, the graph displays the selected directed
 call graph as a hierarchy of call occurrences. A microservice is therefore

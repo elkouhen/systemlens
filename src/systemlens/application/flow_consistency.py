@@ -1,8 +1,9 @@
 """Conservative consistency diagnostics for persisted code-flow evidence."""
 
 from dataclasses import asdict, dataclass
-from itertools import product
-from typing import Mapping
+from collections import defaultdict
+from itertools import chain
+from typing import Iterable, Mapping
 
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
 
@@ -148,68 +149,84 @@ def diagnose_flow_consistency_snapshot(
         (flow, step) for flow in flows for step in flow.steps
         if step.kind == "data_read" and _is_sync(step)
     ]
+    reads_by_resource: dict[str, list[tuple[CodeFlow, CodeFlowStep]]] = defaultdict(list)
+    unknown_resource_reads: list[tuple[CodeFlow, CodeFlowStep]] = []
+    for read_flow, read in reads:
+        resource = _resource(read)
+        if resource is None:
+            unknown_resource_reads.append((read_flow, read))
+        else:
+            reads_by_resource[resource].append((read_flow, read))
+
+    def candidate_reads(write: CodeFlowStep) -> Iterable[tuple[CodeFlow, CodeFlowStep]]:
+        resource = _resource(write)
+        if resource is None:
+            return reads
+        return chain(reads_by_resource.get(resource, ()), unknown_resource_reads)
+
     exact_matches: set[tuple[tuple[str, int], tuple[str, int]]] = set()
     for write_flow, write in writes:
-        for read_flow, read in reads:
+        for read_flow, read in candidate_reads(write):
             overlaps, limitation = _overlap(write, read)
             if overlaps and limitation is None:
                 exact_matches.add(((write_flow.id, write.order), (read_flow.id, read.order)))
     matched_writes = {write for write, _read in exact_matches}
     matched_reads = {read for _write, read in exact_matches}
+    roots_by_flow: dict[str, set[str]] = defaultdict(set)
+    for root, reachable in (causal_reachability or {}).items():
+        for flow_id in reachable:
+            roots_by_flow[flow_id].add(root)
+    flow_by_id = {flow.id: flow for flow in flows}
     diagnostics: list[FlowConsistencyDiagnostic] = []
-    for (write_flow, write), (read_flow, read) in product(writes, reads):
-        overlaps, overlap_limitation = _overlap(write, read)
-        if not overlaps and overlap_limitation is None:
-            continue
-        if overlap_limitation == "correspondance entre les expressions de clé non établie" and (
-            (write_flow.id, write.order) in matched_writes
-            or (read_flow.id, read.order) in matched_reads
-        ):
-            continue
-        if write_flow.id == read_flow.id:
-            causal, evidence = _causal(write_flow, write, read)
-            diagnostics.append(_diagnose_pair(
-                write_flow, write, read_flow, read, write_flow.id, evidence,
-                "lecture située avant l'écriture dans le flux" if read.order < write.order
-                else None if causal else "lien causal non prouvé",
-            ))
-            continue
-        roots = sorted(
-            root for root, reachable in (causal_reachability or {}).items()
-            if write_flow.id in reachable and read_flow.id in reachable
-        )
-        if not roots:
-            continue
-        for display_root in roots:
-            if write.causal_id and read.causal_id and write.causal_id != read.causal_id:
-                evidence = "déclencheur commun, identifiants causaux différents"
-                causal_limitation = "identifiants causaux incompatibles"
-            elif write.causal_id and read.causal_id:
-                evidence = "identifiant causal partagé sur deux branches atteignables"
-                causal_limitation = None
-            else:
-                evidence = "déclencheur commun et chemins persistés"
-                causal_limitation = None
-            root_flow = next((flow for flow in flows if flow.id == display_root), None)
-            write_path = (causal_paths or {}).get(display_root, {}).get(write_flow.id, ())
-            if root_flow is not None and write_path and causal_limitation is None:
-                publication = next((step for step in root_flow.steps if (
-                    step.endpoint_id == write_path[0]
-                    and step.kind in {"message_publish", "http_call"}
-                )), None)
-                read_site = next((step for step in read_flow.steps[1:] if (
-                    step.kind in {"method_call", "data_read"}
-                )), None)
-                if publication is not None and read_site is not None and (
-                    read_site.path == publication.path and
-                    read_site.start_line < publication.start_line
-                ):
-                    causal_limitation = "lecture située avant la publication dans la méthode d'entrée"
-            diagnostics.append(_diagnose_pair(
-                write_flow, write, read_flow, read, display_root, evidence, causal_limitation,
-                (causal_paths or {}).get(display_root, {}).get(write_flow.id, ()),
-                (causal_paths or {}).get(display_root, {}).get(read_flow.id, ()),
-            ))
+    for write_flow, write in writes:
+        for read_flow, read in candidate_reads(write):
+            overlaps, overlap_limitation = _overlap(write, read)
+            if not overlaps and overlap_limitation is None:
+                continue
+            if overlap_limitation == "correspondance entre les expressions de clé non établie" and (
+                (write_flow.id, write.order) in matched_writes
+                or (read_flow.id, read.order) in matched_reads
+            ):
+                continue
+            if write_flow.id == read_flow.id:
+                causal, evidence = _causal(write_flow, write, read)
+                diagnostics.append(_diagnose_pair(
+                    write_flow, write, read_flow, read, write_flow.id, evidence,
+                    "lecture située avant l'écriture dans le flux" if read.order < write.order
+                    else None if causal else "lien causal non prouvé",
+                ))
+                continue
+            roots = sorted(roots_by_flow[write_flow.id] & roots_by_flow[read_flow.id])
+            for display_root in roots:
+                if write.causal_id and read.causal_id and write.causal_id != read.causal_id:
+                    evidence = "déclencheur commun, identifiants causaux différents"
+                    causal_limitation = "identifiants causaux incompatibles"
+                elif write.causal_id and read.causal_id:
+                    evidence = "identifiant causal partagé sur deux branches atteignables"
+                    causal_limitation = None
+                else:
+                    evidence = "déclencheur commun et chemins persistés"
+                    causal_limitation = None
+                root_flow = flow_by_id.get(display_root)
+                write_path = (causal_paths or {}).get(display_root, {}).get(write_flow.id, ())
+                if root_flow is not None and write_path and causal_limitation is None:
+                    publication = next((step for step in root_flow.steps if (
+                        step.endpoint_id == write_path[0]
+                        and step.kind in {"message_publish", "http_call"}
+                    )), None)
+                    read_site = next((step for step in read_flow.steps[1:] if (
+                        step.kind in {"method_call", "data_read"}
+                    )), None)
+                    if publication is not None and read_site is not None and (
+                        read_site.path == publication.path and
+                        read_site.start_line < publication.start_line
+                    ):
+                        causal_limitation = "lecture située avant la publication dans la méthode d'entrée"
+                diagnostics.append(_diagnose_pair(
+                    write_flow, write, read_flow, read, display_root, evidence, causal_limitation,
+                    (causal_paths or {}).get(display_root, {}).get(write_flow.id, ()),
+                    (causal_paths or {}).get(display_root, {}).get(read_flow.id, ()),
+                ))
     unique = {diagnostic.id: diagnostic for diagnostic in diagnostics}
     return sorted(unique.values(), key=lambda item: (
         item.flow_id, item.write_flow_id, item.write_order, item.read_flow_id, item.read_order,

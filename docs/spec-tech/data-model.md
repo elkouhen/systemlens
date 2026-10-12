@@ -195,6 +195,10 @@ The HTML export stores call graphs under `call_graphs`, keyed by a stable graph
 identifier. A `CallGraphDescription` describes service-level propagation for
 one selected flow or flow group. It does not replace the persisted method call
 facts or the individual `CodeFlow` records.
+The exporter hashes only each graph's root-specific shape when deduplicating
+graphs. The trigger catalogue is shared by all roots, so it remains in every
+stored graph but is omitted from repeated hash serialization. Building each
+root's reachable graph still costs work proportional to its reachable flows.
 
 ```json
 {
@@ -266,7 +270,7 @@ to render ports and arc labels.
 
 `triggers` maps each participating service to the flow entries that can start
 the propagation. A trigger kind is one of `http_entry`, `message_entry` or
-`cron_entry`. The `flow_id` links back to the exported `code_flows` collection;
+`cron_entry`. The `flow_id` links to `code_flows` or `supporting_code_flows`;
 `endpoint_id` may be null for a scheduled trigger without an endpoint fact.
 The graph description retains cycles and fan-out without merging distinct
 flows. A graph with no zero-indegree service uses all participating services as
@@ -460,12 +464,20 @@ OUT-to-IN topology: a flow is a root when no persisted flow reaches its input
 endpoint. `flows show` uses the persisted endpoint snapshot to connect an OUT
 endpoint to downstream matching IN endpoints and emits that reachable forest
 as `tree`; cycles and repeated flow IDs are emitted only once.
-HTML export and the CLI flow list expose one entry per persisted integration
-flow or cycle. Data-access terminal paths stay in the compatible SQLite flow
-snapshot as evidence, but do not become selectable call flows. Export builds
-reachability over the full snapshot, then projects deduplicated access sites
-onto visible call roots. A selected call-tree tooltip filters accesses by the
-service occurrence's exact input endpoint; unknown associations stay absent.
+The CLI flow list exposes every persisted integration flow. HTML export lists
+only uncovered call roots in `code_flows`. It selects zero-indegree trigger
+flows first, then one stable representative for each component not reached
+from them, including isolated cycles. A flow reached by a selected root stays
+in `supporting_code_flows` so the browser can render its call-tree occurrence.
+An unmatched or partially reconciled flow stays selectable when no indexed
+root covers it. Per-service HTML flow counts include selectable roots only.
+
+Data-access terminal paths stay in the compatible SQLite flow snapshot as
+evidence, but do not become selectable call flows. Export builds reachability
+over the full snapshot, then projects deduplicated access sites and
+diagnostics onto selectable roots. A selected call-tree tooltip filters
+accesses by the service occurrence's exact input endpoint; unknown
+associations stay absent.
 The architecture graph and left widget receive no data-access annotations.
 This projection does not infer a linear order or change persisted flow IDs.
 Call-root reachability retains its existing bounded traversal cost.
@@ -485,11 +497,18 @@ operation. Export also includes each operation's source path, line, module,
 action, and trigger endpoint as `write_site` or `read_site`. The renderer uses
 the endpoint paths to highlight the causal sequence. It places selectable
 diagnostic badges on call-tree service occurrences only when the operation's
-module and trigger endpoint match that occurrence. Candidate
-pairs are examined across the persisted accesses and reported on each reachable
-call root. The number of pair comparisons is O(W × R), for W async writes and R
-sync reads in the exported snapshot; materializing diagnostics also scales with
-the number of roots that reach each pair.
+module and trigger endpoint match that occurrence. The detector groups sync
+reads by resource and compares an async write with reads of the same resource
+or reads whose resource is unknown. A write with an unknown resource remains
+eligible for every read. Inverted flow-to-root sets find shared roots without
+scanning every root for each pair.
+
+For W writes, R reads, and P candidate pairs, indexing costs O(W + R + total
+reachability entries), followed by O(P) overlap checks. Root intersection cost
+depends on the number of roots containing each candidate's flows. P can still
+reach W × R when resources are shared or unknown; output size also grows with
+the number of common roots.
+
 When a read precedes a write in one ordered flow, or its call site precedes
 the publication in the same entry source file, the pair is insufficient
 evidence for a stale read after that write. This source-order guard does not
