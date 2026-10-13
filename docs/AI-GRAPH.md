@@ -25,7 +25,7 @@ the SQLite source inventory.
     {
       "id": "stable-id",
       "storage_id": "optional-persisted-id",
-      "kind": "service | external_service | topic | collection | data_schema | message_channel",
+      "kind": "service | external_service | topic | collection | data_schema | message_channel | flow_data_access",
       "name": "display name",
       "owner": "service-id or service name, required for collection",
       "evidence": [{"path": "relative/path", "start_line": 1, "end_line": 2, "quote": "optional short quote"}]
@@ -74,7 +74,8 @@ The optional `endpoints` and `flows` arrays support direct source analysis
 without a SystemLens source index. An endpoint records its service, role,
 protocol, channel, relative evidence path, and line range. A flow records its
 service, method, status, confidence, reason, and ordered steps. Each step may
-reference an endpoint ID. `import-facts` persists these arrays only in an
+reference an endpoint ID or carry a CRUD `action` for a data-access step.
+`import-facts` persists these arrays only in an
 empty source snapshot, so the call-graph export remains separate from indexed
 source facts.
 
@@ -108,6 +109,33 @@ The command upserts facts by `(namespace, fact_type, id)`. Re-importing a
 revised fact replaces its evidence, status, confidence and metadata. Use
 `--complete` only for a full snapshot of that namespace; partial passes leave
 unmentioned facts untouched.
+
+An indexed call flow can receive a data-access annotation through a node fact.
+Use the exact ID from `systemlens flows list --json`. The importer rejects an
+unknown flow ID and requires a relative source path with a line number.
+
+```json
+{
+  "id": "orders-read-1",
+  "kind": "flow_data_access",
+  "name": "OrderEntity",
+  "status": "confirmed",
+  "confidence": "medium",
+  "metadata": {"flow_id": "indexed-flow-id", "action": "read", "branch": "sync"},
+  "evidence": [{"path": "src/main/java/example/Orders.java", "start_line": 42}]
+}
+```
+
+Place this object in `nodes`; the manifest still requires an `edges` array.
+`action` accepts `read`, `insert`, `update`, `delete`, `create_or_update`, or
+`read_update`. `branch` is optional and accepts `sync` or `async`. The HTML
+export labels the annotation as imported in the selected call graph. It does
+not create a data-resource node or change the indexed call path. Imported
+annotations do not participate in consistency diagnostics.
+
+Reindexing retains the fact. If its flow ID disappears, the export omits the
+annotation until it is reconciled. `export facts` preserves the annotation for
+review and re-import.
 
 To export persisted enrichment facts as a manifest that can be reviewed,
 completed, and imported again, use:

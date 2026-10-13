@@ -2,6 +2,7 @@
     function reset() {
       closeInspector();
       expandedHttpRoute = null;
+      codeFlowSelection.clear();
       updateGraphState({
         selectedId: null,
         dependencyFocusOnly: false,
@@ -9,7 +10,6 @@
         relatedNodes: null,
         relatedEdges: null,
         analysisPortEndpointId: null,
-        selectedCodeFlowId: null,
         selectedDiagnosticId: null,
         diagnosticFocusSnapshot: null,
         viewMode: "architecture",
@@ -205,7 +205,7 @@
     resetButton.addEventListener("click", reset);
     dependencyDepth.addEventListener("change", () => {
       graphState.dependencyDepth = Number(dependencyDepth.value) || 1;
-      if (!graphState.selectedId || graphState.selectedCodeFlowId) return;
+      if (!graphState.selectedId || codeFlowSelection.flowId) return;
       dependencyFocusOnly.checked = true;
       graphState.dependencyFocusOnly = true;
       updateSelectedNodeDependencyScope(graphState.selectedId);
@@ -213,7 +213,7 @@
       applyLayout(graphState.activeLayout);
     });
     dependencyFocusOnly.addEventListener("change", () => {
-      if (!graphState.selectedId || graphState.selectedCodeFlowId) {
+      if (!graphState.selectedId || codeFlowSelection.flowId) {
         dependencyFocusOnly.checked = false;
         return;
       }
@@ -317,7 +317,7 @@
       renderer?.refresh();
       requestGraphRender();
       if (refit) {
-        if (graphState.selectedCodeFlowId && graphState.relatedNodes?.size) {
+        if (codeFlowSelection.flowId && graphState.relatedNodes?.size) {
           centerCameraOnPath({ nodes: [...graphState.relatedNodes] });
         } else {
           fitCameraToVisibleGraph(activeRenderer());

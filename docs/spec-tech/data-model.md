@@ -77,6 +77,24 @@ only when the source snapshot has no indexed endpoints or modules. This keeps
 direct flow projections separate from deterministic source facts while making
 the selected-flow HTML view available without running source indexing.
 
+A `flow_data_access` node fact attaches a reviewed data operation to an
+existing `CodeFlow` ID. Its name is the resource, its metadata contains
+`flow_id`, `action`, and optional `branch`, and its relative evidence identifies
+the source line. Import rejects unknown flow IDs atomically. These facts use
+the existing `graph_facts` namespace lifecycle and survive source indexing.
+The HTML exporter joins them to reachable call flows by ID and keeps them out
+of the topology node set. Stale IDs produce no annotation. Imported facts do
+not become `CodeFlowStep` records or consistency-diagnostic evidence.
+
+Direct-flow step import preserves the optional `action` field. A step without
+`action` remains compatible with older manifests and loads with a null action.
+Direct-flow steps may also carry the optional anomaly evidence fields
+`phase`, `transaction_id`, `concurrency`, `fields`, `value_dependencies`,
+`guard`, `guard_scope`, `isolation`, and `freshness_required`. Value dependency
+IDs use `flow_id:step_order`. Concurrency values are validated against the
+detector's supported vocabulary. These optional fields are stored in the
+existing JSON flow snapshot; older rows load with empty or null defaults.
+
 The `export facts` command serializes a `graph_facts` namespace as the
 `systemlens-ai-graph-v1` manifest. It preserves the stored ID, evidence,
 status, confidence, pass and revision metadata, and arbitrary metadata. A
@@ -502,6 +520,23 @@ reads by resource and compares an async write with reads of the same resource
 or reads whose resource is unknown. A write with an unknown resource remains
 eligible for every read. Inverted flow-to-root sets find shared roots without
 scanning every root for each pair.
+
+Advanced diagnostics require exact resource/key identity and positive
+`concurrency` evidence (`parallel`, `independent_handlers`, or `reentrant`).
+An async branch label by itself does not prove overlap. This gate applies to
+`potential_concurrent_read_write` and `potential_concurrent_write` candidates.
+The classifier also recognizes a read-modify-write pair only when both writes
+depend on reads in distinct named transactions, and recognizes dirty reads
+only when the writer is explicitly uncommitted and the reader explicitly uses
+read-uncommitted isolation. A freshness requirement can refine a concurrent
+read/write interaction to `potential_read_write_anomaly`. Matching guard kind
+and exact `resource:key` scope produce `conflict_protection_identified`.
+
+The renderer includes action, phase, transaction, fields, guards, causal/order
+evidence, limitations, and paired read source locations in service tooltips.
+Advanced source-indexed facts remain unavailable unless supplied in enriched
+flow records; missing metadata creates no concurrency claim. These findings
+are static candidates, not observed incidents.
 
 For W writes, R reads, and P candidate pairs, indexing costs O(W + R + total
 reachability entries), followed by O(P) overlap checks. Root intersection cost

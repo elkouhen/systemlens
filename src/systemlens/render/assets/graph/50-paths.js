@@ -38,14 +38,12 @@
     function clearPathControls() {
       search.value = "";
       pathStops.splice(0, pathStops.length);
-      graphState.selectedCodeFlowId = null;
+      codeFlowSelection.clear();
       graphState.selectedDiagnosticId = null;
       graphState.diagnosticFocusSnapshot = null;
       graphState.viewMode = "architecture";
       graphState.callGraphDisplayMode = "tree";
       graphState.callTreeZoom = 1;
-      graphState.codeFlowRootNodeId = null;
-      graphState.codeFlowTrigger = null;
       graphState.codeFlowTreeCoordinates = new Map();
       graphState.callTreeExpanded = new Set();
       graphState.callTreeCollapsed = new Set();
@@ -511,7 +509,10 @@
         `${link.input_endpoint_id}:${link.output_endpoint_id}`
       )));
       graphState.analysisPortEndpointId = null;
-      graphState.selectedCodeFlowId = context.codeFlow?.id || null;
+      codeFlowSelection.select(context.codeFlow?.id || null, {
+        rootNodeId: context.codeFlowRootNodeId || null,
+        trigger: context.codeFlowTrigger || null,
+      });
       graphState.callTreeExpanded = new Set();
       graphState.callTreeCollapsed = new Set();
       graphState.viewMode = context.codeFlow ? "call-graph" : "architecture";
@@ -524,16 +525,14 @@
       graphState.callTreeZoom = 1;
       graphState.selectedCallGraphEdgeKey = null;
       graphCanvas.removeAttribute("data-selected-call-graph-arc");
-      graphState.codeFlowRootNodeId = context.codeFlowRootNodeId || null;
-      graphState.codeFlowTrigger = context.codeFlowTrigger || null;
       graphFlowStatus.hidden = context.topologyReconciled !== false;
       if (!graphFlowStatus.hidden) {
         graphFlowStatus.textContent = "Relations topologiques incomplètes : les étapes sont surlignées sans arête vérifiée.";
       }
-      if (graphState.selectedCodeFlowId) graphCanvas.dataset.selectedCodeFlow = graphState.selectedCodeFlowId;
+      if (codeFlowSelection.flowId) graphCanvas.dataset.selectedCodeFlow = codeFlowSelection.flowId;
       else delete graphCanvas.dataset.selectedCodeFlow;
       setPathMicroserviceOrder(path, context.codeFlow || (context.codeFlows || [])[0], context.codeFlows || []);
-      if (graphState.selectedCodeFlowId) rebuildGraph();
+      if (codeFlowSelection.flowId) rebuildGraph();
       else renderer.refresh();
       // The normal Explorer deliberately has no port overlays. Rebuild them
       // after setting the selected call graph so its ports and local links
@@ -1262,19 +1261,17 @@
       clearPathControls();
       if (!graphState.layeredView && !graphState.clusteredView) await applyLayout("cluster");
       const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);
+      codeFlowSelection.clear();
       updateGraphState({
         selectedId: null,
         selectedClusterKey: resolvedCluster.key,
         relatedNodes: null,
         relatedEdges: null,
         relatedLocalPortLinks: new Set(),
-        selectedCodeFlowId: null,
         selectedDiagnosticId: null,
         diagnosticFocusSnapshot: null,
         viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
-        codeFlowRootNodeId: null,
-        codeFlowTrigger: null,
         pathMicroserviceOrder: new Map(),
       });
       delete graphCanvas.dataset.selectedCodeFlow;
@@ -1294,13 +1291,11 @@
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       graphState.relatedLocalPortLinks = new Set();
-      graphState.selectedCodeFlowId = null;
+      codeFlowSelection.clear();
       graphState.selectedDiagnosticId = null;
       graphState.diagnosticFocusSnapshot = null;
       graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
-      graphState.codeFlowRootNodeId = null;
-      graphState.codeFlowTrigger = null;
       delete graphCanvas.dataset.selectedCodeFlow;
       network.forEachEdge((edge, attributes, source, target) => {
         if (!isVisibleRelation(attributes, source, target) || !matches(attributes, source, target)) return;
@@ -1352,7 +1347,7 @@
     function selectNode(id, preservePath = false, openNodeInspector = true) {
       // A focused flow graph is navigated with its flow arcs and camera only.
       // Do not let a microservice click leave the flow projection.
-      if (graphState.selectedCodeFlowId) return;
+      if (codeFlowSelection.flowId) return;
       const node = nodeDataById.get(id);
       const isInspectableResource = node && [
         "kafka_topic", "message_channel", "mongodb_collection", "data_schema", "jpa_entity",
@@ -1373,13 +1368,11 @@
       graphState.selectedClusterKey = null;
       updateSelectedNodeDependencyScope(id);
       graphState.relatedLocalPortLinks = new Set();
-      graphState.selectedCodeFlowId = null;
+      codeFlowSelection.clear();
       graphState.selectedDiagnosticId = null;
       graphState.diagnosticFocusSnapshot = null;
       graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
-      graphState.codeFlowRootNodeId = null;
-      graphState.codeFlowTrigger = null;
       delete graphCanvas.dataset.selectedCodeFlow;
       renderer.refresh();
       renderDetails(id);

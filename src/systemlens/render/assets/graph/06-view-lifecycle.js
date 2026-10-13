@@ -1,4 +1,4 @@
-// Ordered source module: 45-view-lifecycle.js
+// Ordered source module: 06-view-lifecycle.js
 // Owns the boundary between the architecture projection and the flow views.
 const graphViewLifecycle = (() => {
   const graphSurfaces = () => [
@@ -46,7 +46,7 @@ const graphViewLifecycle = (() => {
     graphState.relatedEdges = null;
     graphState.dependencyFocusOnly = false;
     graphState.analysisPortEndpointId = null;
-    graphState.selectedCodeFlowId = null;
+    codeFlowSelection.clear();
     graphState.selectedDiagnosticId = null;
     graphState.diagnosticFocusSnapshot = null;
     graphState.callGraphDisplayMode = "network";
@@ -54,8 +54,6 @@ const graphViewLifecycle = (() => {
     graphState.pathMicroserviceOrder = new Map();
     graphState.codeFlowTreeCoordinates = new Map();
     graphState.relatedLocalPortLinks = new Set();
-    graphState.codeFlowRootNodeId = null;
-    graphState.codeFlowTrigger = null;
     graphState.viewMode = viewMode;
     dependencyFocusOnly.checked = false;
     dependencyAnalysisControls.disabled = true;

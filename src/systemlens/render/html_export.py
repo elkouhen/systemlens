@@ -48,12 +48,13 @@ _GRAPH_CSS = "".join(
 )
 _GRAPH_JS_FILENAMES = (
     "00-core.js",
+    "05-code-flow-selection.js",
+    "06-view-lifecycle.js",
     "10-rebuild.js",
     "20-controls.js",
     "30-layouts.js",
     "40-details.js",
     "42-resource-catalogue.js",
-    "45-view-lifecycle.js",
     "50-paths.js",
     "55-code-flows.js",
     "60-bootstrap.js",
@@ -119,8 +120,14 @@ def render_graph_html(
     codeql_call_edges: list[CodeQLCallGraphEdge] | None = None,
     flow_descriptions: dict[str, str] | None = None,
     progress_notice: str | None = None,
+    call_graphs_only: bool = False,
 ) -> str:
     """Render a graph view model as one self-contained HTML document."""
+    flow_annotation_facts = [
+        fact for fact in graph_facts or []
+        if fact.fact_type == "node" and fact.kind == "flow_data_access"
+    ]
+    topology_facts = [fact for fact in graph_facts or [] if fact.kind != "flow_data_access"]
     view_model = build_graph_view_model(
         endpoints_by_service=endpoints_by_service,
         edges=edges,
@@ -137,7 +144,7 @@ def render_graph_html(
         kafka_dto_definitions=kafka_dto_definitions,
         openapi_contracts=openapi_contracts,
         asyncapi_contracts=asyncapi_contracts,
-        graph_facts=graph_facts,
+        graph_facts=topology_facts,
         strategy1=strategy1,
         architecture_relations=architecture_relations,
         integration_methods=integration_methods,
@@ -151,7 +158,7 @@ def render_graph_html(
     ]
     flow_edges = [
         *edges,
-        *graph_edges_from_facts(graph_facts or [], endpoints_by_service),
+        *graph_edges_from_facts(topology_facts, endpoints_by_service),
     ]
     call_graph_index = _index_call_graph_inputs(export_flows, endpoints_by_service, flow_edges)
     call_graph_index_for_display = _index_call_graph_inputs(
@@ -296,18 +303,27 @@ def render_graph_html(
     causal_reachability: dict[str, set[str]] = {}
     causal_paths: dict[str, dict[str, tuple[str, ...]]] = {}
     flow_by_id = {flow.id: flow for flow in export_flows}
+    annotations_by_flow: dict[str, list[GraphFact]] = {}
+    for fact in flow_annotation_facts:
+        metadata = fact.metadata or {}
+        flow_id = metadata.get("flow_id")
+        if isinstance(flow_id, str) and flow_id in flow_by_id:
+            annotations_by_flow.setdefault(flow_id, []).append(fact)
     data_accesses_by_flow: dict[str, list[dict[str, object]]] = {}
     for root_flow, _, _ in export_flow_items:
         paths = _reachable_flow_paths(call_graph_index, root_flow.id)
         causal_reachability[root_flow.id] = set(paths)
         causal_paths[root_flow.id] = paths
-        accesses: dict[tuple[str, str, int, str | None], dict[str, object]] = {}
+        accesses: dict[tuple[str, str, int, str, str], dict[str, object]] = {}
         for reachable_id in sorted(paths):
             reachable_flow = flow_by_id[reachable_id]
             for step in reachable_flow.steps:
                 if step.kind not in {"data_read", "data_write"}:
                     continue
-                site = (reachable_flow.module, step.path, step.start_line, step.operation)
+                site = (
+                    reachable_flow.module, step.path, step.start_line,
+                    step.operation or "", step.resource or step.name,
+                )
                 accesses.setdefault(site, {
                     "flow_id": reachable_id,
                     "module": reachable_flow.module,
@@ -318,6 +334,29 @@ def render_graph_html(
                     "line": step.start_line,
                     "confidence": reachable_flow.confidence,
                     "branch": step.branch,
+                    "trigger_endpoint_id": reachable_flow.steps[0].endpoint_id if reachable_flow.steps else None,
+                })
+            for fact in annotations_by_flow.get(reachable_id, []):
+                metadata = fact.metadata or {}
+                action = str(metadata.get("action", ""))
+                if action not in {"read", "insert", "update", "delete", "create_or_update", "read_update"}:
+                    continue
+                site = (
+                    reachable_flow.module, fact.evidence_path or "",
+                    fact.evidence_line or 0, action, fact.name or "",
+                )
+                accesses.setdefault(site, {
+                    "flow_id": reachable_id,
+                    "module": reachable_flow.module,
+                    "kind": "data_read" if action == "read" else "data_write",
+                    "action": action,
+                    "resource": fact.name,
+                    "path": fact.evidence_path,
+                    "line": fact.evidence_line,
+                    "confidence": fact.confidence,
+                    "status": fact.status,
+                    "branch": metadata.get("branch"),
+                    "origin": "imported",
                     "trigger_endpoint_id": reachable_flow.steps[0].endpoint_id if reachable_flow.steps else None,
                 })
         if accesses:
@@ -363,6 +402,29 @@ def render_graph_html(
             *diagnostic.read_path_endpoint_ids,
             *((diagnostic.read_endpoint_id,) if diagnostic.read_endpoint_id else ()),
         )))
+        if diagnostic.event_type != "async_write_sync_read":
+            item["interaction_path_endpoint_ids"] = list(dict.fromkeys((
+                *diagnostic.write_path_endpoint_ids,
+                *((diagnostic.write_endpoint_id,) if diagnostic.write_endpoint_id else ()),
+                *diagnostic.read_path_endpoint_ids,
+                *((diagnostic.read_endpoint_id,) if diagnostic.read_endpoint_id else ()),
+            )))
+        for side, flow_id, dependency_order in (
+            ("write", diagnostic.write_flow_id, diagnostic.write_dependency_step),
+            ("read", diagnostic.read_flow_id, diagnostic.read_dependency_step),
+        ):
+            evidence_flow = flow_by_id.get(flow_id)
+            evidence_step = next((
+                step for step in evidence_flow.steps if step.order == dependency_order
+            ), None) if evidence_flow is not None and dependency_order is not None else None
+            if evidence_flow is not None and evidence_step is not None:
+                item[f"{side}_dependency_site"] = {
+                    "module": evidence_flow.module,
+                    "trigger_endpoint_id": evidence_flow.steps[0].endpoint_id if evidence_flow.steps else None,
+                    "path": evidence_step.path,
+                    "line": evidence_step.start_line,
+                    "action": evidence_step.action,
+                }
         exported_diagnostics.append(item)
     view_model["flow_diagnostics"] = exported_diagnostics
     view_model["flow_descriptions"] = {
@@ -378,22 +440,113 @@ def render_graph_html(
         name = node.get("name")
         if node.get("kind") == "microservice" and isinstance(name, str):
             node["internal_flow_count"] = flow_counts[name]
+    if call_graphs_only:
+        call_graph_edge_endpoint_ids = {
+            str(endpoint_id)
+            for graph in call_graphs.values()
+            for edge in cast(list[dict[str, object]], graph.get("edges", []))
+            for endpoint_id in cast(list[object], edge.get("endpoint_ids", []))
+        }
+        call_flow_endpoint_ids = {
+            str(step.endpoint_id)
+            for flow, _equivalent_count, _call_graph_id in export_flow_items
+            for step in flow.steps
+            if step.endpoint_id
+        }
+        relevant_endpoint_ids = call_graph_edge_endpoint_ids | call_flow_endpoint_ids
+        service_names = {
+            str(service)
+            for graph in call_graphs.values()
+            for service in cast(list[object], graph.get("node_order", []))
+        }
+        service_names.update(flow.module for flow, _count, _graph_id in export_flow_items)
+        topic_names = {
+            str(edge.get("label", ""))
+            for graph in call_graphs.values()
+            for edge in cast(list[dict[str, object]], graph.get("edges", []))
+            if edge.get("kind") == "kafka"
+        }
+        compact_nodes: list[dict[str, object]] = []
+        for node in nodes:
+            kind = node.get("kind")
+            name = str(node.get("name", ""))
+            if kind == "microservice" and name in service_names:
+                compact_node: dict[str, object] = {
+                    key: node[key]
+                    for key in ("id", "kind", "name", "color", "ports", "http_routes", "kafka_endpoints")
+                    if key in node
+                }
+                compact_node["ports"] = [
+                    port for port in cast(list[dict[str, object]], node.get("ports", []))
+                    if str(port.get("endpoint_id", "")) in relevant_endpoint_ids
+                ]
+                compact_nodes.append(compact_node)
+            elif kind in {"kafka_topic", "message_channel"} and name in topic_names:
+                compact_nodes.append({
+                    key: node[key] for key in ("id", "kind", "name", "color") if key in node
+                })
+        view_model["nodes"] = compact_nodes
+        view_model["links"] = [
+            link for link in cast(list[dict[str, object]], view_model["links"])
+            if relevant_endpoint_ids.intersection(
+                str(value) for value in cast(list[object], link.get("endpoint_ids", []))
+            )
+        ]
+        view_model["port_links"] = [
+            link for link in cast(list[dict[str, object]], view_model["port_links"])
+            if relevant_endpoint_ids.intersection((
+                str(link.get("input_endpoint_id", "")),
+                str(link.get("output_endpoint_id", "")),
+            ))
+        ]
+        view_model["internal_port_links"] = [
+            link for link in cast(list[dict[str, object]], view_model["internal_port_links"])
+            if relevant_endpoint_ids.intersection((
+                str(link.get("input_endpoint_id", "")),
+                str(link.get("output_endpoint_id", "")),
+            ))
+        ]
+        for key in (
+            "groups", "kafka_dtos", "project_dto_definitions",
+            "mongo_persistence_classes", "resource_descriptions",
+            "asyncapi_contracts", "indexing_issues",
+        ):
+            view_model[key] = []
+        view_model["codeql_call_graph"] = {"nodes": [], "edges": []}
+        view_model["call_graphs_only"] = True
     graph_data = json.dumps(
         view_model,
         ensure_ascii=False,
         separators=(",", ":"),
     ).replace("<", "\\u003c")
     asyncapi_assets = ""
-    if asyncapi_contracts:
+    if asyncapi_contracts and not call_graphs_only:
         asyncapi_assets = (
             '<script id="asyncapi-assets" type="application/octet-stream">'
             f"{_ASYNCAPI_COMPRESSED_ASSETS}</script>"
             f"<script>{_ASYNCAPI_LOADER_JS}</script>"
         )
-    return (
-        _GRAPH_HTML_TEMPLATE.replace("__GRAPH_CSS__", _GRAPH_CSS)
+    graph_css = _GRAPH_CSS
+    if call_graphs_only:
+        graph_css += """
+          body.call-graphs-only .toolbar-mode-tabs,
+          body.call-graphs-only #architecture-tabs-title,
+          body.call-graphs-only .toolbar-tabs > button:not(#flows-tab),
+          body.call-graphs-only .toolbar-panel:not(#flows-panel) { display: none !important; }
+        """
+    html = (
+        _GRAPH_HTML_TEMPLATE.replace("__GRAPH_CSS__", graph_css)
         .replace("__GRAPH_JS__", _GRAPH_JS)
         .replace("__GRAPH_DATA__", graph_data)
         .replace("__LAYER_GEOMETRY__", _LAYER_GEOMETRY_JS)
         .replace("__ASYNCAPI_WEB_COMPONENT__", asyncapi_assets)
     )
+    if call_graphs_only:
+        html = html.replace("<body>", '<body class="call-graphs-only">')
+        html = html.replace(
+            "</body>",
+            "<script>document.getElementById('flows-tab')?.click();"
+            "document.querySelector('#code-flows .code-flow-item:not(.is-unavailable)')?.click();"
+            "</script></body>",
+        )
+    return html

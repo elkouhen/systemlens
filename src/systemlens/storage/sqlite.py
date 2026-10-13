@@ -964,7 +964,13 @@ class Store:
                 reconciliation=row["reconciliation"],
                 alternative_count=row["alternative_count"],
                 steps=tuple(
-                    CodeFlowStep(**step) for step in json.loads(row["steps"])
+                    CodeFlowStep(
+                        **{
+                            **step,
+                            "fields": tuple(step.get("fields", ())),
+                            "value_dependencies": tuple(step.get("value_dependencies", ())),
+                        }
+                    ) for step in json.loads(row["steps"])
                 ),
             )
             for row in rows

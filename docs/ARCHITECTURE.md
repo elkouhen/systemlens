@@ -213,12 +213,19 @@ directly from outside the package.
 | `graph_view_model.py` | Projects a persisted architecture snapshot into the browser-facing graph model; it performs no source discovery |
 | `call_graph.py` | Projects persisted code flows and topology into the browser-facing call-graph model, including flow deduplication and fusion |
 | `html_export.py` | Small standalone-document assembler for `systemlens export microservices --html`; serializes the graph model and injects ordered CSS/JavaScript modules into `assets/graph.html` |
+| `assets/graph/05-code-flow-selection.js` | Owns the selected flow ID, call-graph root, and trigger separately from general graph state; it loads before `10-rebuild.js`, whose initial render reads this state |
+| `assets/graph/06-view-lifecycle.js` | Owns view activation and overlay visibility; it loads before `10-rebuild.js`, which can clear overlays during the initial render |
+| `assets/graph/40-details.js` and `assets/graph/55-code-flows.js` | The details widget sends named open-in-list or open-in-graph events to the flow panel; the flow catalogue handles them |
 | `likec4_export.py` | LikeC4 project export (`--c4`) and the request/reply HTML fragment |
 | `module_graph.py` | Endpoint/module/workspace/flow rendering, plus the module-dependency HTML export (`assets/module_graph.html`) |
 | `software_layers.py` | Dedicated software-layer rendering (`systemlens export layers`) with Strategy1 layer classification and `assets/software_layers.html` |
 | `_graph_view_helpers.py` | Low-level helpers (VS Code deep links, MongoDB/REST visual edges) shared by graph projections |
 | `assets/graph/*.css`, `assets/graph/*.js` | Ordered browser modules for the interactive graph; numeric prefixes make concatenation deterministic |
 | `assets/graph.html`, `assets/module_graph.html` | Static HTML templates, injected with `.replace("__..._DATA__", json_payload)`; kept as plain HTML files rather than Python string constants |
+
+The browser modules are concatenated into one script for the standalone export.
+The flow-selection store and flow-panel events establish ownership boundaries
+within that script; they do not yet make the browser files independent modules.
 
 `_graph_view_helpers.py` and the cross-import of `_complexity_ranking` /
 `_vscode_file_uri` between these submodules are an

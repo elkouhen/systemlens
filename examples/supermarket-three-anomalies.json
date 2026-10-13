@@ -1,0 +1,291 @@
+{
+  "format": "systemlens-ai-graph-v1",
+  "generated_by": {
+    "agent": "SystemLens",
+    "model": "synthetic-fixture",
+    "pass": "001",
+    "namespace": "supermarket-three-anomalies"
+  },
+  "mode": "partial",
+  "description": "One order call graph with an async read-after-write risk, a concurrent read/write interaction, and a lost-update candidate. Uses synthetic shared-database facts.",
+  "nodes": [
+    {
+      "id": "order-service",
+      "kind": "service",
+      "name": "order-service"
+    },
+    {
+      "id": "inventory-service",
+      "kind": "service",
+      "name": "inventory-service"
+    },
+    {
+      "id": "supermarket.order.placed",
+      "kind": "topic",
+      "name": "supermarket.order.placed",
+      "technology": "kafka"
+    },
+    {
+      "id": "inventory.stock-reserved",
+      "kind": "topic",
+      "name": "inventory.stock-reserved",
+      "technology": "kafka"
+    },
+    {
+      "id": "products",
+      "kind": "collection",
+      "name": "shared:inventory:products",
+      "technology": "postgresql"
+    },
+    {
+      "id": "orders-db",
+      "kind": "collection",
+      "name": "order-service:orders",
+      "technology": "postgresql"
+    }
+  ],
+  "edges": [
+    {
+      "id": "order-publishes",
+      "source": "order-service",
+      "target": "supermarket.order.placed",
+      "kind": "event",
+      "relation": "publishes",
+      "channel": "supermarket.order.placed",
+      "confidence": "high"
+    },
+    {
+      "id": "inventory-consumes",
+      "source": "supermarket.order.placed",
+      "target": "inventory-service",
+      "kind": "event",
+      "relation": "consumes",
+      "channel": "supermarket.order.placed",
+      "confidence": "high"
+    },
+    {
+      "id": "inventory-publishes",
+      "source": "inventory-service",
+      "target": "inventory.stock-reserved",
+      "kind": "event",
+      "relation": "publishes",
+      "confidence": "high"
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "orders-http",
+      "service": "order-service",
+      "role": "serve",
+      "system": "rest",
+      "topic": "POST /api/orders",
+      "path": "order-service/src/OrderserviceFlow.java",
+      "start_line": 10,
+      "end_line": 10,
+      "snippet": "serve POST /api/orders"
+    },
+    {
+      "id": "orders-publish",
+      "service": "order-service",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "supermarket.order.placed",
+      "path": "order-service/src/OrderserviceFlow.java",
+      "start_line": 14,
+      "end_line": 14,
+      "snippet": "produce supermarket.order.placed"
+    },
+    {
+      "id": "inventory-consume",
+      "service": "inventory-service",
+      "role": "consume",
+      "system": "kafka",
+      "topic": "supermarket.order.placed",
+      "path": "inventory-service/src/InventoryserviceFlow.java",
+      "start_line": 20,
+      "end_line": 20,
+      "snippet": "consume supermarket.order.placed"
+    },
+    {
+      "id": "inventory-publish",
+      "service": "inventory-service",
+      "role": "produce",
+      "system": "kafka",
+      "topic": "inventory.stock-reserved",
+      "path": "inventory-service/src/InventoryserviceFlow.java",
+      "start_line": 28,
+      "end_line": 28,
+      "snippet": "produce inventory.stock-reserved"
+    }
+  ],
+  "flows": [
+    {
+      "id": "orders-root",
+      "module": "order-service",
+      "method": "OrderFlow.place",
+      "path": "order-service/src/OrderserviceFlow.java",
+      "start_line": 10,
+      "end_line": 40,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "Synthetic, explicitly evidenced anomaly demonstration.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "http_entry",
+          "name": "POST /api/orders",
+          "path": "order-service/src/OrderserviceFlow.java",
+          "start_line": 10,
+          "end_line": 10,
+          "endpoint_id": "orders-http"
+        },
+        {
+          "order": 2,
+          "kind": "data_read",
+          "name": "Product",
+          "path": "order-service/src/OrderserviceFlow.java",
+          "start_line": 12,
+          "end_line": 12,
+          "resource": "shared:inventory:products",
+          "key": "payload.productId",
+          "action": "read",
+          "branch": "sync",
+          "transaction_id": "tx-orders",
+          "concurrency": "independent_handlers",
+          "phase": "observe",
+          "fields": [
+            "stockQuantity"
+          ]
+        },
+        {
+          "order": 3,
+          "kind": "data_write",
+          "name": "Product",
+          "path": "order-service/src/OrderserviceFlow.java",
+          "start_line": 13,
+          "end_line": 13,
+          "resource": "shared:inventory:products",
+          "key": "payload.productId",
+          "action": "update",
+          "branch": "sync",
+          "transaction_id": "tx-orders",
+          "concurrency": "independent_handlers",
+          "phase": "apply",
+          "fields": [
+            "stockQuantity"
+          ],
+          "value_dependencies": [
+            "orders-root:2"
+          ]
+        },
+        {
+          "order": 4,
+          "kind": "data_write",
+          "name": "OrderStatus",
+          "path": "order-service/src/OrderserviceFlow.java",
+          "start_line": 14,
+          "end_line": 14,
+          "resource": "order-service:orders",
+          "key": "request.orderId",
+          "action": "update",
+          "branch": "async",
+          "completion": "ack_only"
+        },
+        {
+          "order": 5,
+          "kind": "data_read",
+          "name": "OrderStatus",
+          "path": "order-service/src/OrderserviceFlow.java",
+          "start_line": 15,
+          "end_line": 15,
+          "resource": "order-service:orders",
+          "key": "request.orderId",
+          "action": "read",
+          "branch": "sync"
+        },
+        {
+          "order": 6,
+          "kind": "message_publish",
+          "name": "supermarket.order.placed",
+          "path": "order-service/src/OrderserviceFlow.java",
+          "start_line": 16,
+          "end_line": 16,
+          "endpoint_id": "orders-publish"
+        }
+      ]
+    },
+    {
+      "id": "inventory-handler",
+      "module": "inventory-service",
+      "method": "InventoryFlow.reserve",
+      "path": "inventory-service/src/InventoryserviceFlow.java",
+      "start_line": 20,
+      "end_line": 50,
+      "status": "potential",
+      "confidence": "high",
+      "reason": "Synthetic, explicitly evidenced anomaly demonstration.",
+      "steps": [
+        {
+          "order": 1,
+          "kind": "message_entry",
+          "name": "supermarket.order.placed",
+          "path": "inventory-service/src/InventoryserviceFlow.java",
+          "start_line": 20,
+          "end_line": 20,
+          "endpoint_id": "inventory-consume"
+        },
+        {
+          "order": 2,
+          "kind": "data_read",
+          "name": "Product",
+          "path": "inventory-service/src/InventoryserviceFlow.java",
+          "start_line": 22,
+          "end_line": 22,
+          "resource": "shared:inventory:products",
+          "key": "payload.productId",
+          "action": "read",
+          "branch": "sync",
+          "causal_id": "order-42",
+          "transaction_id": "tx-inventory",
+          "concurrency": "independent_handlers",
+          "phase": "observe",
+          "fields": [
+            "stockQuantity"
+          ]
+        },
+        {
+          "order": 3,
+          "kind": "data_write",
+          "name": "Product",
+          "path": "inventory-service/src/InventoryserviceFlow.java",
+          "start_line": 24,
+          "end_line": 24,
+          "resource": "shared:inventory:products",
+          "key": "payload.productId",
+          "action": "update",
+          "branch": "sync",
+          "causal_id": "order-42",
+          "transaction_id": "tx-inventory",
+          "concurrency": "independent_handlers",
+          "phase": "apply",
+          "fields": [
+            "stockQuantity"
+          ],
+          "value_dependencies": [
+            "inventory-handler:2"
+          ],
+          "completion": "unknown"
+        },
+        {
+          "order": 4,
+          "kind": "message_publish",
+          "name": "inventory.stock-reserved",
+          "path": "inventory-service/src/InventoryserviceFlow.java",
+          "start_line": 28,
+          "end_line": 28,
+          "endpoint_id": "inventory-publish"
+        }
+      ]
+    }
+  ]
+}

@@ -21,3 +21,17 @@ For a larger demonstration, `async-write-sync-read-complex-facts.json` contains
 five services, 10 HTTP routes, 10 Kafka topics with producer and consumer arcs,
 and eight mixed flows. Its generated HTML counterpart is
 `async-write-sync-read-complex-facts.html`.
+
+`supermarket-three-anomalies.json` is a compact synthetic call graph for one
+order flow. It demonstrates an asynchronous read-after-write risk, a concurrent
+read/write interaction, and a lost-update candidate on a shared product record.
+Its generated graph is `supermarket-three-anomalies.html`. The shared database,
+concurrency, transaction, and value-dependency facts are illustrative inputs,
+not claims about the supermarket demo application's implementation. Regenerate
+the dataset and graph with:
+
+```bash
+python scripts/generate_supermarket_anomaly_fixture.py
+systemlens export microservices --graph examples/supermarket-three-anomalies.json \
+  --html examples/supermarket-three-anomalies.html
+```

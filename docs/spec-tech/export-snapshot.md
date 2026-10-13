@@ -22,6 +22,11 @@ reference nodes in the manifest; this keeps the edge importable without
 claiming that the reference node was extracted from the source. The command
 does not export source-derived facts as enrichment facts.
 
+`flow_data_access` facts in the enrichment namespace stay separate from
+topology nodes. The HTML exporter joins them to an indexed flow by ID and
+shows them in the selected call graph's service tooltip. It drops stale flow
+references from the projection without deleting the persisted fact.
+
 HTML and JSON graph exports only consume the loaded architecture snapshot.
 They do not reopen OpenAPI documents or recursively parse Java DTO sources at
 render time. The export can show indexed Kafka payload-type identities and
@@ -113,14 +118,19 @@ flow transitions grouped by output endpoint, default roots, and trigger
 metadata. Each root still gets its own traversal because its reachable graph,
 edge discovery order, and call tree can differ; the optimization removes
 repeated global scans without collapsing distinct persisted flow graphs.
-Each graph also carries a causal occurrence tree rooted at the selected flow.
-The browser uses that tree for hierarchical rendering, so it does not combine
-unrelated service-level arcs into additional branches.
+Each selected graph carries causal transitions rooted at its selected flow.
+The browser builds local occurrences from those transitions, stopping at cycles,
+depth limits, and targets without an indexed consumer flow. It does not rebuild
+the call tree from service-level topology when causal evidence is absent, so
+unrelated arcs cannot become branches of the selected flow.
 The port gesture is isolated from the card drag and node-selection handlers, so
 analysis never changes the graph view or camera and does not persist data.
 Every visible SVG arc has a transparent, wider hit-area path layered above it;
 the hit area receives selection and tooltip events without changing the visual
 stroke width or routing geometry.
+The Architecture overlay draws non-Kafka hit areas first and Kafka hit areas
+last. This stable, linear-time partition keeps topic inspection reachable when
+several relations share a path; it needs linear temporary space per render.
 The export indexes displayed nodes and visual edges by
 persisted endpoint ID once; reconciliation requires exactly one endpoint-backed
 candidate and never selects a relation from a route label, topic name, or first

@@ -40,9 +40,20 @@ Each pair is classified as `potential_risk`, `guarantee_identified`,
 expressions, conflicting causal IDs, and incomplete query overlap remain
 explicit limitations. A visibility guarantee requires an explicit visible
 completion and matching non-empty expected versions. Several pairs are listed
-independently. The graph has no diagnostic annotations until the user selects
-a pair, then highlights only that pair's write and read. An export without the
-optional diagnostic array remains a valid older export.
+independently. The selected call graph shows pair badges on the matching
+microservice occurrences; selecting a badge highlights its pair. An export
+without the optional diagnostic array remains a valid older export.
+
+The selected call graph MAY also show `potential_concurrent_read_write`,
+`potential_concurrent_write`, `potential_lost_update`, `potential_dirty_read`,
+`potential_read_write_anomaly`, or `conflict_protection_identified` when their
+explicit flow evidence is available. Concurrency findings require positive
+concurrency metadata; an async branch alone is insufficient. Lost-update
+findings require paired read-to-write value dependencies and distinct named
+transactions. Dirty-read findings require an explicitly uncommitted write and
+read-uncommitted isolation evidence. Tooltips show the evidence and unresolved
+conditions. Missing metadata MUST NOT be treated as proof of safety or as proof
+of concurrency. These static findings do not assert a runtime incident.
 
 ## Detailed sections
 

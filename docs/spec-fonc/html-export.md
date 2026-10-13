@@ -2,6 +2,14 @@
 
 Parent: [Functional specification](../SPEC-FONC.md).
 
+`systemlens export microservices --html FILE --call-graphs-only` produces a
+standalone HTML view centered on indexed call graphs. It opens the call-flow
+catalogue, selects the first available graph, and retains data-access and
+consistency annotations attached to those flows. The embedded snapshot omits
+unrelated resource catalogues, contracts, and architecture inventory. The
+default HTML export remains unchanged. This option requires `--html` and does
+not apply to JSON, XLSX, or LikeC4 exports.
+
 The consolidated presentation and interaction contract is maintained in
 [UX/UI rules](../UX-UI.md). This page owns export states, inspectors, flow
 catalogue behavior, and evidence semantics; it does not duplicate the global

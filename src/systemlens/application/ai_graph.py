@@ -24,6 +24,7 @@ _STATUSES = {"confirmed", "proposed", "ambiguous", "unresolved"}
 _CONFIDENCES = {"high", "medium", "low", "unknown"}
 _FACT_NODE_KINDS = _NODE_KINDS | {"data_schema", "message_channel"}
 _FACT_EDGE_KINDS = _EDGE_KINDS | {"serves", "calls", "reads", "writes", "publishes", "consumes", "provides"}
+_DATA_ACTIONS = {"read", "insert", "update", "delete", "create_or_update", "read_update"}
 
 
 def _relative_path(value: Any, field: str) -> str:
@@ -232,6 +233,23 @@ def load_fact_manifest(
         metadata = raw.get("metadata", {})
         if not isinstance(metadata, dict):
             raise AiGraphError(f"nodes[{index}].metadata doit être un objet.")
+        if kind == "flow_data_access":
+            flow_id = metadata.get("flow_id")
+            action = metadata.get("action")
+            if not isinstance(flow_id, str) or not flow_id.strip():
+                raise AiGraphError(f"nodes[{index}].metadata.flow_id est requis.")
+            if "confidence" not in raw:
+                raise AiGraphError(f"nodes[{index}].confidence est requis.")
+            if not isinstance(action, str) or action not in _DATA_ACTIONS:
+                raise AiGraphError(f"nodes[{index}].metadata.action est invalide.")
+            if evidence_path is None or evidence_line is None:
+                raise AiGraphError(f"nodes[{index}].evidence doit contenir un chemin et une ligne.")
+            _relative_path(evidence_path, f"nodes[{index}].evidence[0].path")
+            if status not in {"confirmed", "proposed"}:
+                raise AiGraphError(f"nodes[{index}]: accès aux données non résolu.")
+            branch = metadata.get("branch")
+            if branch is not None and (not isinstance(branch, str) or branch not in {"sync", "async"}):
+                raise AiGraphError(f"nodes[{index}].metadata.branch est invalide.")
         if raw.get("owner") is not None:
             metadata = {**metadata, "owner": raw["owner"]}
         facts.append(GraphFact(
@@ -254,6 +272,8 @@ def load_fact_manifest(
         source_id = _required_string(raw.get("source"), f"edges[{index}].source")
         target_id = _required_string(raw.get("target"), f"edges[{index}].target")
         kind = _required_string(raw.get("kind"), f"edges[{index}].kind")
+        if kind == "flow_data_access":
+            raise AiGraphError(f"edges[{index}].kind doit être un nœud.")
         module = _optional_module(raw.get("module"), f"edges[{index}].module")
         if raw_id in raw_ids:
             raise AiGraphError(f"identifiant de fait dupliqué: {raw_id}")
@@ -395,6 +415,40 @@ def load_direct_flow_manifest(
                 step_endpoint_id = _required_string(step_endpoint_id, f"flows[{index}].steps[{step_index}].endpoint_id")
                 if step_endpoint_id not in endpoint_ids:
                     raise AiGraphError(f"flows[{index}].steps[{step_index}] référence un endpoint inconnu.")
+            phase = step.get("phase")
+            if phase is not None and (
+                not isinstance(phase, str) or phase not in {
+                    "start", "apply", "observe", "commit", "visible", "complete", "uncommitted",
+                }
+            ):
+                raise AiGraphError(f"flows[{index}].steps[{step_index}].phase est invalide.")
+            concurrency = step.get("concurrency")
+            if concurrency is not None and (
+                not isinstance(concurrency, str) or concurrency not in {
+                    "parallel", "independent_handlers", "reentrant", "sequential", "unknown",
+                }
+            ):
+                raise AiGraphError(f"flows[{index}].steps[{step_index}].concurrency est invalide.")
+            for optional_text in (
+                "transaction_id", "guard", "guard_scope", "isolation",
+            ):
+                if step.get(optional_text) is not None and not isinstance(step[optional_text], str):
+                    raise AiGraphError(
+                        f"flows[{index}].steps[{step_index}].{optional_text} doit être une chaîne."
+                    )
+            fields = step.get("fields", [])
+            dependencies = step.get("value_dependencies", [])
+            if not isinstance(fields, list) or not all(isinstance(value, str) for value in fields):
+                raise AiGraphError(f"flows[{index}].steps[{step_index}].fields doit être une liste de chaînes.")
+            if not isinstance(dependencies, list) or not all(isinstance(value, str) for value in dependencies):
+                raise AiGraphError(
+                    f"flows[{index}].steps[{step_index}].value_dependencies doit être une liste de chaînes."
+                )
+            freshness_required = step.get("freshness_required")
+            if freshness_required is not None and not isinstance(freshness_required, bool):
+                raise AiGraphError(
+                    f"flows[{index}].steps[{step_index}].freshness_required doit être un booléen."
+                )
             steps.append(CodeFlowStep(
                 order=order,
                 kind=_required_string(step.get("kind"), f"flows[{index}].steps[{step_index}].kind"),
@@ -409,6 +463,16 @@ def load_direct_flow_manifest(
                 expected_version=step.get("expected_version") if isinstance(step.get("expected_version"), str) else None,
                 completion=step.get("completion") if isinstance(step.get("completion"), str) else None,
                 query_shape=step.get("query_shape") if isinstance(step.get("query_shape"), str) else None,
+                action=step.get("action") if isinstance(step.get("action"), str) else None,
+                phase=phase,
+                transaction_id=step.get("transaction_id") if isinstance(step.get("transaction_id"), str) else None,
+                concurrency=concurrency,
+                fields=tuple(fields),
+                value_dependencies=tuple(dependencies),
+                guard=step.get("guard") if isinstance(step.get("guard"), str) else None,
+                guard_scope=step.get("guard_scope") if isinstance(step.get("guard_scope"), str) else None,
+                isolation=step.get("isolation") if isinstance(step.get("isolation"), str) else None,
+                freshness_required=freshness_required,
             ))
         flows.append(CodeFlow(
             id=flow_id, module=module, method=method, path=flow_path,

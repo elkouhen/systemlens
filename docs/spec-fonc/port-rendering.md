@@ -178,6 +178,20 @@ pair, its classification, and the related data operations. The
 architecture graph does not show data-access annotations. Accesses without a
 reachable call flow remain in the persisted
 snapshot but have no call-graph annotation.
+
+The selected call graph may also show concurrent read/write, concurrent write,
+lost-update, dirty-read, freshness-risk, and conflict-protection diagnostics
+when the persisted flow contains their required evidence. Each badge is on the
+operation's service occurrence and selecting it highlights only its pair. Its
+tooltip includes the resource/key, action, lifecycle phase, transaction,
+affected fields, guards, dependency source locations, and unresolved evidence.
+These are static findings, not observed runtime incidents. The native indexer
+does not yet extract all advanced metadata; without it, the graph abstains.
+
+Imported data-access facts follow the same occurrence rule. Their tooltip line
+identifies them as imported and marks proposed claims. They do not add calls,
+resource nodes, or consistency badges.
+
 Clicking an entry opens its single call graph in the Explorer workspace. Selecting
 another entry replaces the currently displayed call graph; the graphs are not
 merged and no side-by-side call-graph comparison is offered.
@@ -406,6 +420,8 @@ of toolbar icon buttons. `Shift + click` on an Architecture node opens its
 introspection window. A plain click on an Architecture node MUST NOT select it,
 open details, or alter the graph state. Introspection MUST NOT move, zoom,
 refit, or otherwise alter the camera in any primary view.
+When several Architecture relations overlap, Kafka hit areas stay above the
+other relations so `Shift + click` can open the topic inspector.
 
 In the layers and modules views, each module exposes a full-width clickable
 header. Selecting that header highlights the module and opens its member list;

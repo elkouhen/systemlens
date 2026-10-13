@@ -37,11 +37,13 @@ entry.
 
 Flow consistency analysis is also a snapshot projection. `CodeFlowStep` keeps
 optional branch, resource, key, causal identity, expected version, completion,
-and query-shape metadata; old SQLite JSON rows load with these fields unknown.
-The detector pairs accesses across handlers reachable from one persisted
-trigger, keeps exact endpoint evidence for each pair, and reports incomplete
-evidence instead of treating an empty result as proof of safety. See the
-[flow data model](spec-tech/data-model.md) for its matching rules.
+query-shape, and optional transaction/concurrency evidence; old SQLite JSON
+rows load with new fields empty. The detector classifies asynchronous
+read-after-write risks and, when explicit resource/key, concurrency, value-flow,
+isolation, freshness, or guard evidence is present, concurrent writes,
+read/write interactions, lost updates, and dirty reads. It keeps endpoint and
+source evidence on each pair. Missing metadata never proves safety or a race.
+See the [flow data model](spec-tech/data-model.md) for matching rules.
 
 ## Detailed sections
 

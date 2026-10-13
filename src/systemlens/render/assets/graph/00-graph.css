@@ -84,18 +84,22 @@
     .graph-call-tree-edge-label { fill: #4338ca; font-size: 10px; font-weight: 800; paint-order: stroke; stroke: #f8fafc; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; }
     .graph-call-tree-edge.is-diagnostic-async, .graph-call-tree-edge-hit.is-diagnostic-async { stroke: #f59e0b !important; stroke-width: 4px; stroke-dasharray: 9 5; opacity: 1; }
     .graph-call-tree-edge.is-diagnostic-sync, .graph-call-tree-edge-hit.is-diagnostic-sync { stroke: #0284c7 !important; stroke-width: 4px; opacity: 1; }
+    .graph-call-tree-edge.is-diagnostic-interaction, .graph-call-tree-edge-hit.is-diagnostic-interaction { stroke: #a855f7 !important; stroke-width: 4px; stroke-dasharray: 3 4; opacity: 1; }
     .graph-call-tree-edge.is-diagnostic-muted, .graph-call-tree-edge-hit.is-diagnostic-muted, .graph-call-tree-edge-label.is-diagnostic-muted { opacity: .16; }
     .graph-call-tree-edge-label.is-diagnostic-async { fill: #b45309; font-weight: 900; }
     .graph-call-tree-edge-label.is-diagnostic-sync { fill: #0369a1; font-weight: 900; }
+    .graph-call-tree-edge-label.is-diagnostic-interaction { fill: #7e22ce; font-weight: 900; }
     .graph-call-tree-edge-label.is-clickable { pointer-events: auto; cursor: pointer; }
     .graph-call-tree-node { position: absolute; width: 150px; min-height: 82px; height: auto; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; cursor: pointer; pointer-events: auto; transition: box-shadow .12s ease, outline .12s ease; }
     .graph-call-tree-node.is-hovered { outline: 2px solid color-mix(in srgb, var(--card-accent, #64748b) 70%, transparent); outline-offset: 2px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 8px 22px rgba(15, 23, 42, .2); }
     .graph-call-tree-node.is-selected { outline: 2px solid #7c3aed; outline-offset: 3px; box-shadow: 0 0 0 5px rgba(124, 58, 237, .18), 0 8px 22px rgba(15, 23, 42, .22); }
     .graph-call-tree-node.is-diagnostic-async { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, .28), 0 8px 22px rgba(15, 23, 42, .2); }
     .graph-call-tree-node.is-diagnostic-sync { border-color: #0284c7; box-shadow: 0 0 0 3px rgba(2, 132, 199, .28), 0 8px 22px rgba(15, 23, 42, .2); }
+    .graph-call-tree-node.is-diagnostic-interaction { border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168, 85, 247, .28), 0 8px 22px rgba(15, 23, 42, .2); }
     .graph-call-tree-diagnostic-badge { grid-column: 1 / 3; display: block; margin-top: 5px; padding: 3px 5px; border-radius: 4px; font-size: 8px; font-weight: 900; line-height: 1.15; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
     .graph-call-tree-diagnostic-badge.is-async { color: #92400e; background: #fef3c7; }
     .graph-call-tree-diagnostic-badge.is-sync { color: #075985; background: #e0f2fe; }
+    .graph-call-tree-diagnostic-badge.is-interaction { color: #581c87; background: #f3e8ff; }
     .graph-call-tree-node .graph-node-card-icon { grid-column: 2; grid-row: 1; }
     .graph-call-tree-node .graph-node-card-name { grid-column: 1; grid-row: 1; }
     .graph-call-tree-node .graph-node-card-kind { grid-column: 1 / 3; grid-row: 2; }

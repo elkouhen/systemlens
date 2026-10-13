@@ -191,7 +191,7 @@
     if (!window.__systemlensCallGraphArcKeyboardNavigation) {
       window.__systemlensCallGraphArcKeyboardNavigation = true;
       window.addEventListener("keydown", event => {
-        if (!graphState.selectedCodeFlowId) return;
+        if (!codeFlowSelection.flowId) return;
         if (event.target.closest?.("input, select, textarea, [contenteditable='true']")) return;
         if (event.key === "Escape" && graphState.selectedCallGraphEdgeKey) {
           event.preventDefault();
@@ -309,12 +309,12 @@
     }
     function rebuildGraph() {
       const callGraphOnly = graphState.viewMode === "call-graph"
-        && Boolean(graphState.selectedCodeFlowId);
+        && Boolean(codeFlowSelection.flowId);
       if (callGraphOnly && !graphState.selectedCallGraphEdgeKey) {
         graphState.selectedCallGraphEdgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc || null;
       }
       const selectedFlows = callGraphOnly
-        ? (graphData.code_flows || []).filter(flow => flow.id === graphState.selectedCodeFlowId)
+        ? (graphData.code_flows || []).filter(flow => flow.id === codeFlowSelection.flowId)
         : [];
       const selectedFlow = selectedFlows[0] || null;
       const selectedCallGraph = callGraphForFlows(selectedFlows);
@@ -541,8 +541,8 @@
           const topics = [...new Set((node.ports || []).filter(port => /kafka|topic|message/i.test(port.type || "")).map(port => port.name))];
           if (topics.length) addTooltipLine(tooltip, `Messages : ${topics.slice(0, 4).join(", ")}${topics.length > 4 ? "…" : ""}`, "graph-entity-tooltip-detail");
           if (node.technology || node.build_system) addTooltipLine(tooltip, [node.technology, node.build_system].filter(Boolean).join(" · "), "graph-entity-tooltip-detail");
-          const accesses = callGraphOnly && graphState.selectedCodeFlowId
-            ? (graphData.flow_data_accesses?.[graphState.selectedCodeFlowId] || []).filter(access => access.module === node.name)
+          const accesses = callGraphOnly && codeFlowSelection.flowId
+            ? (graphData.flow_data_accesses?.[codeFlowSelection.flowId] || []).filter(access => access.module === node.name)
             : [];
           dataAccessTooltipLines(accesses).forEach(line => addTooltipLine(tooltip, line, "graph-entity-tooltip-detail"));
         } else if (node.kind === "kafka_topic") {
@@ -648,14 +648,14 @@
         labelAlignment: "center",
         nodeReducer: (node, data) => {
           if (!callGraphOnly && !isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
-          if (graphState.selectedCodeFlowId && nodeDataById.get(node)?.kind !== "microservice") {
+          if (codeFlowSelection.flowId && nodeDataById.get(node)?.kind !== "microservice") {
             return { ...data, hidden: true, label: "" };
           }
-          if (graphState.selectedCodeFlowId && !graphState.relatedNodes?.has(node)) {
+          if (codeFlowSelection.flowId && !graphState.relatedNodes?.has(node)) {
             return { ...data, hidden: true, label: "" };
           }
           const renderedData = graphState.renderMode === "symbols" ? { ...data, size: .5 } : data;
-          if (graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)) {
+          if (codeFlowSelection.flowId && graphState.relatedNodes.has(node)) {
             return {
               ...renderedData,
               size: renderedData.size * 1.22,
@@ -663,7 +663,7 @@
               zIndex: 2,
             };
           }
-          if (graphState.selectedCodeFlowId) return renderedData;
+          if (codeFlowSelection.flowId) return renderedData;
           if (!graphState.selectedId || graphState.relatedNodes.has(node)) {
             return renderedData;
           }
@@ -674,7 +674,7 @@
             return { ...data, hidden: true };
           }
           if (data.hitArea) return data;
-          if (graphState.selectedCodeFlowId) {
+          if (codeFlowSelection.flowId) {
             // The selected call graph is rendered once by the LibAvoid SVG
             // overlay. Keeping Sigma's straight edge underneath would draw
             // every connector twice and make routes appear broken.
@@ -793,7 +793,7 @@
           graphViewLifecycle.clearOverlays();
           return;
         }
-        const callTreeActive = Boolean(graphState.selectedCodeFlowId)
+        const callTreeActive = Boolean(codeFlowSelection.flowId)
           && graphState.viewMode === "call-graph";
         if (callTreeActive || !graphCallTreeOverlay?.hidden) renderCallTreeOverlay();
         nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
@@ -818,7 +818,7 @@
           const flowZoomIn = document.getElementById("flow-zoom-in");
           const flowZoomOut = document.getElementById("flow-zoom-out");
           if (!graphContext || !flowContext || !graphTitle || !graphHelp || !flowTitle || !flowHelp) return;
-          const active = Boolean(graphState.selectedCodeFlowId);
+          const active = Boolean(codeFlowSelection.flowId);
           const callGraphActive = active && (
             graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree"
           );
@@ -863,7 +863,7 @@
           );
           flowTitle.textContent = "Arbre d’appel";
           const selectedFlows = (graphData.code_flows || []).filter(flow => (
-            flow.id === graphState.selectedCodeFlowId
+            flow.id === codeFlowSelection.flowId
           ));
           const selectedFlow = selectedFlows[0];
           const trigger = selectedFlow?.steps?.[0];
@@ -1004,7 +1004,7 @@
           }
         };
         updateAnalysisModeIndicator();
-        if (graphState.selectedCodeFlowId) return;
+        if (codeFlowSelection.flowId) return;
         network.forEachNode((id, attributes) => {
           if (
             (!callGraphOnly && !isVisibleNodeId(id))
@@ -1246,16 +1246,16 @@
           const point = nodePoints.get(id);
           const node = nodeDataById.get(id);
           if (!node || !point) return;
-          if (graphState.selectedCodeFlowId && node.kind !== "microservice") return;
+          if (codeFlowSelection.flowId && node.kind !== "microservice") return;
           const label = document.createElement("span");
           const isTopic = node.kind === "message_channel" || node.kind === "kafka_topic";
           const isDatabase = node.kind === "data_schema" || node.kind === "mongodb_collection";
           const isJpaEntity = node.kind === "jpa_entity";
           const isResource = isTopic || isDatabase || isJpaEntity;
           const adaptiveLabelSide = adaptiveLabels.get(id);
-          const isCodeFlowNode = graphState.selectedCodeFlowId && graphState.relatedNodes?.has(id);
-          const isCodeFlowRoot = graphState.selectedCodeFlowId && graphState.codeFlowRootNodeId === id;
-          const trigger = isCodeFlowRoot ? graphState.codeFlowTrigger : null;
+          const isCodeFlowNode = codeFlowSelection.flowId && graphState.relatedNodes?.has(id);
+          const isCodeFlowRoot = codeFlowSelection.flowId && codeFlowSelection.rootNodeId === id;
+          const trigger = isCodeFlowRoot ? codeFlowSelection.trigger : null;
           label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${isJpaEntity ? " is-jpa-entity" : ""}${isCodeFlowRoot ? " is-graph-root" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}${isCodeFlowNode ? " is-code-flow-node" : ""}`;
           label.dataset.nodeKind = node.kind;
           label.dataset.nodeId = id;
@@ -1393,7 +1393,7 @@
         // than from graph nodes. This keeps its endpoints attached to the
         // readable port anchors through every pan, zoom, and card scale.
         portPathOverlay.replaceChildren();
-        if (graphState.renderMode !== "symbols" && !graphState.selectedCodeFlowId) {
+        if (graphState.renderMode !== "symbols" && !codeFlowSelection.flowId) {
           const svgNamespace = "http://www.w3.org/2000/svg";
           const marker = document.createElementNS(svgNamespace, "marker");
           marker.id = "graph-architecture-arrow";
@@ -1437,7 +1437,10 @@
               center.y + dy * boundaryScale + unitY * offset,
             ];
           };
-          visibleLinks.forEach(link => {
+          // Keep Kafka hit areas above overlapping relations so their inspector remains reachable.
+          const architectureLinks = visibleLinks.filter(link => link.kind !== "kafka");
+          visibleLinks.forEach(link => { if (link.kind === "kafka") architectureLinks.push(link); });
+          architectureLinks.forEach(link => {
             const source = nodePoints.get(link.source);
             const target = nodePoints.get(link.target);
             if (!source || !target) return;
@@ -1474,7 +1477,7 @@
             portPathOverlay.append(hitArea);
           });
         }
-        if (graphState.renderMode === "symbols" || !graphState.selectedCodeFlowId) return;
+        if (graphState.renderMode === "symbols" || !codeFlowSelection.flowId) return;
         const svgNamespace = "http://www.w3.org/2000/svg";
         const marker = document.createElementNS(svgNamespace, "marker");
         marker.id = "graph-port-arrow";
@@ -2204,7 +2207,7 @@
           return routed.d;
         };
         const selectedPortLinks = [...new Map((graphData.port_links || []).filter(link => (
-          !graphState.selectedCodeFlowId
+          !codeFlowSelection.flowId
           && (selectedEndpointIds.has(link.source_endpoint_id)
             || selectedEndpointIds.has(link.target_endpoint_id))
         )).map(link => [
@@ -2213,7 +2216,7 @@
         ]))].map(([, link]) => link);
         (graphData.internal_port_links || []).forEach(link => {
           if (
-            graphState.selectedCodeFlowId
+            codeFlowSelection.flowId
             && !graphState.relatedLocalPortLinks?.has(
               `${link.input_endpoint_id}:${link.output_endpoint_id}`
             )
@@ -2315,7 +2318,7 @@
         selectNode(node, false, true);
       });
       renderer.on("clickEdge", ({ edge, event }) => {
-        if (graphState.selectedCodeFlowId) return;
+        if (codeFlowSelection.flowId) return;
         const originalEvent = event?.originalEvent || event;
         if (!originalEvent?.shiftKey) return;
         const match = String(edge).match(/^edge(?:-hit)?-(\d+)$/);

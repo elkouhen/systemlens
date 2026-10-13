@@ -22,7 +22,7 @@
       graphState.callTreeVisibleEdgeCount = edgeCount;
       const stats = document.getElementById("flow-mode-context-stats");
       if (!stats) return;
-      const active = Boolean(graphState.selectedCodeFlowId)
+      const active = Boolean(codeFlowSelection.flowId)
         && (graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree");
       stats.hidden = !active;
       stats.textContent = active
@@ -42,31 +42,19 @@
       })[kind] || String(kind || "Étape").replaceAll("_", " ");
     }
 
-    function codeFlowDataActionLabel(step) {
-      return ({
-        read: "Lecture de données",
-        insert: "Insertion de données",
-        update: "Modification de données",
-        delete: "Suppression de données",
-        create_or_update: "Création ou modification de données",
-        read_update: "Lecture et modification de données",
-      })[step.action] || codeFlowStepLabel(step.kind);
+    function dataEntityLabel(resource) {
+      return String(resource || "donnée inconnue").split(":").at(-1).split(".").at(-1);
     }
 
-    function dataAccessTooltipLines(accesses) {
-      const items = accesses || [];
-      if (!items.length) return [];
-      const confidenceLabels = { high: "élevée", medium: "moyenne", low: "faible" };
-      const lines = [`Données · ${items.length} accès potentiel${items.length > 1 ? "s" : ""}`];
-      items.forEach(access => {
-        const resource = access.resource?.startsWith("jpa:")
-          ? access.resource.split(":").at(-1).split(".").at(-1)
-          : access.resource || "donnée inconnue";
-        const source = access.path
-          ? ` · ${access.path.split("/").at(-1)}:${access.line}` : "";
-        lines.push(`${codeFlowDataActionLabel(access).replace(" de données", "")} · ${resource}${source} · confiance ${confidenceLabels[access.confidence] || "inconnue"}`);
-      });
-      return lines;
+    function flowDiagnosticTitle(diagnostic) {
+      return ({
+        potential_concurrent_read_write: "LECTURE / ÉCRITURE · INTERACTION POSSIBLE",
+        potential_concurrent_write: "ÉCRITURES CONCURRENTES POSSIBLES",
+        potential_lost_update: "LOST UPDATE POSSIBLE",
+        potential_dirty_read: "LECTURE NON VALIDÉE POSSIBLE",
+        potential_read_write_anomaly: "ANOMALIE DE FRAÎCHEUR POSSIBLE",
+        conflict_protection_identified: "PROTECTION DE CONFLIT IDENTIFIÉE",
+      })[diagnostic.event_type] || "ÉCRITURE ASYNC / LECTURE SYNC";
     }
 
     function codeFlowPriority(flow) {
@@ -305,7 +293,7 @@
           window.addEventListener("pointercancel", finishCallTreePan, true);
         }, true);
         graphCallTreeOverlay.addEventListener("wheel", event => {
-          if (!graphState.selectedCodeFlowId || graphState.callGraphDisplayMode !== "tree") return;
+          if (!codeFlowSelection.flowId || graphState.callGraphDisplayMode !== "tree") return;
           event.preventDefault();
           const bounds = graphCallTreeOverlay.getBoundingClientRect();
           const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
@@ -313,13 +301,13 @@
           zoomCallTree(factor, event.clientX - bounds.left, event.clientY - bounds.top);
         }, { passive: false });
       }
-      const active = Boolean(graphState.selectedCodeFlowId)
+      const active = Boolean(codeFlowSelection.flowId)
         && graphState.viewMode === "call-graph";
       const treeActive = active;
       const viewport = graphCallTreeOverlay.getBoundingClientRect();
       const treeSignature = treeActive
         ? [
-            graphState.selectedCodeFlowId,
+            codeFlowSelection.flowId,
             graphState.callTreeDepth,
             graphState.selectedDiagnosticId || "",
             graphState.callTreeSelectedPathKey || "",
@@ -341,18 +329,13 @@
         return;
       }
       const selectedFlows = (graphData.code_flows || []).filter(flow => (
-        flow.id === graphState.selectedCodeFlowId
+        flow.id === codeFlowSelection.flowId
       ));
       const callGraph = callGraphForFlows(selectedFlows);
       const edges = (callGraph?.edges || []).filter(edge => edge.source !== edge.target);
-      const order = callGraph?.node_order || callGraph?.nodes || [];
-      const nodes = [...new Set([...order, ...edges.flatMap(edge => [edge.source, edge.target])])];
-      const treePortsByEndpointId = new Map(graphData.nodes.flatMap(node => (
-        (node.ports || []).map(port => [port.endpoint_id, port])
-      )));
       const selectedFlow = selectedFlows[0] || null;
       const selectedFlowDiagnostics = (graphData.flow_diagnostics || []).filter(item => (
-        item.flow_id === graphState.selectedCodeFlowId
+        item.flow_id === codeFlowSelection.flowId
       ));
       const selectedDiagnostic = (graphData.flow_diagnostics || []).find(item => (
         item.id === graphState.selectedDiagnosticId
@@ -368,60 +351,15 @@
       const syncDiagnosticPathEndpoints = new Set(
         selectedDiagnostic?.sync_path_endpoint_ids || selectedDiagnostic?.sync_endpoint_ids || [],
       );
+      const interactionDiagnosticPathEndpoints = new Set(
+        selectedDiagnostic?.interaction_path_endpoint_ids || [],
+      );
       const allCallFlows = [...codeFlows, ...(graphData.supporting_code_flows || [])];
       const flowById = new Map(allCallFlows.map(flow => [flow.id, flow]));
-      const flowIdsByOutputEndpoint = new Map();
-      const outputEndpointIdsByFlow = new Map();
-      allCallFlows.forEach(flow => {
-        const outputEndpointIds = new Set((flow.steps || [])
-          .map(step => step.endpoint_id)
-          .filter(endpointId => treePortsByEndpointId.get(endpointId)?.direction === "out"));
-        outputEndpointIdsByFlow.set(flow.id, outputEndpointIds);
-        outputEndpointIds.forEach(endpointId => {
-          flowIdsByOutputEndpoint.set(endpointId, [
-            ...(flowIdsByOutputEndpoint.get(endpointId) || []), flow.id,
-          ]);
-        });
-      });
-      const childrenByInputEndpoint = new Map();
-      const childrenByRootService = new Map();
-      const incoming = new Set();
-      edges.forEach((edge, index) => {
-        const child = { edge, index };
-        const sourceEndpointId = edge.endpoint_ids?.[0];
-        const sourceFlowIds = flowIdsByOutputEndpoint.get(sourceEndpointId) || [];
-        sourceFlowIds.forEach(flowId => {
-          const triggerEndpointId = flowById.get(flowId)?.steps?.[0]?.endpoint_id;
-          if (!triggerEndpointId) return;
-          const children = childrenByInputEndpoint.get(triggerEndpointId) || [];
-          if (!children.some(item => item.index === index)) children.push(child);
-          childrenByInputEndpoint.set(triggerEndpointId, children);
-        });
-        childrenByRootService.set(edge.source, [
-          ...(childrenByRootService.get(edge.source) || []), child,
-        ]);
-        incoming.add(edge.target);
-      });
-      const roots = nodes.filter(node => !incoming.has(node));
-      const rootNames = roots.length ? roots : nodes.slice(0, 1);
-      const rootInputEndpointId = selectedFlow?.steps?.[0]?.endpoint_id || null;
-      const persistedTreeOccurrences = Array.isArray(callGraph?.call_tree?.occurrences)
-        ? callGraph.call_tree.occurrences
-        : [];
-      const persistedTreeById = new Map(
-        persistedTreeOccurrences.map(occurrence => [occurrence.id, occurrence]),
-      );
-      const persistedTreeRootIds = Array.isArray(callGraph?.call_tree?.root_occurrence_ids)
-        ? callGraph.call_tree.root_occurrence_ids
-        : [];
-      const hasPersistedTree = persistedTreeRootIds.some(rootId => persistedTreeById.has(rootId));
-      const causalTransitions = callGraph?.call_tree?.transitions;
+      const causalTransitions = callGraph?.call_tree?.transitions || {};
       const causalRootFlowIds = Array.isArray(callGraph?.call_tree?.root_flow_ids)
         ? callGraph.call_tree.root_flow_ids
         : [];
-      const hasCausalTree = Boolean(
-        causalTransitions && causalRootFlowIds.length,
-      );
       const maxOccurrences = 5000;
       let occurrenceCount = 0;
       const maxDepth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 1));
@@ -431,16 +369,10 @@
         ancestorInputPorts,
         inputEndpointId = null,
         pathKey = name,
-        ancestorNodes = new Set(),
-        definition = null,
-        flowId = null,
         ancestorFlows = new Set(),
-        flowIds = null,
+        flowIds = [],
       ) => {
-        const currentFlowIds = Array.isArray(flowIds) && flowIds.length
-          ? flowIds
-          : (definition?.flow_id || flowId) ? [definition?.flow_id || flowId] : [];
-        const currentFlowId = currentFlowIds[0] || null;
+        const currentFlowId = flowIds[0] || null;
         const currentFlow = currentFlowId ? flowById.get(currentFlowId) : null;
         const occurrence = {
           id: `call-tree-${occurrenceCount++}`,
@@ -448,71 +380,51 @@
           pathKey,
           depth,
           children: [],
-          cycle: Boolean(definition?.cycle),
-          continuationUnknown: Boolean(definition?.continuation_unknown)
-            || Boolean(hasCausalTree && currentFlowId && !currentFlow),
+          cycle: false,
+          continuationUnknown: depth > 0 && !currentFlow,
           flowId: currentFlowId,
-          flowIds: currentFlowIds,
-          hiddenChildrenCount: Number(definition?.hidden_children_count || 0),
+          flowIds,
+          hiddenChildrenCount: 0,
           expanded: false,
           collapsed: false,
         };
         const endpointCycle = inputEndpointId && ancestorInputPorts.has(inputEndpointId);
-        const fallbackCycle = !inputEndpointId && ancestorNodes.has(name);
-        const flowCycle = currentFlowIds.some(id => ancestorFlows.has(id));
-        if (endpointCycle || fallbackCycle || flowCycle || occurrence.cycle) {
+        const flowCycle = flowIds.some(id => ancestorFlows.has(id));
+        if (endpointCycle || flowCycle) {
           occurrence.cycle = true;
           return occurrence;
         }
-        const outgoing = hasCausalTree
-          ? (() => {
-            const byRelation = new Map();
-            currentFlowIds.forEach(sourceFlowId => {
-              (causalTransitions[sourceFlowId] || []).forEach(transition => {
-                const edge = transition.edge;
-                const relationKey = [
-                  edge.kind,
-                  edge.endpoint_ids?.[0] || "",
-                  edge.label || "",
-                  edge.endpoint_ids?.[1] || "",
-                  edge.source || "",
-                  edge.target || "",
-                ].join("|");
-                const targetFlowIds = Array.isArray(transition.target_flow_ids)
-                  ? transition.target_flow_ids
-                  : [];
-                const existing = byRelation.get(relationKey);
-                if (existing) {
-                  existing.flowIds = [...new Set([...existing.flowIds, ...targetFlowIds])];
-                } else {
-                  byRelation.set(relationKey, {
-                    edge,
-                    index: byRelation.size,
-                    flowIds: [...new Set(targetFlowIds)],
-                  });
-                }
+        const byRelation = new Map();
+        flowIds.forEach(sourceFlowId => {
+          (causalTransitions[sourceFlowId] || []).forEach(transition => {
+            const edge = transition.edge;
+            const relationKey = [
+              edge.kind,
+              edge.endpoint_ids?.[0] || "",
+              edge.label || "",
+              edge.endpoint_ids?.[1] || "",
+              edge.source || "",
+              edge.target || "",
+            ].join("|");
+            const targetFlowIds = Array.isArray(transition.target_flow_ids)
+              ? transition.target_flow_ids
+              : [];
+            const existing = byRelation.get(relationKey);
+            if (existing) {
+              existing.flowIds = [...new Set([...existing.flowIds, ...targetFlowIds])];
+            } else {
+              byRelation.set(relationKey, {
+                edge,
+                index: byRelation.size,
+                flowIds: [...new Set(targetFlowIds)],
               });
-            });
-            return [...byRelation.values()].map(relation => ({
-              ...relation,
-              flowId: relation.flowIds[0] || null,
-            }));
-          })()
-          : hasPersistedTree
-          ? (definition?.children || [])
-            .map(childId => persistedTreeById.get(childId))
-            .filter(Boolean)
-            .map((childDefinition, index) => ({
-              definition: childDefinition,
-              edge: childDefinition.edge || null,
-              index,
-            }))
-          : inputEndpointId
-            ? (childrenByInputEndpoint.get(inputEndpointId) || [])
-            : (childrenByRootService.get(name) || []).filter(({ edge }) => (
-              !rootInputEndpointId
-              || outputEndpointIdsByFlow.get(selectedFlow?.id)?.has(edge.endpoint_ids?.[0])
-            ));
+            }
+          });
+        });
+        const outgoing = [...byRelation.values()].map(relation => ({
+          ...relation,
+          flowId: relation.flowIds[0] || null,
+        }));
         const expanded = graphState.callTreeExpanded.has(pathKey);
         const collapsed = graphState.callTreeCollapsed.has(pathKey);
         occurrence.expanded = expanded;
@@ -531,22 +443,16 @@
         }
         const nextInputPorts = new Set(ancestorInputPorts);
         if (inputEndpointId) nextInputPorts.add(inputEndpointId);
-        const nextNodes = new Set(ancestorNodes);
-        nextNodes.add(name);
         const nextFlows = new Set(ancestorFlows);
-        currentFlowIds.forEach(id => nextFlows.add(id));
-        outgoing.forEach(({ edge, index, definition: childDefinition, flowId: childFlowId, flowIds: childFlowIds }) => {
-          const childPathKey = childDefinition?.path_key
-            || `${pathKey}>${childFlowId || edge.target}:${edge.endpoint_ids?.[1] || edge.target}`;
+        flowIds.forEach(id => nextFlows.add(id));
+        outgoing.forEach(({ edge, index, flowId: childFlowId, flowIds: childFlowIds }) => {
+          const childPathKey = `${pathKey}>${childFlowId || edge.target}:${edge.endpoint_ids?.[1] || edge.target}`;
           const child = makeOccurrence(
-            childDefinition?.name || edge.target,
+            edge.target,
             depth + 1,
             nextInputPorts,
-            childDefinition?.input_endpoint_id || edge.endpoint_ids?.[1],
+            edge.endpoint_ids?.[1],
             childPathKey,
-            nextNodes,
-            childDefinition,
-            childFlowId,
             nextFlows,
             childFlowIds,
           );
@@ -556,39 +462,17 @@
         });
         return occurrence;
       };
-      const rootsTree = hasCausalTree
-        ? causalRootFlowIds
-          .map(flowId => flowById.get(flowId))
-          .filter(Boolean)
-          .map(rootFlow => makeOccurrence(
-            rootFlow.module,
-            0,
-            new Set(),
-            rootFlow.steps?.[0]?.endpoint_id || null,
-            rootFlow.id,
-            new Set(),
-            null,
-            rootFlow.id,
-            new Set(),
-          ))
-        : hasPersistedTree
-        ? persistedTreeRootIds
-          .map(rootId => persistedTreeById.get(rootId))
-          .filter(Boolean)
-          .map(definition => makeOccurrence(
-            definition.name,
-            0,
-            new Set(),
-            definition.input_endpoint_id || null,
-            definition.path_key || definition.name,
-            new Set(),
-            definition,
-          ))
-        : rootNames.map(name => makeOccurrence(
-          name,
+      const rootsTree = causalRootFlowIds
+        .map(flowId => flowById.get(flowId))
+        .filter(Boolean)
+        .map(rootFlow => makeOccurrence(
+          rootFlow.module,
           0,
           new Set(),
-          rootNames.length === 1 ? rootInputEndpointId : null,
+          rootFlow.steps?.[0]?.endpoint_id || null,
+          rootFlow.id,
+          new Set(),
+          [rootFlow.id],
         ));
       if (!rootsTree.length) {
         graphCallTreeOverlay.textContent = "Aucun appel interservice résolu.";
@@ -805,21 +689,19 @@
             .join(" | ");
           lines.push(`OUT ${outputText}${outputs.length > 3 ? " …" : ""}`);
         }
-        const dataAccesses = graphData.flow_data_accesses?.[graphState.selectedCodeFlowId] || [];
-        const inputEndpointId = occurrence.edge?.endpoint_ids?.[1]
-          || (occurrence.depth === 0 ? selectedFlow?.steps?.[0]?.endpoint_id : null);
-        lines.push(...dataAccessTooltipLines(dataAccesses.filter(access => (
-          access.module === occurrence.name
-          && access.trigger_endpoint_id === inputEndpointId
-        ))));
-        diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, index, side }) => {
-          const operation = side === "write" ? "Écriture async" : "Lecture sync";
-          const name = side === "write" ? diagnostic.write_name : diagnostic.read_name;
-          const verdict = diagnostic.classification === "potential_risk"
-            ? "risque potentiel"
-            : diagnostic.classification === "guarantee_identified"
-              ? "garantie identifiée" : "preuves insuffisantes";
-          lines.push(`P${index + 1} · ${operation} · ${name || "donnée"} · ${verdict}`);
+        diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, side }) => {
+          if (diagnostic.key) lines.push(`Clé · ${diagnostic.key}`);
+          if (diagnostic[`${side}_phase`]) lines.push(`Phase · ${diagnostic[`${side}_phase`]}`);
+          if (diagnostic[`${side}_transaction_id`]) lines.push(`Transaction · ${diagnostic[`${side}_transaction_id`]}`);
+          if (diagnostic[`${side}_fields`]?.length) lines.push(`Champs · ${diagnostic[`${side}_fields`].join(", ")}`);
+          if (diagnostic.guard) lines.push(`Protection · ${diagnostic.guard} (${diagnostic.guard_scope || "portée inconnue"})`);
+          for (const dependencySide of ["write", "read"]) {
+            const dependency = diagnostic[`${dependencySide}_dependency_site`];
+            if (dependency?.module === occurrence.name
+              && dependency.trigger_endpoint_id === inputEndpointId) {
+              lines.push(`Lecture liée · ${dependency.path}:${dependency.line}`);
+            }
+          }
         });
         return lines;
       };
@@ -872,8 +754,10 @@
           line.classList.add("graph-call-tree-edge", protocolClass);
           edgeHit.classList.add(protocolClass);
           const edgeEndpointIds = new Set(child.edge.endpoint_ids || []);
-          const edgeDiagnosticKind = [...edgeEndpointIds].some(endpointId => asyncDiagnosticPathEndpoints.has(endpointId))
-            ? "async"
+          const edgeDiagnosticKind = [...edgeEndpointIds].some(endpointId => interactionDiagnosticPathEndpoints.has(endpointId))
+            ? "interaction"
+            : [...edgeEndpointIds].some(endpointId => asyncDiagnosticPathEndpoints.has(endpointId))
+              ? "async"
             : [...edgeEndpointIds].some(endpointId => syncDiagnosticPathEndpoints.has(endpointId))
               ? "sync"
               : null;
@@ -922,9 +806,11 @@
           label.classList.add("graph-call-tree-edge-label");
           if (edgeDiagnosticKind) {
             label.classList.add(`is-diagnostic-${edgeDiagnosticKind}`, "is-diagnostic-badge-label");
-            const diagnosticLabel = edgeDiagnosticKind === "async"
-              ? `P${selectedDiagnosticIndex} · ÉCRITURE ASYNC`
-              : `P${selectedDiagnosticIndex} · LECTURE SYNC`;
+            const diagnosticLabel = edgeDiagnosticKind === "interaction"
+              ? flowDiagnosticTitle(selectedDiagnostic)
+              : edgeDiagnosticKind === "async"
+              ? `D${selectedDiagnosticIndex} · ÉCRITURE ASYNC`
+              : `D${selectedDiagnosticIndex} · LECTURE SYNC`;
             label.textContent = `${diagnosticLabel} · ${edgeDisplayLabel(child.edge)}`;
           } else if (selectedDiagnostic) {
             label.classList.add("is-diagnostic-muted");
@@ -975,19 +861,38 @@
             ? `Microservice · +${occurrence.hiddenChildrenCount} appels`
             : "Microservice";
         node.append(icon, name, kind);
-        diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, index, side }) => {
-          const kind = side === "write" ? "async" : "sync";
-          if (diagnostic.id === graphState.selectedDiagnosticId) {
-            node.classList.add(`is-diagnostic-${kind}`);
-          }
+        const diagnosticBadges = new Map();
+        diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, side }) => {
+          const operation = diagnostic[`${side}_action`] === "delete"
+            ? "suppression"
+            : side === "read" ? "lecture" : "écriture";
+          const label = `${operation} ${dataEntityLabel(diagnostic.resource)}`;
+          const kind = diagnostic.event_type === "async_write_sync_read"
+            ? side === "write" ? "async" : "sync" : "interaction";
+          const badge = diagnosticBadges.get(label) || { label, kinds: new Set(), annotations: [] };
+          badge.kinds.add(kind);
+          badge.annotations.push({ diagnostic, side, kind });
+          diagnosticBadges.set(label, badge);
+        });
+        diagnosticBadges.forEach(({ label, kinds, annotations }) => {
+          const selectedAnnotation = annotations.find(
+            item => item.diagnostic.id === graphState.selectedDiagnosticId,
+          );
+          const kind = selectedAnnotation
+            ? selectedAnnotation.kind
+            : kinds.has("interaction") ? "interaction" : kinds.has("async") ? "async" : "sync";
+          if (selectedAnnotation) node.classList.add(`is-diagnostic-${kind}`);
           const diagnosticBadge = document.createElement("span");
           diagnosticBadge.className = `graph-call-tree-diagnostic-badge is-${kind}`;
-          diagnosticBadge.textContent = `P${index + 1} · ${kind === "async" ? "ÉCRITURE ASYNC" : "LECTURE SYNC"}`;
-          diagnosticBadge.title = `${diagnostic.resource || "Donnée"} · cliquer pour isoler ce diagnostic`;
+          diagnosticBadge.textContent = label;
+          diagnosticBadge.title = annotations.length > 1
+            ? `${annotations.length} diagnostics associés · cliquer pour isoler`
+            : "Cliquer pour isoler ce diagnostic";
           diagnosticBadge.addEventListener("click", event => {
             event.preventDefault();
             event.stopPropagation();
-            if (selectedFlow) focusFlowDiagnostic(diagnostic, selectedFlow);
+            const target = selectedAnnotation || annotations[0];
+            if (selectedFlow) focusFlowDiagnostic(target.diagnostic, selectedFlow);
           });
           node.append(diagnosticBadge);
         });
@@ -1115,7 +1020,7 @@
       return true;
     }
     function expandAllCallTree() {
-      if (!graphState.selectedCodeFlowId || graphState.callGraphDisplayMode !== "tree") return false;
+      if (!codeFlowSelection.flowId || graphState.callGraphDisplayMode !== "tree") return false;
       const camera = captureCallTreeCamera();
       graphState.callTreeDepth = 8;
       graphState.callTreeExpanded = new Set();
@@ -1125,7 +1030,7 @@
       return true;
     }
     function syncCallTreeDepthControl() {
-      const active = Boolean(graphState.selectedCodeFlowId)
+      const active = Boolean(codeFlowSelection.flowId)
         && (graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree")
         && graphState.callGraphDisplayMode === "tree";
       const depth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 1));
@@ -1139,7 +1044,7 @@
       if (depthIncrease) depthIncrease.disabled = !active || depth >= 8;
     }
     function adjustCallTreeDepth(delta) {
-      if (!graphState.selectedCodeFlowId || graphState.callGraphDisplayMode !== "tree") return false;
+      if (!codeFlowSelection.flowId || graphState.callGraphDisplayMode !== "tree") return false;
       const currentDepth = Number(graphState.callTreeDepth) || 1;
       const nextDepth = Math.max(1, Math.min(8, currentDepth + delta));
       if (nextDepth === currentDepth) return false;
@@ -1403,7 +1308,7 @@
 
     function syncCodeFlowSelection() {
       codeFlowsList.querySelectorAll(".code-flow-item").forEach(item => {
-        item.classList.toggle("is-selected", item.dataset.flowId === graphState.selectedCodeFlowId);
+        item.classList.toggle("is-selected", item.dataset.flowId === codeFlowSelection.flowId);
       });
     }
 
@@ -1472,7 +1377,7 @@
 
     function codeFlowItem(flow) {
       const item = document.createElement("li");
-      const selected = graphState.selectedCodeFlowId === flow.id;
+      const selected = codeFlowSelection.flowId === flow.id;
       item.className = `code-flow-item${flow.status === "cycle" ? " is-cycle" : ""}${flow.reconciliation === "partial" ? " is-partial" : ""}${selected ? " is-selected" : ""}`;
       item.dataset.flowId = flow.id;
       const header = document.createElement("div");
@@ -1533,7 +1438,7 @@
           callTreeZoom: graphState.callTreeZoom,
         };
       }
-      if (graphState.selectedCodeFlowId !== flow.id) showCodeFlow(flow);
+      if (codeFlowSelection.flowId !== flow.id) showCodeFlow(flow);
       graphState.selectedDiagnosticId = diagnostic.id;
       graphState.callTreeDepth = Math.max(Number(graphState.callTreeDepth) || 1, 8);
       graphState.callTreeExpanded = new Set();
@@ -1576,6 +1481,15 @@
       updateCodeFlowFilterSummary();
       codeFlowsTitle.textContent = `Flux de code (${visible.length})`;
     }
+
+    flowsPanel.addEventListener("systemlens:code-flow-open-in-graph", event => {
+      const flow = codeFlows.find(item => item.id === event.detail?.flowId);
+      if (flow) showCodeFlow(flow);
+    });
+    flowsPanel.addEventListener("systemlens:code-flow-open-in-list", event => {
+      const flow = codeFlows.find(item => item.id === event.detail?.flowId);
+      if (flow) openCodeFlowInList(flow);
+    });
 
     codeFlowFilter.addEventListener("input", renderCodeFlows);
     document.getElementById("flows-panel").addEventListener("systemlens:flows-open", renderCodeFlows);

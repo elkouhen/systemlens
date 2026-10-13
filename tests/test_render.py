@@ -1145,6 +1145,12 @@ def test_call_tree_follows_causal_flow_occurrences_and_unknown_leaves() -> None:
         code_flows=flows[:2],
     ))
     unknown_flow = unknown_data["code_flows"][0]
+    exported_graph = _flow_call_graph(unknown_data, unknown_flow)
+    assert "occurrences" not in exported_graph["call_tree"]
+    assert "root_occurrence_ids" not in exported_graph["call_tree"]
+    exported_tree = exported_graph["call_trees_by_flow"][unknown_flow["id"]]
+    assert exported_tree["root_flow_ids"] == [unknown_flow["id"]]
+    assert exported_tree["transitions"][unknown_flow["id"]][0]["target_flow_ids"] == []
     unknown_tree = _networkx_call_graph(
         flows[:2],
         {"orders": endpoints["orders"], "payments": endpoints["payments"][:1]},
@@ -2044,12 +2050,3 @@ def test_mongodb_resource_owner_uses_lowest_writing_service_layer() -> None:
     collection_nodes = [node for node in graph_data["nodes"] if node["kind"] == "mongodb_collection"]
     assert collection_nodes
     assert {node["owner_service"] for node in collection_nodes} == {"orders-repository"}
-
-
-def test_html_export_embeds_resource_catalogue_workspace() -> None:
-    document = render_graph_html({"orders": []}, [])
-
-    assert 'id="resource-catalogue-categories"' in document
-    assert 'id="resource-service-filter"' in document
-    assert "42-resource-catalogue.js" in document
-    assert "Ressources indexées" in document

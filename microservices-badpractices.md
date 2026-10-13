@@ -2,9 +2,11 @@
 
 Prioritize bounded diagnostics for synchronous calls without established time
 budgets and for structural contract changes between two known versions. A
-diagnostic for a database update and event publication is a useful third candidate,
-subject to validation on representative Spring applications. The other patterns
-remain review questions until their decisive evidence is available.
+database update and event publication is a third candidate. Lost-update analysis
+is a valuable follow-up because indexed data operations provide part of its
+evidence, but a first release should report review candidates rather than claim a
+concurrency defect. The other patterns remain review questions until their
+decisive evidence is available.
 
 This is a feasibility assessment for SystemLens, not a list of implemented
 checks or measured defect rates. Static evidence can identify a candidate or
@@ -48,7 +50,7 @@ They do not claim that static analysis can prove the absence of a problem.
 | Database update and event publication without recovery from partial failure; missing or premature event | High | Medium after data operations join internal flows | Medium for a candidate, low for a failure claim | High: operation evidence, transaction, outbox, CDC, recovery | Large |
 | Redelivered message processed without idempotency; duplicate business effect | High | Low: locate listener and effect | Low for absence of protection | High: constraints, deduplication, downstream guarantees | Large |
 | Event order assumed across Kafka partitions; dependent updates out of order | Medium | Medium: inspect producer key and handler | Low to medium without the dependency | High: partitioning and business order | Medium to large |
-| Concurrent read-modify-write without conflict protection; lost update | High | Low: locate read and write | Low without database semantics | High: isolation, locks, versioning | Large |
+| Concurrent read-modify-write without conflict protection; lost update | High | Medium for a same-method read and write to the same known resource; low for value dependence and record identity | Low unless the value dependency, record key, transaction boundary, and protection are understood | High: database semantics, isolation, locks, versioning | Large |
 | Availability check before action without atomic reservation; overselling | High when inventory is shared | Low: locate check and action | Low without the inventory invariant | High: business constraint, database enforcement | Large |
 | Late asynchronous action after compensation; cancelled action takes effect | High when sagas are used | Low: locate both handlers | Low without state transitions | High: saga policy and guards | Large |
 | Side effect retried after timeout without idempotency; duplicate effect | High | Medium: find retry and remote effect | Low to medium without remote guarantees | High: retry policy, idempotency key | Medium to large |
@@ -105,6 +107,21 @@ process, or transaction manager as missing evidence rather than proof of unsafe 
 Spring can synchronize Kafka publication with a database transaction, and a
 transaction-bound listener can defer handling until commit. This limits the
 precision of a rule based on source order alone.
+
+Treat lost-update analysis as a separate follow-up built on the same operation
+facts. A useful candidate requires evidence that a write value depends on an
+earlier read of the same record, plus the transaction boundary and any applicable
+conflict control. A matching entity name is insufficient: the record key may be
+unknown, aliases may obscure the value flow, and another layer may provide
+protection. `@Transactional` alone does not establish conflict protection, and
+the indexed source may not identify the database isolation mode. Report
+“potential read-modify-write; protection not established” only when the read,
+write, and value dependency are source-backed. Otherwise abstain or show the
+operations as separate facts. Recognize a protection mechanism only when its
+scope and applicability to that update are established. Validate the candidate
+against protected, unprotected, and ambiguous examples before considering an
+automatic finding. The current operation facts do not yet establish these
+conditions, so this is not among the first three bounded diagnostics.
 
 Before promoting any candidate to a user-facing check, evaluate it on positive,
 negative, and ambiguous examples from more than one repository. Record

@@ -267,7 +267,49 @@ unknown. Verify with `uv run pytest tests/test_data_operations.py`. Its absence
 must be visible in coverage output; section 4 does not cover every Java
 persistence technology.
 
-## 6. Residual risks
+## 6. Follow-up: lost-update candidates
+
+The indexed read and write facts can support a later review aid for concurrent
+read-modify-write patterns. They do not currently prove that the written value
+depends on the read value, that both operations target the same record, or that
+concurrent transactions can overlap. Keep this analysis separate from the
+operation classification and flow projection.
+
+The first useful candidate requires all of the following source evidence:
+
+- A read and a write or update in one method-level value-flow path.
+- Evidence that the write value depends on the read result.
+- The same resolved resource and record key for both operations.
+- A known transaction boundary, or an explicit unknown transaction status.
+- An inventory of recognized conflict controls applicable to the update, such
+  as a version check, a scoped lock, or a conditional atomic update.
+
+Do not treat `@Transactional` as conflict protection by itself. Do not report an
+unprotected update when the database engine, isolation mode, key identity, or
+protection mechanism is unknown. The result should say “potential
+read-modify-write; protection not established” and link to both source sites.
+An unresolved value dependency or record key must produce an abstention, not a
+defect finding.
+
+Acceptance criteria:
+
+- Protected, unprotected, and ambiguous examples distinguish correctly across
+  more than one Spring application.
+- Each candidate includes both operation locations, the resolved resource and
+  key when known, transaction evidence, recognized protection evidence, and
+  explicit unknowns.
+- A read and write to the same entity without value-flow evidence do not become
+  a lost-update candidate.
+- Precision, abstention rate, and reviewer time are recorded before promoting
+  this review aid to a user-facing diagnostic.
+
+The scope is larger than locating a read and a write. Java value flow, key
+aliasing, transaction propagation, and database behavior can cross framework
+and configuration boundaries. If these cannot be resolved with bounded
+evidence, retain the operations as graph annotations and leave the concurrency
+conclusion to the reviewer.
+
+## 7. Residual risks
 
 Static reachability can over-approximate runtime dispatch and cannot prove a
 transaction committed. A repository method may wrap additional side effects.
@@ -281,7 +323,7 @@ avoid conflicting read/write judgments. If typed resolution proves too weak
 on a supported repository, retain unknown evidence and narrow coverage rather
 than promoting a method-name guess to an architecture fact.
 
-## 7. Research and API references
+## 8. Research and API references
 
 These papers guide the design; none validates SystemLens' proposed operation
 classifier or its persisted call graph. Its precision and coverage require

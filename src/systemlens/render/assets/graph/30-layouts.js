@@ -460,6 +460,7 @@
         || graphState.clusteredView !== (layout === "cluster")
         || graphState.viewMode === "call-graph";
       if (switchingView) {
+        codeFlowSelection.clear();
         updateGraphState({
           selectedId: null,
           dependencyFocusOnly: false,
@@ -467,7 +468,6 @@
           hoveredId: null,
           relatedNodes: null,
           relatedEdges: null,
-          selectedCodeFlowId: null,
           selectedDiagnosticId: null,
           diagnosticFocusSnapshot: null,
           viewMode: "architecture",
@@ -579,7 +579,7 @@
         renderer.refresh();
         await fitCameraToVisibleGraph(renderer);
       }
-      if (graphState.selectedCodeFlowId && graphState.relatedNodes?.size) {
+      if (codeFlowSelection.flowId && graphState.relatedNodes?.size) {
         centerCameraOnPath({ nodes: [...graphState.relatedNodes] });
       }
       // Sigma's noverlap solver works with Sigma node radii, while the

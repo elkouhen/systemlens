@@ -598,7 +598,10 @@
         listAction.className = "reference-action";
         listAction.textContent = "Flux";
         listAction.title = "Ouvrir ce flux dans l’onglet Flux";
-        const openInList = () => openCodeFlowInList(flow);
+        const openInList = () => flowsPanel.dispatchEvent(new CustomEvent(
+          "systemlens:code-flow-open-in-list",
+          { detail: { flowId: flow.id } },
+        ));
         listAction.addEventListener("click", openInList);
         registerDetailsAction(listAction, openInList);
         const graphAction = document.createElement("button");
@@ -606,7 +609,10 @@
         graphAction.className = "reference-action";
         graphAction.textContent = "Arbre d’appel";
         graphAction.title = "Afficher ce flux dans le graphe d’appel";
-        const openInGraph = () => showCodeFlow(flow);
+        const openInGraph = () => flowsPanel.dispatchEvent(new CustomEvent(
+          "systemlens:code-flow-open-in-graph",
+          { detail: { flowId: flow.id } },
+        ));
         graphAction.addEventListener("click", openInGraph);
         registerDetailsAction(graphAction, openInGraph);
         actions.append(listAction, graphAction);

@@ -2150,6 +2150,11 @@ def export_microservices_cmd(
     html: Optional[Path] = typer.Option(
         None, "--html", help="Fichier HTML Sigma.js à produire."
     ),
+    call_graphs_only: bool = typer.Option(
+        False,
+        "--call-graphs-only",
+        help="Limiter l’export HTML aux graphes d’appel et à leurs annotations.",
+    ),
     xlsx: Optional[Path] = typer.Option(
         None, "--xlsx", help="Classeur XLSX de diagnostic des ports et flux."
     ),
@@ -2177,6 +2182,7 @@ def export_microservices_cmd(
     # object in the function default.
     if not isinstance(graph, Path):
         graph = None
+    call_graphs_only = call_graphs_only is True
     if not isinstance(xlsx, Path):
         xlsx = None
     outputs = [
@@ -2184,6 +2190,9 @@ def export_microservices_cmd(
     ]
     if len(outputs) + int(json_output) != 1:
         typer.echo("Choisissez un seul format parmi --html, --c4, --xlsx ou --json.", err=True)
+        raise typer.Exit(code=2)
+    if call_graphs_only and html is None:
+        typer.echo("`--call-graphs-only` nécessite `--html FILE`.", err=True)
         raise typer.Exit(code=2)
     if c4 is not None and c4.suffix:
         typer.echo(
@@ -2243,6 +2252,7 @@ def export_microservices_cmd(
                     "integration_methods": getattr(graph_data, "integration_methods", []),
                     "codeql_call_edges": getattr(graph_data, "codeql_call_edges", []),
                     "flow_descriptions": getattr(graph_data, "flow_descriptions", {}),
+                    "call_graphs_only": call_graphs_only,
                 },
             )),
             encoding="utf-8",

@@ -43,6 +43,15 @@ def import_graph_facts(
                     "Les flux directs ne peuvent être importés que dans un dépôt "
                     "sans index source."
                 )
+            known_flows = {flow.id for flow in store.all_code_flows()}
+            known_flows.update(flow.id for flow in flows)
+            for fact in facts:
+                flow_id = (fact.metadata or {}).get("flow_id")
+                if (fact.fact_type == "node" and fact.kind == "flow_data_access"
+                        and (not isinstance(flow_id, str) or flow_id not in known_flows)):
+                    raise ValueError(
+                        f"Annotation {fact.id}: flux inconnu {flow_id}."
+                    )
             existing = {
                 fact.id for fact in store.graph_facts_by_namespace(resolved_namespace)
             }

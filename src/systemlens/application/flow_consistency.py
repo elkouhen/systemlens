@@ -1,7 +1,7 @@
 """Conservative consistency diagnostics for persisted code-flow evidence."""
 
-from dataclasses import asdict, dataclass
 from collections import defaultdict
+from dataclasses import asdict, dataclass, replace
 from itertools import chain
 from typing import Iterable, Mapping
 
@@ -33,6 +33,20 @@ class FlowConsistencyDiagnostic:
     read_name: str = ""
     write_path_endpoint_ids: tuple[str, ...] = ()
     read_path_endpoint_ids: tuple[str, ...] = ()
+    event_type: str = "async_write_sync_read"
+    write_action: str | None = None
+    read_action: str | None = None
+    write_phase: str | None = None
+    read_phase: str | None = None
+    write_transaction_id: str | None = None
+    read_transaction_id: str | None = None
+    write_fields: tuple[str, ...] = ()
+    read_fields: tuple[str, ...] = ()
+    guard: str | None = None
+    guard_scope: str | None = None
+    order_evidence: str | None = None
+    write_dependency_step: int | None = None
+    read_dependency_step: int | None = None
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -48,6 +62,29 @@ def _is_sync(step: CodeFlowStep) -> bool:
 
 def _resource(step: CodeFlowStep) -> str | None:
     return step.resource or step.name or None
+
+
+_CONCURRENCY_EVIDENCE = {"parallel", "independent_handlers", "reentrant"}
+_CONFLICT_GUARDS = {"version", "compare_and_set", "lock", "serializable"}
+
+
+def _may_overlap(left: CodeFlowStep, right: CodeFlowStep) -> bool:
+    """Require explicit concurrency evidence; async branch labels are insufficient."""
+    if left.concurrency == "sequential" or right.concurrency == "sequential":
+        return False
+    return left.concurrency in _CONCURRENCY_EVIDENCE or right.concurrency in _CONCURRENCY_EVIDENCE
+
+
+def _guard_applies(left: CodeFlowStep, right: CodeFlowStep, identity: str) -> bool:
+    return bool(
+        left.guard in _CONFLICT_GUARDS
+        and right.guard == left.guard
+        and left.guard_scope == right.guard_scope == identity
+    )
+
+
+def _event_id(flow: CodeFlow, step: CodeFlowStep) -> str:
+    return f"{flow.id}:{step.order}"
 
 
 def _overlap(write: CodeFlowStep, read: CodeFlowStep) -> tuple[bool, str | None]:
@@ -127,6 +164,17 @@ def _diagnose_pair(
         read_name=read.name,
         write_path_endpoint_ids=write_path_endpoint_ids,
         read_path_endpoint_ids=read_path_endpoint_ids,
+        write_action=write.action,
+        read_action=read.action,
+        write_phase=write.phase,
+        read_phase=read.phase,
+        write_transaction_id=write.transaction_id,
+        read_transaction_id=read.transaction_id,
+        write_fields=write.fields,
+        read_fields=read.fields,
+        guard=write.guard if write.guard == read.guard else None,
+        guard_scope=write.guard_scope if write.guard_scope == read.guard_scope else None,
+        order_evidence=causal_evidence,
     )
 
 
@@ -227,6 +275,197 @@ def diagnose_flow_consistency_snapshot(
                     (causal_paths or {}).get(display_root, {}).get(write_flow.id, ()),
                     (causal_paths or {}).get(display_root, {}).get(read_flow.id, ()),
                 ))
+
+    # Advanced detectors require exact identity and explicit concurrency facts.
+    accesses_by_identity: dict[
+        tuple[str, str], dict[str, list[tuple[CodeFlow, CodeFlowStep]]]
+    ] = defaultdict(lambda: {"data_read": [], "data_write": []})
+    for flow in flows:
+        if flow.status == "cycle":
+            continue
+        for step in flow.steps:
+            resource = _resource(step)
+            if step.kind in {"data_read", "data_write"} and resource and step.key:
+                accesses_by_identity[(resource, step.key)][step.kind].append((flow, step))
+    rmw_sequences_by_identity: dict[
+        tuple[str, str], list[tuple[CodeFlow, CodeFlowStep, CodeFlowStep]]
+    ] = {}
+    for identity, grouped_accesses in accesses_by_identity.items():
+        reads_for_key = grouped_accesses["data_read"]
+        writes_for_key = grouped_accesses["data_write"]
+        reads_by_flow: dict[str, list[CodeFlowStep]] = defaultdict(list)
+        writes_by_flow: dict[str, list[CodeFlowStep]] = defaultdict(list)
+        for candidate_flow, step in reads_for_key:
+            reads_by_flow[candidate_flow.id].append(step)
+        for candidate_flow, step in writes_for_key:
+            writes_by_flow[candidate_flow.id].append(step)
+        rmw_sequences: list[tuple[CodeFlow, CodeFlowStep, CodeFlowStep]] = []
+        for flow_id in reads_by_flow.keys() & writes_by_flow.keys():
+            flow = flow_by_id[flow_id]
+            flow_reads = reads_by_flow[flow_id]
+            flow_writes = writes_by_flow[flow_id]
+            for read in flow_reads:
+                for write in flow_writes:
+                    if (
+                        write.order > read.order
+                        and read.transaction_id
+                        and read.transaction_id == write.transaction_id
+                        and _event_id(flow, read) in write.value_dependencies
+                    ):
+                        rmw_sequences.append((flow, read, write))
+        rmw_sequences_by_identity[identity] = rmw_sequences
+
+    lost_update_pairs: set[tuple[str, int, str, int]] = set()
+    for (resource, key), rmw_sequences in rmw_sequences_by_identity.items():
+        for index, (left_flow, left_read, left_write) in enumerate(rmw_sequences):
+            if _resource(left_write) != resource or left_write.key != key:
+                continue
+            for right_flow, right_read, right_write in rmw_sequences[index + 1:]:
+                if right_flow.id == left_flow.id or _resource(right_write) != resource or right_write.key != key:
+                    continue
+                if left_write.transaction_id == right_write.transaction_id:
+                    continue
+                if not _may_overlap(left_write, right_write):
+                    continue
+                if left_write.fields and right_write.fields and not set(left_write.fields).intersection(right_write.fields):
+                    continue
+                guard_identity = f"{resource}:{key}"
+                if _guard_applies(left_write, right_write, guard_identity):
+                    continue
+                if left_write.causal_id and right_write.causal_id and left_write.causal_id != right_write.causal_id:
+                    continue
+                roots = sorted(roots_by_flow[left_flow.id] & roots_by_flow[right_flow.id])
+                for display_root in roots:
+                    diagnostic = _diagnose_pair(
+                        left_flow, left_write, right_flow, right_write, display_root,
+                        "deux écritures dépendent de lectures antérieures dans des transactions distinctes",
+                        "l’interleaving d’exécution reste potentiel",
+                        (causal_paths or {}).get(display_root, {}).get(left_flow.id, ()),
+                        (causal_paths or {}).get(display_root, {}).get(right_flow.id, ()),
+                    )
+                    diagnostics.append(replace(
+                        diagnostic,
+                        id=f"{diagnostic.id}:potential_lost_update",
+                        event_type="potential_lost_update",
+                        classification="potential_lost_update",
+                        severity="P1",
+                        confidence="medium" if left_write.fields and right_write.fields else "low",
+                        limitation=(None if left_write.fields and right_write.fields else
+                                    "champs écrits non résolus; recouvrement non prouvé"),
+                        causal_evidence=(
+                            f"lecture {left_read.order} → écriture {left_write.order}; "
+                            f"lecture {right_read.order} → écriture {right_write.order}"
+                        ),
+                        order_evidence="dépendances de valeur explicites; entrelacement possible selon les faits fournis",
+                        write_dependency_step=left_read.order,
+                        read_dependency_step=right_read.order,
+                    ))
+                    lost_update_pairs.add((left_flow.id, left_write.order, right_flow.id, right_write.order))
+
+    for grouped_accesses in accesses_by_identity.values():
+        for write_flow, write in grouped_accesses["data_write"]:
+            for read_flow, read in grouped_accesses["data_read"]:
+                if write_flow.id == read_flow.id:
+                    continue
+                if _is_async(write) and _is_sync(read):
+                    continue
+                if not _may_overlap(write, read):
+                    continue
+                if write.causal_id and read.causal_id and write.causal_id != read.causal_id:
+                    continue
+                roots = sorted(roots_by_flow[write_flow.id] & roots_by_flow[read_flow.id])
+                for display_root in roots:
+                    guard_identity = f"{_resource(write)}:{write.key}"
+                    if read.isolation in {"read_uncommitted", "read-uncommitted"} and write.phase == "uncommitted":
+                        event_type = "potential_dirty_read"
+                        classification = "potential_dirty_read"
+                        limitation = "la visibilité réelle dépend du moteur et de sa configuration"
+                    elif write.freshness_required or read.freshness_required:
+                        event_type = "potential_read_write_anomaly"
+                        classification = "potential_read_write_anomaly"
+                        limitation = "exigence de fraîcheur fournie; sémantique de stockage à confirmer"
+                    elif _guard_applies(write, read, guard_identity):
+                        event_type = "conflict_protection_identified"
+                        classification = "conflict_protection_identified"
+                        limitation = None
+                    else:
+                        event_type = "potential_concurrent_read_write"
+                        classification = "potential_interaction"
+                        limitation = "chevauchement possible; aucun défaut de fraîcheur établi"
+                    diagnostic = _diagnose_pair(
+                        write_flow, write, read_flow, read, display_root,
+                        "concurrence explicitement documentée pour au moins un accès",
+                        limitation,
+                        (causal_paths or {}).get(display_root, {}).get(write_flow.id, ()),
+                        (causal_paths or {}).get(display_root, {}).get(read_flow.id, ()),
+                    )
+                    if event_type == "potential_concurrent_read_write" and (
+                        write_flow.id, write.order, read_flow.id, read.order
+                    ) in lost_update_pairs:
+                        continue
+                    diagnostics.append(replace(
+                        diagnostic,
+                        id=f"{diagnostic.id}:{event_type}",
+                        event_type=event_type,
+                        classification=classification,
+                        severity="P1" if event_type != "potential_concurrent_read_write" else "P2",
+                        confidence="medium" if event_type in {
+                            "potential_read_write_anomaly", "potential_dirty_read",
+                        } else "low",
+                        limitation=limitation,
+                        guard=write.guard if write.guard == read.guard else None,
+                        guard_scope=write.guard_scope if write.guard_scope == read.guard_scope else None,
+                        order_evidence=diagnostic.causal_evidence,
+                    ))
+
+    # Concurrent writes are reported only with exact key identity and explicit
+    # overlap evidence. Distinct source locations or async branches alone do
+    # not establish a race.
+    for (resource, key), grouped_accesses in accesses_by_identity.items():
+        writes_for_key = grouped_accesses["data_write"]
+        for index, (left_flow, left_write) in enumerate(writes_for_key):
+            for right_flow, right_write in writes_for_key[index + 1:]:
+                if left_flow.id == right_flow.id or not _may_overlap(left_write, right_write):
+                    continue
+                if (left_flow.id, left_write.order, right_flow.id, right_write.order) in lost_update_pairs:
+                    continue
+                if left_write.causal_id and right_write.causal_id and left_write.causal_id != right_write.causal_id:
+                    continue
+                roots = sorted(roots_by_flow[left_flow.id] & roots_by_flow[right_flow.id])
+                for display_root in roots:
+                    guard_identity = f"{resource}:{key}"
+                    protected = _guard_applies(left_write, right_write, guard_identity)
+                    fields_disjoint = bool(
+                        left_write.fields and right_write.fields
+                        and not set(left_write.fields).intersection(right_write.fields)
+                    )
+                    event_type = "conflict_protection_identified" if protected else "potential_concurrent_write"
+                    diagnostic = _diagnose_pair(
+                        left_flow, left_write, right_flow, right_write, display_root,
+                        "concurrence explicitement documentée; ordre total absent",
+                        None if protected else (
+                            "champs disjoints; aucun lost update déduit" if fields_disjoint else
+                            "intervalles de transaction et garanties du stockage non établis"
+                        ),
+                        (causal_paths or {}).get(display_root, {}).get(left_flow.id, ()),
+                        (causal_paths or {}).get(display_root, {}).get(right_flow.id, ()),
+                    )
+                    diagnostics.append(replace(
+                        diagnostic,
+                        id=f"{diagnostic.id}:{event_type}:writes",
+                        event_type=event_type,
+                        classification=event_type,
+                        severity="info" if protected else "P1",
+                        confidence="high" if protected else "low",
+                        key=key,
+                        read_name=right_write.name,
+                        read_action=right_write.action,
+                        read_phase=right_write.phase,
+                        read_transaction_id=right_write.transaction_id,
+                        read_fields=right_write.fields,
+                        guard=left_write.guard if protected else None,
+                        guard_scope=left_write.guard_scope if protected else None,
+                    ))
     unique = {diagnostic.id: diagnostic for diagnostic in diagnostics}
     return sorted(unique.values(), key=lambda item: (
         item.flow_id, item.write_flow_id, item.write_order, item.read_flow_id, item.read_order,

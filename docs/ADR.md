@@ -14,7 +14,7 @@ functional or technical contract.
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
 | Indexed contracts and implementation boundaries | [ADR-25](#adr-25-separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26-organize-implementation-modules-by-architectural-ownership) |
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch) |
-| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html) |
+| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -1008,3 +1008,23 @@ flow list and SQLite snapshot complete.
 fan-in, cycles, and nested call occurrences. Access and consistency projections
 run only for selectable roots. A flow with no proven upstream arc remains
 selectable; partial topology cannot hide it by inference.
+
+## ADR-54: Attach imported data access to indexed call flows
+
+**Status:** Accepted.
+
+**Context:** Source indexing can miss a data operation that a reviewer can
+locate, while direct flow import cannot run on an indexed source snapshot.
+Replacing an indexed flow with an agent-produced path would weaken its source
+evidence and disturb stable call selection.
+
+**Decision:** Import a `flow_data_access` node fact in the existing namespace
+layer. Require a known flow ID, a CRUD action, confidence, and relative source
+evidence. Join the fact to its selected call graph at export time. Keep it out
+of topology nodes and consistency diagnostics.
+
+**Consequences:** Reviewers can annotate indexed calls without changing the
+source snapshot or SQLite schema. The annotation persists across reindexing.
+A changed flow ID requires reconciliation before the annotation reappears.
+The import and HTML projection add work proportional to imported facts and the
+reachable flows of each selected root.

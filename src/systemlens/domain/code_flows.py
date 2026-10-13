@@ -38,6 +38,16 @@ class CodeFlowStep:
     completion: str | None = None
     query_shape: str | None = None
     action: str | None = None
+    # Optional explicit evidence for lifecycle and concurrency analyses.
+    phase: str | None = None
+    transaction_id: str | None = None
+    concurrency: str | None = None
+    fields: tuple[str, ...] = ()
+    value_dependencies: tuple[str, ...] = ()
+    guard: str | None = None
+    guard_scope: str | None = None
+    isolation: str | None = None
+    freshness_required: bool | None = None
 
 
 @dataclass(frozen=True)

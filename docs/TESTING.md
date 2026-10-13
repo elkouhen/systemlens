@@ -5,21 +5,11 @@ rendering contracts under `tests/`. The default suite stays local and excludes
 tests that require Chrome or a real CodeQL database. `pyproject.toml` owns the
 pytest marker configuration.
 
-## Validation snapshot
+## Validation environment
 
-The current working tree was validated on 2026-10-03 with the commands below.
-Test counts and durations describe that run and will change as the suite changes.
-
-| Check | Result |
-|---|---|
-| `uv run ruff check src tests` | Passed |
-| `uv run mypy` | Passed across 79 source files |
-| `uv run pytest --durations=15` | 422 passed, 15 deselected, 8.61 seconds |
-| `uv run pytest --collect-only -q` | 437 collected across 38 test files |
-
-The complete default run needs permission to bind an ephemeral loopback port
-for the SimpleWeb functional tests. A restricted sandbox can reject those two
-socket operations even when the application behavior is correct.
+The SimpleWeb functional tests bind an ephemeral loopback port. A restricted
+sandbox can reject those two socket operations before the HTTP behavior runs.
+Run the default suite in an environment that permits loopback binding.
 
 ## Test levels
 
@@ -36,6 +26,19 @@ when invoking the public surface would hide the invariant under test.
 Integration tests use a real external runtime. Browser tests use Chrome through
 Playwright. Real CodeQL tests create and query a Java database. These tests carry
 the `slow` marker and do not run in the default suite.
+
+## Test selection
+
+Start with one observable behavior test for each contract. Add a focused
+algorithm test when the public command or artifact hides a distinct invariant.
+For browser interactions, select a named control or resource and follow the
+visible user path before asserting the result.
+
+Keep negative cases that could expose a wrong target, invented annotation, or
+partial mutation. When a new test covers the same failure as an existing test,
+replace or strengthen the existing case instead of adding a duplicate.
+Parameterization is useful for distinct inputs, but each parameter remains a
+separate collected test case.
 
 ## Coverage map
 
@@ -88,9 +91,10 @@ verify a distinct layout or complexity contract.
 ## Validation commands
 
 Pull requests use `.github/workflows/quality.yml` as the automated quality
-gate. It runs lint, type checking, the default tests, architecture checks,
-Bandit, Semgrep, and coverage. Browser acceptance tests run locally when Chrome
-is available. A skipped local prerequisite does not count as a passing CI result.
+gate. It runs lint, type checking, the default tests once under coverage,
+Bandit, and Semgrep. The default run includes the architecture rules. Browser
+acceptance tests run locally when Chrome is available. A skipped local
+prerequisite does not count as a passing CI result.
 
 Run the default checks after a Python change:
 
