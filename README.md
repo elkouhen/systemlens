@@ -18,7 +18,7 @@ then inspect the result through the CLI or the HTML export.
 
 This repository owns the local SystemLens product: deterministic indexing,
 source evidence, the CLI, persisted flows, and HTML exports.
-It does not own agent prompts or the observability environment.
+It does not own agent prompts or the lab's demo application.
 
 The companion `systemlens-skill` is optional: it lets an agent perform a
 focused, evidence-based analysis to enrich the separate graph-fact layer. Its
@@ -29,24 +29,23 @@ findings remain reviewable and never replace source-derived facts.
 - [systemlens-skill](https://github.com/elkouhen/systemlens-skill) owns agent
   guidance and flow descriptions.
 - [SystemLens observability lab](https://github.com/elkouhen/systemlens-observability-lab)
-  owns the runnable observability environment.
+  provides a demo application for checking SystemLens indexing.
 
-## Three-repository workflow
+## Indexing, AI enrichment, and test application
 
-The three repositories form one architecture-analysis workflow with distinct
-responsibilities:
+SystemLens indexes Java/Spring source code. The companion skill adds
+reviewable facts identified through AI analysis. The lab provides a demo
+application for checking SystemLens indexing.
 
 | Repository | Responsibility | Main output |
 |---|---|---|
 | `systemlens` | Index Java/Spring source evidence and visualize the persisted model. | SQLite index, CLI results, interactive HTML graphs |
-| `systemlens-skill` | Index with CodeQL and SystemLens, analyze source directly, and import complementary facts through the CLI. | Versioned AI fact manifests and HTML exports |
-| `systemlens-observability-lab` | Run test applications, deploy the complete Kubernetes/Elastic environment, and validate instrumentation and observability. | Deployed workloads, telemetry checks, reproducible integration fixtures |
+| `systemlens-skill` | Complement the index with reviewable facts identified through AI analysis. | Versioned AI fact manifests |
+| `systemlens-observability-lab` | Provide a demo application for checking SystemLens indexing. | Test application source code |
 
-Use either the direct-analysis skill workflow or the deterministic index-first
-workflow. The direct workflow reads source code with the agent, imports a
-reviewable JSON manifest, and exports HTML through the SystemLens CLI.
-The indexed workflow builds the local source snapshot before enrichment. Use
-the observability lab to validate runtime behavior and telemetry separately.
+Run SystemLens against the lab application to check source indexing. When AI
+analysis identifies additional architecture facts, use the companion skill to
+prepare a reviewable manifest and import it through the SystemLens CLI.
 
 ## Install
 
