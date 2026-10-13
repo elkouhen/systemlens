@@ -42,9 +42,9 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
         page.locator("#graph-call-tree .graph-call-tree-node").filter(
             has_text="inventory-service"
         ).first.hover()
-        assert "ProductEntity" in page.locator(
-            "#graph-flow-tooltips .graph-call-tree-entity-tooltip"
-        ).inner_text()
+        tooltip = page.locator("#graph-flow-tooltips .graph-call-tree-entity-tooltip").inner_text()
+        assert "IN " in tooltip
+        assert "ProductEntity" not in tooltip
         browser.close()
 
 
@@ -236,7 +236,10 @@ def test_call_flow_lists_data_access_on_sibling_path() -> None:
 
 
 @pytest.mark.slow
-def test_flow_view_names_persisted_delete_action() -> None:
+@pytest.mark.parametrize("include_call_graph_annotations", [True, False])
+def test_flow_view_keeps_delete_access_out_of_service_tooltip(
+    include_call_graph_annotations: bool,
+) -> None:
     entry = MessageEndpoint(
         id="orders-delete", role="serve", system="rest", topic="DELETE /orders",
         topic_dynamic=False, source="code", framework="spring-mvc",
@@ -261,7 +264,10 @@ def test_flow_view_names_persisted_delete_action() -> None:
             CodeFlowStep(2, "message_publish", "orders.created", "Orders.java", 5, 5),
         ),
     )
-    document = render_graph_html({"orders": [entry]}, [], code_flows=[output_flow, flow])
+    document = render_graph_html(
+        {"orders": [entry]}, [], code_flows=[output_flow, flow],
+        include_call_graph_annotations=include_call_graph_annotations,
+    )
     with sync_playwright() as playwright:
         try:
             browser = _launch_visual_browser(playwright)
@@ -269,6 +275,8 @@ def test_flow_view_names_persisted_delete_action() -> None:
             pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
         context = browser.new_context(viewport={"width": 1000, "height": 700})
         page = context.new_page()
+        errors: list[str] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
         page.set_content(document, wait_until="load")
         page.locator("#architecture-mode-tab").click()
         page.locator(".graph-node-card-label").filter(has_text="orders").first.hover()
@@ -283,9 +291,11 @@ def test_flow_view_names_persisted_delete_action() -> None:
         ).first.inner_text()
         page.locator("#code-flows .code-flow-item").first.click()
         page.locator(".graph-call-tree-node").first.hover()
-        assert "Suppression · orders" in page.locator(
+        assert "Suppression · orders" not in page.locator(
             "#graph-flow-tooltips .graph-call-tree-entity-tooltip"
         ).inner_text()
+        assert page.locator("#graph").get_attribute("data-selected-code-flow")
+        assert not errors
         context.close()
         browser.close()
 
@@ -677,7 +687,9 @@ def _complex_dataset_document() -> str:
     )
 
 
-def _code_flow_document() -> str:
+def _code_flow_document(
+    *, call_graphs_only: bool = False, include_call_graph_annotations: bool = True,
+) -> str:
     def kafka_endpoint(role: str, topic: str, path: str, module: str) -> MessageEndpoint:
         return MessageEndpoint(
             id=compute_endpoint_id(role, topic, path),
@@ -750,7 +762,30 @@ def _code_flow_document() -> str:
             GraphEdge("kafka", "payments", "inventory", payments_publish, inventory_consume),
         ],
         code_flows=[flow],
+        call_graphs_only=call_graphs_only,
+        include_call_graph_annotations=include_call_graph_annotations,
     )
+
+
+@pytest.mark.slow
+def test_call_graph_only_export_selects_flow_after_browser_initialization() -> None:
+    document = _code_flow_document(
+        call_graphs_only=True, include_call_graph_annotations=False,
+    )
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        errors: list[str] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.set_content(document, wait_until="load")
+        assert page.locator("#flows-tab").get_attribute("aria-selected") == "true"
+        assert page.locator("#graph").get_attribute("data-selected-code-flow")
+        assert page.locator("#code-flows .code-flow-item.is-selected").count() == 1
+        assert not errors
+        browser.close()
 
 
 @pytest.mark.slow
@@ -816,6 +851,62 @@ def _launch_visual_browser(playwright: Playwright):
     if executable:
         return playwright.chromium.launch(headless=True, executable_path=executable)
     return playwright.chromium.launch(headless=True)
+
+
+@pytest.mark.slow
+def test_graph_navigation_renders_each_projection_once_per_action() -> None:
+    document = _code_flow_document()
+    for name in ("rebuildGraph", "renderResourceCatalogue", "renderCodeFlows"):
+        signature = f"function {name}() {{"
+        assert document.count(signature) == 1
+        document = document.replace(
+            signature,
+            signature + f" window.__{name} = (window.__{name} || 0) + 1;",
+        )
+
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.set_default_timeout(5_000)
+        errors: list[str] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.set_content(document, wait_until="load")
+        assert page.evaluate("window.__rebuildGraph") == 1
+        assert page.locator("#graph-tab").get_attribute("aria-selected") == "true"
+
+        page.locator("#contracts-mode-tab").click()
+        catalogue_renders = page.evaluate("window.__renderResourceCatalogue")
+        page.locator("#microservices-filter").fill("payments")
+        assert page.evaluate("window.__renderResourceCatalogue") == catalogue_renders + 1
+        page.evaluate("""() => {
+            const filter = document.getElementById('resource-kind-filter');
+            filter.value = 'microservice';
+            filter.dispatchEvent(new Event('change'));
+        }""")
+        assert page.evaluate("window.__renderResourceCatalogue") == catalogue_renders + 2
+
+        page.locator("#architecture-mode-tab").click()
+        page.locator("#flows-tab").click()
+        flow_renders = page.evaluate("window.__renderCodeFlows")
+        flow_id = page.locator("#code-flows .code-flow-item").first.get_attribute("data-flow-id")
+        assert flow_id
+        page.evaluate("""flowId => document.getElementById('flows-panel').dispatchEvent(
+            new CustomEvent('systemlens:code-flow-open-in-list', {
+                detail: {flowId}
+            })
+        )""", flow_id)
+        assert not errors
+        assert page.evaluate("window.__renderCodeFlows") == flow_renders + 1
+        page.locator("#code-flows .code-flow-item").first.click()
+        assert page.locator("#graph").get_attribute("data-selected-code-flow") == flow_id
+        page.locator("#architecture-mode-tab").click()
+        assert page.locator("#graph").get_attribute("data-selected-code-flow") is None
+        assert page.locator("#graph-tab").get_attribute("aria-selected") == "true"
+        assert not errors
+        browser.close()
 
 
 def _producer(message_type: str) -> MessageEndpoint:

@@ -541,10 +541,6 @@
           const topics = [...new Set((node.ports || []).filter(port => /kafka|topic|message/i.test(port.type || "")).map(port => port.name))];
           if (topics.length) addTooltipLine(tooltip, `Messages : ${topics.slice(0, 4).join(", ")}${topics.length > 4 ? "…" : ""}`, "graph-entity-tooltip-detail");
           if (node.technology || node.build_system) addTooltipLine(tooltip, [node.technology, node.build_system].filter(Boolean).join(" · "), "graph-entity-tooltip-detail");
-          const accesses = callGraphOnly && codeFlowSelection.flowId
-            ? (graphData.flow_data_accesses?.[codeFlowSelection.flowId] || []).filter(access => access.module === node.name)
-            : [];
-          dataAccessTooltipLines(accesses).forEach(line => addTooltipLine(tooltip, line, "graph-entity-tooltip-detail"));
         } else if (node.kind === "kafka_topic") {
           const producers = new Set(graphData.links
             .filter(link => link.kind === "kafka" && link.target === node.id)
@@ -867,7 +863,7 @@
           ));
           const selectedFlow = selectedFlows[0];
           const trigger = selectedFlow?.steps?.[0];
-          flowHelp.textContent = "Survolez un microservice pour voir ses accès aux données et diagnostics potentiels.";
+          flowHelp.textContent = "Survolez un microservice pour voir ses ports et ses méthodes.";
           if (flowTrigger) {
             const triggerKind = ({
               http_entry: "Entrée HTTP",
@@ -2429,4 +2425,3 @@
       // centered above so the complete vertical stack stays in view.
       renderer.getCamera().animatedReset({ duration: 0 });
     }
-    rebuildGraph();

@@ -7,7 +7,6 @@
     const codeFlowKind = document.getElementById("code-flow-kind");
     const codeFlowMessageType = document.getElementById("code-flow-message-type");
     const codeFlowMessageTypes = document.getElementById("code-flow-message-types");
-    const codeFlowCycles = document.getElementById("code-flow-cycles");
     const codeFlowsSummary = document.getElementById("code-flows-summary");
     const codeFlowFilterSummary = document.getElementById("code-flow-filter-summary");
     const codeFlowFilterReset = document.getElementById("code-flow-filter-reset");
@@ -1258,10 +1257,8 @@
     }
 
     function openCodeFlowInList(flow) {
-      codeFlowCycles.setAttribute("aria-pressed", "false");
       codeFlowFilter.value = flow.id;
       setToolbarTab("flows");
-      renderCodeFlows();
       requestAnimationFrame(() => codeFlowsList.querySelector(`[data-flow-id="${flow.id}"]`)?.scrollIntoView({ block: "nearest" }));
     }
 

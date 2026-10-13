@@ -50,6 +50,7 @@ _GRAPH_JS_FILENAMES = (
     "00-core.js",
     "05-code-flow-selection.js",
     "06-view-lifecycle.js",
+    "07-navigation.js",
     "10-rebuild.js",
     "20-controls.js",
     "30-layouts.js",
@@ -121,11 +122,13 @@ def render_graph_html(
     flow_descriptions: dict[str, str] | None = None,
     progress_notice: str | None = None,
     call_graphs_only: bool = False,
+    include_call_graph_annotations: bool = True,
 ) -> str:
     """Render a graph view model as one self-contained HTML document."""
     flow_annotation_facts = [
         fact for fact in graph_facts or []
-        if fact.fact_type == "node" and fact.kind == "flow_data_access"
+        if include_call_graph_annotations
+        and fact.fact_type == "node" and fact.kind == "flow_data_access"
     ]
     topology_facts = [fact for fact in graph_facts or [] if fact.kind != "flow_data_access"]
     view_model = build_graph_view_model(
@@ -286,6 +289,7 @@ def render_graph_html(
                     "query_shape": step.query_shape,
                 }
                 for step in flow.steps
+                if include_call_graph_annotations or step.kind not in {"data_read", "data_write"}
             ],
         }
 
@@ -310,7 +314,7 @@ def render_graph_html(
         if isinstance(flow_id, str) and flow_id in flow_by_id:
             annotations_by_flow.setdefault(flow_id, []).append(fact)
     data_accesses_by_flow: dict[str, list[dict[str, object]]] = {}
-    for root_flow, _, _ in export_flow_items:
+    for root_flow, _, _ in (export_flow_items if include_call_graph_annotations else ()):
         paths = _reachable_flow_paths(call_graph_index, root_flow.id)
         causal_reachability[root_flow.id] = set(paths)
         causal_paths[root_flow.id] = paths
@@ -365,9 +369,11 @@ def render_graph_html(
             ]
     view_model["flow_data_accesses"] = data_accesses_by_flow
     call_flow_ids = visible_flow_ids
-    for diagnostic in diagnose_flow_consistency_snapshot(
-        export_flows, causal_reachability, causal_paths,
-    ):
+    diagnostics_for_export = (
+        diagnose_flow_consistency_snapshot(export_flows, causal_reachability, causal_paths)
+        if include_call_graph_annotations else ()
+    )
+    for diagnostic in diagnostics_for_export:
         if diagnostic.flow_id not in call_flow_ids:
             continue
         item = diagnostic.as_dict()
@@ -543,10 +549,4 @@ def render_graph_html(
     )
     if call_graphs_only:
         html = html.replace("<body>", '<body class="call-graphs-only">')
-        html = html.replace(
-            "</body>",
-            "<script>document.getElementById('flows-tab')?.click();"
-            "document.querySelector('#code-flows .code-flow-item:not(.is-unavailable)')?.click();"
-            "</script></body>",
-        )
     return html

@@ -39,6 +39,14 @@ DTO closure referenced by Kafka endpoints before that closure is persisted.
 `storage/serialization.py` owns SQLite row and JSON conversions. The `store/`
 compatibility package retains the former Python import.
 
+The standalone HTML export concatenates browser assets in a fixed order.
+`06-view-lifecycle.js` updates flow selection and its graph attributes together;
+`07-navigation.js` changes tabs and panel visibility. Widgets can request a
+tab change through that navigation function. `60-bootstrap.js` registers
+handlers before the first graph rebuild and applies the initial layout after
+setting the workspace size. A filter handler belongs to its widget, so one
+filter event causes one catalogue projection.
+
 Within `render/`, `graph_view_model.py` owns the architecture projection from
 persisted facts to the browser data model, and `call_graph.py` owns the
 call-graph projection and its flow-level transformations. `html_export.py`

@@ -747,6 +747,24 @@ def test_export_flow_diagnostic_retains_cross_handler_causal_paths() -> None:
     assert "shipping-out" in diagnostic["sync_path_endpoint_ids"]
     assert "shipping-in" in diagnostic["sync_path_endpoint_ids"]
 
+    without_annotations = _html_graph_data(render_graph_html(
+        endpoints, edges, code_flows=flows, include_call_graph_annotations=False,
+    ))
+    assert without_annotations["flow_data_accesses"] == {}
+    assert without_annotations["flow_diagnostics"] == []
+    assert without_annotations["call_graphs"] == data["call_graphs"]
+    assert [flow["id"] for flow in without_annotations["code_flows"]] == [
+        flow["id"] for flow in data["code_flows"]
+    ]
+    assert all(
+        step["kind"] not in {"data_read", "data_write"}
+        for flow in [
+            *without_annotations["code_flows"],
+            *without_annotations["supporting_code_flows"],
+        ]
+        for step in flow["steps"]
+    )
+
 
 def test_call_graph_enriches_data_siblings_and_pairs_async_write_with_sync_read() -> None:
     root_in = replace(_rest_endpoint("serve", "POST /orders", "Orders.java"), id="root-in")

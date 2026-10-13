@@ -460,7 +460,6 @@
         || graphState.clusteredView !== (layout === "cluster")
         || graphState.viewMode === "call-graph";
       if (switchingView) {
-        codeFlowSelection.clear();
         updateGraphState({
           selectedId: null,
           dependencyFocusOnly: false,
@@ -470,7 +469,6 @@
           relatedEdges: null,
           selectedDiagnosticId: null,
           diagnosticFocusSnapshot: null,
-          viewMode: "architecture",
           selectedCallGraphEdgeKey: null,
           pathMicroserviceOrder: new Map(),
           codeFlowTreeCoordinates: new Map(),
@@ -479,7 +477,6 @@
         dependencyAnalysisControls.disabled = true;
         dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
         dependencyFocusOnly.disabled = true;
-        delete graphCanvas.dataset.selectedCodeFlow;
         clearPathControls();
         setDetailsEmpty("Sélectionnez un nœud ou un module pour afficher ses informations.");
       }

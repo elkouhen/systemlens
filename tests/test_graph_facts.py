@@ -218,6 +218,20 @@ def test_imported_data_access_reaches_cli_html_export(
     assert accesses[0]["path"] == "Orders.java"
     assert all(node["name"] != "OrderEntity" for node in graph["nodes"])
 
+    plain_export = RUNNER.invoke(app, [
+        "export", "microservices", "--html", "graph-plain.html",
+        "--no-call-graph-annotations", "--call-graphs-only",
+    ])
+    assert plain_export.exit_code == 0, plain_export.output
+    plain_graph = _graph_data((repo / "graph-plain.html").read_text(encoding="utf-8"))
+    assert plain_graph["call_graphs_only"] is True
+    assert plain_graph["flow_data_accesses"] == {}
+    assert plain_graph["flow_diagnostics"] == []
+    assert plain_graph["call_graphs"] == graph["call_graphs"]
+    assert [flow["id"] for flow in plain_graph["code_flows"]] == [
+        flow["id"] for flow in graph["code_flows"]
+    ]
+
 
 def test_imported_data_access_survives_fact_round_trip(tmp_path: Path, monkeypatch) -> None:
     repo, _, _ = _indexed_order_flow(tmp_path, monkeypatch)

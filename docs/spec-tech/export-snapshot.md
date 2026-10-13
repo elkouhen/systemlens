@@ -24,8 +24,18 @@ does not export source-derived facts as enrichment facts.
 
 `flow_data_access` facts in the enrichment namespace stay separate from
 topology nodes. The HTML exporter joins them to an indexed flow by ID and
-shows them in the selected call graph's service tooltip. It drops stale flow
-references from the projection without deleting the persisted fact.
+includes the resulting accesses in the flow search projection. It drops stale
+flow references from the projection without deleting the persisted fact.
+
+With `--no-call-graph-annotations`, HTML serialization omits this projection,
+consistency diagnostics, and data-access steps from selectable and supporting
+flows. It still builds call topology from the complete persisted flows and
+keeps their IDs stable. The exporter skips access aggregation and diagnostic
+projection in this mode; indexing and JSON output keep their full facts.
+
+The call-graphs-only browser bootstrap selects the first available flow after
+its event handlers are registered. It skips the architecture layout when this
+focused view opens. If no selectable flow exists, the flow list remains empty.
 
 HTML and JSON graph exports only consume the loaded architecture snapshot.
 They do not reopen OpenAPI documents or recursively parse Java DTO sources at

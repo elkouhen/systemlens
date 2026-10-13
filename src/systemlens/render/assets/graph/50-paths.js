@@ -38,10 +38,9 @@
     function clearPathControls() {
       search.value = "";
       pathStops.splice(0, pathStops.length);
-      codeFlowSelection.clear();
+      graphViewLifecycle.clearFlowSelection();
       graphState.selectedDiagnosticId = null;
       graphState.diagnosticFocusSnapshot = null;
-      graphState.viewMode = "architecture";
       graphState.callGraphDisplayMode = "tree";
       graphState.callTreeZoom = 1;
       graphState.codeFlowTreeCoordinates = new Map();
@@ -49,8 +48,6 @@
       graphState.callTreeCollapsed = new Set();
       graphState.relatedLocalPortLinks = new Set();
       graphFlowStatus.hidden = true;
-      delete graphCanvas.dataset.selectedCodeFlow;
-      delete graphCanvas.dataset.flowFocusRatio;
     }
     function restResourceLabel(link, target) {
       const servicePrefix = `${target.name}: `;
@@ -509,13 +506,9 @@
         `${link.input_endpoint_id}:${link.output_endpoint_id}`
       )));
       graphState.analysisPortEndpointId = null;
-      codeFlowSelection.select(context.codeFlow?.id || null, {
-        rootNodeId: context.codeFlowRootNodeId || null,
-        trigger: context.codeFlowTrigger || null,
-      });
+      graphViewLifecycle.selectPathFlow(context.codeFlow, context.codeFlowRootNodeId, context.codeFlowTrigger);
       graphState.callTreeExpanded = new Set();
       graphState.callTreeCollapsed = new Set();
-      graphState.viewMode = context.codeFlow ? "call-graph" : "architecture";
       graphState.callGraphDisplayMode = "tree";
       if (context.codeFlow && flowsTab?.getAttribute("aria-selected") === "true") {
         document.getElementById("graph-mode-context")?.setAttribute("hidden", "");
@@ -529,8 +522,6 @@
       if (!graphFlowStatus.hidden) {
         graphFlowStatus.textContent = "Relations topologiques incomplètes : les étapes sont surlignées sans arête vérifiée.";
       }
-      if (codeFlowSelection.flowId) graphCanvas.dataset.selectedCodeFlow = codeFlowSelection.flowId;
-      else delete graphCanvas.dataset.selectedCodeFlow;
       setPathMicroserviceOrder(path, context.codeFlow || (context.codeFlows || [])[0], context.codeFlows || []);
       if (codeFlowSelection.flowId) rebuildGraph();
       else renderer.refresh();
@@ -1261,7 +1252,6 @@
       clearPathControls();
       if (!graphState.layeredView && !graphState.clusteredView) await applyLayout("cluster");
       const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);
-      codeFlowSelection.clear();
       updateGraphState({
         selectedId: null,
         selectedClusterKey: resolvedCluster.key,
@@ -1270,11 +1260,9 @@
         relatedLocalPortLinks: new Set(),
         selectedDiagnosticId: null,
         diagnosticFocusSnapshot: null,
-        viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
         pathMicroserviceOrder: new Map(),
       });
-      delete graphCanvas.dataset.selectedCodeFlow;
       renderer.refresh();
       requestGraphRender();
       renderClusterDetails(resolvedCluster);
@@ -1291,12 +1279,9 @@
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       graphState.relatedLocalPortLinks = new Set();
-      codeFlowSelection.clear();
       graphState.selectedDiagnosticId = null;
       graphState.diagnosticFocusSnapshot = null;
-      graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
-      delete graphCanvas.dataset.selectedCodeFlow;
       network.forEachEdge((edge, attributes, source, target) => {
         if (!isVisibleRelation(attributes, source, target) || !matches(attributes, source, target)) return;
         graphState.relatedEdges.add(edge); graphState.relatedNodes.add(source); graphState.relatedNodes.add(target);
@@ -1368,12 +1353,10 @@
       graphState.selectedClusterKey = null;
       updateSelectedNodeDependencyScope(id);
       graphState.relatedLocalPortLinks = new Set();
-      codeFlowSelection.clear();
+      graphViewLifecycle.clearFlowSelection();
       graphState.selectedDiagnosticId = null;
       graphState.diagnosticFocusSnapshot = null;
-      graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
-      delete graphCanvas.dataset.selectedCodeFlow;
       renderer.refresh();
       renderDetails(id);
       if (openNodeInspector && node) {

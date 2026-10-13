@@ -213,8 +213,10 @@ directly from outside the package.
 | `graph_view_model.py` | Projects a persisted architecture snapshot into the browser-facing graph model; it performs no source discovery |
 | `call_graph.py` | Projects persisted code flows and topology into the browser-facing call-graph model, including flow deduplication and fusion |
 | `html_export.py` | Small standalone-document assembler for `systemlens export microservices --html`; serializes the graph model and injects ordered CSS/JavaScript modules into `assets/graph.html` |
-| `assets/graph/05-code-flow-selection.js` | Owns the selected flow ID, call-graph root, and trigger separately from general graph state; it loads before `10-rebuild.js`, whose initial render reads this state |
-| `assets/graph/06-view-lifecycle.js` | Owns view activation and overlay visibility; it loads before `10-rebuild.js`, which can clear overlays during the initial render |
+| `assets/graph/05-code-flow-selection.js` | Stores the selected flow ID, call-graph root, and trigger separately from general graph state |
+| `assets/graph/06-view-lifecycle.js` | Owns view activation, flow-selection transitions, and graph-surface visibility |
+| `assets/graph/07-navigation.js` | Owns toolbar tab changes and panel visibility; the details and flow widgets call this navigation boundary |
+| `assets/graph/60-bootstrap.js` | Registers browser handlers and starts the first graph projection after the browser assets have initialized |
 | `assets/graph/40-details.js` and `assets/graph/55-code-flows.js` | The details widget sends named open-in-list or open-in-graph events to the flow panel; the flow catalogue handles them |
 | `complexity.py` | Assigns deterministic complexity tiers used to color graph nodes |
 | `module_graph.py` | Endpoint/module/workspace/flow rendering, plus the module-dependency HTML export (`assets/module_graph.html`) |
@@ -224,8 +226,11 @@ directly from outside the package.
 | `assets/graph.html`, `assets/module_graph.html` | Static HTML templates, injected with `.replace("__..._DATA__", json_payload)`; kept as plain HTML files rather than Python string constants |
 
 The browser modules are concatenated into one script for the standalone export.
-The flow-selection store and flow-panel events establish ownership boundaries
-within that script; they do not yet make the browser files independent modules.
+The flow-selection store, view lifecycle, navigation function, and flow-panel
+events establish ownership boundaries within that script. The browser files
+still share lexical state and must load in the declared order. Bootstrap
+starts one graph projection, then applies the initial layout after sizing the
+workspace. Each widget registers its own filter handlers once.
 
 `_graph_view_helpers.py` and `complexity.py` hold internal functions shared by
 graph projections. Importing these helpers is allowed within the `render/`

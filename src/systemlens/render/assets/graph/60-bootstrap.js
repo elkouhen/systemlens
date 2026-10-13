@@ -2,7 +2,6 @@
     function reset() {
       closeInspector();
       expandedHttpRoute = null;
-      codeFlowSelection.clear();
       updateGraphState({
         selectedId: null,
         dependencyFocusOnly: false,
@@ -12,22 +11,18 @@
         analysisPortEndpointId: null,
         selectedDiagnosticId: null,
         diagnosticFocusSnapshot: null,
-        viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
         pathMicroserviceOrder: new Map(),
         codeFlowTreeCoordinates: new Map(),
       });
-      delete graphCanvas.dataset.selectedCodeFlow;
       delete graphCanvas.dataset.selectedCallGraphArc;
-      delete graphCanvas.dataset.flowFocusRatio;
+      clearPathControls();
       renderer.refresh();
       setDetailsEmpty("Sélectionnez un nœud ou un module pour afficher ses informations.");
-      search.value = "";
       dependencyAnalysisControls.disabled = true;
       dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
       dependencyFocusOnly.checked = false;
       dependencyFocusOnly.disabled = true;
-      clearPathControls();
       persistState();
     }
     function restoreState() {
@@ -290,8 +285,6 @@
     });
     jpaReferencesFilter.addEventListener("input", renderReferences);
     mongoClassReferencesFilter.addEventListener("input", renderReferences);
-    microservicesFilter.addEventListener("input", renderResourceCatalogue);
-    resourceKindFilter?.addEventListener("change", renderResourceCatalogue);
     collectionsFilter.addEventListener("input", renderCollections);
     renderIndexingIssues();
     renderReferences();
@@ -302,7 +295,9 @@
     dependencyAnalysisControls.disabled = true;
     dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
     dependencyFocusOnly.disabled = true;
-    setToolbarTab("graph");
+    // The first projection starts after every widget has registered its handlers.
+    // The viewport is established below before the initial layout runs.
+    setToolbarTab("graph", { deferLayout: true });
     function updateWorkspaceViewport(refit = false) {
       const root = document.documentElement;
       const toolbarBounds = toolbar?.getBoundingClientRect();
@@ -325,7 +320,6 @@
       }
     }
     updateWorkspaceViewport(false);
-    applyLayout("forceatlas2-noverlap");
     function runExploreSearch() {
       const query = search.value.trim();
       searchStatus.textContent = "";
@@ -350,3 +344,9 @@
       if (event.key === "Enter") { event.preventDefault(); runExploreSearch(); }
     });
     window.addEventListener("resize", () => updateWorkspaceViewport(true));
+    if (graphData.call_graphs_only) {
+      setToolbarTab("flows");
+      codeFlowsList.querySelector(".code-flow-item:not(.is-unavailable)")?.click();
+    } else {
+      applyLayout("forceatlas2-noverlap");
+    }

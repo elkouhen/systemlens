@@ -1028,3 +1028,23 @@ source snapshot or SQLite schema. The annotation persists across reindexing.
 A changed flow ID requires reconciliation before the annotation reappears.
 The import and HTML projection add work proportional to imported facts and the
 reachable flows of each selected root.
+
+## ADR-55: Give browser navigation and initial rendering explicit owners
+
+**Status:** Accepted.
+
+**Context:** The standalone HTML export concatenates its browser files into one
+script. A graph rebuild ran while later widgets were still loading, and the
+bootstrap rebuilt it again. The details widget also owned toolbar navigation,
+while some catalogue inputs registered the same render handler in two files.
+
+**Decision:** Keep the single-script export. Put tab and panel transitions in
+`07-navigation.js`, and keep flow-selection transitions in
+`06-view-lifecycle.js`. Register widget filters in their widget files. Start
+the first graph projection from bootstrap after all browser files initialize,
+then apply the initial layout after sizing the workspace.
+
+**Consequences:** The first projection reads initialized widget state, and
+one catalogue filter event invokes one renderer. Browser files still share
+lexical state and depend on the assembler's declared load order. Moving to
+independent JavaScript modules remains a separate change.

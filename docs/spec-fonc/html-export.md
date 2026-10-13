@@ -10,6 +10,16 @@ unrelated resource catalogues, contracts, and architecture inventory. The
 default HTML export remains unchanged. This option requires `--html` and does
 not apply to JSON exports.
 
+`--no-call-graph-annotations` works with either HTML export mode. It omits
+read, write, and delete annotations and consistency diagnostics from call
+graphs while retaining their services, calls, and flow selection. The default
+includes those annotations. The option requires `--html FILE` and does not
+change the persisted index or JSON export.
+
+```bash
+systemlens export microservices --html calls.html --call-graphs-only --no-call-graph-annotations
+```
+
 The consolidated presentation and interaction contract is maintained in
 [UX/UI rules](../UX-UI.md). This page owns export states, inspectors, flow
 catalogue behavior, and evidence semantics; it does not duplicate the global

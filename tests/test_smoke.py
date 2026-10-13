@@ -21,6 +21,12 @@ def test_export_help_uses_module_and_project_vocabulary() -> None:
     assert microservices.exit_code == 0
     assert "--html" in microservices.stdout
     assert "--json" in microservices.stdout
+    assert "--no-call-graph-annotations" in microservices.stdout
+    invalid = CliRunner().invoke(app, [
+        "export", "microservices", "--json", "--no-call-graph-annotations",
+    ])
+    assert invalid.exit_code == 2
+    assert "nécessite `--html FILE`" in invalid.output
     assert "--xlsx" not in microservices.stdout
     assert "--c4" not in microservices.stdout
 

@@ -2080,7 +2080,12 @@ def export_microservices_cmd(
     call_graphs_only: bool = typer.Option(
         False,
         "--call-graphs-only",
-        help="Limiter l’export HTML aux graphes d’appel et à leurs annotations.",
+        help="Limiter l’export HTML aux graphes d’appel.",
+    ),
+    no_call_graph_annotations: bool = typer.Option(
+        False,
+        "--no-call-graph-annotations",
+        help="Omettre les accès aux données et diagnostics des graphes d’appel HTML.",
     ),
     root_path: Optional[Path] = typer.Option(
         None,
@@ -2103,12 +2108,16 @@ def export_microservices_cmd(
     if not isinstance(graph, Path):
         graph = None
     call_graphs_only = call_graphs_only is True
+    no_call_graph_annotations = no_call_graph_annotations is True
     outputs = [output for output in (html,) if isinstance(output, Path)]
     if len(outputs) + int(json_output) != 1:
         typer.echo("Choisissez un seul format parmi --html ou --json.", err=True)
         raise typer.Exit(code=2)
     if call_graphs_only and html is None:
         typer.echo("`--call-graphs-only` nécessite `--html FILE`.", err=True)
+        raise typer.Exit(code=2)
+    if no_call_graph_annotations and html is None:
+        typer.echo("`--no-call-graph-annotations` nécessite `--html FILE`.", err=True)
         raise typer.Exit(code=2)
     if graph is not None and workspace is not None:
         typer.echo("`--graph` ne peut pas être combiné avec `--workspace`.", err=True)
@@ -2150,6 +2159,7 @@ def export_microservices_cmd(
                     "codeql_call_edges": getattr(graph_data, "codeql_call_edges", []),
                     "flow_descriptions": getattr(graph_data, "flow_descriptions", {}),
                     "call_graphs_only": call_graphs_only,
+                    "include_call_graph_annotations": not no_call_graph_annotations,
                 },
             )),
             encoding="utf-8",

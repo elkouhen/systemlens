@@ -39,6 +39,23 @@ const graphViewLifecycle = (() => {
     if (!visible && graphFlowStatus) graphFlowStatus.hidden = true;
   }
 
+  function selectPathFlow(flow, rootNodeId, trigger) {
+    codeFlowSelection.select(flow?.id || null, {
+      rootNodeId: rootNodeId || null,
+      trigger: trigger || null,
+    });
+    graphState.viewMode = flow ? "call-graph" : "architecture";
+    if (flow) graphCanvas.dataset.selectedCodeFlow = flow.id;
+    else delete graphCanvas.dataset.selectedCodeFlow;
+  }
+
+  function clearFlowSelection(viewMode = "architecture") {
+    codeFlowSelection.clear();
+    graphState.viewMode = viewMode;
+    delete graphCanvas.dataset.selectedCodeFlow;
+    delete graphCanvas.dataset.flowFocusRatio;
+  }
+
   function resetSelection(viewMode) {
     graphState.selectedId = null;
     graphState.selectedClusterKey = null;
@@ -46,7 +63,7 @@ const graphViewLifecycle = (() => {
     graphState.relatedEdges = null;
     graphState.dependencyFocusOnly = false;
     graphState.analysisPortEndpointId = null;
-    codeFlowSelection.clear();
+    clearFlowSelection(viewMode);
     graphState.selectedDiagnosticId = null;
     graphState.diagnosticFocusSnapshot = null;
     graphState.callGraphDisplayMode = "network";
@@ -54,14 +71,11 @@ const graphViewLifecycle = (() => {
     graphState.pathMicroserviceOrder = new Map();
     graphState.codeFlowTreeCoordinates = new Map();
     graphState.relatedLocalPortLinks = new Set();
-    graphState.viewMode = viewMode;
     dependencyFocusOnly.checked = false;
     dependencyAnalysisControls.disabled = true;
     dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
     dependencyFocusOnly.disabled = true;
-    delete graphCanvas.dataset.selectedCodeFlow;
     delete graphCanvas.dataset.selectedCallGraphArc;
-    delete graphCanvas.dataset.flowFocusRatio;
   }
 
   function activate(tab, options = {}) {
@@ -75,13 +89,13 @@ const graphViewLifecycle = (() => {
         ? "call-graph"
         : "empty";
 
-    graphState.viewMode = viewMode;
-    if (!graphVisible) clearOverlays();
-    setGraphVisibility(graphVisible);
     const resetView = (tab === "graph" || tab === "flows") && !showingFlowGraph;
     if (resetView) resetSelection(viewMode);
+    else graphState.viewMode = viewMode;
+    if (!graphVisible) clearOverlays();
+    setGraphVisibility(graphVisible);
     return { showingGraph, showingFlows, showingFlowGraph, graphVisible, resetView };
   }
 
-  return { activate, clearOverlays };
+  return { activate, clearOverlays, selectPathFlow, clearFlowSelection };
 })();
