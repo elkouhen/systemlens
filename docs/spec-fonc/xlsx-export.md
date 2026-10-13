@@ -1,4 +1,7 @@
-# XLSX diagnostic export
+# Former XLSX diagnostic export
+
+> NOTE: The XLSX export command has been removed. This page is retained as a
+> historical description and is not part of the current functional contract.
 
 Parent: [Functional specification](../SPEC-FONC.md).
 

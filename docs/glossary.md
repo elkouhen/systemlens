@@ -51,7 +51,7 @@ documentation, CLI, and generated graph exports.
 | Indexing | Operation that builds or updates the index. |
 | Import | CLI operation that adds or replaces facts from a JSON manifest. It is distinct from extraction. |
 | Enrichment | Additional indexed information supplied by an external or supplemental analysis source. |
-| Export | Generated representation of the persisted architecture snapshot, such as HTML, JSON, GraphML, or XLSX. An export must not silently re-parse source code. |
+| Export | Generated representation of the persisted architecture snapshot, such as HTML or JSON. An export must not silently re-parse source code. |
 
 ## User interface
 

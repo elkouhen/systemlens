@@ -1,8 +1,7 @@
-"""Low-level graph rendering helpers shared by the HTML and LikeC4 exports.
+"""Low-level graph rendering helpers shared by graph projections.
 
-Deep-link URI building and MongoDB/REST evidence lookups are common to both
-`render_graph_html` and `render_graph_likec4`; keeping a single shared module
-avoids duplicating this logic across the two large renderers.
+Deep-link URI building and MongoDB/REST evidence lookups are shared by graph
+projections; keeping one helper module avoids duplicating this logic.
 """
 
 from pathlib import Path

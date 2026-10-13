@@ -42,7 +42,7 @@ from systemlens.render._graph_view_helpers import (
     _vscode_file_uri,
     _vscode_uri,
 )
-from systemlens.render.likec4_export import _complexity_ranking
+from systemlens.render.complexity import _complexity_ranking
 from systemlens.render.snapshot import kafka_dto_views
 
 

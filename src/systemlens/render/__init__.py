@@ -1,10 +1,9 @@
-"""Rendering layer: turns indexed facts into CLI text/JSON and HTML/LikeC4 exports.
+"""Rendering layer: turns indexed facts into CLI text/JSON and HTML exports.
 
-This package used to be a single 5000+ line ``render.py`` module. It is now
-split by rendering concern (see each submodule's docstring), but every name
-that used to be importable as ``systemlens.render.<name>`` remains importable
-from here unchanged — this ``__init__`` is the single public surface other
-modules (``cli``, ``indexer``, tests) depend on.
+This package is split by rendering concern (see each submodule's docstring).
+This ``__init__`` is the public rendering surface used by other modules
+(``cli``, ``indexer``, and tests); implementation modules should not be imported
+directly across package boundaries.
 """
 
 from systemlens.render.search import (
@@ -29,10 +28,6 @@ from systemlens.render.html_export import (
     GraphExportInput,
     render_graph_html,
     render_graph_html_input,
-)
-from systemlens.render.likec4_export import (
-    ComplexityRanking,
-    render_graph_likec4,
 )
 from systemlens.render.module_graph import (
     EndpointHit,
@@ -81,8 +76,6 @@ __all__ = [
     "render_graph_html",
     "GraphExportInput",
     "render_graph_html_input",
-    "ComplexityRanking",
-    "render_graph_likec4",
     "EndpointHit",
     "FlowResultInfo",
     "FlowSiteInfo",

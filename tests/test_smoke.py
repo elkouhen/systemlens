@@ -17,6 +17,13 @@ def test_export_help_uses_module_and_project_vocabulary() -> None:
     assert "clusters" not in result.stdout
     assert "namespaces" not in result.stdout
 
+    microservices = CliRunner().invoke(app, ["export", "microservices", "--help"])
+    assert microservices.exit_code == 0
+    assert "--html" in microservices.stdout
+    assert "--json" in microservices.stdout
+    assert "--xlsx" not in microservices.stdout
+    assert "--c4" not in microservices.stdout
+
     root = CliRunner().invoke(app, ["--help"])
     assert root.exit_code == 0
     assert "projects" in root.stdout

@@ -44,7 +44,7 @@ modules must live in the package that owns their responsibility:
 | `storage/` | SQLite schema, migrations, codecs and fact persistence |
 | `infrastructure/` | Local configuration and state-path resolution |
 | `delivery/` | CLI and local HTTP adapters |
-| `render/` | Text, JSON, HTML and LikeC4 output projections |
+| `render/` | Text, JSON, and HTML output projections |
 
 The `render/` package (formerly the single `render.py` file, still imported as
 `from systemlens.render import ...`) is an output adapter. It may consume
@@ -167,7 +167,7 @@ they are not cross-module entry points.
 | File eligibility or incremental refresh policy | `indexing/file_inventory.py` |
 | Persisted contract materialization | `indexing/materializers.py` |
 | SQLite schema or queries | `storage/sqlite.py` |
-| JSON, terminal, HTML, or LikeC4 presentation | `render/` package (`__init__.py` re-exports the public surface) |
+| JSON, terminal, or HTML presentation | `render/` package (`__init__.py` re-exports the public surface) |
 
 ## The `scanner/` package
 
@@ -216,7 +216,7 @@ directly from outside the package.
 | `assets/graph/05-code-flow-selection.js` | Owns the selected flow ID, call-graph root, and trigger separately from general graph state; it loads before `10-rebuild.js`, whose initial render reads this state |
 | `assets/graph/06-view-lifecycle.js` | Owns view activation and overlay visibility; it loads before `10-rebuild.js`, which can clear overlays during the initial render |
 | `assets/graph/40-details.js` and `assets/graph/55-code-flows.js` | The details widget sends named open-in-list or open-in-graph events to the flow panel; the flow catalogue handles them |
-| `likec4_export.py` | LikeC4 project export (`--c4`) and the request/reply HTML fragment |
+| `complexity.py` | Assigns deterministic complexity tiers used to color graph nodes |
 | `module_graph.py` | Endpoint/module/workspace/flow rendering, plus the module-dependency HTML export (`assets/module_graph.html`) |
 | `software_layers.py` | Dedicated software-layer rendering (`systemlens export layers`) with Strategy1 layer classification and `assets/software_layers.html` |
 | `_graph_view_helpers.py` | Low-level helpers (VS Code deep links, MongoDB/REST visual edges) shared by graph projections |
@@ -227,13 +227,9 @@ The browser modules are concatenated into one script for the standalone export.
 The flow-selection store and flow-panel events establish ownership boundaries
 within that script; they do not yet make the browser files independent modules.
 
-`_graph_view_helpers.py` and the cross-import of `_complexity_ranking` /
-`_vscode_file_uri` between these submodules are an
-intentional, narrow exception to dependency rule 3 below: sharing a
-leading-underscore helper is acceptable **within** the `render/` package,
-because the package boundary (its `__init__.py`), not the file boundary, is
-the actual contract. Reaching into `render/<submodule>.py` from *outside* the
-package remains prohibited.
+`_graph_view_helpers.py` and `complexity.py` hold internal functions shared by
+graph projections. Importing these helpers is allowed within the `render/`
+package; code outside the package should use the public surface in `__init__.py`.
 
 Kafka DTO materialization is owned by `indexing/dto_inventory.py`.
 `indexing/service.py` invokes its public function before persistence;

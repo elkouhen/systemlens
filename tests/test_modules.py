@@ -66,7 +66,7 @@ def test_microservice_html_export_uses_the_explicit_root_path(
     )
 
     cli.export_microservices_cmd(
-        workspace=None, html=tmp_path / "architecture.html", c4=None,
+        workspace=None, html=tmp_path / "architecture.html",
         root_path=Path("/exported/repository"), json_output=False,
     )
 
@@ -91,7 +91,7 @@ def test_microservice_html_export_defaults_root_path_to_the_current_directory(
     )
 
     cli.export_microservices_cmd(
-        workspace=None, html=tmp_path / "architecture.html", c4=None,
+        workspace=None, html=tmp_path / "architecture.html",
         root_path=None, json_output=False,
     )
 
