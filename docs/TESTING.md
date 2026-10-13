@@ -89,9 +89,8 @@ verify a distinct layout or complexity contract.
 
 Pull requests use `.github/workflows/quality.yml` as the automated quality
 gate. It runs lint, type checking, the default tests, architecture checks,
-Bandit, Semgrep, coverage, and the browser acceptance suite with its pinned
-Playwright browser. A skipped local prerequisite does not count as a passing
-CI result.
+Bandit, Semgrep, and coverage. Browser acceptance tests run locally when Chrome
+is available. A skipped local prerequisite does not count as a passing CI result.
 
 Run the default checks after a Python change:
 

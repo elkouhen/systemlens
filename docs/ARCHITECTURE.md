@@ -270,7 +270,7 @@ uv run pytest -m slow tests/test_browser_export.py
 
 The browser acceptance command is a local/manual gate. The lockfile pins the
 Playwright version, which in turn pins the Chromium revision used for local
-validation. There is currently no GitHub Actions workflow for this gate.
+validation. The GitHub Actions quality workflow does not run this gate.
 
 ## Diagnostics
 
