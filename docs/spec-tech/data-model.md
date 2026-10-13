@@ -213,10 +213,14 @@ The HTML export stores call graphs under `call_graphs`, keyed by a stable graph
 identifier. A `CallGraphDescription` describes service-level propagation for
 one selected flow or flow group. It does not replace the persisted method call
 facts or the individual `CodeFlow` records.
-The exporter hashes only each graph's root-specific shape when deduplicating
-graphs. The trigger catalogue is shared by all roots, so it remains in every
-stored graph but is omitted from repeated hash serialization. Building each
-root's reachable graph still costs work proportional to its reachable flows.
+The exporter removes a root graph when its service set and exact directed arc
+set are proper subsets of another root graph. Arc identity includes source and
+target services, relation kind, label, and endpoint IDs. Equal graphs keep
+their separate selectable flows. Identical root-specific shapes share one
+stored graph by digest. The trigger catalogue is shared by all roots, so the
+digest omits it. Building
+each root's graph costs work proportional to its reachable flows. Containment
+lookup uses an inverted arc index, or a service index for graphs without arcs.
 
 ```json
 {

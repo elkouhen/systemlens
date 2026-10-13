@@ -37,6 +37,17 @@ The call-graphs-only browser bootstrap selects the first available flow after
 its event handlers are registered. It skips the architecture layout when this
 focused view opens. If no selectable flow exists, the flow list remains empty.
 
+The HTML flow picker first removes flows reached from another indexed root.
+It then removes root graphs whose services and exact endpoint-backed arcs are
+proper subsets of another root graph. The persisted flows are unchanged;
+omitted roots remain in `supporting_code_flows`. Equal graphs retain their
+separate flow entries; identical root-specific shapes share a stored graph.
+
+The containment lookup uses the rarest indexed arc, or a service for graphs
+without arcs, to limit pairwise comparisons. A larger graph can share topology
+with an omitted root without
+sharing its causal trigger; diagnostics remain tied to selected roots.
+
 HTML and JSON graph exports only consume the loaded architecture snapshot.
 They do not reopen OpenAPI documents or recursively parse Java DTO sources at
 render time. The export can show indexed Kafka payload-type identities and

@@ -33,7 +33,7 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
         page = browser.new_page(viewport={"width": 1440, "height": 1000})
         page.set_content(document, wait_until="load")
         page.locator("#flows-tab").click()
-        assert page.locator("#code-flows .code-flow-item").count() == 3
+        assert page.locator("#code-flows .code-flow-item").count() == 2
         page.locator("#code-flows .code-flow-item").filter(has_text="GET /api/error").click()
         page.locator("#flow-call-tree-depth-increase").click()
         assert page.locator("#graph-call-tree .graph-call-tree-node").filter(

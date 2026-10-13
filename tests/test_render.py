@@ -327,6 +327,56 @@ def test_export_keeps_equivalent_persisted_flows() -> None:
     }
 
 
+def test_export_omits_independent_root_whose_call_graph_is_contained() -> None:
+    a_out = replace(_rest_endpoint("call", "POST /b", "A.java"), id="a-out")
+    b_in = replace(_rest_endpoint("serve", "POST /b", "B.java"), id="b-in")
+    b_out = replace(_rest_endpoint("call", "POST /c", "B.java"), id="b-out")
+    c_in = replace(_rest_endpoint("serve", "POST /c", "C.java"), id="c-in")
+    flows = [
+        CodeFlow(
+            id="a-root", module="a", method="A.run", path="A.java",
+            start_line=1, end_line=2, status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "cron_entry", "cron", "A.java", 1, 1),
+                   CodeFlowStep(2, "http_call", "POST /b", "A.java", 2, 2, a_out.id)),
+        ),
+        CodeFlow(
+            id="b-handler", module="b", method="B.handle", path="B.java",
+            start_line=1, end_line=2, status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "http_entry", "POST /b", "B.java", 1, 1, b_in.id),
+                   CodeFlowStep(2, "http_call", "POST /c", "B.java", 2, 2, b_out.id)),
+        ),
+        CodeFlow(
+            id="b-root", module="b", method="B.run", path="B.java",
+            start_line=3, end_line=4, status="potential", confidence="medium", reason="test",
+            steps=(CodeFlowStep(1, "cron_entry", "cron", "B.java", 3, 3),
+                   CodeFlowStep(2, "http_call", "POST /c", "B.java", 4, 4, b_out.id)),
+        ),
+    ]
+    endpoints = {"a": [a_out], "b": [b_in, b_out], "c": [c_in]}
+    edges = [
+        GraphEdge("rest", "a", "b", a_out, b_in),
+        GraphEdge("rest", "b", "c", b_out, c_in),
+    ]
+
+    data = _html_graph_data(render_graph_html(endpoints, edges, code_flows=flows))
+    assert [flow["id"] for flow in data["code_flows"]] == ["a-root"]
+    assert len(data["call_graphs"]) == 1
+    assert {flow["id"] for flow in data["supporting_code_flows"]} == {"b-handler", "b-root"}
+
+    # A same-labelled call through another port is distinct evidence.
+    other_out = replace(b_out, id="b-other-out")
+    other_in = replace(c_in, id="c-other-in")
+    other_root = replace(
+        flows[2], steps=(flows[2].steps[0], replace(flows[2].steps[1], endpoint_id=other_out.id))
+    )
+    distinct_data = _html_graph_data(render_graph_html(
+        {"a": [a_out], "b": [b_in, b_out, other_out], "c": [c_in, other_in]},
+        [*edges, GraphEdge("rest", "b", "c", other_out, other_in)],
+        code_flows=[*flows[:2], other_root],
+    ))
+    assert {flow["id"] for flow in distinct_data["code_flows"]} == {"a-root", "b-root"}
+
+
 def test_export_fuses_kafka_producer_and_consumer_fragments() -> None:
     producer = replace(_kafka_endpoint("produce", "OrderCreated", "Publisher.java"), id="orders-out")
     consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Inventory.java"), id="inventory-in")

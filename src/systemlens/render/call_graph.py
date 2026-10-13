@@ -15,6 +15,7 @@ from systemlens.domain.models import MessageEndpoint
 
 EdgeTransition = tuple[GraphEdge, tuple[str, ...]]
 FlowTransitions = tuple[tuple[str, tuple[EdgeTransition, ...]], ...]
+CallArcSignature = tuple[str, str, str, str, tuple[str, ...]]
 
 
 @dataclass(frozen=True)
@@ -790,10 +791,11 @@ def _all_export_flows(
     edges: list[GraphEdge],
     index: _CallGraphIndex | None = None,
 ) -> Iterator[tuple[CodeFlow, dict[str, object], int]]:
-    """Build one selectable HTML entry for each uncovered call-flow root.
+    """Build selectable entries for maximal call graphs.
 
     A downstream flow remains in its parent's call tree. When a disconnected
     cycle has no zero-indegree root, its first stable flow represents it.
+    A graph contained in another graph adds no selectable topology.
     """
     index = index or _index_call_graph_inputs(flows, endpoints_by_service, edges)
     ordered_flows = sorted(
@@ -804,6 +806,7 @@ def _all_export_flows(
     candidates = [flow for flow in ordered_flows if flow.id in root_ids]
     candidates.extend(flow for flow in ordered_flows if flow.id not in root_ids)
     covered: set[str] = set()
+    selected: list[tuple[CodeFlow, dict[str, object], int]] = []
     for flow in candidates:
         if flow.id in covered:
             continue
@@ -813,8 +816,47 @@ def _all_export_flows(
         )
         call_tree = cast(dict[str, object], call_graph["call_tree"])
         covered.update(cast(list[str], call_tree["reachable_flow_ids"]))
-        yield (
+        selected.append((
             flow,
             call_graph,
             1,
+        ))
+
+    # Reachability removes downstream flows, but independent triggers can
+    # still produce graphs whose complete arcs sit inside a larger graph.
+    graph_shapes: list[tuple[set[str], set[CallArcSignature]]] = []
+    edge_owners: dict[CallArcSignature, list[int]] = {}
+    node_owners: dict[str, list[int]] = {}
+    for position, (_flow, graph, _count) in enumerate(selected):
+        nodes = set(cast(list[str], graph["nodes"]))
+        arcs = {
+            (
+                str(edge["source"]), str(edge["target"]),
+                str(edge["kind"]), str(edge["label"]),
+                tuple(cast(list[str], edge.get("endpoint_ids", []))),
+            )
+            for edge in cast(list[dict[str, object]], graph["edges"])
+        }
+        graph_shapes.append((nodes, arcs))
+        for node in nodes:
+            node_owners.setdefault(node, []).append(position)
+        for arc in arcs:
+            edge_owners.setdefault(arc, []).append(position)
+
+    for position, item in enumerate(selected):
+        nodes, arcs = graph_shapes[position]
+        if arcs:
+            possible_parents = min((edge_owners[arc] for arc in arcs), key=len)
+        elif nodes:
+            possible_parents = min((node_owners[node] for node in nodes), key=len)
+        else:
+            possible_parents = []
+        contained = any(
+            position != parent
+            and nodes <= graph_shapes[parent][0]
+            and arcs <= graph_shapes[parent][1]
+            and (nodes != graph_shapes[parent][0] or arcs != graph_shapes[parent][1])
+            for parent in possible_parents
         )
+        if not contained:
+            yield item

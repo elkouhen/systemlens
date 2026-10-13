@@ -128,10 +128,13 @@ The exported `call_graphs` map describes service-level propagation for one flow
 or flow group. Each graph contains participating nodes, deterministic order,
 traversal levels, a compact call tree, per-flow causal transition indexes,
 complete directed edges with display orders and endpoint identifiers, and
-service triggers. The flow picker lists only paths with no upstream indexed
-call flow, plus one stable entry for each uncovered cycle or disconnected
-component. A downstream flow remains visible inside every selected root that
-reaches it.
+service triggers. The flow picker starts with paths that have no upstream
+indexed call flow, plus one stable entry for each uncovered cycle or
+disconnected component. It then omits a root graph when every service and
+exact directed call arc appears in a larger root graph. Calls with different
+endpoint IDs remain distinct even when their displayed labels match.
+Equal graphs retain their separate flow entries. Downstream flows
+remain in the supporting flow data for selected roots that reach them.
 
 The first traversal level is the root set. Selecting a call graph keeps its
 arc order and trigger metadata visible.
