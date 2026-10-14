@@ -3,7 +3,7 @@
 Parent: [Technical specification](../SPEC-TECH.md).
 
 
-### Core persisted facts
+## Core persisted facts
 
 `MessageEndpoint` is the primary extracted fact. It records role, system,
 topic, dynamic status, source (`code` or `manifest`), framework, location,
@@ -107,7 +107,7 @@ inventory, currently the `default` or `strategy1` topic convention. CLI,
 export, graph, and audit adapters consume this profile. A workspace federation
 retains source profiles and rejects a mixture of incompatible topic strategies.
 
-### Materialised contracts
+## Materialised contracts
 
 The HTML graph exposes every indexed data resource through the common
 `ResourceDescription` shape. The shape is presentation-neutral and applies to
@@ -137,17 +137,21 @@ JPA entities, Mongo persistence classes, and indexed DTOs:
 `id` and `identity` identify the resource; `name` is display-only. `kind` and
 `technology` describe what was indexed without inferring a storage engine or a
 runtime mapping. `attributes` contains only fields extracted from the indexed
-source or persisted contract. `source.path` remains relative to the indexed
-project root. `navigation.inspect` selects the resource inspector, while
-`navigation.open_source` is an explicit source action. `usage` contains only
-persisted or deterministically derived relationships.
+source or persisted contract.
+
+The contract requires `source.path` to be relative to the indexed project root.
+The current DTO projection retains a module-relative path, as described under
+[source portability](#persistence-and-source-portability). `navigation.inspect`
+selects the resource inspector, while `navigation.open_source` is an explicit
+source action. `usage` contains only persisted or deterministically derived
+relationships.
 
 The HTML resource widget consumes this common shape. A resource click displays
 its description and usages in the main details panel. The class name is a
 separate inspect action that opens the attribute view, so resource description
 and class structure remain distinct.
 
-### HTML graph object descriptions
+## HTML graph object descriptions
 
 The HTML graph keeps service and topic descriptions separate from the
 `ResourceDescription` contract because they represent runtime architecture
@@ -207,7 +211,7 @@ its owner, usages and class or schema inspection action. This separation keeps
 runtime objects, persisted data classes and message contracts distinct while
 giving them the same identity, source and navigation vocabulary.
 
-### Call graph descriptions
+## Call graph descriptions
 
 The HTML export stores call graphs under `call_graphs`, keyed by a stable graph
 identifier. A `CallGraphDescription` describes service-level propagation for
@@ -321,7 +325,7 @@ resolved project field types. Nested definitions retain source locations and
 declared fields but are marked as non-root so collection inventories list only
 actual persistence roots while inspectors can navigate the complete closure.
 
-### Diagnostics and portability
+## Extraction diagnostics and code flows
 
 `ExtractionDiagnostic` is a safe, persisted extraction outcome with its file
 path, extractor, category, severity and a non-source-code detail. The initial
@@ -340,10 +344,10 @@ never presented as a complete parse.
 `CodeFlow` is a persisted, ordered potential path through one Java method or a
 chain of Java methods resolved by the selected method-call engine. Its
 first `CodeFlowStep` is an indexed HTTP/Kafka entry point or a source-evidenced
-`@Scheduled(cron = "...")` trigger; later steps are HTTP calls, Kafka
-publications, or MongoDB/JPA reads and writes in the entry method or a reachable
-method. Steps retain relative evidence paths and
-line ranges. Flow identity uses the module, relative path, qualified method,
+`@Scheduled` trigger; a literal cron expression names that step when present.
+Later steps are HTTP calls, Kafka publications, or MongoDB/JPA reads and writes
+in the entry method or a reachable method. Steps retain relative evidence paths
+and line ranges. Flow identity uses the module, relative path, qualified method,
 and trigger semantics rather than line numbers, so ordinary line movement does
 not replace the logical flow. If overloaded or generated declarations still
 produce the same identity, indexing keeps the first historical ID and adds a
@@ -449,23 +453,26 @@ select an implementation on Spring bean metadata alone. The analysis profile,
 including the selected method-call engine, availability, activation and its bounds, participates in the
 code-flow signature so switching profile recalculates unchanged repositories.
 
+## Service call graph projection
+
 The flow join groups AST and interprocedural candidates with deterministic
 in-memory keys. Parallel candidate routes are grouped by their source endpoint
 identities, module, input flow, input Java type, output flow, output Java type,
 and status;
 the representative with the strongest confidence, then the shortest route, is
 persisted. The indexing deduplication uses plain deterministic collections; HTML
-layout remains a rendering concern handled by the browser graph stack. Each exported code flow
-also carries a NetworkX-derived service subgraph and deterministic component
-order; the Flux view uses that snapshot instead of reconstructing the call
-sequence from display labels.
+layout remains a rendering concern handled by the browser graph stack.
+
+The HTML export stores NetworkX-derived service graphs under `call_graphs` and
+places a `call_graph_id` on each selectable flow. The Flux view follows that
+graph snapshot instead of reconstructing call sequences from display labels.
+
 Kafka publications are not expanded into cross-service persisted CodeFlow
-candidates. The flow views can nevertheless follow a publication to every
-opposite-role endpoint with the same protocol and concrete topic/route, even
-when the endpoint's Java type is unknown or differs. A publication without an
-input trigger does not become a flow root. A
-publisher explicitly annotated with a cron expression still creates a local
-source flow whose first step is `cron_entry`, followed by its publication.
+candidates. The flow views follow a publication to opposite-role endpoints on
+the same concrete topic only when a compatible topology relation exists. A
+publication without an input trigger does not become a flow root. A publisher
+annotated with `@Scheduled` still creates a local source flow whose first step
+is `cron_entry`, followed by its publication.
 Known message types must match when both endpoints provide one. Missing type
 evidence does not prevent the topology relation, while conflicting known types
 prevent it.
@@ -498,6 +505,8 @@ from them, including isolated cycles. A flow reached by a selected root stays
 in `supporting_code_flows` so the browser can render its call-tree occurrence.
 An unmatched or partially reconciled flow stays selectable when no indexed
 root covers it. Per-service HTML flow counts include selectable roots only.
+
+## Data access projection
 
 Data-access terminal paths stay in the compatible SQLite flow snapshot as
 evidence, but do not become selectable call flows. Export builds reachability
@@ -537,6 +546,8 @@ when exactly one resource with that name exists in the same module. Otherwise
 the exporter keeps the imported name and its unresolved identity separate.
 The browser qualifies duplicate short names with their package, module, or
 an uncertain-identity marker.
+
+## Consistency diagnostics
 
 An async write is a database write in a Kafka consumer handler reached after a
 message publication. A sync read is a database read on an HTTP entry path.
@@ -592,6 +603,8 @@ projection does not merge sibling paths into one execution sequence. Its work
 is bounded by the number of exported flow roots times reachable flow edges
 and access steps; it does not reopen Java source files.
 
+## Flow reconciliation and checkpoints
+
 Each persisted `CodeFlow` also carries a `reconciliation` status. `complete`
 means every endpoint step exists in the same snapshot and every cross-service
 effect has a matching persisted topology edge; `partial` means
@@ -635,6 +648,8 @@ endpoints provide one; missing type evidence remains compatible. The CodeQL
 call graph remains limited to source-backed Java method calls, so a Kafka topic
 does not create an internal method edge.
 
+## HTML port projection
+
 The HTML graph model joins endpoint identifiers and statically inferred message
 types to the persisted
 `integration_methods` projection. Microservice cards remain simple rectangles
@@ -660,6 +675,8 @@ uses deterministic opposing lanes for a direct cycle. The same overlay draws
 dashed, directed local links from each input to the outputs associated with it
 by a persisted code flow. It neither alters
 persisted endpoint identity nor turns a CodeQL fact into a linear route.
+
+## Persistence and source portability
 
 The SQLite store is standard-library-only: it does not load native vector
 extensions or persist/query vector representations. The retained findings
@@ -703,10 +720,18 @@ OpenAPI file and operation line as source evidence. Zero or multiple candidates
 remain unmatched; this projection never selects a method merely from an HTTP
 route or a class name.
 
-The index persists source evidence only as paths relative to the indexed
-project root. HTML export receives a local `--root-path` and joins it to these
-relative paths when building VS Code URIs. This keeps an index portable across
-machines and avoids persisting WSL or other host-specific path context.
+The source-evidence contract requires paths relative to the indexed project
+root. For root-relative evidence, HTML export receives a local `--root-path`
+and joins it to each evidence path when building VS Code URIs. This keeps indexes
+portable across machines without persisting host-specific source roots.
+
+**Known implementation gap:** Some persisted source fields are module-relative:
+`JpaMethod.path` in module inventory and `source` in Kafka DTO definitions. The
+DTO export resolves its source URI through the owning module, but its
+`ResourceDescription.source.path` retains that module-relative value. These
+fields require normalization to meet the root-relative source-evidence contract.
+
+## DTO and contract materialization
 
 Kafka DTO definitions and OpenAPI/Swagger document contents are materialized at
 index time. Each OpenAPI/Swagger source file is attributed and materialized
