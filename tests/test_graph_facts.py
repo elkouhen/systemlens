@@ -210,6 +210,7 @@ def test_imported_data_access_reaches_cli_html_export(
     ])
     assert exported.exit_code == 0, exported.output
     graph = _graph_data((repo / "graph.html").read_text(encoding="utf-8"))
+    assert graph["flow_data_access_flow_ids_by_root"]["order-flow"] == ["order-flow"]
     accesses = graph["flow_data_accesses"]["order-flow"]
     assert len(accesses) == 1
     assert accesses[0]["action"] == action
@@ -226,6 +227,7 @@ def test_imported_data_access_reaches_cli_html_export(
     plain_graph = _graph_data((repo / "graph-plain.html").read_text(encoding="utf-8"))
     assert plain_graph["call_graphs_only"] is True
     assert plain_graph["flow_data_accesses"] == {}
+    assert plain_graph["flow_data_access_flow_ids_by_root"] == {}
     assert plain_graph["flow_diagnostics"] == []
     assert plain_graph["call_graphs"] == graph["call_graphs"]
     assert [flow["id"] for flow in plain_graph["code_flows"]] == [

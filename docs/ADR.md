@@ -1048,3 +1048,26 @@ then apply the initial layout after sizing the workspace.
 one catalogue filter event invokes one renderer. Browser files still share
 lexical state and depend on the assembler's declared load order. Moving to
 independent JavaScript modules remains a separate change.
+
+## ADR-56: Show CRUD evidence and association uncertainty on call occurrences
+
+**Status:** Accepted.
+
+**Context:** A handler can reach both an external call and a database access
+through separate internal paths. Their shared entry point does not prove that
+both effects occur on every execution. A `save` call can create or update, and
+resource names imported without a qualified ID can remain ambiguous.
+
+**Decision:** Show one CRUD badge per resource ID on each call-graph service
+occurrence. Keep sibling accesses reachable through the same handler, but mark
+the badge with `?` when the flow ID or first source-backed method call does not
+support a more specific association. Display `create_or_update` as `C/U` rather
+than two certain operations. Resolve an imported simple name to a source ID
+only when one candidate exists in the owning module. This supersedes ADR-51's
+tooltip placement while retaining its occurrence-level scope.
+
+**Consequences:** The selected graph retains possible accesses without
+claiming a proved branch execution. Distinct unresolved resources remain
+separate, with qualified duplicate names in the badge. The HTML snapshot
+stores one optional first-call witness per access flow; the SQLite schema and
+persisted facts do not change.

@@ -84,6 +84,108 @@ def _flow_call_graph(data: dict[str, object], flow: dict[str, object]) -> dict[s
     return graph
 
 
+def test_mixed_call_and_data_flow_is_exported_in_either_effect_order() -> None:
+    entry = replace(_rest_endpoint("serve", "POST /orders", "Orders.java"), id="in")
+    output = replace(_kafka_endpoint("produce", "OrderEvent", "Orders.java"), id="out")
+    trigger = CodeFlowStep(1, "http_entry", entry.topic, "Orders.java", 1, 1, entry.id)
+    publish = CodeFlowStep(2, "message_publish", output.topic, "Orders.java", 2, 2, output.id)
+    write = CodeFlowStep(3, "data_write", "OrderEntity", "Orders.java", 3, 3,
+                         action="update", resource="jpa:orders:OrderEntity")
+    for suffix, effects in (
+        ("call-first", (publish, write)),
+        ("data-first", (replace(write, order=2), replace(publish, order=3))),
+    ):
+        flow = CodeFlow(
+            suffix, "orders", "Orders.place", "Orders.java", 1, 3,
+            "potential", "medium", "test", (trigger, *effects),
+        )
+        data = _html_graph_data(render_graph_html(
+            {"orders": [entry, output]}, [], code_flows=[flow],
+        ))
+        assert [item["id"] for item in data["code_flows"]] == [suffix]
+        assert data["flow_data_access_flow_ids_by_root"][suffix] == [suffix]
+        assert data["flow_data_accesses"][suffix][0]["action"] == "update"
+
+
+def test_sibling_access_retains_first_call_evidence_for_each_root() -> None:
+    entry = replace(_rest_endpoint("serve", "POST /orders", "Orders.java"), id="in")
+    first = replace(_kafka_endpoint("produce", "FirstEvent", "Orders.java"), id="out-a")
+    second = replace(_kafka_endpoint("produce", "SecondEvent", "Orders.java"), id="out-b")
+    trigger = CodeFlowStep(1, "http_entry", entry.topic, "Orders.java", 1, 1, entry.id)
+    route_a = CodeFlowStep(2, "method_call", "Orders.pathA", "Orders.java", 2, 2)
+    route_b = CodeFlowStep(2, "method_call", "Orders.pathB", "Orders.java", 3, 3)
+    flows = [
+        CodeFlow("a", "orders", "Orders.place", "Orders.java", 1, 6,
+                 "potential", "medium", "test", (
+                     trigger, route_a,
+                     CodeFlowStep(3, "message_publish", first.topic, "Orders.java", 4, 4, first.id),
+                 )),
+        CodeFlow("b", "orders", "Orders.place", "Orders.java", 1, 6,
+                 "potential", "medium", "test", (
+                     trigger, route_b,
+                     CodeFlowStep(3, "message_publish", second.topic, "Orders.java", 5, 5, second.id),
+                 )),
+        CodeFlow("a-data", "orders", "Orders.place", "Orders.java", 1, 6,
+                 "potential", "medium", "test", (
+                     trigger, route_a,
+                     CodeFlowStep(3, "data_read", "OrderEntity", "Orders.java", 6, 6,
+                                  action="read", resource="jpa:orders:OrderEntity"),
+                 )),
+    ]
+    data = _html_graph_data(render_graph_html(
+        {"orders": [entry, first, second]}, [], code_flows=flows,
+    ))
+
+    assert [item["id"] for item in data["code_flows"]] == ["a", "b"]
+    assert data["flow_data_access_flow_ids_by_root"] == {
+        "a": ["a-data"], "b": ["a-data"],
+    }
+    assert data["flow_data_access_first_calls"]["a-data"] == [
+        "Orders.pathA", "Orders.java", 2,
+    ]
+
+
+def test_ambiguous_imported_entity_name_keeps_separate_resource_identity() -> None:
+    entry = replace(_rest_endpoint("serve", "POST /orders", "Orders.java"), id="in")
+    output = replace(_kafka_endpoint("produce", "OrderEvent", "Orders.java"), id="out")
+    trigger = CodeFlowStep(1, "http_entry", entry.topic, "Orders.java", 1, 1, entry.id)
+    call = CodeFlow("call", "orders", "Orders.place", "Orders.java", 1, 4,
+                    "potential", "medium", "test", (
+                        trigger, CodeFlowStep(2, "message_publish", output.topic,
+                                              "Orders.java", 2, 2, output.id),
+                    ))
+    accesses = [
+        CodeFlow(f"access-{index}", "orders", "Orders.place", "Orders.java", 1, 4,
+                 "potential", "medium", "test", (
+                     trigger, CodeFlowStep(2, "data_read", "ProductEntity", "Orders.java",
+                                           index + 2, index + 2, action="read",
+                                           resource=f"jpa:orders:package{index}.ProductEntity"),
+                 ))
+        for index in (1, 2)
+    ]
+    imported = GraphFact(
+        id="ai::node::delete-product", fact_type="node", kind="flow_data_access",
+        name="ProductEntity", source_kind=None, source_name=None,
+        target_kind=None, target_name=None, relation=None, origin="ai",
+        confidence="medium", evidence_path="Orders.java", evidence_line=6,
+        metadata={"flow_id": "call", "action": "delete"},
+        namespace="ai", status="proposed",
+    )
+    data = _html_graph_data(render_graph_html(
+        {"orders": [entry, output]}, [],
+        code_flows=[call, *accesses], graph_facts=[imported],
+    ))
+
+    assert {item["resource"] for item in data["flow_data_accesses"]["call"]} == {
+        "ProductEntity",
+    }
+    assert {
+        data["flow_data_accesses"][flow.id][0]["resource"] for flow in accesses
+    } == {
+        "jpa:orders:package1.ProductEntity", "jpa:orders:package2.ProductEntity",
+    }
+
+
 def test_export_preserves_specific_data_action_from_persisted_flow(tmp_path: Path) -> None:
     entry = _rest_endpoint("serve", "DELETE /orders", "Orders.java")
     flow = CodeFlow(
@@ -114,7 +216,8 @@ def test_export_preserves_specific_data_action_from_persisted_flow(tmp_path: Pat
     ))
 
     assert [item["id"] for item in data["code_flows"]] == ["call"]
-    assert data["flow_data_accesses"]["call"][0]["action"] == "delete"
+    assert data["flow_data_access_flow_ids_by_root"]["call"] == ["mongo-delete"]
+    assert data["flow_data_accesses"]["mongo-delete"][0]["action"] == "delete"
     assert "service_data_accesses" not in data
     legacy_steps = [
         {key: value for key, value in step.__dict__.items() if key != "action"}
@@ -801,6 +904,8 @@ def test_export_flow_diagnostic_retains_cross_handler_causal_paths() -> None:
         endpoints, edges, code_flows=flows, include_call_graph_annotations=False,
     ))
     assert without_annotations["flow_data_accesses"] == {}
+    assert without_annotations["flow_data_access_first_calls"] == {}
+    assert without_annotations["flow_data_access_flow_ids_by_root"] == {}
     assert without_annotations["flow_diagnostics"] == []
     assert without_annotations["call_graphs"] == data["call_graphs"]
     assert [flow["id"] for flow in without_annotations["code_flows"]] == [
@@ -849,13 +954,15 @@ def test_call_graph_enriches_data_siblings_and_pairs_async_write_with_sync_read(
     data = _html_graph_data(render_graph_html(
         {"orders": [root_in, message_out, unrelated_in], "inventory": [message_in]},
         [GraphEdge("kafka", "orders", "inventory", message_out, message_in)],
-        code_flows=flows,
+        code_flows=[*flows, replace(flows[1], id="read-second")],
     ))
 
-    accesses = data["flow_data_accesses"]["publish"]
+    access_ids = data["flow_data_access_flow_ids_by_root"]["publish"]
+    accesses = [access for flow_id in access_ids for access in data["flow_data_accesses"][flow_id]]
     assert [flow["id"] for flow in data["code_flows"]] == ["publish"]
+    assert access_ids == ["read", "read-second", "write"]
     assert {(item["flow_id"], item["action"]) for item in accesses} == {
-        ("read", "read"), ("write", "update"),
+        ("read", "read"), ("read-second", "read"), ("write", "update"),
     }
     assert not any(item["flow_id"] == "unrelated" for item in accesses)
     assert any(item["flow_id"] == "publish" and item["classification"] == "potential_risk"

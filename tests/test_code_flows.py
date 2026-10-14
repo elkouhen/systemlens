@@ -398,6 +398,54 @@ class ScheduledPublisher {
     assert {flow.steps[0].name for flow in flows} == {"0 * * * * *"}
 
 
+def test_scheduled_methods_keep_data_access_with_and_without_publication(tmp_path: Path) -> None:
+    relative_source = "orders/src/main/java/ScheduledPublisher.java"
+    source = tmp_path / relative_source
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "import org.springframework.scheduling.annotation.Scheduled;\n"
+        "class ScheduledPublisher {\n"
+        "  @Scheduled(cron = \"0 * * * * *\")\n"
+        "  void publish() {\n"
+        "    kafka.send();\n"
+        "    mongo.save();\n"
+        "  }\n"
+        "  @Scheduled(cron = \"0 0 * * * *\")\n"
+        "  void cleanup() {\n"
+        "    mongo.remove();\n"
+        "  }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven",
+        version=None, kind="application", starts_application=True,
+        configuration_example="",
+        mongo_methods=(
+            MongoMethod("save", "mongo", "src/main/java/ScheduledPublisher.java", 6,
+                        "orders", owner_method="publish"),
+            MongoMethod("remove", "mongo", "src/main/java/ScheduledPublisher.java", 10,
+                        "orders", owner_method="cleanup"),
+        ),
+    )
+    publish = _endpoint(
+        "publish", "produce", "kafka", "orders.updated", relative_source, 5,
+    )
+
+    flows = materialize_code_flows(tmp_path, [publish], [module])
+
+    assert {
+        flow.method: [(step.kind, step.action) for step in flow.steps]
+        for flow in flows
+    } == {
+        "com.example.OrderController.publish": [
+            ("cron_entry", None), ("message_publish", None),
+            ("data_write", "create_or_update"),
+        ],
+        "cleanup": [("cron_entry", None), ("data_write", "delete")],
+    }
+
+
 def test_same_method_kafka_join_explains_multiple_inputs(tmp_path: Path) -> None:
     path = "orders/src/main/java/example/OrderApp.java"
     source = tmp_path / path

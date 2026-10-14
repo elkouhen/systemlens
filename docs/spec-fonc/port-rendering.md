@@ -163,21 +163,18 @@ When a flow is selected from the Flux de code tab, that tab remains active so
 the user can select another flow directly. The selected flow still updates the
 Explorer graph and its analysis state; opening the Explorer tab remains
 available through the normal tab control.
-The Flux de code catalogue shows only call flows ending at an integration
-output or a call cycle. Data-access terminal paths remain indexed evidence,
-but they are not selectable flows. Searching a resource also finds call flows
-whose reachable accesses use it.
+The Flux de code catalogue shows call flows with an integration output or a
+call cycle, including flows whose last step accesses data. Pure data-access
+terminal paths remain indexed evidence but are not selectable flows. Searching
+a resource also finds call flows whose reachable accesses use it.
 
-In a selected call graph, microservice tooltips show potential reads, writes,
-and deletes with their resource, source location, and confidence. A service
-occurrence shows only accesses whose indexed entry endpoint matches that
-occurrence. The left widget lists call flows without data-access or consistency
-annotation cards; the selected graph contains selectable consistency badges
-on the matching microservices. Hovering a microservice shows the diagnostic
-pair, its classification, and the related data operations. The
+In a selected call graph, each microservice occurrence shows grouped CRUD
+annotations for eligible access paths. The matching input endpoint and handler
+identify the occurrence; badges mark handler-only associations with `?`.
+The left widget lists call flows without data-access or consistency cards.
+Consistency badges on the matching microservices remain selectable. The
 architecture graph does not show data-access annotations. Accesses without a
-reachable call flow remain in the persisted
-snapshot but have no call-graph annotation.
+reachable call flow remain in the persisted snapshot without a call-graph badge.
 
 The selected call graph may also show concurrent read/write, concurrent write,
 lost-update, dirty-read, freshness-risk, and conflict-protection diagnostics

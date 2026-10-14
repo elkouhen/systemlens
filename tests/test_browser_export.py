@@ -45,6 +45,28 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
         tooltip = page.locator("#graph-flow-tooltips .graph-call-tree-entity-tooltip").inner_text()
         assert "IN " in tooltip
         assert "ProductEntity" not in tooltip
+        page.locator("#flow-call-tree-depth-increase").click()
+        page.locator("#flow-call-tree-depth-increase").click()
+        inventory_nodes = page.locator("#graph-call-tree .graph-call-tree-node").filter(
+            has_text="inventory-service"
+        )
+        assert inventory_nodes.count() == 2
+        first_badges = inventory_nodes.first.locator(
+            ".graph-call-tree-access-badge, .graph-call-tree-diagnostic-badge"
+        ).all_inner_texts()
+        assert "C/U StockMovementEntity" in first_badges
+        assert sum(label.endswith("ProductEntity") for label in first_badges) <= 1
+        assert inventory_nodes.last.locator(
+            ".graph-call-tree-access-badge, .graph-call-tree-diagnostic-badge"
+        ).all_inner_texts() == ["R (C/U) ProductEntity ?"]
+        diagnostic_badges = page.locator("#graph-call-tree .graph-call-tree-diagnostic-badge")
+        assert diagnostic_badges.count() > 0
+        diagnostic_badges.first.click(force=True)
+        assert page.locator(
+            "#graph-call-tree .graph-call-tree-node.is-diagnostic-async, "
+            "#graph-call-tree .graph-call-tree-node.is-diagnostic-sync, "
+            "#graph-call-tree .graph-call-tree-node.is-diagnostic-interaction"
+        ).count() > 0
         browser.close()
 
 
@@ -162,7 +184,10 @@ def test_resource_graph_labels_break_at_name_boundaries() -> None:
 
 
 @pytest.mark.slow
-def test_call_flow_lists_data_access_on_sibling_path() -> None:
+@pytest.mark.parametrize("include_call_graph_annotations", [True, False])
+def test_call_flow_lists_data_access_on_sibling_path(
+    include_call_graph_annotations: bool,
+) -> None:
     entry = MessageEndpoint(
         id="orders-entry", role="serve", system="rest", topic="POST /orders",
         topic_dynamic=False, source="code", framework="spring-mvc",
@@ -192,6 +217,12 @@ def test_call_flow_lists_data_access_on_sibling_path() -> None:
                          resource="jpa:orders:ProductEntity"),
         ),
     )
+    other_method_read = replace(
+        read, id="d-other-method-read", method="Orders.other",
+        steps=(read.steps[0], replace(
+            read.steps[1], name="UnrelatedEntity", resource="jpa:orders:UnrelatedEntity",
+        )),
+    )
     imported = GraphFact(
         id="ai::node::orders-delete", fact_type="node", kind="flow_data_access",
         name="OrderEntity", source_kind=None, source_name=None,
@@ -200,9 +231,20 @@ def test_call_flow_lists_data_access_on_sibling_path() -> None:
         metadata={"flow_id": "a-publish", "action": "delete"},
         namespace="ai", status="proposed",
     )
+    imported_product_delete = replace(
+        imported, id="ai::node::product-delete", name="ProductEntity",
+        evidence_line=6,
+        metadata={"flow_id": "a-publish", "action": "delete"},
+    )
+    distinct_product_read = replace(
+        imported, id="ai::node::other-product-read",
+        name="jpa:orders:other.ProductEntity", evidence_line=7,
+        metadata={"flow_id": "a-publish", "action": "read"},
+    )
     document = render_graph_html(
-        {"orders": [entry]}, [], code_flows=[publish, read, write],
-        graph_facts=[imported],
+        {"orders": [entry]}, [], code_flows=[publish, read, write, other_method_read],
+        graph_facts=[imported, imported_product_delete, distinct_product_read],
+        include_call_graph_annotations=include_call_graph_annotations,
     )
     with sync_playwright() as playwright:
         try:
@@ -223,12 +265,21 @@ def test_call_flow_lists_data_access_on_sibling_path() -> None:
         assert page.locator("#code-flow-data-summary").count() == 0
         assert page.locator("#flow-diagnostics").count() == 0
         assert page.locator(".code-flow-item.is-selected").count() == 1
+        badges = page.locator(".graph-call-tree-node .graph-call-tree-access-badge")
+        if include_call_graph_annotations:
+            assert set(badges.all_inner_texts()) == {
+                "D OrderEntity", "RD (C/U) ProductEntity (orders) ?",
+                "R ProductEntity (other)",
+            }
+            assert badges.count() == 3
+            assert "UnrelatedEntity" not in badges.all_inner_texts()
+        else:
+            assert badges.count() == 0
         page.locator(".graph-call-tree-node").first.hover()
         tooltip = page.locator("#graph-flow-tooltips .graph-call-tree-entity-tooltip")
         tooltip_text = tooltip.inner_text()
-        assert "lecture ProductEntity" not in tooltip_text
-        assert "écriture ProductEntity" not in tooltip_text
-        assert "suppression OrderEntity" not in tooltip_text
+        assert "RD (C/U) ProductEntity" not in tooltip_text
+        assert "D OrderEntity" not in tooltip_text
         assert page.locator("#code-flows .code-flow-item").count() == 1
         assert page.locator("#code-flow-show-data-paths").count() == 0
         context.close()
@@ -294,6 +345,7 @@ def test_flow_view_keeps_delete_access_out_of_service_tooltip(
         assert "Suppression · orders" not in page.locator(
             "#graph-flow-tooltips .graph-call-tree-entity-tooltip"
         ).inner_text()
+        assert page.locator(".graph-call-tree-access-badge").count() == 0
         assert page.locator("#graph").get_attribute("data-selected-code-flow")
         assert not errors
         context.close()
@@ -807,9 +859,8 @@ def test_obsidian_default_and_saved_theme_preserve_graph_state() -> None:
         assert page.locator("#graph").evaluate(
             "element => getComputedStyle(element).backgroundColor"
         ) == "rgb(11, 16, 24)"
-        assert page.locator(".graph-node-card-label").first.evaluate(
-            "element => getComputedStyle(element).backgroundColor"
-        ) == "rgb(19, 30, 43)"
+        page.wait_for_function("""() => [...document.querySelectorAll('.graph-node-card-label')]
+            .some(element => getComputedStyle(element).backgroundColor === 'rgb(19, 30, 43)')""")
         node_count = page.locator(".graph-node-card-label").count()
         page.locator("#theme-toggle").click()
         assert page.locator("html").get_attribute("data-theme") == "light"

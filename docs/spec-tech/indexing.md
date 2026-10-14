@@ -139,6 +139,10 @@ When CodeQL is disabled or unavailable, a source symbol pass follows
 receiver-typed calls between indexed Java methods. It keeps these candidates at
 low confidence and drops ambiguous overloads, while retaining an ambiguous
 receiver type long enough to apply module-scoped interface dispatch.
+The same-method AST materializer records JPA and Mongo accesses in scheduled
+methods alongside their publications. It also persists a scheduled method
+whose only indexed effect is a data access. Such a data-only flow remains
+supporting evidence rather than a selectable inter-service call graph.
 When duplicate qualified types exist in different build modules, resolution
 first restricts candidates to the caller's module. Inheritance declarations and
 dispatch indexes retain the `(qualified name, module)` identity, so homonymous

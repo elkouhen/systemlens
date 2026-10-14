@@ -157,7 +157,9 @@ def render_graph_html(
     export_flows = list(code_flows or [])
     call_flows = [
         flow for flow in export_flows
-        if not flow.steps or flow.steps[-1].kind not in {"data_read", "data_write"}
+        if not flow.steps
+        or flow.steps[-1].kind not in {"data_read", "data_write"}
+        or any(step.kind in {"http_call", "message_publish"} for step in flow.steps)
     ]
     flow_edges = [
         *edges,
@@ -313,61 +315,109 @@ def render_graph_html(
         flow_id = metadata.get("flow_id")
         if isinstance(flow_id, str) and flow_id in flow_by_id:
             annotations_by_flow.setdefault(flow_id, []).append(fact)
-    data_accesses_by_flow: dict[str, list[dict[str, object]]] = {}
+    reachable_access_flow_ids: set[str] = set()
     for root_flow, _, _ in (export_flow_items if include_call_graph_annotations else ()):
         paths = _reachable_flow_paths(call_graph_index, root_flow.id)
         causal_reachability[root_flow.id] = set(paths)
         causal_paths[root_flow.id] = paths
-        accesses: dict[tuple[str, str, int, str, str], dict[str, object]] = {}
-        for reachable_id in sorted(paths):
-            reachable_flow = flow_by_id[reachable_id]
-            for step in reachable_flow.steps:
+        reachable_access_flow_ids.update(paths)
+    source_resources_by_module_and_name: dict[tuple[str, str], set[str]] = {}
+    for flow in export_flows:
+        for step in flow.steps:
+            if step.kind not in {"data_read", "data_write"}:
+                continue
+            resource = step.resource or step.name
+            simple_name = resource.rsplit(":", 1)[-1].rsplit(".", 1)[-1]
+            source_resources_by_module_and_name.setdefault(
+                (flow.module, simple_name), set()
+            ).add(resource)
+    data_accesses_by_flow: dict[str, list[dict[str, object]]] = {}
+    first_call_by_access_flow: dict[str, list[object]] = {}
+    if include_call_graph_annotations:
+        for flow in export_flows:
+            if flow.id not in reachable_access_flow_ids:
+                continue
+            accesses: dict[tuple[str, int, str, str, str], dict[str, object]] = {}
+            for step in flow.steps:
                 if step.kind not in {"data_read", "data_write"}:
                     continue
                 site = (
-                    reachable_flow.module, step.path, step.start_line,
+                    step.path, step.start_line, step.kind,
                     step.operation or "", step.resource or step.name,
                 )
                 accesses.setdefault(site, {
-                    "flow_id": reachable_id,
-                    "module": reachable_flow.module,
+                    "flow_id": flow.id,
+                    "module": flow.module,
                     "kind": step.kind,
                     "action": step.action,
                     "resource": step.resource or step.name,
                     "path": step.path,
                     "line": step.start_line,
-                    "confidence": reachable_flow.confidence,
+                    "confidence": flow.confidence,
                     "branch": step.branch,
-                    "trigger_endpoint_id": reachable_flow.steps[0].endpoint_id if reachable_flow.steps else None,
+                    "trigger_endpoint_id": flow.steps[0].endpoint_id if flow.steps else None,
+                    "trigger_method": flow.method,
+                    "trigger_kind": flow.steps[0].kind if flow.steps else None,
+                    "trigger_name": flow.steps[0].name if flow.steps else None,
                 })
-            for fact in annotations_by_flow.get(reachable_id, []):
+            for fact in annotations_by_flow.get(flow.id, []):
                 metadata = fact.metadata or {}
                 action = str(metadata.get("action", ""))
                 if action not in {"read", "insert", "update", "delete", "create_or_update", "read_update"}:
                     continue
+                fact_name = fact.name or ""
+                candidates = source_resources_by_module_and_name.get(
+                    (flow.module, fact_name.rsplit(":", 1)[-1].rsplit(".", 1)[-1]), set()
+                )
+                candidate = next(iter(candidates)) if len(candidates) == 1 else None
+                resource = (
+                    candidate
+                    if candidate and (
+                        fact_name == candidate
+                        or ":" not in fact_name and (
+                            "." not in fact_name or candidate.rsplit(":", 1)[-1] == fact_name
+                        )
+                    ) else fact_name
+                )
                 site = (
-                    reachable_flow.module, fact.evidence_path or "",
-                    fact.evidence_line or 0, action, fact.name or "",
+                    fact.evidence_path or "", fact.evidence_line or 0,
+                    "imported", action, resource,
                 )
                 accesses.setdefault(site, {
-                    "flow_id": reachable_id,
-                    "module": reachable_flow.module,
+                    "flow_id": flow.id,
+                    "module": flow.module,
                     "kind": "data_read" if action == "read" else "data_write",
                     "action": action,
-                    "resource": fact.name,
+                    "resource": resource,
                     "path": fact.evidence_path,
                     "line": fact.evidence_line,
                     "confidence": fact.confidence,
                     "status": fact.status,
                     "branch": metadata.get("branch"),
                     "origin": "imported",
-                    "trigger_endpoint_id": reachable_flow.steps[0].endpoint_id if reachable_flow.steps else None,
+                    "trigger_endpoint_id": flow.steps[0].endpoint_id if flow.steps else None,
+                    "trigger_method": flow.method,
+                    "trigger_kind": flow.steps[0].kind if flow.steps else None,
+                    "trigger_name": flow.steps[0].name if flow.steps else None,
                 })
-        if accesses:
-            data_accesses_by_flow[root_flow.id] = [
-                accesses[site] for site in sorted(accesses)
-            ]
+            if accesses:
+                data_accesses_by_flow[flow.id] = [accesses[site] for site in sorted(accesses)]
+                first_call = next(
+                    (step for step in flow.steps if step.kind == "method_call"), None
+                )
+                if first_call is not None:
+                    first_call_by_access_flow[flow.id] = [
+                        first_call.name, first_call.path, first_call.start_line,
+                    ]
     view_model["flow_data_accesses"] = data_accesses_by_flow
+    view_model["flow_data_access_first_calls"] = first_call_by_access_flow
+    access_flow_ids_by_root: dict[str, list[str]] = {}
+    for root_flow, _, _ in (export_flow_items if include_call_graph_annotations else ()):
+        paths = causal_paths[root_flow.id]
+        access_ids = sorted(paths.keys() & data_accesses_by_flow.keys())
+        if access_ids:
+            access_flow_ids_by_root[root_flow.id] = access_ids
+    view_model["flow_data_access_flow_ids_by_root"] = access_flow_ids_by_root
     call_flow_ids = visible_flow_ids
     diagnostics_for_export = (
         diagnose_flow_consistency_snapshot(export_flows, causal_reachability, causal_paths)

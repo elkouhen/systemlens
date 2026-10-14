@@ -139,6 +139,22 @@ remain in the supporting flow data for selected roots that reach them.
 The first traversal level is the root set. Selecting a call graph keeps its
 arc order and trigger metadata visible.
 
+Each microservice occurrence in a selected call graph shows one badge per
+entity associated with its internal flow and input. The badge combines the
+source-evidenced operations in CRUD order: `C` for create, `R` for read, `U`
+for update, and `D` for delete, followed by the entity name. `C/U` marks an
+operation that may create or update; it does not claim that both happened.
+For example, `R (C/U) ProductEntity` combines a read with that alternative.
+
+An access in the shared entry handler remains a potential annotation on each
+branch because static evidence does not establish which branch executes it.
+The badge adds `?` after the entity name when only the handler or input port
+connects that access to the occurrence. Hovering the badge explains this scope.
+When distinct resource IDs share a short entity name, the badges add a
+qualifier instead of merging those identities.
+
+When an anomaly concerns the entity, its badge remains selectable for diagnosis.
+
 When a single code flow is selected, the graph displays the selected directed
 call graph as a hierarchy of call occurrences. A microservice is therefore
 rendered once per occurrence in the expanded tree, so the same service may

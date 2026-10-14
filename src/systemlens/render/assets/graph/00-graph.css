@@ -100,6 +100,7 @@
     .graph-call-tree-diagnostic-badge.is-async { color: #92400e; background: #fef3c7; }
     .graph-call-tree-diagnostic-badge.is-sync { color: #075985; background: #e0f2fe; }
     .graph-call-tree-diagnostic-badge.is-interaction { color: #581c87; background: #f3e8ff; }
+    .graph-call-tree-access-badge { grid-column: 1 / 3; display: block; margin-top: 5px; padding: 3px 5px; border-radius: 4px; color: #155e75; background: #cffafe; font-size: 8px; font-weight: 800; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .graph-call-tree-node .graph-node-card-icon { grid-column: 2; grid-row: 1; }
     .graph-call-tree-node .graph-node-card-name { grid-column: 1; grid-row: 1; }
     .graph-call-tree-node .graph-node-card-kind { grid-column: 1 / 3; grid-row: 2; }

@@ -496,13 +496,41 @@ root covers it. Per-service HTML flow counts include selectable roots only.
 
 Data-access terminal paths stay in the compatible SQLite flow snapshot as
 evidence, but do not become selectable call flows. Export builds reachability
-over the full snapshot, then projects deduplicated access sites and
-diagnostics onto selectable roots. A selected call-tree tooltip filters
-accesses by the service occurrence's exact input endpoint; unknown
-associations stay absent.
-The architecture graph and left widget receive no data-access annotations.
-This projection does not infer a linear order or change persisted flow IDs.
-Call-root reachability retains its existing bounded traversal cost.
+over the full snapshot and stores each access once under its internal flow ID.
+`flow_data_access_flow_ids_by_root` lists the access-bearing flows reachable
+from each selectable root. Accesses at the same source site remain separate
+when they belong to different internal flows.
+
+The browser associates an access with a call-tree service occurrence when its
+source flow ID matches that occurrence, or when the service, input endpoint,
+and handler method match. A leaf without a call-flow continuation uses its
+exact input endpoint. Cron flows without an endpoint use the same trigger
+kind, name, and handler method. An unmatched access gets no service badge.
+
+The exporter stores the first source-backed method call once per access flow
+when that call exists. The browser marks an access as route-supported when its
+flow ID is on the occurrence or its first method call matches an occurrence
+flow. Other same-handler accesses remain possible but add `?` after the entity
+name; this marker describes association uncertainty, not an unknown CRUD action.
+Unknown leaves retain accesses reached through their exact input endpoint.
+
+The call tree groups access and diagnostic annotations by full resource ID at
+each matched occurrence, then displays one badge with the simple entity name.
+It unions certain operation letters in CRUD order: `insert` or `create` maps
+to `C`, `read` to `R`, `update` to `U`, and `delete` to `D`.
+`create_or_update` contributes `C/U` as a separate alternative; `read_update`
+contributes both `R` and `U`. An unknown write contributes no operation letter;
+if no known letter remains, the badge shows `?`. A diagnostic makes the
+grouped badge selectable.
+
+The architecture graph and left widget receive no data-access badges. This
+projection does not infer a linear order or change persisted flow IDs.
+
+An imported access with a simple entity name uses a source resource ID only
+when exactly one resource with that name exists in the same module. Otherwise
+the exporter keeps the imported name and its unresolved identity separate.
+The browser qualifies duplicate short names with their package, module, or
+an uncertain-identity marker.
 
 An async write is a database write in a Kafka consumer handler reached after a
 message publication. A sync read is a database read on an HTTP entry path.

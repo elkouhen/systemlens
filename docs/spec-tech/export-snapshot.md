@@ -27,6 +27,23 @@ topology nodes. The HTML exporter joins them to an indexed flow by ID and
 includes the resulting accesses in the flow search projection. It drops stale
 flow references from the projection without deleting the persisted fact.
 
+The HTML snapshot stores access sites under their source internal flow ID in
+`flow_data_accesses`. It stores only reachable access-flow IDs under each
+selectable root in `flow_data_access_flow_ids_by_root`. Browser search and
+call-tree badges resolve these references when needed, so shared downstream
+accesses are serialized once rather than repeated for every root.
+`flow_data_access_first_calls` stores one optional first method-call witness
+per access flow for the browser's occurrence-level association marker.
+
+An internal flow that contains an external call remains selectable even when
+its final step accesses data. Pure data-access flows remain supporting evidence.
+For each selected root, sibling accesses remain reachable even when their
+method-call routes differ. The browser marks handler-only associations as
+uncertain instead of discarding them.
+
+The exporter scans each root's reachable flows and serializes each access flow
+once. It does not reopen source files.
+
 With `--no-call-graph-annotations`, HTML serialization omits this projection,
 consistency diagnostics, and data-access steps from selectable and supporting
 flows. It still builds call topology from the complete persisted flows and

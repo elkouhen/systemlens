@@ -495,6 +495,127 @@
         occurrence.children.forEach(collect);
       };
       rootsTree.forEach(collect);
+      const rootAccesses = (graphData.flow_data_access_flow_ids_by_root?.[codeFlowSelection.flowId] || [])
+        .flatMap(id => graphData.flow_data_accesses?.[id] || []);
+      const accessesByFlow = new Map();
+      const accessesByInput = new Map();
+      const accessesByHandler = new Map();
+      const accessesByCron = new Map();
+      const addAccess = (index, key, access) => {
+        const matches = index.get(key) || [];
+        matches.push(access);
+        index.set(key, matches);
+      };
+      rootAccesses.forEach(access => {
+        addAccess(accessesByFlow, access.flow_id, access);
+        if (access.trigger_endpoint_id) {
+          addAccess(accessesByInput, JSON.stringify([access.module, access.trigger_endpoint_id]), access);
+          addAccess(accessesByHandler, JSON.stringify([
+            access.module, access.trigger_endpoint_id, access.trigger_method,
+          ]), access);
+        } else {
+          addAccess(accessesByCron, JSON.stringify([
+            access.module, access.trigger_method, access.trigger_kind, access.trigger_name,
+          ]), access);
+        }
+      });
+      const inputForOccurrence = occurrence => occurrence.edge?.endpoint_ids?.[1]
+        || (occurrence.depth === 0 ? selectedFlow?.steps?.[0]?.endpoint_id : null);
+      const accessesForOccurrence = occurrence => {
+        const inputEndpointId = inputForOccurrence(occurrence);
+        const internalFlows = occurrence.flowIds.map(id => flowById.get(id)).filter(Boolean);
+        const firstCalls = new Set(internalFlows.flatMap(flow => {
+          const first = flow.steps?.find(step => step.kind === "method_call");
+          return first ? [JSON.stringify([first.name, first.path, first.start_line])] : [];
+        }));
+        const matches = new Map();
+        const addMatch = (access, exactFlow) => {
+          const first = graphData.flow_data_access_first_calls?.[access.flow_id];
+          const routeSupported = first && firstCalls.has(JSON.stringify(first));
+          matches.set(access, Boolean(matches.get(access) || exactFlow || routeSupported));
+        };
+        occurrence.flowIds.forEach(id => (accessesByFlow.get(id) || []).forEach(access => {
+          if (access.module === occurrence.name) addMatch(access, true);
+        }));
+        if (inputEndpointId && !internalFlows.length) {
+          (accessesByInput.get(JSON.stringify([occurrence.name, inputEndpointId])) || [])
+            .forEach(access => addMatch(access, false));
+        } else if (inputEndpointId) {
+          internalFlows.forEach(flow => (
+            accessesByHandler.get(JSON.stringify([occurrence.name, inputEndpointId, flow.method])) || []
+          ).forEach(access => addMatch(access, false)));
+        } else {
+          internalFlows.forEach(flow => (
+            accessesByCron.get(JSON.stringify([
+              occurrence.name, flow.method, flow.steps?.[0]?.kind, flow.steps?.[0]?.name,
+            ])) || []
+          ).forEach(access => addMatch(access, false)));
+        }
+        return [...matches].map(([access, routeSupported]) => ({
+          ...access, handler_only: !routeSupported,
+        }));
+      };
+      const diagnosticAnnotationsForOccurrence = occurrence => {
+        const inputEndpointId = inputForOccurrence(occurrence);
+        return selectedFlowDiagnostics.flatMap((diagnostic, index) => (
+          ["write", "read"].flatMap(side => {
+            const site = diagnostic[`${side}_site`];
+            return inputEndpointId && site?.module === occurrence.name
+              && site.trigger_endpoint_id === inputEndpointId
+              ? [{ diagnostic, index, side }] : [];
+          })
+        ));
+      };
+      const crudLetters = (action, kind) => ({
+        insert: "C",
+        create: "C",
+        read: "R",
+        update: "U",
+        delete: "D",
+        read_update: "RU",
+      })[action] || (kind === "data_read" ? "R" : "");
+      const addCrudAction = (group, action, kind) => {
+        if (action === "create_or_update") {
+          group.createOrUpdate = true;
+          return;
+        }
+        for (const letter of crudLetters(action, kind)) group.letters.add(letter);
+      };
+      const annotationGroupsByOccurrence = new Map();
+      const annotationGroupsForOccurrence = occurrence => {
+        if (annotationGroupsByOccurrence.has(occurrence)) {
+          return annotationGroupsByOccurrence.get(occurrence);
+        }
+        const groups = new Map();
+        const groupFor = resource => {
+          const key = String(resource || "");
+          if (!groups.has(key)) groups.set(key, {
+            resource: key, name: dataEntityLabel(resource), letters: new Set(),
+            createOrUpdate: false, handlerOnly: false, flowIds: new Set(),
+            kinds: new Set(), annotations: [],
+          });
+          return groups.get(key);
+        };
+        accessesForOccurrence(occurrence).forEach(access => {
+          const group = groupFor(access.resource);
+          addCrudAction(group, access.action, access.kind);
+          group.flowIds.add(access.flow_id);
+          if (access.handler_only) group.handlerOnly = true;
+        });
+        diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, side }) => {
+          const group = groupFor(diagnostic.resource);
+          const kind = diagnostic.event_type === "async_write_sync_read"
+            ? side === "write" ? "async" : "sync" : "interaction";
+          addCrudAction(
+            group, diagnostic[`${side}_action`], side === "read" ? "data_read" : "data_write",
+          );
+          group.kinds.add(kind);
+          group.annotations.push({ diagnostic, side, kind });
+        });
+        annotationGroupsByOccurrence.set(occurrence, groups);
+        return groups;
+      };
+      const badgeCount = occurrence => annotationGroupsForOccurrence(occurrence).size;
       const visibleTreeEdgeCount = allOccurrences.reduce(
         (count, occurrence) => count + occurrence.children.length,
         0,
@@ -512,9 +633,10 @@
         return text.length > 58 ? `${text.slice(0, 55)}…` : text;
       };
       const direction = "lr";
-      const gapY = 105;
+      const maxBadges = Math.max(0, ...allOccurrences.map(badgeCount));
+      const cardHeight = Math.max(82, 42 + maxBadges * 20);
+      const gapY = Math.max(105, cardHeight + 23);
       const cardWidth = 150;
-      const cardHeight = 82;
       const maxEdgeLabelLength = allOccurrences.reduce((maximum, occurrence) => (
         occurrence.children.reduce((current, child) => (
           Math.max(current, edgeDisplayLabel(child.edge).length)
@@ -652,20 +774,8 @@
           `${port.path}${port.line ? `:${port.line}` : ""}`,
         ], clientX, clientY);
       };
-      const diagnosticAnnotationsForOccurrence = occurrence => {
-        const inputEndpointId = occurrence.edge?.endpoint_ids?.[1]
-          || (occurrence.depth === 0 ? selectedFlow?.steps?.[0]?.endpoint_id : null);
-        if (!inputEndpointId) return [];
-        return selectedFlowDiagnostics.flatMap((diagnostic, index) => (
-          ["write", "read"].flatMap(side => {
-            const site = diagnostic[`${side}_site`];
-            return site?.module === occurrence.name
-              && site.trigger_endpoint_id === inputEndpointId
-              ? [{ diagnostic, index, side }] : [];
-          })
-        ));
-      };
       const treeOccurrenceTooltipLines = occurrence => {
+        const inputEndpointId = inputForOccurrence(occurrence);
         const lines = [
           occurrence.cycle
             ? "Microservice · cycle détecté"
@@ -842,6 +952,7 @@
             : occurrenceCount === 2 ? "is-frequency-2" : "";
         const isSelectedOccurrence = graphState.callTreeSelectedPathKey === occurrence.pathKey;
         node.className = `graph-call-tree-node${frequencyClass ? ` ${frequencyClass}` : ""}${occurrence.cycle ? " is-cycle" : ""}${isSelectedOccurrence ? " is-selected" : ""}`;
+        node.style.height = `${cardHeight}px`;
         const original = nodeIdForCodeFlowResource(occurrence.name, "microservice");
         const originalNode = original ? nodeDataById.get(original) : null;
         node.style.setProperty("--card-accent", originalNode?.color || "#64748b");
@@ -860,40 +971,58 @@
             ? `Microservice · +${occurrence.hiddenChildrenCount} appels`
             : "Microservice";
         node.append(icon, name, kind);
-        const diagnosticBadges = new Map();
-        diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, side }) => {
-          const operation = diagnostic[`${side}_action`] === "delete"
-            ? "suppression"
-            : side === "read" ? "lecture" : "écriture";
-          const label = `${operation} ${dataEntityLabel(diagnostic.resource)}`;
-          const kind = diagnostic.event_type === "async_write_sync_read"
-            ? side === "write" ? "async" : "sync" : "interaction";
-          const badge = diagnosticBadges.get(label) || { label, kinds: new Set(), annotations: [] };
-          badge.kinds.add(kind);
-          badge.annotations.push({ diagnostic, side, kind });
-          diagnosticBadges.set(label, badge);
-        });
-        diagnosticBadges.forEach(({ label, kinds, annotations }) => {
-          const selectedAnnotation = annotations.find(
+        const annotationGroups = [...annotationGroupsForOccurrence(occurrence).values()]
+          .sort((a, b) => a.name.localeCompare(b.name, "fr")
+            || a.resource.localeCompare(b.resource, "fr"));
+        const annotationNameCounts = new Map();
+        annotationGroups.forEach(group => annotationNameCounts.set(
+          group.name, (annotationNameCounts.get(group.name) || 0) + 1,
+        ));
+        annotationGroups.forEach(group => {
+          const certainLetters = [..."CRUD"].filter(letter => group.letters.has(letter)).join("");
+          const letters = group.createOrUpdate
+            ? certainLetters ? `${certainLetters} (C/U)` : "C/U"
+            : certainLetters || "?";
+          const selectedAnnotation = group.annotations.find(
             item => item.diagnostic.id === graphState.selectedDiagnosticId,
           );
           const kind = selectedAnnotation
             ? selectedAnnotation.kind
-            : kinds.has("interaction") ? "interaction" : kinds.has("async") ? "async" : "sync";
+            : group.kinds.has("interaction") ? "interaction"
+              : group.kinds.has("async") ? "async" : "sync";
           if (selectedAnnotation) node.classList.add(`is-diagnostic-${kind}`);
-          const diagnosticBadge = document.createElement("span");
-          diagnosticBadge.className = `graph-call-tree-diagnostic-badge is-${kind}`;
-          diagnosticBadge.textContent = label;
-          diagnosticBadge.title = annotations.length > 1
-            ? `${annotations.length} diagnostics associés · cliquer pour isoler`
-            : "Cliquer pour isoler ce diagnostic";
-          diagnosticBadge.addEventListener("click", event => {
-            event.preventDefault();
-            event.stopPropagation();
-            const target = selectedAnnotation || annotations[0];
-            if (selectedFlow) focusFlowDiagnostic(target.diagnostic, selectedFlow);
-          });
-          node.append(diagnosticBadge);
+          const badge = document.createElement("span");
+          badge.className = group.annotations.length
+            ? `graph-call-tree-diagnostic-badge is-${kind}`
+            : "graph-call-tree-access-badge";
+          const qualifier = group.resource.includes(":")
+            ? group.resource.split(":").at(-1).split(".").at(-2)
+              || group.resource.split(":").at(-2)
+            : "identité incertaine";
+          const ambiguousName = annotationNameCounts.get(group.name) > 1;
+          const entityName = ambiguousName
+            ? `${group.name} (${qualifier})` : group.name;
+          badge.textContent = `${letters} ${entityName}${group.handlerOnly ? " ?" : ""}`;
+          if (ambiguousName) badge.title = group.resource;
+          if (group.handlerOnly) {
+            badge.title = `${badge.title ? `${badge.title} · ` : ""}Association possible au handler ; parcours interne non établi`;
+          }
+          if (group.flowIds.size) {
+            badge.dataset.accessFlowIds = [...group.flowIds].sort().join(",");
+          }
+          if (group.annotations.length) {
+            const diagnosticTitle = group.annotations.length > 1
+              ? `${group.annotations.length} diagnostics associés · cliquer pour isoler`
+              : "Cliquer pour isoler ce diagnostic";
+            badge.title = `${diagnosticTitle}${badge.title ? ` · ${badge.title}` : ""}`;
+            badge.addEventListener("click", event => {
+              event.preventDefault();
+              event.stopPropagation();
+              const target = selectedAnnotation || group.annotations[0];
+              if (selectedFlow) focusFlowDiagnostic(target.diagnostic, selectedFlow);
+            });
+          }
+          node.append(badge);
         });
         if (treeTrigger && occurrence.depth === 0 && occurrence.name === treeTriggerRootName) {
           const triggerKind = ({
@@ -1460,7 +1589,8 @@
     function renderCodeFlows() {
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
       const visible = codeFlows.filter(flow => {
-        const accesses = graphData.flow_data_accesses?.[flow.id] || [];
+        const accesses = (graphData.flow_data_access_flow_ids_by_root?.[flow.id] || [])
+          .flatMap(id => graphData.flow_data_accesses?.[id] || []);
         const haystack = [
           flow.id,
           flow.module,

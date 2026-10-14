@@ -336,19 +336,26 @@ def materialize_code_flows(
 
     mongo_by_path_and_method: dict[tuple[str, str, str], list[MongoMethod]] = defaultdict(list)
     jpa_by_path_and_method: dict[tuple[str, str, str], list[JpaMethod]] = defaultdict(list)
+    operation_modules_by_path_and_method: dict[tuple[str, str], set[str]] = defaultdict(set)
     for module in modules:
         identity = module_identity(module)
         for method in module.mongo_methods:
             if method.owner_method:
                 path = _repository_path(repo_root, module, method.path)
                 mongo_by_path_and_method[(identity, path, method.owner_method)].append(method)
+                operation_modules_by_path_and_method[(path, method.owner_method)].add(identity)
         for jpa_method in module.jpa_methods:
             path = _repository_path(repo_root, module, jpa_method.path)
             jpa_by_path_and_method[(identity, path, jpa_method.owner_method)].append(jpa_method)
+            operation_modules_by_path_and_method[(path, jpa_method.owner_method)].add(identity)
 
     flows: list[CodeFlow] = []
 
-    for path, path_endpoints in sorted(endpoints_by_path.items()):
+    indexed_paths = set(endpoints_by_path)
+    indexed_paths.update(path for _module, path, _method in mongo_by_path_and_method)
+    indexed_paths.update(path for _module, path, _method in jpa_by_path_and_method)
+    for path in sorted(indexed_paths):
+        path_endpoints = endpoints_by_path.get(path, [])
         parsed = java_parser.parse_java(str(repo_root.resolve()), path)
         if parsed is None:
             continue
@@ -459,30 +466,53 @@ def materialize_code_flows(
                     ),
                     steps=tuple(steps),
                 ))
-            if scheduled_trigger is not None and endpoint_effects:
-                producer = endpoint_effects[0]
-                assert producer.module is not None
+            if scheduled_trigger is not None:
+                operation_modules = operation_modules_by_path_and_method.get(
+                    (path, method_name), set()
+                )
+                producer = endpoint_effects[0] if endpoint_effects else None
+                owner_module = producer.module if producer else (
+                    next(iter(operation_modules)) if len(operation_modules) == 1 else None
+                )
+                if owner_module is None:
+                    continue
                 qualified_method = (
                     f"{producer.qualified_name}.{method_name}"
-                    if producer.qualified_name
+                    if producer is not None and producer.qualified_name
                     else method_name
                 )
-                scheduled_effects: list[tuple[int, str, MessageEndpoint]] = sorted(
-                    (
-                        (endpoint.start_line, endpoint.id, endpoint)
-                        for endpoint in endpoint_effects
-                    ),
-                    key=lambda item: (item[0], item[1]),
+                scheduled_effects: list[tuple[int, str, MessageEndpoint | MongoMethod | JpaMethod]] = [
+                    (endpoint.start_line, endpoint.id, endpoint)
+                    for endpoint in endpoint_effects
+                ]
+                scheduled_effects.extend(
+                    (mongo.line, f"mongo:{mongo.operation}:{mongo.collection or ''}", mongo)
+                    for mongo in mongo_by_path_and_method.get((owner_module, path, method_name), ())
+                    if mongo_facets(mongo.operation) and start_line <= mongo.line <= end_line
                 )
+                scheduled_effects.extend(
+                    (jpa.line, f"jpa:{jpa.operation}:{jpa.entity}", jpa)
+                    for jpa in jpa_by_path_and_method.get((owner_module, path, method_name), ())
+                    if start_line <= jpa.line <= end_line
+                )
+                if not scheduled_effects:
+                    continue
+                scheduled_effects.sort(key=lambda item: (item[0], item[1]))
                 steps = [scheduled_trigger]
                 for order, (_line, _key, effect) in enumerate(scheduled_effects, start=2):
-                    steps.append(_endpoint_step(effect, order))
+                    steps.append(
+                        _endpoint_step(effect, order)
+                        if isinstance(effect, MessageEndpoint)
+                        else _mongo_step(effect, path, order, scheduled_trigger.kind)
+                        if isinstance(effect, MongoMethod)
+                        else _jpa_step(effect, path, order, owner_module, scheduled_trigger.kind)
+                    )
                 flows.append(CodeFlow(
                     id=compute_code_flow_id(
-                        producer.module, path, qualified_method,
+                        owner_module, path, qualified_method,
                         "cron_entry", scheduled_trigger.name,
                     ),
-                    module=producer.module,
+                    module=owner_module,
                     method=qualified_method,
                     path=path,
                     start_line=start_line,
@@ -490,7 +520,7 @@ def materialize_code_flows(
                     status="potential",
                     confidence="medium",
                     reason=(
-                        "A scheduled Java method publishes an external effect; "
+                        "A scheduled Java method has source-backed effects; "
                         "the scheduler is the flow trigger."
                     ),
                     steps=tuple(steps),
