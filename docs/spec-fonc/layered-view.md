@@ -1,3 +1,6 @@
+> NOTE: This document describes removed HTML layer and module rendering.
+> See [placement and interaction](placement.md) for the current graph contract.
+
 # Layered-view rendering rules
 
 Parent: [Functional specification](../SPEC-FONC.md).

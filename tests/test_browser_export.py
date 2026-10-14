@@ -644,9 +644,6 @@ _SIMPLE_DATASET_EXPORT = (
 _GRAPH_TEMPLATE = (
     Path(__file__).parents[1] / "src" / "systemlens" / "render" / "assets" / "graph.html"
 )
-_LAYER_GEOMETRY = (
-    Path(__file__).parents[1] / "src" / "systemlens" / "render" / "assets" / "layer_geometry.js"
-)
 _GRAPH_ASSETS = Path(__file__).parents[1] / "src" / "systemlens" / "render" / "assets"
 _GRAPH_CSS_MODULES = tuple(sorted(_GRAPH_ASSETS.joinpath("graph").glob("*.css")))
 _GRAPH_JS_MODULES = tuple(sorted(_GRAPH_ASSETS.joinpath("graph").glob("*.js")))
@@ -669,7 +666,6 @@ def _current_simple_dataset_document() -> str:
             "\n".join(path.read_text(encoding="utf-8") for path in _GRAPH_JS_MODULES),
         )
         .replace("__GRAPH_DATA__", match.group(1))
-        .replace("__LAYER_GEOMETRY__", _LAYER_GEOMETRY.read_text(encoding="utf-8"))
     )
 
 
@@ -780,7 +776,6 @@ def _complex_dataset_document() -> str:
             "\n".join(path.read_text(encoding="utf-8") for path in _GRAPH_JS_MODULES),
         )
         .replace("__GRAPH_DATA__", json.dumps(data))
-        .replace("__LAYER_GEOMETRY__", _LAYER_GEOMETRY.read_text(encoding="utf-8"))
     )
 
 
@@ -1248,104 +1243,22 @@ def _capture_render_snapshot(page, name: str) -> None:
                 const rect = card.getBoundingClientRect();
                 return { id: card.dataset.nodeId, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
             }),
-            clusters: [...document.querySelectorAll('.graph-namespace-group, .graph-project-group')].map(group => {
-                const rect = group.getBoundingClientRect();
-                return { className: group.className, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-            }),
-        })"""
+                    })"""
     )
     screenshot = _inspect_png_content(image, metrics["graph"])
     assert screenshot["width"] == metrics["viewport"]["width"]
     assert screenshot["height"] == metrics["viewport"]["height"]
-    if metrics["cards"] or metrics["clusters"]:
+    if metrics["cards"]:
         assert screenshot["dark_pixels"] > 40, f"Screenshot graph area is empty: {screenshot}"
     assert screenshot["distinct_pixels"] > 100, f"Screenshot has no rendered content: {screenshot}"
     metrics["screenshot"] = screenshot
     (output / f"{name}.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
 
 
-def _assert_architecture_cards_are_contained_in_clusters(page) -> None:
-    assert page.evaluate(
-        """() => {
-                const cards = [...document.querySelectorAll('.graph-node-card-label')]
-                    .map(card => card.getBoundingClientRect())
-                    .filter(card => card.right > 0 && card.left < innerWidth && card.bottom > 0 && card.top < innerHeight);
-                const groups = [...document.querySelectorAll('.graph-namespace-group')]
-                    .map(group => group.getBoundingClientRect());
-                if (!groups.length) return true;
-                return cards.every(card => groups.some(bounds => (
-                card.left >= bounds.left && card.right <= bounds.right
-                && card.top >= bounds.top && card.bottom <= bounds.bottom
-            )));
-        }"""
-    )
-
-
-def _assert_architecture_clusters_do_not_overlap(page) -> None:
-    """Reject intersections between architecture-module sibling rectangles."""
-    result = page.evaluate(
-        """() => {
-            const rects = [...document.querySelectorAll('.graph-namespace-group')].map(group => {
-                const rect = group.getBoundingClientRect();
-                return { name: group.dataset.namespace, left: rect.left, right: rect.right,
-                    top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height };
-            });
-            const overlap = (left, right) => left.left < right.right - .5
-                && left.right > right.left + .5
-                && left.top < right.bottom - .5
-                && left.bottom > right.top + .5;
-            const intersections = [];
-            rects.forEach((left, index) => rects.slice(index + 1).forEach(right => {
-                if (overlap(left, right)) intersections.push([left.name, right.name]);
-            }));
-            return { valid: !intersections.length, intersections, rects };
-        }"""
-    )
-    assert result["valid"], result
-
-
-def _assert_pan_moves_cluster_overlays_as_one_surface(page) -> None:
-    before = page.evaluate(
-        """() => [...document.querySelectorAll(
-            '.graph-node-card-label, .graph-namespace-group, .graph-project-group'
-        )].map(element => {
-            const rect = element.getBoundingClientRect();
-            return [rect.left, rect.top, rect.right, rect.bottom];
-        })"""
-    )
-    assert before
-    start = page.locator(".graph-node-card-label").first.bounding_box()
-    assert start
-    page.mouse.move(start["x"] + start["width"] / 2, start["y"] + start["height"] / 2)
-    page.mouse.down()
-    page.mouse.move(start["x"] + start["width"] / 2 - 80, start["y"] + start["height"] / 2 + 65, steps=10)
-    page.mouse.up()
-    page.wait_for_timeout(250)
-    after = page.evaluate(
-        """() => [...document.querySelectorAll(
-            '.graph-node-card-label, .graph-namespace-group, .graph-project-group'
-        )].map(element => {
-            const rect = element.getBoundingClientRect();
-            return [rect.left, rect.top, rect.right, rect.bottom];
-        })"""
-    )
-    assert len(after) == len(before)
-    delta_x = after[0][0] - before[0][0]
-    delta_y = after[0][1] - before[0][1]
-    assert abs(delta_x) > 1 or abs(delta_y) > 1
-    for old, new in zip(before, after):
-        assert new[0] - old[0] == pytest.approx(delta_x, abs=1.5)
-        assert new[1] - old[1] == pytest.approx(delta_y, abs=1.5)
-        assert new[2] - old[2] == pytest.approx(delta_x, abs=1.5)
-        assert new[3] - old[3] == pytest.approx(delta_y, abs=1.5)
-    assert delta_x < -5
-    assert delta_y > 5
-
-
 def _surface_rects(page) -> list[list[float]]:
     return page.evaluate(
         """() => [...document.querySelectorAll(
-            '.graph-node-card-label, .graph-namespace-group, .graph-project-group'
+            '.graph-node-card-label'
         )].map(element => {
             const rect = element.getBoundingClientRect();
             return [rect.left, rect.top, rect.right, rect.bottom];
@@ -1421,138 +1334,6 @@ def _assert_zoom_is_monotonic_and_settles_without_a_release_jump(page) -> None:
         # Zoom-out is never clamped to a collision-derived camera state; it
         # must only change the camera and preserve card dimensions.
         assert restored_distance <= after_distance * 1.01
-
-
-def _assert_background_pan_preserves_overlay_scale(page) -> None:
-    before = page.locator(".graph-namespace-group").first.bounding_box()
-    assert before
-    start = _graph_background_point(page, end_dx=-100, end_dy=80)
-    page.mouse.move(start["x"], start["y"])
-    page.mouse.down()
-    page.mouse.move(start["x"] - 100, start["y"] + 80, steps=10)
-    page.mouse.up()
-    page.wait_for_timeout(250)
-    after = page.locator(".graph-namespace-group").first.bounding_box()
-    assert after
-    assert after["x"] < before["x"] - 5
-    assert after["y"] > before["y"] + 5
-    assert after["width"] == pytest.approx(before["width"], abs=0.1)
-    assert after["height"] == pytest.approx(before["height"], abs=0.1)
-
-
-def _assert_clusters_only_overlap_when_nested(page) -> None:
-    """Allow an overlap only when one module rectangle contains the other."""
-    result = page.evaluate(
-        """() => {
-            const rects = [...document.querySelectorAll(
-                '.graph-namespace-group, .graph-project-group'
-            )].map(element => {
-                const rect = element.getBoundingClientRect();
-                return { name: element.dataset.namespace || element.dataset.namespaceGroup,
-                    left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
-                    width: rect.width, height: rect.height };
-            });
-            const overlap = (left, right) => left.left < right.right - .5
-                && left.right > right.left + .5
-                && left.top < right.bottom - .5
-                && left.bottom > right.top + .5;
-            const contains = (outer, inner) => inner.left >= outer.left - .5
-                && inner.right <= outer.right + .5 && inner.top >= outer.top - .5
-                && inner.bottom <= outer.bottom + .5;
-            const invalid = [];
-            rects.forEach((left, index) => rects.slice(index + 1).forEach(right => {
-                if (overlap(left, right) && !contains(left, right) && !contains(right, left)) {
-                    invalid.push([left.name, right.name]);
-                }
-            }));
-            return { valid: !invalid.length, invalid, rects };
-        }"""
-    )
-    assert result["valid"], result
-
-
-def _assert_nested_namespace_cluster_contains_three_children(page) -> None:
-    result = page.evaluate(
-        """() => {
-            const parent = document.querySelector(
-                '.graph-project-group[data-namespace-group="platform-edge"]'
-            );
-            const children = [...document.querySelectorAll(
-                '.graph-namespace-group[data-namespace^="platform-edge/"]'
-            )];
-            if (!parent || children.length !== 3) return { valid: false, children: children.length };
-            const outer = parent.getBoundingClientRect();
-            const rects = children.map(child => child.getBoundingClientRect());
-            const contains = rect => (
-                rect.left >= outer.left && rect.right <= outer.right
-                && rect.top >= outer.top && rect.bottom <= outer.bottom
-            );
-            return {
-                valid: rects.every(contains),
-                parent: [outer.left, outer.top, outer.width, outer.height],
-                children: rects.map(rect => [rect.left, rect.top, rect.width, rect.height]),
-            };
-        }"""
-    )
-    assert result["valid"], result
-
-
-def _assert_layer_bands_are_disjoint_and_contain_clusters(page) -> None:
-    result = page.evaluate(
-        """() => {
-                const bands = [...document.querySelectorAll('.graph-layer-band')]
-                    .map(element => ({ layer: element.dataset.layer,
-                        rect: element.getBoundingClientRect() }));
-                const clusters = [...document.querySelectorAll('.graph-namespace-group')]
-                    .map(element => ({ layer: element.dataset.layer,
-                        namespace: element.dataset.namespace,
-                        rect: element.getBoundingClientRect() }));
-            const clip = rect => ({
-                left: Math.max(0, rect.left), right: Math.min(innerWidth, rect.right),
-                top: Math.max(0, rect.top), bottom: Math.min(innerHeight, rect.bottom),
-            });
-            const visible = rect => rect.right > 0 && rect.left < innerWidth
-                && rect.bottom > 0 && rect.top < innerHeight;
-            const overlap = (left, right) => (
-                left.left < right.right - .5 && left.right > right.left + .5
-                && left.top < right.bottom - .5 && left.bottom > right.top + .5
-            );
-            const contains = (outer, inner) => (
-                inner.left >= outer.left && inner.right <= outer.right
-                && inner.top >= outer.top && inner.bottom <= outer.bottom
-            );
-            const visibleBands = bands.filter(item => visible(item.rect));
-            const visibleClusters = clusters.filter(item => visible(item.rect));
-            const intersections = [];
-            visibleBands.forEach((band, index) => visibleBands.slice(index + 1).forEach(other => {
-                if (overlap(clip(band.rect), clip(other.rect))) {
-                    intersections.push([band.layer, other.layer]);
-                }
-            }));
-            const outside = visibleClusters.filter(cluster => {
-                const owner = visibleBands.find(band => band.layer === cluster.layer);
-                return !owner || !contains(clip(owner.rect), clip(cluster.rect));
-            }).map(cluster => ({ layer: cluster.layer, namespace: cluster.namespace }));
-            return { valid: !intersections.length && !outside.length,
-                intersections, outside, bands, clusters };
-        }"""
-    )
-    assert result["valid"], result
-
-
-def _assert_geometry_contract(page, *, layered: bool) -> None:
-    graph = page.locator("#graph")
-    assert graph.get_attribute("data-invalid-coordinates") == "false"
-    _assert_architecture_cards_have_uniform_size(page)
-    if page.locator(".graph-namespace-group").count():
-        _assert_architecture_cards_do_not_overlap(page)
-    else:
-        _assert_architecture_cards_are_valid(page)
-    _assert_architecture_cards_are_contained_in_clusters(page)
-    if not layered:
-        _assert_clusters_only_overlap_when_nested(page)
-    if layered:
-        _assert_layer_bands_are_disjoint_and_contain_clusters(page)
 
 
 @pytest.mark.slow
@@ -1636,8 +1417,6 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert page.locator("#flows-tab").get_attribute("aria-selected") == "true"
         for overlay_id in (
             "graph",
-            "graph-layers",
-            "graph-groups",
             "graph-port-paths",
             "graph-node-labels",
             "graph-call-tree",
@@ -1731,228 +1510,89 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
 
 
 @pytest.mark.slow
-def test_primary_view_selector_opens_each_view_directly() -> None:
+def test_graph_view_has_no_layer_or_module_rendering() -> None:
     with sync_playwright() as playwright:
         try:
             browser = _launch_visual_browser(playwright)
         except PlaywrightError as error:
             pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
-        context = browser.new_context(viewport={"width": 800, "height": 450})
-        page = context.new_page()
-        page.set_default_timeout(10_000)
+        page = browser.new_page(viewport={"width": 800, "height": 450})
         page.set_content(_complex_dataset_document(), wait_until="load")
         page.wait_for_function(
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
         )
-
-        # Enriched aliases must obey the same selectors as native graph kinds.
-        page.locator("#display-controls > summary").click()
-        page.locator("#node-kafka-topic").uncheck()
-        page.wait_for_function(
-            "() => document.querySelector('#graph')?.dataset.visibleNodeCount === '80'"
-        )
-        assert page.locator("#graph").get_attribute("data-relation-count") == "60"
-        page.locator("#node-kafka-topic").check()
-        page.wait_for_function(
-            "() => document.querySelector('#graph')?.dataset.visibleNodeCount === '180'"
-        )
-        page.locator("#relation-kafka").uncheck()
-        page.wait_for_function(
-            "() => document.querySelector('#graph')?.dataset.relationCount === '60'"
-        )
-        page.locator("#relation-kafka").check()
-        page.wait_for_function(
-            "() => document.querySelector('#graph')?.dataset.relationCount === '300'"
-        )
-
-        view_controls = page.get_by_role("group", name="Mode de visualisation")
-        assert view_controls.is_visible()
-        assert view_controls.get_by_role("button").all_text_contents() == [
-                "Graphe", "Couches", "Modules",
-        ]
-        assert page.locator("#graph-mode-context .graph-mode-context-actions").bounding_box() is not None
-        for button_id, status_text in (
-            ("layout-elk", "vue par couches actif."),
-            ("layout-cluster", "vue par modules actif."),
-            ("layout-forceatlas2-noverlap", "vue par graphe actif."),
-        ):
-            page.locator(f"#{button_id}").click()
-            page.locator("#layout-status").filter(has_text=status_text).wait_for(
-                state="visible"
-            )
-            assert page.locator(f"#{button_id}").get_attribute("aria-pressed") == "true"
-            assert page.locator(".view-mode[aria-pressed='true']").count() == 1
-
-        context.close()
+        assert page.locator(".view-controls, #layout-forceatlas2-noverlap").count() == 0
+        assert page.locator("#graph-layers, #graph-groups, #layout-elk, #layout-cluster").count() == 0
+        assert page.locator(".graph-layer-band, .graph-namespace-group, .graph-project-group").count() == 0
+        page.locator("#layout-status").filter(has_text="vue par graphe actif.").wait_for()
+        page.locator("#advanced-controls > summary").click()
+        page.locator("#layout-noverlap").click()
+        page.locator("#layout-status").filter(has_text="éviter les chevauchements actif.").wait_for()
+        assert page.locator("#layout-noverlap").get_attribute("aria-pressed") == "true"
+        page.locator("#layout-forceatlas2").click()
+        page.locator("#layout-status").filter(has_text="regroupement des liens actif.").wait_for()
+        assert page.locator("#layout-noverlap").get_attribute("aria-pressed") == "false"
+        assert page.locator("#layout-forceatlas2").get_attribute("aria-pressed") == "true"
         browser.close()
 
 
 @pytest.mark.slow
-def test_cluster_and_resource_details_support_bidirectional_navigation() -> None:
+def test_resource_details_navigate_module_hierarchy_without_changing_layout() -> None:
     with sync_playwright() as playwright:
         try:
             browser = _launch_visual_browser(playwright)
         except PlaywrightError as error:
             pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
-        context = browser.new_context(viewport={"width": 1440, "height": 900})
-        page = context.new_page()
-        page.set_default_timeout(10_000)
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
         page.set_content(_complex_dataset_document(), wait_until="load")
         page.wait_for_function(
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
         )
-        page.locator("#layout-cluster").click()
-        page.locator("#layout-status").filter(has_text="vue par modules actif.").wait_for(
-            state="visible"
+        node_id = page.evaluate(
+            """() => JSON.parse(document.querySelector('#graph-data').textContent).nodes
+                .find(node => node.cluster_path === 'platform-edge/sub-1').id"""
         )
-
-        page.locator(".graph-project-group-title").filter(
-            has_text="platform-edge"
-        ).dispatch_event("click")
-        assert page.locator("#details .details-title").inner_text() == "platform-edge"
-        assert "Cluster" not in page.locator(".toolbar").inner_text()
-        subclusters = page.get_by_role("heading", name="Sous-modules").locator("..").get_by_role(
-            "button"
-        )
-        assert subclusters.all_text_contents() == [
-            "platform-edge/sub-1", "platform-edge/sub-2", "platform-edge/sub-3",
-        ]
-        subclusters.first.click()
-        page.locator("#details .details-title").filter(
-            has_text="platform-edge/sub-1"
-        ).wait_for(state="visible")
-
-        resources = page.get_by_role("heading", name="Ressources contenues").locator(
-            ".."
-        ).get_by_role("button")
-        assert resources.count() > 0
-        resources.first.click()
-        selected_id = page.locator(".graph-node-card-label.is-selected").get_attribute(
-            "data-node-id"
-        )
-        assert selected_id
-        cluster_link = page.get_by_role("heading", name="Module", exact=True).locator(
-            ".."
-        ).get_by_role("button")
-        assert cluster_link.inner_text() == "platform-edge/sub-1"
-
-        page.locator("#inspector-close").click()
-        page.locator("#layout-forceatlas2-noverlap").click()
-        page.locator("#layout-status").filter(has_text="vue par graphe actif.").wait_for(
-            state="visible"
-        )
-        page.locator(f'.graph-node-card-label[data-node-id="{selected_id}"]').click(
-            modifiers=["Shift"]
-        )
+        page.locator(f'.graph-node-card-label[data-node-id="{node_id}"]').click(modifiers=["Shift"])
         page.get_by_role("heading", name="Module", exact=True).locator("..").get_by_role(
             "button"
         ).click()
-        page.locator("#layout-status").filter(has_text="vue par modules actif.").wait_for(
-            state="visible"
-        )
         assert page.locator("#details .details-title").inner_text() == "platform-edge/sub-1"
         page.get_by_role("heading", name="Module parent").locator("..").get_by_role(
             "button"
         ).click()
         assert page.locator("#details .details-title").inner_text() == "platform-edge"
-
-        context.close()
+        assert page.locator(".view-controls, #layout-forceatlas2-noverlap").count() == 0
         browser.close()
 
 
 @pytest.mark.slow
-def test_complex_dataset_geometry_contract_across_all_views() -> None:
-    """Stress the geometry invariants with the 50-service stress dataset."""
+def test_complex_dataset_graph_geometry() -> None:
     with sync_playwright() as playwright:
         try:
             browser = _launch_visual_browser(playwright)
         except PlaywrightError as error:
             pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
-        # Playwright contexts are private/incognito browser profiles: no
-        # cookies, local storage, cache, or service workers leak between runs.
-        context = browser.new_context(viewport={"width": 1440, "height": 900})
-        page = context.new_page()
-        page.set_default_timeout(10_000)
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
         errors: list[str] = []
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.set_content(_complex_dataset_document(), wait_until="load")
         page.wait_for_function(
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
         )
-
         graph = page.locator("#graph")
         assert graph.get_attribute("data-visible-node-count") == "180"
         assert graph.get_attribute("data-relation-count") == "300"
-        assert not errors, errors
         page.locator("#layout-status").filter(has_text="vue par graphe actif.").wait_for(state="visible")
-        _capture_render_snapshot(page, "complex-initial")
-
-        # The same contract is checked after layout, resize, zoom and pan. A
-        # failure here means the geometry is viewport-dependent, which is the
-        # class of regression that unit tests on graph coordinates miss.
-        for layout_id, layered in (
-            ("layout-cluster", False),
-            ("layout-elk", True),
-            ("layout-forceatlas2-noverlap", False),
-        ):
-            # Exercise each permanently visible primary-view control against
-            # the same geometry contract.
-            previous_status = page.locator("#layout-status").text_content() or ""
-            already_active = page.locator(f"#{layout_id}").get_attribute("aria-pressed") == "true"
-            page.locator(f"#{layout_id}").dispatch_event("click")
-            if not already_active:
-                page.wait_for_function(
-                    "previous => document.querySelector('#layout-status')?.textContent !== previous",
-                    arg=previous_status,
-                )
-                expected_status = {
-                    "layout-cluster": "vue par modules actif.",
-                    "layout-elk": "vue par couches actif.",
-                    "layout-forceatlas2-noverlap": "vue par graphe actif.",
-                }[layout_id]
-                page.locator("#layout-status").filter(
-                    has_text=expected_status
-                ).wait_for(state="visible")
-            page.wait_for_timeout(700)
-            _capture_render_snapshot(page, f"complex-{layout_id.removeprefix('layout-')}-after-action")
-            card_size = _assert_architecture_cards_have_uniform_size(page)
-            _capture_render_snapshot(page, f"complex-{layout_id.removeprefix('layout-')}-fit")
-            _assert_geometry_contract(page, layered=layered)
-            if layout_id == "layout-cluster":
-                _assert_nested_namespace_cluster_contains_three_children(page)
-                _capture_render_snapshot(page, "complex-cluster-final")
-            _assert_architecture_cards_keep_size_after_camera_change(page, card_size)
-            _assert_geometry_contract(page, layered=layered)
-            _assert_zoom_is_monotonic_and_settles_without_a_release_jump(page)
-            _assert_architecture_cards_keep_size_after_camera_change(page, card_size)
-            _assert_geometry_contract(page, layered=layered)
-
-            page.locator("#graph-zoom-out").click()
-            page.locator("#graph-zoom-out").click()
-            page.wait_for_timeout(300)
-            _capture_render_snapshot(page, f"complex-{layout_id.removeprefix('layout-')}-after-zoom-out")
-            _assert_architecture_cards_keep_size_after_camera_change(page, card_size)
-            _assert_geometry_contract(page, layered=layered)
-
-            page.mouse.move(1250, 780)
-            page.mouse.down()
-            page.mouse.move(1120, 700, steps=8)
-            page.mouse.up()
-            page.wait_for_timeout(300)
-            _capture_render_snapshot(page, f"complex-{layout_id.removeprefix('layout-')}-after-pan")
-            _assert_architecture_cards_keep_size_after_camera_change(page, card_size)
-            _assert_geometry_contract(page, layered=layered)
-
-            page.set_viewport_size({"width": 1024, "height": 640})
-            page.wait_for_timeout(500)
-            _capture_render_snapshot(page, f"complex-{layout_id.removeprefix('layout-')}-after-resize")
-            _assert_architecture_cards_keep_size_after_camera_change(page, card_size)
-            _assert_geometry_contract(page, layered=layered)
-            page.set_viewport_size({"width": 1440, "height": 900})
-            page.wait_for_timeout(300)
-
+        card_size = _assert_architecture_cards_have_uniform_size(page)
+        _assert_architecture_cards_do_not_overlap(page)
+        _capture_render_snapshot(page, "complex-graph-initial")
+        _assert_zoom_is_monotonic_and_settles_without_a_release_jump(page)
+        _assert_architecture_cards_keep_size_after_camera_change(page, card_size)
+        page.set_viewport_size({"width": 1024, "height": 640})
+        page.wait_for_timeout(400)
+        _assert_architecture_cards_keep_size_after_camera_change(page, card_size)
+        assert graph.get_attribute("data-invalid-coordinates") == "false"
         assert not errors, errors
-        context.close()
         browser.close()
 
 
@@ -2037,14 +1677,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _capture_render_snapshot(page, "constrained-initial")
 
         graph = page.locator("#graph")
-        view_controls = page.get_by_role(
-            "group", name="Mode de visualisation · un seul choix"
-        )
-        assert view_controls.is_visible()
-        assert view_controls.get_by_role("button").all_text_contents() == [
-                "Graphe", "Couches", "Modules",
-        ]
-        assert page.locator("#layout-forceatlas2-noverlap").get_attribute("aria-pressed") == "true"
+        assert page.locator(".view-controls, #layout-forceatlas2-noverlap").count() == 0
         assert graph.get_attribute("data-relation-count") == "4"
         assert page.locator("#details").is_hidden()
         assert page.locator("#details").evaluate(
@@ -2072,81 +1705,27 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         page.locator("#relation-kafka").check()
         _capture_render_snapshot(page, "constrained-after-kafka-on")
         assert graph.get_attribute("data-relation-count") == "4"
-        page.locator("#layout-elk").click()
-        page.locator("#layout-status").filter(has_text="vue par couches actif.").wait_for(state="visible")
-        _capture_render_snapshot(page, "constrained-after-layers")
         assert not errors, errors
         _assert_architecture_cards_match_size(page, card_size)
-        _assert_architecture_cards_do_not_overlap(page)
-        _assert_architecture_cards_are_contained_in_clusters(page)
-        _assert_architecture_clusters_do_not_overlap(page)
-        _assert_clusters_only_overlap_when_nested(page)
         full_node_count = _assert_filtered_graph_is_valid(page)
 
-        # Changing node types must rebuild the graph and its layer overlays.
-        # The filtered graph must contain no stale card for the removed type.
+        # Node filters must remove stale cards without changing the graph mode.
         page.locator("#node-kafka-topic").uncheck()
-        page.locator("#layout-status").filter(has_text="vue par couches").wait_for(state="visible")
-        _capture_render_snapshot(page, "constrained-after-topic-off")
         without_topic_count = _assert_filtered_graph_is_valid(
             page, full_node_count, "kafka_topic"
         )
-
         page.locator("#node-mongodb-collection").uncheck()
-        page.locator("#layout-status").filter(has_text="vue par couches").wait_for(state="visible")
-        _capture_render_snapshot(page, "constrained-after-mongodb-off")
         _assert_filtered_graph_is_valid(page, without_topic_count, "mongodb_collection")
-
         page.locator("#node-microservice").uncheck()
-        _capture_render_snapshot(page, "constrained-after-microservice-off")
         page.locator("#node-external-microservice").uncheck()
-        _capture_render_snapshot(page, "constrained-after-external-off")
-        page.locator("#layout-status").filter(has_text="vue par couches").wait_for(state="visible")
-        assert page.locator("#graph").get_attribute("data-visible-node-count") == "0"
-        assert page.locator("#graph").get_attribute("data-invalid-coordinates") == "false"
+        assert graph.get_attribute("data-visible-node-count") == "0"
+        assert graph.get_attribute("data-invalid-coordinates") == "false"
         page.locator("#node-microservice").check()
-        _capture_render_snapshot(page, "constrained-after-microservice-on")
         page.locator("#node-external-microservice").check()
-        _capture_render_snapshot(page, "constrained-after-external-on")
         page.locator("#node-kafka-topic").check()
-        _capture_render_snapshot(page, "constrained-after-topic-on")
         page.locator("#node-mongodb-collection").check()
-        page.locator("#layout-status").filter(has_text="vue par couches").wait_for(state="visible")
-        _capture_render_snapshot(page, "constrained-after-mongodb-on")
-
-        page.locator("#layout-cluster").click()
-        page.locator("#layout-status").filter(has_text="vue par modules actif.").wait_for(state="visible")
-        _capture_render_snapshot(page, "constrained-after-clusters")
-        page.wait_for_function("() => Boolean(document.querySelector('#graph').dataset.clusterLayout)")
-        assert page.locator("#graph").get_attribute("data-cluster-sub-layers") == (
-            "microservices-first,resources-second"
-        )
-        cluster_layout = json.loads(
-            page.locator("#graph").get_attribute("data-cluster-layout") or "{}"
-        )
-        assert cluster_layout
-        for cluster in {item["cluster"] for item in cluster_layout.values()}:
-            services = [
-                item["y"] for item in cluster_layout.values()
-                if item["cluster"] == cluster and item["subLayer"] == "microservices"
-            ]
-            resources = [
-                item["y"] for item in cluster_layout.values()
-                if item["cluster"] == cluster and item["subLayer"] == "resources"
-            ]
-            if services and resources:
-                assert min(services) > max(resources)
-        page.wait_for_function(
-            "() => document.querySelectorAll('#graph-layers .graph-namespace-group').length >= 1"
-        )
-        assert page.locator("#graph-layers .graph-cluster-sublayer-title").count() == 0
-        _assert_architecture_cards_match_size(page, card_size)
-        _assert_architecture_cards_do_not_overlap(page)
-        _assert_architecture_cards_are_contained_in_clusters(page)
-        _assert_architecture_clusters_do_not_overlap(page)
-        _assert_clusters_only_overlap_when_nested(page)
-        _assert_architecture_clusters_do_not_overlap(page)
-        assert page.locator("#graph").get_attribute("data-invalid-coordinates") == "false"
+        assert graph.get_attribute("data-visible-node-count") == str(full_node_count)
+        assert page.locator("#graph-layers, #graph-groups, #layout-elk, #layout-cluster").count() == 0
 
         page.locator("#contracts-mode-tab").click()
         page.locator("#resource-catalogue-categories button").filter(has_text="Topics").click()
@@ -2268,54 +1847,22 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _capture_render_snapshot(page, "constrained-after-inventory-search")
         assert page.locator("#inspector-title").inner_text().startswith("Microservice · inventory")
         page.locator("#inspector-close").click()
-        # Readable fit prevents card overlap. Other camera states still require
-        # finite geometry and stable card sizes, even when zoom compresses gaps.
-        for view_name, status_text in (
-                ("Graphe", "vue par graphe actif."),
-            ("Couches", "vue par couches actif."),
-            ("Modules", "vue par modules actif."),
-        ):
-            page.get_by_role("button", name=view_name, exact=True).click()
-            page.locator("#layout-status").filter(has_text=status_text).wait_for(state="visible")
-            page.locator("#graph-mode-center").click()
-            page.wait_for_timeout(400)
-            _capture_render_snapshot(page, f"constrained-{view_name.lower()}-after-view")
-            _assert_architecture_cards_have_uniform_size(page)
-            _assert_architecture_cards_do_not_overlap(page)
-            for _ in range(2):
-                page.locator("#graph-zoom-out").click()
-            page.wait_for_timeout(400)
-            _capture_render_snapshot(page, f"constrained-{view_name.lower()}-after-zoom-out")
-            _assert_architecture_cards_have_uniform_size(page)
+        # Pan, zoom and resize retain finite graph geometry and card dimensions.
+        page.locator("#graph-mode-center").click()
+        _assert_architecture_cards_have_uniform_size(page)
+        for control in ("#graph-zoom-out", "#graph-zoom-in"):
+            page.locator(control).click()
             _assert_architecture_cards_are_valid(page)
-            for _ in range(2):
-                page.locator("#graph-zoom-in").click()
-            page.wait_for_timeout(400)
-            _capture_render_snapshot(page, f"constrained-{view_name.lower()}-after-zoom-in")
-            _assert_architecture_cards_have_uniform_size(page)
-            _assert_architecture_cards_are_valid(page)
-            page.set_viewport_size({"width": 1024, "height": 600})
-            page.wait_for_timeout(400)
-            _capture_render_snapshot(page, f"constrained-{view_name.lower()}-after-resize")
-            _assert_architecture_cards_have_uniform_size(page)
-            _assert_architecture_cards_are_valid(page)
-            if view_name == "Modules":
-                _assert_background_pan_preserves_overlay_scale(page)
-                _assert_pan_moves_cluster_overlays_as_one_surface(page)
-            else:
-                page.mouse.move(980, 80)
-                page.mouse.down()
-                page.mouse.move(900, 145, steps=10)
-                page.mouse.up()
-                page.wait_for_timeout(250)
-                _capture_render_snapshot(page, f"constrained-{view_name.lower()}-after-pan")
-            _assert_architecture_cards_have_uniform_size(page)
-            _assert_architecture_cards_are_valid(page)
-            _assert_architecture_cards_are_contained_in_clusters(page)
-            _assert_architecture_clusters_do_not_overlap(page)
-            assert graph.get_attribute("data-invalid-coordinates") == "false"
-            page.set_viewport_size({"width": 800, "height": 450})
-            page.wait_for_timeout(400)
+        page.set_viewport_size({"width": 1024, "height": 600})
+        page.wait_for_timeout(400)
+        _assert_architecture_cards_are_valid(page)
+        page.mouse.move(980, 80)
+        page.mouse.down()
+        page.mouse.move(900, 145, steps=10)
+        page.mouse.up()
+        page.wait_for_timeout(250)
+        _assert_architecture_cards_are_valid(page)
+        assert graph.get_attribute("data-invalid-coordinates") == "false"
         assert not errors
         context.close()
         browser.close()

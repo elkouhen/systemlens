@@ -375,9 +375,6 @@
       // its camera from a safe state captured for the previous graph.
       graphState.cameraFitAdjusting = false;
       graphState.lastSafeCameraState = null;
-      graphState.clusterLayoutPositions = new Map();
-      graphLayersOverlay.replaceChildren();
-      graphGroupsOverlay.replaceChildren();
       portPathOverlay.replaceChildren();
       nodeLabelOverlay.replaceChildren();
       flowTooltipOverlay.replaceChildren();
@@ -677,7 +674,6 @@
             return { ...data, hidden: true };
           }
           if (graphState.selectedId && graphState.relatedEdges.has(edge)) return { ...data, size: 1.5 };
-          if (graphState.clusteredView || graphState.layeredClusterView) return { ...data, size: .5 };
           if (graphState.selectedId) return { ...data, color: "#d8dee9", size: .35 };
           return data;
         },
@@ -1019,225 +1015,7 @@
         graphCanvas.dataset.adaptiveLabelCount = String(adaptiveLabels.size);
         // Card dimensions stay constant. Overlap is an accepted overview
         // state; zoom and pan must never change card size or fight the camera.
-        graphGroupsOverlay.replaceChildren();
         nodeLabelOverlay.replaceChildren();
-        const layerOrder = ["api", "application", "orchestration", "infrastructure", "domain", "persistence", "external"];
-        if (!graphState.layeredView && !graphState.clusteredView) {
-          graphLayersOverlay.replaceChildren();
-          graphGroupsOverlay.replaceChildren();
-        } else {
-        graphLayersOverlay.replaceChildren();
-        const layerColors = { external: "#64748b", api: "#0891b2", application: "#2563eb", orchestration: "#9333ea", infrastructure: "#d97706", shared: "#64748b", module: "#475569", domain: "#7c3aed", persistence: "#0f766e" };
-        const visibleServices = [...nodePoints.entries()]
-          .map(([id, point]) => ({ id, point, node: nodeDataById.get(id) }))
-          .filter(item => item.node?.kind === "microservice" && layeredLayerForNode(item.id));
-        const visibleLayerItems = graphState.layeredClusterView
-          ? [...nodePoints.entries()]
-            .map(([id, point]) => ({ id, point, node: nodeDataById.get(id) }))
-            .filter(item => layeredLayerForNode(item.id))
-          : visibleServices;
-        const layers = layerOrder
-          .map(id => ({ id, items: visibleLayerItems.filter(item => layeredLayerForNode(item.id) === id) }))
-          .filter(layer => layer.items.length);
-        const layerCenters = layers.map(layer => ({
-          ...layer,
-          center: layer.items.reduce((sum, item) => sum + item.point.y, 0) / layer.items.length,
-        }));
-        const pointsByLayer = new Map(layerCenters.map(layer => [layer.id, layer.items.map(item => item.point)]));
-        if (!nodePoints.size) {
-          graphLayersOverlay.replaceChildren();
-          graphGroupsOverlay.replaceChildren();
-          return;
-        }
-        if (!graphState.layeredClusterView) {
-          [...nodePoints.entries()]
-            .filter(([id]) => nodeDataById.get(id)?.kind !== "microservice")
-            .forEach(([id, point]) => {
-              if (!layerCenters.length) return;
-              const nearest = layerCenters.reduce((best, layer) => (
-                Math.abs(layer.center - point.y) < Math.abs(best.center - point.y) ? layer : best
-              ), layerCenters[0]);
-              if (nearest) {
-                pointsByLayer.get(nearest.id).push(point);
-              }
-            });
-        }
-        const allLayerPoints = graphState.layeredClusterView
-          ? [...nodePoints.values()]
-          : [...pointsByLayer.values()].flat();
-        // Reserve a left gutter inside every layer band for its title.  The
-        // module rectangles keep their graph-space positions, while the
-        // widened band starts earlier so the overlay title never sits on top
-        // of the first module.
-        const layerTitleGutter = 182;
-        const contentMinX = allLayerPoints.length
-          ? Math.min(...allLayerPoints.map(point => point.x)) - 92
-          : 0;
-        const contentMaxX = allLayerPoints.length
-          ? Math.max(...allLayerPoints.map(point => point.x)) + 92
-          : window.innerWidth;
-        // ELK can retain an empty layer shell when filters remove all of its
-        // nodes. Never feed empty point sets to Math.min/Math.max: Infinity
-        // collapses the band geometry to the top edge and makes every band
-        // overlap after projection.
-        const renderedLayerCenters = layerCenters.filter(layer => (
-          (pointsByLayer.get(layer.id) || []).length > 0
-        ));
-        const layerBounds = renderedLayerCenters.map(layer => {
-          const points = pointsByLayer.get(layer.id) || [];
-          return {
-            ...layer,
-            contentTop: Math.min(...points.map(point => point.y))
-              - GRAPH_CARD_HEIGHT / 2 - MODULE_PADDING_TOP - MODULE_GAP,
-            contentBottom: Math.max(...points.map(point => point.y))
-              + GRAPH_CARD_HEIGHT / 2 + MODULE_PADDING_BOTTOM + MODULE_GAP,
-          };
-        });
-        if (!layerCenters.length) {
-          graphLayersOverlay.replaceChildren();
-        }
-        const layerBands = SystemLensLayerGeometry.computeLayerBands(layerBounds, {
-          contentMinX,
-          contentMaxX,
-          viewportWidth: window.innerWidth,
-          titleGutter: layerTitleGutter,
-        });
-        if (!graphState.clusteredView || graphState.layeredClusterView) renderedLayerCenters.forEach((layer, index) => {
-          const bandBounds = layerBands[index];
-          const bandHeight = bandBounds.height;
-          if (bandHeight < 4) return;
-          const band = document.createElement("div");
-          band.className = "graph-layer-band";
-          band.dataset.layer = layer.id;
-          band.style.left = `${bandBounds.left}px`; band.style.top = `${bandBounds.top}px`;
-          band.style.width = `${bandBounds.width}px`;
-          band.style.height = `${bandHeight}px`;
-          band.style.setProperty("--layer-accent", layerColors[layer.id] || "#64748b");
-          const title = document.createElement("span"); title.className = "graph-layer-title";
-          title.textContent = layer.id.replaceAll("_", " "); band.append(title); graphLayersOverlay.append(band);
-        });
-        const namespaces = new Map();
-        [...nodePoints.entries()].forEach(([id, point]) => {
-          const node = nodeDataById.get(id);
-          const layer = graphState.clusteredView && !graphState.layeredClusterView
-            ? "namespaces"
-            : graphState.layeredClusterView
-              ? layeredLayerForNode(id)
-              : node?.architecture_layer || (node?.kind === "microservice" ? node.layer : null);
-          const values = graphState.clusteredView || graphState.layeredClusterView
-            ? [namespaceForNode(id)]
-            : node?.architecture_namespace
-              ? [node.architecture_namespace]
-              : [...new Set([...(node?.runtime_namespaces || []), ...(node?.fact_namespaces || [])])];
-          values.forEach(namespace => {
-            if (!layer || !namespace) return;
-            const key = `${layer}:${namespace}`;
-            const group = namespaces.get(key) || { layer, namespace, points: [], ids: [] };
-            group.points.push(point); group.ids.push(id); namespaces.set(key, group);
-          });
-        });
-        const namespaceBounds = new Map();
-        namespaces.forEach(group => {
-          let minX = Math.min(...group.points.map(point => point.x)) - 68;
-          let maxX = Math.max(...group.points.map(point => point.x)) + 68;
-          let minY = Math.min(...group.points.map(point => point.y)) - 44;
-          let maxY = Math.max(...group.points.map(point => point.y)) + 44;
-          if (graphState.clusteredView || graphState.layeredClusterView) {
-            // The cards are HTML rectangles in viewport coordinates. Build
-            // the namespace envelope from those projected centers so graph
-            // zoom cannot make a module smaller than its visible children.
-            // Keep this in sync with .graph-node-card-label's CSS scale.
-            // The envelope must contain the rendered HTML card, not Sigma's
-            // logical node dimensions.
-            const cardHalfWidth = GRAPH_CARD_WIDTH / 2;
-            const cardHalfHeight = GRAPH_CARD_HEIGHT / 2;
-            minX = Math.min(...group.points.map(point => point.x)) - cardHalfWidth - MODULE_PADDING_X;
-            maxX = Math.max(...group.points.map(point => point.x)) + cardHalfWidth + MODULE_PADDING_X;
-            minY = Math.min(...group.points.map(point => point.y)) - cardHalfHeight - MODULE_PADDING_TOP;
-            maxY = Math.max(...group.points.map(point => point.y)) + cardHalfHeight + MODULE_PADDING_BOTTOM;
-          }
-          const renderedWidth = Math.max(150, maxX - minX);
-          const renderedHeight = Math.max(92, maxY - minY);
-          const boundsKey = `${group.layer}:${group.namespace}`;
-          const cluster = clusterDescriptorForPath(group.namespace);
-          namespaceBounds.set(boundsKey, {
-            minX, maxX: minX + renderedWidth, minY, maxY: minY + renderedHeight,
-          });
-          const box = document.createElement("div");
-          box.className = `graph-namespace-group${graphState.selectedClusterKey === cluster.key ? " is-selected" : ""}`;
-          box.dataset.namespace = group.namespace;
-          box.dataset.layer = group.layer;
-          box.dataset.clusterKey = cluster.key;
-          box.style.left = `${minX}px`; box.style.top = `${minY}px`;
-          box.style.width = `${renderedWidth}px`;
-          box.style.height = `${renderedHeight}px`;
-          box.style.setProperty("--namespace-accent", layerColors[group.layer] || "#64748b");
-          const title = document.createElement("button");
-          title.type = "button";
-          title.className = "graph-namespace-title";
-          title.textContent = group.namespace === "root" ? "ROOT" : group.namespace;
-          title.title = `Afficher les éléments du module ${title.textContent}`;
-          title.addEventListener("click", event => {
-            event.stopPropagation();
-            selectCluster(cluster);
-          });
-          box.append(title);
-          graphLayersOverlay.append(box);
-        });
-        const namespaceGroupEntries = [...namespaces.entries()];
-        (graphData.groups || []).forEach(group => {
-          const children = group.children || [];
-          const childNamespaceBounds = namespaceGroupEntries
-            .filter(([, namespaceGroup]) => (
-              (!group.namespace
-                || namespaceGroup.namespace === group.namespace
-                || namespaceGroup.namespace.startsWith(`${group.namespace}/`))
-              && namespaceGroup.ids.some(id => children.includes(id))
-            ))
-            .map(([key]) => namespaceBounds.get(key))
-            .filter(Boolean);
-          let minX;
-          let maxX;
-          let minY;
-          let maxY;
-          if (childNamespaceBounds.length) {
-            // A parent group is defined by its rendered children. This keeps
-            // nested boxes aligned after zoom/pan and guarantees containment.
-            minX = Math.min(...childNamespaceBounds.map(bounds => bounds.minX)) - 22;
-            maxX = Math.max(...childNamespaceBounds.map(bounds => bounds.maxX)) + 22;
-            minY = Math.min(...childNamespaceBounds.map(bounds => bounds.minY)) - 28;
-            maxY = Math.max(...childNamespaceBounds.map(bounds => bounds.maxY)) + 22;
-          } else {
-            const points = children.map(id => nodePoints.get(id)).filter(Boolean);
-            if (points.length < 2) return;
-            minX = Math.min(...points.map(point => point.x)) - 68;
-            maxX = Math.max(...points.map(point => point.x)) + 68;
-            minY = Math.min(...points.map(point => point.y)) - 52;
-            maxY = Math.max(...points.map(point => point.y)) + 52;
-          }
-          const container = document.createElement("div");
-          const cluster = clusterDescriptorForPath(group.namespace || group.name || "root");
-          container.className = `graph-project-group${graphState.selectedClusterKey === cluster.key ? " is-selected" : ""}`;
-          container.dataset.namespaceGroup = group.namespace || group.name || "root";
-          container.dataset.clusterKey = cluster.key;
-          container.style.left = `${minX}px`;
-          container.style.top = `${minY}px`;
-          container.style.width = `${Math.max(150, maxX - minX)}px`;
-          container.style.height = `${Math.max(120, maxY - minY)}px`;
-          container.style.setProperty("--group-accent", "#64748b");
-          const title = document.createElement("button");
-          title.type = "button";
-          title.className = "graph-project-group-title";
-          title.textContent = group.name;
-          title.title = `Afficher les éléments du module ${group.name}`;
-          title.addEventListener("click", event => {
-            event.stopPropagation();
-            selectCluster(cluster);
-          });
-          container.append(title);
-          graphGroupsOverlay.append(container);
-        });
-        }
         network.forEachNode((id, attributes) => {
           const point = nodePoints.get(id);
           const node = nodeDataById.get(id);
@@ -2340,9 +2118,7 @@
         const graphPoint = renderer.viewportToGraph(cursor);
         const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
         const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * .0006);
-        const maximumRatio = ["cluster", "elk"].includes(graphState.activeLayout)
-          ? graphState.maximumCollisionFreeRatio
-          : 100;
+        const maximumRatio = 100;
         const ratio = Math.max(.01, Math.min(maximumRatio, state.ratio * factor));
         camera.setState({
           ...state,

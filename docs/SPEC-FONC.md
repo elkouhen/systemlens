@@ -15,7 +15,7 @@ in `docs/spec-fonc/` so each topic can be read and reviewed independently.
 | Use the CLI | [CLI](spec-fonc/cli.md) |
 | Change endpoint or flow extraction | [Extraction rules](spec-fonc/extraction-rules.md) |
 | Change export behavior | [HTML export](spec-fonc/html-export.md), [port rendering](spec-fonc/port-rendering.md), and [placement](spec-fonc/placement.md) |
-| Change graph views | [Layered view](spec-fonc/layered-view.md) and [module rendering](spec-fonc/modules.md) |
+| Change graph rendering | [Placement and interaction](spec-fonc/placement.md) and [module navigation](spec-fonc/modules.md) |
 | Change HTML presentation or interaction | [UX/UI rules](UX-UI.md) |
 | Change incremental indexing | [Incrementality](spec-fonc/incrementality.md) |
 
@@ -62,7 +62,6 @@ of concurrency. These static findings do not assert a runtime incident.
 - [HTML export](spec-fonc/html-export.md)
 - [Port rendering](spec-fonc/port-rendering.md)
 - [Placement and interaction](spec-fonc/placement.md)
-- [Layered view](spec-fonc/layered-view.md)
-- [Module rendering](spec-fonc/modules.md)
+- [Module navigation](spec-fonc/modules.md)
 - [Incrementality and freshness](spec-fonc/incrementality.md)
 - [UX/UI rules](UX-UI.md)

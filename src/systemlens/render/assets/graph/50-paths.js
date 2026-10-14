@@ -1250,7 +1250,6 @@
     }
     async function selectCluster(cluster) {
       clearPathControls();
-      if (!graphState.layeredView && !graphState.clusteredView) await applyLayout("cluster");
       const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);
       updateGraphState({
         selectedId: null,

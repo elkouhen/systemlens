@@ -104,16 +104,11 @@
     const layoutButtons = new Map([
       ["forceatlas2", document.getElementById("layout-forceatlas2")],
       ["noverlap", document.getElementById("layout-noverlap")],
-      ["forceatlas2-noverlap", document.getElementById("layout-forceatlas2-noverlap")],
-      ["elk", document.getElementById("layout-elk")],
-      ["cluster", document.getElementById("layout-cluster")],
     ]);
     const layoutLabels = new Map([
       ["forceatlas2", "regroupement des liens"],
       ["noverlap", "éviter les chevauchements"],
       ["forceatlas2-noverlap", "vue par graphe"],
-      ["elk", "vue par couches"],
-      ["cluster", "vue par modules"],
     ]);
     const pathStops = [];
     const MAX_SIMPLE_PATH_DEPTH = 8;
@@ -271,17 +266,6 @@
       if (data?.layer_label || data?.layer) return data.layer_label || data.layer;
       const owner = preferredOwnerForNode(node);
       return owner?.layer_label || owner?.layer || "Unknown";
-    }
-    function layeredLayerForNode(node) {
-      const layerOrder = ["api", "application", "orchestration", "infrastructure", "domain", "persistence", "external"];
-      const data = nodeDataById.get(node);
-      const declaredLayer = data?.architecture_layer || data?.layer_label;
-      if (declaredLayer && layerOrder.includes(declaredLayer)) return declaredLayer;
-      if (data?.kind === "microservice" && layerOrder.includes(data.layer)) return data.layer;
-      const neighbourLayer = network.neighbors(node)
-        .map(neighbour => nodeDataById.get(neighbour)?.layer)
-        .find(layer => layerOrder.includes(layer));
-      return neighbourLayer || "application";
     }
     function normalizeClusterPath(path) {
       const normalized = String(path || "root").replace(/^\/+|\/+$/g, "");

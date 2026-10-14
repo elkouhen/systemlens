@@ -13,79 +13,8 @@
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/graphology/0.25.4/graphology.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/sigma.js/2.4.0/sigma.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/elkjs@0.12.0/lib/elk.bundled.js"></script>
-  <script src="https://unpkg.com/cytoscape@3.31.2/dist/cytoscape.min.js"></script>
-  <script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>
-  <script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>
-  <script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>
   <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js"></script>
 
-  <script>(function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory();
-  else root.SystemLensLayerGeometry = factory();
-})(typeof globalThis === "object" ? globalThis : this, function () {
-  function computeLayerBands(layerBounds, options) {
-    const {
-      contentMinX,
-      contentMaxX,
-      viewportWidth: _viewportWidth,
-      titleGutter = 182,
-      minimumWidth = 260,
-    } = options;
-    // Layer bands belong to the same unbounded overlay surface as modules.
-    // Clamping them to the viewport cuts off panned/off-screen modules and can
-    // make a module appear to intersect the neighbouring layer boundary.
-    const left = contentMinX - titleGutter;
-    const right = contentMaxX;
-    const width = Math.max(minimumWidth, right - left);
-    return layerBounds.map((bounds, index) => {
-      const previous = layerBounds[index - 1];
-      const next = layerBounds[index + 1];
-      const top = previous
-        ? (previous.contentBottom + bounds.contentTop) / 2
-        : bounds.contentTop;
-      const bottom = next
-        ? (bounds.contentBottom + next.contentTop) / 2
-        : bounds.contentBottom;
-      return { left, top, width, height: Math.max(0, bottom - top) };
-    });
-  }
-
-  function rectanglesOverlap(left, right) {
-    return left.left < right.left + right.width
-      && left.left + left.width > right.left
-      && left.top < right.top + right.height
-      && left.top + left.height > right.top;
-  }
-
-  function computeClusterSubLayers(microservices, resources, options) {
-    const { nodeGapX = 1000, nodeGapY = 700, subLayerGapY = 700, maxColumns = 5 } = options;
-    const positions = {};
-    const groups = [microservices, resources].filter(group => group.length);
-    // Sigma's graph Y axis grows upwards.  Keep services at the upper
-    // sub-layer (higher graph Y) and move resources towards negative Y.
-    let cursorY = 0;
-    let width = 0;
-    groups.forEach((group, groupIndex) => {
-      const columns = Math.min(maxColumns, Math.max(1, Math.ceil(Math.sqrt(group.length))));
-      const rows = Math.ceil(group.length / columns);
-      width = Math.max(width, (columns - 1) * nodeGapX);
-      group.forEach((id, index) => {
-        positions[id] = {
-          x: (index % columns) * nodeGapX,
-          y: cursorY - Math.floor(index / columns) * nodeGapY,
-          group: groupIndex,
-        };
-      });
-      cursorY -= (rows - 1) * nodeGapY;
-      if (groupIndex === 0 && groups.length > 1) cursorY -= subLayerGapY;
-    });
-    return { positions, width, height: cursorY };
-  }
-
-  return { computeLayerBands, computeClusterSubLayers, rectanglesOverlap };
-});
-</script>
   <style>    :root {
       --type-kicker: 10px;
       --type-control: 11px;
@@ -104,7 +33,7 @@
     * { box-sizing: border-box; }
     body { margin: 0; overflow: hidden; }
     #graph { background: #f8fafc; touch-action: none; }
-    #graph[hidden], #graph-layers[hidden], #graph-groups[hidden], #graph-port-paths[hidden], #graph-node-labels[hidden], #graph-call-tree[hidden], #graph-flow-tooltips[hidden] { display: none !important; }
+    #graph[hidden], #graph-port-paths[hidden], #graph-node-labels[hidden], #graph-call-tree[hidden], #graph-flow-tooltips[hidden] { display: none !important; }
     /* Keep Sigma's canvas in a dedicated background layer. The workspace
        controls must remain above it, regardless of DOM order. */
     /* Sigma and every HTML overlay must share the same containing rectangle.
@@ -119,8 +48,6 @@
       height: auto;
       z-index: 0;
     }
-    #graph-layers { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
-    #graph-groups { position: absolute; inset: 0; pointer-events: none; z-index: auto; overflow: visible; }
     #graph-port-paths { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; }
     #graph-port-paths.is-selected-call-graph-front { z-index: 4; }
     .graph-port-path, .graph-call-path { fill: none; stroke: #7c3aed; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .9; pointer-events: stroke; }
@@ -161,7 +88,7 @@
     #graph-call-tree { position: fixed; left: var(--workspace-left, 0px); right: var(--workspace-right, 0px); top: var(--workspace-top, 0px); bottom: var(--workspace-bottom, 0px); z-index: 5; overflow: hidden; background: color-mix(in srgb, #f8fafc 86%, transparent); cursor: grab; touch-action: none; }
     #graph-call-tree:active { cursor: grabbing; }
     #graph-call-tree[hidden] { display: none; }
-    #graph.is-call-tree-hidden, #graph-layers.is-call-tree-hidden, #graph-groups.is-call-tree-hidden, #graph-port-paths.is-call-tree-hidden, #graph-node-labels.is-call-tree-hidden { visibility: hidden; }
+    #graph.is-call-tree-hidden, #graph-port-paths.is-call-tree-hidden, #graph-node-labels.is-call-tree-hidden { visibility: hidden; }
     .graph-call-tree-canvas { position: absolute; transform-origin: 0 0; pointer-events: none; }
     .graph-call-tree-canvas > svg { pointer-events: auto; }
     .graph-call-tree-edge { fill: none; stroke: #7c3aed; stroke-width: 2; opacity: .8; marker-end: url(#graph-call-tree-arrow); pointer-events: stroke; cursor: help; transition: stroke-width .12s ease, opacity .12s ease; }
@@ -188,6 +115,7 @@
     .graph-call-tree-diagnostic-badge.is-async { color: #92400e; background: #fef3c7; }
     .graph-call-tree-diagnostic-badge.is-sync { color: #075985; background: #e0f2fe; }
     .graph-call-tree-diagnostic-badge.is-interaction { color: #581c87; background: #f3e8ff; }
+    .graph-call-tree-access-badge { grid-column: 1 / 3; display: block; margin-top: 5px; padding: 3px 5px; border-radius: 4px; color: #155e75; background: #cffafe; font-size: 8px; font-weight: 800; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .graph-call-tree-node .graph-node-card-icon { grid-column: 2; grid-row: 1; }
     .graph-call-tree-node .graph-node-card-name { grid-column: 1; grid-row: 1; }
     .graph-call-tree-node .graph-node-card-kind { grid-column: 1 / 3; grid-row: 2; }
@@ -214,24 +142,12 @@
     /* Only flow tooltips rise over fixed widgets; graph cards stay below. */
     #graph-flow-tooltips { position: fixed; inset: 0; z-index: 11; pointer-events: none; overflow: visible; }
     #graph-flow-status { position: fixed; z-index: 10; top: 16px; left: 50%; max-width: min(460px, calc(100vw - 32px)); margin: 0; padding: 8px 11px; transform: translateX(-50%); border: 1px solid #f59e0b; border-radius: 8px; color: #78350f; background: #fffbeb; box-shadow: 0 5px 16px rgba(15, 23, 42, .18); font-size: 11px; font-weight: 700; line-height: 1.35; text-align: center; pointer-events: none; }
-    #graph-layers, #graph-groups, #graph-port-paths, #graph-node-labels {
+    #graph-port-paths, #graph-node-labels {
       left: var(--workspace-left, 0px);
       right: var(--workspace-right, 0px);
       top: var(--workspace-top, 0px);
       bottom: var(--workspace-bottom, 0px);
     }
-    .graph-layer-band { position: absolute; border-top: 2px solid color-mix(in srgb, var(--layer-accent, #64748b) 58%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--layer-accent, #64748b) 30%, transparent); background: color-mix(in srgb, var(--layer-accent, #64748b) 5%, transparent); }
-    .graph-layer-title { position: absolute; top: 8px; left: 14px; min-width: 154px; padding: 3px 8px; box-sizing: border-box; color: var(--layer-accent, #64748b); background: color-mix(in srgb, #f8fafc 94%, var(--layer-accent, #64748b)); border-radius: 5px; font-size: 11px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
-    .graph-namespace-group { position: absolute; border: 1px dashed color-mix(in srgb, var(--namespace-accent, #64748b) 72%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--namespace-accent, #64748b) 8%, transparent); }
-    .graph-namespace-group.is-selected { border-style: solid; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--namespace-accent, #64748b) 28%, transparent), 0 0 18px color-mix(in srgb, var(--namespace-accent, #64748b) 28%, transparent); }
-    .graph-namespace-title { position: absolute; z-index: 4; top: 7px; left: 8px; right: 8px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: var(--namespace-accent, #64748b); background: color-mix(in srgb, #f8fafc 92%, var(--namespace-accent, #64748b)); border-radius: 5px; font: inherit; font-size: 10px; font-weight: 750; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
-    .graph-namespace-title:hover, .graph-namespace-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--namespace-accent, #64748b) 58%, transparent); outline-offset: 1px; }
-    .graph-project-group { position: absolute; padding: 25px 13px 13px; border: 1px dashed var(--group-accent, #64748b); border-radius: 12px; background: color-mix(in srgb, var(--group-accent, #64748b) 4%, transparent); color: var(--group-accent, #64748b); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-    .graph-project-group.is-selected { border-style: solid; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--group-accent, #64748b) 28%, transparent), 0 0 18px color-mix(in srgb, var(--group-accent, #64748b) 28%, transparent); }
-    .graph-project-group-title { position: absolute; z-index: 5; top: 8px; left: 10px; right: 10px; width: auto; max-width: none; min-height: 22px; padding: 2px 7px; box-sizing: border-box; overflow: hidden; pointer-events: auto; cursor: pointer; border: 0; color: inherit; background: color-mix(in srgb, #f8fafc 94%, var(--group-accent, #64748b)); border-radius: 5px; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: center; text-overflow: ellipsis; text-transform: inherit; white-space: nowrap; }
-    .graph-namespace-title:hover, .graph-project-group-title:hover { filter: brightness(.97); box-shadow: 0 1px 5px color-mix(in srgb, currentColor 18%, transparent); }
-    .graph-project-group-title:focus-visible { outline: 2px solid color-mix(in srgb, var(--group-accent, #64748b) 58%, transparent); outline-offset: 1px; }
-    :root[data-theme="dark"] .graph-project-group { background: color-mix(in srgb, var(--group-accent, #64748b) 8%, transparent); }
     .graph-node-card-label { position: absolute; width: 110px; height: 70px; min-height: 70px; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; box-sizing: border-box; transform: translate(-50%, -50%) scale(var(--graph-card-scale, 1)); transform-origin: center; pointer-events: auto; cursor: pointer; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #ffffff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; overflow: visible; }
     .graph-node-card-label.is-resource { overflow-wrap: normal; }
     .graph-node-card-label.is-resource .graph-node-card-name { font-size: 9px; overflow-wrap: normal; word-break: normal; }
@@ -478,11 +394,9 @@
     .graph-control-group button:hover { background: rgba(255, 255, 255, .8); box-shadow: 0 1px 3px rgba(15, 23, 42, .1); transform: none; }
     .zoom-controls button { width: 30px; font-size: 18px; }
     .fit-controls .graph-action-label { height: 28px; padding: 0 9px; color: #52616b; }
-    .display-actions .view-controls { flex: 1 1 auto; min-width: 0; }
-    .view-controls .graph-action-label { flex: 1 1 auto; height: 28px; padding: 0 7px; color: #52616b; }
     .render-controls .graph-action-label { height: 28px; padding: 0 8px; color: #52616b; }
-    .fit-controls .fit-mode.is-active, .view-controls .view-mode.is-active, .render-controls .render-mode.is-active { color: #fff; background: #3156d3; box-shadow: 0 2px 6px rgba(49, 86, 211, .25); }
-    .fit-controls .fit-mode.is-active:hover, .view-controls .view-mode.is-active:hover, .render-controls .render-mode.is-active:hover { background: #2647b5; }
+    .fit-controls .fit-mode.is-active, .render-controls .render-mode.is-active { color: #fff; background: #3156d3; box-shadow: 0 2px 6px rgba(49, 86, 211, .25); }
+    .fit-controls .fit-mode.is-active:hover, .render-controls .render-mode.is-active:hover { background: #2647b5; }
     .graph-actions-spacer { flex: 1 1 auto; min-width: 2px; }
     .graph-actions .graph-secondary-action { height: 32px; color: #52616b; background: transparent; }
     .graph-actions .graph-secondary-action:disabled { visibility: hidden; pointer-events: none; }
@@ -818,7 +732,6 @@
     .graph-control-group button { height: var(--control-height); }
     .graph-actions .graph-action-label { padding: 0 5px; font-size: 10px; }
     .fit-controls .graph-action-label,
-    .view-controls .graph-action-label,
     .render-controls .graph-action-label { height: var(--control-height); }
     .toolbar button { transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease; }
     .toolbar button:hover { transform: translateY(-1px); }
@@ -845,7 +758,6 @@
     .toolbar-tab { color: #64748b !important; }
     .toolbar-tab.is-active,
     .fit-controls .fit-mode.is-active,
-    .view-controls .view-mode.is-active,
     .render-controls .render-mode.is-active {
       color: #fff !important;
       background: var(--accent) !important;
@@ -853,7 +765,6 @@
     }
     .toolbar-tab.is-active:hover,
     .fit-controls .fit-mode.is-active:hover,
-    .view-controls .view-mode.is-active:hover,
     .render-controls .render-mode.is-active:hover { background: #2647b5 !important; }
     .graph-node-card-label.is-resource {
       width: 110px;
@@ -1005,7 +916,7 @@
     :root[data-theme="dark"] .toolbar-tabs, :root[data-theme="dark"] .graph-control-group { border-color: var(--ui-border); background: var(--ui-widget); }
     :root[data-theme="dark"] .graph-control-group button { color: var(--ui-text); background: transparent; }
     :root[data-theme="dark"] .graph-control-group button:hover { background: var(--ui-control) !important; }
-    :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .view-controls .view-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: var(--ui-on-accent); background: var(--ui-selected); }
+    :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: var(--ui-on-accent); background: var(--ui-selected); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: rgba(15, 27, 46, .84); }
     :root[data-theme="dark"] .toolbar-tab { color: var(--ui-text) !important; }
     :root[data-theme="dark"] .toolbar .toolbar-mode-tab { color: var(--ui-muted); background: transparent; }
@@ -1120,7 +1031,6 @@
     .layout-option:hover { color: var(--ui-title) !important; background: var(--ui-control) !important; }
     .toolbar-tab.is-active,
     .fit-controls .fit-mode.is-active,
-    .view-controls .view-mode.is-active,
     .render-controls .render-mode.is-active,
     .layout-option.is-active {
       border-color: var(--ui-selected) !important;
@@ -1130,7 +1040,6 @@
     }
     .toolbar-tab.is-active:hover,
     .fit-controls .fit-mode.is-active:hover,
-    .view-controls .view-mode.is-active:hover,
     .render-controls .render-mode.is-active:hover,
     .layout-option.is-active:hover { color: var(--ui-on-accent) !important; background: var(--ui-selected-hover) !important; }
     .details-group,
@@ -1269,14 +1178,6 @@
     #architecture-toolbar > .mode-context .graph-mode-context-actions { gap: 6px; }
     #architecture-toolbar > .mode-context .architecture-context-actions { display: contents; }
     #architecture-toolbar > .mode-context .architecture-context-actions[hidden] { display: none !important; }
-    #architecture-toolbar > .mode-context .view-controls {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      flex: 1 1 100%;
-      order: -2;
-      width: 100%;
-      min-width: 0 !important;
-    }
     #architecture-toolbar > .mode-context .render-controls { flex: 1 1 100%; order: -1; }
     #architecture-toolbar > .mode-context .graph-secondary-action {
       min-height: 38px;
@@ -1290,7 +1191,6 @@
       min-width: 92px !important;
       white-space: nowrap;
     }
-    #architecture-toolbar > .mode-context .view-controls button,
     #architecture-toolbar > .mode-context .render-controls button {
       min-height: 38px;
       min-width: 0;
@@ -1365,7 +1265,6 @@
     .mode-context .zoom-controls button:hover { border-color: var(--ui-selected); background: var(--ui-accent-soft-hover); }
     .call-tree-depth-control { min-height: 27px; }
     .mode-context.is-architecture-toolbar .architecture-context-actions .fit-mode.is-active,
-    .mode-context.is-architecture-toolbar .architecture-context-actions .view-mode.is-active,
     .mode-context.is-architecture-toolbar .architecture-context-actions .render-mode.is-active {
       border-color: var(--ui-selected);
       color: var(--ui-on-accent);
@@ -1651,11 +1550,8 @@
     #flow-mode-context .graph-secondary-action { min-height: 38px; padding-inline: 12px; font-size: 12px; font-weight: 750; }
     #graph-mode-context #graph-mode-center,
     #flow-mode-context #flow-mode-center { flex: 0 0 92px; width: 92px !important; min-width: 92px !important; white-space: nowrap; }
-    #graph-mode-context .view-controls,
     #graph-mode-context .render-controls { min-height: 38px; }
-    #graph-mode-context .view-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex: 1 1 100%; order: -2; width: 100%; min-width: 0; }
     #graph-mode-context .render-controls { flex: 1 1 100%; order: -1; }
-    #graph-mode-context .view-controls button,
     #graph-mode-context .render-controls button { min-height: 38px; min-width: 0; width: 100%; padding-inline: 10px; font-size: 12px; font-weight: 750; }
     #graph-mode-context .zoom-controls button,
     #flow-mode-context .zoom-controls button { width: 38px; min-width: 38px; padding: 0; font-size: 20px; }
@@ -1810,11 +1706,6 @@
   border-color: var(--ui-accent-border);
   background: var(--ui-panel);
 }
-:root[data-theme="dark"] .graph-layer-title {
-  color: var(--ui-text);
-  background: var(--ui-panel);
-  border-left: 2px solid var(--layer-accent, #64748b);
-}
 :root[data-theme="dark"] .graph-entity-tooltip,
 :root[data-theme="dark"] .graph-edge-tooltip,
 :root[data-theme="dark"] .graph-port-tooltip,
@@ -1872,8 +1763,6 @@ body:not(.catalogue-active) #architecture-tabs-group .toolbar-tab { flex: 0 0 au
 
 body.catalogue-active { overflow: auto; }
 body.catalogue-active #graph,
-body.catalogue-active #graph-layers,
-body.catalogue-active #graph-groups,
 body.catalogue-active #graph-port-paths,
 body.catalogue-active #graph-node-labels { visibility: hidden; }
 body.catalogue-active .toolbar {
@@ -2291,11 +2180,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         <button id="graph-zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer" title="Réduire l’échelle du graphe">−</button>
       </div>
       <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled hidden>Réinitialiser</button>
-      <div class="graph-control-group view-controls" role="group" aria-label="Mode de visualisation · un seul choix" title="Mode de visualisation · un seul choix">
-          <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe</button>
-          <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
-          <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
-      </div>
       <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
           <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
           <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
@@ -2346,8 +2230,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     </div>
   </details>
   <div id="graph" aria-label="Graphe des interactions"></div>
-  <div id="graph-layers" aria-hidden="true"></div>
-  <div id="graph-groups" aria-hidden="true"></div>
   <svg id="graph-port-paths" aria-hidden="true"></svg>
   <div id="graph-node-labels" aria-hidden="true"></div>
   <div id="graph-call-tree" aria-label="Arbre hiérarchique des appels" hidden></div>
@@ -2425,10 +2307,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     const GRAPH_CARD_SCALE = 1;
     const GRAPH_CARD_WIDTH = 110 * GRAPH_CARD_SCALE;
     const GRAPH_CARD_HEIGHT = 70 * GRAPH_CARD_SCALE;
-    const MODULE_PADDING_X = 24;
-    const MODULE_PADDING_TOP = 42;
-    const MODULE_PADDING_BOTTOM = 24;
-    const MODULE_GAP = 8;
     const themeToggle = document.getElementById("theme-toggle");
     const themeStorageKey = "systemlens:graph-theme";
     const storedTheme = (() => {
@@ -2459,8 +2337,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       graphData.nodes.filter(node => !linkedNodeIds.has(node.id)).map(node => node.id)
     );
     const nodeSuggestions = document.getElementById("node-suggestions");
-    const graphLayersOverlay = document.getElementById("graph-layers");
-    const graphGroupsOverlay = document.getElementById("graph-groups");
     const portPathOverlay = document.getElementById("graph-port-paths");
     const nodeLabelOverlay = document.getElementById("graph-node-labels");
     const graphCallTreeOverlay = document.getElementById("graph-call-tree");
@@ -2544,21 +2420,14 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       relatedEdges: null,
       relatedLocalPortLinks: new Set(),
       analysisPortEndpointId: null,
-      selectedCodeFlowId: null,
       selectedDiagnosticId: null,
       diagnosticFocusSnapshot: null,
       selectedCallGraphEdgeKey: null,
       analysisContextCollapsed: true,
-      codeFlowRootNodeId: null,
-      codeFlowTrigger: null,
       pathMicroserviceOrder: new Map(),
       codeFlowTreeCoordinates: new Map(),
       callTreeExpanded: new Set(),
       callTreeCollapsed: new Set(),
-      layeredView: false,
-      clusteredView: false,
-      layeredClusterView: false,
-      clusterLayoutPositions: new Map(),
       cameraFitAdjusting: false,
       lastSafeCameraState: null,
       graphPanCleanup: null,
@@ -2571,7 +2440,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       layoutRequest: 0,
       fitMode: "readable",
       fitRequest: 0,
-      maximumCollisionFreeRatio: 100,
       renderMode: "cards",
       callGraphDisplayMode: "tree",
       callTreeDepth: 1,
@@ -2586,13 +2454,9 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     }
     function requiredCardZoomIn(targetRenderer) {
       if (!targetRenderer || !network) return 1;
-      const compoundView = ["cluster", "elk"].includes(graphState.activeLayout);
       const symbolMode = graphState.renderMode === "symbols";
-      // Compound views must remain collision-free when the user switches
-      // between Symbols and Cards without moving the camera. Reserve the
-      // largest envelope even when symbols are currently rendered.
-      const cardWidth = compoundView || !symbolMode ? GRAPH_CARD_WIDTH + 4 : 34;
-      const cardHeight = compoundView || !symbolMode ? GRAPH_CARD_HEIGHT + 4 : 34;
+      const cardWidth = !symbolMode ? GRAPH_CARD_WIDTH + 4 : 34;
+      const cardHeight = !symbolMode ? GRAPH_CARD_HEIGHT + 4 : 34;
       const buckets = new Map();
       const requiredZooms = [];
       network.forEachNode((id, attributes) => {
@@ -2613,7 +2477,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
                 cardWidth / Math.max(distanceX, 1),
                 cardHeight / Math.max(distanceY, 1),
               );
-              requiredZooms.push(compoundView ? requiredZoom : Math.min(4, requiredZoom));
+              requiredZooms.push(Math.min(4, requiredZoom));
             }
           }
         }
@@ -2622,43 +2486,9 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         bucket.push(point);
         buckets.set(key, bucket);
       });
-      if (compoundView) {
-        const groupedPoints = new Map();
-        network.forEachNode((id, attributes) => {
-          if (!isVisibleNodeId(id) || attributes.hidden) return;
-          const modulePath = namespaceForNode(id);
-          const layer = graphState.activeLayout === "elk" ? layeredLayerForNode(id) : "modules";
-          const key = `${layer}:${modulePath}`;
-          const point = targetRenderer.graphToViewport({ x: attributes.x, y: attributes.y });
-          const points = groupedPoints.get(key) || [];
-          points.push(point);
-          groupedPoints.set(key, points);
-        });
-        const bounds = [...groupedPoints.values()].map(points => ({
-          minX: Math.min(...points.map(point => point.x)),
-          maxX: Math.max(...points.map(point => point.x)),
-          minY: Math.min(...points.map(point => point.y)),
-          maxY: Math.max(...points.map(point => point.y)),
-        }));
-        const requiredGapX = GRAPH_CARD_WIDTH + 2 * MODULE_PADDING_X + MODULE_GAP;
-        const requiredGapY = GRAPH_CARD_HEIGHT + MODULE_PADDING_TOP
-          + MODULE_PADDING_BOTTOM + MODULE_GAP;
-        for (let leftIndex = 0; leftIndex < bounds.length; leftIndex += 1) {
-          for (let rightIndex = leftIndex + 1; rightIndex < bounds.length; rightIndex += 1) {
-            const left = bounds[leftIndex];
-            const right = bounds[rightIndex];
-            const gapX = Math.max(left.minX - right.maxX, right.minX - left.maxX, 0);
-            const gapY = Math.max(left.minY - right.maxY, right.minY - left.maxY, 0);
-            const zoomX = gapX > 0 ? requiredGapX / gapX : Number.POSITIVE_INFINITY;
-            const zoomY = gapY > 0 ? requiredGapY / gapY : Number.POSITIVE_INFINITY;
-            const required = Math.min(zoomX, zoomY);
-            if (Number.isFinite(required)) requiredZooms.push(required);
-          }
-        }
-      }
       if (!requiredZooms.length) return 1;
       requiredZooms.sort((left, right) => left - right);
-      if (["forceatlas2-noverlap", "cluster", "elk"].includes(graphState.activeLayout)) {
+      if (graphState.activeLayout === "forceatlas2-noverlap") {
         return requiredZooms[requiredZooms.length - 1];
       }
       // A single near-coincident pair must not dictate the camera distance for
@@ -2707,7 +2537,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     ]).then(([forceAtlas2Module, noverlapModule]) => ({
       forceAtlas2: forceAtlas2Module.default,
       noverlap: noverlapModule.default,
-      elk: typeof window.ELK === "function" ? new window.ELK() : null,
     })).catch(error => {
       console.warn("Impossible de charger les dispositions du graphe.", error);
       return null;
@@ -2932,6 +2761,228 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       };
     }
 
+// Ordered source module: 05-code-flow-selection.js
+// Owns the selected flow and the context needed to render its call graph.
+const codeFlowSelection = (() => {
+  const emptySelection = Object.freeze({ flowId: null, rootNodeId: null, trigger: null });
+  let selection = emptySelection;
+
+  function select(flowId, { rootNodeId = null, trigger = null } = {}) {
+    selection = flowId
+      ? Object.freeze({ flowId, rootNodeId, trigger })
+      : emptySelection;
+    return selection;
+  }
+
+  function clear() {
+    selection = emptySelection;
+  }
+
+  return {
+    get flowId() { return selection.flowId; },
+    get rootNodeId() { return selection.rootNodeId; },
+    get trigger() { return selection.trigger; },
+    select,
+    clear,
+  };
+})();
+
+// Ordered source module: 06-view-lifecycle.js
+// Owns the boundary between the architecture projection and the flow views.
+const graphViewLifecycle = (() => {
+  const graphSurfaces = () => [
+    graphCanvas,
+    portPathOverlay,
+    nodeLabelOverlay,
+    graphCallTreeOverlay,
+    flowTooltipOverlay,
+  ];
+
+  function clearOverlays() {
+    [
+      portPathOverlay,
+      nodeLabelOverlay,
+      graphCallTreeOverlay,
+      flowTooltipOverlay,
+    ].forEach(element => element?.replaceChildren());
+  }
+
+  function setGraphVisibility(visible) {
+    graphSurfaces().forEach(element => {
+      if (!element) return;
+      const surfaceVisible = visible && (
+        element !== graphCallTreeOverlay || graphState.viewMode === "call-graph"
+      );
+      element.hidden = !surfaceVisible;
+      // SVG/canvas overlays have author-level display rules. Keep the
+      // transition deterministic even when those rules override [hidden].
+      element.style.display = surfaceVisible ? "" : "none";
+      if (visible && element !== graphCallTreeOverlay) {
+        element.classList.remove("is-call-tree-hidden");
+      }
+    });
+    if (!visible && graphFlowStatus) graphFlowStatus.hidden = true;
+  }
+
+  function selectPathFlow(flow, rootNodeId, trigger) {
+    codeFlowSelection.select(flow?.id || null, {
+      rootNodeId: rootNodeId || null,
+      trigger: trigger || null,
+    });
+    graphState.viewMode = flow ? "call-graph" : "architecture";
+    if (flow) graphCanvas.dataset.selectedCodeFlow = flow.id;
+    else delete graphCanvas.dataset.selectedCodeFlow;
+  }
+
+  function clearFlowSelection(viewMode = "architecture") {
+    codeFlowSelection.clear();
+    graphState.viewMode = viewMode;
+    delete graphCanvas.dataset.selectedCodeFlow;
+    delete graphCanvas.dataset.flowFocusRatio;
+  }
+
+  function resetSelection(viewMode) {
+    graphState.selectedId = null;
+    graphState.selectedClusterKey = null;
+    graphState.relatedNodes = null;
+    graphState.relatedEdges = null;
+    graphState.dependencyFocusOnly = false;
+    graphState.analysisPortEndpointId = null;
+    clearFlowSelection(viewMode);
+    graphState.selectedDiagnosticId = null;
+    graphState.diagnosticFocusSnapshot = null;
+    graphState.callGraphDisplayMode = "network";
+    graphState.selectedCallGraphEdgeKey = null;
+    graphState.pathMicroserviceOrder = new Map();
+    graphState.codeFlowTreeCoordinates = new Map();
+    graphState.relatedLocalPortLinks = new Set();
+    dependencyFocusOnly.checked = false;
+    dependencyAnalysisControls.disabled = true;
+    dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
+    dependencyFocusOnly.disabled = true;
+    delete graphCanvas.dataset.selectedCallGraphArc;
+  }
+
+  function activate(tab, options = {}) {
+    const showingGraph = tab === "graph";
+    const showingFlows = tab === "flows";
+    const showingFlowGraph = showingFlows && options.showFlowGraph === true;
+    const graphVisible = !showingFlows || showingFlowGraph;
+    const viewMode = showingGraph
+      ? "architecture"
+      : showingFlowGraph
+        ? "call-graph"
+        : "empty";
+
+    const resetView = (tab === "graph" || tab === "flows") && !showingFlowGraph;
+    if (resetView) resetSelection(viewMode);
+    else graphState.viewMode = viewMode;
+    if (!graphVisible) clearOverlays();
+    setGraphVisibility(graphVisible);
+    return { showingGraph, showingFlows, showingFlowGraph, graphVisible, resetView };
+  }
+
+  return { activate, clearOverlays, selectPathFlow, clearFlowSelection };
+})();
+
+// Ordered source module: 07-navigation.js
+// Owns toolbar navigation and panel visibility.
+    function setToolbarTab(tab, options = {}) {
+      graphState.analysisContextCollapsed = true;
+      document.body.classList.toggle("catalogue-active", tab === "microservices");
+      const { showingGraph, showingFlows, showingFlowGraph, graphVisible, resetView } = graphViewLifecycle.activate(tab, options);
+      // The two navigation surfaces have different meanings: Graphe is the
+      // static architecture view, while Flux de code only becomes a graph
+      // after the user explicitly selects a flow from its list.
+      if (resetView) {
+        // The Flux de code panel is hidden behind the toolbar and does not
+        // need a graph rebuild. Rebuild only when returning to Graphe, after
+        // the static view has become visible again.
+        if (tab === "graph") {
+          rebuildGraph();
+          if (!options.deferLayout) applyLayout(graphState.activeLayout);
+        }
+      }
+      if (document.querySelector(".toolbar")?.classList.contains("has-details")) {
+        setDetailsEmpty("Sélectionnez un nœud pour afficher ses détails.");
+      }
+      const showingMicroservices = tab === "microservices";
+      const showingIssues = tab === "issues";
+      const showingContracts = tab === "contracts";
+      const showingAsyncApi = tab === "asyncapi";
+      const showingDtoContracts = tab === "dto-contracts";
+      const showingJpa = tab === "jpa";
+      const showingRoutes = tab === "routes";
+      const showingKafka = tab === "kafka";
+      const showingCollections = tab === "collections";
+      const showingPersistence = tab === "persistence";
+      const showingContractView = showingContracts || showingAsyncApi || showingDtoContracts || showingJpa || showingPersistence;
+      const mode = showingMicroservices
+        ? "contracts"
+        : showingFlows
+        ? "architecture"
+        : showingContractView
+          ? "contracts"
+          : showingIssues
+            ? "diagnostics"
+            : "architecture";
+      Object.entries(modeTabs).forEach(([name, button]) => {
+        const active = name === mode;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", String(active));
+      });
+      Object.entries(modeGroups).forEach(([name, group]) => {
+        group.hidden = name !== mode || (showingMicroservices && name === "contracts");
+      });
+      graphTab.classList.toggle("is-active", showingGraph);
+      graphTab.setAttribute("aria-selected", String(showingGraph));
+      microservicesTab.classList.toggle("is-active", showingMicroservices);
+      microservicesTab.setAttribute("aria-selected", String(showingMicroservices));
+      routesTab.classList.toggle("is-active", showingRoutes);
+      routesTab.setAttribute("aria-selected", String(showingRoutes));
+      contractsTab.classList.toggle("is-active", showingContracts);
+      contractsTab.setAttribute("aria-selected", String(showingContracts));
+      asyncApiTab.classList.toggle("is-active", showingAsyncApi);
+      asyncApiTab.setAttribute("aria-selected", String(showingAsyncApi));
+      dtoContractTab.classList.toggle("is-active", showingDtoContracts);
+      dtoContractTab.setAttribute("aria-selected", String(showingDtoContracts));
+      jpaTab.classList.toggle("is-active", showingJpa);
+      jpaTab.setAttribute("aria-selected", String(showingJpa));
+      kafkaTab.classList.toggle("is-active", showingKafka);
+      kafkaTab.setAttribute("aria-selected", String(showingKafka));
+      collectionsTab.classList.toggle("is-active", showingCollections);
+      collectionsTab.setAttribute("aria-selected", String(showingCollections));
+      persistenceTab.classList.toggle("is-active", showingPersistence);
+      persistenceTab.setAttribute("aria-selected", String(showingPersistence));
+      issuesTab.classList.toggle("is-active", showingIssues);
+      issuesTab.setAttribute("aria-selected", String(showingIssues));
+      flowsTab.classList.toggle("is-active", showingFlows);
+      flowsTab.setAttribute("aria-selected", String(showingFlows));
+      graphPanel.hidden = !showingGraph;
+      microservicesPanel.hidden = !showingMicroservices;
+      quickSearch.hidden = !showingGraph;
+      graphContext.hidden = !showingGraph;
+      // Keep the mode-specific graph toolbars aligned with the selected tab.
+      // The Flux list has no graph controls; they only appear after a flow
+      // explicitly opens its call graph.
+      const graphModeContext = document.getElementById("graph-mode-context");
+      const flowModeContext = document.getElementById("flow-mode-context");
+      if (graphModeContext) graphModeContext.hidden = !showingGraph;
+      if (flowModeContext) flowModeContext.hidden = !showingFlows;
+      issuesPanel.hidden = !showingIssues;
+      contractsPanel.hidden = !showingContracts;
+      asyncApiContractPanel.hidden = !showingAsyncApi;
+      dtoContractPanel.hidden = !showingDtoContracts;
+      jpaPanel.hidden = !showingJpa;
+      routesPanel.hidden = !showingRoutes;
+      kafkaPanel.hidden = !showingKafka;
+      collectionsPanel.hidden = !showingCollections;
+      persistencePanel.hidden = !showingPersistence;
+      flowsPanel.hidden = !showingFlows;
+      graphLegend.hidden = !showingGraph;
+      if (showingFlows && !showingFlowGraph) flowsPanel.dispatchEvent(new Event("systemlens:flows-open"));
+    }
+
 // Ordered source module: 10-rebuild.js
     let callGraphArcNavigator = { links: [], views: [], activeIndex: null };
     let selectedCallGraphArcVisualTimer = null;
@@ -3125,7 +3176,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     if (!window.__systemlensCallGraphArcKeyboardNavigation) {
       window.__systemlensCallGraphArcKeyboardNavigation = true;
       window.addEventListener("keydown", event => {
-        if (!graphState.selectedCodeFlowId) return;
+        if (!codeFlowSelection.flowId) return;
         if (event.target.closest?.("input, select, textarea, [contenteditable='true']")) return;
         if (event.key === "Escape" && graphState.selectedCallGraphEdgeKey) {
           event.preventDefault();
@@ -3243,12 +3294,12 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     }
     function rebuildGraph() {
       const callGraphOnly = graphState.viewMode === "call-graph"
-        && Boolean(graphState.selectedCodeFlowId);
+        && Boolean(codeFlowSelection.flowId);
       if (callGraphOnly && !graphState.selectedCallGraphEdgeKey) {
         graphState.selectedCallGraphEdgeKey = document.getElementById("graph")?.dataset.selectedCallGraphArc || null;
       }
       const selectedFlows = callGraphOnly
-        ? (graphData.code_flows || []).filter(flow => flow.id === graphState.selectedCodeFlowId)
+        ? (graphData.code_flows || []).filter(flow => flow.id === codeFlowSelection.flowId)
         : [];
       const selectedFlow = selectedFlows[0] || null;
       const selectedCallGraph = callGraphForFlows(selectedFlows);
@@ -3309,9 +3360,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       // its camera from a safe state captured for the previous graph.
       graphState.cameraFitAdjusting = false;
       graphState.lastSafeCameraState = null;
-      graphState.clusterLayoutPositions = new Map();
-      graphLayersOverlay.replaceChildren();
-      graphGroupsOverlay.replaceChildren();
       portPathOverlay.replaceChildren();
       nodeLabelOverlay.replaceChildren();
       flowTooltipOverlay.replaceChildren();
@@ -3475,10 +3523,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           const topics = [...new Set((node.ports || []).filter(port => /kafka|topic|message/i.test(port.type || "")).map(port => port.name))];
           if (topics.length) addTooltipLine(tooltip, `Messages : ${topics.slice(0, 4).join(", ")}${topics.length > 4 ? "…" : ""}`, "graph-entity-tooltip-detail");
           if (node.technology || node.build_system) addTooltipLine(tooltip, [node.technology, node.build_system].filter(Boolean).join(" · "), "graph-entity-tooltip-detail");
-          const accesses = callGraphOnly && graphState.selectedCodeFlowId
-            ? (graphData.flow_data_accesses?.[graphState.selectedCodeFlowId] || []).filter(access => access.module === node.name)
-            : [];
-          dataAccessTooltipLines(accesses).forEach(line => addTooltipLine(tooltip, line, "graph-entity-tooltip-detail"));
         } else if (node.kind === "kafka_topic") {
           const producers = new Set(graphData.links
             .filter(link => link.kind === "kafka" && link.target === node.id)
@@ -3582,14 +3626,14 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         labelAlignment: "center",
         nodeReducer: (node, data) => {
           if (!callGraphOnly && !isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
-          if (graphState.selectedCodeFlowId && nodeDataById.get(node)?.kind !== "microservice") {
+          if (codeFlowSelection.flowId && nodeDataById.get(node)?.kind !== "microservice") {
             return { ...data, hidden: true, label: "" };
           }
-          if (graphState.selectedCodeFlowId && !graphState.relatedNodes?.has(node)) {
+          if (codeFlowSelection.flowId && !graphState.relatedNodes?.has(node)) {
             return { ...data, hidden: true, label: "" };
           }
           const renderedData = graphState.renderMode === "symbols" ? { ...data, size: .5 } : data;
-          if (graphState.selectedCodeFlowId && graphState.relatedNodes.has(node)) {
+          if (codeFlowSelection.flowId && graphState.relatedNodes.has(node)) {
             return {
               ...renderedData,
               size: renderedData.size * 1.22,
@@ -3597,7 +3641,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
               zIndex: 2,
             };
           }
-          if (graphState.selectedCodeFlowId) return renderedData;
+          if (codeFlowSelection.flowId) return renderedData;
           if (!graphState.selectedId || graphState.relatedNodes.has(node)) {
             return renderedData;
           }
@@ -3608,14 +3652,13 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
             return { ...data, hidden: true };
           }
           if (data.hitArea) return data;
-          if (graphState.selectedCodeFlowId) {
+          if (codeFlowSelection.flowId) {
             // The selected call graph is rendered once by the LibAvoid SVG
             // overlay. Keeping Sigma's straight edge underneath would draw
             // every connector twice and make routes appear broken.
             return { ...data, hidden: true };
           }
           if (graphState.selectedId && graphState.relatedEdges.has(edge)) return { ...data, size: 1.5 };
-          if (graphState.clusteredView || graphState.layeredClusterView) return { ...data, size: .5 };
           if (graphState.selectedId) return { ...data, color: "#d8dee9", size: .35 };
           return data;
         },
@@ -3727,7 +3770,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           graphViewLifecycle.clearOverlays();
           return;
         }
-        const callTreeActive = Boolean(graphState.selectedCodeFlowId)
+        const callTreeActive = Boolean(codeFlowSelection.flowId)
           && graphState.viewMode === "call-graph";
         if (callTreeActive || !graphCallTreeOverlay?.hidden) renderCallTreeOverlay();
         nodeLabelOverlay.classList.toggle("is-symbol-mode", graphState.renderMode === "symbols");
@@ -3752,7 +3795,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           const flowZoomIn = document.getElementById("flow-zoom-in");
           const flowZoomOut = document.getElementById("flow-zoom-out");
           if (!graphContext || !flowContext || !graphTitle || !graphHelp || !flowTitle || !flowHelp) return;
-          const active = Boolean(graphState.selectedCodeFlowId);
+          const active = Boolean(codeFlowSelection.flowId);
           const callGraphActive = active && (
             graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree"
           );
@@ -3797,11 +3840,11 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           );
           flowTitle.textContent = "Arbre d’appel";
           const selectedFlows = (graphData.code_flows || []).filter(flow => (
-            flow.id === graphState.selectedCodeFlowId
+            flow.id === codeFlowSelection.flowId
           ));
           const selectedFlow = selectedFlows[0];
           const trigger = selectedFlow?.steps?.[0];
-          flowHelp.textContent = "Survolez un microservice pour voir ses accès aux données et diagnostics potentiels.";
+          flowHelp.textContent = "Survolez un microservice pour voir ses ports et ses méthodes.";
           if (flowTrigger) {
             const triggerKind = ({
               http_entry: "Entrée HTTP",
@@ -3938,7 +3981,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           }
         };
         updateAnalysisModeIndicator();
-        if (graphState.selectedCodeFlowId) return;
+        if (codeFlowSelection.flowId) return;
         network.forEachNode((id, attributes) => {
           if (
             (!callGraphOnly && !isVisibleNodeId(id))
@@ -3957,239 +4000,21 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         graphCanvas.dataset.adaptiveLabelCount = String(adaptiveLabels.size);
         // Card dimensions stay constant. Overlap is an accepted overview
         // state; zoom and pan must never change card size or fight the camera.
-        graphGroupsOverlay.replaceChildren();
         nodeLabelOverlay.replaceChildren();
-        const layerOrder = ["api", "application", "orchestration", "infrastructure", "domain", "persistence", "external"];
-        if (!graphState.layeredView && !graphState.clusteredView) {
-          graphLayersOverlay.replaceChildren();
-          graphGroupsOverlay.replaceChildren();
-        } else {
-        graphLayersOverlay.replaceChildren();
-        const layerColors = { external: "#64748b", api: "#0891b2", application: "#2563eb", orchestration: "#9333ea", infrastructure: "#d97706", shared: "#64748b", module: "#475569", domain: "#7c3aed", persistence: "#0f766e" };
-        const visibleServices = [...nodePoints.entries()]
-          .map(([id, point]) => ({ id, point, node: nodeDataById.get(id) }))
-          .filter(item => item.node?.kind === "microservice" && layeredLayerForNode(item.id));
-        const visibleLayerItems = graphState.layeredClusterView
-          ? [...nodePoints.entries()]
-            .map(([id, point]) => ({ id, point, node: nodeDataById.get(id) }))
-            .filter(item => layeredLayerForNode(item.id))
-          : visibleServices;
-        const layers = layerOrder
-          .map(id => ({ id, items: visibleLayerItems.filter(item => layeredLayerForNode(item.id) === id) }))
-          .filter(layer => layer.items.length);
-        const layerCenters = layers.map(layer => ({
-          ...layer,
-          center: layer.items.reduce((sum, item) => sum + item.point.y, 0) / layer.items.length,
-        }));
-        const pointsByLayer = new Map(layerCenters.map(layer => [layer.id, layer.items.map(item => item.point)]));
-        if (!nodePoints.size) {
-          graphLayersOverlay.replaceChildren();
-          graphGroupsOverlay.replaceChildren();
-          return;
-        }
-        if (!graphState.layeredClusterView) {
-          [...nodePoints.entries()]
-            .filter(([id]) => nodeDataById.get(id)?.kind !== "microservice")
-            .forEach(([id, point]) => {
-              if (!layerCenters.length) return;
-              const nearest = layerCenters.reduce((best, layer) => (
-                Math.abs(layer.center - point.y) < Math.abs(best.center - point.y) ? layer : best
-              ), layerCenters[0]);
-              if (nearest) {
-                pointsByLayer.get(nearest.id).push(point);
-              }
-            });
-        }
-        const allLayerPoints = graphState.layeredClusterView
-          ? [...nodePoints.values()]
-          : [...pointsByLayer.values()].flat();
-        // Reserve a left gutter inside every layer band for its title.  The
-        // module rectangles keep their graph-space positions, while the
-        // widened band starts earlier so the overlay title never sits on top
-        // of the first module.
-        const layerTitleGutter = 182;
-        const contentMinX = allLayerPoints.length
-          ? Math.min(...allLayerPoints.map(point => point.x)) - 92
-          : 0;
-        const contentMaxX = allLayerPoints.length
-          ? Math.max(...allLayerPoints.map(point => point.x)) + 92
-          : window.innerWidth;
-        // ELK can retain an empty layer shell when filters remove all of its
-        // nodes. Never feed empty point sets to Math.min/Math.max: Infinity
-        // collapses the band geometry to the top edge and makes every band
-        // overlap after projection.
-        const renderedLayerCenters = layerCenters.filter(layer => (
-          (pointsByLayer.get(layer.id) || []).length > 0
-        ));
-        const layerBounds = renderedLayerCenters.map(layer => {
-          const points = pointsByLayer.get(layer.id) || [];
-          return {
-            ...layer,
-            contentTop: Math.min(...points.map(point => point.y))
-              - GRAPH_CARD_HEIGHT / 2 - MODULE_PADDING_TOP - MODULE_GAP,
-            contentBottom: Math.max(...points.map(point => point.y))
-              + GRAPH_CARD_HEIGHT / 2 + MODULE_PADDING_BOTTOM + MODULE_GAP,
-          };
-        });
-        if (!layerCenters.length) {
-          graphLayersOverlay.replaceChildren();
-        }
-        const layerBands = SystemLensLayerGeometry.computeLayerBands(layerBounds, {
-          contentMinX,
-          contentMaxX,
-          viewportWidth: window.innerWidth,
-          titleGutter: layerTitleGutter,
-        });
-        if (!graphState.clusteredView || graphState.layeredClusterView) renderedLayerCenters.forEach((layer, index) => {
-          const bandBounds = layerBands[index];
-          const bandHeight = bandBounds.height;
-          if (bandHeight < 4) return;
-          const band = document.createElement("div");
-          band.className = "graph-layer-band";
-          band.dataset.layer = layer.id;
-          band.style.left = `${bandBounds.left}px`; band.style.top = `${bandBounds.top}px`;
-          band.style.width = `${bandBounds.width}px`;
-          band.style.height = `${bandHeight}px`;
-          band.style.setProperty("--layer-accent", layerColors[layer.id] || "#64748b");
-          const title = document.createElement("span"); title.className = "graph-layer-title";
-          title.textContent = layer.id.replaceAll("_", " "); band.append(title); graphLayersOverlay.append(band);
-        });
-        const namespaces = new Map();
-        [...nodePoints.entries()].forEach(([id, point]) => {
-          const node = nodeDataById.get(id);
-          const layer = graphState.clusteredView && !graphState.layeredClusterView
-            ? "namespaces"
-            : graphState.layeredClusterView
-              ? layeredLayerForNode(id)
-              : node?.architecture_layer || (node?.kind === "microservice" ? node.layer : null);
-          const values = graphState.clusteredView || graphState.layeredClusterView
-            ? [namespaceForNode(id)]
-            : node?.architecture_namespace
-              ? [node.architecture_namespace]
-              : [...new Set([...(node?.runtime_namespaces || []), ...(node?.fact_namespaces || [])])];
-          values.forEach(namespace => {
-            if (!layer || !namespace) return;
-            const key = `${layer}:${namespace}`;
-            const group = namespaces.get(key) || { layer, namespace, points: [], ids: [] };
-            group.points.push(point); group.ids.push(id); namespaces.set(key, group);
-          });
-        });
-        const namespaceBounds = new Map();
-        namespaces.forEach(group => {
-          let minX = Math.min(...group.points.map(point => point.x)) - 68;
-          let maxX = Math.max(...group.points.map(point => point.x)) + 68;
-          let minY = Math.min(...group.points.map(point => point.y)) - 44;
-          let maxY = Math.max(...group.points.map(point => point.y)) + 44;
-          if (graphState.clusteredView || graphState.layeredClusterView) {
-            // The cards are HTML rectangles in viewport coordinates. Build
-            // the namespace envelope from those projected centers so graph
-            // zoom cannot make a module smaller than its visible children.
-            // Keep this in sync with .graph-node-card-label's CSS scale.
-            // The envelope must contain the rendered HTML card, not Sigma's
-            // logical node dimensions.
-            const cardHalfWidth = GRAPH_CARD_WIDTH / 2;
-            const cardHalfHeight = GRAPH_CARD_HEIGHT / 2;
-            minX = Math.min(...group.points.map(point => point.x)) - cardHalfWidth - MODULE_PADDING_X;
-            maxX = Math.max(...group.points.map(point => point.x)) + cardHalfWidth + MODULE_PADDING_X;
-            minY = Math.min(...group.points.map(point => point.y)) - cardHalfHeight - MODULE_PADDING_TOP;
-            maxY = Math.max(...group.points.map(point => point.y)) + cardHalfHeight + MODULE_PADDING_BOTTOM;
-          }
-          const renderedWidth = Math.max(150, maxX - minX);
-          const renderedHeight = Math.max(92, maxY - minY);
-          const boundsKey = `${group.layer}:${group.namespace}`;
-          const cluster = clusterDescriptorForPath(group.namespace);
-          namespaceBounds.set(boundsKey, {
-            minX, maxX: minX + renderedWidth, minY, maxY: minY + renderedHeight,
-          });
-          const box = document.createElement("div");
-          box.className = `graph-namespace-group${graphState.selectedClusterKey === cluster.key ? " is-selected" : ""}`;
-          box.dataset.namespace = group.namespace;
-          box.dataset.layer = group.layer;
-          box.dataset.clusterKey = cluster.key;
-          box.style.left = `${minX}px`; box.style.top = `${minY}px`;
-          box.style.width = `${renderedWidth}px`;
-          box.style.height = `${renderedHeight}px`;
-          box.style.setProperty("--namespace-accent", layerColors[group.layer] || "#64748b");
-          const title = document.createElement("button");
-          title.type = "button";
-          title.className = "graph-namespace-title";
-          title.textContent = group.namespace === "root" ? "ROOT" : group.namespace;
-          title.title = `Afficher les éléments du module ${title.textContent}`;
-          title.addEventListener("click", event => {
-            event.stopPropagation();
-            selectCluster(cluster);
-          });
-          box.append(title);
-          graphLayersOverlay.append(box);
-        });
-        const namespaceGroupEntries = [...namespaces.entries()];
-        (graphData.groups || []).forEach(group => {
-          const children = group.children || [];
-          const childNamespaceBounds = namespaceGroupEntries
-            .filter(([, namespaceGroup]) => (
-              (!group.namespace
-                || namespaceGroup.namespace === group.namespace
-                || namespaceGroup.namespace.startsWith(`${group.namespace}/`))
-              && namespaceGroup.ids.some(id => children.includes(id))
-            ))
-            .map(([key]) => namespaceBounds.get(key))
-            .filter(Boolean);
-          let minX;
-          let maxX;
-          let minY;
-          let maxY;
-          if (childNamespaceBounds.length) {
-            // A parent group is defined by its rendered children. This keeps
-            // nested boxes aligned after zoom/pan and guarantees containment.
-            minX = Math.min(...childNamespaceBounds.map(bounds => bounds.minX)) - 22;
-            maxX = Math.max(...childNamespaceBounds.map(bounds => bounds.maxX)) + 22;
-            minY = Math.min(...childNamespaceBounds.map(bounds => bounds.minY)) - 28;
-            maxY = Math.max(...childNamespaceBounds.map(bounds => bounds.maxY)) + 22;
-          } else {
-            const points = children.map(id => nodePoints.get(id)).filter(Boolean);
-            if (points.length < 2) return;
-            minX = Math.min(...points.map(point => point.x)) - 68;
-            maxX = Math.max(...points.map(point => point.x)) + 68;
-            minY = Math.min(...points.map(point => point.y)) - 52;
-            maxY = Math.max(...points.map(point => point.y)) + 52;
-          }
-          const container = document.createElement("div");
-          const cluster = clusterDescriptorForPath(group.namespace || group.name || "root");
-          container.className = `graph-project-group${graphState.selectedClusterKey === cluster.key ? " is-selected" : ""}`;
-          container.dataset.namespaceGroup = group.namespace || group.name || "root";
-          container.dataset.clusterKey = cluster.key;
-          container.style.left = `${minX}px`;
-          container.style.top = `${minY}px`;
-          container.style.width = `${Math.max(150, maxX - minX)}px`;
-          container.style.height = `${Math.max(120, maxY - minY)}px`;
-          container.style.setProperty("--group-accent", "#64748b");
-          const title = document.createElement("button");
-          title.type = "button";
-          title.className = "graph-project-group-title";
-          title.textContent = group.name;
-          title.title = `Afficher les éléments du module ${group.name}`;
-          title.addEventListener("click", event => {
-            event.stopPropagation();
-            selectCluster(cluster);
-          });
-          container.append(title);
-          graphGroupsOverlay.append(container);
-        });
-        }
         network.forEachNode((id, attributes) => {
           const point = nodePoints.get(id);
           const node = nodeDataById.get(id);
           if (!node || !point) return;
-          if (graphState.selectedCodeFlowId && node.kind !== "microservice") return;
+          if (codeFlowSelection.flowId && node.kind !== "microservice") return;
           const label = document.createElement("span");
           const isTopic = node.kind === "message_channel" || node.kind === "kafka_topic";
           const isDatabase = node.kind === "data_schema" || node.kind === "mongodb_collection";
           const isJpaEntity = node.kind === "jpa_entity";
           const isResource = isTopic || isDatabase || isJpaEntity;
           const adaptiveLabelSide = adaptiveLabels.get(id);
-          const isCodeFlowNode = graphState.selectedCodeFlowId && graphState.relatedNodes?.has(id);
-          const isCodeFlowRoot = graphState.selectedCodeFlowId && graphState.codeFlowRootNodeId === id;
-          const trigger = isCodeFlowRoot ? graphState.codeFlowTrigger : null;
+          const isCodeFlowNode = codeFlowSelection.flowId && graphState.relatedNodes?.has(id);
+          const isCodeFlowRoot = codeFlowSelection.flowId && codeFlowSelection.rootNodeId === id;
+          const trigger = isCodeFlowRoot ? codeFlowSelection.trigger : null;
           label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${isJpaEntity ? " is-jpa-entity" : ""}${isCodeFlowRoot ? " is-graph-root" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}${isCodeFlowNode ? " is-code-flow-node" : ""}`;
           label.dataset.nodeKind = node.kind;
           label.dataset.nodeId = id;
@@ -4327,7 +4152,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         // than from graph nodes. This keeps its endpoints attached to the
         // readable port anchors through every pan, zoom, and card scale.
         portPathOverlay.replaceChildren();
-        if (graphState.renderMode !== "symbols" && !graphState.selectedCodeFlowId) {
+        if (graphState.renderMode !== "symbols" && !codeFlowSelection.flowId) {
           const svgNamespace = "http://www.w3.org/2000/svg";
           const marker = document.createElementNS(svgNamespace, "marker");
           marker.id = "graph-architecture-arrow";
@@ -4411,7 +4236,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
             portPathOverlay.append(hitArea);
           });
         }
-        if (graphState.renderMode === "symbols" || !graphState.selectedCodeFlowId) return;
+        if (graphState.renderMode === "symbols" || !codeFlowSelection.flowId) return;
         const svgNamespace = "http://www.w3.org/2000/svg";
         const marker = document.createElementNS(svgNamespace, "marker");
         marker.id = "graph-port-arrow";
@@ -5141,7 +4966,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           return routed.d;
         };
         const selectedPortLinks = [...new Map((graphData.port_links || []).filter(link => (
-          !graphState.selectedCodeFlowId
+          !codeFlowSelection.flowId
           && (selectedEndpointIds.has(link.source_endpoint_id)
             || selectedEndpointIds.has(link.target_endpoint_id))
         )).map(link => [
@@ -5150,7 +4975,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         ]))].map(([, link]) => link);
         (graphData.internal_port_links || []).forEach(link => {
           if (
-            graphState.selectedCodeFlowId
+            codeFlowSelection.flowId
             && !graphState.relatedLocalPortLinks?.has(
               `${link.input_endpoint_id}:${link.output_endpoint_id}`
             )
@@ -5252,7 +5077,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         selectNode(node, false, true);
       });
       renderer.on("clickEdge", ({ edge, event }) => {
-        if (graphState.selectedCodeFlowId) return;
+        if (codeFlowSelection.flowId) return;
         const originalEvent = event?.originalEvent || event;
         if (!originalEvent?.shiftKey) return;
         const match = String(edge).match(/^edge(?:-hit)?-(\d+)$/);
@@ -5278,9 +5103,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         const graphPoint = renderer.viewportToGraph(cursor);
         const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
         const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * .0006);
-        const maximumRatio = ["cluster", "elk"].includes(graphState.activeLayout)
-          ? graphState.maximumCollisionFreeRatio
-          : 100;
+        const maximumRatio = 100;
         const ratio = Math.max(.01, Math.min(maximumRatio, state.ratio * factor));
         camera.setState({
           ...state,
@@ -5363,7 +5186,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       // centered above so the complete vertical stack stays in view.
       renderer.getCamera().animatedReset({ duration: 0 });
     }
-    rebuildGraph();
 
 // Ordered source module: 20-controls.js
     const details = document.getElementById("details");
@@ -5471,16 +5293,11 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     const layoutButtons = new Map([
       ["forceatlas2", document.getElementById("layout-forceatlas2")],
       ["noverlap", document.getElementById("layout-noverlap")],
-      ["forceatlas2-noverlap", document.getElementById("layout-forceatlas2-noverlap")],
-      ["elk", document.getElementById("layout-elk")],
-      ["cluster", document.getElementById("layout-cluster")],
     ]);
     const layoutLabels = new Map([
       ["forceatlas2", "regroupement des liens"],
       ["noverlap", "éviter les chevauchements"],
       ["forceatlas2-noverlap", "vue par graphe"],
-      ["elk", "vue par couches"],
-      ["cluster", "vue par modules"],
     ]);
     const pathStops = [];
     const MAX_SIMPLE_PATH_DEPTH = 8;
@@ -5639,17 +5456,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       const owner = preferredOwnerForNode(node);
       return owner?.layer_label || owner?.layer || "Unknown";
     }
-    function layeredLayerForNode(node) {
-      const layerOrder = ["api", "application", "orchestration", "infrastructure", "domain", "persistence", "external"];
-      const data = nodeDataById.get(node);
-      const declaredLayer = data?.architecture_layer || data?.layer_label;
-      if (declaredLayer && layerOrder.includes(declaredLayer)) return declaredLayer;
-      if (data?.kind === "microservice" && layerOrder.includes(data.layer)) return data.layer;
-      const neighbourLayer = network.neighbors(node)
-        .map(neighbour => nodeDataById.get(neighbour)?.layer)
-        .find(layer => layerOrder.includes(layer));
-      return neighbourLayer || "application";
-    }
     function normalizeClusterPath(path) {
       const normalized = String(path || "root").replace(/^\/+|\/+$/g, "");
       return !normalized || normalized === "ROOT" ? "root" : normalized;
@@ -5711,369 +5517,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
 
 // Ordered source module: 30-layouts.js
       return path === "root" ? "ROOT" : path;
-    }
-    function packClusterGraphPositions() {
-      document.getElementById("graph").dataset.clusterSubLayers = "microservices-first,resources-second";
-      const namespaceGroups = new Map();
-      network.forEachNode(node => {
-        const namespace = namespaceForNode(node);
-        if (!namespaceGroups.has(namespace)) namespaceGroups.set(namespace, []);
-        namespaceGroups.get(namespace).push(node);
-      });
-      const groups = [...namespaceGroups.entries()].sort(([left], [right]) => left.localeCompare(right));
-      // Keep namespace positions deterministic. The camera fits node centers
-      // and cards remain fixed-size overlays; dense groups may overlap in the
-      // overview instead of triggering a second layout or camera correction.
-      const nodeGapX = 1100;
-      const nodeGapY = 900;
-      const clusterPaddingX = 90;
-      const clusterPaddingY = 80;
-      const clusterGapX = 3600;
-      const clusterGapY = 2600;
-      const packedGroups = groups.map(([namespace, nodes]) => {
-        const orderedNodes = [...nodes].sort((left, right) => {
-          const leftPosition = graphState.clusterLayoutPositions.get(left);
-          const rightPosition = graphState.clusterLayoutPositions.get(right);
-          return (rightPosition?.y ?? 0) - (leftPosition?.y ?? 0)
-            || (leftPosition?.x ?? 0) - (rightPosition?.x ?? 0)
-            || left.localeCompare(right);
-        });
-        const microservices = orderedNodes.filter(node => nodeDataById.get(node)?.kind === "microservice");
-        const resources = orderedNodes.filter(node => nodeDataById.get(node)?.kind !== "microservice");
-        const subLayers = SystemLensLayerGeometry.computeClusterSubLayers(
-          microservices, resources, { nodeGapX, nodeGapY, subLayerGapY: 1200, maxColumns: 5 }
-        );
-        // The overlay envelope is deliberately larger than the node grid:
-        // refreshNodeLabels adds 120px horizontally and 100px vertically on
-        // each side when it draws a namespace box.  Pack using that envelope,
-        // while keeping the node coordinates centered on the grid itself.
-        return {
-          namespace,
-          nodes: orderedNodes,
-          resources,
-          subLayers,
-          width: subLayers.width,
-          height: Math.abs(subLayers.height),
-          envelopeWidth: subLayers.width + 240,
-          envelopeHeight: Math.abs(subLayers.height) + 200,
-        };
-      });
-      // Four columns use the wide graph viewport more efficiently and reduce
-      // the collision-free zoom required by large module inventories.
-      const outerColumns = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(packedGroups.length))));
-      const outerRows = Math.ceil(packedGroups.length / outerColumns);
-      const outerWidth = Math.max(...packedGroups.map(group => group.envelopeWidth + clusterPaddingX * 2));
-      const rowHeights = Array.from({ length: outerRows }, (_, row) => Math.max(
-        ...packedGroups.slice(row * outerColumns, (row + 1) * outerColumns)
-          .map(group => group.envelopeHeight + clusterPaddingY * 2),
-      ));
-      let cursorY = 0;
-      packedGroups.forEach((group, index) => {
-        const row = Math.floor(index / outerColumns);
-        const column = index % outerColumns;
-        const clusterX = (column - (outerColumns - 1) / 2) * (outerWidth + clusterGapX);
-        const clusterY = cursorY + clusterPaddingY;
-        group.nodes.forEach(node => {
-          const position = group.subLayers.positions[node];
-          network.setNodeAttribute(node, "x", clusterX - group.width / 2 + position.x);
-          network.setNodeAttribute(node, "y", clusterY + position.y);
-          network.setNodeAttribute(
-            node,
-            "clusterSubLayer",
-            group.resources.includes(node) ? "resources" : "microservices",
-          );
-        });
-        if (column === outerColumns - 1 || index === packedGroups.length - 1) {
-          cursorY += rowHeights[row] + clusterGapY;
-        }
-      });
-      const graphElement = document.getElementById("graph");
-      graphElement.dataset.clusterSubLayers = "microservices-first,resources-second";
-      graphElement.dataset.clusterSubLayerPositions = JSON.stringify(
-        [...new Set([...network.nodes()].map(node => network.getNodeAttribute(node, "clusterSubLayer")))]
-      );
-      graphElement.dataset.clusterLayout = JSON.stringify(
-        Object.fromEntries([...network.nodes()].map(node => [node, {
-          cluster: namespaceForNode(node),
-          subLayer: network.getNodeAttribute(node, "clusterSubLayer"),
-          x: network.getNodeAttribute(node, "x"),
-          y: network.getNodeAttribute(node, "y"),
-        }]))
-      );
-    }
-    function packLayeredClusterGraphPositions() {
-      const layerOrder = ["api", "application", "orchestration", "infrastructure", "domain", "persistence", "external"];
-      const groupsByLayer = new Map(layerOrder.map(layer => [layer, new Map()]));
-      const layerForNode = node => layeredLayerForNode(node);
-      network.forEachNode(node => {
-        const layer = layerForNode(node);
-        const namespace = namespaceForNode(node);
-        const namespaces = groupsByLayer.get(layer);
-        if (!namespaces.has(namespace)) namespaces.set(namespace, []);
-        namespaces.get(namespace).push(node);
-      });
-      const nodeGapX = 1000;
-      const nodeGapY = 700;
-      const clusterPaddingX = 100;
-      const clusterPaddingY = 120;
-      const clusterGapX = 220;
-      const namespaceGapY = 300;
-      const layerGapY = 970;
-      let cursorY = 0;
-      layerOrder.forEach(layer => {
-        const groups = [...groupsByLayer.get(layer).entries()]
-          .sort(([left], [right]) => left.localeCompare(right))
-          .map(([namespace, nodes]) => {
-            const orderedNodes = [...nodes].sort((left, right) => {
-              const leftPosition = graphState.clusterLayoutPositions.get(left);
-              const rightPosition = graphState.clusterLayoutPositions.get(right);
-              return (rightPosition?.y ?? 0) - (leftPosition?.y ?? 0)
-                || (leftPosition?.x ?? 0) - (rightPosition?.x ?? 0)
-                || left.localeCompare(right);
-            });
-            const columns = Math.min(12, Math.max(1, Math.ceil(Math.sqrt(orderedNodes.length))));
-            const microservices = orderedNodes.filter(node => nodeDataById.get(node)?.kind === "microservice");
-            const resources = orderedNodes.filter(node => nodeDataById.get(node)?.kind !== "microservice");
-            return {
-              namespace,
-              nodes: orderedNodes,
-              columns,
-              microservices,
-              resources,
-            };
-          });
-        if (!groups.length) return;
-        const maxClusterRows = 3;
-        const maxColumns = group => Math.min(12, group.nodes.length);
-        const layoutLayerGroups = () => {
-          const columns = Math.min(10, Math.max(1, groups.length));
-          const rows = Math.ceil(groups.length / columns);
-          groups.forEach(group => {
-            group.subLayers = SystemLensLayerGeometry.computeClusterSubLayers(
-              group.microservices,
-              group.resources,
-              { nodeGapX, nodeGapY, subLayerGapY: 700, maxColumns: group.columns },
-            );
-            group.width = group.subLayers.width;
-            group.height = Math.abs(group.subLayers.height);
-          });
-          const outerWidth = Math.max(...groups.map(group => group.width + 240 + clusterPaddingX * 2));
-          const rowHeights = Array.from({ length: rows }, (_, row) => Math.max(
-            ...groups.slice(row * columns, (row + 1) * columns)
-              .map(group => group.height + 200 + clusterPaddingY * 2),
-          ));
-          let layerCursorY = cursorY;
-          groups.forEach((group, index) => {
-            const row = Math.floor(index / columns);
-            const column = index % columns;
-            const clusterX = (column - (columns - 1) / 2) * (outerWidth + clusterGapX);
-            const clusterY = -(layerCursorY + clusterPaddingY);
-            // Nodes are laid out from the first row towards negative graph Y.
-            // The envelope must therefore extend by the full row span from
-            // the first node, not by half of that span on either side.
-            group.minY = clusterY - group.height - clusterPaddingY;
-            group.maxY = clusterY + clusterPaddingY;
-            group.nodes.forEach(node => {
-              const position = group.subLayers.positions[node];
-              network.setNodeAttribute(node, "x", clusterX - group.width / 2 + position.x);
-              network.setNodeAttribute(node, "y", clusterY + position.y);
-              network.setNodeAttribute(
-                node,
-                "clusterSubLayer",
-                group.resources.includes(node) ? "resources" : "microservices",
-              );
-            });
-            if (column === columns - 1 || index === groups.length - 1) {
-              layerCursorY += rowHeights[row] + namespaceGapY;
-            }
-          });
-          return layerCursorY;
-        };
-        // Keep exceptionally tall module envelopes from crossing a neighbouring layer.
-        // Adding columns trades vertical pressure for horizontal space; the
-        // outer width is recomputed on every pass so the diagram grows with it.
-        for (let pass = 0; pass < 12; pass += 1) {
-          layoutLayerGroups();
-          const overflowing = groups.filter(group => (
-            Math.ceil(group.nodes.length / group.columns) > maxClusterRows
-            || group.maxY - group.minY > (maxClusterRows - 1) * nodeGapY + 2 * clusterPaddingY
-          ));
-          if (!overflowing.length) break;
-          const changed = overflowing.some(group => {
-            if (group.columns >= maxColumns(group)) return false;
-            group.columns += 1;
-            return true;
-          });
-          if (!changed) break;
-        }
-        cursorY = layoutLayerGroups() + layerGapY;
-      });
-      document.getElementById("graph").dataset.layeredSubLayers = "microservices-first,resources-second";
-    }
-    async function applyFcoseClusterLayout() {
-      graphState.clusterLayoutPositions = new Map();
-      if (typeof window.cytoscape !== "function") {
-        packClusterGraphPositions();
-        return false;
-      }
-      const namespaceGroups = new Map();
-      network.forEachNode(node => {
-        const namespace = namespaceForNode(node);
-        if (!namespaceGroups.has(namespace)) namespaceGroups.set(namespace, []);
-        namespaceGroups.get(namespace).push(node);
-      });
-      const groups = [...namespaceGroups.entries()].sort(([left], [right]) => left.localeCompare(right));
-      const parentByNamespace = new Map(groups.map(([namespace], index) => [namespace, `cluster-${index}`]));
-      const elements = [];
-      groups.forEach(([namespace, nodes]) => {
-        const parent = parentByNamespace.get(namespace);
-        elements.push({ data: { id: parent } });
-        nodes.forEach(node => {
-          const attributes = network.getNodeAttributes(node);
-          elements.push({
-            data: { id: node, parent },
-            position: { x: attributes.x, y: attributes.y },
-          });
-        });
-      });
-      network.forEachEdge((edge, _attributes, source, target) => {
-        elements.push({ data: { id: `edge-${edge}`, source, target } });
-      });
-      let cy;
-      try {
-        cy = window.cytoscape({ headless: true, elements });
-        const layout = cy.layout({
-          name: "fcose",
-          quality: "proof",
-          randomize: true,
-          animate: false,
-          fit: false,
-          nodeDimensionsIncludeLabels: false,
-          tilingPaddingVertical: 40,
-          tilingPaddingHorizontal: 40,
-          idealEdgeLength: 180,
-          nodeRepulsion: 9000,
-          gravity: 0.25,
-          gravityCompound: 1.0,
-        });
-        let layoutStopped = false;
-        await Promise.race([
-          new Promise((resolve, reject) => {
-          layout.one("layoutstop", resolve);
-          try { layout.run(); } catch (error) { reject(error); }
-          }),
-          new Promise(resolve => setTimeout(() => resolve(false), 1500)),
-        ]).then(result => { layoutStopped = result !== false; });
-        if (!layoutStopped) throw new Error("fCoSE n'a pas terminé dans le délai prévu");
-        cy.nodes().filter(node => !node.isParent()).forEach(node => {
-          const position = node.position();
-          graphState.clusterLayoutPositions.set(node.id(), { x: position.x, y: position.y });
-        });
-        const fcoseApplied = graphState.clusterLayoutPositions.size === network.order;
-        if (!fcoseApplied) {
-          network.forEachNode(node => {
-            const attributes = network.getNodeAttributes(node);
-            graphState.clusterLayoutPositions.set(node, { x: attributes.x, y: attributes.y });
-          });
-        }
-        packClusterGraphPositions();
-        return fcoseApplied;
-      } catch (error) {
-        console.warn("fCoSE est indisponible pour le rendu par modules ; la grille déterministe est utilisée.", error);
-        network.forEachNode(node => {
-          const attributes = network.getNodeAttributes(node);
-          graphState.clusterLayoutPositions.set(node, { x: attributes.x, y: attributes.y });
-        });
-        packClusterGraphPositions();
-        return false;
-      } finally {
-        cy?.destroy();
-      }
-    }
-    async function applyElkLayout(libraries) {
-      const layerOrder = ["api", "application", "orchestration", "infrastructure", "domain", "persistence", "external"];
-      const groups = new Map(layerOrder.map(layer => [layer, new Map()]));
-      const layerForNode = node => {
-        const data = nodeDataById.get(node);
-        if (data?.architecture_layer && groups.has(data.architecture_layer)) return data.architecture_layer;
-        if (data?.kind === "microservice" && groups.has(data.layer)) return data.layer;
-        const neighbourLayers = network.neighbors(node)
-          .map(neighbour => nodeDataById.get(neighbour)?.layer)
-          .filter(layer => groups.has(layer));
-        return neighbourLayers[0] || "application";
-      };
-      network.forEachNode(node => {
-        const layer = layerForNode(node);
-        const namespace = namespaceForNode(node);
-        const layerGroups = groups.get(layer);
-        if (!layerGroups.has(namespace)) layerGroups.set(namespace, []);
-        layerGroups.get(namespace).push(node);
-      });
-      const children = [...groups.entries()]
-        .filter(([, namespaces]) => namespaces.size)
-        .map(([layer, namespaces]) => ({
-          id: `elk-layer-${layer}`,
-          layoutOptions: {
-            "elk.algorithm": "box",
-            "elk.direction": "DOWN",
-            "elk.hierarchyHandling": "INCLUDE_CHILDREN",
-            "elk.padding": "[top=34,left=28,bottom=28,right=28]",
-          },
-          children: [...namespaces.entries()].map(([namespace, nodes]) => ({
-            id: `elk-namespace-${layer}-${namespace.replace(/[^a-zA-Z0-9_-]/g, "-")}`,
-            layoutOptions: {
-              "elk.algorithm": "box",
-              "elk.direction": "DOWN",
-              "elk.hierarchyHandling": "INCLUDE_CHILDREN",
-              "elk.padding": "[top=28,left=22,bottom=22,right=22]",
-              "elk.spacing.nodeNode": "55",
-            },
-            children: nodes.map(node => ({ id: node, width: 150, height: 86 })),
-          })),
-        }));
-      const layerOrderEdges = children.slice(1).map((layer, index) => ({
-        id: `elk-layer-order-${index}`,
-        sources: [children[index].id],
-        targets: [layer.id],
-      }));
-      const result = await libraries.elk.layout({
-        id: "systemlens-architecture",
-        layoutOptions: {
-          "elk.algorithm": "layered",
-          "elk.direction": "DOWN",
-          "elk.hierarchyHandling": "INCLUDE_CHILDREN",
-          "elk.edgeRouting": "ORTHOGONAL",
-          "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
-          "elk.layered.spacing.nodeNodeBetweenLayers": "110",
-          "elk.spacing.nodeNode": "70",
-          "elk.spacing.edgeNode": "40",
-          "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
-        },
-        children,
-        // Architecture relations are rendered by Sigma. The synthetic order
-        // edges only stack software layers vertically for the layer view.
-        edges: layerOrderEdges,
-      });
-      const offsetX = (result.width || 0) / -2;
-      const offsetY = (result.height || 0) / -2;
-      const placeChildren = (items, parentX = 0, parentY = 0, parentId = "") => items.forEach((child, index) => {
-        const x = parentX + Number(child.x || 0);
-        const y = parentY + Number(child.y || 0);
-        if (child.children) placeChildren(child.children, x, y, child.id);
-        else {
-          const namespaceChild = parentId.startsWith("elk-namespace-");
-          const namespaceColumns = 5;
-          // ELK coordinates are later normalized by Sigma. Keep a generous
-          // margin so the 110x70 HTML cards never touch after projection.
-          const spreadX = namespaceChild ? (index % namespaceColumns) * 1500 : 0;
-          const spreadY = namespaceChild ? Math.floor(index / namespaceColumns) * 900 : 0;
-          network.setNodeAttribute(child.id, "x", x + spreadX + offsetX);
-          // ELK's Y axis grows downwards, while Sigma's graph Y axis grows
-          // upwards. Invert it so the canonical order keeps domain at bottom.
-          network.setNodeAttribute(child.id, "y", -((namespaceChild ? parentY + spreadY : y) + offsetY));
-        }
-      });
-      placeChildren(result.children || []);
     }
     function setActiveLayout(layout) {
       layoutButtons.forEach((button, key) => {
@@ -6158,6 +5601,9 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     }
 
     async function applyLayout(layout) {
+      if (!["forceatlas2", "noverlap", "forceatlas2-noverlap"].includes(layout)) {
+        layout = "forceatlas2-noverlap";
+      }
       const request = ++graphState.layoutRequest;
       const previousLayout = graphState.activeLayout;
       updateGraphState({
@@ -6166,11 +5612,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         cameraFitAdjusting: false,
       });
       const label = layoutLabels.get(layout);
-      const nextLayeredView = ["elk", "cluster"].includes(layout);
-      const switchingView = graphState.layeredView !== nextLayeredView
-        || graphState.clusteredView !== (layout === "cluster")
-        || graphState.viewMode === "call-graph";
-      if (switchingView) {
+      if (graphState.viewMode === "call-graph") {
         updateGraphState({
           selectedId: null,
           dependencyFocusOnly: false,
@@ -6178,10 +5620,8 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
           hoveredId: null,
           relatedNodes: null,
           relatedEdges: null,
-          selectedCodeFlowId: null,
           selectedDiagnosticId: null,
           diagnosticFocusSnapshot: null,
-          viewMode: "architecture",
           selectedCallGraphEdgeKey: null,
           pathMicroserviceOrder: new Map(),
           codeFlowTreeCoordinates: new Map(),
@@ -6190,9 +5630,8 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         dependencyAnalysisControls.disabled = true;
         dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
         dependencyFocusOnly.disabled = true;
-        delete graphCanvas.dataset.selectedCodeFlow;
         clearPathControls();
-        setDetailsEmpty("Sélectionnez un nœud ou un module pour afficher ses informations.");
+        setDetailsEmpty("Sélectionnez un nœud pour afficher ses informations.");
       }
       const zoomOutButton = document.getElementById("graph-zoom-out");
       if (zoomOutButton) {
@@ -6201,45 +5640,16 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       }
       setActiveLayout(layout);
       layoutStatus.textContent = `Calcul de la disposition ${label}…`;
-      // Module placement is deterministic and local; it does not need any
-      // external layout library. Keep the library loading requirement for
-      // ForceAtlas2/Noverlap and the ELK layer view only.
-      // The layer view only needs ELK. Do not make it wait for the dynamic
-      // ForceAtlas2/Noverlap imports used by the other views: while those
-      // imports are pending, ELK layout completion (and therefore stable pan
-      // interaction) could be delayed indefinitely.
-      const libraries = layout === "cluster"
-        ? {}
-        : layout === "elk"
-          ? { elk: typeof window.ELK === "function" ? new window.ELK() : null }
-          : await layoutLibraries;
+      const libraries = await layoutLibraries;
       if (request !== graphState.layoutRequest) return;
-      if (libraries === null && layout !== "cluster") {
+      if (libraries === null) {
         updateGraphState({ activeLayout: previousLayout });
         setActiveLayout(previousLayout);
         layoutStatus.textContent = "Les dispositions du graphe sont indisponibles ; la disposition initiale est conservée.";
         return;
       }
-      if (layout === "elk" && libraries.elk === null) {
-        updateGraphState({ activeLayout: previousLayout });
-        setActiveLayout(previousLayout);
-        layoutStatus.textContent = "ELK.js est indisponible ; la disposition initiale est conservée.";
-        return;
-      }
       try {
         restoreInitialNodePositions();
-        if (layout === "elk") {
-          await applyElkLayout(libraries);
-          packLayeredClusterGraphPositions();
-        }
-        if (layout === "cluster") {
-          // The deterministic packer is the source of truth for this view:
-          // it sizes namespaces from their two sub-layers and reserves sibling
-          // gaps before projection. fCoSE can block the browser main thread
-          // on large compound graphs, which prevents the fallback and leaves
-          // partially packed module envelopes on screen.
-          packClusterGraphPositions();
-        }
         if (layout === "forceatlas2" || layout === "forceatlas2-noverlap") {
           libraries.forceAtlas2.assign(network, {
             iterations: Math.min(320, Math.max(120, network.order * 4)),
@@ -6273,30 +5683,14 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       await fitCameraToVisibleGraph(renderer);
       await new Promise(resolve => setTimeout(resolve, 300));
       if (request !== graphState.layoutRequest) return;
-      // Commit the view mode only after its layout and camera are ready. This
-      // keeps the old overlays coherent while an async layout is pending and
-      // prevents a half-switched view from mixing old positions with new
-      // module/layer geometry.
-      updateGraphState({
-        layeredView: nextLayeredView,
-        clusteredView: layout === "cluster",
-        layeredClusterView: layout === "elk",
-      });
       if (layout === "forceatlas2-noverlap" && graphState.fitMode === "readable") {
-        // Force layouts optimize Sigma's node radii, not the larger HTML
-        // overlays. Resolve their final projected envelope only in the plain
-        // graph's readable view; compound views keep deterministic packing.
         resolveGraphCardOverlaps();
         renderer.refresh();
         await fitCameraToVisibleGraph(renderer);
       }
-      if (graphState.selectedCodeFlowId && graphState.relatedNodes?.size) {
+      if (codeFlowSelection.flowId && graphState.relatedNodes?.size) {
         centerCameraOnPath({ nodes: [...graphState.relatedNodes] });
       }
-      // Sigma's noverlap solver works with Sigma node radii, while the
-      // readable labels are larger HTML rectangles. Resolve any residual
-      // collision using the actual projected card envelope after the camera
-      // has fitted the layout.
       requestGraphRender();
       layoutStatus.textContent = `${label} actif.`;
     }
@@ -6317,101 +5711,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       const key = normalizeNodeName(node.name);
       nodesByNormalizedName.set(key, [...(nodesByNormalizedName.get(key) || []), node]);
     });
-    function setToolbarTab(tab, options = {}) {
-      graphState.analysisContextCollapsed = true;
-      document.body.classList.toggle("catalogue-active", tab === "microservices");
-      const { showingGraph, showingFlows, showingFlowGraph, graphVisible, resetView } = graphViewLifecycle.activate(tab, options);
-      // The two navigation surfaces have different meanings: Graphe is the
-      // static architecture view, while Flux de code only becomes a graph
-      // after the user explicitly selects a flow from its list.
-      if (resetView) {
-        // The Flux de code panel is hidden behind the toolbar and does not
-        // need a graph rebuild. Rebuild only when returning to Graphe, after
-        // the static view has become visible again.
-        if (tab === "graph") {
-          rebuildGraph();
-          applyLayout(graphState.activeLayout);
-        }
-      }
-      if (document.querySelector(".toolbar")?.classList.contains("has-details")) {
-        setDetailsEmpty("Sélectionnez un nœud pour afficher ses détails.");
-      }
-      const showingMicroservices = tab === "microservices";
-      const showingIssues = tab === "issues";
-      const showingContracts = tab === "contracts";
-      const showingAsyncApi = tab === "asyncapi";
-      const showingDtoContracts = tab === "dto-contracts";
-      const showingJpa = tab === "jpa";
-      const showingRoutes = tab === "routes";
-      const showingKafka = tab === "kafka";
-      const showingCollections = tab === "collections";
-      const showingPersistence = tab === "persistence";
-      const showingContractView = showingContracts || showingAsyncApi || showingDtoContracts || showingJpa || showingPersistence;
-      const mode = showingMicroservices
-        ? "contracts"
-        : showingFlows
-        ? "architecture"
-        : showingContractView
-          ? "contracts"
-          : showingIssues
-            ? "diagnostics"
-            : "architecture";
-      Object.entries(modeTabs).forEach(([name, button]) => {
-        const active = name === mode;
-        button.classList.toggle("is-active", active);
-        button.setAttribute("aria-selected", String(active));
-      });
-      Object.entries(modeGroups).forEach(([name, group]) => {
-        group.hidden = name !== mode || (showingMicroservices && name === "contracts");
-      });
-      graphTab.classList.toggle("is-active", showingGraph);
-      graphTab.setAttribute("aria-selected", String(showingGraph));
-      microservicesTab.classList.toggle("is-active", showingMicroservices);
-      microservicesTab.setAttribute("aria-selected", String(showingMicroservices));
-      routesTab.classList.toggle("is-active", showingRoutes);
-      routesTab.setAttribute("aria-selected", String(showingRoutes));
-      contractsTab.classList.toggle("is-active", showingContracts);
-      contractsTab.setAttribute("aria-selected", String(showingContracts));
-      asyncApiTab.classList.toggle("is-active", showingAsyncApi);
-      asyncApiTab.setAttribute("aria-selected", String(showingAsyncApi));
-      dtoContractTab.classList.toggle("is-active", showingDtoContracts);
-      dtoContractTab.setAttribute("aria-selected", String(showingDtoContracts));
-      jpaTab.classList.toggle("is-active", showingJpa);
-      jpaTab.setAttribute("aria-selected", String(showingJpa));
-      kafkaTab.classList.toggle("is-active", showingKafka);
-      kafkaTab.setAttribute("aria-selected", String(showingKafka));
-      collectionsTab.classList.toggle("is-active", showingCollections);
-      collectionsTab.setAttribute("aria-selected", String(showingCollections));
-      persistenceTab.classList.toggle("is-active", showingPersistence);
-      persistenceTab.setAttribute("aria-selected", String(showingPersistence));
-      issuesTab.classList.toggle("is-active", showingIssues);
-      issuesTab.setAttribute("aria-selected", String(showingIssues));
-      flowsTab.classList.toggle("is-active", showingFlows);
-      flowsTab.setAttribute("aria-selected", String(showingFlows));
-      graphPanel.hidden = !showingGraph;
-      microservicesPanel.hidden = !showingMicroservices;
-      quickSearch.hidden = !showingGraph;
-      graphContext.hidden = !showingGraph;
-      // Keep the mode-specific graph toolbars aligned with the selected tab.
-      // The Flux list has no graph controls; they only appear after a flow
-      // explicitly opens its call graph.
-      const graphModeContext = document.getElementById("graph-mode-context");
-      const flowModeContext = document.getElementById("flow-mode-context");
-      if (graphModeContext) graphModeContext.hidden = !showingGraph;
-      if (flowModeContext) flowModeContext.hidden = !showingFlows;
-      issuesPanel.hidden = !showingIssues;
-      contractsPanel.hidden = !showingContracts;
-      asyncApiContractPanel.hidden = !showingAsyncApi;
-      dtoContractPanel.hidden = !showingDtoContracts;
-      jpaPanel.hidden = !showingJpa;
-      routesPanel.hidden = !showingRoutes;
-      kafkaPanel.hidden = !showingKafka;
-      collectionsPanel.hidden = !showingCollections;
-      persistencePanel.hidden = !showingPersistence;
-      flowsPanel.hidden = !showingFlows;
-      graphLegend.hidden = !showingGraph;
-      if (showingFlows) flowsPanel.dispatchEvent(new Event("systemlens:flows-open"));
-    }
     function renderIndexingIssues() {
       const progress = graphData.progress_notice;
       progressNotice.hidden = !progress;
@@ -6902,7 +6201,10 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         listAction.className = "reference-action";
         listAction.textContent = "Flux";
         listAction.title = "Ouvrir ce flux dans l’onglet Flux";
-        const openInList = () => openCodeFlowInList(flow);
+        const openInList = () => flowsPanel.dispatchEvent(new CustomEvent(
+          "systemlens:code-flow-open-in-list",
+          { detail: { flowId: flow.id } },
+        ));
         listAction.addEventListener("click", openInList);
         registerDetailsAction(listAction, openInList);
         const graphAction = document.createElement("button");
@@ -6910,7 +6212,10 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         graphAction.className = "reference-action";
         graphAction.textContent = "Arbre d’appel";
         graphAction.title = "Afficher ce flux dans le graphe d’appel";
-        const openInGraph = () => showCodeFlow(flow);
+        const openInGraph = () => flowsPanel.dispatchEvent(new CustomEvent(
+          "systemlens:code-flow-open-in-graph",
+          { detail: { flowId: flow.id } },
+        ));
         graphAction.addEventListener("click", openInGraph);
         registerDetailsAction(graphAction, openInGraph);
         actions.append(listAction, graphAction);
@@ -7871,96 +7176,6 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
     microservicesFilter.addEventListener("input", renderResourceCatalogue);
     renderResourceCatalogueControls();
 
-// Ordered source module: 45-view-lifecycle.js
-// Owns the boundary between the architecture projection and the flow views.
-const graphViewLifecycle = (() => {
-  const graphSurfaces = () => [
-    graphCanvas,
-    graphLayersOverlay,
-    graphGroupsOverlay,
-    portPathOverlay,
-    nodeLabelOverlay,
-    graphCallTreeOverlay,
-    flowTooltipOverlay,
-  ];
-
-  function clearOverlays() {
-    [
-      graphLayersOverlay,
-      graphGroupsOverlay,
-      portPathOverlay,
-      nodeLabelOverlay,
-      graphCallTreeOverlay,
-      flowTooltipOverlay,
-    ].forEach(element => element?.replaceChildren());
-  }
-
-  function setGraphVisibility(visible) {
-    graphSurfaces().forEach(element => {
-      if (!element) return;
-      const surfaceVisible = visible && (
-        element !== graphCallTreeOverlay || graphState.viewMode === "call-graph"
-      );
-      element.hidden = !surfaceVisible;
-      // SVG/canvas overlays have author-level display rules. Keep the
-      // transition deterministic even when those rules override [hidden].
-      element.style.display = surfaceVisible ? "" : "none";
-      if (visible && element !== graphCallTreeOverlay) {
-        element.classList.remove("is-call-tree-hidden");
-      }
-    });
-    if (!visible && graphFlowStatus) graphFlowStatus.hidden = true;
-  }
-
-  function resetSelection(viewMode) {
-    graphState.selectedId = null;
-    graphState.selectedClusterKey = null;
-    graphState.relatedNodes = null;
-    graphState.relatedEdges = null;
-    graphState.dependencyFocusOnly = false;
-    graphState.analysisPortEndpointId = null;
-    graphState.selectedCodeFlowId = null;
-    graphState.selectedDiagnosticId = null;
-    graphState.diagnosticFocusSnapshot = null;
-    graphState.callGraphDisplayMode = "network";
-    graphState.selectedCallGraphEdgeKey = null;
-    graphState.pathMicroserviceOrder = new Map();
-    graphState.codeFlowTreeCoordinates = new Map();
-    graphState.relatedLocalPortLinks = new Set();
-    graphState.codeFlowRootNodeId = null;
-    graphState.codeFlowTrigger = null;
-    graphState.viewMode = viewMode;
-    dependencyFocusOnly.checked = false;
-    dependencyAnalysisControls.disabled = true;
-    dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
-    dependencyFocusOnly.disabled = true;
-    delete graphCanvas.dataset.selectedCodeFlow;
-    delete graphCanvas.dataset.selectedCallGraphArc;
-    delete graphCanvas.dataset.flowFocusRatio;
-  }
-
-  function activate(tab, options = {}) {
-    const showingGraph = tab === "graph";
-    const showingFlows = tab === "flows";
-    const showingFlowGraph = showingFlows && options.showFlowGraph === true;
-    const graphVisible = !showingFlows || showingFlowGraph;
-    const viewMode = showingGraph
-      ? "architecture"
-      : showingFlowGraph
-        ? "call-graph"
-        : "empty";
-
-    graphState.viewMode = viewMode;
-    if (!graphVisible) clearOverlays();
-    setGraphVisibility(graphVisible);
-    const resetView = (tab === "graph" || tab === "flows") && !showingFlowGraph;
-    if (resetView) resetSelection(viewMode);
-    return { showingGraph, showingFlows, showingFlowGraph, graphVisible, resetView };
-  }
-
-  return { activate, clearOverlays };
-})();
-
 // Ordered source module: 50-paths.js
     let expandedHttpRoute = null;
     function revealDetails() {
@@ -8001,21 +7216,16 @@ const graphViewLifecycle = (() => {
     function clearPathControls() {
       search.value = "";
       pathStops.splice(0, pathStops.length);
-      graphState.selectedCodeFlowId = null;
+      graphViewLifecycle.clearFlowSelection();
       graphState.selectedDiagnosticId = null;
       graphState.diagnosticFocusSnapshot = null;
-      graphState.viewMode = "architecture";
       graphState.callGraphDisplayMode = "tree";
       graphState.callTreeZoom = 1;
-      graphState.codeFlowRootNodeId = null;
-      graphState.codeFlowTrigger = null;
       graphState.codeFlowTreeCoordinates = new Map();
       graphState.callTreeExpanded = new Set();
       graphState.callTreeCollapsed = new Set();
       graphState.relatedLocalPortLinks = new Set();
       graphFlowStatus.hidden = true;
-      delete graphCanvas.dataset.selectedCodeFlow;
-      delete graphCanvas.dataset.flowFocusRatio;
     }
     function restResourceLabel(link, target) {
       const servicePrefix = `${target.name}: `;
@@ -8474,10 +7684,9 @@ const graphViewLifecycle = (() => {
         `${link.input_endpoint_id}:${link.output_endpoint_id}`
       )));
       graphState.analysisPortEndpointId = null;
-      graphState.selectedCodeFlowId = context.codeFlow?.id || null;
+      graphViewLifecycle.selectPathFlow(context.codeFlow, context.codeFlowRootNodeId, context.codeFlowTrigger);
       graphState.callTreeExpanded = new Set();
       graphState.callTreeCollapsed = new Set();
-      graphState.viewMode = context.codeFlow ? "call-graph" : "architecture";
       graphState.callGraphDisplayMode = "tree";
       if (context.codeFlow && flowsTab?.getAttribute("aria-selected") === "true") {
         document.getElementById("graph-mode-context")?.setAttribute("hidden", "");
@@ -8487,16 +7696,12 @@ const graphViewLifecycle = (() => {
       graphState.callTreeZoom = 1;
       graphState.selectedCallGraphEdgeKey = null;
       graphCanvas.removeAttribute("data-selected-call-graph-arc");
-      graphState.codeFlowRootNodeId = context.codeFlowRootNodeId || null;
-      graphState.codeFlowTrigger = context.codeFlowTrigger || null;
       graphFlowStatus.hidden = context.topologyReconciled !== false;
       if (!graphFlowStatus.hidden) {
         graphFlowStatus.textContent = "Relations topologiques incomplètes : les étapes sont surlignées sans arête vérifiée.";
       }
-      if (graphState.selectedCodeFlowId) graphCanvas.dataset.selectedCodeFlow = graphState.selectedCodeFlowId;
-      else delete graphCanvas.dataset.selectedCodeFlow;
       setPathMicroserviceOrder(path, context.codeFlow || (context.codeFlows || [])[0], context.codeFlows || []);
-      if (graphState.selectedCodeFlowId) rebuildGraph();
+      if (codeFlowSelection.flowId) rebuildGraph();
       else renderer.refresh();
       // The normal Explorer deliberately has no port overlays. Rebuild them
       // after setting the selected call graph so its ports and local links
@@ -9223,7 +8428,6 @@ const graphViewLifecycle = (() => {
     }
     async function selectCluster(cluster) {
       clearPathControls();
-      if (!graphState.layeredView && !graphState.clusteredView) await applyLayout("cluster");
       const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);
       updateGraphState({
         selectedId: null,
@@ -9231,16 +8435,11 @@ const graphViewLifecycle = (() => {
         relatedNodes: null,
         relatedEdges: null,
         relatedLocalPortLinks: new Set(),
-        selectedCodeFlowId: null,
         selectedDiagnosticId: null,
         diagnosticFocusSnapshot: null,
-        viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
-        codeFlowRootNodeId: null,
-        codeFlowTrigger: null,
         pathMicroserviceOrder: new Map(),
       });
-      delete graphCanvas.dataset.selectedCodeFlow;
       renderer.refresh();
       requestGraphRender();
       renderClusterDetails(resolvedCluster);
@@ -9257,14 +8456,9 @@ const graphViewLifecycle = (() => {
       graphState.relatedNodes = new Set([id]);
       graphState.relatedEdges = new Set();
       graphState.relatedLocalPortLinks = new Set();
-      graphState.selectedCodeFlowId = null;
       graphState.selectedDiagnosticId = null;
       graphState.diagnosticFocusSnapshot = null;
-      graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
-      graphState.codeFlowRootNodeId = null;
-      graphState.codeFlowTrigger = null;
-      delete graphCanvas.dataset.selectedCodeFlow;
       network.forEachEdge((edge, attributes, source, target) => {
         if (!isVisibleRelation(attributes, source, target) || !matches(attributes, source, target)) return;
         graphState.relatedEdges.add(edge); graphState.relatedNodes.add(source); graphState.relatedNodes.add(target);
@@ -9315,7 +8509,7 @@ const graphViewLifecycle = (() => {
     function selectNode(id, preservePath = false, openNodeInspector = true) {
       // A focused flow graph is navigated with its flow arcs and camera only.
       // Do not let a microservice click leave the flow projection.
-      if (graphState.selectedCodeFlowId) return;
+      if (codeFlowSelection.flowId) return;
       const node = nodeDataById.get(id);
       const isInspectableResource = node && [
         "kafka_topic", "message_channel", "mongodb_collection", "data_schema", "jpa_entity",
@@ -9336,14 +8530,10 @@ const graphViewLifecycle = (() => {
       graphState.selectedClusterKey = null;
       updateSelectedNodeDependencyScope(id);
       graphState.relatedLocalPortLinks = new Set();
-      graphState.selectedCodeFlowId = null;
+      graphViewLifecycle.clearFlowSelection();
       graphState.selectedDiagnosticId = null;
       graphState.diagnosticFocusSnapshot = null;
-      graphState.viewMode = "architecture";
       graphState.selectedCallGraphEdgeKey = null;
-      graphState.codeFlowRootNodeId = null;
-      graphState.codeFlowTrigger = null;
-      delete graphCanvas.dataset.selectedCodeFlow;
       renderer.refresh();
       renderDetails(id);
       if (openNodeInspector && node) {
@@ -9362,7 +8552,6 @@ const graphViewLifecycle = (() => {
     const codeFlowKind = document.getElementById("code-flow-kind");
     const codeFlowMessageType = document.getElementById("code-flow-message-type");
     const codeFlowMessageTypes = document.getElementById("code-flow-message-types");
-    const codeFlowCycles = document.getElementById("code-flow-cycles");
     const codeFlowsSummary = document.getElementById("code-flows-summary");
     const codeFlowFilterSummary = document.getElementById("code-flow-filter-summary");
     const codeFlowFilterReset = document.getElementById("code-flow-filter-reset");
@@ -9377,7 +8566,7 @@ const graphViewLifecycle = (() => {
       graphState.callTreeVisibleEdgeCount = edgeCount;
       const stats = document.getElementById("flow-mode-context-stats");
       if (!stats) return;
-      const active = Boolean(graphState.selectedCodeFlowId)
+      const active = Boolean(codeFlowSelection.flowId)
         && (graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree");
       stats.hidden = !active;
       stats.textContent = active
@@ -9648,7 +8837,7 @@ const graphViewLifecycle = (() => {
           window.addEventListener("pointercancel", finishCallTreePan, true);
         }, true);
         graphCallTreeOverlay.addEventListener("wheel", event => {
-          if (!graphState.selectedCodeFlowId || graphState.callGraphDisplayMode !== "tree") return;
+          if (!codeFlowSelection.flowId || graphState.callGraphDisplayMode !== "tree") return;
           event.preventDefault();
           const bounds = graphCallTreeOverlay.getBoundingClientRect();
           const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
@@ -9656,13 +8845,13 @@ const graphViewLifecycle = (() => {
           zoomCallTree(factor, event.clientX - bounds.left, event.clientY - bounds.top);
         }, { passive: false });
       }
-      const active = Boolean(graphState.selectedCodeFlowId)
+      const active = Boolean(codeFlowSelection.flowId)
         && graphState.viewMode === "call-graph";
       const treeActive = active;
       const viewport = graphCallTreeOverlay.getBoundingClientRect();
       const treeSignature = treeActive
         ? [
-            graphState.selectedCodeFlowId,
+            codeFlowSelection.flowId,
             graphState.callTreeDepth,
             graphState.selectedDiagnosticId || "",
             graphState.callTreeSelectedPathKey || "",
@@ -9676,7 +8865,7 @@ const graphViewLifecycle = (() => {
       callTreeRenderSignature = treeSignature;
       graphCallTreeOverlay.hidden = !treeActive;
       document.getElementById("graph")?.classList.toggle("is-call-tree-hidden", treeActive);
-      [graphLayersOverlay, graphGroupsOverlay, portPathOverlay, nodeLabelOverlay]
+      [portPathOverlay, nodeLabelOverlay]
         .forEach(element => element?.classList.toggle("is-call-tree-hidden", treeActive));
       if (!treeActive) {
         graphCallTreeOverlay.replaceChildren();
@@ -9684,13 +8873,13 @@ const graphViewLifecycle = (() => {
         return;
       }
       const selectedFlows = (graphData.code_flows || []).filter(flow => (
-        flow.id === graphState.selectedCodeFlowId
+        flow.id === codeFlowSelection.flowId
       ));
       const callGraph = callGraphForFlows(selectedFlows);
       const edges = (callGraph?.edges || []).filter(edge => edge.source !== edge.target);
       const selectedFlow = selectedFlows[0] || null;
       const selectedFlowDiagnostics = (graphData.flow_diagnostics || []).filter(item => (
-        item.flow_id === graphState.selectedCodeFlowId
+        item.flow_id === codeFlowSelection.flowId
       ));
       const selectedDiagnostic = (graphData.flow_diagnostics || []).find(item => (
         item.id === graphState.selectedDiagnosticId
@@ -9851,6 +9040,131 @@ const graphViewLifecycle = (() => {
         occurrence.children.forEach(collect);
       };
       rootsTree.forEach(collect);
+      const rootAccesses = (graphData.flow_data_access_flow_ids_by_root?.[codeFlowSelection.flowId] || [])
+        .flatMap(id => graphData.flow_data_accesses?.[id] || []);
+      const accessesByFlow = new Map();
+      const accessesByInput = new Map();
+      const accessesByHandler = new Map();
+      const accessesByCron = new Map();
+      const addAccess = (index, key, access) => {
+        const matches = index.get(key) || [];
+        matches.push(access);
+        index.set(key, matches);
+      };
+      rootAccesses.forEach(access => {
+        addAccess(accessesByFlow, access.flow_id, access);
+        if (access.trigger_endpoint_id) {
+          addAccess(accessesByInput, JSON.stringify([access.module, access.trigger_endpoint_id]), access);
+          addAccess(accessesByHandler, JSON.stringify([
+            access.module, access.trigger_endpoint_id, access.trigger_method,
+          ]), access);
+        } else {
+          addAccess(accessesByCron, JSON.stringify([
+            access.module, access.trigger_method, access.trigger_kind, access.trigger_name,
+          ]), access);
+        }
+      });
+      const inputForOccurrence = occurrence => occurrence.edge?.endpoint_ids?.[1]
+        || (occurrence.depth === 0 ? selectedFlow?.steps?.[0]?.endpoint_id : null);
+      const accessesForOccurrence = occurrence => {
+        const inputEndpointId = inputForOccurrence(occurrence);
+        const internalFlows = occurrence.flowIds.map(id => flowById.get(id)).filter(Boolean);
+        const occurrenceCallPaths = internalFlows.map(flow => (
+          (flow.steps || []).filter(step => step.kind === "method_call")
+            .map(step => [step.name, step.path, step.start_line])
+        ));
+        const matches = new Map();
+        const addMatch = (access, exactFlow) => {
+          const accessPath = graphData.flow_data_access_call_paths?.[access.flow_id];
+          const routeSupported = accessPath?.length > 0 && occurrenceCallPaths.some(path => (
+            accessPath.length <= path.length && accessPath.every((call, index) => (
+              JSON.stringify(call) === JSON.stringify(path[index])
+            ))
+          ));
+          matches.set(access, Boolean(matches.get(access) || exactFlow || routeSupported));
+        };
+        occurrence.flowIds.forEach(id => (accessesByFlow.get(id) || []).forEach(access => {
+          if (access.module === occurrence.name) addMatch(access, true);
+        }));
+        if (inputEndpointId && !internalFlows.length) {
+          (accessesByInput.get(JSON.stringify([occurrence.name, inputEndpointId])) || [])
+            .forEach(access => addMatch(access, false));
+        } else if (inputEndpointId) {
+          internalFlows.forEach(flow => (
+            accessesByHandler.get(JSON.stringify([occurrence.name, inputEndpointId, flow.method])) || []
+          ).forEach(access => addMatch(access, false)));
+        } else {
+          internalFlows.forEach(flow => (
+            accessesByCron.get(JSON.stringify([
+              occurrence.name, flow.method, flow.steps?.[0]?.kind, flow.steps?.[0]?.name,
+            ])) || []
+          ).forEach(access => addMatch(access, false)));
+        }
+        return [...matches].map(([access, routeSupported]) => ({
+          ...access, handler_only: !routeSupported,
+        }));
+      };
+      const diagnosticAnnotationsForOccurrence = occurrence => {
+        const inputEndpointId = inputForOccurrence(occurrence);
+        return selectedFlowDiagnostics.flatMap((diagnostic, index) => (
+          ["write", "read"].flatMap(side => {
+            const site = diagnostic[`${side}_site`];
+            return inputEndpointId && site?.module === occurrence.name
+              && site.trigger_endpoint_id === inputEndpointId
+              ? [{ diagnostic, index, side }] : [];
+          })
+        ));
+      };
+      const crudLetters = (action, kind) => ({
+        insert: "C",
+        create: "C",
+        read: "R",
+        update: "U",
+        delete: "D",
+        read_update: "RU",
+      })[action] || (kind === "data_read" ? "R" : "");
+      const addCrudAction = (group, action, kind) => {
+        if (action === "create_or_update") {
+          group.createOrUpdate = true;
+          return;
+        }
+        for (const letter of crudLetters(action, kind)) group.letters.add(letter);
+      };
+      const annotationGroupsByOccurrence = new Map();
+      const annotationGroupsForOccurrence = occurrence => {
+        if (annotationGroupsByOccurrence.has(occurrence)) {
+          return annotationGroupsByOccurrence.get(occurrence);
+        }
+        const groups = new Map();
+        const groupFor = resource => {
+          const key = String(resource || "");
+          if (!groups.has(key)) groups.set(key, {
+            resource: key, name: dataEntityLabel(resource), letters: new Set(),
+            createOrUpdate: false, handlerOnly: false, flowIds: new Set(),
+            kinds: new Set(), annotations: [],
+          });
+          return groups.get(key);
+        };
+        accessesForOccurrence(occurrence).forEach(access => {
+          const group = groupFor(access.resource);
+          addCrudAction(group, access.action, access.kind);
+          group.flowIds.add(access.flow_id);
+          if (access.handler_only) group.handlerOnly = true;
+        });
+        diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, side }) => {
+          const group = groupFor(diagnostic.resource);
+          const kind = diagnostic.event_type === "async_write_sync_read"
+            ? side === "write" ? "async" : "sync" : "interaction";
+          addCrudAction(
+            group, diagnostic[`${side}_action`], side === "read" ? "data_read" : "data_write",
+          );
+          group.kinds.add(kind);
+          group.annotations.push({ diagnostic, side, kind });
+        });
+        annotationGroupsByOccurrence.set(occurrence, groups);
+        return groups;
+      };
+      const badgeCount = occurrence => annotationGroupsForOccurrence(occurrence).size;
       const visibleTreeEdgeCount = allOccurrences.reduce(
         (count, occurrence) => count + occurrence.children.length,
         0,
@@ -9868,9 +9182,10 @@ const graphViewLifecycle = (() => {
         return text.length > 58 ? `${text.slice(0, 55)}…` : text;
       };
       const direction = "lr";
-      const gapY = 105;
+      const maxBadges = Math.max(0, ...allOccurrences.map(badgeCount));
+      const cardHeight = Math.max(82, 42 + maxBadges * 20);
+      const gapY = Math.max(105, cardHeight + 23);
       const cardWidth = 150;
-      const cardHeight = 82;
       const maxEdgeLabelLength = allOccurrences.reduce((maximum, occurrence) => (
         occurrence.children.reduce((current, child) => (
           Math.max(current, edgeDisplayLabel(child.edge).length)
@@ -10008,20 +9323,8 @@ const graphViewLifecycle = (() => {
           `${port.path}${port.line ? `:${port.line}` : ""}`,
         ], clientX, clientY);
       };
-      const diagnosticAnnotationsForOccurrence = occurrence => {
-        const inputEndpointId = occurrence.edge?.endpoint_ids?.[1]
-          || (occurrence.depth === 0 ? selectedFlow?.steps?.[0]?.endpoint_id : null);
-        if (!inputEndpointId) return [];
-        return selectedFlowDiagnostics.flatMap((diagnostic, index) => (
-          ["write", "read"].flatMap(side => {
-            const site = diagnostic[`${side}_site`];
-            return site?.module === occurrence.name
-              && site.trigger_endpoint_id === inputEndpointId
-              ? [{ diagnostic, index, side }] : [];
-          })
-        ));
-      };
       const treeOccurrenceTooltipLines = occurrence => {
+        const inputEndpointId = inputForOccurrence(occurrence);
         const lines = [
           occurrence.cycle
             ? "Microservice · cycle détecté"
@@ -10198,6 +9501,7 @@ const graphViewLifecycle = (() => {
             : occurrenceCount === 2 ? "is-frequency-2" : "";
         const isSelectedOccurrence = graphState.callTreeSelectedPathKey === occurrence.pathKey;
         node.className = `graph-call-tree-node${frequencyClass ? ` ${frequencyClass}` : ""}${occurrence.cycle ? " is-cycle" : ""}${isSelectedOccurrence ? " is-selected" : ""}`;
+        node.style.height = `${cardHeight}px`;
         const original = nodeIdForCodeFlowResource(occurrence.name, "microservice");
         const originalNode = original ? nodeDataById.get(original) : null;
         node.style.setProperty("--card-accent", originalNode?.color || "#64748b");
@@ -10216,40 +9520,58 @@ const graphViewLifecycle = (() => {
             ? `Microservice · +${occurrence.hiddenChildrenCount} appels`
             : "Microservice";
         node.append(icon, name, kind);
-        const diagnosticBadges = new Map();
-        diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, side }) => {
-          const operation = diagnostic[`${side}_action`] === "delete"
-            ? "suppression"
-            : side === "read" ? "lecture" : "écriture";
-          const label = `${operation} ${dataEntityLabel(diagnostic.resource)}`;
-          const kind = diagnostic.event_type === "async_write_sync_read"
-            ? side === "write" ? "async" : "sync" : "interaction";
-          const badge = diagnosticBadges.get(label) || { label, kinds: new Set(), annotations: [] };
-          badge.kinds.add(kind);
-          badge.annotations.push({ diagnostic, side, kind });
-          diagnosticBadges.set(label, badge);
-        });
-        diagnosticBadges.forEach(({ label, kinds, annotations }) => {
-          const selectedAnnotation = annotations.find(
+        const annotationGroups = [...annotationGroupsForOccurrence(occurrence).values()]
+          .sort((a, b) => a.name.localeCompare(b.name, "fr")
+            || a.resource.localeCompare(b.resource, "fr"));
+        const annotationNameCounts = new Map();
+        annotationGroups.forEach(group => annotationNameCounts.set(
+          group.name, (annotationNameCounts.get(group.name) || 0) + 1,
+        ));
+        annotationGroups.forEach(group => {
+          const certainLetters = [..."CRUD"].filter(letter => group.letters.has(letter)).join("");
+          const letters = group.createOrUpdate
+            ? certainLetters ? `${certainLetters} (C/U)` : "C/U"
+            : certainLetters || "?";
+          const selectedAnnotation = group.annotations.find(
             item => item.diagnostic.id === graphState.selectedDiagnosticId,
           );
           const kind = selectedAnnotation
             ? selectedAnnotation.kind
-            : kinds.has("interaction") ? "interaction" : kinds.has("async") ? "async" : "sync";
+            : group.kinds.has("interaction") ? "interaction"
+              : group.kinds.has("async") ? "async" : "sync";
           if (selectedAnnotation) node.classList.add(`is-diagnostic-${kind}`);
-          const diagnosticBadge = document.createElement("span");
-          diagnosticBadge.className = `graph-call-tree-diagnostic-badge is-${kind}`;
-          diagnosticBadge.textContent = label;
-          diagnosticBadge.title = annotations.length > 1
-            ? `${annotations.length} diagnostics associés · cliquer pour isoler`
-            : "Cliquer pour isoler ce diagnostic";
-          diagnosticBadge.addEventListener("click", event => {
-            event.preventDefault();
-            event.stopPropagation();
-            const target = selectedAnnotation || annotations[0];
-            if (selectedFlow) focusFlowDiagnostic(target.diagnostic, selectedFlow);
-          });
-          node.append(diagnosticBadge);
+          const badge = document.createElement("span");
+          badge.className = group.annotations.length
+            ? `graph-call-tree-diagnostic-badge is-${kind}`
+            : "graph-call-tree-access-badge";
+          const qualifier = group.resource.includes(":")
+            ? group.resource.split(":").at(-1).split(".").at(-2)
+              || group.resource.split(":").at(-2)
+            : "identité incertaine";
+          const ambiguousName = annotationNameCounts.get(group.name) > 1;
+          const entityName = ambiguousName
+            ? `${group.name} (${qualifier})` : group.name;
+          badge.textContent = `${letters} ${entityName}${group.handlerOnly ? " ?" : ""}`;
+          if (ambiguousName) badge.title = group.resource;
+          if (group.handlerOnly) {
+            badge.title = `${badge.title ? `${badge.title} · ` : ""}Association possible au handler ; parcours interne non établi`;
+          }
+          if (group.flowIds.size) {
+            badge.dataset.accessFlowIds = [...group.flowIds].sort().join(",");
+          }
+          if (group.annotations.length) {
+            const diagnosticTitle = group.annotations.length > 1
+              ? `${group.annotations.length} diagnostics associés · cliquer pour isoler`
+              : "Cliquer pour isoler ce diagnostic";
+            badge.title = `${diagnosticTitle}${badge.title ? ` · ${badge.title}` : ""}`;
+            badge.addEventListener("click", event => {
+              event.preventDefault();
+              event.stopPropagation();
+              const target = selectedAnnotation || group.annotations[0];
+              if (selectedFlow) focusFlowDiagnostic(target.diagnostic, selectedFlow);
+            });
+          }
+          node.append(badge);
         });
         if (treeTrigger && occurrence.depth === 0 && occurrence.name === treeTriggerRootName) {
           const triggerKind = ({
@@ -10375,7 +9697,7 @@ const graphViewLifecycle = (() => {
       return true;
     }
     function expandAllCallTree() {
-      if (!graphState.selectedCodeFlowId || graphState.callGraphDisplayMode !== "tree") return false;
+      if (!codeFlowSelection.flowId || graphState.callGraphDisplayMode !== "tree") return false;
       const camera = captureCallTreeCamera();
       graphState.callTreeDepth = 8;
       graphState.callTreeExpanded = new Set();
@@ -10385,7 +9707,7 @@ const graphViewLifecycle = (() => {
       return true;
     }
     function syncCallTreeDepthControl() {
-      const active = Boolean(graphState.selectedCodeFlowId)
+      const active = Boolean(codeFlowSelection.flowId)
         && (graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree")
         && graphState.callGraphDisplayMode === "tree";
       const depth = Math.max(1, Math.min(8, Number(graphState.callTreeDepth) || 1));
@@ -10399,7 +9721,7 @@ const graphViewLifecycle = (() => {
       if (depthIncrease) depthIncrease.disabled = !active || depth >= 8;
     }
     function adjustCallTreeDepth(delta) {
-      if (!graphState.selectedCodeFlowId || graphState.callGraphDisplayMode !== "tree") return false;
+      if (!codeFlowSelection.flowId || graphState.callGraphDisplayMode !== "tree") return false;
       const currentDepth = Number(graphState.callTreeDepth) || 1;
       const nextDepth = Math.max(1, Math.min(8, currentDepth + delta));
       if (nextDepth === currentDepth) return false;
@@ -10613,10 +9935,8 @@ const graphViewLifecycle = (() => {
     }
 
     function openCodeFlowInList(flow) {
-      codeFlowCycles.setAttribute("aria-pressed", "false");
       codeFlowFilter.value = flow.id;
       setToolbarTab("flows");
-      renderCodeFlows();
       requestAnimationFrame(() => codeFlowsList.querySelector(`[data-flow-id="${flow.id}"]`)?.scrollIntoView({ block: "nearest" }));
     }
 
@@ -10663,7 +9983,7 @@ const graphViewLifecycle = (() => {
 
     function syncCodeFlowSelection() {
       codeFlowsList.querySelectorAll(".code-flow-item").forEach(item => {
-        item.classList.toggle("is-selected", item.dataset.flowId === graphState.selectedCodeFlowId);
+        item.classList.toggle("is-selected", item.dataset.flowId === codeFlowSelection.flowId);
       });
     }
 
@@ -10732,7 +10052,7 @@ const graphViewLifecycle = (() => {
 
     function codeFlowItem(flow) {
       const item = document.createElement("li");
-      const selected = graphState.selectedCodeFlowId === flow.id;
+      const selected = codeFlowSelection.flowId === flow.id;
       item.className = `code-flow-item${flow.status === "cycle" ? " is-cycle" : ""}${flow.reconciliation === "partial" ? " is-partial" : ""}${selected ? " is-selected" : ""}`;
       item.dataset.flowId = flow.id;
       const header = document.createElement("div");
@@ -10793,7 +10113,7 @@ const graphViewLifecycle = (() => {
           callTreeZoom: graphState.callTreeZoom,
         };
       }
-      if (graphState.selectedCodeFlowId !== flow.id) showCodeFlow(flow);
+      if (codeFlowSelection.flowId !== flow.id) showCodeFlow(flow);
       graphState.selectedDiagnosticId = diagnostic.id;
       graphState.callTreeDepth = Math.max(Number(graphState.callTreeDepth) || 1, 8);
       graphState.callTreeExpanded = new Set();
@@ -10818,7 +10138,8 @@ const graphViewLifecycle = (() => {
     function renderCodeFlows() {
       const query = codeFlowFilter.value.trim().toLocaleLowerCase();
       const visible = codeFlows.filter(flow => {
-        const accesses = graphData.flow_data_accesses?.[flow.id] || [];
+        const accesses = (graphData.flow_data_access_flow_ids_by_root?.[flow.id] || [])
+          .flatMap(id => graphData.flow_data_accesses?.[id] || []);
         const haystack = [
           flow.id,
           flow.module,
@@ -10837,6 +10158,15 @@ const graphViewLifecycle = (() => {
       codeFlowsTitle.textContent = `Flux de code (${visible.length})`;
     }
 
+    flowsPanel.addEventListener("systemlens:code-flow-open-in-graph", event => {
+      const flow = codeFlows.find(item => item.id === event.detail?.flowId);
+      if (flow) showCodeFlow(flow);
+    });
+    flowsPanel.addEventListener("systemlens:code-flow-open-in-list", event => {
+      const flow = codeFlows.find(item => item.id === event.detail?.flowId);
+      if (flow) openCodeFlowInList(flow);
+    });
+
     codeFlowFilter.addEventListener("input", renderCodeFlows);
     document.getElementById("flows-panel").addEventListener("systemlens:flows-open", renderCodeFlows);
     renderCodeFlows();
@@ -10852,25 +10182,20 @@ const graphViewLifecycle = (() => {
         relatedNodes: null,
         relatedEdges: null,
         analysisPortEndpointId: null,
-        selectedCodeFlowId: null,
         selectedDiagnosticId: null,
         diagnosticFocusSnapshot: null,
-        viewMode: "architecture",
         selectedCallGraphEdgeKey: null,
         pathMicroserviceOrder: new Map(),
         codeFlowTreeCoordinates: new Map(),
       });
-      delete graphCanvas.dataset.selectedCodeFlow;
       delete graphCanvas.dataset.selectedCallGraphArc;
-      delete graphCanvas.dataset.flowFocusRatio;
+      clearPathControls();
       renderer.refresh();
       setDetailsEmpty("Sélectionnez un nœud ou un module pour afficher ses informations.");
-      search.value = "";
       dependencyAnalysisControls.disabled = true;
       dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
       dependencyFocusOnly.checked = false;
       dependencyFocusOnly.disabled = true;
-      clearPathControls();
       persistState();
     }
     function restoreState() {
@@ -10990,28 +10315,15 @@ const graphViewLifecycle = (() => {
       camera.setState({ x: .5, y: .5, ratio: 1, angle: 0 });
       targetRenderer.refresh();
       if (fitRequest !== graphState.fitRequest) return;
-      const compoundView = targetRenderer === renderer
-        && ["cluster", "elk"].includes(graphState.activeLayout);
-      const collisionZoom = compoundView ? Math.max(1, requiredCardZoomIn(targetRenderer)) : 1;
-      if (compoundView) {
-        graphState.maximumCollisionFreeRatio = 1 / collisionZoom;
-      } else if (targetRenderer === renderer) {
-        graphState.maximumCollisionFreeRatio = 100;
-      }
       if (nextMode === "readable") {
         const state = camera.getState();
         // Start from the complete overview, then move closer. Architecture
         // cards use the measured projected spacing.
-        if (compoundView) {
-          camera.setState({ ...state, ratio: Math.max(.01, state.ratio / Math.max(1.6, collisionZoom)) });
-        } else if (targetRenderer === renderer && network.order <= 12) {
+        if (targetRenderer === renderer && network.order <= 12) {
           camera.setState({ ...state, ratio: requiredSmallGraphOverviewRatio(targetRenderer) });
         } else {
           camera.setState({ ...state, ratio: Math.max(.01, state.ratio / Math.max(1.6, requiredCardZoomIn(targetRenderer))) });
         }
-      } else if (compoundView) {
-        const state = camera.getState();
-        camera.setState({ ...state, ratio: Math.max(.01, state.ratio / collisionZoom) });
       }
       targetRenderer.refresh();
       if (targetRenderer === renderer) {
@@ -11038,7 +10350,7 @@ const graphViewLifecycle = (() => {
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
-      camera.setState({ ...state, ratio: Math.min(graphState.maximumCollisionFreeRatio, state.ratio * 1.25) });
+      camera.setState({ ...state, ratio: Math.min(100, state.ratio * 1.25) });
       requestGraphRender();
     };
     ["graph-zoom-in", "flow-zoom-in"].forEach(id => document.getElementById(id)?.addEventListener("click", zoomIn));
@@ -11048,7 +10360,7 @@ const graphViewLifecycle = (() => {
     resetButton.addEventListener("click", reset);
     dependencyDepth.addEventListener("change", () => {
       graphState.dependencyDepth = Number(dependencyDepth.value) || 1;
-      if (!graphState.selectedId || graphState.selectedCodeFlowId) return;
+      if (!graphState.selectedId || codeFlowSelection.flowId) return;
       dependencyFocusOnly.checked = true;
       graphState.dependencyFocusOnly = true;
       updateSelectedNodeDependencyScope(graphState.selectedId);
@@ -11056,7 +10368,7 @@ const graphViewLifecycle = (() => {
       applyLayout(graphState.activeLayout);
     });
     dependencyFocusOnly.addEventListener("change", () => {
-      if (!graphState.selectedId || graphState.selectedCodeFlowId) {
+      if (!graphState.selectedId || codeFlowSelection.flowId) {
         dependencyFocusOnly.checked = false;
         return;
       }
@@ -11133,8 +10445,6 @@ const graphViewLifecycle = (() => {
     });
     jpaReferencesFilter.addEventListener("input", renderReferences);
     mongoClassReferencesFilter.addEventListener("input", renderReferences);
-    microservicesFilter.addEventListener("input", renderResourceCatalogue);
-    resourceKindFilter?.addEventListener("change", renderResourceCatalogue);
     collectionsFilter.addEventListener("input", renderCollections);
     renderIndexingIssues();
     renderReferences();
@@ -11145,7 +10455,9 @@ const graphViewLifecycle = (() => {
     dependencyAnalysisControls.disabled = true;
     dependencyAnalysisHelp.textContent = "Sélectionnez un nœud pour activer cette analyse.";
     dependencyFocusOnly.disabled = true;
-    setToolbarTab("graph");
+    // The first projection starts after every widget has registered its handlers.
+    // The viewport is established below before the initial layout runs.
+    setToolbarTab("graph", { deferLayout: true });
     function updateWorkspaceViewport(refit = false) {
       const root = document.documentElement;
       const toolbarBounds = toolbar?.getBoundingClientRect();
@@ -11160,7 +10472,7 @@ const graphViewLifecycle = (() => {
       renderer?.refresh();
       requestGraphRender();
       if (refit) {
-        if (graphState.selectedCodeFlowId && graphState.relatedNodes?.size) {
+        if (codeFlowSelection.flowId && graphState.relatedNodes?.size) {
           centerCameraOnPath({ nodes: [...graphState.relatedNodes] });
         } else {
           fitCameraToVisibleGraph(activeRenderer());
@@ -11168,7 +10480,6 @@ const graphViewLifecycle = (() => {
       }
     }
     updateWorkspaceViewport(false);
-    applyLayout("forceatlas2-noverlap");
     function runExploreSearch() {
       const query = search.value.trim();
       searchStatus.textContent = "";
@@ -11193,6 +10504,12 @@ const graphViewLifecycle = (() => {
       if (event.key === "Enter") { event.preventDefault(); runExploreSearch(); }
     });
     window.addEventListener("resize", () => updateWorkspaceViewport(true));
+    if (graphData.call_graphs_only) {
+      setToolbarTab("flows");
+      codeFlowsList.querySelector(".code-flow-item:not(.is-unavailable)")?.click();
+    } else {
+      applyLayout("forceatlas2-noverlap");
+    }
 </script>
 </body>
 </html>

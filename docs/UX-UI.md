@@ -92,7 +92,7 @@ error states explain what is unavailable and what the user can do next.
 | --- | --- | --- | --- |
 | Navigation widget | Switch between graph, flow, resource, contract, and diagnostics views. | View groups, active view, and collapse control. | Changes the workspace view and clears incompatible transient details. It does not contain resource facts. |
 | Graph workspace widget | Provide the primary visual reading surface for architecture or one selected call tree. | Graph canvas, rendered nodes, relations, camera controls, and view-specific controls. | Pan, zoom, fit, and selection affect the current projection only. The graph remains visible while supporting widgets change. |
-| Graph context widget | Expose the controls and summary needed to interpret the current graph. | Search or filters, layout and display actions, counts, and the active selection summary. The mutually exclusive architecture view modes (`Graphe statique`, `Vue par couches`, `Vue par modules`) MUST be grouped and labelled as one control. | May be collapsed. Actions change the projection or transient state without duplicating the graph hierarchy. |
+| Graph context widget | Expose the controls and summary needed to interpret the current graph. | Search or filters, layout and display actions, counts, and the active selection summary. | May be collapsed. Actions change the projection or transient state without duplicating the graph hierarchy. |
 | Resource catalogue widget | Browse indexed topics, Mongo collections, routes, contracts, or persistence resources. | Search or filters, compact rows, resource type, and relevant counts or status. | Selecting a resource updates the docked inspector while preserving the filtered catalogue. Resource details MUST NOT expand inline in the result list. |
 | Details widget | Show the selected graph element's immediate context and available analysis actions. | Identity, summary, relations, evidence, and actions for focus, modules, code flows, or source navigation. | It is contextual and may be hidden when an introspection window opens. It does not compete with the modal identity header. |
 | Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, description, ownership, relations, evidence, breadcrumb, and back or close action. | Opens as a dedicated window. Related resources remain selectable and update the same inspection history. |
@@ -207,28 +207,16 @@ Search results MUST distinguish exact, ambiguous, invalid, repeated, and
 unreachable requests. A rejected request leaves the current graph unchanged and
 reports an actionable reason.
 
-## Architecture graph views
+## Architecture graph
 
-The plain, module, and layered views are distinct projections of the same
-architecture snapshot. Switching views MUST preserve facts while rebuilding
-the visible projection and refitting the camera according to the active fit
-mode.
+The architecture graph shows the indexed resources and relations in one graph
+view. It does not draw software-layer bands or module containers. A resource's
+layer and module remain available in its details, and module details support
+hierarchy navigation without switching graph layout.
 
-Module rectangles MUST contain their visible cards, include title and padding,
-and remain disjoint from sibling rectangles. A module may use multiple rows.
-Within a module, microservices occupy the first placement sub-layer and
-resources the second; this is conveyed by position and MUST NOT add synthetic
-sub-layer labels.
-
-Layered view uses bounded horizontal bands, shared left and right bounds, and a
-visible title gutter. Bands are ordered by the canonical software-layer order,
-with persistence at the bottom and external services in their dedicated
-position. A module MUST be fully contained in its owning band.
-
-Filtering, selection, zooming, resizing, and layout changes MUST recompute
-container geometry. Stale modules, layers, coordinates, and overlays MUST be
-cleared when the filtered graph is empty or no longer contains a previous
-container.
+Filtering, selection, zooming, resizing, and layout changes MUST keep graph
+coordinates and node overlays synchronized. Empty or filtered graphs MUST clear
+stale node cards and paths.
 
 ## Camera and graph interaction
 
@@ -237,15 +225,13 @@ fit actions. `Tout le graphe` provides the complete overview. `Vue lisible`
 may zoom further to keep fixed-size cards readable. Pan and zoom move the
 camera, not graph nodes.
 
-Wheel zoom MUST be handled once for the Sigma canvas and HTML overlays. Hovering
+Wheel zoom MUST be handled once for the Sigma canvas and HTML card overlays. Hovering
 a card MUST NOT introduce a second native zoom behavior. Camera updates and
-overlay updates are coalesced so canvas, cards, modules, and labels move as one
+overlay updates are coalesced so canvas, cards, and labels move as one
 visual surface.
 
-Compound views MUST keep cards and sibling module envelopes disjoint at the
-active camera scale. Peripheral nodes may require panning. For graphs of at
-most 12 nodes, readable fitting MUST retain a complete overview rather than
-making the graph appear empty.
+For graphs of at most 12 nodes, readable fitting MUST retain a complete
+overview rather than making the graph appear empty.
 
 The desktop workspace begins at the window's left edge. The toolbar overlays
 the upper-left graph area, while the usable graph surface begins below it.
@@ -371,7 +357,7 @@ The following documents provide the implementation detail for this contract:
   states, inspectors, and flow catalogue behavior.
 - [Port rendering](spec-fonc/port-rendering.md) owns endpoint evidence and
   port-to-port projection rules.
-- [Layered view](spec-fonc/layered-view.md) and [module rendering](spec-fonc/modules.md)
+- [Module membership and navigation](spec-fonc/modules.md)
   own architecture grouping invariants.
 - [Placement and interaction](spec-fonc/placement.md) owns graph projection
   and interaction-specific behavior.

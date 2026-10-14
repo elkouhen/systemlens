@@ -221,7 +221,7 @@ In the selected flow graph, each arc has a transparent hover target. Hovering
 an arc or its order label highlights that arc and its label without changing
 the persisted graph data.
 
-The exported Explorer presents the graph as a layered workspace: a compact
+The exported Explorer presents the graph in a shared workspace: a compact
 control surface, a searchable graph context, summary counters, and a separate
 legend and inspector. The visual treatment adapts to light and dark themes and
 constrained viewports without changing graph data, selection state, or the

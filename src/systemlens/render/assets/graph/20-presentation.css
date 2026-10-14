@@ -80,7 +80,6 @@
     .graph-control-group button { height: var(--control-height); }
     .graph-actions .graph-action-label { padding: 0 5px; font-size: 10px; }
     .fit-controls .graph-action-label,
-    .view-controls .graph-action-label,
     .render-controls .graph-action-label { height: var(--control-height); }
     .toolbar button { transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease; }
     .toolbar button:hover { transform: translateY(-1px); }
@@ -107,7 +106,6 @@
     .toolbar-tab { color: #64748b !important; }
     .toolbar-tab.is-active,
     .fit-controls .fit-mode.is-active,
-    .view-controls .view-mode.is-active,
     .render-controls .render-mode.is-active {
       color: #fff !important;
       background: var(--accent) !important;
@@ -115,7 +113,6 @@
     }
     .toolbar-tab.is-active:hover,
     .fit-controls .fit-mode.is-active:hover,
-    .view-controls .view-mode.is-active:hover,
     .render-controls .render-mode.is-active:hover { background: #2647b5 !important; }
     .graph-node-card-label.is-resource {
       width: 110px;
@@ -267,7 +264,7 @@
     :root[data-theme="dark"] .toolbar-tabs, :root[data-theme="dark"] .graph-control-group { border-color: var(--ui-border); background: var(--ui-widget); }
     :root[data-theme="dark"] .graph-control-group button { color: var(--ui-text); background: transparent; }
     :root[data-theme="dark"] .graph-control-group button:hover { background: var(--ui-control) !important; }
-    :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .view-controls .view-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: var(--ui-on-accent); background: var(--ui-selected); }
+    :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: var(--ui-on-accent); background: var(--ui-selected); }
     :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: rgba(15, 27, 46, .84); }
     :root[data-theme="dark"] .toolbar-tab { color: var(--ui-text) !important; }
     :root[data-theme="dark"] .toolbar .toolbar-mode-tab { color: var(--ui-muted); background: transparent; }

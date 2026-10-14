@@ -145,11 +145,6 @@
   border-color: var(--ui-accent-border);
   background: var(--ui-panel);
 }
-:root[data-theme="dark"] .graph-layer-title {
-  color: var(--ui-text);
-  background: var(--ui-panel);
-  border-left: 2px solid var(--layer-accent, #64748b);
-}
 :root[data-theme="dark"] .graph-entity-tooltip,
 :root[data-theme="dark"] .graph-edge-tooltip,
 :root[data-theme="dark"] .graph-port-tooltip,
@@ -207,8 +202,6 @@ body:not(.catalogue-active) #architecture-tabs-group .toolbar-tab { flex: 0 0 au
 
 body.catalogue-active { overflow: auto; }
 body.catalogue-active #graph,
-body.catalogue-active #graph-layers,
-body.catalogue-active #graph-groups,
 body.catalogue-active #graph-port-paths,
 body.catalogue-active #graph-node-labels { visibility: hidden; }
 body.catalogue-active .toolbar {

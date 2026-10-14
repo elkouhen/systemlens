@@ -315,8 +315,8 @@ The search is the single entry point for exact resource selection and shortest
 itinerary queries. Advanced actions reuse its current itinerary to list simple
 alternatives or lock the selection; they do not introduce a second path input.
 Graph-specific context follows the search: its first row contains zoom, fit
-and reset actions; its second row contains the graph-view and node-rendering
-selectors; architecture counters and inventory status follow. This whole context appears only in
+and reset actions; its second row contains the node-rendering selector;
+architecture counters and inventory status follow. This whole context appears only in
 Explorer, so domain tabs start directly with their own content. A dedicated,
 compact `Displayed nodes and edges` control lets users independently select
 API, Topic, Data-access and other edge categories, and internal services,
@@ -331,40 +331,24 @@ selection and itinerary evaluation occur when the user presses Enter. This
 allows a query such as `service-a -> service-b` to be entered continuously
 without opening the first microservice as soon as its name is complete.
 
-The graph offers three primary views: graph, layers, and modules. Grouped and
-non-overlapping placement strategies remain secondary options. The layers view
-uses ELK.js compound nodes to arrange resources in a deterministic hierarchy:
-software layers are stacked vertically, modules are nested inside their
-layer, and projects/resources are placed inside each module without
-overlap. The internal canonical order is `api`, `application`, `orchestration`,
-`infrastructure`, `domain`, then `persistence`;
-`persistence` is always the lowest layer. In Strategy1, the `CYCLE-DE-VIE`
-project group is rendered in the Orchestration layer.
+The architecture graph presents one view. Grouped and non-overlapping
+placement strategies remain available as secondary controls.
+The graph does not draw software-layer bands or module containers.
 
-External microservices are rendered in a dedicated `External services` layer
-at the bottom, after the internal layer order.
-
-Shared libraries and other non-deployable projects are not rendered as layers.
-
-The three primary views are presented as a permanently visible segmented
-selector with direct `Graph`, `Layers`, and `Modules` choices; changing
-views MUST NOT require cycling through intermediate views. Placement strategies
-remain secondary controls. On desktop, the navigation panel uses a compact
+On desktop, the navigation panel uses a compact
 340 px maximum width, 10 px outer margins, and dense internal spacing. The
 graph viewport spans the full window behind the floating navigation panel, so
 the area below the panel continues to render both nodes and edges. Zoom
 actions are grouped as a compact `−` / `+`
 control, and the adjacent segmented fit control exposes two explicit modes:
-`All`, which frames every visible node in the plain graph and uses the widest
-collision-free scale in the module and layer views, and `Readable`, which keeps
+`All`, which frames every visible node, and `Readable`, which keeps
 the same center but zooms in until cards have useful reading separation. The
 selected mode is reapplied after a view or window-size change, and `Readable
 distance` is the initial mode. Reapplying either selected mode MUST be
 idempotent: repeated or rapid clicks MUST produce the same camera framing and
 MUST NOT compound the previous zoom.
 
-Users can pan and zoom to explore the remaining graph. In the layers and
-modules views, relations are visually subdued. In every view, microservice,
+Users can pan and zoom to explore the graph. Microservice,
 Topic, message channel,
 Data resource, data schema, and equivalent resource cards share the same
 rendered width, height, and scale. Their semantic differences are conveyed by
@@ -389,18 +373,14 @@ solid fill. Node names use adaptive, collision-aware labeling: the viewport
 shows a bounded sample prioritizing connected and semantically important
 nodes, and progressively admits more labels as the user zooms in. A selected
 or hovered node's name is always visible and MAY extend beyond the symbol
-envelope. `Readable` fitting uses the compact symbol envelope in the plain
-graph. Module and layer views retain full module-envelope clearance so
-switching rendering mode never changes their camera framing.
+envelope. `Readable` fitting uses the compact symbol envelope.
 The hovered symbol and its label are rendered above every non-hovered symbol,
 so another geometric marker cannot obscure the visible resource name.
-In the plain graph's `Readable` fit, a final screen-space collision pass keeps
-the active card or symbol envelopes from overlapping. This pass does not run in
-the layers or modules views, whose deterministic placement remains unchanged.
+In the graph's `Readable` fit, a final screen-space collision pass keeps
+the active card or symbol envelopes from overlapping.
 
-During pan and zoom, the graph and its module overlays remain synchronized so
-cards and their containing rectangles move together without transient partial
-redraws.
+During pan and zoom, the graph and its card overlays remain synchronized
+without transient partial redraws.
 
 The details panel is integrated into the left navigation panel and is hidden
 until a resource, architecture module, build project, or itinerary is selected. Opening it MUST
@@ -420,16 +400,12 @@ refit, or otherwise alter the camera in any primary view.
 When several Architecture relations overlap, Kafka hit areas stay above the
 other relations so `Shift + click` can open the topic inspector.
 
-In the layers and modules views, each module exposes a full-width clickable
-header. Selecting that header highlights the module and opens its member list;
-the module body remains available for graph panning.
-
 Module details MUST support direct hierarchy navigation: the parent module,
 direct child modules, and resources assigned directly to the selected module
 are actionable when present. Selecting a listed resource opens its ordinary
 resource details. Conversely, every resource detail exposes its canonical
-module as an action; following it switches directly to the Modules view and
-selects that module. Nested module membership is derived from canonical
+module as an action; following it selects the module details without changing graph layout. Nested
+module membership is derived from canonical
 slash-separated paths. A parent module does not claim resources that
 are assigned only to one of its descendants.
 
@@ -448,10 +424,4 @@ zoom remains available through the wheel and the explicit zoom controls.
 Releasing a pan MUST stop the camera immediately; no inertial continuation is
 allowed.
 
-Automatic collision protection MUST NOT zoom the camera during a pan; it may
-only constrain an explicit zoom-out operation.
-
-In the module and layer views, zooming out remains available until fixed-size
-cards would make sibling module envelopes overlap. The camera is then clamped
-to the collision-free ratio calculated for the current viewport; panning and
-zooming in remain available.
+Automatic collision protection MUST NOT zoom the camera during a pan.

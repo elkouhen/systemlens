@@ -13,14 +13,8 @@
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/graphology/0.25.4/graphology.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/sigma.js/2.4.0/sigma.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/elkjs@0.12.0/lib/elk.bundled.js"></script>
-  <script src="https://unpkg.com/cytoscape@3.31.2/dist/cytoscape.min.js"></script>
-  <script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>
-  <script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>
-  <script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>
   <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js"></script>
-  __ASYNCAPI_WEB_COMPONENT__
-  <script>__LAYER_GEOMETRY__</script>
+__ASYNCAPI_WEB_COMPONENT__
   <style>__GRAPH_CSS__</style>
 </head>
 <body>
@@ -237,11 +231,6 @@
         <button id="graph-zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer" title="Réduire l’échelle du graphe">−</button>
       </div>
       <button id="reset" class="graph-action-label graph-secondary-action" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser la sélection" disabled hidden>Réinitialiser</button>
-      <div class="graph-control-group view-controls" role="group" aria-label="Mode de visualisation · un seul choix" title="Mode de visualisation · un seul choix">
-          <button id="layout-forceatlas2-noverlap" class="graph-action-label view-mode is-active" type="button" aria-pressed="true" title="Afficher les relations avec des nœuds espacés">Graphe</button>
-          <button id="layout-elk" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher les couches et les ressources">Couches</button>
-          <button id="layout-cluster" class="graph-action-label view-mode" type="button" aria-pressed="false" title="Afficher la hiérarchie des modules et des projets">Modules</button>
-      </div>
       <div class="graph-control-group render-controls" role="group" aria-label="Rendu des nœuds">
           <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
           <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
@@ -292,8 +281,6 @@
     </div>
   </details>
   <div id="graph" aria-label="Graphe des interactions"></div>
-  <div id="graph-layers" aria-hidden="true"></div>
-  <div id="graph-groups" aria-hidden="true"></div>
   <svg id="graph-port-paths" aria-hidden="true"></svg>
   <div id="graph-node-labels" aria-hidden="true"></div>
   <div id="graph-call-tree" aria-label="Arbre hiérarchique des appels" hidden></div>

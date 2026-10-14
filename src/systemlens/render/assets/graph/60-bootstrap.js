@@ -142,28 +142,15 @@
       camera.setState({ x: .5, y: .5, ratio: 1, angle: 0 });
       targetRenderer.refresh();
       if (fitRequest !== graphState.fitRequest) return;
-      const compoundView = targetRenderer === renderer
-        && ["cluster", "elk"].includes(graphState.activeLayout);
-      const collisionZoom = compoundView ? Math.max(1, requiredCardZoomIn(targetRenderer)) : 1;
-      if (compoundView) {
-        graphState.maximumCollisionFreeRatio = 1 / collisionZoom;
-      } else if (targetRenderer === renderer) {
-        graphState.maximumCollisionFreeRatio = 100;
-      }
       if (nextMode === "readable") {
         const state = camera.getState();
         // Start from the complete overview, then move closer. Architecture
         // cards use the measured projected spacing.
-        if (compoundView) {
-          camera.setState({ ...state, ratio: Math.max(.01, state.ratio / Math.max(1.6, collisionZoom)) });
-        } else if (targetRenderer === renderer && network.order <= 12) {
+        if (targetRenderer === renderer && network.order <= 12) {
           camera.setState({ ...state, ratio: requiredSmallGraphOverviewRatio(targetRenderer) });
         } else {
           camera.setState({ ...state, ratio: Math.max(.01, state.ratio / Math.max(1.6, requiredCardZoomIn(targetRenderer))) });
         }
-      } else if (compoundView) {
-        const state = camera.getState();
-        camera.setState({ ...state, ratio: Math.max(.01, state.ratio / collisionZoom) });
       }
       targetRenderer.refresh();
       if (targetRenderer === renderer) {
@@ -190,7 +177,7 @@
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
-      camera.setState({ ...state, ratio: Math.min(graphState.maximumCollisionFreeRatio, state.ratio * 1.25) });
+      camera.setState({ ...state, ratio: Math.min(100, state.ratio * 1.25) });
       requestGraphRender();
     };
     ["graph-zoom-in", "flow-zoom-in"].forEach(id => document.getElementById(id)?.addEventListener("click", zoomIn));

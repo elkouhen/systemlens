@@ -75,7 +75,6 @@
     .layout-option:hover { color: var(--ui-title) !important; background: var(--ui-control) !important; }
     .toolbar-tab.is-active,
     .fit-controls .fit-mode.is-active,
-    .view-controls .view-mode.is-active,
     .render-controls .render-mode.is-active,
     .layout-option.is-active {
       border-color: var(--ui-selected) !important;
@@ -85,7 +84,6 @@
     }
     .toolbar-tab.is-active:hover,
     .fit-controls .fit-mode.is-active:hover,
-    .view-controls .view-mode.is-active:hover,
     .render-controls .render-mode.is-active:hover,
     .layout-option.is-active:hover { color: var(--ui-on-accent) !important; background: var(--ui-selected-hover) !important; }
     .details-group,

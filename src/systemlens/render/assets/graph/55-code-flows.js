@@ -320,7 +320,7 @@
       callTreeRenderSignature = treeSignature;
       graphCallTreeOverlay.hidden = !treeActive;
       document.getElementById("graph")?.classList.toggle("is-call-tree-hidden", treeActive);
-      [graphLayersOverlay, graphGroupsOverlay, portPathOverlay, nodeLabelOverlay]
+      [portPathOverlay, nodeLabelOverlay]
         .forEach(element => element?.classList.toggle("is-call-tree-hidden", treeActive));
       if (!treeActive) {
         graphCallTreeOverlay.replaceChildren();

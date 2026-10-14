@@ -70,14 +70,6 @@
     #architecture-toolbar > .mode-context .graph-mode-context-actions { gap: 6px; }
     #architecture-toolbar > .mode-context .architecture-context-actions { display: contents; }
     #architecture-toolbar > .mode-context .architecture-context-actions[hidden] { display: none !important; }
-    #architecture-toolbar > .mode-context .view-controls {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      flex: 1 1 100%;
-      order: -2;
-      width: 100%;
-      min-width: 0 !important;
-    }
     #architecture-toolbar > .mode-context .render-controls { flex: 1 1 100%; order: -1; }
     #architecture-toolbar > .mode-context .graph-secondary-action {
       min-height: 38px;
@@ -91,7 +83,6 @@
       min-width: 92px !important;
       white-space: nowrap;
     }
-    #architecture-toolbar > .mode-context .view-controls button,
     #architecture-toolbar > .mode-context .render-controls button {
       min-height: 38px;
       min-width: 0;
@@ -166,7 +157,6 @@
     .mode-context .zoom-controls button:hover { border-color: var(--ui-selected); background: var(--ui-accent-soft-hover); }
     .call-tree-depth-control { min-height: 27px; }
     .mode-context.is-architecture-toolbar .architecture-context-actions .fit-mode.is-active,
-    .mode-context.is-architecture-toolbar .architecture-context-actions .view-mode.is-active,
     .mode-context.is-architecture-toolbar .architecture-context-actions .render-mode.is-active {
       border-color: var(--ui-selected);
       color: var(--ui-on-accent);
@@ -452,11 +442,8 @@
     #flow-mode-context .graph-secondary-action { min-height: 38px; padding-inline: 12px; font-size: 12px; font-weight: 750; }
     #graph-mode-context #graph-mode-center,
     #flow-mode-context #flow-mode-center { flex: 0 0 92px; width: 92px !important; min-width: 92px !important; white-space: nowrap; }
-    #graph-mode-context .view-controls,
     #graph-mode-context .render-controls { min-height: 38px; }
-    #graph-mode-context .view-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex: 1 1 100%; order: -2; width: 100%; min-width: 0; }
     #graph-mode-context .render-controls { flex: 1 1 100%; order: -1; }
-    #graph-mode-context .view-controls button,
     #graph-mode-context .render-controls button { min-height: 38px; min-width: 0; width: 100%; padding-inline: 10px; font-size: 12px; font-weight: 750; }
     #graph-mode-context .zoom-controls button,
     #flow-mode-context .zoom-controls button { width: 38px; min-width: 38px; padding: 0; font-size: 20px; }

@@ -3,8 +3,6 @@
 const graphViewLifecycle = (() => {
   const graphSurfaces = () => [
     graphCanvas,
-    graphLayersOverlay,
-    graphGroupsOverlay,
     portPathOverlay,
     nodeLabelOverlay,
     graphCallTreeOverlay,
@@ -13,8 +11,6 @@ const graphViewLifecycle = (() => {
 
   function clearOverlays() {
     [
-      graphLayersOverlay,
-      graphGroupsOverlay,
       portPathOverlay,
       nodeLabelOverlay,
       graphCallTreeOverlay,

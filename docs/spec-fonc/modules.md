@@ -1,4 +1,4 @@
-# Module rendering rules
+# Module membership and navigation
 
 Parent: [Functional specification](../SPEC-FONC.md).
 
@@ -12,41 +12,19 @@ The shared presentation and interaction rules are defined in
 ownership, and module-specific behavior.
 
 
-The module view MUST preserve these visual invariants:
+Modules group indexed projects by canonical `cluster_path` values derived from
+project directory paths. A parent path can contain child modules, while each
+resource belongs directly to one module. Runtime Kubernetes namespaces do not
+define this hierarchy.
 
-- Module membership MUST use the same resolver for placement and for the
-  visible module rectangle.
-- A Topic, message channel, Data resource, or other resource MUST be
-  assigned first to the module of its producing microservice, using the
-  incoming source relation. A consumer module MUST NOT move the resource
-  into its module. Resources without an identifiable producer remain in
-  `ROOT`.
-- Resources inside one module MUST be placed on a grid with a positive
-  horizontal and vertical gap greater than the projected card size.
-- Within each module, microservices MUST occupy the first
-  sub-layer and Topics, Data, and other resources MUST occupy a second
-  sub-layer below them. Empty sub-layers are omitted. This ordering is conveyed
-  by placement only; the renderer MUST NOT add visible `Microservices` or
-  `Resources` sub-layer labels inside the module.
-- Module rectangles MUST be packed with a positive gap based on their full
-  rendered envelope, including card, title, and padding margins, and MUST NOT
-  overlap each other.
-- When a second grouping level is displayed, each parent module MUST be the
-  union of its visible child module rectangles plus its own title/padding
-  margin. Parent bounds MUST contain the complete child boxes; the
-  non-overlap rule applies between sibling modules, not between a parent and
-  its descendants.
-- A project-group parent MUST remain attached to the module of its owning
-  projects and MUST contain only those owning projects. Resources MUST remain
-  in the module of their producing microservice; relation targets
-  MUST NOT be added as children of the structural parent or enlarge it across
-  unrelated modules.
-- Module bounds MUST be calculated from graph-coordinate bounds and projected
-  after camera changes. Parent bounds MUST be recomputed from the projected
-  child bounds, so zooming cannot make a child escape its parent or make the
-  hierarchy drift.
-- The layout MUST NOT depend on the software-layer order. Narrow viewports MAY
-  use additional rows to keep modules inside the visible graph area.
+For a Topic, message channel, Data resource, or other resource, the producer's
+module takes precedence over consumer modules. If no producer can be identified,
+the resource remains in `root`. Project groups contain only their own projects;
+relations to other resources do not expand their membership.
+
+The graph does not draw module rectangles. A resource detail links to its module;
+module details expose the parent, direct child modules, and resources assigned
+directly to that module. Navigation leaves the graph layout unchanged.
 
 Microservices with no indexed inter-service relation remain visible in a
 separate isolated area of the graph, so their absence of dependencies is not

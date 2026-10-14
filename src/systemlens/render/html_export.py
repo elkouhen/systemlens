@@ -62,7 +62,6 @@ _GRAPH_JS_FILENAMES = (
 )
 _GRAPH_JS_MODULES = tuple(_ASSET_ROOT / "graph" / name for name in _GRAPH_JS_FILENAMES)
 _GRAPH_JS = "\n".join(path.read_text(encoding="utf-8") for path in _GRAPH_JS_MODULES)
-_LAYER_GEOMETRY_JS = (_ASSET_ROOT / "layer_geometry.js").read_text(encoding="utf-8")
 _ASYNCAPI_WEB_COMPONENT_JS = (
     _ASSET_ROOT / "vendor" / "asyncapi-web-component-3.1.8.js"
 ).read_text(encoding="utf-8")
@@ -597,7 +596,6 @@ def render_graph_html(
         _GRAPH_HTML_TEMPLATE.replace("__GRAPH_CSS__", graph_css)
         .replace("__GRAPH_JS__", _GRAPH_JS)
         .replace("__GRAPH_DATA__", graph_data)
-        .replace("__LAYER_GEOMETRY__", _LAYER_GEOMETRY_JS)
         .replace("__ASYNCAPI_WEB_COMPONENT__", asyncapi_assets)
     )
     if call_graphs_only:
