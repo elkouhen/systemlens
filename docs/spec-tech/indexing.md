@@ -43,6 +43,18 @@ snapshot; stale flows are dropped before deduplication. AI facts are projected
 into a transient topology view for reconciliation; the facts remain independent
 rows and are never copied into source-derived tables.
 
+The flow reconstruction treats each discovered module with an application
+entry point as a service boundary. From an entry module, it rejects Java call
+targets in another application module while retaining helper modules. It
+applies the same rule to direct CodeQL input-to-output pairs. A set of
+application module identities makes each boundary check constant time per
+candidate edge.
+
+When module metadata is absent, the reconstruction cannot classify the
+boundary and retains the call-graph result without this filter.
+The code-flow signature triggers a rebuild of existing indexes after this
+rule changes.
+
 With `systemlens flows calculate --module NAME`, the same reconstruction starts
 only from input methods owned by `NAME`. The method and call-edge snapshots
 remain global, so helper methods outside the selected module can still resolve.
@@ -91,14 +103,18 @@ processing order, hashing provides the change decision, and pattern checks are
 applied once per file. Incrementality limits AST extraction to changed files,
 but it does not avoid this complete inventory pass.
 
-Steps 1 to 7 execute inside `Store.transaction()`. The writable connection uses
-`BEGIN IMMEDIATE`, then commits the complete snapshot only after relation
-materialization succeeds; any exception rolls back files, endpoints, modules,
-dependencies, relations and index signatures together. Schema creation and
+Steps 1 to 7 execute inside `Store.transaction()`, which starts with
+`BEGIN IMMEDIATE`. CodeQL stages can publish partial snapshots through
+`Store.commit_checkpoint()`: each checkpoint commits the pending changes and
+opens a new transaction. Final reconciliation publishes the completed snapshot.
+See [checkpoint persistence](persistence.md) for stage and completion metadata.
+
+An exception rolls back only changes since the latest commit. Without an
+intermediate checkpoint, the previous snapshot remains intact; with one,
+the committed partial snapshot remains available. Schema creation and
 compatible migrations happen when a writable store opens, before an index
 transaction. Read-only stores open SQLite in `mode=ro` and never migrate or
-commit. A concurrent reader sees the last committed snapshot until the writer
-commits the next one.
+commit. Concurrent readers see the latest committed snapshot.
 
 AST endpoint analysis uses no subprocess. For interprocedural flows, the local
 CodeQL executable is used by default once for the repository to create a

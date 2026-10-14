@@ -18,7 +18,6 @@ in `docs/spec-fonc/` so each topic can be read and reviewed independently.
 | Change graph views | [Layered view](spec-fonc/layered-view.md) and [module rendering](spec-fonc/modules.md) |
 | Change HTML presentation or interaction | [UX/UI rules](UX-UI.md) |
 | Change incremental indexing | [Incrementality](spec-fonc/incrementality.md) |
-| Check a limitation | [Boundaries](spec-fonc/boundaries.md) |
 
 The keywords **MUST** and **MUST NOT** identify compatibility requirements.
 The section files are normative for the behavior they own.
@@ -66,5 +65,4 @@ of concurrency. These static findings do not assert a runtime incident.
 - [Layered view](spec-fonc/layered-view.md)
 - [Module rendering](spec-fonc/modules.md)
 - [Incrementality and freshness](spec-fonc/incrementality.md)
-- [Boundaries](spec-fonc/boundaries.md)
 - [UX/UI rules](UX-UI.md)

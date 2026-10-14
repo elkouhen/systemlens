@@ -86,6 +86,11 @@ dispatch at low confidence. These data flows are separate from paths ending
 at an HTTP call or Kafka publication; an operation on a sibling branch is not
 attached to that output path. An ambiguous owner method has no data flow.
 
+An internal method path stops before a different module that starts its own
+application. It may continue into a module without an application entry point.
+Calls between applications require indexed HTTP or Kafka endpoints to connect
+their separate internal flows.
+
 The same module inventory records conventional Java DTOs associated with JPA
 entities through imported, same-package or qualified entity references. If the
 module has no OpenAPI file, it also records DTO types used in REST controller
@@ -182,8 +187,10 @@ from the caller's module are preferred; if no preference is possible, the
 alternatives remain explicit instead of being merged or guessed.
 CodeQL contributes only source-located resolved callees; recovered receiver
 types and `methodFullName` values without source evidence are diagnostics, not
-architecture edges. Reflection, dynamic routing, and runtime-only routing are
-not added.
+architecture edges. The inventory is static, so reflection, arbitrary string
+construction, runtime routing and undeclared external contracts can remain
+unresolved. Consumers should interpret facts using dynamic status, confidence
+and source evidence.
 
 CodeQL call rows are first merged into a directed method graph. Weak connected
 components group methods linked by source-evidenced calls; they do not reverse

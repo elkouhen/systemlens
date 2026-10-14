@@ -1091,3 +1091,25 @@ claiming a route match. The HTML snapshot is larger for access flows with
 several calls; the first-call field remains for older consumers. SQLite facts
 and schema remain unchanged. Identical call paths still cannot prove which
 conditional branch ran.
+
+## ADR-58: Stop internal call paths at application boundaries
+
+**Status:** Accepted.
+
+**Context:** The global CodeQL method graph can connect an entry in one
+application module to a method in another application module. Assigning a
+reached data operation to the entry module then displays the other service's
+database access as its own. Cross-module helper calls remain useful.
+
+**Decision:** During flow reconstruction, stop a path before a different
+module that starts its own application. Keep calls into modules without an
+application entry point. Apply the boundary to directed traversal and direct
+CodeQL input-to-output pairs. This narrows ADR-30's cross-module fallback
+while preserving its helper-module resolution.
+
+**Consequences:** Internal flows no longer claim data or output effects from
+another application through a Java method path. Interservice HTTP and Kafka
+edges still connect separate internal flows. Existing indexes rebuild flows
+through a code-flow signature change; SQLite schema and source facts remain
+compatible. An application module deliberately embedded as a library loses
+these internal paths. Module metadata must be present to classify the boundary.

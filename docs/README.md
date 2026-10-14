@@ -24,8 +24,8 @@ a second source of truth.
 | How tests are organized and validated | [Test strategy and validation report](TESTING.md) |
 | What the AI graph manifest contains | [AI graph manifest](AI-GRAPH.md) |
 | How internal flows are diagnosed | [Internal flow diagnosis](DIAGNOSE-INTERNAL-FLOWS.md) |
+| How indexing, flows, call trees, and data consistency diagnostics are calculated | [Core SystemLens algorithms](spec-tech/algorithms.md) |
 | Common microservice failure patterns | [Microservices bad practices](../microservices-badpractices.md) |
-| Proposed data-consistency anomaly detectors for call graphs | [Call-graph anomaly detection](../detect-anomalies.md) |
 | How to run a full CodeQL index and describe flows | [Full CodeQL indexing and flow descriptions](prompts/full-index-codeql-flow-descriptions.md) |
 
 ## Change rules

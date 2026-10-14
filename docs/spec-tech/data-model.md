@@ -382,6 +382,11 @@ dispatch lowers confidence; neither branch execution nor transaction success
 is inferred. The current flow hop bound also bounds these data paths. Without
 a source-backed call edge, only same-method data operations are available.
 
+Traversal excludes methods in another discovered application module. A helper
+module without an application entry point remains eligible. The same boundary
+applies to direct CodeQL input-to-output pairs, so data access in another
+application cannot be assigned to the entry module through a Java call path.
+
 JPA data steps use `jpa:<module>:<qualified entity>` as their logical resource;
 the action is `read`, `delete`, or `create_or_update`. An HTTP entry labels a
 reached blocking JPA access synchronous, and a Kafka entry labels it

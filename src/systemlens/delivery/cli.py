@@ -1809,6 +1809,7 @@ def index_cmd(
                         if path
                     }),
                     module=selected_module.name,
+                    modules=store.all_modules(),
                     codeql_edge_confidence=config.codeql_edge_confidence,
                 )
                 debug_flows = direct_flows
@@ -1823,6 +1824,7 @@ def index_cmd(
                     store.all_endpoints(),
                     [],
                     module=selected_module.name,
+                    modules=store.all_modules(),
                     call_chain_progress=_echo_only_constructed_chains,
                     call_chain_module=selected_module.name,
                     persisted_edges=store.all_codeql_call_edges(),

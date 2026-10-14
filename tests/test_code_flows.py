@@ -2129,6 +2129,71 @@ def test_mongo_operations_get_independent_source_backed_paths(tmp_path: Path) ->
     assert not any(step.action for flow in ambiguous_flows for step in flow.steps)
 
 
+def test_codeql_data_paths_do_not_enter_another_application_module(tmp_path: Path) -> None:
+    orders_path = "orders/src/OrderController.java"
+    inventory_path = "inventory/src/InventoryAdapter.java"
+    library_path = "shared/src/SharedAdapter.java"
+    orders_entry = _endpoint("orders-entry", "serve", "rest", "POST /orders", orders_path, 3)
+    inventory_entry = replace(
+        _endpoint("inventory-entry", "serve", "rest", "POST /inventory", inventory_path, 3),
+        module="inventory",
+    )
+    inventory_output = replace(
+        _endpoint("inventory-output", "produce", "kafka", "inventory.changed", inventory_path, 8),
+        module="inventory",
+    )
+    methods = [
+        IntegrationMethod("orders-entry-method", "orders", "Orders.receive",
+                          orders_path, 2, 10, (orders_entry.id,), ()),
+        IntegrationMethod("inventory-entry-method", "inventory", "Inventory.receive",
+                          inventory_path, 2, 4, (inventory_entry.id,), ()),
+        IntegrationMethod("inventory-data-method", "inventory", "Inventory.save",
+                          inventory_path, 5, 7, (), ()),
+        IntegrationMethod("inventory-output-method", "inventory", "Inventory.publish",
+                          inventory_path, 8, 10, (), (inventory_output.id,)),
+        IntegrationMethod("shared-data-method", "shared", "Shared.find",
+                          library_path, 2, 5, (), ()),
+    ]
+    modules = [
+        DiscoveredModule("orders", tmp_path / "orders", "maven", None, "application", True, ""),
+        DiscoveredModule(
+            "inventory", tmp_path / "inventory", "maven", None, "application", True, "",
+            mongo_methods=(MongoMethod(
+                "save", "repository", "src/InventoryAdapter.java", 6,
+                "inventory_rows", owner_method="save",
+            ),),
+        ),
+        DiscoveredModule(
+            "shared", tmp_path / "shared", "maven", None, "library", False, "",
+            mongo_methods=(MongoMethod(
+                "findById", "repository", "src/SharedAdapter.java", 4,
+                "shared_catalog", owner_method="find",
+            ),),
+        ),
+    ]
+    edges = [
+        CodeQLCallGraphEdge("orders-entry-method", "inventory-data-method", orders_path, 4, "possible"),
+        CodeQLCallGraphEdge("orders-entry-method", "inventory-output-method", orders_path, 5, "possible"),
+        CodeQLCallGraphEdge("orders-entry-method", "shared-data-method", orders_path, 6, "exact"),
+        CodeQLCallGraphEdge("inventory-entry-method", "inventory-data-method", inventory_path, 4, "exact"),
+    ]
+
+    flows = materialize_codeql_code_flows(
+        methods, [orders_entry, inventory_entry, inventory_output], [],
+        persisted_edges=edges, modules=modules,
+        reachability=(CodeQLReachability(
+            "Orders.receive", orders_path, 2,
+            "Inventory.publish", inventory_path, 8, "exact",
+        ),),
+    )
+
+    orders_flows = [flow for flow in flows if flow.module == "orders"]
+    assert {flow.steps[-1].name for flow in orders_flows} == {"shared_catalog"}
+    assert orders_flows[0].steps[-1].path == library_path
+    inventory_flows = [flow for flow in flows if flow.module == "inventory"]
+    assert {flow.steps[-1].name for flow in inventory_flows} == {"inventory_rows"}
+
+
 def test_ast_fallback_uses_call_arity_to_resolve_output_overloads(tmp_path: Path) -> None:
     source = "orders/src/main/java/com/example/OrderController.java"
     text = """package com.example;

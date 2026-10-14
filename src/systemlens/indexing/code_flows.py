@@ -27,7 +27,7 @@ from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 from systemlens.indexing.java_symbols import JavaSymbols
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v31-trigger-aware-data-branches"
+CODE_FLOW_SIGNATURE = "code-flow-v32-application-boundaries"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
@@ -1188,6 +1188,14 @@ def materialize_codeql_code_flows(
         entry for entry in methods
         if entry.input_endpoint_ids and (module is None or entry.module == module)
     ]
+    application_modules = {
+        module_identity(discovered)
+        for discovered in modules if discovered.starts_application
+    }
+
+    def within_application_boundary(entry_module: str, target_module: str) -> bool:
+        return target_module == entry_module or target_module not in application_modules
+
     if resume_from_entry < 0 or resume_from_entry > len(input_methods):
         raise ValueError(
             f"Invalid CodeQL join resume offset {resume_from_entry}; "
@@ -1325,6 +1333,7 @@ def materialize_codeql_code_flows(
                     (target, call, signature_join)
                     for target, call, signature_join in adjacency.get(current.id, [])
                     if target.id in component
+                    and within_application_boundary(entry.module, target.module)
                     and dispatch_matches_entry(entry, current, target)
                 ), key=lambda item: (
                     item[1].caller_path, item[1].call_line, item[0].id,
@@ -1473,7 +1482,11 @@ def materialize_codeql_code_flows(
                     for candidate, call, inferred in adjacency.get(current_id, []):
                         # A direct CodeQL witness must not contain synthetic
                         # AST edges or a weaker dispatch than the proven pair.
-                        if inferred or (confidence == "medium" and call.dispatch_confidence != "exact"):
+                        if (
+                            inferred
+                            or not within_application_boundary(source.module, candidate.module)
+                            or (confidence == "medium" and call.dispatch_confidence != "exact")
+                        ):
                             continue
                         if candidate.id in visited:
                             continue
@@ -1506,6 +1519,8 @@ def materialize_codeql_code_flows(
             source_method = source_location[0]
             target_method = target_location[0]
             if module is not None and source_method.module != module:
+                continue
+            if not within_application_boundary(source_method.module, target_method.module):
                 continue
             for input_id in source_method.input_endpoint_ids:
                 trigger = endpoint_by_id.get(input_id)

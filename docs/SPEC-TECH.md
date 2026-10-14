@@ -15,7 +15,8 @@ can evolve without one oversized specification.
 | Architecture ownership or adapters | [Architecture](spec-tech/architecture.md) |
 | Persisted facts or materialized contracts | [Data model](spec-tech/data-model.md) |
 | Export inputs and snapshot rules | [Export snapshot](spec-tech/export-snapshot.md) |
-| Index orchestration or flow algorithms | [Indexing](spec-tech/indexing.md) |
+| Index orchestration or flow reconstruction | [Indexing](spec-tech/indexing.md) |
+| Cross-cutting algorithm overview | [Algorithms](spec-tech/algorithms.md) |
 | Source extraction | [Extractors](spec-tech/extractors.md) |
 | Browser coordinates, camera, or placement | [Graph layout](spec-tech/graph-layout.md) |
 | Visible HTML presentation or interaction | [UX/UI rules](UX-UI.md) |
@@ -51,6 +52,7 @@ See the [flow data model](spec-tech/data-model.md) for matching rules.
 - [Data model](spec-tech/data-model.md)
 - [Export snapshot contract](spec-tech/export-snapshot.md)
 - [Indexing](spec-tech/indexing.md)
+- [Algorithms](spec-tech/algorithms.md)
 - [Extractors](spec-tech/extractors.md)
 - [Graph layout algorithms](spec-tech/graph-layout.md)
 - [Persistence and compatibility](spec-tech/persistence.md)
