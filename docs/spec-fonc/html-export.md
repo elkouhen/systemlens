@@ -149,7 +149,8 @@ For example, `R (C/U) ProductEntity` combines a read with that alternative.
 An access in the shared entry handler remains a potential annotation on each
 branch because static evidence does not establish which branch executes it.
 The badge adds `?` after the entity name when only the handler or input port
-connects that access to the occurrence. Hovering the badge explains this scope.
+connects that access to the occurrence, including when method-call paths diverge.
+Hovering the badge explains this scope.
 When distinct resource IDs share a short entity name, the badges add a
 qualifier instead of merging those identities.
 

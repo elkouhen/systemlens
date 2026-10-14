@@ -507,11 +507,12 @@ and handler method match. A leaf without a call-flow continuation uses its
 exact input endpoint. Cron flows without an endpoint use the same trigger
 kind, name, and handler method. An unmatched access gets no service badge.
 
-The exporter stores the first source-backed method call once per access flow
-when that call exists. The browser marks an access as route-supported when its
-flow ID is on the occurrence or its first method call matches an occurrence
-flow. Other same-handler accesses remain possible but add `?` after the entity
-name; this marker describes association uncertainty, not an unknown CRUD action.
+The exporter stores each source-backed method-call path once per access flow.
+The browser marks an access as route-supported when its flow ID is on the
+occurrence or its complete call path is a prefix of an occurrence flow's call
+path. Sharing only the first call leaves the association uncertain. Other
+same-handler accesses remain possible but add `?` after the entity name; this
+marker describes association uncertainty, not an unknown CRUD action.
 Unknown leaves retain accesses reached through their exact input endpoint.
 
 The call tree groups access and diagnostic annotations by full resource ID at

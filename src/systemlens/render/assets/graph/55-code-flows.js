@@ -524,14 +524,18 @@
       const accessesForOccurrence = occurrence => {
         const inputEndpointId = inputForOccurrence(occurrence);
         const internalFlows = occurrence.flowIds.map(id => flowById.get(id)).filter(Boolean);
-        const firstCalls = new Set(internalFlows.flatMap(flow => {
-          const first = flow.steps?.find(step => step.kind === "method_call");
-          return first ? [JSON.stringify([first.name, first.path, first.start_line])] : [];
-        }));
+        const occurrenceCallPaths = internalFlows.map(flow => (
+          (flow.steps || []).filter(step => step.kind === "method_call")
+            .map(step => [step.name, step.path, step.start_line])
+        ));
         const matches = new Map();
         const addMatch = (access, exactFlow) => {
-          const first = graphData.flow_data_access_first_calls?.[access.flow_id];
-          const routeSupported = first && firstCalls.has(JSON.stringify(first));
+          const accessPath = graphData.flow_data_access_call_paths?.[access.flow_id];
+          const routeSupported = accessPath?.length > 0 && occurrenceCallPaths.some(path => (
+            accessPath.length <= path.length && accessPath.every((call, index) => (
+              JSON.stringify(call) === JSON.stringify(path[index])
+            ))
+          ));
           matches.set(access, Boolean(matches.get(access) || exactFlow || routeSupported));
         };
         occurrence.flowIds.forEach(id => (accessesByFlow.get(id) || []).forEach(access => {

@@ -107,7 +107,7 @@ def test_mixed_call_and_data_flow_is_exported_in_either_effect_order() -> None:
         assert data["flow_data_accesses"][suffix][0]["action"] == "update"
 
 
-def test_sibling_access_retains_first_call_evidence_for_each_root() -> None:
+def test_sibling_access_retains_call_path_evidence_for_each_root() -> None:
     entry = replace(_rest_endpoint("serve", "POST /orders", "Orders.java"), id="in")
     first = replace(_kafka_endpoint("produce", "FirstEvent", "Orders.java"), id="out-a")
     second = replace(_kafka_endpoint("produce", "SecondEvent", "Orders.java"), id="out-b")
@@ -140,6 +140,9 @@ def test_sibling_access_retains_first_call_evidence_for_each_root() -> None:
     assert data["flow_data_access_flow_ids_by_root"] == {
         "a": ["a-data"], "b": ["a-data"],
     }
+    assert data["flow_data_access_call_paths"]["a-data"] == [
+        ["Orders.pathA", "Orders.java", 2],
+    ]
     assert data["flow_data_access_first_calls"]["a-data"] == [
         "Orders.pathA", "Orders.java", 2,
     ]
@@ -904,6 +907,7 @@ def test_export_flow_diagnostic_retains_cross_handler_causal_paths() -> None:
         endpoints, edges, code_flows=flows, include_call_graph_annotations=False,
     ))
     assert without_annotations["flow_data_accesses"] == {}
+    assert without_annotations["flow_data_access_call_paths"] == {}
     assert without_annotations["flow_data_access_first_calls"] == {}
     assert without_annotations["flow_data_access_flow_ids_by_root"] == {}
     assert without_annotations["flow_diagnostics"] == []

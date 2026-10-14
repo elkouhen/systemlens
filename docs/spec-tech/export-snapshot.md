@@ -32,8 +32,13 @@ The HTML snapshot stores access sites under their source internal flow ID in
 selectable root in `flow_data_access_flow_ids_by_root`. Browser search and
 call-tree badges resolve these references when needed, so shared downstream
 accesses are serialized once rather than repeated for every root.
-`flow_data_access_first_calls` stores one optional first method-call witness
-per access flow for the browser's occurrence-level association marker.
+`flow_data_access_call_paths` stores the ordered source-backed method-call
+witnesses for each access flow that has them. The browser compares the complete
+access path with each occurrence path before treating an association as
+route-supported. An older snapshot without call-path witnesses keeps the
+association uncertain unless the exact flow ID matches.
+`flow_data_access_first_calls` remains in the export for consumers of the
+previous snapshot shape; the browser does not use it for association.
 
 An internal flow that contains an external call remains selectable even when
 its final step accesses data. Pure data-access flows remain supporting evidence.

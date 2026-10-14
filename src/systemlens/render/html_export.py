@@ -332,7 +332,7 @@ def render_graph_html(
                 (flow.module, simple_name), set()
             ).add(resource)
     data_accesses_by_flow: dict[str, list[dict[str, object]]] = {}
-    first_call_by_access_flow: dict[str, list[object]] = {}
+    call_paths_by_access_flow: dict[str, list[list[object]]] = {}
     if include_call_graph_annotations:
         for flow in export_flows:
             if flow.id not in reachable_access_flow_ids:
@@ -402,15 +402,18 @@ def render_graph_html(
                 })
             if accesses:
                 data_accesses_by_flow[flow.id] = [accesses[site] for site in sorted(accesses)]
-                first_call = next(
-                    (step for step in flow.steps if step.kind == "method_call"), None
-                )
-                if first_call is not None:
-                    first_call_by_access_flow[flow.id] = [
-                        first_call.name, first_call.path, first_call.start_line,
-                    ]
+                call_path = [
+                    [step.name, step.path, step.start_line]
+                    for step in flow.steps if step.kind == "method_call"
+                ]
+                if call_path:
+                    call_paths_by_access_flow[flow.id] = call_path
     view_model["flow_data_accesses"] = data_accesses_by_flow
-    view_model["flow_data_access_first_calls"] = first_call_by_access_flow
+    view_model["flow_data_access_call_paths"] = call_paths_by_access_flow
+    view_model["flow_data_access_first_calls"] = {
+        flow_id: call_path[0]
+        for flow_id, call_path in call_paths_by_access_flow.items()
+    }
     access_flow_ids_by_root: dict[str, list[str]] = {}
     for root_flow, _, _ in (export_flow_items if include_call_graph_annotations else ()):
         paths = causal_paths[root_flow.id]

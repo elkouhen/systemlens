@@ -54,7 +54,7 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
         first_badges = inventory_nodes.first.locator(
             ".graph-call-tree-access-badge, .graph-call-tree-diagnostic-badge"
         ).all_inner_texts()
-        assert "C/U StockMovementEntity" in first_badges
+        assert "C/U StockMovementEntity ?" in first_badges
         assert sum(label.endswith("ProductEntity") for label in first_badges) <= 1
         assert inventory_nodes.last.locator(
             ".graph-call-tree-access-badge, .graph-call-tree-diagnostic-badge"
@@ -283,6 +283,51 @@ def test_call_flow_lists_data_access_on_sibling_path(
         assert page.locator("#code-flows .code-flow-item").count() == 1
         assert page.locator("#code-flow-show-data-paths").count() == 0
         context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_access_badge_marks_divergent_method_route_as_uncertain() -> None:
+    entry = MessageEndpoint(
+        id="orders-entry", role="serve", system="rest", topic="POST /orders",
+        topic_dynamic=False, source="code", framework="spring-mvc",
+        path="Orders.java", start_line=1, end_line=1, snippet="",
+    )
+    trigger = CodeFlowStep(1, "http_entry", entry.topic, "Orders.java", 1, 1, entry.id)
+    shared = CodeFlowStep(2, "method_call", "Orders.common", "Orders.java", 2, 2)
+    route_a = CodeFlowStep(3, "method_call", "Orders.pathA", "Orders.java", 3, 3)
+    route_b = CodeFlowStep(3, "method_call", "Orders.pathB", "Orders.java", 4, 4)
+    def flow(flow_id: str, route: CodeFlowStep, effect: CodeFlowStep) -> CodeFlow:
+        return CodeFlow(
+            flow_id, "orders", "Orders.place", "Orders.java", 1, 7,
+            "potential", "medium", "test", (trigger, shared, route, effect),
+        )
+
+    document = render_graph_html({"orders": [entry]}, [], code_flows=[
+        flow("output", route_a, CodeFlowStep(
+            4, "message_publish", "orders.created", "Orders.java", 5, 5,
+        )),
+        flow("same-route", route_a, CodeFlowStep(
+            4, "data_read", "SameRoute", "Orders.java", 6, 6,
+            action="read", resource="jpa:orders:SameRoute",
+        )),
+        flow("other-route", route_b, CodeFlowStep(
+            4, "data_read", "OtherRoute", "Orders.java", 7, 7,
+            action="read", resource="jpa:orders:OtherRoute",
+        )),
+    ])
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.set_content(document, wait_until="load")
+        page.locator("#flows-tab").click()
+        page.locator("#code-flows .code-flow-item").first.click()
+        assert set(page.locator(".graph-call-tree-access-badge").all_inner_texts()) == {
+            "R SameRoute", "R OtherRoute ?",
+        }
         browser.close()
 
 

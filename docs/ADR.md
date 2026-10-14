@@ -1071,3 +1071,23 @@ claiming a proved branch execution. Distinct unresolved resources remain
 separate, with qualified duplicate names in the badge. The HTML snapshot
 stores one optional first-call witness per access flow; the SQLite schema and
 persisted facts do not change.
+
+## ADR-57: Compare complete method-call paths for data-access badges
+
+**Status:** Accepted.
+
+**Context:** Two access paths can share the first method call and then diverge.
+ADR-56's first-call witness marks both routes as supported, even when only one
+route reaches the data operation.
+
+**Decision:** Export each access flow's ordered method-call path. A call-tree
+occurrence supports the association when its flow ID matches the access flow,
+or when the access path is a non-empty prefix of an occurrence flow's path.
+Otherwise, the badge keeps the handler-level `?` marker. This supersedes
+ADR-56's first-call witness rule.
+
+**Consequences:** Divergent routes retain visible potential accesses without
+claiming a route match. The HTML snapshot is larger for access flows with
+several calls; the first-call field remains for older consumers. SQLite facts
+and schema remain unchanged. Identical call paths still cannot prove which
+conditional branch ran.
