@@ -14,7 +14,7 @@ from playwright.sync_api import Playwright, sync_playwright
 
 from systemlens.domain.models import GraphFact, MessageEndpoint, compute_endpoint_id
 from systemlens.domain.graph import GraphEdge
-from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, CodeQLCallGraphEdge, IntegrationMethod
 from systemlens.domain.module_inventory import DiscoveredModule, JpaEntity, MongoField, MongoPersistenceClass
 from systemlens.render import render_graph_html
 
@@ -183,6 +183,60 @@ def test_call_tree_cards_expand_for_many_data_annotations() -> None:
 
 
 @pytest.mark.slow
+def test_strategy1_call_tree_shows_called_consume_signature() -> None:
+    producer = _producer("OrderCreated")
+    consumer = replace(
+        producer, id="orders-in", role="consume", module="orders",
+        framework="kafka-topic-strategy1", path="Listener.java",
+        start_line=2, end_line=2,
+    )
+    flow = CodeFlow(
+        id="publisher-flow", module="publisher", method="Publisher.publish",
+        path="Publisher.java", start_line=1, end_line=4,
+        status="potential", confidence="medium", reason="test",
+        steps=(
+            CodeFlowStep(1, "cron_entry", "cron", "Publisher.java", 1, 1),
+            CodeFlowStep(2, "message_publish", producer.topic, "Publisher.java", 4, 4, producer.id),
+        ),
+    )
+    listener = IntegrationMethod(
+        "listener", "orders", "Orders.onMessage", "Listener.java", 2, 8,
+        (consumer.id,), (), ("ConsumerRecord<String, byte[]>",),
+    )
+    consume = IntegrationMethod(
+        "consume", "orders", "Orders.consume", "Listener.java", 10, 12,
+        (), (), ("OrderCreated",),
+    )
+    document = render_graph_html(
+        {"publisher": [producer], "orders": [consumer]},
+        [GraphEdge("kafka", "publisher", "orders", producer, consumer)],
+        code_flows=[flow], integration_methods=[listener, consume],
+        codeql_call_edges=[CodeQLCallGraphEdge(
+            "listener", "consume", "Listener.java", 5, "exact",
+        )],
+        strategy1=True,
+    )
+
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.set_content(document, wait_until="load")
+        page.locator("#flows-tab").click()
+        page.locator("#code-flows .code-flow-item").first.click()
+        page.locator("#flow-call-tree-depth-increase").click()
+        card = page.locator("#graph-call-tree .graph-call-tree-node").filter(has_text="orders")
+        assert card.locator(".graph-call-tree-method-name").inner_text() == "consume"
+        assert card.locator(".graph-call-tree-method-parameters").inner_text() == "(OrderCreated)"
+        assert card.locator(".graph-call-tree-method").get_attribute("title") == (
+            "Orders::consume(OrderCreated)"
+        )
+        browser.close()
+
+
+@pytest.mark.slow
 def test_call_tree_marks_target_without_indexed_consumer_as_unknown() -> None:
     # Given a source-backed publication with no indexed consumer flow.
     producer = _producer("OrderCreated")
@@ -241,6 +295,12 @@ def test_call_tree_marks_target_without_indexed_consumer_as_unknown() -> None:
         )
         root = page.locator("#graph-call-tree .graph-call-tree-node").filter(has_text="orders")
         assert root.locator(".graph-call-tree-method").inner_text() == "publish"
+        assert root.locator(".graph-node-card-kind").count() == 0
+        assert target.locator(".graph-node-card-kind").inner_text() == "Suite inconnue"
+        assert all(
+            "Microservice" not in card
+            for card in page.locator("#graph-call-tree .graph-call-tree-node").all_inner_texts()
+        )
         target.hover()
         assert "suite inconnue" in page.locator(
             "#graph-flow-tooltips .graph-call-tree-entity-tooltip"

@@ -188,10 +188,19 @@ colored block below the microservice name. The declared parameter types appear
 beneath the method name when the index contains them. An empty signature is shown
 as `()`.
 
+Call-tree cards show the service name without repeating its microservice type.
+An occurrence with no indexed consumer flow keeps its `Suite inconnue` status.
+Cycles and hidden-call counts remain visible through their separate badges.
+
 If the input port has no indexed method, the renderer uses the associated flow
 method when available. Hovering the block shows the qualified signature. Missing
 method evidence omits the block; missing signature evidence omits the parameter
 line. Long names and types may be clipped to the card width.
+
+For a Strategy1 Kafka reception, the call-tree card shows the signature of a
+directly called `consume` method when exactly one such method has indexed
+parameter types. Otherwise, it shows the annotated listener signature. This
+display choice does not change the Kafka input port or indexed method facts.
 
 The tree mode uses a fixed left-to-right orientation and an incremental depth
 control from 1 to 8 levels. The default is depth 1, showing only the root

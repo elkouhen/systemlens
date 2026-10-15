@@ -330,6 +330,32 @@ def build_graph_view_model(
         for method in integration_methods or []
         for endpoint_id in (*method.input_endpoint_ids, *method.output_endpoint_ids)
     }
+    method_by_id = {method.id: method for method in integration_methods or []}
+    callees_by_caller_id: dict[str, set[str]] = {}
+    for call_edge in codeql_call_edges or []:
+        callees_by_caller_id.setdefault(call_edge.caller_id, set()).add(call_edge.callee_id)
+
+    def call_tree_consume_signature(endpoint: MessageEndpoint) -> dict[str, object] | None:
+        """Prefer a uniquely called Strategy1 consume method for call-tree display."""
+        if not strategy1 or endpoint.system != "kafka" or endpoint.role != "consume":
+            return None
+        listener = method_by_endpoint_id.get(endpoint.id)
+        if listener is None:
+            return None
+        candidates = [
+            method_by_id[callee_id]
+            for callee_id in callees_by_caller_id.get(listener.id, set())
+            if callee_id in method_by_id
+            and method_by_id[callee_id].qualified_method.rsplit(".", 1)[-1] == "consume"
+        ]
+        if len(candidates) != 1 or candidates[0].parameter_types is None:
+            return None
+        candidate = candidates[0]
+        owner, separator, name = candidate.qualified_method.rpartition(".")
+        return {
+            "method": f"{owner}::{name}" if separator else candidate.qualified_method,
+            "parameter_types": list(candidate.parameter_types or ()),
+        }
     resolved_http_target_by_call_id = {
         edge.from_endpoint.id: (edge.to_service, edge.to_endpoint)
         for edge in edges
@@ -514,6 +540,10 @@ def build_graph_view_model(
                 "system": endpoint.system,
                 "role": endpoint.role,
                 "method": port_method_label(endpoint),
+                **(
+                    {"call_tree_signature": signature}
+                    if (signature := call_tree_consume_signature(endpoint)) is not None else {}
+                ),
                 **(
                     {"parameter_types": list(method_by_endpoint_id[endpoint.id].parameter_types or ())}
                     if endpoint.id in method_by_endpoint_id

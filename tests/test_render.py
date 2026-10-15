@@ -280,6 +280,50 @@ def test_export_includes_persisted_codeql_call_graph() -> None:
     }
 
 
+def test_strategy1_call_tree_signature_uses_unique_called_consume_method() -> None:
+    listener_endpoint = replace(
+        _kafka_endpoint("consume", "OrderCreated", "Listener.java"),
+        id="orders-in", module="orders", framework="kafka-topic-strategy1",
+    )
+    listener = IntegrationMethod(
+        "listener", "orders", "Orders.onMessage", "Listener.java", 1, 8,
+        (listener_endpoint.id,), (), ("ConsumerRecord<String, byte[]>",),
+    )
+    consume = IntegrationMethod(
+        "consume", "orders", "Orders.consume", "Listener.java", 10, 12,
+        (), (), ("OrderCreated",),
+    )
+    other_consume = replace(consume, id="other", qualified_method="Other.consume")
+    call = CodeQLCallGraphEdge("listener", "consume", "Listener.java", 5, "exact")
+    other_call = CodeQLCallGraphEdge("listener", "other", "Listener.java", 6, "possible")
+
+    def port_for(
+        framework: str, extra_edges: list[CodeQLCallGraphEdge], *, strategy1: bool = True
+    ) -> dict:
+        endpoint = replace(listener_endpoint, framework=framework)
+        data = _html_graph_data(render_graph_html(
+            {"orders": [endpoint]}, [],
+            integration_methods=[listener, consume, other_consume],
+            codeql_call_edges=[call, *extra_edges],
+            strategy1=strategy1,
+        ))
+        return next(
+            port for node in data["nodes"] for port in node.get("ports", [])
+            if port["endpoint_id"] == endpoint.id
+        )
+
+    expected = {"method": "Orders::consume", "parameter_types": ["OrderCreated"]}
+    strategy_port = port_for("kafka-topic-strategy1", [])
+    assert strategy_port["call_tree_signature"] == expected
+    assert strategy_port["method"] == "Orders::onMessage"
+    assert strategy_port["parameter_types"] == ["ConsumerRecord<String, byte[]>"]
+    assert port_for("spring-kafka", [])["call_tree_signature"] == expected
+    assert "call_tree_signature" not in port_for("kafka-topic-strategy1", [], strategy1=False)
+    assert "call_tree_signature" not in port_for("kafka-topic-strategy1", [other_call])
+    other_consume = replace(other_consume, parameter_types=None)
+    assert "call_tree_signature" not in port_for("kafka-topic-strategy1", [other_call])
+
+
 def test_global_input_label_references_its_local_output() -> None:
     producer = replace(_kafka_endpoint("produce", "OrderCreated", "Orders.java"), id="orders-out")
     consumer = replace(_kafka_endpoint("consume", "OrderCreated", "Payments.java"), id="payments-in")

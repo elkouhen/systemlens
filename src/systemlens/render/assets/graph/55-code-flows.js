@@ -718,9 +718,14 @@
         const inputEndpointId = inputForOccurrence(occurrence);
         const inputPort = inputEndpointId ? portsByEndpointId.get(inputEndpointId) : null;
         const inputMethod = String(inputPort?.method || "").trim();
-        const candidates = inputMethod.includes("::")
-          ? [{ method: inputMethod, parameterTypes: inputPort.parameter_types }]
-          : occurrence.flowIds.map(id => {
+        const preferredSignature = inputPort?.call_tree_signature;
+        let candidates;
+        if (preferredSignature) {
+          candidates = [{ method: preferredSignature.method, parameterTypes: preferredSignature.parameter_types }];
+        } else if (inputMethod.includes("::")) {
+          candidates = [{ method: inputMethod, parameterTypes: inputPort.parameter_types }];
+        } else {
+          candidates = occurrence.flowIds.map(id => {
             const flow = flowById.get(id);
             const method = String(flow?.method || "").trim();
             const declaration = (graphData.codeql_call_graph?.nodes || []).find(node => (
@@ -729,6 +734,7 @@
             ));
             return { method, parameterTypes: declaration?.parameter_types };
           }).filter(item => item.method);
+        }
         const signatures = [...new Map(candidates.map(item => [
           JSON.stringify([item.method, item.parameterTypes]), item,
         ])).values()].map(item => {
@@ -885,16 +891,12 @@
         } else {
           node.append(icon, name);
         }
-        const kind = document.createElement("span");
-        kind.className = "graph-node-card-kind";
-        kind.textContent = occurrence.cycle
-          ? "Microservice · cycle"
-          : occurrence.continuationUnknown
-            ? "Microservice · suite inconnue"
-          : occurrence.hiddenChildrenCount
-            ? `Microservice · +${occurrence.hiddenChildrenCount} appels`
-            : "Microservice";
-        node.append(kind);
+        if (occurrence.continuationUnknown) {
+          const status = document.createElement("span");
+          status.className = "graph-node-card-kind";
+          status.textContent = "Suite inconnue";
+          node.append(status);
+        }
         const annotationGroups = [...annotationGroupsForOccurrence(occurrence).values()]
           .sort((a, b) => a.name.localeCompare(b.name, "fr")
             || a.resource.localeCompare(b.resource, "fr"));

@@ -284,6 +284,14 @@ method evidence is available. The method line MUST remain visually distinct
 from the service name and MUST retain its qualified name in the title. Long
 names may be clipped to the card width.
 
+The card MUST omit the repeated `Microservice` type label. An unknown
+continuation MUST retain its `Suite inconnue` status; cycles and hidden calls
+use their existing badges.
+
+For a Strategy1 Kafka reception, the method block MUST show a uniquely called
+`consume` signature when its parameter types are indexed. Without that evidence,
+the block retains the annotated listener signature.
+
 Hovering or focusing an occurrence MUST highlight its path from the root and
 dim unrelated branches. Leaving the occurrence or moving focus MUST restore the
 full tree. This emphasis is transient and MUST NOT change selection or the
