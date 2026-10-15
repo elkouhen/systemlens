@@ -37,6 +37,7 @@ from systemlens.render._graph_view_helpers import (
     _openapi_contract_evidence_path,
     _resolve_openapi_contract_owner,
     _rest_resources_served,
+    _source_evidence_path,
     _visual_graph_edges,
     _visual_link_evidence,
     _vscode_file_uri,
@@ -872,7 +873,7 @@ def build_graph_view_model(
                 "source_path": entity.path,
                 "source_line": entity.line,
                 "vscode_uri": _vscode_file_uri(
-                    module.path.parent / entity.path,
+                    _source_evidence_path(entity.path, module, source_roots),
                     root_path,
                     source_roots,
                     entity.line,

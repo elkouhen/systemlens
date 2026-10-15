@@ -28,6 +28,20 @@ than treating it as a broken link.
 `README.md` stays intentionally short. The specifications and ADRs hold the
 authoritative detail.
 
+## Skill routing
+
+Load these project skills when the task matches their trigger:
+
+- [`writing-for-agents`](.agents/skills/writing-for-agents/SKILL.md): When
+  creating or editing an agent skill, `AGENTS.md`, `CLAUDE.md`, or a document
+  that routes agents to project context. Keep context pointers short.
+- [`codebase-design`](.agents/skills/codebase-design/SKILL.md): When designing
+  a module interface, choosing a seam, or planning an architecture refactor.
+  Use its vocabulary when updating the technical specification or an ADR.
+- [`playwright-cli`](.agents/skills/playwright-cli/SKILL.md): When inspecting,
+  reproducing, or reviewing an interaction in the generated HTML export. Run
+  the browser integration test under Validation for regression coverage.
+
 ## Source-of-truth and conflict resolution
 
 Apply requirements in this order: explicit user and platform safety

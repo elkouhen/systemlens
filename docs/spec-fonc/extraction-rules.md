@@ -213,10 +213,10 @@ third argument is present. Simple `Message<T>`, `GenericMessage<T>` and
 `ProducerRecord<K,V>` wrappers are unwrapped. It never replaces an AST type
 and applies only a unique source-backed result; ambiguous results remain
 unknown.
-Strategy1 resolves every listener and sender topic through an exact key lookup
-in `kafka.yml` or `kafka.yaml`. The supported declaration is the nested
-`topics.<key>.nom` leaf. Strategy1 does not normalize case, CamelCase,
-underscores, dots, whitespace, prefixes or suffixes when comparing the key.
+Strategy1 resolves listener and sender topic keys against `kafka.yml` or
+`kafka.yaml` after normalizing case, CamelCase boundaries, digits, and
+separators. The supported declaration is the nested `topics.<key>.nom` leaf.
+It does not infer a match from a partial key or an undeclared topic.
 Only the `topics` attribute of `@KafkaListener` is inspected for topic
 references. Properties such as `topics.<key>.groupe` in `groupId` are
 consumer-group settings, not topic references, and are ignored.
@@ -224,15 +224,15 @@ If the declared value starts with `${kafka.prefix-topic}.`, Strategy1 removes
 that environment prefix before persisting and matching the physical topic.
 An absent, ambiguous or non-matching declaration remains dynamic and does not
 receive a derived name. A conditional topic expression creates one producer
-fact for each statically resolved branch when each branch has an exact catalog
-match. The same branch resolver handles direct expressions and variables
-assigned by `if/else` or `switch` control flow.
+fact for each statically resolved branch when each branch matches a catalog
+entry after key normalization. The same branch resolver handles direct
+expressions and variables assigned by `if/else` or `switch` control flow.
 Kafka topic expressions also resolve source-local conventionally named uppercase
 `static final` string constants and concatenations whose operands are all
 statically resolvable.
 When one operand remains unresolved, the complete expression stays dynamic;
 SystemLens does not keep its first literal as a concrete topic.
-An uppercase `Flux` enum constant is resolved only when its exact constant name
+An uppercase `Flux` enum constant is resolved only when its normalized name
 has a matching catalog entry. Other variable topic expressions stay dynamic.
 When the publishing method is annotated with `@Scheduled(cron = "...")`, the
 flow starts with an explicit `Déclencheur Cron` step, followed by the Kafka

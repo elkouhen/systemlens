@@ -728,8 +728,10 @@ route or a class name.
 
 The source-evidence contract requires paths relative to the indexed project
 root. For root-relative evidence, HTML export receives a local `--root-path`
-and joins it to each evidence path when building VS Code URIs. This keeps indexes
-portable across machines without persisting host-specific source roots.
+and joins it to each evidence path when building absolute VS Code URIs.
+Module-relative evidence uses the owning module path. The export resolves
+nested module paths before applying the local root. This keeps indexes portable
+across machines without persisting host-specific source roots.
 
 **Known implementation gap:** Some persisted source fields are module-relative:
 `JpaMethod.path` in module inventory and `source` in Kafka DTO definitions. The

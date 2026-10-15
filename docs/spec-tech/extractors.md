@@ -145,17 +145,17 @@ With `--strategy strategy1`, every method whose name starts with
 `envoyerMessageKafka` is an additional producer convention, including
 `envoyerMessageKafkaRequest(topic, payload)` and
 `envoyerMessageKafkaReply(topic, payload)`. A first argument shaped as
-`kafkaProperties.getTopics().getXxx()` resolves only through an exact
-`kafka.yml` or `kafka.yaml` `topics.<key>.nom` declaration. A conditional first
-argument creates one producer fact for each statically resolved branch with an
-exact catalog match. This includes a ternary expression and a topic variable
+`kafkaProperties.getTopics().getXxx()` resolves through a matching normalized
+`kafka.yml` or `kafka.yaml` `topics.<key>.nom` key. A conditional first
+argument creates one producer fact for each statically resolved branch with a
+matching catalog entry. This includes a ternary expression and a topic variable
 assigned in `if/else` or `switch` branches. Other values use the conservative
 topic resolver and remain dynamic unless they match an exact declared value.
 For listeners, the extractor inspects only the `topics` attribute. Only
 `${kafka.topics.<key>.nom}` placeholders in that attribute create consume
 endpoints. A `${kafka.topics.<key>.groupe}` placeholder in `groupId` identifies
 the consumer group and is ignored by topic extraction.
-Strategy1 applies no topic-key normalization. The second argument is always
+The second argument is always
 used to derive the payload type from its method parameter, local variable
 declaration or enclosing class field, including calls with three arguments.
 This positional rule applies identically to

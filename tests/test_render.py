@@ -1970,6 +1970,64 @@ def test_vscode_uri_joins_root_path_with_indexed_relative_path(tmp_path: Path) -
     ) == "vscode://file//exported/repository/orders/src/Order.java:14"
 
 
+def test_nested_jpa_entity_link_uses_absolute_project_path(tmp_path: Path) -> None:
+    module_root = tmp_path / "services" / "orders"
+    source = module_root / "src" / "Order.java"
+    source.parent.mkdir(parents=True)
+    source.write_text("class Order {}", encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=module_root, build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+        jpa_entities=(JpaEntity(
+            qualified_name="com.example.Order",
+            path="services/orders/src/Order.java", line=12,
+        ),),
+    )
+    graph_data = _html_graph_data(render_graph_html(
+        {"orders": []}, [], modules_by_service={"orders": module},
+        source_roots=[tmp_path], root_path=Path("/exported/repository"),
+    ))
+
+    entity = next(node for node in graph_data["nodes"] if node["kind"] == "jpa_entity")
+    expected = "vscode://file//exported/repository/services/orders/src/Order.java:12"
+    assert entity["source_path"] == "services/orders/src/Order.java"
+    assert entity["vscode_uri"] == expected
+    description = next(
+        item for item in graph_data["resource_descriptions"] if item["id"] == entity["id"]
+    )
+    assert description["navigation"]["open_source"] == expected
+    local_graph = _html_graph_data(render_graph_html(
+        {"orders": []}, [], modules_by_service={"orders": module},
+    ))
+    local_entity = next(node for node in local_graph["nodes"] if node["kind"] == "jpa_entity")
+    assert local_entity["vscode_uri"] == f"vscode://file/{source}:12"
+
+
+def test_endpoint_link_opens_moved_source_from_export_root(tmp_path: Path) -> None:
+    indexed_root = tmp_path / "indexed"
+    export_root = tmp_path / "moved"
+    source = export_root / "services" / "orders" / "src" / "Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text("class Publisher {}", encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=indexed_root / "services" / "orders",
+        build_system="maven", version=None, kind="application",
+        starts_application=True, configuration_example="",
+    )
+    endpoint = replace(
+        _kafka_endpoint("produce", "OrderCreated", "services/orders/src/Publisher.java"),
+        module="orders",
+    )
+    graph_data = _html_graph_data(render_graph_html(
+        {"orders": [endpoint]}, [], modules_by_service={"orders": module},
+        source_roots=[indexed_root], root_path=export_root,
+    ))
+
+    service = next(node for node in graph_data["nodes"] if node["id"] == "microservice:orders")
+    assert service["vscode_uri"] == f"vscode://file/{source.parent.parent}"
+    assert service["kafka_endpoints"][0]["vscode_uri"] == f"vscode://file/{source}:1"
+
+
 def test_graph_html_resolves_mongo_class_from_dependent_persistence_module() -> None:
     application = DiscoveredModule(
         name="orders-app", path=Path("/workspace/orders-app"), build_system="maven",

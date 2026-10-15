@@ -36,7 +36,8 @@ excluded. Maven modules whose artifact identifier or directory name contains
 but does not alter AST endpoint extraction.
 `analysis` is the versionable source of truth for the topic convention,
 method-call engine, and disabled extractors. Under Strategy1, listener and
-sender topic keys must match the keys in `kafka.yml` or `kafka.yaml` exactly.
+sender topic keys match declared keys in `kafka.yml` or `kafka.yaml` after
+normalization.
 `root_path` is local export configuration only:
 it resolves relative source evidence into VS Code links and is never persisted
 in the architecture snapshot.

@@ -3,6 +3,7 @@ __pycache__/
 .systemlens/
 *.db
 apm_modules/
+.agents/
 .playwright-cli/
 output/
 .coverage

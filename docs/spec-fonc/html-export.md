@@ -52,6 +52,11 @@ navigation. The `maps` relation identifies the mapping without implying a
 database read/write edge. Mongo persistence classes and indexed DTOs use the
 same resource description and two-level inspection model.
 
+Source and module actions use absolute `vscode://file/` locations. When the
+indexed project has moved, `--root-path` sets the local project root used for
+these links, including sources in nested modules. Indexed source paths remain
+relative and contain no machine-specific root.
+
 The service inspector lists persisted Java DTOs associated with indexed JPA
 entities and DTOs used by REST controller signatures when no OpenAPI contract
 is indexed. The list includes the DTO role and source location; it does not

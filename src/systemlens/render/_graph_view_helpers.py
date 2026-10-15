@@ -81,27 +81,63 @@ def _endpoint_vscode_uri(
     root_path: Path | None = None,
 ) -> str:
     """Build a deep link to an endpoint source location when reporting an issue."""
-    module_roots = [module.path for module in modules if module.name == endpoint.module]
-    roots = module_roots + list(source_roots or []) + [module.path for module in modules]
-    for root in dict.fromkeys(roots):
-        candidate = (root / endpoint.path).resolve()
-        if candidate.is_file():
-            return _vscode_file_uri(candidate, root_path, source_roots, endpoint.start_line)
-    root = roots[0] if roots else Path.cwd()
-    candidate = (root / endpoint.path).resolve()
+    module = next((item for item in modules if item.name == endpoint.module), None)
+    if module is None:
+        module = next(
+            (item for item in modules
+             if _source_evidence_path(endpoint.path, item, source_roots).is_file()),
+            modules[0] if len(modules) == 1 else None,
+        )
+    candidate = _source_evidence_path(endpoint.path, module, source_roots)
     return _vscode_file_uri(candidate, root_path, source_roots, endpoint.start_line)
 
 
 def _vscode_uri(finding: Finding, module: DiscoveredModule | None, source_roots: list[Path] | None, root_path: Path | None = None) -> str:
     """Build a VS Code deep link for an evidenced finding location."""
-    candidates = ([module.path] if module is not None else []) + list(source_roots or [])
-    for root in candidates:
-        candidate = (root / finding.path).resolve()
-        if candidate.is_file():
-            return _vscode_file_uri(candidate, root_path, source_roots, finding.start_line)
-    root = candidates[0] if candidates else Path.cwd()
-    candidate = (root / finding.path).resolve()
+    candidate = _source_evidence_path(finding.path, module, source_roots)
     return _vscode_file_uri(candidate, root_path, source_roots, finding.start_line)
+
+
+def _source_evidence_path(
+    path: str, module: DiscoveredModule | None, source_roots: list[Path] | None,
+) -> Path:
+    """Resolve indexed source evidence against its project or module root."""
+    relative = Path(path)
+    roots = source_roots or []
+    if module is not None:
+        module_root = module.path.resolve()
+        owning_roots = []
+        for root in roots:
+            try:
+                module_prefix = module_root.relative_to(root.resolve()).parts
+            except ValueError:
+                continue
+            owning_roots.append((root, module_prefix))
+        owning_roots.sort(key=lambda item: len(item[1]))
+        for root, module_prefix in owning_roots:
+            if module_prefix and relative.parts[:len(module_prefix)] == module_prefix:
+                return root / relative
+        module_candidate = module_root / relative
+        if module_candidate.is_file():
+            return module_candidate
+        for root, _prefix in owning_roots:
+            candidate = root / relative
+            if candidate.is_file():
+                return candidate
+        if not roots:
+            for length in range(min(len(relative.parts), len(module_root.parts)), 0, -1):
+                if relative.parts[:length] == module_root.parts[-length:]:
+                    return module_root.parents[length - 1] / relative
+            for parent in module_root.parents:
+                candidate = parent / relative
+                if candidate.is_file():
+                    return candidate
+        return module_candidate
+    for root in roots:
+        candidate = root / relative
+        if candidate.is_file():
+            return candidate
+    return (roots[0] if roots else Path.cwd()) / relative
 
 
 def _vscode_file_uri(
