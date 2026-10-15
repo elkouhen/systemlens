@@ -165,8 +165,10 @@ they are not cross-module entry points.
 | Shared module inventory types | `domain/module_inventory.py` |
 | Same-method potential flow materialization | `indexing/code_flows.py` |
 | File eligibility or incremental refresh policy | `indexing/file_inventory.py` |
+| Persisted architecture relation derivation | `indexing/relations.py` |
 | Persisted contract materialization | `indexing/materializers.py` |
 | SQLite schema or queries | `storage/sqlite.py` |
+| SQLite row and JSON conversion | `storage/serialization.py` |
 | JSON, terminal, or HTML presentation | `render/` package (`__init__.py` re-exports the public surface) |
 
 ## The `scanner/` package

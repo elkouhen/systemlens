@@ -84,9 +84,10 @@ systemlens flows calculate
 systemlens export microservices --html architecture.html
 ```
 
-The [AI graph manifest reference](docs/AI-GRAPH.md) defines the format and
-import rules. Source-derived facts remain in the index; AI facts do not replace
-them. Use `systemlens export facts` to review or transfer a namespace.
+The [AI graph manifest reference](docs/spec-fonc/ai-graph-manifest.md) defines
+the format and import rules. Source-derived facts remain in the index; AI facts
+do not replace them. Use `systemlens export facts` to review or transfer a
+namespace.
 
 ## Test with the lab
 
@@ -116,7 +117,8 @@ for relation and export behavior.
 Run `scripts/install-dependencies.sh` on macOS or Ubuntu to provision the local
 development tools and run `uv sync --group dev`. Use `make help` to list checks;
 `make lint`, `make typecheck`, and `make test` run the common validation steps.
-The [test guide](docs/TESTING.md) covers slower browser and companion checks.
+The [test guide](docs/spec-tech/verification.md) covers browser, CodeQL, and
+quality checks.
 
 The repository also includes `apm.yml` for supported coding-agent harnesses.
 Run `apm install` to set it up, or `apm run lint`, `apm run test`, and

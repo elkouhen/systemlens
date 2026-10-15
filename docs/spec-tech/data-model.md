@@ -70,8 +70,9 @@ entry cannot overwrite another fact through SQLite conflict handling.
 CLI graph exports merge both layers using the generic dependency node/edge
 shape, preserving API and MongoDB associations.
 
-The same `systemlens-ai-graph-v1` manifest may contain optional `endpoints` and
-ordered `flows` for direct source analysis. The importer stores manifest
+The same `systemlens-ai-graph-v1` manifest (see the [functional manifest
+contract](../spec-fonc/ai-graph-manifest.md)) may contain optional `endpoints`
+and ordered `flows` for direct source analysis. The importer stores manifest
 endpoints with `source=manifest` and persists the ordered `CodeFlow` records
 only when the source snapshot has no indexed endpoints or modules. This keeps
 direct flow projections separate from deterministic source facts while making
@@ -165,8 +166,9 @@ objects rather than data classes. Their stable fields are:
   "layer": "application",
   "layer_label": "Application",
   "architecture_layer": "application",
+  "cluster_path": "root",
   "project_namespace": "root",
-  "project_namespace_path": ".",
+  "project_namespace_path": "root",
   "build_system": "maven",
   "resources": ["GET /api/products/{productId}"],
   "ports": [],
@@ -174,8 +176,12 @@ objects rather than data classes. Their stable fields are:
 }
 ```
 
+`cluster_path` is the canonical module path. The legacy
+`project_namespace_path` mirrors it, while `project_namespace` retains the
+immediate parent name. Neither field represents a Kubernetes runtime namespace.
+
 `MicroserviceDescription` identifies one deployable application and groups its
-runtime layer, project namespace, build system, served resources and integration
+architecture layer, module path, build system, served resources and integration
 ports. `ports` is the source of truth for HTTP, Kafka and database boundary
 details. `resources` contains served API resources and is not a dependency
 edge. `vscode_uri` points to the service directory when source navigation is

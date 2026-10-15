@@ -31,9 +31,9 @@ value with low precision does not justify an automatic defect verdict.
 SystemLens already persists potential HTTP and Kafka flows and some MongoDB
 accesses, but lexical order does not prove execution or commit order. It also
 stores OpenAPI and AsyncAPI documents. JPA entity declarations do not identify
-physical tables or read/write operations. The [flow model](docs/spec-tech/data-model.md)
-and [product scope](docs/PRD.md) define these boundaries. The existing
-[async-write/sync-read diagnostic](docs/SPEC-FONC.md) covers the first row as
+physical tables or read/write operations. The [flow model](spec-tech/data-model.md)
+and [product scope](PRD.md) define these boundaries. The existing
+[async-write/sync-read diagnostic](SPEC-FONC.md) covers the first row as
 a potential consistency risk.
 
 ## Comparative assessment
@@ -99,8 +99,8 @@ shows why event compatibility depends on policy.
 
 Third, prototype a database update and event publication candidate on a small
 annotated Spring corpus. First, classify source-located data operations and
-attach them to internal call paths: the current [MongoDB flow projection](src/systemlens/indexing/code_flows.py)
-only attaches same-method accesses as reads or writes, while the [JPA inventory](docs/spec-tech/data-model.md)
+attach them to internal call paths: the current [MongoDB flow projection](../src/systemlens/indexing/code_flows.py)
+only attaches same-method accesses as reads or writes, while the [JPA inventory](spec-tech/data-model.md)
 records declarations without operations. Preserve the two source sites and any
 identified transaction or recovery mechanism. Treat an unknown outbox, CDC
 process, or transaction manager as missing evidence rather than proof of unsafe delivery.

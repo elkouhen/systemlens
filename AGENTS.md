@@ -8,11 +8,13 @@ documents and summarizes the documentation hygiene expected in this repository.
 | Document | Content | When to read it |
 |---|---|---|
 | [`README.md`](README.md) | Entry point: positioning, installation, quickstart, MCP setup | First stop for onboarding or user-facing repo updates |
+| [`docs/README.md`](docs/README.md) | One-line map of every project Markdown file | When choosing which document to read for a task |
 | [`docs/PRD.md`](docs/PRD.md) | Problem, vision, personas, scope, success metrics | When you need product intent and scope boundaries |
 | [`docs/SPEC-FONC.md`](docs/SPEC-FONC.md) | Observable behavior: CLI commands, flags, error messages, MCP tools, skill workflows | Before changing anything a user or agent sees |
 | [`docs/SPEC-TECH.md`](docs/SPEC-TECH.md) | Modules, data model, SQLite schema, algorithms, JSON contract | Before changing internal architecture in `src/systemlens/` |
 | [`docs/ADR.md`](docs/ADR.md) | Architecture decisions: context, choice, consequences | Before revisiting an existing technical choice |
-| [`BACKLOG.md`](BACKLOG.md) | Prioritized, acceptance-tested architecture and delivery work | When planning or implementing deferred improvements |
+| [`BACKLOG.md`](BACKLOG.md) | Index of deferred work and its detailed plans | When planning or implementing deferred improvements |
+| [`docs/plans/data-operations-in-internal-flows.md`](docs/plans/data-operations-in-internal-flows.md) | Scoped data-operation plan, status, and acceptance criteria | When working on data operations in internal flows |
 | [`../systemlens-skill/`](../systemlens-skill/) | Companion skill repo: agent workflow, bundled rule packs, operational guidance | Whenever an SystemLens change can affect the skill or its docs |
 | [`../systemlens-observability-lab/`](../systemlens-observability-lab/) | Infrastructure and a test application for observability/integration testing | When validating SystemLens against a real running app/infra, or working on observability-related integration tests |
 

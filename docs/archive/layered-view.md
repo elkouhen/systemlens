@@ -1,9 +1,7 @@
-> NOTE: This document describes removed HTML layer and module rendering.
-> See [placement and interaction](placement.md) for the current graph contract.
+> NOTE: This document preserves historical rules for removed HTML layer and
+> module rendering. See [UX/UI rules](../UX-UI.md) for the current graph contract.
 
 # Layered-view rendering rules
-
-Parent: [Functional specification](../SPEC-FONC.md).
 
 The shared presentation and interaction rules are defined in
 [UX/UI rules](../UX-UI.md). This page owns the layered-view geometry and

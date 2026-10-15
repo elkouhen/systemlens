@@ -14,10 +14,11 @@ in `docs/spec-fonc/` so each topic can be read and reviewed independently.
 | Configure an index | [Configuration](spec-fonc/configuration.md) |
 | Use the CLI | [CLI](spec-fonc/cli.md) |
 | Change endpoint or flow extraction | [Extraction rules](spec-fonc/extraction-rules.md) |
-| Change export behavior | [HTML export](spec-fonc/html-export.md), [port rendering](spec-fonc/port-rendering.md), and [placement](spec-fonc/placement.md) |
-| Change graph rendering | [Placement and interaction](spec-fonc/placement.md) and [module navigation](spec-fonc/modules.md) |
+| Change export behavior | [HTML export](spec-fonc/html-export.md) and [port rendering](spec-fonc/port-rendering.md) |
+| Change graph rendering | [UX/UI rules](UX-UI.md), [module navigation](spec-fonc/modules.md), and [graph layout](spec-tech/graph-layout.md) |
 | Change HTML presentation or interaction | [UX/UI rules](UX-UI.md) |
 | Change incremental indexing | [Incrementality](spec-fonc/incrementality.md) |
+| Use or change the AI graph manifest | [AI graph manifest](spec-fonc/ai-graph-manifest.md) |
 
 The keywords **MUST** and **MUST NOT** identify compatibility requirements.
 The section files are normative for the behavior they own.
@@ -61,7 +62,7 @@ of concurrency. These static findings do not assert a runtime incident.
 - [Extraction rules](spec-fonc/extraction-rules.md)
 - [HTML export](spec-fonc/html-export.md)
 - [Port rendering](spec-fonc/port-rendering.md)
-- [Placement and interaction](spec-fonc/placement.md)
 - [Module navigation](spec-fonc/modules.md)
 - [Incrementality and freshness](spec-fonc/incrementality.md)
+- [AI graph manifest](spec-fonc/ai-graph-manifest.md)
 - [UX/UI rules](UX-UI.md)

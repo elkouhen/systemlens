@@ -15,7 +15,8 @@ ownership, and module-specific behavior.
 Modules group indexed projects by canonical `cluster_path` values derived from
 project directory paths. A parent path can contain child modules, while each
 resource belongs directly to one module. Runtime Kubernetes namespaces do not
-define this hierarchy.
+define this hierarchy. Projects at the indexed repository root belong to the
+synthetic `root` module.
 
 For a Topic, message channel, Data resource, or other resource, the producer's
 module takes precedence over consumer modules. If no producer can be identified,

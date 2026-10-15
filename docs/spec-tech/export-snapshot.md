@@ -4,7 +4,8 @@ Parent: [Technical specification](../SPEC-TECH.md).
 
 
 The read-only `--graph FILE` export path accepts the versioned
-`systemlens-ai-graph-v1` manifest described in [AI-GRAPH.md](../AI-GRAPH.md).
+`systemlens-ai-graph-v1` manifest described in
+[AI graph manifest](../spec-fonc/ai-graph-manifest.md).
 The adapter validates node IDs, kinds, relation endpoints, relative evidence
 paths and ambiguity status before projecting safe claims onto the existing
 HTML graph model. It does not modify source-derived tables. The explicit

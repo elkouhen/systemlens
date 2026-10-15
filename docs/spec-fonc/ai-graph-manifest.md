@@ -1,5 +1,7 @@
 # AI graph manifest (`systemlens-ai-graph-v1`)
 
+Parent: [Functional specification](../SPEC-FONC.md).
+
 An AI may produce an architecture graph when source conventions are too
 complex for deterministic extractors. The same manifest can be rendered as a
 temporary graph or imported as replaceable enrichment facts; it never replaces

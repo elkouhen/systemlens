@@ -20,39 +20,10 @@ excluded) and attaches a workload only when its Kubernetes name exactly matches
 the indexed project name. This optional step can contact the current Kubernetes
 API context; it is never enabled by default.
 
-### Ownership boundaries
+### Snapshot and delivery boundaries
 
-`scanner/` (a package; see `docs/ARCHITECTURE.md`) owns Java/Spring extraction.
-`discovery/java/parser.py` provides cached Tree-sitter parsing and syntax
-helpers. `domain/module_inventory.py` owns the
-build-inventory facts shared with persistence and projections, without
-depending on discovery. The `module_types/` compatibility package retains the
-former import path.
-`discovery/build/` discovers build units; `indexing/relations.py` derives typed
-architecture relations from modules, endpoints and build dependencies.
-`indexing/service.py` orchestrates the incremental transaction, while
-`indexing/file_inventory.py` owns file eligibility and conservative full-rescan
-promotion and `indexing/materializers.py` owns persisted contract projections.
-`indexing/dto_inventory.py` materializes the conservative Java
-DTO closure referenced by Kafka endpoints before that closure is persisted.
-`storage/sqlite.py` owns SQLite connections, schema, transactions, and queries;
-`storage/serialization.py` owns SQLite row and JSON conversions. The `store/`
-compatibility package retains the former Python import.
-
-The standalone HTML export concatenates browser assets in a fixed order.
-`06-view-lifecycle.js` updates flow selection and its graph attributes together;
-`07-navigation.js` changes tabs and panel visibility. Widgets can request a
-tab change through that navigation function. `60-bootstrap.js` registers
-handlers before the first graph rebuild and applies the initial layout after
-setting the workspace size. A filter handler belongs to its widget, so one
-filter event causes one catalogue projection.
-
-Within `render/`, `graph_view_model.py` owns the architecture projection from
-persisted facts to the browser data model, and `call_graph.py` owns the
-call-graph projection and its flow-level transformations. `html_export.py`
-only serializes those models and assembles the standalone document from the
-HTML template and ordered browser assets. Rendering code must not be imported
-by indexing or discovery code.
+The [code architecture guide](../ARCHITECTURE.md) owns package boundaries,
+dependency direction, browser module ownership, and execution paths.
 
 The architecture view keeps HTTP topology at microservice level. The browser
 model also carries every indexed REST endpoint on its owning microservice as

@@ -218,6 +218,10 @@ Filtering, selection, zooming, resizing, and layout changes MUST keep graph
 coordinates and node overlays synchronized. Empty or filtered graphs MUST clear
 stale node cards and paths.
 
+Changing a relation-type filter rebuilds and relayouts the visible graph using
+only the selected dependency types. Excluded relations do not influence the
+resulting placement.
+
 ## Camera and graph interaction
 
 The graph area supports pan, bounded wheel zoom, zoom controls, centering, and
@@ -359,8 +363,6 @@ The following documents provide the implementation detail for this contract:
   port-to-port projection rules.
 - [Module membership and navigation](spec-fonc/modules.md)
   own architecture grouping invariants.
-- [Placement and interaction](spec-fonc/placement.md) owns graph projection
-  and interaction-specific behavior.
 - [Graph layout algorithms](spec-tech/graph-layout.md) owns coordinate,
   camera, packing, complexity, and fallback mechanics.
 

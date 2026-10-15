@@ -64,43 +64,29 @@ source locations of their matched HTTP calls. A route with no matched consumer
 remains visible and is reported as such; the architecture graph does not add a
 separate visual node for every route.
 
-The architecture navigation exposes four top-level areas: Architecture, Flux
-de code, Contrats, and Diagnostics. Architecture provides separate views for
-the graph, the resource catalogue, the topic catalogue, and the collection
-catalogue, plus the HTTP route list. Contrats provides separate views for
-OpenAPI, AsyncAPI, indexed DTOs, JPA entities, and Mongo persistence classes.
-Routes are grouped by
-provider microservice and route path, and each entry displays its HTTP verb,
-resource path, and count of unique calling microservices found. Selecting a
-route opens the common inspector component with its provider, client count,
-calling microservices, source evidence, and REST DTOs. Provider and client
-microservices are interactive: they open the corresponding model inspector and
-keep the route inspector available through the common back action. A
-microservice’s called routes use the same route links and open the target
-provider route in that inspector.
+The visible navigation has two primary workspaces: Architecture and Ressources.
+Architecture contains the graph and the code-flow catalogue. Ressources opens
+one searchable catalogue for indexed resources, routes, contracts, DTOs,
+persistence classes, and diagnostics. Its type and service filters change only
+the catalogue projection. The [UX/UI rules](../UX-UI.md) own the navigation
+and selection contract.
+
+Selecting an HTTP route for inspection opens the common inspector with its
+provider, client count, calling microservices, source evidence, and REST DTOs.
+Provider and client microservices remain interactive and preserve the route
+inspector in the back history. A microservice's called routes use the same
+links to open the target provider route.
 
 When a selected HTTP route has REST DTO evidence on its provider microservice,
 the route details list the DTO names, roles, and source locations. Topic
 details list associated Kafka DTOs, and Mongo collection details list their
 associated persistence classes.
 
-The resource catalogue is the primary cross-resource browser. It lists indexed
-microservices and architecture resources in one searchable view, with a type
-filter for microservices, topics, collections, JPA entities, and other indexed
-resources. Selecting a row opens the existing architecture inspector and keeps
-the graph available as the contextual view; filtering changes only the
-catalogue projection and does not alter persisted facts.
-
-Selecting a microservice, topic, or Mongo collection from a specialized
-Architecture view switches the graph to the selected node and opens the
-graphical inspector component with that node's description widget. The
-inspector can be closed without clearing the graph focus. Selecting a resource
-from the cross-resource catalogue updates its docked inspector and keeps the
-filtered result list visible. Relations to other graph nodes remain interactive
-and reopen the same inspector on the target model element. The inspector
-displays the visited path, makes previous architecture elements selectable in
-the breadcrumb, and provides a back action to return to the previous model
-element without closing the component.
+The resource catalogue keeps its filtered result list visible during resource
+inspection. Relations to other graph nodes remain interactive and reopen the
+inspector on the target. The inspector displays the visited path, makes
+previous architecture elements selectable in the breadcrumb, and provides a
+back action without closing the component.
 
 Nested DTO and Mongo persistence-class inspections use the same header back
 action as all other inspector navigation; they do not add a second in-body

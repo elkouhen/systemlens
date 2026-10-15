@@ -1,6 +1,6 @@
 # Technical specification: systemlens
 
-This document owns implementation constraints: package architecture,
+This document owns implementation constraints: the snapshot pipeline,
 persistence, data contracts, algorithms, and verification. It does not define
 product scope, public command behavior, or visual interaction semantics.
 
@@ -12,7 +12,8 @@ can evolve without one oversized specification.
 
 | Change | Read |
 |---|---|
-| Architecture ownership or adapters | [Architecture](spec-tech/architecture.md) |
+| Snapshot pipeline or adapters | [Architecture](spec-tech/architecture.md) |
+| Package ownership and dependency direction | [Code architecture guide](ARCHITECTURE.md) |
 | Persisted facts or materialized contracts | [Data model](spec-tech/data-model.md) |
 | Export inputs and snapshot rules | [Export snapshot](spec-tech/export-snapshot.md) |
 | Index orchestration or flow reconstruction | [Indexing](spec-tech/indexing.md) |
@@ -21,7 +22,7 @@ can evolve without one oversized specification.
 | Browser coordinates, camera, or placement | [Graph layout](spec-tech/graph-layout.md) |
 | Visible HTML presentation or interaction | [UX/UI rules](UX-UI.md) |
 | SQLite schema or migrations | [Persistence](spec-tech/persistence.md) |
-| Validation and quality gates | [Verification](spec-tech/verification.md) |
+| Validation and quality gates | [Verification and test strategy](spec-tech/verification.md) |
 
 The indexing section specifies Java signature identity, inherited interface
 implementations, and declared return types used by the call-graph fallback.
@@ -56,5 +57,5 @@ See the [flow data model](spec-tech/data-model.md) for matching rules.
 - [Extractors](spec-tech/extractors.md)
 - [Graph layout algorithms](spec-tech/graph-layout.md)
 - [Persistence and compatibility](spec-tech/persistence.md)
-- [Verification](spec-tech/verification.md)
+- [Verification and test strategy](spec-tech/verification.md)
 - [UX/UI rules](UX-UI.md)
