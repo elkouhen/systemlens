@@ -85,6 +85,27 @@ def test_storage_persists_codeql_method_projection(tmp_path: Path) -> None:
         assert store.all_codeql_methods() == [method]
 
 
+def test_integration_method_signatures_survive_storage_and_legacy_migration(tmp_path: Path) -> None:
+    method = IntegrationMethod(
+        id="receive", module="orders", qualified_method="Orders.receive",
+        path="Orders.java", start_line=3, end_line=5,
+        input_endpoint_ids=("entry",), output_endpoint_ids=(),
+        parameter_types=("OrderCreated", "String"),
+    )
+    with Store(tmp_path) as store:
+        store.replace_integration_methods([method])
+        assert store.all_integration_methods() == [method]
+        store.conn.execute("ALTER TABLE integration_methods DROP COLUMN parameter_types")
+        store.set_meta("schema_version", "37")
+
+    with Store(tmp_path) as store:
+        assert store.all_integration_methods() == [
+            method.__class__(**{**method.__dict__, "parameter_types": None})
+        ]
+        store.replace_integration_methods([method])
+        assert store.all_integration_methods() == [method]
+
+
 def test_storage_rejects_conflicting_contract_rows_before_replacing_snapshot(tmp_path: Path) -> None:
     with Store(tmp_path) as store:
         store.replace_openapi_contracts([{"module": "orders", "path": "api.yaml", "spec": {"openapi": "3.0.0"}}])

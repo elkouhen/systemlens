@@ -1140,7 +1140,7 @@ def test_store_adds_jpa_inventory_to_existing_index(tmp_path: Path) -> None:
     with Store(tmp_path) as store:
         columns = {row["name"] for row in store.conn.execute("PRAGMA table_info(modules)")}
         assert "jpa_entities" in columns
-        assert store.get_meta("schema_version") == "37"
+        assert store.get_meta("schema_version") == "38"
 
 
 def test_jpa_calls_require_typed_spring_data_repository(tmp_path: Path) -> None:

@@ -60,9 +60,22 @@ microservices and architecture resources. Its search control MUST remain above
 the category list and results. Opening Ressources MUST initially show all
 resource types; category selection and filters refine the same list without
 changing the graph or persisted selection. Each row MUST expose the resource
-kind and relationship counts when available; selecting a row MUST open the
-shared inspector so the catalogue remains a browsing surface rather
-than a second details panel.
+kind and relationship counts when available. Selecting a row opens its docked
+preview; `Inspecter` opens the shared inspector for deeper details.
+
+For a DTO, JPA entity, or Mongo persistence class, the preview shows indexed
+attribute names and types. A Mongo collection shows fields grouped by its
+indexed persistence classes. Missing fields receive an explicit empty state.
+
+When a DTO field has an indexed reference to another DTO, its type opens that
+DTO in the same preview. Each resolved candidate is a separate choice. The
+back action names the previous resource and returns to its attributes.
+
+The preview lists directly related indexed resources as selectable links.
+Choosing one selects its catalogue row and updates the preview. If filters hide
+the target, the catalogue clears those filters to make the selected row visible.
+The preview provides a back action for the previous resource. Closing the
+inspector preserves the catalogue selection and its navigation path.
 
 ## Widget inventory and shared contract
 
@@ -93,7 +106,7 @@ error states explain what is unavailable and what the user can do next.
 | Navigation widget | Switch between graph, flow, resource, contract, and diagnostics views. | View groups, active view, and collapse control. | Changes the workspace view and clears incompatible transient details. It does not contain resource facts. |
 | Graph workspace widget | Provide the primary visual reading surface for architecture or one selected call tree. | Graph canvas, rendered nodes, relations, camera controls, and view-specific controls. | Pan, zoom, fit, and selection affect the current projection only. The graph remains visible while supporting widgets change. |
 | Graph context widget | Expose the controls and summary needed to interpret the current graph. | Search or filters, layout and display actions, counts, and the active selection summary. | May be collapsed. Actions change the projection or transient state without duplicating the graph hierarchy. |
-| Resource catalogue widget | Browse indexed topics, Mongo collections, routes, contracts, or persistence resources. | Search or filters, compact rows, resource type, and relevant counts or status. | Selecting a resource updates the docked inspector while preserving the filtered catalogue. Resource details MUST NOT expand inline in the result list. |
+| Resource catalogue widget | Browse indexed topics, Mongo collections, routes, contracts, or persistence resources. | Search or filters, compact rows, resource type, attributes when indexed, and relevant counts or status. | Selecting a resource updates the docked preview and its related-resource links. `Inspecter` opens the shared inspector. Resource details MUST NOT expand inline in the result list. |
 | Details widget | Show the selected graph element's immediate context and available analysis actions. | Identity, summary, relations, evidence, and actions for focus, modules, code flows, or source navigation. | It is contextual and may be hidden when an introspection window opens. It does not compete with the modal identity header. |
 | Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, description, ownership, relations, evidence, breadcrumb, and back or close action. | Opens as a dedicated window. Related resources remain selectable and update the same inspection history. |
 | Flow catalogue widget | Select a persisted code flow or flow group for call-graph analysis. | Compact flow rows, description, trigger, protocol, status, and summary statistics. | Selecting a row replaces the selected flow graph. Full details are shown in the selected-flow view, not in every row. |
@@ -250,6 +263,11 @@ architecture graph or persisted identifiers.
 A service is rendered once per call occurrence. The same microservice may
 therefore appear in several branches. Occurrences use local render identifiers,
 while labels and actions resolve to the persisted microservice.
+
+Each occurrence card MUST expand to contain all of its data-operation and
+diagnostic annotations. Cards with fewer annotations keep their own smaller
+height. Visible branches MUST remain separated, with relation arcs attached to
+the rendered card centers.
 
 The `+N appels` count belongs to the occurrence, not to the microservice name.
 It MUST be derived from the occurrence's incoming endpoint and associated flow,

@@ -66,6 +66,7 @@ Every layout switch MUST refit the camera to the resulting graph using the
 selected fit mode. In a compound view, both modes MUST honor the collision-free
 camera limit; this may leave peripheral nodes outside the viewport, and users
 can pan to reach them. `Readable distance` MAY zoom in further.
+
 For graphs of at most 12 nodes, the readable mode MUST retain the complete
 overview instead of applying its normal zoom and making the small diagram
 appear empty. It adds only the zoom-out required to keep the full fixed-size
@@ -78,6 +79,7 @@ path once, in its `Architecture` section, for microservices and resources
 shown there MUST NOT be repeated as header badges or raw metadata. The module
 path MUST be the slash-separated path of grouping
 directories, such as `group1/group2`, without a structural-group prefix.
+
 For a resource modified in writing, the path MUST be inherited from its
 producing or owning microservice.
 If several microservices modify the same resource in writing, the renderer

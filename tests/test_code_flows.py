@@ -1445,7 +1445,7 @@ def test_store_additively_migrates_previous_schema_for_code_flows(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'codeql_call_edges'"
         ).fetchone()
         assert call_edges_table is not None
-        assert store.get_meta("schema_version") == "37"
+        assert store.get_meta("schema_version") == "38"
 
 
 def test_codeql_calls_join_ast_entry_and_output_methods(tmp_path: Path) -> None:
@@ -1621,7 +1621,10 @@ def test_codeql_materializes_same_method_contract_input_and_output(tmp_path: Pat
     source = "orders/src/main/java/com/example/OrderController.java"
     file = tmp_path / source
     file.parent.mkdir(parents=True)
-    file.write_text("package com.example; class OrderController { void place() {} }\n", encoding="utf-8")
+    file.write_text(
+        "package com.example; class OrderController { void place(String order, int quantity) {} }\n",
+        encoding="utf-8",
+    )
     module = DiscoveredModule(
         name="orders", path=tmp_path / "orders", build_system="maven", version=None,
         kind="application", starts_application=True, configuration_example="",
@@ -1629,6 +1632,7 @@ def test_codeql_materializes_same_method_contract_input_and_output(tmp_path: Pat
     entry = _endpoint("entry", "serve", "rest", "POST /orders", source, 1)
     output = replace(_endpoint("output", "call", "rest", "POST /inventory", source, 1), module="orders")
     methods = materialize_integration_methods(tmp_path, [entry, output], [source], [module])
+    assert methods[0].parameter_types == ("String", "int")
 
     flows = materialize_codeql_code_flows(methods, [entry, output], [])
 

@@ -326,7 +326,7 @@ def build_graph_view_model(
     })
     fact_namespaces = sorted({fact.namespace for fact in graph_facts or [] if fact.namespace})
     method_by_endpoint_id = {
-        endpoint_id: method.qualified_method
+        endpoint_id: method
         for method in integration_methods or []
         for endpoint_id in (*method.input_endpoint_ids, *method.output_endpoint_ids)
     }
@@ -470,11 +470,12 @@ def build_graph_view_model(
                 f"{port_label_by_endpoint_id[endpoint.id]} → {', '.join(local_outputs)}"
             )
     def port_method_label(endpoint: MessageEndpoint) -> str:
-        qualified = method_by_endpoint_id.get(endpoint.id)
-        if qualified is None:
+        method = method_by_endpoint_id.get(endpoint.id)
+        if method is None:
             return endpoint.qualified_name or "<unknown>"
-        owner, separator, method = qualified.rpartition(".")
-        return f"{owner}::{method}" if separator else qualified
+        qualified = method.qualified_method
+        owner, separator, method_name = qualified.rpartition(".")
+        return f"{owner}::{method_name}" if separator else qualified
 
     def port_type_label(endpoint: MessageEndpoint) -> str:
         return {
@@ -513,6 +514,11 @@ def build_graph_view_model(
                 "system": endpoint.system,
                 "role": endpoint.role,
                 "method": port_method_label(endpoint),
+                **(
+                    {"parameter_types": list(method_by_endpoint_id[endpoint.id].parameter_types or ())}
+                    if endpoint.id in method_by_endpoint_id
+                    and method_by_endpoint_id[endpoint.id].parameter_types is not None else {}
+                ),
                 "name": topic_display(endpoint),
                 "path": endpoint.path,
                 "line": endpoint.start_line,
@@ -1492,6 +1498,10 @@ def build_graph_view_model(
                         "end_line": method.end_line,
                         "input_endpoint_ids": list(method.input_endpoint_ids),
                         "output_endpoint_ids": list(method.output_endpoint_ids),
+                        **(
+                            {"parameter_types": list(method.parameter_types)}
+                            if method.parameter_types is not None else {}
+                        ),
                     }
                     for method in sorted(methods_by_id.values(), key=lambda item: item.id)
                 ],

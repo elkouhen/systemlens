@@ -356,6 +356,7 @@ flows. When the local CodeQL CLI is available, create a temporary source-only
 Java database with `--build-mode=none`, then join these facts with
 CodeQL-resolved static method calls to materialize bounded interprocedural
 flows. `--codeql-database` remains an override for an existing database.
+
 Preserve call-site evidence and label every flow `potential` with medium
 confidence when dispatch is unique; retain multiple CodeQL virtual-dispatch
 candidates at low confidence instead of choosing an implementation. Store flows
@@ -387,7 +388,8 @@ only persisted snapshots.
 
 ## ADR-27a: Use AST symbol facts to constrain buildless call-graph fallbacks
 
-**Status:** Superseded by [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence).
+**Status:** Superseded by
+[ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence).
 
 **Context:** A source-only CodeQL database can lack enough dependency/type
 information to resolve a Java interface or bean call. The existing fallback
@@ -425,6 +427,7 @@ status. Equal-quality observations refresh the stored value; lower-quality
 observations may fill missing optional fields but cannot replace stronger
 semantic fields or provenance. Persist a `CodeFlow.reconciliation` status
 derived only from endpoint identifiers and the current topology edges:
+
 `complete` for fully matched evidence and `partial` when code evidence remains
 but an endpoint or cross-service edge is missing, unresolved, dynamic, or
 ambiguous. Same-service input/output evidence does not require an
@@ -511,6 +514,7 @@ spots. Multiple concrete implementations are retained as separate low-confidence
 possible candidates rather than resolved to one runtime target. Symbol/hierarchy
 indexing keeps duplicate qualified types separate by module, and per-source
 predecessor trees consume memory proportional to their relations;
+
 When the caller module provides compatible implementations, it is preferred;
 cross-module candidates remain available only when that local set is empty.
 the QL closures remain potentially large but are explicitly output-anchored.

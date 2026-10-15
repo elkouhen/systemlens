@@ -33,6 +33,7 @@ Kafka topology relations. `ArchitectureSnapshot` derives its topology edges
 from those persisted relations; adapters may use indexed endpoints only to add
 route, topic, and source presentation details and do not re-resolve targets or
 rescan source.
+
 When two distinct evidences share the same base relation identifier, indexing
 retains both by assigning the later relation a deterministic content-derived
 suffix.
@@ -64,6 +65,7 @@ module, pass/revision metadata, optional relative evidence and a note. The
 and upserts a manifest by `(namespace, fact_type, manifest_id)`; complete
 snapshots can remove stale facts only inside their namespace. Source-derived
 relations remain owned by the indexer and cannot be removed through fact import.
+
 Manifest storage IDs must be unique across nodes and edges in one import. A
 duplicate storage ID is rejected before any fact is persisted, so one manifest
 entry cannot overwrite another fact through SQLite conflict handling.
@@ -223,6 +225,7 @@ The HTML export stores call graphs under `call_graphs`, keyed by a stable graph
 identifier. A `CallGraphDescription` describes service-level propagation for
 one selected flow or flow group. It does not replace the persisted method call
 facts or the individual `CodeFlow` records.
+
 The exporter removes a root graph when its service set and exact directed arc
 set are proper subsets of another root graph. Arc identity includes source and
 target services, relation kind, label, and endpoint IDs. Equal graphs keep
@@ -285,20 +288,23 @@ lookup uses an inverted arc index, or a service index for graphs without arcs.
 
 `nodes` is the unique set of participating microservices. `node_order` is the
 deterministic display order. `traversal_levels` groups services by directed
-reachability; its first level is the graph root set. `call_tree` is the
-compact tree projection used for service-level layout and may omit an arc when
-the full graph contains a fan-out, fan-in or cycle. `call_trees_by_flow` stores
-one causal transition index for each exported flow root, so equivalent service
-graphs do not make different events share a root. `root_flow_ids` identifies
-the event roots, `reachable_flow_ids` bounds the traversal, and each transition
-stores its integration edge plus the matching target flow IDs. An empty target
-flow list represents a reachable target with no indexed consumer flow; the
-browser renders it as an unknown leaf. The browser creates local occurrences
-from this index and applies its cycle and depth rules. `edges` is the complete
-service-level graph. Each edge is directed from caller or publisher to callee
-or consumer, and `order` is the one-based display order within that graph.
-`endpoint_ids` preserves the concrete input and output endpoint evidence used
-to render ports and arc labels.
+reachability; its first level is the graph root set. `call_tree` is the compact
+tree projection used for service-level layout and may omit an arc when the full
+graph contains a fan-out, fan-in or cycle. `call_trees_by_flow` stores one causal
+transition index for each exported flow root, so equivalent service graphs do not
+make different events share a root.
+
+`root_flow_ids` identifies the event roots, `reachable_flow_ids` bounds the
+traversal, and each transition stores its integration edge plus the matching
+target flow IDs. An empty target flow list represents a reachable target with no
+indexed consumer flow; the browser renders it as an unknown leaf. The browser
+creates local occurrences from this index and applies its cycle and depth rules.
+`edges` is the complete service-level graph. Each edge is directed from caller or
+publisher to callee or consumer, and `order` is the one-based display order within
+that graph.
+
+`endpoint_ids` preserves the concrete input and output endpoint evidence used to
+render ports and arc labels.
 
 `triggers` maps each participating service to the flow entries that can start
 the propagation. A trigger kind is one of `http_entry`, `message_entry` or
@@ -348,49 +354,55 @@ missing token. The file-level diagnostic remains visible so partial coverage is
 never presented as a complete parse.
 
 `CodeFlow` is a persisted, ordered potential path through one Java method or a
-chain of Java methods resolved by the selected method-call engine. Its
-first `CodeFlowStep` is an indexed HTTP/Kafka entry point or a source-evidenced
+chain of Java methods resolved by the selected method-call engine. Its first
+`CodeFlowStep` is an indexed HTTP/Kafka entry point or a source-evidenced
 `@Scheduled` trigger; a literal cron expression names that step when present.
-Later steps are HTTP calls, Kafka publications, or MongoDB/JPA reads and writes
-in the entry method or a reachable method. Steps retain relative evidence paths
-and line ranges. Flow identity uses the module, relative path, qualified method,
-and trigger semantics rather than line numbers, so ordinary line movement does
-not replace the logical flow. If overloaded or generated declarations still
-produce the same identity, indexing keeps the first historical ID and adds a
-stable route discriminator to later IDs before persistence. The materializer runs during indexing, while
-`systemlens flows calculate` rebuilds endpoint and data paths from the
-stored integration-method and CodeQL-edge snapshots with the independent
-enrichment topology; neither export nor query runs it. The same-method pass
-scans the endpoint and data-operation inventory plus eligible Java AST nodes.
-The directed method-graph pass visits reachable methods and edges per entry
-within the configured hop bound. Maven
-`target/` and Gradle `build/` output trees are excluded from the inventory, so
-copied resources and generated classes cannot duplicate source facts. A
-same-method relation remains `potential` with medium confidence because static
-lexical order does not prove branch execution. A method with multiple indexed
-Kafka inputs and a `join` call gets an explanatory join reason; no extra
-dependency or unconditional path is inferred. Method-call facts join
-persisted AST method facts to form interprocedural flows; `method_call` steps keep
-the call-site line. For CodeQL, reachability is computed from indexed output
-methods backwards through their callers until indexed input methods are reached.
+Later steps are HTTP calls, Kafka publications, or MongoDB/JPA reads and writes in
+the entry method or a reachable method. Steps retain relative evidence paths and
+line ranges.
+
+Flow identity uses the module, relative path, qualified method, and trigger
+semantics rather than line numbers, so ordinary line movement does not replace the
+logical flow. If overloaded or generated declarations still produce the same
+identity, indexing keeps the first historical ID and adds a stable route
+discriminator to later IDs before persistence. The materializer runs during
+indexing, while `systemlens flows calculate` rebuilds endpoint and data paths from
+the stored integration-method and CodeQL-edge snapshots with the independent
+enrichment topology; neither export nor query runs it.
+
+The same-method pass scans the endpoint and data-operation inventory plus eligible
+Java AST nodes. The directed method-graph pass visits reachable methods and edges
+per entry within the configured hop bound. Maven `target/` and Gradle `build/`
+output trees are excluded from the inventory, so copied resources and generated
+classes cannot duplicate source facts. A same-method relation remains `potential`
+with medium confidence because static lexical order does not prove branch
+execution. A method with multiple indexed Kafka inputs and a `join` call gets an
+explanatory join reason; no extra dependency or unconditional path is inferred.
+
+Method-call facts join persisted AST method facts to form interprocedural flows;
+`method_call` steps keep the call-site line. For CodeQL, reachability is computed
+from indexed output methods backwards through their callers until indexed input
+methods are reached.
 
 Same-method MongoDB steps retain the raw operation and an optional `action`:
-`read`, `insert`, `update`, `delete`, `create_or_update`, or `read_update`.
-The shared classifier in `src/systemlens/domain/mongo_operations.py` derives
-read and write facets for relations and exports. `read_update` creates both
-facets but keeps the existing broad `data_write` step kind. `bulkOps` is a
-builder; it and unsupported operations create no flow or relation effect.
-Older step JSON loads with `action=null`. This action is an API-level attempt,
-not evidence of a committed database change. `flows calculate` still rebuilds
-paths from persisted module inventory, method, and call-edge facts. A MongoDB
-call joins one method only when module, relative source path, owner name, and
-line range identify it uniquely. A bounded directed traversal from each
-indexed entry emits a separate potential path to each reachable operation,
-including calls in helper methods. An operation reached on a sibling branch
-does not become a step of an unrelated endpoint-to-endpoint path. A possible
-dispatch lowers confidence; neither branch execution nor transaction success
-is inferred. The current flow hop bound also bounds these data paths. Without
-a source-backed call edge, only same-method data operations are available.
+`read`, `insert`, `update`, `delete`, `create_or_update`, or `read_update`. The
+shared classifier in `src/systemlens/domain/mongo_operations.py` derives read and
+write facets for relations and exports. `read_update` creates both facets but
+keeps the existing broad `data_write` step kind. `bulkOps` is a builder; it and
+unsupported operations create no flow or relation effect. Older step JSON loads
+with `action=null`. This action is an API-level attempt, not evidence of a
+committed database change.
+
+`flows calculate` still rebuilds paths from persisted module inventory, method,
+and call-edge facts. A MongoDB call joins one method only when module, relative
+source path, owner name, and line range identify it uniquely. A bounded directed
+traversal from each indexed entry emits a separate potential path to each
+reachable operation, including calls in helper methods. An operation reached on a
+sibling branch does not become a step of an unrelated endpoint-to-endpoint path. A
+possible dispatch lowers confidence; neither branch execution nor transaction
+success is inferred. The current flow hop bound also bounds these data paths.
+
+Without a source-backed call edge, only same-method data operations are available.
 
 Traversal excludes methods in another discovered application module. A helper
 module without an application entry point remains eligible. The same boundary
@@ -417,46 +429,50 @@ ambiguous inherited declarations still produce no edge.
 
 The transitive query has no business-level hop or global path limit; the
 configured complete-pass deadline remains the operational safeguard. The legacy
-`analysis.codeql_max_hops` remains for bounded route reconstruction; it does
-not authorize inferred call edges.
-By default, SystemLens creates one
-temporary CodeQL database for the whole indexed repository, with CodeQL's
-`--build-mode=none` source-only mode, then deletes it. The resulting calls are
-partitioned by caller project only for progress checkpoints. With HTML progress,
-global flows are materialized once, reused for final persistence, and filtered
-by reported call-site evidence for partial views. With an explicit global
-database, the call query is scoped to each source-owning project while
-retaining cross-project callees. Direct answers without an intermediate
-witness are withheld until the final checkpoint. The complete global call
-list, including cross-project references, is used for final method-flow
-materialization. If the scoped queries produce no calls because the supplied
-database uses a different source-root spelling, indexing retries one unscoped
-query before materializing the checkpoints.
-The call facts are aggregated before method-flow materialization and persisted
-as root-relative `codeql_call_edges`. A missing or untrusted callee
-path may join one unique qualified indexed method, but is explicitly
-low-confidence and retains signature-join provenance; ambiguous names remain
-unresolved. An
-explicit CLI database remains a global-database override. When the CodeQL executable is
-absent, indexing retains only same-method and source-symbol flows and reports
-that limitation. When CodeQL represents a lambda as a synthetic
-anonymous callable, SystemLens attributes its call site to the narrowest
-persisted Java method enclosing that line in the same file. Dynamic dispatch,
-reflection, and runtime-only routing remain outside this deterministic layer.
-In buildless mode, a transient AST symbol index covers source-declared
+`analysis.codeql_max_hops` remains for bounded route reconstruction; it does not
+authorize inferred call edges. By default, SystemLens creates one temporary CodeQL
+database for the whole indexed repository, with CodeQL's `--build-mode=none`
+source-only mode, then deletes it. The resulting calls are partitioned by caller
+project only for progress checkpoints.
+
+With HTML progress, global flows are materialized once, reused for final
+persistence, and filtered by reported call-site evidence for partial views. With
+an explicit global database, the call query is scoped to each source-owning
+project while retaining cross-project callees. Direct answers without an
+intermediate witness are withheld until the final checkpoint. The complete global
+call list, including cross-project references, is used for final method-flow
+materialization.
+
+If the scoped queries produce no calls because the supplied database uses a
+different source-root spelling, indexing retries one unscoped query before
+materializing the checkpoints. The call facts are aggregated before method-flow
+materialization and persisted as root-relative `codeql_call_edges`. A missing or
+untrusted callee path may join one unique qualified indexed method, but is
+explicitly low-confidence and retains signature-join provenance; ambiguous names
+remain unresolved. An explicit CLI database remains a global-database override.
+
+When the CodeQL executable is absent, indexing retains only same-method and
+source-symbol flows and reports that limitation. When CodeQL represents a lambda
+as a synthetic anonymous callable, SystemLens attributes its call site to the
+narrowest persisted Java method enclosing that line in the same file. Dynamic
+dispatch, reflection, and runtime-only routing remain outside this deterministic
+layer. In buildless mode, a transient AST symbol index covers source-declared
 qualified types, imports and transitive `extends`/`implements` relations,
-including source files without endpoint facts. It may bridge an
-abstract/interface method to one unique compatible implementation and recover
-receiver-typed helper calls by arity/signature. Duplicate types in the caller's
-module, ambiguous overloads, unknown receivers and unsupported generic/vararg
-substitutions stay unresolved. When duplicate qualified types exist in other
-modules, resolution first prefers the caller's module. Synthetic edges are
-always `possible`/`low` and never replace exact CodeQL evidence.
-For a virtual call, CodeQL's unique `exactVirtualMethod` target is retained at
-medium confidence. If no unique target can be proven, its `viableCallable`
-candidates are retained individually at low confidence; SystemLens does not
-select an implementation on Spring bean metadata alone. The analysis profile,
-including the selected method-call engine, availability, activation and its bounds, participates in the
+including source files without endpoint facts.
+
+It may bridge an abstract/interface method to one unique compatible implementation
+and recover receiver-typed helper calls by arity/signature. Duplicate types in the
+caller's module, ambiguous overloads, unknown receivers and unsupported
+generic/vararg substitutions stay unresolved. When duplicate qualified types exist
+in other modules, resolution first prefers the caller's module. Synthetic edges
+are always `possible`/`low` and never replace exact CodeQL evidence. For a virtual
+call, CodeQL's unique `exactVirtualMethod` target is retained at medium
+confidence.
+
+If no unique target can be proven, its `viableCallable` candidates are retained
+individually at low confidence; SystemLens does not select an implementation on
+Spring bean metadata alone. The analysis profile, including the selected
+method-call engine, availability, activation and its bounds, participates in the
 code-flow signature so switching profile recalculates unchanged repositories.
 
 ## Service call graph projection
@@ -482,6 +498,7 @@ is `cron_entry`, followed by its publication.
 Known message types must match when both endpoints provide one. Missing type
 evidence does not prevent the topology relation, while conflicting known types
 prevent it.
+
 The exported flow-graph projection builds directed candidate arcs from the
 flow-associated OUT ports, identifies trigger flows with no incoming flow
 arc as roots, and traverses those flows in breadth-first order. A trigger is only
@@ -489,6 +506,7 @@ an `http_entry`, `message_entry`, or `cron_entry` first step; a publication or
 HTTP call is an internal output. For each visited module, the traversal follows
 only its flow-associated OUT ports and valid output-to-input topology arcs,
 then visits the flow whose trigger is the target IN port.
+
 Expanded OUT ports and endpoint pairs prevent duplicate work and terminate
 cycles without suppressing a module reached again through another branch.
 Fan-in, fan-out, and reachable modules without a matching arc remain visible.
@@ -496,6 +514,7 @@ If the candidate graph is cyclic and has no zero-indegree module, all flow
 modules are used as deterministic roots while preserving arc direction.
 The snapshot retains the traversal levels and call tree used to assign arc
 orders before copying those orders onto the final call graph.
+
 The graph records external trigger events under their owning microservices.
 The browser receives these canonical service arcs with their endpoint identities
 and does not reconstruct a second set from display labels.
@@ -504,6 +523,7 @@ OUT-to-IN topology: a flow is a root when no persisted flow reaches its input
 endpoint. `flows show` uses the persisted endpoint snapshot to connect an OUT
 endpoint to downstream matching IN endpoints and emits that reachable forest
 as `tree`; cycles and repeated flow IDs are emitted only once.
+
 The CLI flow list exposes every persisted integration flow. HTML export lists
 only uncovered call roots in `code_flows`. It selects zero-indegree trigger
 flows first, then one stable representative for each component not reached
@@ -556,25 +576,27 @@ an uncertain-identity marker.
 ## Consistency diagnostics
 
 An async write is a database write in a Kafka consumer handler reached after a
-message publication. A sync read is a database read on an HTTP entry path.
-Reads in Kafka consumers and writes on other trigger types have no branch
-classification. Async-write/sync-read diagnostics pair these classified sites
-and matching resources across handlers reachable from the same persisted trigger.
-Matching causal IDs support the pair; conflicting IDs or different key
-expressions remain `insufficient_evidence`. A missing branch label is unknown
-and does not classify an access as synchronous. A visibility guarantee requires
-an explicit `visible` completion and the same non-empty expected version on
-both accesses. Each exported diagnostic retains its owning write and read flow
-IDs, operation endpoint IDs, and the endpoint paths from the trigger to each
-operation. Export also includes each operation's source path, line, module,
-action, and trigger endpoint as `write_site` or `read_site`. The renderer uses
-the endpoint paths to highlight the causal sequence. It places selectable
-diagnostic badges on call-tree service occurrences only when the operation's
-module and trigger endpoint match that occurrence. The detector groups sync
-reads by resource and compares an async write with reads of the same resource
-or reads whose resource is unknown. A write with an unknown resource remains
-eligible for every read. Inverted flow-to-root sets find shared roots without
-scanning every root for each pair.
+message publication. A sync read is a database read on an HTTP entry path. Reads
+in Kafka consumers and writes on other trigger types have no branch
+classification. Async-write/sync-read diagnostics pair these classified sites and
+matching resources across handlers reachable from the same persisted trigger.
+Matching causal IDs support the pair; conflicting IDs or different key expressions
+remain `insufficient_evidence`. A missing branch label is unknown and does not
+classify an access as synchronous.
+
+A visibility guarantee requires an explicit `visible` completion and the same
+non-empty expected version on both accesses. Each exported diagnostic retains its
+owning write and read flow IDs, operation endpoint IDs, and the endpoint paths
+from the trigger to each operation. Export also includes each operation's source
+path, line, module, action, and trigger endpoint as `write_site` or `read_site`.
+The renderer uses the endpoint paths to highlight the causal sequence. It places
+selectable diagnostic badges on call-tree service occurrences only when the
+operation's module and trigger endpoint match that occurrence.
+
+The detector groups sync reads by resource and compares an async write with reads
+of the same resource or reads whose resource is unknown. A write with an unknown
+resource remains eligible for every read. Inverted flow-to-root sets find shared
+roots without scanning every root for each pair.
 
 Advanced diagnostics require exact resource/key identity and positive
 `concurrency` evidence (`parallel`, `independent_handlers`, or `reentrant`).
@@ -618,6 +640,7 @@ the code evidence remains valid but at least one endpoint or topology edge is
 missing, unresolved, dynamic, or ambiguous. Same-service input-to-output
 evidence can be complete without an inter-service edge. The status is derived
 during indexing from endpoint identifiers and never from route-label matching.
+
 If multiple topology edges match the same flow step, reconciliation remains
 `partial` because the evidence is ambiguous. When several static call routes
 collapse to one canonical flow, `alternative_count` records the number of
@@ -635,11 +658,13 @@ completed-project count. Each checkpoint also carries the source-owning Maven
 module and the Java methods associated with its indexed IN and OUT integration
 points. Partial checkpoints may omit later method-call facts; the final
 reconciliation replaces them and marks the snapshot complete.
+
 The join emits periodic progress logs while traversing input methods and
 call-graph transitions. After each join batch, the current provisional
 `code_flows` snapshot is committed, allowing exports to retain the arcs found
 before an interruption. These snapshots remain partial until final
 reconciliation.
+
 The join offset, compatibility signature, and ordered input-method signature
 are stored in `meta`; an explicit resume request can therefore skip completed
 IN methods after a process crash. The resume path is valid only while source
@@ -657,30 +682,32 @@ does not create an internal method edge.
 ## HTML port projection
 
 The HTML graph model joins endpoint identifiers and statically inferred message
-types to the persisted
-`integration_methods` projection. Microservice cards remain simple rectangles
-and receive an export-time count of persisted internal flows for that service.
-The selected-service widget renders every indexed HTTP/Kafka endpoint as an
-input/output port inventory, including ports without a resolved target or an
-associated code flow. It also renders resolved input-to-output flow evidence.
-Rendering does not read source files. At export time, every HTTP/Kafka endpoint receives a deterministic
-identity global to the complete export: `I<n>` for an input and `O<n>` for an
-output, ordered by a stable topological service order, then relative evidence
-path, source line, and endpoint ID. A cyclic service component falls back to
-the stable service order without inventing a direction. The projection derives
-input-to-output references only from persisted code flows whose endpoint steps
-belong to the same service: each input receives the labels of its locally
-reached outputs (`I4 → O1, O3`). This prevents an external caller from being
-presented as an output of the service it invokes. The renderer adds those
-presentation-only labels to graph details and serialized code-flow endpoint
-steps. Fixed-size graph cards render
-those labels as side anchors: inputs on the left and outputs on the right. An
-SVG overlay projects only persisted REST/Kafka edges with an output source and
-an input target between these anchors; it redraws after camera changes and
-uses deterministic opposing lanes for a direct cycle. The same overlay draws
-dashed, directed local links from each input to the outputs associated with it
-by a persisted code flow. It neither alters
-persisted endpoint identity nor turns a CodeQL fact into a linear route.
+types to the persisted `integration_methods` projection. Microservice cards remain
+simple rectangles and receive an export-time count of persisted internal flows for
+that service. The selected-service widget renders every indexed HTTP/Kafka
+endpoint as an input/output port inventory, including ports without a resolved
+target or an associated code flow. It also renders resolved input-to-output flow
+evidence. Rendering does not read source files.
+
+At export time, every HTTP/Kafka endpoint receives a deterministic identity global
+to the complete export: `I<n>` for an input and `O<n>` for an output, ordered by a
+stable topological service order, then relative evidence path, source line, and
+endpoint ID. A cyclic service component falls back to the stable service order
+without inventing a direction. The projection derives input-to-output references
+only from persisted code flows whose endpoint steps belong to the same service:
+each input receives the labels of its locally reached outputs (`I4 → O1, O3`).
+
+This prevents an external caller from being presented as an output of the service
+it invokes. The renderer adds those presentation-only labels to graph details and
+serialized code-flow endpoint steps. Fixed-size graph cards render those labels as
+side anchors: inputs on the left and outputs on the right. An SVG overlay projects
+only persisted REST/Kafka edges with an output source and an input target between
+these anchors; it redraws after camera changes and uses deterministic opposing
+lanes for a direct cycle. The same overlay draws dashed, directed local links from
+each input to the outputs associated with it by a persisted code flow.
+
+It neither alters persisted endpoint identity nor turns a CodeQL fact into a
+linear route.
 
 ## Persistence and source portability
 
@@ -688,29 +715,34 @@ The SQLite store is standard-library-only: it does not load native vector
 extensions or persist/query vector representations. The retained findings
 search compatibility path uses deterministic lexical matching.
 
-Schema version 32 adds the persisted `codeql_call_edges` source-backed method
-call graph to schema version 31, which added `code_flows.alternative_count`
-route metadata to the schema 30 `code_flows.reconciliation` status and
-migrates older snapshots with `unknown`. Schema version 29 adds the
-`asyncapi_contracts` table for validated AsyncAPI
-documents owned by a module and rendered from the persisted snapshot. When an
-export contains at least one such document, it embeds the Apache-2.0 licensed
-AsyncAPI web component (version 3.1.8) and its distributed stylesheet; exports
-without AsyncAPI facts do not carry this payload. The HTML renderer stores the
-viewer assets as deterministic gzip data encoded in base64. The browser loads
-them once, on the first contract inspection, using `DecompressionStream`.
-This reduces file size and defers viewer execution, but does not bound graph
-memory usage. The persisted graph JSON remains unchanged. Schema
-version 28 adds the `integration_methods` table for AST method evidence
-and input/output endpoint identifiers. Schema version 27 added the
-`code_flows` table and its module/path indexes. The
-migration is additive and occurs when the writable store opens, before the
-index transaction. Stored steps are JSON projections of immutable domain
-facts; source paths remain relative to the indexed root. Integration-method IDs
-are stable hashes of the module, relative path, qualified method and parameter
-signature. If malformed or generated Java repeats that signature, later
-declarations receive a deterministic source-coordinate suffix so the snapshot
-remains insertable.
+Schema version 32 adds the persisted `codeql_call_edges` source-backed method call
+graph to schema version 31, which added `code_flows.alternative_count` route
+metadata to the schema 30 `code_flows.reconciliation` status and migrates older
+snapshots with `unknown`. Schema version 29 adds the `asyncapi_contracts` table
+for validated AsyncAPI documents owned by a module and rendered from the persisted
+snapshot. When an export contains at least one such document, it embeds the
+Apache-2.0 licensed AsyncAPI web component (version 3.1.8) and its distributed
+stylesheet; exports without AsyncAPI facts do not carry this payload.
+
+The HTML renderer stores the viewer assets as deterministic gzip data encoded in
+base64. The browser loads them once, on the first contract inspection, using
+`DecompressionStream`. This reduces file size and defers viewer execution, but
+does not bound graph memory usage. The persisted graph JSON remains unchanged.
+
+Schema version 38 adds nullable declared parameter types to `integration_methods`.
+Existing indexes migrate with unknown signatures, while a fresh index records the
+types from Java declarations.
+
+Schema version 28 adds the `integration_methods` table for AST method evidence and
+input/output endpoint identifiers. Schema version 27 added the `code_flows` table
+and its module/path indexes. The migration is additive and occurs when the
+writable store opens, before the index transaction.
+
+Stored steps are JSON projections of immutable domain facts; source paths remain
+relative to the indexed root. Integration-method IDs are stable hashes of the
+module, relative path, qualified method and parameter signature. If malformed or
+generated Java repeats that signature, later declarations receive a deterministic
+source-coordinate suffix so the snapshot remains insertable.
 
 Code-flow IDs are unique within every persisted snapshot, including provisional
 CodeQL checkpoints and `flows calculate` results. A collision preserves the
@@ -744,6 +776,7 @@ fields require normalization to meet the root-relative source-evidence contract.
 Kafka DTO definitions and OpenAPI/Swagger document contents are materialized at
 index time. Each OpenAPI/Swagger source file is attributed and materialized
 once by the indexed Maven or Gradle module that directly encloses the file;
+
 other modules may reference it but do not list it again. This attribution is
 resolved by matching the repository-relative evidence path's segments against
 the enclosing module's own directory segments (not merely its last path

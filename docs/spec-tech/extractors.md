@@ -4,15 +4,17 @@ Parent: [Technical specification](../SPEC-TECH.md).
 
 
 `infer_framework_endpoints` applies an ordered registry of Java endpoint
-extractors. The registry walks declarations, annotations and method
-invocations to discover Spring MVC/WebFlux routes, Feign clients, Spring HTTP
-interfaces (`@HttpExchange` and method-level exchange annotations), RestTemplate,
-RestClient, WebClient, Spring Data REST and gateway routes. It resolves literals, known
-Spring property expressions, unique never-reassigned local string base URLs,
-and bounded private String helpers with one unconditional return. Multi-document Spring YAML is read document by document;
-base-document values take precedence where no active-profile selection exists.
-YAML parse failures, including unrendered Helm Go-template expressions, leave
-that file without Spring-property facts and never abort the repository index.
+extractors. The registry walks declarations, annotations and method invocations to
+discover Spring MVC/WebFlux routes, Feign clients, Spring HTTP interfaces
+(`@HttpExchange` and method-level exchange annotations), RestTemplate, RestClient,
+WebClient, Spring Data REST and gateway routes. It resolves literals, known Spring
+property expressions, unique never-reassigned local string base URLs, and bounded
+private String helpers with one unconditional return.
+
+Multi-document Spring YAML is read document by document; base-document values take
+precedence where no active-profile selection exists. YAML parse failures,
+including unrendered Helm Go-template expressions, leave that file without
+Spring-property facts and never abort the repository index.
 
 The Strategy1 REST registry also recognizes generated OpenAPI client calls shaped as
 `apiClient.invokeAPI("/path", HttpMethod.GET, ...)`. It requires a literal
@@ -65,6 +67,7 @@ helper with literal arguments, and a path, the extractor
 resolves the value and retains its HTTP host as endpoint evidence while
 persisting the normalized route as the endpoint topic and retaining the source
 spelling for presentation.
+
 HTTP-interface targets come from the explicit `@ClientRegistrationId` marker;
 the interface group alone is not treated as a target. Helper evaluation is
 source-only and rejects mutation, overload ambiguity, conditional returns,
@@ -94,6 +97,7 @@ message types are unknown. The arc has medium confidence when type evidence is
 missing. Two known and different types remain incompatible and do not create an
 arc. An unmatched endpoint is exported as partial evidence. A dynamic topic
 whose display label matches one concrete topic reuses that topic's graph node;
+
 otherwise identical dynamic labels share one unresolved node.
 Each endpoint link and source evidence remain separate, and dynamic topics do
 not create a producer/consumer pairing. The HTML payload includes a warning
@@ -103,6 +107,7 @@ conditional topic expressions branch by branch, preserving one endpoint per
 statically resolved branch so the call graph can retain every possible topic.
 It handles ternary expressions, topic variables assigned in `if/else` branches,
 and `switch` statements or expressions through one shared branch resolver.
+
 source-local conventionally named uppercase `static final` string constants
 and binary string concatenations through the bounded Java string evaluator. It
 returns a concrete topic only when every operand resolves; a partially dynamic
@@ -128,11 +133,11 @@ key is scheduled once, so the closure costs `O(V + E)` for `V` persisted types
 and `E` resolved field references, apart from the cost of resolving field type
 names.
 
-JPA entity discovery scans eligible production Java files in each owning
-module. It requires an import or qualified annotation from
-`jakarta.persistence` or `javax.persistence` and an `@Entity` class annotation. It persists the class
-name and source location without deriving a table name or operation. The pass
-costs `O(B + N)` for scanned source bytes `B` and syntax nodes `N`.
+JPA entity discovery scans eligible production Java files in each owning module.
+It requires an import or qualified annotation from `jakarta.persistence` or
+`javax.persistence` and an `@Entity` class annotation. It persists the class name
+and source location without deriving a table name or operation. The pass costs
+`O(B + N)` for scanned source bytes `B` and syntax nodes `N`.
 
 The JPA DTO pass scans production Java declarations once more for conventional
 DTO names ending in `DTO`, `Dto`, `Request`, `Response`, `Command`, `Query` or
@@ -151,6 +156,7 @@ argument creates one producer fact for each statically resolved branch with a
 matching catalog entry. This includes a ternary expression and a topic variable
 assigned in `if/else` or `switch` branches. Other values use the conservative
 topic resolver and remain dynamic unless they match an exact declared value.
+
 For listeners, the extractor inspects only the `topics` attribute. Only
 `${kafka.topics.<key>.nom}` placeholders in that attribute create consume
 endpoints. A `${kafka.topics.<key>.groupe}` placeholder in `groupId` identifies
@@ -215,6 +221,7 @@ symbol. Zooming in therefore increases the labeled share of currently visible
 nodes without changing graph positions or camera state. Selected and hovered
 labels bypass the density and collision constraints so their names remain
 visible.
+
 For `n` visible nodes, the current conservative collision pass is `O(n²)` and
 uses `O(n)` temporary rectangles; exported architecture reports are expected
 to remain within interactive inventory sizes.

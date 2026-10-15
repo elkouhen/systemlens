@@ -13,14 +13,16 @@ ternary expressions, topic variables assigned in `if/else` branches, and
 `switch` statements or expressions. The call graph can therefore point to
 every statically resolved topic.
 
-With `--strategy strategy1`, the extractor recognizes generated OpenAPI client calls when an `ApiClient`
-receiver invokes `invokeAPI` with a literal route and an `HttpMethod` enum. It
-retains the exact route, method, source invocation and uniquely resolved Maven
-input contract path. A client call may link to a served operation only through
-that exact contract path, with one unique target module and a compatible route.
-Route similarity alone never identifies a service. A `@Value` field declared in
-another Java file is usable only when its name has one unambiguous property key
-across the indexed repository; conflicting declarations stay unresolved.
+With `--strategy strategy1`, the extractor recognizes generated OpenAPI client
+calls when an `ApiClient` receiver invokes `invokeAPI` with a literal route and an
+`HttpMethod` enum. It retains the exact route, method, source invocation and
+uniquely resolved Maven input contract path. A client call may link to a served
+operation only through that exact contract path, with one unique target module and
+a compatible route. Route similarity alone never identifies a service.
+
+A `@Value` field declared in another Java file is usable only when its name has
+one unambiguous property key across the indexed repository; conflicting
+declarations stay unresolved.
 
 Strategy1 configured API clients may resolve a domain from a `HubRestApi` enum
 constant, including statically imported constants and redundant parentheses. If
@@ -28,10 +30,11 @@ the factory argument remains unresolved, the scanner may use a unique matching
 `XxxApi.class` argument from the same bean method. This fallback is retained as
 inferred evidence. Configuration constants alone do not create HTTP call
 endpoints. A matched `@Bean` is retained as `configured-api-client-factory`
-evidence so dependency analysis can establish the service-level relation
-without presenting the factory as a route call. When the domain or client type
-identifies a local `model-*` OpenAPI module, its contract path is retained as
-additional evidence. Beans returning `WebClient` or
+evidence so dependency analysis can establish the service-level relation without
+presenting the factory as a route call.
+
+When the domain or client type identifies a local `model-*` OpenAPI module, its
+contract path is retained as additional evidence. Beans returning `WebClient` or
 `ExchangeFilterFunction` are excluded from configured API client relations.
 
 Strategy1 also resolves a call such as `client.getRoutings(...)` when the
@@ -70,6 +73,7 @@ retain their raw API
 operation. Indexed flows classify supported calls as read, insert,
 update, delete, create-or-update, or read-and-update attempts. Deletes and
 multi-item inserts are writes. `save` and `upsert` remain create-or-update;
+
 `findAndModify` and `findAndReplace` have both read and write facets. A
 `bulkOps` builder, `getCollection`, and `watch` do not create read or write
 effects. A field whose name only resembles a Mongo receiver does not create a
@@ -107,15 +111,17 @@ other trigger types have no async/sync branch classification. Consistency
 diagnostics pair only classified async writes and sync reads; missing keys or
 query shape leave a candidate pair as insufficient evidence.
 
-For REST clients, a literal URL or a unique, never-reassigned local string
-base URL is normalized to its route and retains its HTTP host as target
-evidence. A private, uniquely named helper with a single unconditional String
-return and literal arguments may be evaluated transitively under the same
-rules. Spring HTTP interfaces retain `@ClientRegistrationId` as explicit
-service-target evidence when present. Spring application names are read from multi-document YAML files;
+For REST clients, a literal URL or a unique, never-reassigned local string base
+URL is normalized to its route and retains its HTTP host as target evidence. A
+private, uniquely named helper with a single unconditional String return and
+literal arguments may be evaluated transitively under the same rules. Spring HTTP
+interfaces retain `@ClientRegistrationId` as explicit service-target evidence when
+present. Spring application names are read from multi-document YAML files;
 profile-specific values do not override the base document without an explicit
-active-profile selection. A mutable or otherwise unresolved URL remains a
-dynamic, unresolved port rather than a guessed service link.
+active-profile selection.
+
+A mutable or otherwise unresolved URL remains a dynamic, unresolved port rather
+than a guessed service link.
 
 Indexing materializes AST method facts that associate each Java method with its
 HTTP/message entry endpoints and HTTP/message output endpoints. It then
@@ -140,6 +146,7 @@ CodeQL additionally answers transitive reachability by starting at indexed
 output methods and walking callers until indexed input methods are reached;
 these direct answers are used when the Python-side traversal cannot reconstruct
 the intermediate calls. The configured timeout remains the operational guard.
+
 Only source-located CodeQL call pairs are materialized. The internal-flow join
 keeps source-located intermediate methods even when they have no IN or OUT
 integration port; ports only anchor the beginning and end of a flow. CodeQL's
@@ -148,11 +155,13 @@ flows. When CodeQL returns only a source-backed interface method, the Python
 materializer expands it to every source-backed compatible implementation and
 marks each added edge as inferred and possible; it preserves all candidates
 instead of choosing one runtime target.
+
 When CodeQL also resolves a concrete virtual target, a source-backed interface
 declaration is retained as an additional possible witness so the caller-to-
 contract edge remains visible in the persisted call-edge listing.
 Calls are aggregated before the global flow join. `--codeql-database DIR`
 reuses an existing global CodeQL database instead.
+
 The temporary database and the supplied database path are never persisted. If
 the selected engine is unavailable, indexing reports the CodeQL limitation
 and retains same-method and source-symbol flows. A uniquely resolved dispatch
@@ -162,12 +171,14 @@ flow with low confidence. Calls without an exact caller and callee source
 location remain unresolved unless the extractor cannot prove a usable path and
 exactly one indexed method has the qualified name. That fallback is marked
 `low` with signature-join provenance; it does not apply to ambiguous names.
+
 Source-declared abstract/interface dispatch may bridge to source-backed concrete
 implementations and receiver-based helper calls may be added, always as
 `possible`/`low`; multiple candidates remain separate and explicitly ambiguous.
 Explicit imports and qualified parameter types can identify a signature without
 dependency sources. Interface implementations can use inherited public instance
 methods, provided a more specific declaration does not hide the inherited body.
+
 Calls such as `getPort().send()` use the getter's declared return type when its
 name and arity identify one parameter signature and one resolved return type.
 Unknown return types and ambiguous overloads remain unresolved; the fallback
@@ -175,16 +186,19 @@ does not evaluate getter bodies or select runtime beans.
 When a caller module has compatible implementations of the same interface method,
 the candidates from that caller module are preferred. If the caller module has no
 compatible implementation, candidates from other modules remain possible.
+
 The static base type remains a possible target when a subtype override is also
 visible. An inherited template call is restricted to the concrete entry subtype
 when that subtype is known. `super.method()` resolves to the direct parent
 declaration. These rules prevent sibling implementations from entering one
 source flow while preserving uncertainty for a base-typed field.
+
 Inheritance relations are kept distinct when the same qualified interface or
 class name is declared in different modules. An ambiguous receiver type is
 retained long enough to collect compatible contracts, then implementations
 from the caller's module are preferred; if no preference is possible, the
 alternatives remain explicit instead of being merged or guessed.
+
 CodeQL contributes only source-located resolved callees; recovered receiver
 types and `methodFullName` values without source evidence are diagnostics, not
 architecture edges. The inventory is static, so reflection, arbitrary string
@@ -206,6 +220,7 @@ new multi-service code-flow candidates. Known message types must match when
 both sides provide one; an unknown type remains compatible and lowers the
 confidence of the topology fact. A publication without an input trigger does
 not become a code-flow root.
+
 For Strategy1 producer conventions, CodeQL may complete a missing payload type
 from the second argument of `envoyerMessageKafka*`, including local data-flow
 within the enclosing method. The second argument remains authoritative when a
@@ -213,6 +228,7 @@ third argument is present. Simple `Message<T>`, `GenericMessage<T>` and
 `ProducerRecord<K,V>` wrappers are unwrapped. It never replaces an AST type
 and applies only a unique source-backed result; ambiguous results remain
 unknown.
+
 Strategy1 resolves listener and sender topic keys against `kafka.yml` or
 `kafka.yaml` after normalizing case, CamelCase boundaries, digits, and
 separators. The supported declaration is the nested `topics.<key>.nom` leaf.
@@ -220,6 +236,7 @@ It does not infer a match from a partial key or an undeclared topic.
 Only the `topics` attribute of `@KafkaListener` is inspected for topic
 references. Properties such as `topics.<key>.groupe` in `groupId` are
 consumer-group settings, not topic references, and are ignored.
+
 If the declared value starts with `${kafka.prefix-topic}.`, Strategy1 removes
 that environment prefix before persisting and matching the physical topic.
 An absent, ambiguous or non-matching declaration remains dynamic and does not
@@ -227,11 +244,13 @@ receive a derived name. A conditional topic expression creates one producer
 fact for each statically resolved branch when each branch matches a catalog
 entry after key normalization. The same branch resolver handles direct
 expressions and variables assigned by `if/else` or `switch` control flow.
+
 Kafka topic expressions also resolve source-local conventionally named uppercase
 `static final` string constants and concatenations whose operands are all
 statically resolvable.
 When one operand remains unresolved, the complete expression stays dynamic;
 SystemLens does not keep its first literal as a concrete topic.
+
 An uppercase `Flux` enum constant is resolved only when its normalized name
 has a matching catalog entry. Other variable topic expressions stay dynamic.
 When the publishing method is annotated with `@Scheduled(cron = "...")`, the
@@ -239,6 +258,7 @@ flow starts with an explicit `Déclencheur Cron` step, followed by the Kafka
 publication owned by that method. The cron expression is retained as source
 evidence; methods scheduled by a fixed delay/rate without a cron expression
 remain outside this trigger classification.
+
 The architecture graph remains conservative when message payload typing is
 missing or contradictory: a producer/consumer service arc requires the same
 concrete topic, while two known and different Java message types prevent the

@@ -6,6 +6,7 @@ The shared presentation and interaction rules are defined in
 [UX/UI rules](../UX-UI.md). This page owns endpoint evidence, port mapping,
 and flow-specific rendering behavior.
 
+## Ports and topology paths
 
 The Explorer renders a microservice as one compact rectangle with its numbered
 input ports (`I<n>`) distributed along the left side and its numbered output
@@ -15,78 +16,94 @@ one input reaches several local outputs, it draws one directed relationship to
 each output.
 
 When a persisted REST or Kafka topology edge has both a source endpoint and a
-resolved target endpoint, the export draws a directed port-to-port path from
-the source `O<n>` to the target `I<n>`. For Kafka, the static architecture graph
+resolved target endpoint, the export draws a directed port-to-port path from the
+source `O<n>` to the target `I<n>`. For Kafka, the static architecture graph
 represents the interaction only through the topic resource:
 `microservice → topic → microservice`. It does not add a direct
-microservice-to-microservice arc. Kafka topics remain visible as indexed
-resources; these paths are readable projections of the same evidence, not
-replacements for the topic relation. Several ports on one side are distributed
-deterministically to avoid overlap. Cycles remain visible as directed return
-paths. An unresolved target, dynamic topic, or ambiguous route MUST NOT create
-a port-to-port path. The corresponding endpoint evidence remains visible as a
-partial topic relation when it can be represented without pairing it to
-another service. A dynamic topic with the same display label as a concrete
-topic reuses that topic node. Other identical dynamic labels within one
-microservice may share one unresolved topic node, but each endpoint relation
-remains visible. The topic uses the same visual label as a concrete topic.
-Hovering a port displays its identifier, direction,
-protocol endpoint, statically inferred Java parameter/message type when known,
-source-relative evidence path and line, associated Java method and, for a resolved REST call, its
-resolved target; an external caller is never presented as an input's output.
-Arc tooltips carry every mapped local output (`O<n>`) and the source/target
-services; their `Port IN` and `Port OUT` headings identify the direction, so
-the topic or route is shown only once. Port tooltips remain limited to the
-endpoint itself. The
-tooltip does not add or infer any architecture fact.
-In a selected flow view, clicking a port or an arc enters transient
-analysis mode. The selected arc, its label, and its endpoint ports are
-highlighted; clicking the same port or arc clears the focus, and clicking
-another port or arc moves it. Pressing Escape also clears the selected arc and
-its tooltip. This interaction does not change the view,
-selected flow, camera, or persisted facts.
-The selected call graph displays only its referenced IN and OUT ports by
-default. The analysis context keeps the ports referenced by the selected flow
-visible on the services in the selected graph. Returning to a different flow
-restores the referenced-port default; this view is derived from persisted
-facts and does not change them.
-The visible arc remains visually thin, but its interactive hit area is wider so
-that selecting an arc remains usable in a dense graph.
-When an arc is selected, its SVG layer is raised above the service cards so the
-complete route remains visible across node boundaries. Consecutive arcs that
-leave the same service are selected and highlighted together, while navigation
-still advances through their individual arcs. Clearing the selection
-restores the ordinary layer order.
-Its primary card title is the input trigger, while the Java method remains
-visible as source evidence. Flow selection reconciles every integration step
-only through its persisted endpoint identifier: route labels and resource names
-are never used to choose an edge. A local input-to-output port relation is
-reconciled evidence even though it has no inter-node topology edge. If an
-endpoint is absent, unresolved, or maps to more than one displayed relation,
-the card explicitly marks the graph view as having partial edges rather than
-presenting it as a verified path.
+microservice-to-microservice arc. Kafka topics remain visible as indexed resources;
+these paths are readable projections
+of the same evidence, not replacements for the topic relation. Several ports on
+one side are distributed deterministically to avoid overlap.
+
+Cycles remain visible as directed return paths. An unresolved target, dynamic
+topic, or ambiguous route MUST NOT create a port-to-port path. The corresponding
+endpoint evidence remains visible as a partial topic relation when it can be
+represented without pairing it to another service. A dynamic topic with the same
+display label as a concrete topic reuses that topic node. Other identical dynamic
+labels within one microservice may share one unresolved topic node, but each
+endpoint relation remains visible. The topic uses the same visual label as a
+concrete topic.
+
+Hovering a port displays its identifier, direction, protocol endpoint, statically
+inferred Java parameter/message type when known, source-relative evidence path and
+line, associated Java method and, for a resolved REST call, its resolved target;
+an external caller is never presented as an input's output. Arc tooltips carry
+every mapped local output (`O<n>`) and the source/target services; their `Port IN`
+and `Port OUT` headings identify the direction, so the topic or route is shown
+only once. Port tooltips remain limited to the endpoint itself. The tooltip does
+not add or infer any architecture fact.
+
+## Port focus and flow evidence
+
+In a selected flow view, clicking a port or an arc enters transient analysis mode.
+The selected arc, its label, and its endpoint ports are highlighted; clicking the
+same port or arc clears the focus, and clicking another port or arc moves it.
+Pressing Escape also clears the selected arc and its tooltip. This interaction
+does not change the view, selected flow, camera, or persisted facts. The selected
+call graph displays only its referenced IN and OUT ports by default. The analysis
+context keeps the ports referenced by the selected flow visible on the services in
+the selected graph.
+
+Returning to a different flow restores the referenced-port default; this view is
+derived from persisted facts and does not change them. The visible arc remains
+visually thin, but its interactive hit area is wider so that selecting an arc
+remains usable in a dense graph. When an arc is selected, its SVG layer is raised
+above the service cards so the complete route remains visible across node
+boundaries. Consecutive arcs that leave the same service are selected and
+highlighted together, while navigation still advances through their individual
+arcs. Clearing the selection restores the ordinary layer order.
+
+Its primary card title is the input trigger, while the Java method remains visible
+as source evidence. Flow selection reconciles every integration step only through
+its persisted endpoint identifier: route labels and resource names are never used
+to choose an edge. A local input-to-output port relation is reconciled evidence
+even though it has no inter-node topology edge. If an endpoint is absent,
+unresolved, or maps to more than one displayed relation, the card explicitly marks
+the graph view as having partial edges rather than presenting it as a verified
+path.
+
 For a REST input declared only by OpenAPI and implemented through a generated
-interface, the port can display its unique same-module Java `@Override` method
-on a `@RestController` when its name exactly matches the contract
-`operationId`; otherwise the method remains unknown.
+interface, the port can display its unique same-module Java `@Override` method on
+a `@RestController` when its name exactly matches the contract `operationId`;
+otherwise the method remains unknown.
+
+## Flow catalogue
+
 Detected CodeQL call cycles and concrete Kafka topic cycles are retained as
-potential `cycle` flows. They are visually distinguished and listed before
-non-cyclic flows; within each category, flows traversing more distinct
-microservices appear first. The service count comes from the persisted
-call-graph node order when available, with endpoint evidence as a fallback.
-The Flux tab provides a `Cycles only` control with the detected-cycle count to
-isolate them immediately.
+potential `cycle` flows. They are visually
+distinguished and listed before non-cyclic flows; within each category, flows
+traversing more distinct microservices appear first.
+
+The service count comes from the persisted call-graph node order when available,
+with endpoint evidence as a fallback. The Flux tab provides a `Cycles only`
+control with the detected-cycle count to isolate them immediately.
+
 Explorer path selections are ephemeral. URL fragments such as `from`, `to`,
 `via`, and `lock` are ignored and never alter the initial graph rendering.
-Selecting a microservice distinguishes two flow views. `Flux associés` remains
-visible and lists every persisted flow owned by the service or traversing one
-of its indexed ports; each compact entry identifies its trigger, length, cycle
-status and Java method, and can display that flow in Explorer. `Flux internes`
-is a separate collapsed disclosure by default: it contains only the potential
-local input-to-output paths inferred within that service, so the primary
-inspector remains focused on topology. Associated-flow entries provide actions
-to open the Flux tab, highlight the flow in Explorer, or open its persisted
-Java method evidence in VS Code when the export has a resolvable source root.
+Selecting a microservice distinguishes two flow views.
+
+`Flux associés` remains visible and lists every persisted flow owned by the
+service or traversing one of its indexed ports; each compact entry identifies its
+trigger, length, cycle status and Java method, and can display that flow in
+Explorer. `Flux internes` is a separate collapsed disclosure by default: it
+contains only the potential local input-to-output paths inferred within that
+service, so the primary inspector remains focused on topology.
+
+Associated-flow entries provide actions to open the Flux tab, highlight the flow
+in Explorer, or open its persisted Java method evidence in VS Code when the export
+has a resolvable source root.
+
+## Explorer and resource inspectors
 
 The HTML microservice export provides an inspector for each statically typed
 Topic message. It shows the indexed payload-type identity, message topic, and
@@ -104,69 +121,79 @@ for this type of export. They do not modify the indexed facts, persisted
 relations, or source configuration.
 
 The HTML export opens on the Explorer tab with the global architecture graph.
-Before a flow selection it shows only the high-level node cards and
-persisted topology edges: it does not show CodeQL input/output ports,
-port-to-port relations, or internal links. Hovering a microservice, topic,
-collection, or topology arc shows a concise contextual tooltip; the Flux tab
-presents a compact list of persisted potential flows whose endpoint
-evidence spans at least two microservices, grouped by trigger type; it
-does not show method, confidence, or status details before selection. A flow
-remains listed when one of its topology edges is unresolved or absent from
+Before a flow selection it shows only the high-level node cards and persisted
+topology edges: it does not show CodeQL input/output ports, port-to-port
+relations, or internal links. Hovering a microservice, topic, collection, or
+topology arc shows a concise contextual tooltip; the Flux tab presents a compact
+list of persisted potential flows whose endpoint evidence spans at least two
+microservices, grouped by trigger type; it does not show method, confidence, or
+status details before selection.
+
+A flow remains listed when one of its topology edges is unresolved or absent from
 the export; selecting it marks the graph as partial instead of hiding the
 persisted interprocedural evidence. Flows confined to one microservice remain
-excluded from the default list. Each flow
-card also displays the ordered microservice names from its persisted call graph
-when available, or resolves them from indexed endpoint identities as a fallback.
-The flow list is ordered by descending number of distinct microservices
-traversed, then by descending number of call-graph arcs, then by flow length.
+excluded from the default list. Each flow card also displays the ordered
+microservice names from its persisted call graph when available, or resolves them
+from indexed endpoint identities as a fallback. The flow list is ordered by
+descending number of distinct microservices traversed, then by descending number
+of call-graph arcs, then by flow length.
+
 Selecting a node highlights the node and its visible dependencies. The
-dependency-depth control limits this highlight to one through five graph
-relations from the selected node; changing it updates the current selection
-without changing the indexed graph. The `Dépendances uniquement` option hides
-everything outside that scope and recalculates the active graph layout around
-the remaining nodes.
+dependency-depth control limits this highlight to one through five graph relations
+from the selected node; changing it updates the current selection without changing
+the indexed graph. The `Dépendances uniquement` option hides everything outside
+that scope and recalculates the active graph layout around the remaining nodes.
 This diagnostic text belongs to the widget and does not change graph path
 rendering. The Flux tab lists inter-service and internal flows together.
-It provides independent filters for confidence (`élevée`,
-`moyenne`, `faible`), protocol (`HTTP`, `Kafka`, `Mixte`), and Kafka message
-type. The message-type field offers native autocomplete values from the
-indexed Kafka ports and accepts partial text matching. A compact
-summary reports the number of visible flows and each card summarizes its
-service sequence, effects, confidence, reconciliation status, and alternative
-route count. The filter area reports the active filters and provides one
-action to clear every additional filter. A selected flow can be recentered
-from the analysis banner.
-Equivalent persisted routes that render the same interaction graph are grouped into
-one visible flow, preventing duplicate graph cards while retaining their count
-in the export model.
-Selecting a reconciled flow outside the Flux de code tab opens
- the Explorer tab and displays only the microservices involved in the path,
- their indexed ports, and the direct dependencies between those ports. Topics
- remain available in the selected service's badges and tooltips, but are not
-rendered as nodes in this focused view. The focused view uses graph levels and
-vertical offsets for sibling branches, so a branched interaction graph is presented
-as a tree/DAG rather than as a misleading single lane. The
-exported flow graph always has one visible root. When the indexed evidence has
-several incoming producers, the entry service remains the root; when it
-contains a cycle, the return arc is omitted from this visual projection so the
+
+It provides independent filters for confidence (`élevée`, `moyenne`, `faible`),
+protocol (`HTTP`, `Kafka`, `Mixte`), and Kafka message type. The message-type
+field offers native autocomplete values from the indexed Kafka ports and accepts
+partial text matching. A compact summary reports the number of visible flows and
+each card summarizes its service sequence, effects, confidence, reconciliation
+status, and alternative route count. The filter area reports the active filters
+and provides one action to clear every additional filter. A selected flow can be
+recentered from the analysis banner.
+
+Equivalent persisted routes that render the same interaction graph are grouped
+into one visible flow, preventing duplicate graph cards while retaining their
+count in the export model. Selecting a reconciled flow outside the Flux de code
+tab opens the Explorer tab and displays only the microservices involved in the
+path, their indexed ports, and the direct dependencies between those ports. Topics
+remain available in the selected service's badges and tooltips, but are not
+rendered as nodes in this focused view.
+
+The focused view uses graph levels and vertical offsets for sibling branches, so a
+branched interaction graph is presented as a tree/DAG rather than as a misleading
+single lane. The exported flow graph always has one visible root. When the indexed
+evidence has several incoming producers, the entry service remains the root; when
+it contains a cycle, the return arc is omitted from this visual projection so the
 graph remains navigable as an arborescence. The persisted flow and its cycle
-status are not altered. The
-selected nodes retain a visible
-halo. Selecting it keeps the Flux tab and
-its card geometry unchanged; the selected card is marked in place instead of
-replacing the left widget with the graph detail view. Its entry microservice is marked `Racine`: in Cards, it appears in the secondary label; in Symbols, it appears as a badge. A second badge makes the persisted entry trigger explicit, with the exact HTTP route or Kafka topic and a protocol-specific color. These markers are presentation state derived from the selected persisted flow graph; they do not infer or persist an architecture fact. The camera frames the selected flow inside the visible
-workspace beside the toolbar on wide screens and below it when that is the
-larger available region, while preserving margins for fixed-size cards. This
-fit never zooms in beyond the current readable view, is reapplied after a
-viewport resize, and cannot make the toolbar scroll horizontally.
-When a flow is selected from the Flux de code tab, that tab remains active so
-the user can select another flow directly. The selected flow still updates the
-Explorer graph and its analysis state; opening the Explorer tab remains
-available through the normal tab control.
-The Flux de code catalogue shows call flows with an integration output or a
-call cycle, including flows whose last step accesses data. Pure data-access
-terminal paths remain indexed evidence but are not selectable flows. Searching
-a resource also finds call flows whose reachable accesses use it.
+status are not altered. The selected nodes retain a visible halo.
+
+Selecting it keeps the Flux tab and its card geometry unchanged; the selected card
+is marked in place instead of replacing the left widget with the graph detail
+view. Its entry microservice is marked `Racine`: in Cards, it appears in the
+secondary label; in Symbols, it appears as a badge. A second badge makes the
+persisted entry trigger explicit, with the exact HTTP route or Kafka topic and a
+protocol-specific color. These markers are presentation state derived from the
+selected persisted flow graph; they do not infer or persist an architecture fact.
+
+The camera frames the selected flow inside the visible workspace beside the
+toolbar on wide screens and below it when that is the larger available region,
+while preserving margins for fixed-size cards. This fit never zooms in beyond the
+current readable view, is reapplied after a viewport resize, and cannot make the
+toolbar scroll horizontally. When a flow is selected from the Flux de code tab,
+that tab remains active so the user can select another flow directly. The selected
+flow still updates the Explorer graph and its analysis state; opening the Explorer
+tab remains available through the normal tab control.
+
+The Flux de code catalogue shows call flows with an integration output or a call
+cycle, including flows whose last step accesses data. Pure data-access terminal
+paths remain indexed evidence but are not selectable flows. Searching a resource
+also finds call flows whose reachable accesses use it.
+
+## Selected call graph
 
 In a selected call graph, each microservice occurrence shows grouped CRUD
 annotations for eligible access paths. The matching input endpoint and handler
@@ -199,6 +226,7 @@ selects an empty mode until a flow is chosen; selecting a flow activates the
 call-graph mode without changing the selected Flux de code tab. A layout or
 selection change in one mode MUST NOT reuse the node, edge, port, or call-graph
 selection state of the other mode.
+
 Architecture topology arcs and selected call-graph arcs use the same fixed
 2-pixel screen thickness; graph zoom compensation MUST NOT make one view's
 arcs appear thinner or thicker than the other's.
@@ -206,6 +234,7 @@ When a selected flow occupies less space than the available focus area, its
 specific framing may zoom in (a camera ratio below the overview ratio) so the
 flow remains readable; the ratio is bounded and the cards remain inside the
 visible margins.
+
 The selected interaction graph places microservices with all projected
 service-to-service edges and fixed card repulsion. Each service-to-service arc
 is then rendered as one straight SVG segment from the actual `OUT` port to the
@@ -213,12 +242,14 @@ actual `IN` port. The focused view does not add obstacle-routing bends or curves
 the placement algorithm is responsible for keeping cards readable. A stale
 overlay generation MUST NOT reinsert a path, label, or hit area after a newer
 graph render has started.
+
 Endpoint-to-endpoint dependencies are projected into the selected
 service-to-service arc. The selected flow's canonical NetworkX arcs are the
 sole source for the focused overlay, so topology links and port links cannot
 create a second copy of the same dependency.
 Each selected arc displays its port mapping in the form `Ox → Iy`, using the
 actual indexed output and input labels.
+
 The arc label uses the same protocol-specific color as its associated arc in
 both light and dark themes.
 In a selected flow graph, clicking an input or output port enters a transient
@@ -226,12 +257,14 @@ analysis mode: the associated topology or local flow arc and its label are
 highlighted. Clicking the same port clears the analysis highlight; selecting a
 different flow resets it. Port analysis does not change the selected flow,
 camera position, or persisted architecture facts.
+
 Interaction-graph arcs use the same stroke thickness as ordinary topology paths; their
 selection remains identifiable through the selected-flow styling and colour.
 Clearing or replacing the selection restores the ordinary filtered graph.
 The focused graph displays a persistent context banner naming the selected
 flow and showing a compact evidence timeline. Each timeline item prioritizes
 the indexed port (`I`/`O`), topic or resource, protocol, and message type;
+
 non-integration method calls are deliberately omitted from this summary;
 the complete indexed step is available from its tooltip. This avoids a long
 repetition of generic method-step names while preserving the full flow. The
@@ -239,6 +272,8 @@ banner also explains that ports and arcs are analysis controls. When an arc is
 focused, the banner offers an explicit action to clear the analysis focus.
 Arc labels are intentionally subdued until their arc is hovered or selected;
 this keeps the route geometry readable without removing the port mapping.
+
+## Navigation and visual design
 
 The export uses grouped navigation: the Graph group contains Graph, Flux de
 code, and Diagnostics; the Resources group contains Ressources, OpenAPI,
@@ -254,6 +289,7 @@ data resource or contract, while `Message` represents a messaging channel.
 The persisted model keeps the technical kinds `data_schema` and `message_channel`.
 Architecture cards retain the generic category and append the known technology,
 for example `Donnée · MongoDB`, `Donnée · Postgres`, or `Topic · Kafka`.
+
 Microservice details omit `Layer` and `Module` when those values are missing,
 unknown, or only resolve to the root namespace.
 MongoDB
@@ -261,26 +297,27 @@ collections, SQL tables, Redis keyspaces, object-store datasets, Kafka,
 RabbitMQ, SQS, and webhook streams are technology-specific evidence, not the
 primary architecture category.
 
-The export uses a responsive workspace layout with grouped navigation rather
-than one flat list: Architecture, Flux de code, and Diagnostics belong to the graph
-group; Ressources, OpenAPI, Messages, and Données belong to the resources
-group.
-`Resources` is a filterable inventory of every persisted graph node; selecting
-an item opens it in Explorer and focuses its graph card. `Topics` and `Data`
-are data-schema reference views: Java classes defining exchanged event data
-and persisted data respectively. They retain the generic `Topic` and `Data`
-architecture categories rather than implying a single storage or messaging
-technology. It includes
-compact architecture counters, contextual details integrated into the left
-panel, and a full-size resource inspector. On narrow viewports the left panel
-uses one bounded, scrollable region so the graph remains visible while users
-inspect controls or resource details. At intermediate widths up to 1024 px it
-is limited to 320 px and 82% of the viewport height. Its branded header remains
-visible while the panel content scrolls, and its navigation tabs use one
-balanced four-column, two-row grid immediately after the branded header, so
-all seven destinations remain visible without horizontal scrolling. The extended search
-hint is hidden at those widths while its label and example placeholder remain
-visible.
+The export uses a responsive workspace layout with grouped navigation rather than
+one flat list: Architecture, Flux de code, and Diagnostics belong to the graph
+group; Ressources, OpenAPI, Messages, and Données belong to the resources group.
+`Resources` is a filterable inventory of every persisted graph node; selecting an
+item opens it in Explorer and focuses its graph card. `Topics` and `Data` are
+data-schema reference views: Java classes defining exchanged event data and
+persisted data respectively.
+
+They retain the generic `Topic` and `Data` architecture categories rather than
+implying a single storage or messaging technology. It includes compact
+architecture counters, contextual details integrated into the left panel, and a
+full-size resource inspector. On narrow viewports the left panel uses one bounded,
+scrollable region so the graph remains visible while users inspect controls or
+resource details. At intermediate widths up to 1024 px it is limited to 320 px and
+82% of the viewport height.
+
+Its branded header remains visible while the panel content scrolls, and its
+navigation tabs use one balanced four-column, two-row grid immediately after the
+branded header, so all seven destinations remain visible without horizontal
+scrolling. The extended search hint is hidden at those widths while its label and
+example placeholder remain visible.
 
 The Architecture tab always opens the static architecture graph. The Flux de
 code tab initially shows only its catalogue; selecting a flow explicitly
@@ -297,6 +334,7 @@ and graph selectors share the same control height, inner radius, border,
 surface, and blue selected state; collapsible Explorer sections use the same
 bordered surface and outer radius. Pills remain reserved for filters, counters,
 and status metadata so their shape continues to communicate a distinct role.
+
 All widget families also consume one semantic palette for headings, body text,
 muted metadata, accent text, panel surfaces, nested surfaces, controls, borders,
 focus, and selected states. Large headings use the shared heading colour in
@@ -316,6 +354,7 @@ itinerary queries. Advanced actions reuse its current itinerary to list simple
 alternatives or lock the selection; they do not introduce a second path input.
 Graph-specific context follows the search: its first row contains zoom, fit
 and reset actions; its second row contains the node-rendering selector;
+
 architecture counters and inventory status follow. This whole context appears only in
 Explorer, so domain tabs start directly with their own content. A dedicated,
 compact `Displayed nodes and edges` control lets users independently select
@@ -323,6 +362,7 @@ API, Topic, Data-access and other edge categories, and internal services,
 external services, messaging resources, Data resources and other node
 categories. This filtering applies equally to native and imported graph
 vocabularies. Placement strategies remain available as advanced controls.
+
 The toolbar does not expose a separate path-history section. Paths remain
 available from the Explorer search, while itinerary comparison remains in the
 advanced actions.
@@ -341,6 +381,7 @@ graph viewport spans the full window behind the floating navigation panel, so
 the area below the panel continues to render both nodes and edges. Zoom
 actions are grouped as a compact `−` / `+`
 control, and the adjacent segmented fit control exposes two explicit modes:
+
 `All`, which frames every visible node, and `Readable`, which keeps
 the same center but zooms in until cards have useful reading separation. The
 selected mode is reapplied after a view or window-size change, and `Readable
@@ -356,6 +397,7 @@ compact icons aligned with the name, plus border and color. The secondary kind
 label always identifies the resource category and uses the full inner card
 width instead of reserving a permanent icon column. Technology is shown in the
 selected microservice details rather than replacing that shared category label.
+
 Hover tooltips keep the resource name as their anchor and show only
 supplementary metrics. The selected details header keeps summary counts, while
 the detail sections remain the single place for complete relation lists.
@@ -368,6 +410,7 @@ In `Symbols`, microservices use compact hexagons, Topics and message
 channels use circles, and Data resources and data schemas use small
 squares. Symbols use the same visual rule as cards: a light surface tinted by
 the resource accent, a defined accent border and a restrained depth shadow;
+
 the dark theme uses an accent-tinted slate surface rather than a saturated
 solid fill. Node names use adaptive, collision-aware labeling: the viewport
 shows a bounded sample prioritizing connected and semantically important
@@ -382,23 +425,27 @@ the active card or symbol envelopes from overlapping.
 During pan and zoom, the graph and its card overlays remain synchronized
 without transient partial redraws.
 
-The details panel is integrated into the left navigation panel and is hidden
-until a resource, architecture module, build project, or itinerary is selected. Opening it MUST
-NOT resize or crop the full-window graph workspace; only the floating panel's
-contents scroll vertically. The detail view keeps the Explorer search and graph
-controls available above the selected content, while display filters and
-advanced actions remain collapsed to preserve vertical space. The selection
-action is hidden when nothing is selected and becomes an explicit `Fermer`
-action while details are shown. Architecture counters remain visible as compact
-context indicators. Clearing the selection restores the complete Explorer
-controls. Buttons inside details use the full available width for
-resource and module names rather than inheriting the compact square dimensions
-of toolbar icon buttons. `Shift + click` on an Architecture node opens its
-introspection window. A plain click on an Architecture node MUST NOT select it,
-open details, or alter the graph state. Introspection MUST NOT move, zoom,
-refit, or otherwise alter the camera in any primary view.
-When several Architecture relations overlap, Kafka hit areas stay above the
-other relations so `Shift + click` can open the topic inspector.
+## Details and camera interactions
+
+The details panel is integrated into the left navigation panel and is hidden until
+a resource, architecture module, build project, or itinerary is selected. Opening
+it MUST NOT resize or crop the full-window graph workspace; only the floating
+panel's contents scroll vertically. The detail view keeps the Explorer search and
+graph controls available above the selected content, while display filters and
+advanced actions remain collapsed to preserve vertical space. The selection action
+is hidden when nothing is selected and becomes an explicit `Fermer` action while
+details are shown.
+
+Architecture counters remain visible as compact context indicators. Clearing the
+selection restores the complete Explorer controls. Buttons inside details use the
+full available width for resource and module names rather than inheriting the
+compact square dimensions of toolbar icon buttons. `Shift + click` on an
+Architecture node opens its introspection window. A plain click on an Architecture
+node MUST NOT select it, open details, or alter the graph state. Introspection
+MUST NOT move, zoom, refit, or otherwise alter the camera in any primary view.
+
+When several Architecture relations overlap, Kafka hit areas stay above the other
+relations so `Shift + click` can open the topic inspector.
 
 Module details MUST support direct hierarchy navigation: the parent module,
 direct child modules, and resources assigned directly to the selected module

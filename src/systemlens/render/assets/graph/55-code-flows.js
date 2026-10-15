@@ -497,15 +497,6 @@
       }
       const treeTrigger = selectedFlow?.steps?.[0] || null;
       const treeTriggerRootName = rootsTree[0]?.name || null;
-      let leafIndex = 0;
-      const assignPositions = occurrence => {
-        occurrence.children.forEach(assignPositions);
-        occurrence.x = occurrence.depth;
-        occurrence.y = occurrence.children.length
-          ? occurrence.children.reduce((sum, child) => sum + child.y, 0) / occurrence.children.length
-          : leafIndex++;
-      };
-      rootsTree.forEach(assignPositions);
       const allOccurrences = [];
       const collect = occurrence => {
         allOccurrences.push(occurrence);
@@ -636,13 +627,13 @@
         annotationGroupsByOccurrence.set(occurrence, groups);
         return groups;
       };
-      const badgeCount = occurrence => annotationGroupsForOccurrence(occurrence).size;
       const visibleTreeEdgeCount = allOccurrences.reduce(
         (count, occurrence) => count + occurrence.children.length,
         0,
       );
       updateCallTreeStats(allOccurrences.length, visibleTreeEdgeCount);
       const occurrenceCounts = new Map();
+      const nodeByOccurrence = new Map();
       allOccurrences.forEach(occurrence => {
         occurrenceCounts.set(occurrence.name, (occurrenceCounts.get(occurrence.name) || 0) + 1);
       });
@@ -657,54 +648,18 @@
         return `${prefix}${compactLabel}${suffix}`;
       };
       const direction = "lr";
-      const maxBadges = Math.max(0, ...allOccurrences.map(badgeCount));
-      const cardHeight = Math.max(94, 54 + maxBadges * 20);
-      const gapY = Math.max(105, cardHeight + 23);
-      const cardWidth = 150;
+      const cardWidth = 190;
+      const siblingGap = 23;
       const maxEdgeLabelLength = allOccurrences.reduce((maximum, occurrence) => (
         occurrence.children.reduce((current, child) => (
           Math.max(current, edgeDisplayLabel(child.edge).length)
         ), maximum)
       ), 0);
       const estimatedEdgeLabelWidth = Math.min(320, maxEdgeLabelLength * 6);
-      const gapX = Math.max(280, cardWidth + estimatedEdgeLabelWidth + 32);
-      const logicalWidth = direction === "lr"
-        ? (Math.max(...allOccurrences.map(item => item.x)) + 1) * gapX
-        : Math.max(1, leafIndex) * gapX;
-      const logicalHeight = direction === "lr"
-        ? Math.max(1, leafIndex) * gapY
-        : (Math.max(...allOccurrences.map(item => item.x)) + 1) * gapY;
-      const scale = Math.min(1, (viewport.width - 32) / logicalWidth, (viewport.height - 32) / logicalHeight);
-      const offsetX = Math.max(16, (viewport.width - logicalWidth * scale) / 2);
-      const offsetY = Math.max(16, (viewport.height - logicalHeight * scale) / 2);
-      const position = occurrence => direction === "lr"
-        ? { x: occurrence.x * gapX, y: occurrence.y * gapY }
-        : { x: occurrence.y * gapX, y: occurrence.x * gapY };
+      const gapX = Math.max(320, cardWidth + estimatedEdgeLabelWidth + 32);
       const canvas = document.createElement("div");
       canvas.className = "graph-call-tree-canvas";
-      canvas.style.width = `${logicalWidth}px`;
-      canvas.style.height = `${logicalHeight}px`;
-      canvas.dataset.baseScale = String(scale);
-      let left = offsetX;
-      let top = offsetY;
-      let zoom = graphState.callTreeZoom || 1;
-      if (preservedCamera) {
-        const centerX = preservedCamera.centerX ?? viewport.width / 2;
-        const centerY = preservedCamera.centerY ?? viewport.height / 2;
-        const logicalCenterX = (centerX - preservedCamera.left) / preservedCamera.totalScale;
-        const logicalCenterY = (centerY - preservedCamera.top) / preservedCamera.totalScale;
-        zoom = Math.max(.5, Math.min(64, preservedCamera.totalScale / scale));
-        const totalScale = scale * zoom;
-        left = centerX - logicalCenterX * totalScale;
-        top = centerY - logicalCenterY * totalScale;
-      }
-      graphState.callTreeZoom = zoom;
-      canvas.style.left = `${left}px`;
-      canvas.style.top = `${top}px`;
-      canvas.style.transform = `scale(${scale * zoom})`;
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("width", String(logicalWidth));
-      svg.setAttribute("height", String(logicalHeight));
       svg.setAttribute("aria-hidden", "true");
       const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
       const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
@@ -761,21 +716,36 @@
       };
       const methodForOccurrence = occurrence => {
         const inputEndpointId = inputForOccurrence(occurrence);
-        const inputMethod = inputEndpointId
-          ? String(treePort(inputEndpointId, "in").method || "").trim()
-          : "";
-        const methods = inputMethod.includes("::")
-          ? [inputMethod]
-          : [...new Set(occurrence.flowIds
-            .map(id => String(flowById.get(id)?.method || "").trim())
-            .filter(Boolean))];
-        if (!methods.length) return null;
-        const labels = [...new Set(methods.map(method => {
-          const separator = method.lastIndexOf("::");
-          const start = separator >= 0 ? separator + 2 : method.lastIndexOf(".") + 1;
-          return method.slice(start).split("(", 1)[0].trim();
-        }).filter(Boolean))];
-        return labels.length ? { label: labels.join(" · "), title: methods.join("\n") } : null;
+        const inputPort = inputEndpointId ? portsByEndpointId.get(inputEndpointId) : null;
+        const inputMethod = String(inputPort?.method || "").trim();
+        const candidates = inputMethod.includes("::")
+          ? [{ method: inputMethod, parameterTypes: inputPort.parameter_types }]
+          : occurrence.flowIds.map(id => {
+            const flow = flowById.get(id);
+            const method = String(flow?.method || "").trim();
+            const declaration = (graphData.codeql_call_graph?.nodes || []).find(node => (
+              node.method === method && node.path === flow?.path
+              && node.start_line === flow?.start_line
+            ));
+            return { method, parameterTypes: declaration?.parameter_types };
+          }).filter(item => item.method);
+        const signatures = [...new Map(candidates.map(item => [
+          JSON.stringify([item.method, item.parameterTypes]), item,
+        ])).values()].map(item => {
+          const separator = item.method.lastIndexOf("::");
+          const start = separator >= 0 ? separator + 2 : item.method.lastIndexOf(".") + 1;
+          const name = item.method.slice(start).split("(", 1)[0].trim();
+          const parameters = Array.isArray(item.parameterTypes)
+            ? `(${item.parameterTypes.join(", ")})` : null;
+          return { name, parameters, full: `${item.method}${parameters || ""}` };
+        }).filter(item => item.name);
+        if (!signatures.length) return null;
+        const labels = [...new Set(signatures.map(item => item.name))];
+        return {
+          label: labels.join(" · "),
+          parameters: signatures.length === 1 ? signatures[0].parameters : null,
+          title: signatures.map(item => item.full).join("\n"),
+        };
       };
       const clearTreeTooltip = () => flowTooltipOverlay?.replaceChildren();
       const showTreeTooltip = (className, titleText, lines, clientX, clientY) => {
@@ -879,118 +849,6 @@
         };
       };
       allOccurrences.forEach(occurrence => {
-        const source = position(occurrence);
-        occurrence.children.forEach(child => {
-          const target = position(child);
-          const labelX = direction === "lr"
-            ? (source.x + cardWidth + target.x) / 2
-            : (source.x + target.x + cardWidth) / 2;
-          const labelY = direction === "lr"
-            ? (source.y + target.y + cardHeight) / 2 - 7
-            : (source.y + cardHeight + target.y) / 2 - 7;
-          const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-          line.dataset.targetPathKey = child.pathKey;
-          if (direction === "lr") {
-            const startX = source.x + cardWidth;
-            const endX = target.x;
-            const middleX = (startX + endX) / 2;
-            line.setAttribute("d", `M ${startX} ${source.y + cardHeight / 2} C ${middleX} ${source.y + cardHeight / 2}, ${middleX} ${target.y + cardHeight / 2}, ${endX} ${target.y + cardHeight / 2}`);
-          } else {
-            const startY = source.y + cardHeight;
-            const endY = target.y;
-            const middleY = (startY + endY) / 2;
-            line.setAttribute("d", `M ${source.x + cardWidth / 2} ${startY} C ${source.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${endY}`);
-          }
-          const edgeHit = line.cloneNode();
-          edgeHit.classList.remove("graph-call-tree-edge");
-          edgeHit.classList.add("graph-call-tree-edge-hit");
-          const protocolClass = child.edge.kind === "rest" ? "is-rest" : child.edge.kind === "kafka" ? "is-kafka" : "";
-          line.classList.add("graph-call-tree-edge", protocolClass);
-          edgeHit.classList.add(protocolClass);
-          const edgeEndpointIds = new Set(child.edge.endpoint_ids || []);
-          const edgeDiagnosticKind = [...edgeEndpointIds].some(endpointId => interactionDiagnosticPathEndpoints.has(endpointId))
-            ? "interaction"
-            : [...edgeEndpointIds].some(endpointId => asyncDiagnosticPathEndpoints.has(endpointId))
-              ? "async"
-            : [...edgeEndpointIds].some(endpointId => syncDiagnosticPathEndpoints.has(endpointId))
-              ? "sync"
-              : null;
-          if (edgeDiagnosticKind) {
-            line.classList.add(`is-diagnostic-${edgeDiagnosticKind}`);
-            edgeHit.classList.add(`is-diagnostic-${edgeDiagnosticKind}`);
-          } else if (selectedDiagnostic) {
-            line.classList.add("is-diagnostic-muted");
-            edgeHit.classList.add("is-diagnostic-muted");
-          }
-          const edgeTooltip = treeEdgeTooltip(child.edge);
-          line.setAttribute("title", [edgeTooltip.title, ...edgeTooltip.lines].join(" · "));
-          line.addEventListener("mouseenter", event => {
-            line.classList.add("is-hovered");
-            showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
-          });
-          line.addEventListener("mousemove", event => {
-            const tooltip = flowTooltipOverlay?.firstElementChild;
-            if (tooltip) showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
-          });
-          line.addEventListener("mouseleave", () => { line.classList.remove("is-hovered"); clearTreeTooltip(); });
-          const topicNode = child.edge.kind === "kafka"
-            ? nodeForCallTreeTopic(child.edge.label)
-            : null;
-          const callTreeRoute = child.edge.kind === "rest"
-            ? routeForCallTreeEdge(child.edge)
-            : null;
-          if (topicNode || callTreeRoute) {
-            line.style.cursor = "pointer";
-            line.addEventListener("click", event => {
-              if (!event.shiftKey) return;
-              event.preventDefault();
-              event.stopPropagation();
-              openCallTreeEdgeInspector(child.edge);
-            });
-            edgeHit.addEventListener("click", event => {
-              if (!event.shiftKey) return;
-              event.preventDefault();
-              event.stopPropagation();
-              openCallTreeEdgeInspector(child.edge);
-            });
-          }
-          svg.append(edgeHit);
-          svg.append(line);
-          const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-          label.classList.add("graph-call-tree-edge-label");
-          label.dataset.targetPathKey = child.pathKey;
-          if (edgeDiagnosticKind) {
-            label.classList.add(`is-diagnostic-${edgeDiagnosticKind}`, "is-diagnostic-badge-label");
-            const diagnosticLabel = `D${selectedDiagnosticIndex}`;
-            const diagnosticBudget = Math.max(12, 36 - diagnosticLabel.length - 3);
-            label.textContent = `${diagnosticLabel} · ${edgeDisplayLabel(child.edge, diagnosticBudget)}`;
-          } else if (selectedDiagnostic) {
-            label.classList.add("is-diagnostic-muted");
-          }
-          label.setAttribute("x", String(labelX));
-          label.setAttribute("y", String(labelY));
-          if (!edgeDiagnosticKind) label.textContent = edgeDisplayLabel(child.edge);
-          if (topicNode || callTreeRoute) {
-            label.classList.add("is-clickable");
-            label.addEventListener("click", event => {
-              if (!event.shiftKey) return;
-              event.preventDefault();
-              event.stopPropagation();
-              openCallTreeEdgeInspector(child.edge);
-            });
-          }
-          const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-          title.textContent = [
-            edgeDiagnosticKind ? flowDiagnosticTitle(selectedDiagnostic) : "",
-            treeEdgeTooltip(child.edge).title,
-            ...treeEdgeTooltip(child.edge).lines,
-          ].filter(Boolean).join(" · ");
-          label.append(title);
-          svg.append(label);
-        });
-      });
-      canvas.append(svg);
-      allOccurrences.forEach(occurrence => {
         const node = document.createElement("button");
         node.type = "button";
         const occurrenceCount = occurrenceCounts.get(occurrence.name) || 1;
@@ -1000,7 +858,6 @@
         const isSelectedOccurrence = graphState.callTreeSelectedPathKey === occurrence.pathKey;
         node.className = `graph-call-tree-node${frequencyClass ? ` ${frequencyClass}` : ""}${occurrence.cycle ? " is-cycle" : ""}${isSelectedOccurrence ? " is-selected" : ""}`;
         node.dataset.pathKey = occurrence.pathKey;
-        node.style.height = `${cardHeight}px`;
         const original = nodeIdForCodeFlowResource(occurrence.name, "microservice");
         const originalNode = original ? nodeDataById.get(original) : null;
         node.style.setProperty("--card-accent", originalNode?.color || "#64748b");
@@ -1013,7 +870,16 @@
         if (method) {
           const methodName = document.createElement("span");
           methodName.className = "graph-call-tree-method";
-          methodName.textContent = method.label;
+          const methodLabel = document.createElement("strong");
+          methodLabel.className = "graph-call-tree-method-name";
+          methodLabel.textContent = method.label;
+          methodName.append(methodLabel);
+          if (method.parameters !== null) {
+            const parameters = document.createElement("span");
+            parameters.className = "graph-call-tree-method-parameters";
+            parameters.textContent = method.parameters;
+            methodName.append(parameters);
+          }
           methodName.title = method.title;
           node.append(icon, name, methodName);
         } else {
@@ -1156,9 +1022,6 @@
           : occurrence.continuationUnknown
             ? `${occurrence.name} · suite inconnue`
           : `${occurrence.name} · occurrence ${occurrence.id}`;
-        const point = position(occurrence);
-        node.style.left = `${point.x}px`;
-        node.style.top = `${point.y}px`;
         node.addEventListener("pointerover", event => {
           if (event.target.closest?.(".graph-node-port-reference")) return;
           highlightCallTreePath(occurrence.pathKey);
@@ -1187,8 +1050,187 @@
           renderCallTreeOverlay(captureCallTreeCamera());
         });
         canvas.append(node);
+        nodeByOccurrence.set(occurrence, node);
       });
       graphCallTreeOverlay.replaceChildren(canvas);
+      const cardHeightByOccurrence = new Map();
+      const measureSubtree = occurrence => {
+        const node = nodeByOccurrence.get(occurrence);
+        const cardHeight = node.offsetHeight;
+        cardHeightByOccurrence.set(occurrence, cardHeight);
+        const childHeights = occurrence.children.map(measureSubtree);
+        const childrenHeight = childHeights.reduce((sum, height) => sum + height, 0)
+          + Math.max(0, childHeights.length - 1) * siblingGap;
+        occurrence.subtreeHeight = Math.max(cardHeight, childrenHeight);
+        return occurrence.subtreeHeight;
+      };
+      rootsTree.forEach(measureSubtree);
+      const placeSubtree = (occurrence, bandTop) => {
+        const childrenHeight = occurrence.children.reduce(
+          (sum, child) => sum + child.subtreeHeight, 0,
+        ) + Math.max(0, occurrence.children.length - 1) * siblingGap;
+        occurrence.x = occurrence.depth * gapX;
+        occurrence.y = bandTop
+          + (occurrence.subtreeHeight - cardHeightByOccurrence.get(occurrence)) / 2;
+        let childTop = bandTop + (occurrence.subtreeHeight - childrenHeight) / 2;
+        occurrence.children.forEach(child => {
+          placeSubtree(child, childTop);
+          childTop += child.subtreeHeight + siblingGap;
+        });
+      };
+      let rootTop = 0;
+      rootsTree.forEach(root => {
+        placeSubtree(root, rootTop);
+        rootTop += root.subtreeHeight + siblingGap;
+      });
+      const logicalWidth = (Math.max(...allOccurrences.map(item => item.depth)) + 1) * gapX;
+      const logicalHeight = Math.max(1, rootTop - siblingGap);
+      const scale = Math.min(1, (viewport.width - 32) / logicalWidth, (viewport.height - 32) / logicalHeight);
+      const offsetX = Math.max(16, (viewport.width - logicalWidth * scale) / 2);
+      const offsetY = Math.max(16, (viewport.height - logicalHeight * scale) / 2);
+      let left = offsetX;
+      let top = offsetY;
+      let zoom = graphState.callTreeZoom || 1;
+      if (preservedCamera) {
+        const centerX = preservedCamera.centerX ?? viewport.width / 2;
+        const centerY = preservedCamera.centerY ?? viewport.height / 2;
+        const logicalCenterX = (centerX - preservedCamera.left) / preservedCamera.totalScale;
+        const logicalCenterY = (centerY - preservedCamera.top) / preservedCamera.totalScale;
+        zoom = Math.max(.5, Math.min(64, preservedCamera.totalScale / scale));
+        const totalScale = scale * zoom;
+        left = centerX - logicalCenterX * totalScale;
+        top = centerY - logicalCenterY * totalScale;
+      }
+      graphState.callTreeZoom = zoom;
+      canvas.style.width = `${logicalWidth}px`;
+      canvas.style.height = `${logicalHeight}px`;
+      canvas.dataset.baseScale = String(scale);
+      canvas.style.left = `${left}px`;
+      canvas.style.top = `${top}px`;
+      canvas.style.transform = `scale(${scale * zoom})`;
+      svg.setAttribute("width", String(logicalWidth));
+      svg.setAttribute("height", String(logicalHeight));
+      nodeByOccurrence.forEach((node, occurrence) => {
+        node.style.left = `${occurrence.x}px`;
+        node.style.top = `${occurrence.y}px`;
+      });
+      const position = occurrence => ({ x: occurrence.x, y: occurrence.y });
+      allOccurrences.forEach(occurrence => {
+        const source = position(occurrence);
+        occurrence.children.forEach(child => {
+          const target = position(child);
+          const sourceHeight = cardHeightByOccurrence.get(occurrence);
+          const targetHeight = cardHeightByOccurrence.get(child);
+          const sourceCenterY = source.y + sourceHeight / 2;
+          const targetCenterY = target.y + targetHeight / 2;
+          const labelX = direction === "lr"
+            ? (source.x + cardWidth + target.x) / 2
+            : (source.x + target.x + cardWidth) / 2;
+          const labelY = direction === "lr"
+            ? (sourceCenterY + targetCenterY) / 2 - 7
+            : (source.y + sourceHeight + target.y) / 2 - 7;
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          line.dataset.targetPathKey = child.pathKey;
+          if (direction === "lr") {
+            const startX = source.x + cardWidth;
+            const endX = target.x;
+            const middleX = (startX + endX) / 2;
+            line.setAttribute("d", `M ${startX} ${sourceCenterY} C ${middleX} ${sourceCenterY}, ${middleX} ${targetCenterY}, ${endX} ${targetCenterY}`);
+          } else {
+            const startY = source.y + sourceHeight;
+            const endY = target.y;
+            const middleY = (startY + endY) / 2;
+            line.setAttribute("d", `M ${source.x + cardWidth / 2} ${startY} C ${source.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${endY}`);
+          }
+          const edgeHit = line.cloneNode();
+          edgeHit.classList.remove("graph-call-tree-edge");
+          edgeHit.classList.add("graph-call-tree-edge-hit");
+          const protocolClass = child.edge.kind === "rest" ? "is-rest" : child.edge.kind === "kafka" ? "is-kafka" : "";
+          line.classList.add("graph-call-tree-edge", protocolClass);
+          edgeHit.classList.add(protocolClass);
+          const edgeEndpointIds = new Set(child.edge.endpoint_ids || []);
+          const edgeDiagnosticKind = [...edgeEndpointIds].some(endpointId => interactionDiagnosticPathEndpoints.has(endpointId))
+            ? "interaction"
+            : [...edgeEndpointIds].some(endpointId => asyncDiagnosticPathEndpoints.has(endpointId))
+              ? "async"
+            : [...edgeEndpointIds].some(endpointId => syncDiagnosticPathEndpoints.has(endpointId))
+              ? "sync"
+              : null;
+          if (edgeDiagnosticKind) {
+            line.classList.add(`is-diagnostic-${edgeDiagnosticKind}`);
+            edgeHit.classList.add(`is-diagnostic-${edgeDiagnosticKind}`);
+          } else if (selectedDiagnostic) {
+            line.classList.add("is-diagnostic-muted");
+            edgeHit.classList.add("is-diagnostic-muted");
+          }
+          const edgeTooltip = treeEdgeTooltip(child.edge);
+          line.setAttribute("title", [edgeTooltip.title, ...edgeTooltip.lines].join(" · "));
+          line.addEventListener("mouseenter", event => {
+            line.classList.add("is-hovered");
+            showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
+          });
+          line.addEventListener("mousemove", event => {
+            const tooltip = flowTooltipOverlay?.firstElementChild;
+            if (tooltip) showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
+          });
+          line.addEventListener("mouseleave", () => { line.classList.remove("is-hovered"); clearTreeTooltip(); });
+          const topicNode = child.edge.kind === "kafka"
+            ? nodeForCallTreeTopic(child.edge.label)
+            : null;
+          const callTreeRoute = child.edge.kind === "rest"
+            ? routeForCallTreeEdge(child.edge)
+            : null;
+          if (topicNode || callTreeRoute) {
+            line.style.cursor = "pointer";
+            line.addEventListener("click", event => {
+              if (!event.shiftKey) return;
+              event.preventDefault();
+              event.stopPropagation();
+              openCallTreeEdgeInspector(child.edge);
+            });
+            edgeHit.addEventListener("click", event => {
+              if (!event.shiftKey) return;
+              event.preventDefault();
+              event.stopPropagation();
+              openCallTreeEdgeInspector(child.edge);
+            });
+          }
+          svg.append(edgeHit);
+          svg.append(line);
+          const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          label.classList.add("graph-call-tree-edge-label");
+          label.dataset.targetPathKey = child.pathKey;
+          if (edgeDiagnosticKind) {
+            label.classList.add(`is-diagnostic-${edgeDiagnosticKind}`, "is-diagnostic-badge-label");
+            const diagnosticLabel = `D${selectedDiagnosticIndex}`;
+            const diagnosticBudget = Math.max(12, 36 - diagnosticLabel.length - 3);
+            label.textContent = `${diagnosticLabel} · ${edgeDisplayLabel(child.edge, diagnosticBudget)}`;
+          } else if (selectedDiagnostic) {
+            label.classList.add("is-diagnostic-muted");
+          }
+          label.setAttribute("x", String(labelX));
+          label.setAttribute("y", String(labelY));
+          if (!edgeDiagnosticKind) label.textContent = edgeDisplayLabel(child.edge);
+          if (topicNode || callTreeRoute) {
+            label.classList.add("is-clickable");
+            label.addEventListener("click", event => {
+              if (!event.shiftKey) return;
+              event.preventDefault();
+              event.stopPropagation();
+              openCallTreeEdgeInspector(child.edge);
+            });
+          }
+          const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+          title.textContent = [
+            edgeDiagnosticKind ? flowDiagnosticTitle(selectedDiagnostic) : "",
+            treeEdgeTooltip(child.edge).title,
+            ...treeEdgeTooltip(child.edge).lines,
+          ].filter(Boolean).join(" · ");
+          label.append(title);
+          svg.append(label);
+        });
+      });
+      canvas.prepend(svg);
     }
     function zoomCallTree(factor, anchorX = null, anchorY = null) {
       if (graphState.callGraphDisplayMode !== "tree") return false;

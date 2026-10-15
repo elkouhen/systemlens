@@ -2,6 +2,8 @@
 
 Parent: [Functional specification](../SPEC-FONC.md).
 
+## Export modes
+
 `systemlens export microservices --html FILE --call-graphs-only` produces a
 standalone HTML view centered on indexed call graphs. It opens the call-flow
 catalogue, selects the first available graph, and retains data-access and
@@ -24,6 +26,8 @@ The consolidated presentation and interaction contract is maintained in
 [UX/UI rules](../UX-UI.md). This page owns export states, inspectors, flow
 catalogue behavior, and evidence semantics; it does not duplicate the global
 visual language or camera contract.
+
+## Architecture and resource inspectors
 
 New browser sessions open in the Obsidian dark theme. The theme control retains
 the user's explicit light or dark preference where local storage is available.
@@ -93,6 +97,23 @@ inspector on the target. The inspector displays the visited path, makes
 previous architecture elements selectable in the breadcrumb, and provides a
 back action without closing the component.
 
+Selecting a catalogue row shows its type, owner, source, and indexed related
+resources in the right-hand preview. Each related-resource link selects that
+resource in the catalogue. A back action returns to the previous preview;
+closing `Inspecter` leaves this preview and its path available. Graph neighbors
+come from persisted links. Routes, contracts, and Kafka DTOs use their explicit
+owner, contract-route, channel address, or topic associations.
+
+The preview lists indexed attribute names and types for DTOs, JPA entities,
+and Mongo persistence classes. A Mongo collection lists fields by associated
+persistence class. Resources with no indexed fields show an explicit empty
+state; unrelated resource types do not show an attribute section.
+
+An indexed DTO reference on an attribute is selectable and opens the target
+DTO in the same preview. Several resolved reference candidates remain separate
+choices. The preview back action returns to the containing DTO; a type without
+a resolved target remains plain text and does not imply a target.
+
 Nested DTO and Mongo persistence-class inspections use the same header back
 action as all other inspector navigation; they do not add a second in-body
 return control.
@@ -115,6 +136,8 @@ selectable from their corresponding specialized inspectors. When extraction
 retains several candidate field types, each candidate is exposed as a separate
 navigation action.
 
+## Call graph data and annotations
+
 The exported `call_graphs` map describes service-level propagation for one flow
 or flow group. Each graph contains participating nodes, deterministic order,
 traversal levels, a compact call tree, per-flow causal transition indexes,
@@ -124,6 +147,7 @@ indexed call flow, plus one stable entry for each uncovered cycle or
 disconnected component. It then omits a root graph when every service and
 exact directed call arc appears in a larger root graph. Calls with different
 endpoint IDs remain distinct even when their displayed labels match.
+
 Equal graphs retain their separate flow entries. Downstream flows
 remain in the supporting flow data for selected roots that reach them.
 
@@ -147,51 +171,64 @@ qualifier instead of merging those identities.
 
 When an anomaly concerns the entity, its badge remains selectable for diagnosis.
 
+Call-tree cards grow to contain every data-operation and diagnostic badge. Their
+height depends on the annotations on that occurrence, so a card with many badges
+does not enlarge unrelated cards. Branch spacing and arc attachment follow the
+rendered card heights.
+
+## Selected flow navigation
+
 When a single code flow is selected, the graph displays the selected directed
 call graph as a hierarchy of call occurrences. A microservice is therefore
 rendered once per occurrence in the expanded tree, so the same service may
 appear in several branches.
-Each occurrence shows the Java method associated with its input port below the
-microservice name. If the input port has no indexed method, the renderer uses
-the associated flow method when available. Hovering the method shows its
-qualified name; occurrences without method evidence omit this line. Long method
-names may be clipped to the card width.
+
+Each occurrence highlights the Java method associated with its input port in a
+colored block below the microservice name. The declared parameter types appear
+beneath the method name when the index contains them. An empty signature is shown
+as `()`.
+
+If the input port has no indexed method, the renderer uses the associated flow
+method when available. Hovering the block shows the qualified signature. Missing
+method evidence omits the block; missing signature evidence omits the parameter
+line. Long names and types may be clipped to the card width.
 
 The tree mode uses a fixed left-to-right orientation and an incremental depth
 control from 1 to 8 levels. The default is depth 1, showing only the root
-occurrence. The `−` and `+` controls change one level at a time.
-Arc labels retain the order, relation label, and protocol when available. Long
-labels are shortened on the canvas; the arc tooltip retains the full indexed
-details. The renderer estimates label width at 6 pixels per character and adds
-the 150-pixel card width and 32 pixels of clearance, with a 280-pixel minimum
-distance between levels.
+occurrence. The `−` and `+` controls change one level at a time. Arc labels retain
+the order, relation label, and protocol when available. Long labels are shortened
+on the canvas; the arc tooltip retains the full indexed details. The renderer
+estimates label width at 6 pixels per character and adds the 190-pixel card width
+and 32 pixels of clearance, with a 320-pixel minimum distance between levels.
+
 The full tree scales to the available viewport, so deep trees can appear smaller
-and remain zoomable.
-When a branch reaches the configured depth, expansion stops. When a branch
-reaches an input endpoint already displayed on the current branch, the
-occurrence is rendered as a cycle endpoint and is not expanded further. A
-reachable target without an indexed consumer flow is rendered as a leaf with
-an unknown continuation. A repeated service using a different input port is
-therefore not marked as a cycle solely because its name is repeated.
+and remain zoomable. When a branch reaches the configured depth, expansion stops.
+When a branch reaches an input endpoint already displayed on the current branch,
+the occurrence is rendered as a cycle endpoint and is not expanded further. A
+reachable target without an indexed consumer flow is rendered as a leaf with an
+unknown continuation. A repeated service using a different input port is therefore
+not marked as a cycle solely because its name is repeated.
+
 At the depth boundary, the node displays the number of hidden child calls;
 clicking that `+N appels` badge reveals one additional level for that branch
-without changing the current tree viewport. Every visible node with
-descendants displays a `− replier` badge that collapses that branch and
-preserves the viewport. A collapsed node displays a `+N appels` badge to
-reopen its descendants.
-The depth control can still be increased to reveal more levels globally.
-The tree is the only call-graph rendering mode. The upper graph toolbar shows
-`Centrer`, zoom, fit, selection reset, layout, and node-rendering actions in
-the architecture view. In the call-graph view it keeps centering and zoom and
-adds the tree controls and `Déplier tous les nœuds`; it does not repeat the
-call hierarchy. The context widget is collapsed by default and can be
-expanded with `Développer`. Dragging the empty tree
-workspace pans the tree, while clicking a service occurrence keeps its
-selection action. `Shift + click` on a service occurrence or call arc opens
-its dedicated introspection window. Hovering a service occurrence displays its level and cycle
-state. The service occurrence tooltip also displays its IN and OUT ports with
-the associated Java methods. Hovering an arc displays its order, source,
-target, protocol, indexed relation label and message type when available.
+without changing the current tree viewport. Every visible node with descendants
+displays a `− replier` badge that collapses that branch and preserves the
+viewport. A collapsed node displays a `+N appels` badge to reopen its descendants.
+The depth control can still be increased to reveal more levels globally. The tree
+is the only call-graph rendering mode.
+
+The upper graph toolbar shows `Centrer`, zoom, fit, selection reset, layout, and
+node-rendering actions in the architecture view. In the call-graph view it keeps
+centering and zoom and adds the tree controls and `Déplier tous les nœuds`; it
+does not repeat the call hierarchy. The context widget is collapsed by default and
+can be expanded with `Développer`. Dragging the empty tree workspace pans the
+tree, while clicking a service occurrence keeps its selection action. `Shift +
+click` on a service occurrence or call arc opens its dedicated introspection
+window. Hovering a service occurrence displays its level and cycle state.
+
+The service occurrence tooltip also displays its IN and OUT ports with the
+associated Java methods. Hovering an arc displays its order, source, target,
+protocol, indexed relation label and message type when available.
 
 The call-graph heading identifies the view without displaying a service or
 method sequence. Flow descriptions state the trigger and the observed effect
@@ -218,6 +255,8 @@ In the selected flow graph, each arc has a transparent hover target. Hovering
 an arc or its order label highlights that arc and its label without changing
 the persisted graph data.
 
+## Explorer workspace and ports
+
 The exported Explorer presents the graph in a shared workspace: a compact
 control surface, a searchable graph context, summary counters, and a separate
 legend and inspector. The visual treatment adapts to light and dark themes and
@@ -228,15 +267,16 @@ flows, references, and indexing issues.
 
 Every HTTP/Kafka input and output receives a deterministic identifier that is
 global to the exported graph: `I1`, `I2`, … for inputs and `O1`, `O2`, … for
-outputs. When a persisted code flow proves that an input reaches an output in
-the same service, the exported input label includes those local outputs, for
-example `I4 → O3, O5`. The graph anchor shows its compact global identifier
-(`I4`); its tooltip and the inspector retain the complete label. Inputs and
-outputs are centred and distributed independently on their respective sides
-of a card rather than sharing one positional index. A selected service lists
-only its triggered inputs, while the Flux widget uses the same labels; method
-and Data steps remain ordered but unlabelled. When a selected flow port is
-backed by Kafka, its tooltip explicitly shows `Topic en entrée` for a consumed
-topic or `Topic en sortie` for a published topic. The Flux entry also lists all
-input and output topics carried by the persisted flow; HTTP ports keep their
-method and route presentation.
+outputs. When a persisted code flow proves that an input reaches an output in the
+same service, the exported input label includes those local outputs, for example
+`I4 → O3, O5`. The graph anchor shows its compact global identifier (`I4`); its
+tooltip and the inspector retain the complete label. Inputs and outputs are
+centred and distributed independently on their respective sides of a card rather
+than sharing one positional index.
+
+A selected service lists only its triggered inputs, while the Flux widget uses the
+same labels; method and Data steps remain ordered but unlabelled. When a selected
+flow port is backed by Kafka, its tooltip explicitly shows `Topic en entrée` for a
+consumed topic or `Topic en sortie` for a published topic. The Flux entry also
+lists all input and output topics carried by the persisted flow; HTTP ports keep
+their method and route presentation.

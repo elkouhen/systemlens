@@ -218,17 +218,20 @@ avoids rewriting the complete SQLite flow table for every module. When
 explicit progress output is enabled, SystemLens can persist a partial
 `code_flows` snapshot after each completed project and emit a checkpoint line
 with the number of provisional flows.
+
 The checkpoint line names the source-owning Maven module and lists the Java
 methods searched for IN and OUT integration points. The optional HTML
 checkpoint carries the same summary in its provisional progress banner.
 During the final join, progress reports the number of calls attached to Java
 methods, the IN methods explored, the transitions traversed, and the flows
 materialized before final reconciliation.
+
 With `--show-call-chains --module NAME`, each newly explored internal chain
 prefix is also printed during the join, starting at an indexed OUT method and
 walking through callers toward an indexed IN method. Constructed OUT-to-IN
 chains and terminal paths without an input are shown. Terminal paths include
 their stop reason, such as no indexed caller, a cycle, or the hop limit.
+
 Direct IN-to-OUT calls show the indexed entry method before the output in the
 final flow report. Every live line includes the current call depth, and every
 terminal line includes the depth and the exact stop reason. If the selected
@@ -236,6 +239,7 @@ snapshot is unchanged and no indexing stage runs, the command replays this
 diagnostic from the persisted CodeQL graph without rewriting the index.
 Interactive terminals render constructed chains in green; redirected output
 remains plain text.
+
 The index commits a provisional flow snapshot after each join batch, so an
 HTML progress export or a later export from the index retains the call-graph
 arcs found before an interruption.
@@ -252,11 +256,13 @@ the index and reused by incremental indexing and all derived views.
 `analysis.codeql_edge_confidence` accepts `exact` or `possible`. The default
 `possible` keeps possible dispatch and inferred bridges as low-confidence flow
 evidence; `exact` excludes them from flow reconstruction.
+
 The automatic CodeQL projection preserves Java sources below
 `target/generated-sources` so generated AsyncAPI/OpenAPI types remain
 available; other build outputs and build descriptors are excluded.
 `--call-graph-engine` selects the method-call engine for one run and does not modify
 `.systemlens/config.yml`. `--no-codeql` remains a legacy AST-only alias.
+
 `--codeql-progress-html FILE` is an opt-in progress aid: after each completed
 CodeQL project it atomically replaces `FILE` with a graph labelled as
 provisional, including the completed-project count. Users may refresh that
@@ -266,6 +272,7 @@ answers without intermediate evidence appear at the final checkpoint.
 These in-progress indexing facts must not be treated as an exportable or
 complete architecture snapshot; the normal `export microservices --html`
 command remains the authoritative post-index export.
+
 CodeQL diagnostics are silent by default, including for repositories whose
 older configuration still contains `analysis.codeql_verbosity`. The explicit
 `--codeql-progress` option temporarily enables `progress++` for one command.
@@ -274,12 +281,14 @@ guaranteed percentage or remaining-time estimate. During the Python-side join,
 SystemLens reports the call-attachment phase and the input-method exploration
 at least every five seconds while work continues. These messages include
 processed calls or methods, explored transitions, and elapsed time.
+
 `analysis.codeql_timeout_seconds` sets the positive wall-clock budget for the
 complete CodeQL pass, including source generation, temporary database creation,
 query execution and BQRS decoding; its default is `600` seconds. The remaining
 budget is propagated to every subprocess. The deadline includes live progress
 reading, even when a subprocess stops producing output. On POSIX, timeout or
 interrupted progress handling terminates and reaps the complete process group.
+
 A timeout is a soft boundary for the index: SystemLens keeps AST facts and any
 CodeQL calls recovered from a completed partial result, executes the remaining
 relation, flow, reconciliation and statistics post-processing, then commits
@@ -288,6 +297,7 @@ CLI reports that the graph is partial. A timed-out CodeQL pass does not update
 the code-flow signature, so the next index retries the interprocedural analysis
 even when source files are unchanged. Other CodeQL failures remain fatal and
 preserve the previous committed snapshot.
+
 When the join itself is interrupted after one or more committed batches,
 `systemlens index --resume-codeql-join` reuses the compatible repository
 checkpoint and skips the completed IN methods. The option rejects changed
@@ -296,6 +306,7 @@ presentation files such as HTML exports do not invalidate it. If the persisted
 method list no longer
 matches the current indexed method list, the command discards the stale join
 cursor and restarts the CodeQL join from the beginning.
+
 `analysis.codeql_threads` sets the number of threads passed to CodeQL database
 creation and query execution; its default is `0`, which delegates one thread
 per available core to CodeQL. `analysis.codeql_ram_mb` optionally sets

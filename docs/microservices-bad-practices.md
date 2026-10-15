@@ -61,22 +61,33 @@ They do not claim that static analysis can prove the absence of a problem.
 
 Transaction and messaging limits are described by [Spring transaction-bound
 events](https://docs.spring.io/spring-framework/reference/data-access/transaction/event.html),
-[Spring Kafka synchronization](https://docs.spring.io/spring-kafka/reference/tips.html),
-the [transactional outbox](https://learn.microsoft.com/en-us/azure/architecture/databases/guide/transactional-out-box-cosmos),
+[Spring Kafka
+synchronization](https://docs.spring.io/spring-kafka/reference/tips.html), the
+[transactional
+outbox](https://learn.microsoft.com/en-us/azure/architecture/databases/guide/transactional-out-box-cosmos),
 and [Kafka partition semantics](https://kafka.apache.org/protocol.html).
 
-Consistency and concurrency limits are described by [CQRS](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs),
+Consistency and concurrency limits are described by
+[CQRS](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs),
 [cache-aside](https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside),
-[PostgreSQL isolation](https://www.postgresql.org/docs/current/transaction-iso.html),
-[sagas](https://learn.microsoft.com/en-us/azure/architecture/patterns/saga),
-and [idempotent consumers](https://learn.microsoft.com/en-us/azure/architecture/patterns/idempotent-consumer).
+[PostgreSQL
+isolation](https://www.postgresql.org/docs/current/transaction-iso.html),
+[sagas](https://learn.microsoft.com/en-us/azure/architecture/patterns/saga), and
+[idempotent
+consumers](https://learn.microsoft.com/en-us/azure/architecture/patterns/idempotent-consumer).
 
-[AWS retry](https://docs.aws.amazon.com/wellarchitected/2023-04-10/framework/rel_mitigate_interaction_failure_limit_retries.html)
-and [timeout](https://docs.aws.amazon.com/wellarchitected/2023-04-10/framework/rel_mitigate_interaction_failure_client_timeouts.html)
-guidance covers remote-call failures. [Data ownership](https://learn.microsoft.com/en-us/azure/architecture/microservices/design/data-considerations)
-and [API versioning](https://learn.microsoft.com/en-us/azure/architecture/microservices/design/api-design)
-guidance covers service boundaries and contracts. These sources support the
-failure mechanisms; the ratings are estimates based on indexed evidence.
+[AWS
+retry](https://docs.aws.amazon.com/wellarchitected/2023-04-10/framework/rel_mitigate_interaction_failure_limit_retries.html)
+and
+[timeout](https://docs.aws.amazon.com/wellarchitected/2023-04-10/framework/rel_mitigate_interaction_failure_client_timeouts.html)
+guidance covers remote-call failures. [Data
+ownership](https://learn.microsoft.com/en-us/azure/architecture/microservices/design/data-considerations)
+and [API
+versioning](https://learn.microsoft.com/en-us/azure/architecture/microservices/design/api-design)
+guidance covers service boundaries and contracts.
+
+These sources support the failure mechanisms; the ratings are estimates based on
+indexed evidence.
 
 ## Recommended directions
 
@@ -88,40 +99,46 @@ library defaults, and proxies may supply a deadline that is absent beside the
 call. This work reuses indexed HTTP paths and can link a finding to its source.
 
 Second, compare a supplied reference OpenAPI contract with the indexed version.
-Start with removed operations, removed response fields, and newly required
-request parameters, then show affected consumers when their use is known.
-Specify compatibility direction and version selection before classifying a
-change. An unindexed external consumer and a semantic behavior change remain
-unknown. Event contracts can follow once their format and compatibility policy
-are explicit. [OpenAPI diff](https://github.com/OpenAPITools/openapi-diff/blob/master/README.md)
-demonstrates a structural comparison; [schema compatibility guidance](https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html)
+Start with removed operations, removed response fields, and newly required request
+parameters, then show affected consumers when their use is known. Specify
+compatibility direction and version selection before classifying a change. An
+unindexed external consumer and a semantic behavior change remain unknown.
+
+Event contracts can follow once their format and compatibility policy are
+explicit. [OpenAPI
+diff](https://github.com/OpenAPITools/openapi-diff/blob/master/README.md)
+demonstrates a structural comparison; [schema compatibility
+guidance](https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html)
 shows why event compatibility depends on policy.
 
 Third, prototype a database update and event publication candidate on a small
-annotated Spring corpus. First, classify source-located data operations and
-attach them to internal call paths: the current [MongoDB flow projection](../src/systemlens/indexing/code_flows.py)
-only attaches same-method accesses as reads or writes, while the [JPA inventory](spec-tech/data-model.md)
+annotated Spring corpus. First, classify source-located data operations and attach
+them to internal call paths: the current [MongoDB flow
+projection](../src/systemlens/indexing/code_flows.py) only attaches same-method
+accesses as reads or writes, while the [JPA inventory](spec-tech/data-model.md)
 records declarations without operations. Preserve the two source sites and any
-identified transaction or recovery mechanism. Treat an unknown outbox, CDC
-process, or transaction manager as missing evidence rather than proof of unsafe delivery.
-Spring can synchronize Kafka publication with a database transaction, and a
-transaction-bound listener can defer handling until commit. This limits the
-precision of a rule based on source order alone.
+identified transaction or recovery mechanism.
+
+Treat an unknown outbox, CDC process, or transaction manager as missing evidence
+rather than proof of unsafe delivery. Spring can synchronize Kafka publication
+with a database transaction, and a transaction-bound listener can defer handling
+until commit. This limits the precision of a rule based on source order alone.
 
 Treat lost-update analysis as a separate follow-up built on the same operation
 facts. A useful candidate requires evidence that a write value depends on an
 earlier read of the same record, plus the transaction boundary and any applicable
 conflict control. A matching entity name is insufficient: the record key may be
 unknown, aliases may obscure the value flow, and another layer may provide
-protection. `@Transactional` alone does not establish conflict protection, and
-the indexed source may not identify the database isolation mode. Report
-“potential read-modify-write; protection not established” only when the read,
-write, and value dependency are source-backed. Otherwise abstain or show the
-operations as separate facts. Recognize a protection mechanism only when its
-scope and applicability to that update are established. Validate the candidate
-against protected, unprotected, and ambiguous examples before considering an
-automatic finding. The current operation facts do not yet establish these
-conditions, so this is not among the first three bounded diagnostics.
+protection. `@Transactional` alone does not establish conflict protection, and the
+indexed source may not identify the database isolation mode.
+
+Report “potential read-modify-write; protection not established” only when the
+read, write, and value dependency are source-backed. Otherwise abstain or show the
+operations as separate facts. Recognize a protection mechanism only when its scope
+and applicability to that update are established. Validate the candidate against
+protected, unprotected, and ambiguous examples before considering an automatic
+finding. The current operation facts do not yet establish these conditions, so
+this is not among the first three bounded diagnostics.
 
 Before promoting any candidate to a user-facing check, evaluate it on positive,
 negative, and ambiguous examples from more than one repository. Record

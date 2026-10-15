@@ -121,6 +121,7 @@ CodeQL executable is used by default once for the repository to create a
 temporary source-only Java projection (Java files only, without Maven/Gradle
 descriptors or build outputs, except Java files below `target/generated-sources`),
 create a database from that projection, query it, and decode the result as CSV.
+
 The temporary database remains global so cross-module references have the same
 resolution context. CodeQL calls and methods are queried once globally, then
 the returned rows are partitioned and processed one source-owning module at a
@@ -130,12 +131,14 @@ explicit partial checkpoint when explicit progress output is enabled. Without
 that option, module processing only reports progress and the final pass
 persists the complete flow snapshot once. The final pass joins all call facts
 together.
+
 CodeQL's temporary query pack exports only source-located resolved calls.
 When a call has a source-backed interface declaration and CodeQL also exposes
 a concrete virtual target, the query keeps the declared interface call as an
 additional possible witness. This preserves the contract edge for module-aware
 dispatch enrichment; duplicate graph rows are deduplicated by their target and
 confidence.
+
 `--codeql-database` reuses one global database supplied by the caller. Once the
 source-backed call graph is constructed, its
 edges are committed as an explicit partial checkpoint before input-to-output
@@ -143,6 +146,7 @@ reconstruction begins. The checkpoint records
 `codeql_call_graph_status` and the persisted edge count; this status does not
 imply that the flow join is complete. After the input-to-output calculation,
 the provisional merged flows are committed before topology reconciliation;
+
 `codeql_input_output_status` distinguishes a complete join from one based on a
 timed-out partial CodeQL pass. The temporary CodeQL query pack pins
 `codeql/java-all` and resolves it only from the already installed local CodeQL
@@ -159,6 +163,7 @@ The same-method AST materializer records JPA and Mongo accesses in scheduled
 methods alongside their publications. It also persists a scheduled method
 whose only indexed effect is a data access. Such a data-only flow remains
 supporting evidence rather than a selectable inter-service call graph.
+
 When duplicate qualified types exist in different build modules, resolution
 first restricts candidates to the caller's module. Inheritance declarations and
 dispatch indexes retain the `(qualified name, module)` identity, so homonymous
@@ -167,6 +172,7 @@ absent or still ambiguous, all compatible candidates remain possible rather
 than selecting one by name. An ambiguous receiver type is retained for
 dispatch; compatible contracts are collected and the caller-module preference
 is applied to their concrete implementations.
+
 For a statically declared base-class receiver, both the base body and known
 overrides remain possible. A single override does not prove the runtime type.
 When a flow starts in a concrete subtype and then enters an inherited body,
@@ -201,6 +207,7 @@ documented accuracy trade-off for offline indexing.
 The projection receives the eligible relative-path inventory from the indexer,
 so excluded test sources and build outputs cannot enter the temporary CodeQL
 database or its persisted method projection.
+
 With `--generate-sources`, the indexed repository runs only Maven
 `generate-sources` or Gradle `generateSources` before this projection is
 created. A root build descriptor owns its nested modules. If the repository has
@@ -210,6 +217,7 @@ Gradle project, so an aggregator is not required. Java files below a Maven
 analysis. Other non-Java build output remains excluded. The repository is not
 compiled or tested; Maven generation uses the local cache and can therefore
 fail when the required plugin or dependency is unavailable.
+
 The call query keeps both caller and callee in source code, folds exact
 dispatch before viable-dispatch expansion, and computes that resolution once
 per call. The Python post-processing has two distinct stages: it first resolves
@@ -220,6 +228,7 @@ methods. `integration_methods` are anchors for those endpoints, not a filter
 for intermediate methods. Components only restrict the search to methods linked
 by observed calls; they do not reverse edges or create routes. It does not
 connect endpoint facts by name alone.
+
 CodeQL also runs an output-anchored transitive reachability query whose source and target
 predicates are restricted to the already indexed input/output methods by
 relative path and start line. Exact input-to-output reachability is persisted
@@ -234,10 +243,12 @@ resolved call graph is built once per index pass; module checkpoints reuse that
 graph and do not rematerialize it. Flow traversal remains bounded by the
 number of indexed input methods and the graph size, `O(I × (V + E))` in the
 worst case, because each input preserves its own dispatch and cycle state.
+
 Both recursive relations seed only indexed outputs and retain that output as
 their first argument throughout recursion; they do not construct an unrelated
 all-method-pairs closure. Both edges require a source caller and source callee.
 The result explicitly names all seven CSV columns consumed by the decoder.
+
 Python joins require exact source path, method and line evidence except for
 the unique-name fallback above. Buildless AST fallbacks may add only a
 source-declared, uniquely compatible abstract-to-concrete bridge or
@@ -246,6 +257,7 @@ are never name-only guesses. A receiver-typed helper call preserves the
 concrete consumer while walking an inherited method body; when that body calls
 a method overridden exactly once by the concrete consumer, the unique override
 is retained as a possible edge. Ambiguous sibling overrides remain unresolved.
+
 The fallback also scans methods that already own an output endpoint and keeps
 separate resolved-call keys for calls sharing one source line. A generic
 interface call may be completed when the indexed implementations expose
@@ -254,9 +266,11 @@ retained as a possible, low-confidence candidate; multiple candidates remain
 separate rather than being collapsed into one runtime target. Repository-root
 modules attribute source files without endpoints to the root module so their
 helper methods remain available to the call graph.
+
 When several modules provide compatible implementations, the call graph prefers
 implementations from the caller's module. It retains cross-module candidates only
 when the caller's module has no compatible implementation.
+
 The BFS visits each
 method/confidence state
 at most once per input endpoint, under the configured depth/global transition
@@ -266,17 +280,20 @@ cached per input method/confidence in a bounded in-memory cache, costing
 O(V+E) per retained tree plus route reconstruction proportional to emitted
 steps, instead of a BFS per input/output pair. HTML checkpoints filter cached
 flows instead of rebuilding and retraversing the method-call graph for every module.
+
 When a join is resumed, both the direct-flow pass and the bounded BFS start at
 the persisted input-method offset. Previously completed input methods are not
 revisited. The resume checkpoint therefore preserves the same `O(I × (V + E))`
 worst-case bound as a complete join while reducing the work in proportion to
 the completed prefix.
+
 The read-only `analyze indexing-audit` command evaluates twenty distinct
 quality-control rules against the persisted snapshot. It reports only detected
 findings, keeps zero-count rules in the JSON summary, and includes relative
 source evidence when the finding has a persisted location. The audit does not
 re-parse source files or convert informational uncertainty into an asserted
 architecture relation.
+
 The read-only `analyze call-edge` command resolves each selector against the
 persisted method ID, qualified name, then qualified-name suffix. It reports
 ambiguous selectors without choosing a candidate. For one caller and callee,
@@ -287,6 +304,7 @@ those concrete targets as the requested dynamic-dispatch edge.
 It then tests reachability from any indexed input method and to any indexed
 output method. Existing snapshots do not persist rejected raw CodeQL rows, so
 an absent edge remains classified across extraction and CodeQL-to-AST joining.
+
 The diagnostic reports presence as a three-state fact and includes the proof
 basis for each value. An integration method proves AST node presence, and an
 incident non-inferred call edge proves CodeQL node presence when only the
@@ -295,6 +313,7 @@ all source-backed method nodes, so ordinary intermediate methods can be
 rehydrated during a persisted flow reconstruction. A non-inferred
 caller-to-callee edge proves CodeQL edge presence. Inferred edges do not count
 as CodeQL proof; unsupported absence checks remain `unknown`.
+
 When `--codeql-database` is supplied to `analyze call-edge`, node presence is
 queried directly from the source-backed CodeQL `Method` entities instead of
 being inferred from the persisted call-edge snapshot. The BQRS/CSV query
@@ -304,13 +323,15 @@ The module-level `--show-call-chains` diagnostic follows the same rule when an
 external CodeQL database is supplied: it rebuilds the transient full call graph
 before rendering internal-flow examples, so an unchanged snapshot does not
 restrict the diagnostic to persisted endpoint-anchor edges.
+
 After the call adjacency is built, the decoded CodeQL rows and transient Java
 symbol indexes are released before route expansion; the adjacency remains the
 single in-memory call-graph representation used by the BFS. The source-backed
-method projection and all source-backed call edges are written to
-`codeql_methods` and `codeql_call_edges`; ordinary intermediate methods remain
-distinct from `integration_methods` and can be rehydrated in later joins. Live progress uses a wall-clock
-watchdog covering pipe reads;
+method projection and all source-backed call edges are written to `codeql_methods`
+and `codeql_call_edges`; ordinary intermediate methods remain distinct from
+`integration_methods` and can be rehydrated in later joins. Live progress uses a
+wall-clock watchdog covering pipe reads;
+
 POSIX timeouts terminate the complete process group, and
 subprocesses are reaped on errors. The configured deadline covers the complete
 CodeQL pass, not each command independently.

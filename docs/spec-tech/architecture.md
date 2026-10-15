@@ -60,6 +60,7 @@ lives in `scanner/rest_paths.py`, separate from framework-specific extraction.
 The CLI export and
 `systemlens web` both use `application/architecture_projection.py` to select the same
 deployable, exportable service topology before choosing their output format.
+
 The web command serves only an in-memory landing page and the existing
 `/architecture` HTML
 projection: it loads the persisted architecture snapshot and renders it for

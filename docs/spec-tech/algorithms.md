@@ -166,7 +166,10 @@ The detector should mark two classes of potential anomalies on the call graph:
 1. A synchronous read may run before an asynchronous write becomes visible.
 2. Two writes to the same data may overlap without an identified ordering or conflict guard.
 
-A lost update is a narrower second case. It requires two read-modify-write operations on the same record, plus evidence that each written value depends on a value read earlier. The graph can show a candidate and its evidence; static indexing cannot claim that a runtime race occurred.
+A lost update is a narrower second case. It requires two read-modify-write
+operations on the same record, plus evidence that each written value depends on a
+value read earlier. The graph can show a candidate and its evidence; static
+indexing cannot claim that a runtime race occurred.
 
 `src/systemlens/application/flow_consistency.py` implements the classifications
 below when the persisted flow includes the required evidence. Existing source
@@ -179,17 +182,26 @@ as proof of safety or concurrency.
 
 > **Why & What - compare event order**
 >
-> **What:** Model operation start, commit, visibility, and completion as separate events related by an explicit partial order.
+> **What:** Model operation start, commit, visibility, and completion as separate
+> events related by an explicit partial order.
 >
-> **Why:** Line order, a shared trigger, or an asynchronous branch label cannot establish when another service's write becomes visible to a read. Operation intervals also distinguish overlapping writes from writes that merely start in one order and finish in another.
+> **Why:** Line order, a shared trigger, or an asynchronous branch label cannot
+> establish when another service's write becomes visible to a read. Operation
+> intervals also distinguish overlapping writes from writes that merely start in
+> one order and finish in another.
 >
-> **Alternatives considered:** Pair accesses by resource and source order. That costs less and can remain a low-confidence hint, but it cannot support a concurrency or visibility conclusion.
+> **Alternatives considered:** Pair accesses by resource and source order. That
+> costs less and can remain a low-confidence hint, but it cannot support a
+> concurrency or visibility conclusion.
 >
-> **Fallback:** Keep the pair as an insufficient-evidence annotation when lifecycle or ordering facts are missing.
+> **Fallback:** Keep the pair as an insufficient-evidence annotation when
+> lifecycle or ordering facts are missing.
 
 ### Event model
 
-The algorithms operate on events attached to source-backed call-flow occurrences. An occurrence identifies one place in a selected graph, even when the same service or source method appears more than once.
+The algorithms operate on events attached to source-backed call-flow occurrences.
+An occurrence identifies one place in a selected graph, even when the same service
+or source method appears more than once.
 
 Each data event contains:
 
@@ -209,7 +221,10 @@ Each data event contains:
 | `guard` | Version check, conditional update, lock, or other conflict control with its scope |
 | `evidence` | Relative source path, line, method identity, and extraction confidence |
 
-The existing `CodeFlowStep` already has optional `branch`, `resource`, `key`, `causal_id`, `expected_version`, `completion`, `query_shape`, and `action` fields. These fields are useful inputs, but they do not currently encode field-level dependencies, transaction boundaries, or a complete event-order relation.
+The existing `CodeFlowStep` already has optional `branch`, `resource`, `key`,
+`causal_id`, `expected_version`, `completion`, `query_shape`, and `action` fields.
+These fields are useful inputs, but they do not currently encode field-level
+dependencies, transaction boundaries, or a complete event-order relation.
 
 The optional flow-step contract also accepts `phase`, `transaction_id`,
 `concurrency`, `fields`, `value_dependencies`, `guard`, `guard_scope`,
@@ -221,26 +236,51 @@ name the same recognized guard and its `guard_scope` equals
 `resource:key`. These fields are optional and old persisted flow snapshots
 remain valid.
 
-Resources compare equal only when the index can resolve them to the same data identity. Equal entity names in different services do not prove shared storage. Different key expressions mean unknown overlap unless alias or value-flow analysis proves they resolve to the same key. A query shape such as `point` narrows a search but does not identify a record by itself. Unknown resource or key information remains visible as uncertainty.
+Resources compare equal only when the index can resolve them to the same data
+identity. Equal entity names in different services do not prove shared storage.
+Different key expressions mean unknown overlap unless alias or value-flow analysis
+proves they resolve to the same key. A query shape such as `point` narrows a
+search but does not identify a record by itself. Unknown resource or key
+information remains visible as uncertainty.
 
 ### Order and concurrency evidence
 
-The detector builds a directed happens-before relation over lifecycle events. An edge `A → B` means the available source or protocol evidence requires A to precede B. A missing edge means the order is unknown; it does not mean the events are concurrent. A write's `start`, `commit`, and `visible` points remain separate because a request can return before a transaction commits, and a commit may not be visible through a replica or cache.
+The detector builds a directed happens-before relation over lifecycle events. An
+edge `A → B` means the available source or protocol evidence requires A to precede
+B. A missing edge means the order is unknown; it does not mean the events are
+concurrent. A write's `start`, `commit`, and `visible` points remain separate
+because a request can return before a transaction commits, and a commit may not be
+visible through a replica or cache.
 
 The relation may include:
 
-- Control-flow order when the same execution must pass through both operations and the relevant branches are compatible.
+- Control-flow order when the same execution must pass through both operations and
+  the relevant branches are compatible.
 - Synchronous call and return order when the call is known to block until the target returns.
-- Message-send before corresponding handler invocation when the message identity or payload mapping is established.
-- Explicit completion, join, acknowledgement, transaction synchronization, or visibility barriers when their semantics and scope are indexed.
+- Message-send before corresponding handler invocation when the message identity
+  or payload mapping is established.
+- Explicit completion, join, acknowledgement, transaction synchronization, or
+  visibility barriers when their semantics and scope are indexed.
 - Program order within one transaction, while keeping commit and visibility as separate events.
-- Operation start before operation completion, with a commit point when transaction evidence identifies it.
+- Operation start before operation completion, with a commit point when
+  transaction evidence identifies it.
 
-An asynchronous send does not establish that the receiving write committed before another service reads. A common root flow or a shared topic alone does not establish that two operations refer to the same business record. A transaction annotation alone does not identify isolation behavior or provide a conflict guard.
+An asynchronous send does not establish that the receiving write committed before
+another service reads. A common root flow or a shared topic alone does not
+establish that two operations refer to the same business record. A transaction
+annotation alone does not identify isolation behavior or provide a conflict guard.
 
-A call-graph arc proves a possible call relationship, not event order or thread overlap. Build order edges only from execution and framework evidence. The order graph for one expanded occurrence must be acyclic. If contradictory evidence creates a cycle, mark the affected pair `inconsistent_order_evidence` and abstain. Loops need bounded occurrence expansion or an explicit loop summary; a repeated static source site is not a second runtime execution by itself.
+A call-graph arc proves a possible call relationship, not event order or thread
+overlap. Build order edges only from execution and framework evidence. The order
+graph for one expanded occurrence must be acyclic. If contradictory evidence
+creates a cycle, mark the affected pair `inconsistent_order_evidence` and abstain.
+Loops need bounded occurrence expansion or an explicit loop summary; a repeated
+static source site is not a second runtime execution by itself.
 
-The relation must preserve alternative branches. It may say that an ordering is possible only when the source-backed branch predicates are compatible. If branch compatibility cannot be resolved, the detector records `unknown` and abstains from a definite ordering claim.
+The relation must preserve alternative branches. It may say that an ordering is
+possible only when the source-backed branch predicates are compatible. If branch
+compatibility cannot be resolved, the detector records `unknown` and abstains from
+a definite ordering claim.
 
 The current implementation does not build the full lifecycle DAG described
 above. It accepts explicit per-access concurrency and lifecycle evidence and
@@ -253,25 +293,34 @@ execution occurrences.
 Every candidate pair receives one of these evidence states:
 
 - **Confirmed relation:** identity and required order are supported by explicit source evidence.
-- **Potential relation:** identity is supported, but order, completion, visibility, or concurrency remains unresolved.
+- **Potential relation:** identity is supported, but order, completion,
+  visibility, or concurrency remains unresolved.
 - **Insufficient evidence:** a required resource, key, causal link, or coverage fact is missing.
-- **Not applicable:** known resource or key evidence proves the pair does not overlap, or a complete order proves the suspected interleaving cannot occur.
+- **Not applicable:** known resource or key evidence proves the pair does not
+  overlap, or a complete order proves the suspected interleaving cannot occur.
 
-“Confirmed relation” describes a static relationship, not a production incident. The user interface must preserve this distinction in labels and tooltips.
+“Confirmed relation” describes a static relationship, not a production incident.
+The user interface must preserve this distinction in labels and tooltips.
 
 ### Asynchronous write followed by a synchronous read
 
-The first detector reports `potential_async_write_read` when a flow contains an asynchronous write request and a synchronous read that may observe the same data before the requested write becomes visible.
+The first detector reports `potential_async_write_read` when a flow contains an
+asynchronous write request and a synchronous read that may observe the same data
+before the requested write becomes visible.
 
 The required evidence is:
 
 1. A source-backed asynchronous send or dispatch event.
-2. A reachable receiver operation classified as a write or update, or an explicit write annotation linked to that send.
+2. A reachable receiver operation classified as a write or update, or an explicit
+   write annotation linked to that send.
 3. A reachable synchronous read from the same selected root or a causally linked root.
 4. Matching resource identity and either a matching record key or a supported query-overlap result.
 5. No established visibility barrier that orders write visibility before the read.
 
-The send-to-write link needs more than a shared topic name. Prefer a propagated `causal_id`, message key, or source-backed payload field that maps to the data key. If the link comes only from a topic and reachable handlers, report a lower-confidence candidate with the missing correlation shown.
+The send-to-write link needs more than a shared topic name. Prefer a propagated
+`causal_id`, message key, or source-backed payload field that maps to the data
+key. If the link comes only from a topic and reachable handlers, report a
+lower-confidence candidate with the missing correlation shown.
 
 Algorithm:
 
@@ -298,9 +347,16 @@ for each async send S:
             emit potential_async_write_read(S, W, R)
 ```
 
-The event `visible(W)` is distinct from the source call that requested W. A broker acknowledgement, method return, or transaction annotation counts as a barrier only when the indexed framework semantics establish that it also guarantees the write is visible to R. If the read begins before the asynchronous send, this detector does not call it a read-after-request event. If their order is unknown, the detector reports insufficient evidence.
+The event `visible(W)` is distinct from the source call that requested W. A broker
+acknowledgement, method return, or transaction annotation counts as a barrier only
+when the indexed framework semantics establish that it also guarantees the write
+is visible to R. If the read begins before the asynchronous send, this detector
+does not call it a read-after-request event. If their order is unknown, the
+detector reports insufficient evidence.
 
-If the index cannot resolve which write a send triggers, it may display an unpaired asynchronous write and read as separate events. It must not create a high-confidence pair from resource-name similarity alone.
+If the index cannot resolve which write a send triggers, it may display an
+unpaired asynchronous write and read as separate events. It must not create a
+high-confidence pair from resource-name similarity alone.
 
 ### Potentially concurrent writes
 
@@ -320,7 +376,9 @@ These conditions count only when represented by the explicit `concurrency`
 field. The detector does not derive them from `branch=async`, a shared root, or
 repeated graph paths.
 
-A pair that appears twice in one static graph is not sufficient evidence. The detector must distinguish separate runtime opportunities from graph duplication. Unknown broker partitioning, scheduling, or transaction behavior stays unknown.
+A pair that appears twice in one static graph is not sufficient evidence. The
+detector must distinguish separate runtime opportunities from graph duplication.
+Unknown broker partitioning, scheduling, or transaction behavior stays unknown.
 
 Two calls to the same handler count as distinct execution opportunities only
 when the index has evidence that the framework can invoke that handler
@@ -350,11 +408,17 @@ for each candidate pair (W1, W2):
         emit insufficient_evidence(W1, W2)
 ```
 
-An atomic update can protect a particular operation from a lost update while leaving a multi-operation business invariant vulnerable. The detector records the guard and its target fields or predicate; it does not treat the word “atomic” as a universal guarantee.
+An atomic update can protect a particular operation from a lost update while
+leaving a multi-operation business invariant vulnerable. The detector records the
+guard and its target fields or predicate; it does not treat the word “atomic” as a
+universal guarantee.
 
 ### Concurrent read-write interactions
 
-The third detector reports `potential_concurrent_read_write` when a read and a write may overlap on the same resolved resource and key. This is an interaction candidate, not automatically a defect: snapshot reads, atomic updates, or a freshness policy may make the overlap valid.
+The third detector reports `potential_concurrent_read_write` when a read and a
+write may overlap on the same resolved resource and key. This is an interaction
+candidate, not automatically a defect: snapshot reads, atomic updates, or a
+freshness policy may make the overlap valid.
 
 The detector requires exact resource and key identity plus explicit
 `concurrency` evidence on at least one access. An async branch alone is not
@@ -390,9 +454,19 @@ for each candidate pair (R, W):
         emit potential_concurrent_read_write(R, W)
 ```
 
-The detector must distinguish “the read and write may overlap” from “the read may return an obsolete value.” The latter also needs a freshness requirement and database semantics. For example, PostgreSQL repeatable-read transactions continue to use a transaction snapshot after a concurrent commit ([transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html)). That behavior is a problem only when the caller requires a newer value. If no freshness requirement is indexed, show the read/write interaction and leave the anomaly verdict unknown.
+The detector must distinguish “the read and write may overlap” from “the read may
+return an obsolete value.” The latter also needs a freshness requirement and
+database semantics. For example, PostgreSQL repeatable-read transactions continue
+to use a transaction snapshot after a concurrent commit ([transaction
+isolation](https://www.postgresql.org/docs/current/transaction-iso.html)). That
+behavior is a problem only when the caller requires a newer value. If no freshness
+requirement is indexed, show the read/write interaction and leave the anomaly
+verdict unknown.
 
-A read of uncommitted data is a separate, narrower classification. It requires evidence that the read can observe another transaction's uncommitted write and that the configured database permits that behavior. Never infer a dirty read from source call order or from overlapping transaction intervals alone.
+A read of uncommitted data is a separate, narrower classification. It requires
+evidence that the read can observe another transaction's uncommitted write and
+that the configured database permits that behavior. Never infer a dirty read from
+source call order or from overlapping transaction intervals alone.
 
 ### Lost-update refinement
 
@@ -409,9 +483,14 @@ R1(key) → W1(key, value derived from R1)
 R2(key) → W2(key, value derived from R2)
 ```
 
-The reads and writes must target the same resolved record. The writes must overlap on at least one resolved field, or field overlap must remain explicitly unknown. A value-flow analysis must connect each read result to its corresponding write value. Method adjacency or a shared entity name does not establish this dependency.
+The reads and writes must target the same resolved record. The writes must overlap
+on at least one resolved field, or field overlap must remain explicitly unknown. A
+value-flow analysis must connect each read result to its corresponding write
+value. Method adjacency or a shared entity name does not establish this
+dependency.
 
-The algorithm checks whether the persisted order graph admits an interleaving consistent with both local program orders and separate transaction lifecycles:
+The algorithm checks whether the persisted order graph admits an interleaving
+consistent with both local program orders and separate transaction lifecycles:
 
 ```text
 begin(T1) → R1 → apply(W1) → commit(T1)
@@ -419,15 +498,36 @@ begin(T2) → R2 → apply(W2) → commit(T2)
 R1 → R2 → apply(W1) → commit(T1) → apply(W2) → commit(T2)
 ```
 
-This is an example witness, not the only possible interleaving. The detector tests candidate constraints against the known partial order. If they create a cycle, that interleaving is impossible under the modeled evidence. If they remain acyclic, the interleaving is possible within the model and supports a potential lost-update finding. It still does not prove that the runtime scheduler selected it. The detector reports this refinement only when both transaction occurrences are independently supported and the write values derive from their respective reads.
+This is an example witness, not the only possible interleaving. The detector tests
+candidate constraints against the known partial order. If they create a cycle,
+that interleaving is impossible under the modeled evidence. If they remain
+acyclic, the interleaving is possible within the model and supports a potential
+lost-update finding. It still does not prove that the runtime scheduler selected
+it. The detector reports this refinement only when both transaction occurrences
+are independently supported and the write values derive from their respective
+reads.
 
-Before reporting the candidate, check conflict controls that apply to both writes, including version predicates, compare-and-set conditions, database locks, or serialization guarantees. `@Transactional` by itself is not a conflict control. Database isolation rules vary by engine and level; an unknown engine or isolation configuration must remain an explicit limitation. PostgreSQL documents, for example, that its repeatable-read implementation can abort conflicting updates and require a retry, while serialization behavior depends on the database's stated semantics ([PostgreSQL transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html)).
+Before reporting the candidate, check conflict controls that apply to both writes,
+including version predicates, compare-and-set conditions, database locks, or
+serialization guarantees. `@Transactional` by itself is not a conflict control.
+Database isolation rules vary by engine and level; an unknown engine or isolation
+configuration must remain an explicit limitation.
 
-An atomic increment is not a lost update when both operations apply the increment to the current stored value. It may still violate a separate business invariant. Keep that case classified as a distinct invariant risk unless the source establishes a lost update.
+PostgreSQL documents, for example, that its repeatable-read implementation can
+abort conflicting updates and require a retry, while serialization behavior
+depends on the database's stated semantics ([PostgreSQL transaction
+isolation](https://www.postgresql.org/docs/current/transaction-iso.html)).
+
+An atomic increment is not a lost update when both operations apply the increment
+to the current stored value. It may still violate a separate business invariant.
+Keep that case classified as a distinct invariant risk unless the source
+establishes a lost update.
 
 ### Graph presentation
 
-Render each event on the service occurrence where its source evidence belongs. A shared pair ID links the related markers without adding a call edge to the architecture graph.
+Render each event on the service occurrence where its source evidence belongs. A
+shared pair ID links the related markers without adding a call edge to the
+architecture graph.
 
 Suggested markers:
 
@@ -440,37 +540,69 @@ Suggested markers:
 | Read/write pair | `POSSIBLE CONCURRENT READ/WRITE` | Both operation occurrences, linked by the same pair ID |
 | Lost-update refinement | `POSSIBLE LOST UPDATE` | Both read-modify-write occurrences, with the read-to-write dependencies shown in details |
 
-The tooltip gives the resource, key, action, source location, confidence, causal evidence, order evidence, identified guards, and unresolved facts. Selecting a marker highlights only its pair. A dashed visual connector may link pair members; it must be clearly styled as diagnostic evidence and must not appear as a service call or data-flow edge.
+The tooltip gives the resource, key, action, source location, confidence, causal
+evidence, order evidence, identified guards, and unresolved facts. Selecting a
+marker highlights only its pair. A dashed visual connector may link pair members;
+it must be clearly styled as diagnostic evidence and must not appear as a service
+call or data-flow edge.
 
-When an operation is unknown, show the missing field in the tooltip. Do not silently omit an event that was considered and rejected because its key, branch, or transaction evidence was unresolved. If pair volume exceeds the view's display bound, group repeated pairs by stable identity and show the omitted count; never drop the underlying count without notice.
+When an operation is unknown, show the missing field in the tooltip. Do not
+silently omit an event that was considered and rejected because its key, branch,
+or transaction evidence was unresolved. If pair volume exceeds the view's display
+bound, group repeated pairs by stable identity and show the omitted count; never
+drop the underlying count without notice.
 
 ### Complexity and bounds
 
-Let `E` be the number of indexed operation events and `P` the number of candidate pairs after resource indexing. Build resource and key indexes in `O(E)` expected time and space. Evaluate ordering with a directed acyclic graph and memoized reachability rather than searching every simple path. A straightforward all-pairs closure costs `O(V × (V + A))` for `V` events and `A` order edges; the implementation should instead query only candidate pairs and cache repeated reachability questions.
+Let `E` be the number of indexed operation events and `P` the number of candidate
+pairs after resource indexing. Build resource and key indexes in `O(E)` expected
+time and space. Evaluate ordering with a directed acyclic graph and memoized
+reachability rather than searching every simple path. A straightforward all-pairs
+closure costs `O(V × (V + A))` for `V` events and `A` order edges; the
+implementation should instead query only candidate pairs and cache repeated
+reachability questions.
 
-The pair generators must group by canonical resource before comparing keys. Unknown keys remain in a separate resource bucket and are subject to a per-resource candidate bound. When a bound is reached, emit a truncation summary with the number of unexamined pairs; do not silently call the remaining pairs safe.
+The pair generators must group by canonical resource before comparing keys.
+Unknown keys remain in a separate resource bucket and are subject to a
+per-resource candidate bound. When a bound is reached, emit a truncation summary
+with the number of unexamined pairs; do not silently call the remaining pairs
+safe.
 
-Use stable event and pair IDs based on flow identity, source-relative path, source location, operation identity, and occurrence identity. This keeps selection stable across rendering while distinguishing repeated calls to the same source site.
+Use stable event and pair IDs based on flow identity, source-relative path, source
+location, operation identity, and occurrence identity. This keeps selection stable
+across rendering while distinguishing repeated calls to the same source site.
 
 ### Acceptance criteria
 
-- A send, receiver write, and matching synchronous read produce one linked candidate only when causal and resource evidence support the relation.
+- A send, receiver write, and matching synchronous read produce one linked
+  candidate only when causal and resource evidence support the relation.
 - A proven visibility barrier suppresses the stale-read candidate and records the barrier used.
-- A topic match without record-key or payload correlation produces lower-confidence or insufficient evidence, never a high-confidence pairing.
+- A topic match without record-key or payload correlation produces
+  lower-confidence or insufficient evidence, never a high-confidence pairing.
 - Two disjoint keys or resources do not produce a conflict candidate.
 - Reachable writes without branch or scheduler evidence do not become concurrent-write findings.
-- A read/write pair with possible overlap is labelled as an interaction unless a freshness or isolation invariant supports an anomaly classification.
-- A possible dirty read requires both uncommitted-write visibility evidence and database semantics that allow it.
-- A read and write to the same entity without value-flow evidence do not become a lost-update finding.
-- A version guard, conditional update, or database lock is recognized only when its scope matches the candidate update.
-- A selected pair highlights only its event occurrences and does not change the persisted call graph.
+- A read/write pair with possible overlap is labelled as an interaction unless a
+  freshness or isolation invariant supports an anomaly classification.
+- A possible dirty read requires both uncommitted-write visibility evidence and
+  database semantics that allow it.
+- A read and write to the same entity without value-flow evidence do not become a
+  lost-update finding.
+- A version guard, conditional update, or database lock is recognized only when
+  its scope matches the candidate update.
+- A selected pair highlights only its event occurrences and does not change the
+  persisted call graph.
 - Partial call graphs and unknown configuration produce explicit uncertainty and truncation states.
-- Cyclic call paths and contradictory order edges do not become concurrency findings without a bounded execution-occurrence model.
-- Evaluation records confirmed candidates, false positives, abstentions, missed cases, and review time across representative positive, negative, and ambiguous projects.
+- Cyclic call paths and contradictory order edges do not become concurrency
+  findings without a bounded execution-occurrence model.
+- Evaluation records confirmed candidates, false positives, abstentions, missed
+  cases, and review time across representative positive, negative, and ambiguous
+  projects.
 
 ### Costs and open questions
 
-This design improves the analyst's ability to see which operations may race and why. It builds on existing operation annotations and puts the evidence next to the call path.
+This design improves the analyst's ability to see which operations may race and
+why. It builds on existing operation annotations and puts the evidence next to the
+call path.
 
 The detector supports all classifications when the corresponding explicit
 flow facts are present. The main remaining cost is source extraction: Java
@@ -481,12 +613,26 @@ coverage, not the meaning of missing evidence; missing evidence always abstains.
 
 ### References
 
-The vendor documentation below was checked on 2026-10-12; database behavior depends on the selected engine and version.
+The vendor documentation below was checked on 2026-10-12; database behavior
+depends on the selected engine and version.
 
-- Leslie Lamport, [“Time, Clocks, and the Ordering of Events in a Distributed System”](https://lamport.azurewebsites.net/pubs/time-clocks.pdf), *Communications of the ACM*, 1978. Defines a partial order of events and motivates preserving “happened-before” separately from physical or source display order.
-- PostgreSQL, [Transaction Isolation](https://www.postgresql.org/docs/current/transaction-iso.html). Documents engine-specific isolation behavior, concurrent updates, serialization failures, and retry requirements.
-- MongoDB, [Atomicity and Transactions](https://www.mongodb.com/docs/manual/core/write-operations-atomicity/). Documents single-document atomicity and conditional-update behavior. These guarantees apply to MongoDB operations and must not be generalized to other stores.
+- Leslie Lamport, [“Time, Clocks, and the Ordering of Events in a Distributed
+  System”](https://lamport.azurewebsites.net/pubs/time-clocks.pdf),
+  *Communications of the ACM*, 1978. Defines a partial order of events and
+  motivates preserving “happened-before” separately from physical or source
+  display order.
+- PostgreSQL, [Transaction
+  Isolation](https://www.postgresql.org/docs/current/transaction-iso.html).
+  Documents engine-specific isolation behavior, concurrent updates, serialization
+  failures, and retry requirements.
+- MongoDB, [Atomicity and
+  Transactions](https://www.mongodb.com/docs/manual/core/write-operations-atomicity/).
+  Documents single-document atomicity and conditional-update behavior. These
+  guarantees apply to MongoDB operations and must not be generalized to other
+  stores.
 
-The implemented classifiers use conservative evidence rules. The references support the concurrency concepts; they do not validate the detector's precision or coverage. The native Java indexer does not yet extract
-all advanced evidence fields. Advanced source-derived findings therefore
-require enriched flow records; missing metadata produces no concurrency claim.
+The implemented classifiers use conservative evidence rules. The references
+support the concurrency concepts; they do not validate the detector's precision or
+coverage. The native Java indexer does not yet extract all advanced evidence
+fields. Advanced source-derived findings therefore require enriched flow records;
+missing metadata produces no concurrency claim.

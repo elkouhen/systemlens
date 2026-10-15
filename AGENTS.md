@@ -74,9 +74,11 @@ test together.
    `../systemlens-skill/` in the same pass.
 8. Keep changes consistent with the existing codebase and ensure the code is
    correct, including its behavior, contracts, and edge cases.
-9. Keep documentation paragraphs to no more than five short lines where
-   practical. Split longer explanations into focused paragraphs or lists so
-   they remain readable without changing the technical meaning.
+9. Wrap documentation prose at about 80 characters per source line. Keep each
+   paragraph to five short lines where practical and never more than ten.
+   Split longer explanations at natural thought boundaries without changing
+   their technical meaning. Apply the same limit to prose in list items;
+   code blocks and tables are separate structures.
 10. Load the `technical-writing` skill before writing or restructuring
     technical prose, and run its review checklist before delivery.
 

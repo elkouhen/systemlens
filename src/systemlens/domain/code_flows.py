@@ -113,6 +113,8 @@ class IntegrationMethod:
     end_line: int
     input_endpoint_ids: tuple[str, ...]
     output_endpoint_ids: tuple[str, ...]
+    # None means the declaration signature was not persisted by an older index.
+    parameter_types: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)

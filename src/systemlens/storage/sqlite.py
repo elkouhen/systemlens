@@ -51,7 +51,7 @@ from systemlens.storage.serialization import (
     row_to_finding as _row_to_finding,
 )
 
-SCHEMA_VERSION = "37"
+SCHEMA_VERSION = "38"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
@@ -402,7 +402,8 @@ class Store:
                 start_line INTEGER NOT NULL,
                 end_line INTEGER NOT NULL,
                 input_endpoint_ids TEXT NOT NULL,
-                output_endpoint_ids TEXT NOT NULL
+                output_endpoint_ids TEXT NOT NULL,
+                parameter_types TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_integration_methods_path ON integration_methods(path);
             CREATE INDEX IF NOT EXISTS idx_integration_methods_module ON integration_methods(module);
@@ -440,6 +441,7 @@ class Store:
         self._migrate_module_identity()
         self._migrate_graph_fact_columns()
         self._migrate_code_flow_columns()
+        self._migrate_integration_method_columns()
         if self.get_meta("schema_version") != SCHEMA_VERSION:
             self.set_meta("schema_version", SCHEMA_VERSION)
         self.conn.commit()
@@ -547,6 +549,11 @@ class Store:
             self.conn.execute(
                 "ALTER TABLE code_flows ADD COLUMN alternative_count INTEGER NOT NULL DEFAULT 1"
             )
+
+    def _migrate_integration_method_columns(self) -> None:
+        cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(integration_methods)")}
+        if "parameter_types" not in cols:
+            self.conn.execute("ALTER TABLE integration_methods ADD COLUMN parameter_types TEXT")
 
     # -- meta --
 
@@ -829,12 +836,13 @@ class Store:
         self.conn.execute("DELETE FROM integration_methods")
         self.conn.executemany(
             """INSERT INTO integration_methods
-            (id, module, qualified_method, path, start_line, end_line, input_endpoint_ids, output_endpoint_ids)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, module, qualified_method, path, start_line, end_line, input_endpoint_ids, output_endpoint_ids, parameter_types)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (item.id, item.module, item.qualified_method, item.path,
                  item.start_line, item.end_line, json.dumps(item.input_endpoint_ids),
-                 json.dumps(item.output_endpoint_ids))
+                 json.dumps(item.output_endpoint_ids),
+                 json.dumps(item.parameter_types) if item.parameter_types is not None else None)
                 for item in methods
             ],
         )
@@ -849,6 +857,10 @@ class Store:
                 path=row["path"], start_line=row["start_line"], end_line=row["end_line"],
                 input_endpoint_ids=tuple(json.loads(row["input_endpoint_ids"])),
                 output_endpoint_ids=tuple(json.loads(row["output_endpoint_ids"])),
+                parameter_types=(
+                    tuple(json.loads(row["parameter_types"]))
+                    if row["parameter_types"] is not None else None
+                ),
             )
             for row in rows
         ]

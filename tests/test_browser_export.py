@@ -65,13 +65,16 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
             has_text="inventory-service"
         )
         assert inventory_nodes.count() == 2
+        assert inventory_nodes.first.locator(
+            ".graph-call-tree-method-parameters"
+        ).inner_text() == "(OrderPlaced)"
         for _ in range(20):
             page.locator("#flow-zoom-in").click()
         call_tree_zoom = page.locator(".graph-call-tree-canvas").evaluate(
             "canvas => Number(canvas.style.transform.match(/scale\\(([^)]+)\\)/)[1]) "
             "/ Number(canvas.dataset.baseScale)"
         )
-        assert call_tree_zoom == pytest.approx(64)
+        assert call_tree_zoom == pytest.approx(64, abs=0.001)
         first_badges = inventory_nodes.first.locator(
             ".graph-call-tree-access-badge, .graph-call-tree-diagnostic-badge"
         ).all_inner_texts()
@@ -88,6 +91,94 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
             "#graph-call-tree .graph-call-tree-node.is-diagnostic-sync, "
             "#graph-call-tree .graph-call-tree-node.is-diagnostic-interaction"
         ).count() > 0
+        browser.close()
+
+
+@pytest.mark.slow
+def test_call_tree_cards_expand_for_many_data_annotations() -> None:
+    entry = MessageEndpoint(
+        id="orders-entry", role="serve", system="rest", topic="POST /orders",
+        topic_dynamic=False, source="code", framework="spring-mvc",
+        path="Orders.java", start_line=1, end_line=1, snippet="", module="orders",
+    )
+    producer = replace(_producer("OrderCreated"), module="orders")
+    payments = replace(
+        producer, id="payments-in", role="consume", module="payments",
+        path="Payments.java", start_line=8, end_line=8,
+    )
+    shipping = replace(
+        payments, id="shipping-in", module="shipping", path="Shipping.java",
+    )
+    flow = CodeFlow(
+        "orders-flow", "orders", "Orders.place", "Orders.java", 1, 4,
+        "potential", "medium", "test", (
+            CodeFlowStep(1, "http_entry", entry.topic, "Orders.java", 1, 1, entry.id),
+            CodeFlowStep(2, "message_publish", producer.topic, "Publisher.java", 4, 4, producer.id),
+        ),
+    )
+    facts = [
+        GraphFact(
+            id=f"access-{index}", fact_type="node", kind="flow_data_access",
+            name=f"Entity{index:02}", source_kind=None, source_name=None,
+            target_kind=None, target_name=None, relation=None, origin="ai",
+            confidence="medium", evidence_path="Orders.java", evidence_line=10 + index,
+            metadata={"flow_id": flow.id, "action": "read"},
+            namespace="test", status="proposed",
+        )
+        for index in range(24)
+    ]
+    document = render_graph_html(
+        {"orders": [entry, producer], "payments": [payments], "shipping": [shipping]},
+        [
+            GraphEdge("kafka", "orders", "payments", producer, payments),
+            GraphEdge("kafka", "orders", "shipping", producer, shipping),
+        ],
+        code_flows=[flow], graph_facts=facts,
+    )
+
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.set_content(document, wait_until="load")
+        page.locator("#flows-tab").click()
+        page.locator("#code-flows .code-flow-item").first.click()
+        page.locator("#flow-call-tree-depth-increase").click()
+        geometry = page.locator("#graph-call-tree").evaluate("""overlay => {
+          const nodes = [...overlay.querySelectorAll('.graph-call-tree-node')];
+          const details = node => ({
+            pathKey: node.dataset.pathKey,
+            name: node.querySelector('.graph-node-card-name').textContent,
+            x: parseFloat(node.style.left), y: parseFloat(node.style.top),
+            height: node.offsetHeight,
+            badges: [...node.querySelectorAll('.graph-call-tree-access-badge')]
+              .map(badge => badge.offsetTop + badge.offsetHeight),
+          });
+          const edges = [...overlay.querySelectorAll('.graph-call-tree-edge')]
+            .map(edge => {
+              const start = edge.getPointAtLength(0);
+              const end = edge.getPointAtLength(edge.getTotalLength());
+              return { target: edge.dataset.targetPathKey,
+                startX: start.x, startY: start.y, endY: end.y };
+            });
+          return { nodes: nodes.map(details), edges };
+        }""")
+        nodes = {node["name"]: node for node in geometry["nodes"]}
+        assert set(nodes) == {"orders", "payments", "shipping"}
+        root = nodes["orders"]
+        assert len(root["badges"]) == 24
+        assert root["height"] > nodes["payments"]["height"]
+        assert max(root["badges"]) <= root["height"]
+        children = sorted((nodes["payments"], nodes["shipping"]), key=lambda node: node["y"])
+        assert children[1]["y"] >= children[0]["y"] + children[0]["height"] + 20
+        assert len(geometry["edges"]) == 2
+        for edge in geometry["edges"]:
+            target = next(node for node in children if node["pathKey"] == edge["target"])
+            assert edge["startX"] == pytest.approx(root["x"] + 190, abs=1)
+            assert edge["startY"] == pytest.approx(root["y"] + root["height"] / 2, abs=1)
+            assert edge["endY"] == pytest.approx(target["y"] + target["height"] / 2, abs=1)
         browser.close()
 
 
@@ -117,6 +208,7 @@ def test_call_tree_marks_target_without_indexed_consumer_as_unknown() -> None:
             qualified_method="com.example.Payments.consumeOrder",
             path="Payments.java", start_line=8, end_line=8,
             input_endpoint_ids=(consumer.id,), output_endpoint_ids=(),
+            parameter_types=("OrderCreated",),
         )],
     )
 
@@ -136,9 +228,16 @@ def test_call_tree_marks_target_without_indexed_consumer_as_unknown() -> None:
 
         # Then the target stays visible without claiming a resolved continuation.
         assert target.count() == 1
-        assert target.locator(".graph-call-tree-method").inner_text() == "consumeOrder"
+        assert target.locator(".graph-call-tree-method-name").inner_text() == "consumeOrder"
+        assert target.locator(".graph-call-tree-method-parameters").inner_text() == "(OrderCreated)"
+        assert target.locator(".graph-call-tree-method-name").evaluate(
+            "element => Number(getComputedStyle(element).fontWeight)"
+        ) >= 700
+        assert target.locator(".graph-call-tree-method").evaluate(
+            "element => element.getBoundingClientRect().width"
+        ) > 150
         assert target.locator(".graph-call-tree-method").get_attribute("title") == (
-            "com.example.Payments::consumeOrder"
+            "com.example.Payments::consumeOrder(OrderCreated)"
         )
         root = page.locator("#graph-call-tree .graph-call-tree-node").filter(has_text="orders")
         assert root.locator(".graph-call-tree-method").inner_text() == "publish"
@@ -478,6 +577,9 @@ def test_resource_catalogue_updates_docked_preview() -> None:
         page.locator("#resource-catalogue-categories button").filter(has_text="Microservices").click()
         page.locator("#microservices-list .resource-catalogue-row").first.click()
         assert page.locator("#resource-catalogue-preview").get_attribute("class").endswith("has-selection")
+        assert page.locator("#resource-catalogue-preview").evaluate(
+            "element => Math.round(element.getBoundingClientRect().width)"
+        ) == 500
         page.locator("#microservices-list .reference-title").filter(has_text="order-service").click()
         assert page.locator("#inspector-modal").is_hidden()
         assert page.locator("#resource-catalogue-preview-title").inner_text() == "order-service"
@@ -485,13 +587,127 @@ def test_resource_catalogue_updates_docked_preview() -> None:
             "Microservices", exact=True
         ).is_visible()
         assert page.locator("#microservices-panel").is_visible()
-        page.locator("#microservices-list .resource-catalogue-inspect").first.click()
+        related = page.locator("#resource-catalogue-related")
+        related.get_by_role("button", name="supermarket.order.placed", exact=False).click()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "supermarket.order.placed"
+        assert page.locator("#resource-kind-filter").input_value() == "all"
+        assert page.locator("#microservices-list .resource-catalogue-row.is-selected").count() == 1
+        related.get_by_role("button", name="OrderPlaced", exact=False).click()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "OrderPlaced"
+        attributes = page.locator("#resource-catalogue-attributes")
+        assert attributes.is_visible()
+        assert attributes.locator("li").count() == 4
+        assert "orderId" in attributes.inner_text()
+        assert "String" in attributes.inner_text()
+        assert page.locator("#resource-catalogue-categories button[data-kind='dto'] small").inner_text() == "3"
+        page.locator("#resource-catalogue-back").click()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "supermarket.order.placed"
+        page.locator("#resource-catalogue-back").click()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "order-service"
+        related.get_by_role("button", name="src/main/resources/static/asyncapi.yaml", exact=False).click()
+        related.get_by_role("button", name="supermarket.order.placed", exact=False).click()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "supermarket.order.placed"
+        page.locator("#resource-catalogue-back").click()
+        page.locator("#resource-catalogue-back").click()
+        related.get_by_role("button", name="src/main/resources/static/openapi.yaml", exact=False).click()
+        related.get_by_role("button", name="/api/orders", exact=False).click()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "POST /api/orders"
+        page.locator("#resource-catalogue-back").click()
+        page.locator("#resource-catalogue-back").click()
+        page.locator("#microservices-list .resource-catalogue-row.is-selected .resource-catalogue-inspect").click()
         assert page.locator("#inspector-modal").is_visible()
         assert page.locator("#inspector-body").get_by_text("Relations", exact=True).is_visible()
         page.locator("#inspector-close").click()
         assert page.locator("#inspector-modal").is_hidden()
         assert page.locator("#details").is_hidden()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "order-service"
+        assert attributes.is_hidden()
+        page.locator("#resource-catalogue-categories button[data-kind='jpa_entity']").click()
+        page.locator("#microservices-list .reference-title").filter(has_text="ProductEntity").click()
+        assert attributes.locator("li").count() == 3
+        assert "stockQuantity" in attributes.inner_text()
+        page.locator("#resource-catalogue-categories button[data-kind='mongodb_collection']").click()
+        page.locator("#microservices-list .reference-title").filter(has_text="order_fulfillments").click()
+        assert "OrderFulfillmentDocument" in attributes.inner_text()
+        assert "remainingStock" in attributes.inner_text()
+        graph_match = re.search(r'<script id="graph-data"[^>]*>([\s\S]*?)</script>', document)
+        assert graph_match is not None
+        graph_data = json.loads(graph_match.group(1))
+        for item in graph_data["resource_descriptions"]:
+            if item["kind"] == "dto" and item["name"] == "OrderPlaced":
+                item["attributes"] = []
+        for dto in graph_data["kafka_dtos"]:
+            if dto["name"] == "OrderPlaced":
+                dto["fields"] = []
+        page.set_content(document.replace(graph_match.group(1), json.dumps(graph_data)), wait_until="load")
+        page.locator("#contracts-mode-tab").click()
+        page.locator("#resource-catalogue-categories button[data-kind='dto']").click()
+        page.locator("#microservices-list .reference-title").filter(has_text="OrderPlaced").click()
+        assert "Aucun attribut indexé." in attributes.inner_text()
         context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_resource_catalogue_drills_into_indexed_dto_fields() -> None:
+    document = _current_simple_dataset_document()
+    graph_match = re.search(r'<script id="graph-data"[^>]*>([\s\S]*?)</script>', document)
+    assert graph_match is not None
+    graph_data = json.loads(graph_match.group(1))
+    root_fields = [
+        {"name": "details", "type": "OrderDetails", "dto_references": ["example.OrderDetails"]},
+        {"name": "missing", "type": "Missing", "dto_references": ["example.Missing"]},
+    ]
+    for dto in graph_data["kafka_dtos"]:
+        if dto["name"] == "OrderPlaced":
+            dto["fields"].extend(root_fields)
+    for item in graph_data["resource_descriptions"]:
+        if item["kind"] == "dto" and item["name"] == "OrderPlaced":
+            item["attributes"].extend(root_fields)
+    nested = [
+        ("example.OrderDetails", "OrderDetails", [{
+            "name": "delivery", "type": "Address",
+            "dto_references": ["example.Address", "example.AlternateAddress"],
+        }]),
+        ("example.Address", "Address", [{"name": "street", "type": "String"}]),
+        ("example.AlternateAddress", "AlternateAddress", [{"name": "box", "type": "String"}]),
+    ]
+    for identifier, name, fields in nested:
+        graph_data["project_dto_definitions"].append({
+            "id": identifier, "name": name, "qualified_name": identifier,
+            "fields": fields, "module": "supermarket-contracts", "root": False,
+        })
+        graph_data["resource_descriptions"].append({
+            "id": identifier, "kind": "dto", "name": name,
+            "qualified_name": identifier, "owner": "supermarket-contracts",
+            "attributes": fields,
+        })
+    document = document.replace(graph_match.group(1), json.dumps(graph_data))
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator("#contracts-mode-tab").click()
+        page.locator("#resource-catalogue-categories button[data-kind='dto']").click()
+        page.locator("#microservices-list .reference-title").filter(has_text="OrderPlaced").click()
+        attributes = page.locator("#resource-catalogue-attributes")
+        assert attributes.locator("li").filter(has_text="missing").locator("button").count() == 0
+        attributes.get_by_role("button", name="OrderDetails", exact=False).click()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "OrderDetails"
+        assert page.locator("#resource-catalogue-back").inner_text() == "← OrderPlaced"
+        assert attributes.get_by_role("button", name="Address", exact=False).count() == 2
+        attributes.get_by_role("button", name="Address ›", exact=True).click()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "Address"
+        assert "street" in attributes.inner_text()
+        page.locator("#resource-catalogue-back").click()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "OrderDetails"
+        page.locator("#resource-catalogue-back").click()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "OrderPlaced"
+        assert page.locator("#inspector-modal").is_hidden()
         browser.close()
 
 

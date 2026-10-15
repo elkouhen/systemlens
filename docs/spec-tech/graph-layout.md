@@ -23,6 +23,7 @@ The stylesheet follows the same ordered-module convention: base graph,
 widgets, presentation theme, then the shared visual charter. The export
 assembler concatenates both CSS and JavaScript modules into the standalone
 document.
+
 Mutable selection, view, layout, and camera state is held in one
 `graphState` object. Overlay refreshes go through one animation-frame
 scheduler (`requestGraphRender`) so canvas and HTML overlays observe one
@@ -66,19 +67,26 @@ microservice. The tree uses a deterministic depth-first projection with a
 per-branch ancestry set, a configured depth limit, and the child order from the
 causal transition index. Each occurrence labels its Java method from the input
 port's indexed method mapping, falling back to the associated `CodeFlow.method`.
+
 The card shows the short method name and keeps the qualified name in its title.
 Visible arc labels are capped at 36 characters, including diagnostic labels.
 Tooltips retain the indexed edge details. Hover and focus apply a transient
 root-to-occurrence path highlight by comparing local occurrence path keys; this
 does not alter the selected flow or snapshot.
 
-Tree coordinates are assigned by depth and leaf order. Internal occurrences
-are centered over their visible children, then the complete logical canvas is
-scaled to the graph workspace. This gives repeated services independent cards
-and prevents shared-node identity from collapsing distinct branches. A cycle
-endpoint is retained as a terminal occurrence. Expansion is bounded by the
-configured depth, so rendering cost is O(o + e), where `o` is the number of
-expanded occurrences and `e` is the number of inspected outgoing edges.
+Tree coordinates are assigned by depth and measured card height. The browser
+builds each card at its intrinsic height, then measures it before placing arcs.
+Each subtree reserves the greater of its own card height and the combined height
+of its visible children with gaps. Child subtrees stack vertically; the parent
+and child group share a center. Arc endpoints use each card's actual center.
+
+The complete logical canvas is scaled to the graph workspace. Repeated services
+retain independent cards, and a cycle endpoint remains terminal. Expansion is
+bounded by the configured depth. Building, measuring, and placing the tree costs
+O(o + e), where `o` is the number of expanded occurrences and `e` is the number
+of inspected outgoing edges. A very tall annotated tree may fit at a smaller
+initial scale and remains zoomable.
+
 An input-endpoint or flow ancestry set marks a repeated causal occurrence as a
 cycle. A reachable service without a matching consumer flow is retained as a
 terminal unknown-continuation occurrence. Tree construction also stops at
@@ -89,6 +97,7 @@ Duplicate evidence for the same causal relation is removed before transitions
 are indexed. The identity is the protocol, source endpoint, target endpoint,
 and topic or route. Distinct endpoint pairs on the same topic remain distinct,
 because they may represent different producer or consumer contracts.
+
 The tree projection is an independent overlay. Its background captures
 primary-pointer drags and translates the tree canvas, while service cards keep
 pointer interaction for selection. The graph context widget exposes the mode
@@ -130,6 +139,7 @@ After the combined ForceAtlas2/Noverlap layout and readable camera fit, the
 graph resolves residual collisions in projected screen space. The
 solver uses 110×70 card envelopes or 30×30 symbol envelopes, converts the
 adjusted centers back to graph coordinates.
+
 Camera updates during pan and zoom are coalesced to the next animation frame.
 Fit operations reset Sigma's normalized camera state synchronously before
 calculating the selected mode. This makes overlapping fit requests idempotent
@@ -137,6 +147,7 @@ and prevents zero-duration camera animations from racing on repeated clicks.
 The details section participates in the navigation panel's vertical flow but
 does not participate in the Sigma workspace rectangle. The HTML node overlays
 retain the same full-height coordinate surface as the canvas.
+
 Opening or resizing details only changes the navigation panel's internal scroll
 extent and therefore cannot introduce a clipping seam or reset the camera.
 The desktop workspace starts at the window's left edge. The toolbar overlays

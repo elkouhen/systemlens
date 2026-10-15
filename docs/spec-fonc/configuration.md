@@ -34,6 +34,7 @@ excluded. Maven modules whose artifact identifier or directory name contains
 `test` or `archetype` are also excluded from the production index. The
 `min_severity` setting remains accepted for database compatibility
 but does not alter AST endpoint extraction.
+
 `analysis` is the versionable source of truth for the topic convention,
 method-call engine, and disabled extractors. Under Strategy1, listener and
 sender topic keys match declared keys in `kafka.yml` or `kafka.yaml` after

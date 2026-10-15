@@ -46,12 +46,17 @@ work in section 4 began.
 | JPA inventory records entity declarations, not read or write invocations. | [Data model](../spec-tech/data-model.md) | An entity declaration alone cannot prove an operation. |
 | CodeQL methods and call edges are persisted, and `flows calculate` uses the stored snapshot. | [Persistence](../spec-tech/persistence.md), [indexing](../spec-tech/indexing.md) | Flow reconstruction can join stored operations without parsing Java at export time. |
 
-The accepted [conservative extraction](../ADR.md) and
-[snapshot export](../spec-tech/export-snapshot.md) rules apply throughout.
-Any new public behavior requires an update to [extraction rules](../spec-fonc/extraction-rules.md).
-[Spring Data MongoDB](https://docs.spring.io/spring-data/mongodb/reference/4.5/mongodb/template-crud-operations.html)
-and [Spring Data JPA](https://docs.spring.io/spring-data/jpa/reference/jpa/entity-persistence.html)
-document the conditional behavior of `save`. The [MongoDB bulk API](https://docs.spring.io/spring-data/data-mongo/docs/current/api/org/springframework/data/mongodb/core/BulkOperations.html)
+The accepted [conservative extraction](../ADR.md) and [snapshot
+export](../spec-tech/export-snapshot.md) rules apply throughout. Any new public
+behavior requires an update to [extraction
+rules](../spec-fonc/extraction-rules.md). [Spring Data
+MongoDB](https://docs.spring.io/spring-data/mongodb/reference/4.5/mongodb/template-crud-operations.html)
+and [Spring Data
+JPA](https://docs.spring.io/spring-data/jpa/reference/jpa/entity-persistence.html)
+document the conditional behavior of `save`.
+
+The [MongoDB bulk
+API](https://docs.spring.io/spring-data/data-mongo/docs/current/api/org/springframework/data/mongodb/core/BulkOperations.html)
 executes a prepared batch through `execute()`.
 
 ## 3. Proposed representation
@@ -128,12 +133,13 @@ both facets; an unsupported call remains unknown. Verify with
 
 ### 4.2 Correct MongoDB classification at the source
 
-Files: [Mongo discovery](../../src/systemlens/discovery/build/modules.py),
-[flow materializer](../../src/systemlens/indexing/code_flows.py),
-[relations](../../src/systemlens/indexing/relations.py),
-[LikeC4 export at the baseline commit](https://github.com/elkouhen/systemlens/blob/cef857b7eb54d3dcbc00a595ee3eb8fc68674399/src/systemlens/render/likec4_export.py),
-[graph view model](../../src/systemlens/render/graph_view_model.py), and
-[module tests](../../tests/test_modules.py).
+Files: [Mongo discovery](../../src/systemlens/discovery/build/modules.py), [flow
+materializer](../../src/systemlens/indexing/code_flows.py),
+[relations](../../src/systemlens/indexing/relations.py), [LikeC4 export at the
+baseline
+commit](https://github.com/elkouhen/systemlens/blob/cef857b7eb54d3dcbc00a595ee3eb8fc68674399/src/systemlens/render/likec4_export.py),
+[graph view model](../../src/systemlens/render/graph_view_model.py), and [module
+tests](../../tests/test_modules.py).
 
 Work: replace the duplicated write lists with one classifier based on a
 supported receiver type and operation. Classify `insert`/`insertAll`,
@@ -192,18 +198,19 @@ Files: [flow materializer](../../src/systemlens/indexing/code_flows.py),
 [flow tests](../../tests/test_code_flows.py), and
 [consistency tests](../../tests/test_flow_consistency.py).
 
-Work: join an operation to a method only when module, relative path,
-qualified signature, and source range identify one persisted method. Keep
-ambiguous matches unresolved. Traverse directed persisted call edges from
-each indexed entry, including a zero-hop same-method path. Sort edges by
-source coordinate and method ID; retain one shortest source-backed witness
-for each entry and operation pair. Reuse the existing 12-hop flow bound,
-report a truncated result when it is reached, and mark unavailable or partial
-CodeQL coverage separately. Do not report an exact alternative count unless
-the traversed alternatives were actually counted. An endpoint flow receives
-an operation only when the operation's method occurs on that specific flow's
-method witness. Calls and data operations within the same method remain
-potentially co-occurring, with no asserted execution order.
+Work: join an operation to a method only when module, relative path, qualified
+signature, and source range identify one persisted method. Keep ambiguous matches
+unresolved. Traverse directed persisted call edges from each indexed entry,
+including a zero-hop same-method path. Sort edges by source coordinate and method
+ID; retain one shortest source-backed witness for each entry and operation pair.
+Reuse the existing 12-hop flow bound, report a truncated result when it is
+reached, and mark unavailable or partial CodeQL coverage separately.
+
+Do not report an exact alternative count unless the traversed alternatives were
+actually counted. An endpoint flow receives an operation only when the operation's
+method occurs on that specific flow's method witness. Calls and data operations
+within the same method remain potentially co-occurring, with no asserted execution
+order.
 
 Acceptance: a controller calling a helper that calls a repository exposes the
 repository operation with its source site. An operation reached on a sibling
@@ -329,13 +336,31 @@ These papers guide the design; none validates SystemLens' proposed operation
 classifier or its persisted call graph. Its precision and coverage require
 project-specific fixtures and evaluation.
 
-- Liang et al., [*Pointer Analysis for Database-Backed Applications*](https://doi.org/10.1145/3729307), PLDI 2025. DBridge models Java database APIs, including JPA and Spring Data JPA, and provides the DB-Micro benchmark. Its Java-to-database value-flow objective is broader than this plan's operation reachability.
-- Reps, Horwitz, and Sagiv, [*Precise Interprocedural Dataflow Analysis via Graph Reachability*](https://doi.org/10.1145/199448.199462), POPL 1995. Valid interprocedural paths respect matching calls and returns. The persisted method-call graph here lacks the control-flow facts needed to claim that precision.
-- Sui et al., [*On the Recall of Static Call Graph Construction in Practice*](https://doi.org/10.1145/3377811.3380441), ICSE 2020. Their Java evaluation motivates explicit missing-edge and partial-coverage reporting.
-- Smaragdakis and Balatsouras, [*Pointer Analysis*](https://doi.org/10.1561/2500000014), Foundations and Trends in Programming Languages, 2015. Receiver and alias resolution trade precision against coverage and cost.
-- Cherry et al., [*Static Analysis of Database Accesses in MongoDB Applications*](https://doi.org/10.1109/SANER2022.2022.00111), SANER 2022. Its MongoDB API extraction and false-positive evaluation concern JavaScript, so its rules do not directly classify Spring Data Java calls.
+- Liang et al., [*Pointer Analysis for Database-Backed
+  Applications*](https://doi.org/10.1145/3729307), PLDI 2025. DBridge models Java
+  database APIs, including JPA and Spring Data JPA, and provides the DB-Micro
+  benchmark. Its Java-to-database value-flow objective is broader than this plan's
+  operation reachability.
+- Reps, Horwitz, and Sagiv, [*Precise Interprocedural Dataflow Analysis via Graph
+  Reachability*](https://doi.org/10.1145/199448.199462), POPL 1995. Valid
+  interprocedural paths respect matching calls and returns. The persisted
+  method-call graph here lacks the control-flow facts needed to claim that
+  precision.
+- Sui et al., [*On the Recall of Static Call Graph Construction in
+  Practice*](https://doi.org/10.1145/3377811.3380441), ICSE 2020. Their Java
+  evaluation motivates explicit missing-edge and partial-coverage reporting.
+- Smaragdakis and Balatsouras, [*Pointer
+  Analysis*](https://doi.org/10.1561/2500000014), Foundations and Trends in
+  Programming Languages, 2015. Receiver and alias resolution trade precision
+  against coverage and cost.
+- Cherry et al., [*Static Analysis of Database Accesses in MongoDB
+  Applications*](https://doi.org/10.1109/SANER2022.2022.00111), SANER 2022. Its
+  MongoDB API extraction and false-positive evaluation concern JavaScript, so its
+  rules do not directly classify Spring Data Java calls.
 
-The [CodeQL Java call-graph guide](https://codeql.github.com/docs/codeql-language-guides/navigating-the-call-graph/)
-defines static and possible virtual targets. [Spring Data JPA query methods](https://docs.spring.io/spring-data/jpa/reference/jpa/query-methods.html)
+The [CodeQL Java call-graph
+guide](https://codeql.github.com/docs/codeql-language-guides/navigating-the-call-graph/)
+defines static and possible virtual targets. [Spring Data JPA query
+methods](https://docs.spring.io/spring-data/jpa/reference/jpa/query-methods.html)
 define derived deletes and modifying queries. These API contracts determine
 classification rules alongside the research above.

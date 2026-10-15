@@ -177,6 +177,26 @@ def materialize_integration_methods(
                 if parameter_node is not None
                 else "()"
             )
+            parameters = [
+                child for child in parameter_node.named_children
+                if child.type in {"formal_parameter", "spread_parameter"}
+            ] if parameter_node is not None else []
+            parameter_type_nodes = [item.child_by_field_name("type") for item in parameters]
+            parameter_types: tuple[str, ...] | None = None
+            if all(parameter_type_nodes):
+                declared_types = []
+                for item, type_node in zip(parameters, parameter_type_nodes, strict=True):
+                    assert type_node is not None
+                    dimensions = item.child_by_field_name("dimensions")
+                    declared_types.append(
+                        java_parser.node_text(source, type_node).strip()
+                        + ("..." if item.type == "spread_parameter" else "")
+                        + (
+                            "[]" * java_parser.node_text(source, dimensions).count("[")
+                            if dimensions is not None else ""
+                        )
+                    )
+                parameter_types = tuple(declared_types)
             method_id = _method_id(module, path, qualified_method, parameter_signature)
             if method_id in method_ids:
                 # Invalid or generated Java can contain two declarations with
@@ -208,6 +228,7 @@ def materialize_integration_methods(
                 end_line=end_line,
                 input_endpoint_ids=inputs,
                 output_endpoint_ids=outputs,
+                parameter_types=parameter_types,
             ))
             if (
                 _declared_on_rest_controller(declaration, source)
