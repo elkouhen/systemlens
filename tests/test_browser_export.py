@@ -65,6 +65,13 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
             has_text="inventory-service"
         )
         assert inventory_nodes.count() == 2
+        for _ in range(20):
+            page.locator("#flow-zoom-in").click()
+        call_tree_zoom = page.locator(".graph-call-tree-canvas").evaluate(
+            "canvas => Number(canvas.style.transform.match(/scale\\(([^)]+)\\)/)[1]) "
+            "/ Number(canvas.dataset.baseScale)"
+        )
+        assert call_tree_zoom == pytest.approx(64)
         first_badges = inventory_nodes.first.locator(
             ".graph-call-tree-access-badge, .graph-call-tree-diagnostic-badge"
         ).all_inner_texts()

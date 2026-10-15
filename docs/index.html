@@ -153,7 +153,7 @@
     <section aria-labelledby="workflows" style="margin-top: 48px">
       <h2 id="workflows">Use the map in your daily work</h2>
       <p>SystemLens keeps its findings local and grounded in source evidence, so the same map can support investigation, delivery, and architecture review without replacing engineering judgement.</p>
-      <pre><code>uv tool install systemlens
+      <pre><code>uv tool install git+https://github.com/elkouhen/systemlens.git
 
 # In the Java/Spring repository you want to understand
 systemlens init
@@ -182,7 +182,7 @@ systemlens export microservices --html architecture.html</code></pre>
 systemlens index --full \
   --call-graph-engine codeql \
   --codeql-database .codeql/systemlens-java</code></pre>
-      <p>The database must match the indexed source revision and root layout. Recreate it after source changes that affect the call graph. SystemLens also extracts architecture facts with its AST analyser and stores the combined snapshot locally. <a href="https://github.com/elkouhen/systemlens#reuse-a-codeql-database">Read the full CodeQL instructions →</a></p>
+      <p>The database must match the indexed source revision and root layout. Recreate it after source changes that affect the call graph. SystemLens also extracts architecture facts with its AST analyser and stores the combined snapshot locally. <a href="https://github.com/elkouhen/systemlens/blob/main/docs/spec-fonc/cli.md#reuse-an-externally-created-codeql-database">Read the full CodeQL instructions →</a></p>
     </section>
 
     <section aria-labelledby="documentation" style="margin-top: 48px">

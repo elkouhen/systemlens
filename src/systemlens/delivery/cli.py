@@ -1494,7 +1494,7 @@ def index_cmd(
     generate_sources: bool = typer.Option(
         False,
         "--generate-sources",
-        help="Génère les sources dans une copie temporaire, sans compiler ni lancer les tests.",
+        help="Génère les sources dans le dépôt indexé, sans lancer la compilation ni les tests.",
     ),
     no_codeql: bool = typer.Option(
         False,

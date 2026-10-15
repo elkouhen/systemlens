@@ -93,7 +93,7 @@ The tree projection is an independent overlay. Its background captures
 primary-pointer drags and translates the tree canvas, while service cards keep
 pointer interaction for selection. The graph context widget exposes the mode
 and controls without duplicating the tree hierarchy. The tree canvas also
-supports wheel and button zoom from 0.5x to 4x without changing persisted
+supports wheel and button zoom from 0.5x to 64x without changing persisted
 graph coordinates. Tree DOM construction is keyed by the selected flow,
 depth, expanded or collapsed branch paths, and overlay viewport; camera
 refreshes reuse the existing tree when that signature is unchanged. This

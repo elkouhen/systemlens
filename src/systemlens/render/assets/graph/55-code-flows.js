@@ -693,7 +693,7 @@
         const centerY = preservedCamera.centerY ?? viewport.height / 2;
         const logicalCenterX = (centerX - preservedCamera.left) / preservedCamera.totalScale;
         const logicalCenterY = (centerY - preservedCamera.top) / preservedCamera.totalScale;
-        zoom = Math.max(.5, Math.min(4, preservedCamera.totalScale / scale));
+        zoom = Math.max(.5, Math.min(64, preservedCamera.totalScale / scale));
         const totalScale = scale * zoom;
         left = centerX - logicalCenterX * totalScale;
         top = centerY - logicalCenterY * totalScale;
@@ -1204,7 +1204,7 @@
       const top = Number.parseFloat(canvas.style.top) || 0;
       const logicalX = (x - left) / oldTotalScale;
       const logicalY = (y - top) / oldTotalScale;
-      const nextZoom = Math.max(.5, Math.min(4, oldZoom * factor));
+      const nextZoom = Math.max(.5, Math.min(64, oldZoom * factor));
       const nextTotalScale = baseScale * nextZoom;
       graphState.callTreeZoom = nextZoom;
       canvas.style.left = `${x - logicalX * nextTotalScale}px`;

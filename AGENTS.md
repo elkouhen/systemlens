@@ -12,10 +12,12 @@ documents and summarizes the documentation hygiene expected in this repository.
 | [`docs/PRD.md`](docs/PRD.md) | Problem, vision, personas, scope, success metrics | When you need product intent and scope boundaries |
 | [`docs/SPEC-FONC.md`](docs/SPEC-FONC.md) | Observable behavior: CLI commands, flags, error messages, MCP tools, skill workflows | Before changing anything a user or agent sees |
 | [`docs/SPEC-TECH.md`](docs/SPEC-TECH.md) | Modules, data model, SQLite schema, algorithms, JSON contract | Before changing internal architecture in `src/systemlens/` |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Package ownership, dependency direction, maintainer navigation | Before moving code across packages or changing an interface |
+| [`docs/UX-UI.md`](docs/UX-UI.md) | HTML presentation, graph controls, selection, and camera behavior | Before changing the generated interface |
 | [`docs/ADR.md`](docs/ADR.md) | Architecture decisions: context, choice, consequences | Before revisiting an existing technical choice |
 | [`BACKLOG.md`](BACKLOG.md) | Index of deferred work and its detailed plans | When planning or implementing deferred improvements |
 | [`docs/plans/data-operations-in-internal-flows.md`](docs/plans/data-operations-in-internal-flows.md) | Scoped data-operation plan, status, and acceptance criteria | When working on data operations in internal flows |
-| [`../systemlens-skill/`](../systemlens-skill/) | Companion skill repo: agent workflow, bundled rule packs, operational guidance | Whenever an SystemLens change can affect the skill or its docs |
+| [`../systemlens-skill/`](../systemlens-skill/) | Companion skill repo: agent workflow, bundled rule packs, operational guidance | Whenever a SystemLens change can affect the skill or its docs |
 | [`../systemlens-observability-lab/`](../systemlens-observability-lab/) | Infrastructure and a test application for observability/integration testing | When validating SystemLens against a real running app/infra, or working on observability-related integration tests |
 
 `../systemlens-skill/` and `../systemlens-observability-lab/` are separate

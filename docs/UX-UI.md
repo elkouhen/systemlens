@@ -285,7 +285,7 @@ expands one more level for that branch without changing the viewport. Expanded
 nodes expose `− replier`; collapsed nodes expose `+N appels`. `Déplier tous les
 nœuds` expands the visible tree using the current global depth limit.
 
-The tree workspace supports drag-to-pan and bounded zoom from 0.5x to 4x.
+The tree workspace supports drag-to-pan and bounded zoom from 0.5x to 64x.
 Clicking a service occurrence keeps its selection action. The tree context
 widget identifies the projection, displays the indexed trigger event, and
 controls the tree without repeating the hierarchy.

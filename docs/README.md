@@ -19,6 +19,9 @@ a second source of truth.
 
 Use this map to select a file before reading its full contents. The summaries
 route readers to the owner; they do not define behavior or implementation.
+The map covers project documentation. Skill copies installed for the Claude,
+Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
+`.kiro/skills/`; read a skill there only when its task applies.
 
 ### Repository entry points
 

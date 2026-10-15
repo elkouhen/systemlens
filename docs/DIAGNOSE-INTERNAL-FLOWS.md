@@ -18,8 +18,9 @@ If source-generated Java classes are part of the application, use:
 systemlens index --full --generate-sources --codeql-progress 2>&1 | tee indexing.log
 ```
 
-The repository is never compiled or tested by `--generate-sources`; it only
-runs the Maven or Gradle source-generation phase in a temporary copy.
+`--generate-sources` runs the Maven or Gradle source-generation task in the
+indexed repository. It can create or update build outputs there. SystemLens
+does not invoke the compile or test tasks.
 
 ## 2. Check the important index counters
 

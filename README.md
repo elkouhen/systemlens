@@ -24,11 +24,11 @@ provides a demo application for testing indexing.
 
 ## Index and explore
 
-Install SystemLens, then run these commands from the root of a Java/Spring
-repository:
+Install SystemLens from its source repository with `uv`, then run these commands
+from the root of a Java/Spring repository:
 
 ```bash
-uv tool install systemlens
+uv tool install git+https://github.com/elkouhen/systemlens.git
 systemlens init
 systemlens doctor
 systemlens index
