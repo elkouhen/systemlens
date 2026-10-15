@@ -151,14 +151,20 @@ When a single code flow is selected, the graph displays the selected directed
 call graph as a hierarchy of call occurrences. A microservice is therefore
 rendered once per occurrence in the expanded tree, so the same service may
 appear in several branches.
+Each occurrence shows the Java method associated with its input port below the
+microservice name. If the input port has no indexed method, the renderer uses
+the associated flow method when available. Hovering the method shows its
+qualified name; occurrences without method evidence omit this line. Long method
+names may be clipped to the card width.
 
 The tree mode uses a fixed left-to-right orientation and an incremental depth
 control from 1 to 8 levels. The default is depth 1, showing only the root
 occurrence. The `−` and `+` controls change one level at a time.
-The renderer in `src/systemlens/render/assets/graph/55-code-flows.js` sets the
-horizontal distance between levels from the longest visible arc label. It
-reserves an estimated label width, capped at 320 pixels, plus the 150-pixel
-card width and 32 pixels of clearance, with a 280-pixel minimum distance.
+Arc labels retain the order, relation label, and protocol when available. Long
+labels are shortened on the canvas; the arc tooltip retains the full indexed
+details. The renderer estimates label width at 6 pixels per character and adds
+the 150-pixel card width and 32 pixels of clearance, with a 280-pixel minimum
+distance between levels.
 The full tree scales to the available viewport, so deep trees can appear smaller
 and remain zoomable.
 When a branch reaches the configured depth, expansion stops. When a branch

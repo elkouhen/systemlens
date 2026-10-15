@@ -14,7 +14,7 @@ from playwright.sync_api import Playwright, sync_playwright
 
 from systemlens.domain.models import GraphFact, MessageEndpoint, compute_endpoint_id
 from systemlens.domain.graph import GraphEdge
-from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.domain.module_inventory import DiscoveredModule, JpaEntity, MongoField, MongoPersistenceClass
 from systemlens.render import render_graph_html
 
@@ -42,6 +42,20 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
         page.locator("#graph-call-tree .graph-call-tree-node").filter(
             has_text="inventory-service"
         ).first.hover()
+        assert page.locator(
+            "#graph-call-tree .graph-call-tree-node.is-path-context"
+        ).count() >= 2
+        assert page.locator(
+            "#graph-call-tree .graph-call-tree-node.is-path-muted"
+        ).count() > 0
+        assert all(
+            len(label) <= 36
+            for label in page.locator("#graph-call-tree .graph-call-tree-edge-label").evaluate_all(
+                "elements => elements.map(element => Array.from(element.childNodes)"
+                ".filter(node => node.nodeType === Node.TEXT_NODE)"
+                ".map(node => node.textContent).join('').trim())"
+            )
+        )
         tooltip = page.locator("#graph-flow-tooltips .graph-call-tree-entity-tooltip").inner_text()
         assert "IN " in tooltip
         assert "ProductEntity" not in tooltip
@@ -91,6 +105,12 @@ def test_call_tree_marks_target_without_indexed_consumer_as_unknown() -> None:
         {"orders": [producer], "payments": [consumer]},
         [GraphEdge("kafka", "orders", "payments", producer, consumer)],
         code_flows=[flow],
+        integration_methods=[IntegrationMethod(
+            id="payments-consumer", module="payments",
+            qualified_method="com.example.Payments.consumeOrder",
+            path="Payments.java", start_line=8, end_line=8,
+            input_endpoint_ids=(consumer.id,), output_endpoint_ids=(),
+        )],
     )
 
     with sync_playwright() as playwright:
@@ -109,6 +129,12 @@ def test_call_tree_marks_target_without_indexed_consumer_as_unknown() -> None:
 
         # Then the target stays visible without claiming a resolved continuation.
         assert target.count() == 1
+        assert target.locator(".graph-call-tree-method").inner_text() == "consumeOrder"
+        assert target.locator(".graph-call-tree-method").get_attribute("title") == (
+            "com.example.Payments::consumeOrder"
+        )
+        root = page.locator("#graph-call-tree .graph-call-tree-node").filter(has_text="orders")
+        assert root.locator(".graph-call-tree-method").inner_text() == "publish"
         target.hover()
         assert "suite inconnue" in page.locator(
             "#graph-flow-tooltips .graph-call-tree-entity-tooltip"

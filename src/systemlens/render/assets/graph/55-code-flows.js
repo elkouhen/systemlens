@@ -251,6 +251,23 @@
       };
     }
 
+    function highlightCallTreePath(pathKey) {
+      const overlay = graphCallTreeOverlay;
+      if (!overlay) return;
+      const isOnPath = candidate => Boolean(pathKey)
+        && (candidate === pathKey || pathKey.startsWith(`${candidate}>`));
+      overlay.querySelectorAll(".graph-call-tree-node").forEach(node => {
+        const active = isOnPath(node.dataset.pathKey);
+        node.classList.toggle("is-path-context", active);
+        node.classList.toggle("is-path-muted", Boolean(pathKey) && !active);
+      });
+      overlay.querySelectorAll(".graph-call-tree-edge, .graph-call-tree-edge-label").forEach(edge => {
+        const active = isOnPath(edge.dataset.targetPathKey);
+        edge.classList.toggle("is-path-context", active);
+        edge.classList.toggle("is-path-muted", Boolean(pathKey) && !active);
+      });
+    }
+
     function renderCallTreeOverlay(preservedCamera = null) {
       if (!graphCallTreeOverlay) return;
       if (!callTreePanBound) {
@@ -629,16 +646,19 @@
       allOccurrences.forEach(occurrence => {
         occurrenceCounts.set(occurrence.name, (occurrenceCounts.get(occurrence.name) || 0) + 1);
       });
-      const edgeDisplayLabel = edge => {
+      const edgeDisplayLabel = (edge, maxLength = 36) => {
         const protocol = edge.kind === "kafka" ? "Kafka" : edge.kind === "rest" ? "HTTP" : edge.kind || "Appel";
         const prefix = edge.order ? `#${edge.order} · ` : "";
-        const label = edge.label || protocol;
-        const text = `${prefix}${label} · ${protocol}`;
-        return text.length > 58 ? `${text.slice(0, 55)}…` : text;
+        const suffix = ` · ${protocol}`;
+        const label = String(edge.label || protocol);
+        const labelWidth = Math.max(1, maxLength - prefix.length - suffix.length);
+        const compactLabel = label.length > labelWidth
+          ? `${label.slice(0, Math.max(0, labelWidth - 1))}…` : label;
+        return `${prefix}${compactLabel}${suffix}`;
       };
       const direction = "lr";
       const maxBadges = Math.max(0, ...allOccurrences.map(badgeCount));
-      const cardHeight = Math.max(82, 42 + maxBadges * 20);
+      const cardHeight = Math.max(94, 54 + maxBadges * 20);
       const gapY = Math.max(105, cardHeight + 23);
       const cardWidth = 150;
       const maxEdgeLabelLength = allOccurrences.reduce((maximum, occurrence) => (
@@ -739,6 +759,24 @@
           line: port?.line,
         };
       };
+      const methodForOccurrence = occurrence => {
+        const inputEndpointId = inputForOccurrence(occurrence);
+        const inputMethod = inputEndpointId
+          ? String(treePort(inputEndpointId, "in").method || "").trim()
+          : "";
+        const methods = inputMethod.includes("::")
+          ? [inputMethod]
+          : [...new Set(occurrence.flowIds
+            .map(id => String(flowById.get(id)?.method || "").trim())
+            .filter(Boolean))];
+        if (!methods.length) return null;
+        const labels = [...new Set(methods.map(method => {
+          const separator = method.lastIndexOf("::");
+          const start = separator >= 0 ? separator + 2 : method.lastIndexOf(".") + 1;
+          return method.slice(start).split("(", 1)[0].trim();
+        }).filter(Boolean))];
+        return labels.length ? { label: labels.join(" · "), title: methods.join("\n") } : null;
+      };
       const clearTreeTooltip = () => flowTooltipOverlay?.replaceChildren();
       const showTreeTooltip = (className, titleText, lines, clientX, clientY) => {
         if (!flowTooltipOverlay) return;
@@ -788,6 +826,8 @@
               : "Microservice",
           `Niveau ${occurrence.depth + 1}${occurrence.cycle || occurrence.continuationUnknown ? " · expansion arrêtée" : ""}`,
         ];
+        const method = methodForOccurrence(occurrence);
+        if (method) lines.push(`Méthode Java : ${method.title.replaceAll("\n", " · ")}`);
         const occurrenceCount = occurrenceCounts.get(occurrence.name) || 1;
         if (occurrenceCount > 1) lines.push(`Appelé ${occurrenceCount} fois dans l’arbre`);
         const input = occurrence.edge && treePort(occurrence.edge.endpoint_ids?.[1], "in");
@@ -849,6 +889,7 @@
             ? (source.y + target.y + cardHeight) / 2 - 7
             : (source.y + cardHeight + target.y) / 2 - 7;
           const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          line.dataset.targetPathKey = child.pathKey;
           if (direction === "lr") {
             const startX = source.x + cardWidth;
             const endX = target.x;
@@ -917,14 +958,12 @@
           svg.append(line);
           const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
           label.classList.add("graph-call-tree-edge-label");
+          label.dataset.targetPathKey = child.pathKey;
           if (edgeDiagnosticKind) {
             label.classList.add(`is-diagnostic-${edgeDiagnosticKind}`, "is-diagnostic-badge-label");
-            const diagnosticLabel = edgeDiagnosticKind === "interaction"
-              ? flowDiagnosticTitle(selectedDiagnostic)
-              : edgeDiagnosticKind === "async"
-              ? `D${selectedDiagnosticIndex} · ÉCRITURE ASYNC`
-              : `D${selectedDiagnosticIndex} · LECTURE SYNC`;
-            label.textContent = `${diagnosticLabel} · ${edgeDisplayLabel(child.edge)}`;
+            const diagnosticLabel = `D${selectedDiagnosticIndex}`;
+            const diagnosticBudget = Math.max(12, 36 - diagnosticLabel.length - 3);
+            label.textContent = `${diagnosticLabel} · ${edgeDisplayLabel(child.edge, diagnosticBudget)}`;
           } else if (selectedDiagnostic) {
             label.classList.add("is-diagnostic-muted");
           }
@@ -941,7 +980,11 @@
             });
           }
           const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-          title.textContent = `${child.edge.order ? `Arc #${child.edge.order} · ` : ""}${child.edge.label || child.edge.kind || "Appel"}`;
+          title.textContent = [
+            edgeDiagnosticKind ? flowDiagnosticTitle(selectedDiagnostic) : "",
+            treeEdgeTooltip(child.edge).title,
+            ...treeEdgeTooltip(child.edge).lines,
+          ].filter(Boolean).join(" · ");
           label.append(title);
           svg.append(label);
         });
@@ -956,6 +999,7 @@
             : occurrenceCount === 2 ? "is-frequency-2" : "";
         const isSelectedOccurrence = graphState.callTreeSelectedPathKey === occurrence.pathKey;
         node.className = `graph-call-tree-node${frequencyClass ? ` ${frequencyClass}` : ""}${occurrence.cycle ? " is-cycle" : ""}${isSelectedOccurrence ? " is-selected" : ""}`;
+        node.dataset.pathKey = occurrence.pathKey;
         node.style.height = `${cardHeight}px`;
         const original = nodeIdForCodeFlowResource(occurrence.name, "microservice");
         const originalNode = original ? nodeDataById.get(original) : null;
@@ -965,6 +1009,16 @@
         const name = document.createElement("span");
         name.className = "graph-node-card-name";
         name.textContent = occurrence.name;
+        const method = methodForOccurrence(occurrence);
+        if (method) {
+          const methodName = document.createElement("span");
+          methodName.className = "graph-call-tree-method";
+          methodName.textContent = method.label;
+          methodName.title = method.title;
+          node.append(icon, name, methodName);
+        } else {
+          node.append(icon, name);
+        }
         const kind = document.createElement("span");
         kind.className = "graph-node-card-kind";
         kind.textContent = occurrence.cycle
@@ -974,7 +1028,7 @@
           : occurrence.hiddenChildrenCount
             ? `Microservice · +${occurrence.hiddenChildrenCount} appels`
             : "Microservice";
-        node.append(icon, name, kind);
+        node.append(kind);
         const annotationGroups = [...annotationGroupsForOccurrence(occurrence).values()]
           .sort((a, b) => a.name.localeCompare(b.name, "fr")
             || a.resource.localeCompare(b.resource, "fr"));
@@ -1107,6 +1161,7 @@
         node.style.top = `${point.y}px`;
         node.addEventListener("pointerover", event => {
           if (event.target.closest?.(".graph-node-port-reference")) return;
+          highlightCallTreePath(occurrence.pathKey);
           node.classList.add("is-hovered");
           showTreeTooltip("graph-call-tree-entity-tooltip", occurrence.name, treeOccurrenceTooltipLines(occurrence), event.clientX, event.clientY);
         });
@@ -1114,7 +1169,13 @@
           if (event.target.closest?.(".graph-node-port-reference")) return;
           showTreeTooltip("graph-call-tree-entity-tooltip", occurrence.name, treeOccurrenceTooltipLines(occurrence), event.clientX, event.clientY);
         });
-        node.addEventListener("mouseleave", () => { node.classList.remove("is-hovered"); clearTreeTooltip(); });
+        node.addEventListener("mouseleave", () => {
+          node.classList.remove("is-hovered");
+          highlightCallTreePath(null);
+          clearTreeTooltip();
+        });
+        node.addEventListener("focus", () => highlightCallTreePath(occurrence.pathKey));
+        node.addEventListener("blur", () => highlightCallTreePath(null));
         node.addEventListener("click", event => {
           event.preventDefault();
           event.stopPropagation();

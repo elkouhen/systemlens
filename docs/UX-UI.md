@@ -261,6 +261,16 @@ neutral for one occurrence, light accent for two, medium accent for three, and
 strong accent for four or more. The border continues to identify the node type.
 The node tooltip MUST state the exact recurrence count.
 
+Each occurrence shows its short Java method beneath the service name when
+method evidence is available. The method line MUST remain visually distinct
+from the service name and MUST retain its qualified name in the title. Long
+names may be clipped to the card width.
+
+Hovering or focusing an occurrence MUST highlight its path from the root and
+dim unrelated branches. Leaving the occurrence or moving focus MUST restore the
+full tree. This emphasis is transient and MUST NOT change selection or the
+persisted graph.
+
 The tree uses a fixed left-to-right orientation and an incremental depth control
 from 1 to 8 levels. The current default is depth 1, showing only the root
 service. The `−` and `+` controls
@@ -279,6 +289,10 @@ The tree workspace supports drag-to-pan and bounded zoom from 0.5x to 4x.
 Clicking a service occurrence keeps its selection action. The tree context
 widget identifies the projection, displays the indexed trigger event, and
 controls the tree without repeating the hierarchy.
+
+Arc labels in the tree MUST use a compact form that retains the order when
+available, the relation label, and the protocol. Long relation labels may be
+truncated on the canvas; the arc tooltip MUST retain the full indexed details.
 
 Node tooltips MUST show the occurrence level, cycle state, microservice, and
 available IN and OUT ports with their associated Java methods. Arc tooltips

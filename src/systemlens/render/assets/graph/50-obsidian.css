@@ -124,6 +124,7 @@
   background: #131e2b;
   box-shadow: 0 5px 16px rgba(0, 0, 0, .22);
 }
+:root[data-theme="dark"] .graph-call-tree-method { color: var(--ui-muted); }
 :root[data-theme="dark"] .graph-node-card-label .graph-node-card-kind,
 :root[data-theme="dark"] .graph-call-tree-node .graph-node-card-kind { color: var(--ui-muted); font-weight: 500; }
 :root[data-theme="dark"] .graph-node-card-name { color: var(--ui-title); font-weight: 600; }

@@ -64,7 +64,13 @@ transition index for each flow root. The browser expands that index into local
 occurrences, while labels and node actions resolve to the original
 microservice. The tree uses a deterministic depth-first projection with a
 per-branch ancestry set, a configured depth limit, and the child order from the
-causal transition index.
+causal transition index. Each occurrence labels its Java method from the input
+port's indexed method mapping, falling back to the associated `CodeFlow.method`.
+The card shows the short method name and keeps the qualified name in its title.
+Visible arc labels are capped at 36 characters, including diagnostic labels.
+Tooltips retain the indexed edge details. Hover and focus apply a transient
+root-to-occurrence path highlight by comparing local occurrence path keys; this
+does not alter the selected flow or snapshot.
 
 Tree coordinates are assigned by depth and leaf order. Internal occurrences
 are centered over their visible children, then the complete logical canvas is
