@@ -256,7 +256,8 @@ camera, not graph nodes.
 The overview minimap appears for architecture graphs with more than 24 visible
 nodes or with nodes outside the workspace. It shows visible node positions and
 the current viewport. Clicking or dragging it recenters the camera without
-changing selection. The minimap samples at most 700 nodes.
+changing selection. Node positions stay fixed in the minimap while the viewport
+rectangle moves. The minimap samples at most 700 nodes.
 
 Wheel zoom MUST be handled once for the Sigma canvas and HTML card overlays. Hovering
 a card MUST NOT introduce a second native zoom behavior. Camera updates and

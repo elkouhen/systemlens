@@ -176,6 +176,52 @@ def test_crowded_architecture_cards_reveal_secondary_details_on_hover() -> None:
 
 
 @pytest.mark.slow
+def test_architecture_minimap_keeps_world_map_fixed_while_panning() -> None:
+    document = _complex_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1280, "height": 900})
+        page.set_content(document, wait_until="load")
+        minimap = page.locator("#graph-minimap")
+        minimap.wait_for(state="visible")
+        before = page.locator("#graph-minimap-svg").evaluate("""svg => ({
+          dots: [...svg.querySelectorAll('.graph-minimap-node')]
+            .map(node => [node.getAttribute('cx'), node.getAttribute('cy')]),
+          viewport: [
+            svg.querySelector('#graph-minimap-viewport').getAttribute('x'),
+            svg.querySelector('#graph-minimap-viewport').getAttribute('y'),
+          ],
+        })""")
+        bounds = page.locator("#graph-minimap-svg").bounding_box()
+        assert bounds is not None
+        page.mouse.move(bounds["x"] + 22, bounds["y"] + 24)
+        page.mouse.down()
+        page.mouse.move(bounds["x"] + bounds["width"] - 22,
+                        bounds["y"] + bounds["height"] - 20, steps=5)
+        page.mouse.up()
+        page.wait_for_function("""before => {
+          const svg = document.querySelector('#graph-minimap-svg');
+          const viewport = svg.querySelector('#graph-minimap-viewport');
+          return viewport.getAttribute('x') !== before[0]
+            || viewport.getAttribute('y') !== before[1];
+        }""", arg=before["viewport"])
+        after = page.locator("#graph-minimap-svg").evaluate("""svg => ({
+          dots: [...svg.querySelectorAll('.graph-minimap-node')]
+            .map(node => [node.getAttribute('cx'), node.getAttribute('cy')]),
+          viewport: [
+            svg.querySelector('#graph-minimap-viewport').getAttribute('x'),
+            svg.querySelector('#graph-minimap-viewport').getAttribute('y'),
+          ],
+        })""")
+        assert after["dots"] == before["dots"]
+        assert after["viewport"] != before["viewport"]
+        browser.close()
+
+
+@pytest.mark.slow
 def test_large_call_tree_minimap_and_selection_camera() -> None:
     document = _large_call_tree_document()
     with sync_playwright() as playwright:

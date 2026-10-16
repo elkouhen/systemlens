@@ -19,6 +19,7 @@
         && graphState.callGraphDisplayMode === "tree";
       const viewport = (isTree ? graphCallTreeOverlay : graphCanvas).getBoundingClientRect();
       const items = [];
+      let extentPoints = items;
       let thresholdReached = false;
       if (isTree) {
         const canvas = graphCallTreeOverlay.querySelector(".graph-call-tree-canvas");
@@ -34,11 +35,15 @@
         const width = Number.parseFloat(canvas.style.width) || 1;
         const height = Number.parseFloat(canvas.style.height) || 1;
         const treeNodes = [...canvas.querySelectorAll(".graph-call-tree-node")];
+        extentPoints = treeNodes.map(node => ({
+          x: (Number.parseFloat(node.style.left) || 0) + node.offsetWidth / 2,
+          y: (Number.parseFloat(node.style.top) || 0) + node.offsetHeight / 2,
+        }));
         const stride = Math.max(1, Math.ceil(treeNodes.length / 700));
         treeNodes.forEach((node, index) => {
           if (index % stride !== 0 && node.dataset.pathKey !== graphState.callTreeSelectedPathKey) return;
-          const x = left + ((Number.parseFloat(node.style.left) || 0) + node.offsetWidth / 2) * totalScale;
-          const y = top + ((Number.parseFloat(node.style.top) || 0) + node.offsetHeight / 2) * totalScale;
+          const x = (Number.parseFloat(node.style.left) || 0) + node.offsetWidth / 2;
+          const y = (Number.parseFloat(node.style.top) || 0) + node.offsetHeight / 2;
           items.push({
             x, y,
             kind: "service",
@@ -59,15 +64,18 @@
           const attributes = network.getNodeAttributes(id);
           return isVisibleNodeId(id) && !attributes.hidden;
         });
+        extentPoints = visibleIds.map(id => {
+          const attributes = network.getNodeAttributes(id);
+          return { x: attributes.x, y: attributes.y };
+        }).filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
         const stride = Math.max(1, Math.ceil(visibleIds.length / 700));
         visibleIds.forEach((id, index) => {
           if (index % stride !== 0 && id !== graphState.selectedId) return;
           const attributes = network.getNodeAttributes(id);
-          const point = renderer.graphToViewport({ x: attributes.x, y: attributes.y });
-          if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
+          if (!Number.isFinite(attributes.x) || !Number.isFinite(attributes.y)) return;
           const data = nodeDataById.get(id);
           items.push({
-            x: point.x, y: point.y,
+            x: attributes.x, y: attributes.y,
             kind: ["kafka_topic", "message_channel"].includes(data?.kind) ? "topic"
               : data?.kind === "microservice" ? "service" : "resource",
             selected: id === graphState.selectedId,
@@ -75,8 +83,11 @@
           });
         });
         thresholdReached = visibleIds.length > 24
-          || items.some(item => item.x < 0 || item.x > viewport.width
-            || item.y < 0 || item.y > viewport.height);
+          || extentPoints.some(point => {
+            const screen = renderer.graphToViewport(point);
+            return screen.x < 0 || screen.x > viewport.width
+              || screen.y < 0 || screen.y > viewport.height;
+          });
         graphMinimapModel = { kind: "architecture", viewport };
       }
       if (!items.length || !thresholdReached) {
@@ -86,13 +97,13 @@
       }
       graphMinimap.hidden = false;
       const extent = {
-        left: Math.min(0, ...items.map(item => item.x)),
-        right: Math.max(viewport.width, ...items.map(item => item.x)),
-        top: Math.min(0, ...items.map(item => item.y)),
-        bottom: Math.max(viewport.height, ...items.map(item => item.y)),
+        left: Math.min(...extentPoints.map(item => item.x)),
+        right: Math.max(...extentPoints.map(item => item.x)),
+        top: Math.min(...extentPoints.map(item => item.y)),
+        bottom: Math.max(...extentPoints.map(item => item.y)),
       };
-      const paddingX = (extent.right - extent.left) * .04;
-      const paddingY = (extent.bottom - extent.top) * .04;
+      const paddingX = Math.max((extent.right - extent.left) * .16, 1);
+      const paddingY = Math.max((extent.bottom - extent.top) * .16, 1);
       extent.left -= paddingX;
       extent.right += paddingX;
       extent.top -= paddingY;
@@ -103,6 +114,20 @@
       const yAt = y => MINIMAP_PADDING
         + (y - extent.top) / Math.max(1, extent.bottom - extent.top)
           * (MINIMAP_HEIGHT - MINIMAP_PADDING * 2);
+      const setViewportRect = (left, top, right, bottom) => {
+        const minX = MINIMAP_PADDING;
+        const minY = MINIMAP_PADDING;
+        const maxX = MINIMAP_WIDTH - MINIMAP_PADDING;
+        const maxY = MINIMAP_HEIGHT - MINIMAP_PADDING;
+        const x1 = Math.max(minX, Math.min(maxX, xAt(left)));
+        const y1 = Math.max(minY, Math.min(maxY, yAt(top)));
+        const x2 = Math.max(minX, Math.min(maxX, xAt(right)));
+        const y2 = Math.max(minY, Math.min(maxY, yAt(bottom)));
+        graphMinimapViewport.setAttribute("x", String(Math.min(x1, x2)));
+        graphMinimapViewport.setAttribute("y", String(Math.min(y1, y2)));
+        graphMinimapViewport.setAttribute("width", String(Math.max(2, Math.abs(x2 - x1))));
+        graphMinimapViewport.setAttribute("height", String(Math.max(2, Math.abs(y2 - y1))));
+      };
       const sampledItems = items.length <= 700 ? items : [
         ...items.filter(item => item.selected).slice(0, 1),
         ...items.filter(item => !item.selected).slice(0, 699),
@@ -118,10 +143,28 @@
         nodesFragment.append(dot);
       });
       graphMinimapNodes.replaceChildren(nodesFragment);
-      graphMinimapViewport.setAttribute("x", String(xAt(0)));
-      graphMinimapViewport.setAttribute("y", String(yAt(0)));
-      graphMinimapViewport.setAttribute("width", String(Math.max(2, xAt(viewport.width) - xAt(0))));
-      graphMinimapViewport.setAttribute("height", String(Math.max(2, yAt(viewport.height) - yAt(0))));
+      if (graphMinimapModel.kind === "tree") {
+        const { left, top, totalScale } = graphMinimapModel;
+        const logicalLeft = -left / totalScale;
+        const logicalTop = -top / totalScale;
+        setViewportRect(
+          logicalLeft, logicalTop,
+          logicalLeft + viewport.width / totalScale,
+          logicalTop + viewport.height / totalScale,
+        );
+      } else {
+        const graphViewportCorners = [
+          renderer.viewportToGraph({ x: 0, y: 0 }),
+          renderer.viewportToGraph({ x: viewport.width, y: 0 }),
+          renderer.viewportToGraph({ x: 0, y: viewport.height }),
+          renderer.viewportToGraph({ x: viewport.width, y: viewport.height }),
+        ];
+        const viewLeft = Math.min(...graphViewportCorners.map(point => point.x));
+        const viewRight = Math.max(...graphViewportCorners.map(point => point.x));
+        const viewTop = Math.min(...graphViewportCorners.map(point => point.y));
+        const viewBottom = Math.max(...graphViewportCorners.map(point => point.y));
+        setViewportRect(viewLeft, viewTop, viewRight, viewBottom);
+      }
       graphMinimapModel.mapPoint = (event) => {
         const svgRect = graphMinimapSvg.getBoundingClientRect();
         const point = graphMinimapSvg.createSVGPoint();
@@ -135,11 +178,13 @@
             y: (event.clientY - svgRect.top) / Math.max(1, svgRect.height) * MINIMAP_HEIGHT,
           };
         }
+        const mapWidth = MINIMAP_WIDTH - MINIMAP_PADDING * 2;
+        const mapHeight = MINIMAP_HEIGHT - MINIMAP_PADDING * 2;
         return {
-          x: extent.left + (local.x - MINIMAP_PADDING)
-            / (MINIMAP_WIDTH - MINIMAP_PADDING * 2) * (extent.right - extent.left),
-          y: extent.top + (local.y - MINIMAP_PADDING)
-            / (MINIMAP_HEIGHT - MINIMAP_PADDING * 2) * (extent.bottom - extent.top),
+          x: extent.left + Math.max(0, Math.min(1,
+            (local.x - MINIMAP_PADDING) / mapWidth)) * (extent.right - extent.left),
+          y: extent.top + Math.max(0, Math.min(1,
+            (local.y - MINIMAP_PADDING) / mapHeight)) * (extent.bottom - extent.top),
         };
       };
     }
@@ -158,16 +203,14 @@
         const { viewport, totalScale, left, top } = graphMinimapModel;
         const canvas = graphCallTreeOverlay.querySelector(".graph-call-tree-canvas");
         if (!canvas) return;
-        const logicalX = (point.x - left) / totalScale;
-        const logicalY = (point.y - top) / totalScale;
-        canvas.style.left = `${viewport.width / 2 - logicalX * totalScale}px`;
-        canvas.style.top = `${viewport.height / 2 - logicalY * totalScale}px`;
+        canvas.style.left = `${viewport.width / 2 - point.x * totalScale}px`;
+        canvas.style.top = `${viewport.height / 2 - point.y * totalScale}px`;
         graphMinimapModel.left = Number.parseFloat(canvas.style.left) || 0;
         graphMinimapModel.top = Number.parseFloat(canvas.style.top) || 0;
         renderGraphMinimap();
         return;
       }
-      const graphPoint = renderer.viewportToGraph({ x: point.x, y: point.y });
+      const graphPoint = point;
       const projected = renderer.graphToViewport(graphPoint);
       const camera = renderer.getCamera();
       const state = camera.getState();

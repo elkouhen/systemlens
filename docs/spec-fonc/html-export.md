@@ -288,6 +288,10 @@ meaning of the existing controls. Secondary widgets use the same surface,
 spacing, status, and interactive-row treatment for details, filters, code
 flows, references, and indexing issues.
 
+Dense graph views show a minimap. Its node positions remain fixed as the camera
+moves, while the viewport outline tracks pan and zoom. Clicking or dragging the
+map recenters the graph without changing the selected resource or flow.
+
 Every HTTP/Kafka input and output receives a deterministic identifier that is
 global to the exported graph: `I1`, `I2`, … for inputs and `O1`, `O2`, … for
 outputs. When a persisted code flow proves that an input reaches an output in the
