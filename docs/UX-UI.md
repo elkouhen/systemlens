@@ -380,6 +380,11 @@ status. A compact summary reports the visible count. Hovering or focusing an
 entry exposes its complete description, trigger, service route, arc and step
 counts, effects, protocol, confidence, and topology status.
 
+Searching for `incohérence` or `incoherence` filters the catalogue to flows
+with a `potential_risk` consistency diagnostic. Those entries show an
+`Incohérence possible` badge. Insufficient evidence remains a separate state
+and MUST NOT match this search.
+
 Selecting a reconciled flow keeps the catalogue context available, shows the
 tree, and displays a persistent banner with the selected flow and compact
 evidence timeline. The entry microservice is marked `Racine`; the trigger and

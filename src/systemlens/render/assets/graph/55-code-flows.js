@@ -12,6 +12,7 @@
     const codeFlowFilterReset = document.getElementById("code-flow-filter-reset");
     const codeFlowsTitle = document.getElementById("code-flows-title");
     const flowDiagnostics = Array.isArray(graphData.flow_diagnostics) ? graphData.flow_diagnostics : [];
+    const flowConsistencyCountCache = new Map();
     let callTreePan = null;
     let callTreePanBound = false;
     let callTreeRenderSignature = "";
@@ -112,6 +113,27 @@
         ["Étapes", steps.length],
         ["Effets", steps.filter(step => ["message_publish", "http_call", "data_read", "data_write"].includes(step.kind)).length],
       ];
+    }
+
+    function flowConsistencyDiagnostics(flow) {
+      return flowDiagnostics.filter(item => item.flow_id === flow.id);
+    }
+
+    function flowConsistencyCounts(flow) {
+      if (flowConsistencyCountCache.has(flow.id)) return flowConsistencyCountCache.get(flow.id);
+      const diagnostics = flowConsistencyDiagnostics(flow);
+      const counts = {
+        risks: diagnostics.filter(item => item.classification === "potential_risk").length,
+        uncertain: diagnostics.filter(item => item.classification === "insufficient_evidence").length,
+        guarantees: diagnostics.filter(item => item.classification === "guarantee_identified").length,
+      };
+      flowConsistencyCountCache.set(flow.id, counts);
+      return counts;
+    }
+
+    function normalizeFlowSearch(value) {
+      return String(value || "").toLocaleLowerCase().normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
     }
 
     function codeFlowDescription(flow) {
@@ -1682,6 +1704,14 @@
         stat.append(valueElement, labelElement);
         stats.append(stat);
       });
+      const consistencyCounts = flowConsistencyCounts(flow);
+      if (consistencyCounts.risks) {
+        const consistency = document.createElement("span");
+        consistency.className = "code-flow-consistency is-risk";
+        consistency.textContent = `Incohérence possible · ${consistencyCounts.risks}`;
+        consistency.title = "Risque de cohérence détecté dans ce flux. L’analyse statique indique un risque possible, pas une observation à l’exécution.";
+        item.append(consistency);
+      }
       if (path) {
         item.tabIndex = 0;
         item.addEventListener("click", () => showCodeFlow(flow));
@@ -1736,23 +1766,34 @@
     }
 
     function renderCodeFlows() {
-      const query = codeFlowFilter.value.trim().toLocaleLowerCase();
+      const query = normalizeFlowSearch(codeFlowFilter.value.trim());
+      const queryWords = query.split(/\s+/).filter(Boolean);
+      const inconsistencySearch = queryWords.some(word => word === "incoherence" || word === "incoherences");
+      const textQuery = queryWords
+        .filter(word => word !== "incoherence" && word !== "incoherences")
+        .join(" ");
       const visible = codeFlows.filter(flow => {
+        const hasPotentialRisk = flowConsistencyCounts(flow).risks > 0;
         const accesses = (graphData.flow_data_access_flow_ids_by_root?.[flow.id] || [])
           .flatMap(id => graphData.flow_data_accesses?.[id] || []);
-        const haystack = [
+        const haystack = normalizeFlowSearch([
           flow.id,
           flow.module,
           flow.method,
           flow.reason,
           ...(flow.steps || []).flatMap(step => [step.kind, step.name, step.path]),
           ...accesses.flatMap(access => [access.action, access.resource, access.module]),
-        ].join(" ").toLocaleLowerCase();
-        return !query || haystack.includes(query);
+          ...(hasPotentialRisk ? ["incohérence possible risque de cohérence"] : []),
+        ].join(" "));
+        return (!inconsistencySearch || hasPotentialRisk)
+          && (!textQuery || haystack.includes(textQuery));
       });
       codeFlowsList.replaceChildren(...visible.sort(sortCodeFlows).map(codeFlowItem));
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
+      codeFlowsEmpty.textContent = inconsistencySearch
+        ? "Aucun flux avec incohérence possible ne correspond à cette recherche."
+        : "Aucun flux d’appel indexé.";
       codeFlowsSummary.textContent = `${visible.length} flux d’appel affiché${visible.length > 1 ? "s" : ""} sur ${codeFlows.length}.`;
       updateCodeFlowFilterSummary();
       codeFlowsTitle.textContent = `Flux de code (${visible.length})`;

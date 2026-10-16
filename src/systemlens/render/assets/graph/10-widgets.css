@@ -215,6 +215,7 @@
     .code-flow-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .code-flow-summary { margin: 0; color: var(--ui-muted); font-size: 10px; line-height: 1.25; overflow-wrap: anywhere; }
     .code-flow-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; }
+    .code-flow-consistency { width: fit-content; padding: 3px 6px; border: 1px solid #f59e0b; border-radius: 5px; color: #92400e; background: #fffbeb; font-size: 9px; font-weight: 850; line-height: 1.2; }
     .code-flow-stat { display: flex; align-items: baseline; justify-content: center; gap: 3px; min-width: 0; padding: 3px 4px; border: 1px solid var(--ui-border); border-radius: 4px; color: var(--ui-muted); background: var(--ui-control); text-align: center; }
     .code-flow-stat strong { color: var(--ui-title); font-size: 11px; line-height: 1; }
     .code-flow-stat small { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
