@@ -287,6 +287,7 @@ names may be clipped to the card width.
 Each occurrence MUST show only the IN and OUT ports referenced by the selected
 flow. The card labels MUST show the direction without the port number. Hovering
 a port MUST retain its tooltip with the port identity and source details.
+Each call arc MUST begin at its source OUT port and end at its target IN port.
 
 The call-tree context widget MUST summarize consistency diagnostics for the
 selected flow. It MUST show counts for possible risks, insufficient evidence,

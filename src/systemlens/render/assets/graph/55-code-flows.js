@@ -1007,6 +1007,8 @@
           directionPorts.forEach((port, index) => {
             const anchor = document.createElement("span");
             anchor.className = `graph-node-port-reference is-${direction} is-${port.protocol}`;
+            anchor.dataset.endpointId = port.endpointId || "";
+            anchor.dataset.direction = direction;
             anchor.textContent = direction === "in" ? "IN" : "OUT";
             anchor.title = `${direction === "in" ? "Port d’entrée" : "Port de sortie"} · ${port.label}`;
             anchor.style.setProperty(
@@ -1145,33 +1147,42 @@
         node.style.left = `${occurrence.x}px`;
         node.style.top = `${occurrence.y}px`;
       });
-      const position = occurrence => ({ x: occurrence.x, y: occurrence.y });
+      const portAnchorPoint = (occurrence, endpointId, direction) => {
+        const node = nodeByOccurrence.get(occurrence);
+        const anchor = [...(node?.querySelectorAll(".graph-node-port-reference") || [])]
+          .find(port => port.dataset.direction === direction
+            && port.dataset.endpointId === String(endpointId || ""));
+        const cardHeight = cardHeightByOccurrence.get(occurrence);
+        if (!anchor) {
+          return {
+            x: occurrence.x + (direction === "out" ? cardWidth : 0),
+            y: occurrence.y + cardHeight / 2,
+          };
+        }
+        return {
+          x: occurrence.x + anchor.offsetLeft
+            + (direction === "out" ? anchor.offsetWidth : 0),
+          y: occurrence.y + anchor.offsetTop + anchor.offsetHeight / 2,
+        };
+      };
       allOccurrences.forEach(occurrence => {
-        const source = position(occurrence);
         occurrence.children.forEach(child => {
-          const target = position(child);
-          const sourceHeight = cardHeightByOccurrence.get(occurrence);
-          const targetHeight = cardHeightByOccurrence.get(child);
-          const sourceCenterY = source.y + sourceHeight / 2;
-          const targetCenterY = target.y + targetHeight / 2;
-          const labelX = direction === "lr"
-            ? (source.x + cardWidth + target.x) / 2
-            : (source.x + target.x + cardWidth) / 2;
-          const labelY = direction === "lr"
-            ? (sourceCenterY + targetCenterY) / 2 - 7
-            : (source.y + sourceHeight + target.y) / 2 - 7;
+          const source = portAnchorPoint(occurrence, child.edge.endpoint_ids?.[0], "out");
+          const target = portAnchorPoint(child, child.edge.endpoint_ids?.[1], "in");
+          const labelX = (source.x + target.x) / 2;
+          const labelY = (source.y + target.y) / 2 - 7;
           const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
           line.dataset.targetPathKey = child.pathKey;
           if (direction === "lr") {
-            const startX = source.x + cardWidth;
+            const startX = source.x;
             const endX = target.x;
             const middleX = (startX + endX) / 2;
-            line.setAttribute("d", `M ${startX} ${sourceCenterY} C ${middleX} ${sourceCenterY}, ${middleX} ${targetCenterY}, ${endX} ${targetCenterY}`);
+            line.setAttribute("d", `M ${startX} ${source.y} C ${middleX} ${source.y}, ${middleX} ${target.y}, ${endX} ${target.y}`);
           } else {
-            const startY = source.y + sourceHeight;
+            const startY = source.y;
             const endY = target.y;
             const middleY = (startY + endY) / 2;
-            line.setAttribute("d", `M ${source.x + cardWidth / 2} ${startY} C ${source.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${endY}`);
+            line.setAttribute("d", `M ${source.x} ${startY} C ${source.x} ${middleY}, ${target.x} ${middleY}, ${target.x} ${endY}`);
           }
           const edgeHit = line.cloneNode();
           edgeHit.classList.remove("graph-call-tree-edge");
