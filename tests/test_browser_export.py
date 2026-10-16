@@ -97,8 +97,13 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
             )
         )
         tooltip = page.locator("#graph-flow-tooltips .graph-call-tree-entity-tooltip").inner_text()
-        assert "IN " in tooltip
+        assert "IN " not in tooltip
+        assert "OUT " not in tooltip
         assert "ProductEntity" not in tooltip
+        page.locator("#graph-call-tree .graph-node-port-reference.is-in").first.hover()
+        assert "Port IN" in page.locator(
+            "#graph-flow-tooltips .graph-port-tooltip"
+        ).inner_text()
         page.locator("#flow-call-tree-depth-increase").click()
         page.locator("#flow-call-tree-depth-increase").click()
         inventory_nodes = page.locator("#graph-call-tree .graph-call-tree-node").filter(

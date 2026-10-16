@@ -333,10 +333,11 @@ available, the relation label, and the protocol. Long relation labels may be
 truncated on the canvas; the arc tooltip MUST retain the full indexed details.
 
 Node tooltips MUST show the occurrence level, cycle state, microservice, and
-available IN and OUT ports with their associated Java methods. Arc tooltips
-MUST show order, source, target, protocol, indexed relation label, and message
-type when available. Tooltip content is evidence already present in the
-snapshot; it MUST NOT infer a missing fact.
+Java method when available. They MUST omit IN and OUT port inventories. Port
+tooltips MUST show direction, identity, source, and associated Java method.
+Arc tooltips MUST show order, source, target, protocol, indexed relation label,
+and message type when available. Tooltip content is evidence already present
+in the snapshot; it MUST NOT infer a missing fact.
 
 The selected-flow heading identifies the projection without repeating a full
 service or method sequence. Flow descriptions state the trigger and observed

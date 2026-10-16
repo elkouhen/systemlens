@@ -9335,18 +9335,6 @@ const graphViewLifecycle = (() => {
         ];
         const occurrenceCount = occurrenceCounts.get(occurrence.name) || 1;
         if (occurrenceCount > 1) lines.push(`Appelé ${occurrenceCount} fois dans l’arbre`);
-        const input = occurrence.edge && treePort(occurrence.edge.endpoint_ids?.[1], "in");
-        if (input?.endpointId) lines.push(`IN ${input.label} · ${input.method}`);
-        const outputs = occurrence.children
-          .map(child => treePort(child.edge.endpoint_ids?.[0], "out"))
-          .filter(port => port.endpointId);
-        if (outputs.length) {
-          const outputText = outputs
-            .slice(0, 3)
-            .map(port => `${port.label} · ${port.method}`)
-            .join(" | ");
-          lines.push(`OUT ${outputText}${outputs.length > 3 ? " …" : ""}`);
-        }
         diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, side }) => {
           if (diagnostic.key) lines.push(`Clé · ${diagnostic.key}`);
           if (diagnostic[`${side}_phase`]) lines.push(`Phase · ${diagnostic[`${side}_phase`]}`);

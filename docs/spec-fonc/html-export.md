@@ -244,8 +244,9 @@ tree, while clicking a service occurrence keeps its selection action. `Shift +
 click` on a service occurrence or call arc opens its dedicated introspection
 window. Hovering a service occurrence displays its level and cycle state.
 
-The service occurrence tooltip also displays its IN and OUT ports with the
-associated Java methods. Hovering an arc displays its order, source, target,
+The service occurrence tooltip displays its level, cycle state, and Java method
+when available. Hovering a port displays its direction, identity, source, and
+associated Java method. Hovering an arc displays its order, source, target,
 protocol, indexed relation label and message type when available.
 
 The call-graph heading identifies the view without displaying a service or
