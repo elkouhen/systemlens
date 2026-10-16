@@ -258,17 +258,19 @@ def diagnose_flow_consistency_snapshot(
         for flow_id in reachable:
             roots_by_flow[flow_id].add(root)
     flow_by_id = {flow.id: flow for flow in flows}
+
+    def common_roots(left: CodeFlow, right: CodeFlow) -> list[str]:
+        if left.id == right.id:
+            return sorted(roots_by_flow[left.id]) or [left.id]
+        return sorted(roots_by_flow[left.id] & roots_by_flow[right.id])
+
     diagnostics: list[FlowConsistencyDiagnostic] = []
     for write_flow, write in writes:
         for read_flow, read in candidate_reads(write):
             overlaps, overlap_limitation = _overlap(write, read)
             if not overlaps and overlap_limitation is None:
                 continue
-            candidate_roots = (
-                sorted(roots_by_flow[write_flow.id]) or [write_flow.id]
-                if write_flow.id == read_flow.id
-                else sorted(roots_by_flow[write_flow.id] & roots_by_flow[read_flow.id])
-            )
+            candidate_roots = common_roots(write_flow, read_flow)
             if write_flow.id == read_flow.id:
                 causal, evidence = _causal(write_flow, write, read)
                 scenario_limitation = (
@@ -353,12 +355,11 @@ def diagnose_flow_consistency_snapshot(
                         rmw_sequences.append((flow, read, write))
         rmw_sequences_by_identity[identity] = rmw_sequences
 
-    lost_update_pairs: set[tuple[str, int, str, int]] = set()
+    lost_update_write_pairs: set[frozenset[str]] = set()
+    lost_update_access_pairs: set[tuple[str, int, str, int]] = set()
     for rmw_sequences in rmw_sequences_by_identity.values():
         for index, (left_flow, left_read, left_write) in enumerate(rmw_sequences):
             for right_flow, right_read, right_write in rmw_sequences[index + 1:]:
-                if right_flow.id == left_flow.id:
-                    continue
                 if left_write.transaction_id == right_write.transaction_id:
                     continue
                 if not _may_overlap(left_write, right_write):
@@ -368,9 +369,7 @@ def diagnose_flow_consistency_snapshot(
                 guard_identity = f"{_resource(left_write)}:{left_write.key}"
                 if _guard_applies(left_write, right_write, guard_identity):
                     continue
-                if left_write.causal_id and right_write.causal_id and left_write.causal_id != right_write.causal_id:
-                    continue
-                roots = sorted(roots_by_flow[left_flow.id] & roots_by_flow[right_flow.id])
+                roots = common_roots(left_flow, right_flow)
                 for display_root in roots:
                     diagnostic = _diagnose_pair(
                         left_flow, left_write, right_flow, right_write, display_root,
@@ -396,23 +395,30 @@ def diagnose_flow_consistency_snapshot(
                         write_dependency_step=left_read.order,
                         read_dependency_step=right_read.order,
                     ))
-                    lost_update_pairs.add((left_flow.id, left_write.order, right_flow.id, right_write.order))
+                    lost_update_write_pairs.add(frozenset((
+                        _event_id(left_flow, left_write), _event_id(right_flow, right_write),
+                    )))
+                    lost_update_access_pairs.update((
+                        (left_flow.id, left_write.order, right_flow.id, right_read.order),
+                        (right_flow.id, right_write.order, left_flow.id, left_read.order),
+                    ))
 
     for grouped_accesses in accesses_by_identity.values():
         for write_flow, write in grouped_accesses["data_write"]:
             for read_flow, read in grouped_accesses["data_read"]:
-                if write_flow.id == read_flow.id:
-                    continue
                 if _is_async(write) and _is_sync(read):
+                    continue
+                if (write.transaction_id and read.transaction_id
+                        and write.transaction_id == read.transaction_id):
                     continue
                 if not _may_overlap(write, read):
                     continue
-                if write.causal_id and read.causal_id and write.causal_id != read.causal_id:
-                    continue
-                roots = sorted(roots_by_flow[write_flow.id] & roots_by_flow[read_flow.id])
+                roots = common_roots(write_flow, read_flow)
                 for display_root in roots:
                     guard_identity = f"{_resource(write)}:{write.key}"
-                    if read.isolation in {"read_uncommitted", "read-uncommitted"} and write.phase == "uncommitted":
+                    if (read.isolation in {"read_uncommitted", "read-uncommitted"}
+                            and write.phase == "uncommitted"
+                            and write.transaction_id and read.transaction_id):
                         event_type = "potential_dirty_read"
                         classification = "potential_dirty_read"
                         limitation = "la visibilité réelle dépend du moteur et de sa configuration"
@@ -437,7 +443,7 @@ def diagnose_flow_consistency_snapshot(
                     )
                     if event_type == "potential_concurrent_read_write" and (
                         write_flow.id, write.order, read_flow.id, read.order
-                    ) in lost_update_pairs:
+                    ) in lost_update_access_pairs:
                         continue
                     diagnostics.append(replace(
                         diagnostic,
@@ -461,13 +467,16 @@ def diagnose_flow_consistency_snapshot(
         writes_for_key = grouped_accesses["data_write"]
         for index, (left_flow, left_write) in enumerate(writes_for_key):
             for right_flow, right_write in writes_for_key[index + 1:]:
-                if left_flow.id == right_flow.id or not _may_overlap(left_write, right_write):
+                if not _may_overlap(left_write, right_write):
                     continue
-                if (left_flow.id, left_write.order, right_flow.id, right_write.order) in lost_update_pairs:
+                if (left_write.transaction_id and right_write.transaction_id
+                        and left_write.transaction_id == right_write.transaction_id):
                     continue
-                if left_write.causal_id and right_write.causal_id and left_write.causal_id != right_write.causal_id:
+                if frozenset((
+                    _event_id(left_flow, left_write), _event_id(right_flow, right_write),
+                )) in lost_update_write_pairs:
                     continue
-                roots = sorted(roots_by_flow[left_flow.id] & roots_by_flow[right_flow.id])
+                roots = common_roots(left_flow, right_flow)
                 for display_root in roots:
                     guard_identity = f"{_resource(left_write)}:{left_write.key}"
                     protected = _guard_applies(left_write, right_write, guard_identity)

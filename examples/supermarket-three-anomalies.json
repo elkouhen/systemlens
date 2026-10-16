@@ -7,7 +7,7 @@
     "namespace": "supermarket-three-anomalies"
   },
   "mode": "partial",
-  "description": "One order call graph with an async read-after-write risk, a concurrent read/write interaction, and a lost-update candidate. Uses synthetic shared-database facts.",
+  "description": "One order call graph with an async read-after-write risk, a freshness anomaly candidate, and a lost-update candidate. Uses synthetic shared-database facts.",
   "nodes": [
     {
       "id": "order-service",
@@ -266,7 +266,8 @@
           "phase": "observe",
           "fields": [
             "stockQuantity"
-          ]
+          ],
+          "freshness_required": true
         },
         {
           "order": 3,

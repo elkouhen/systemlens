@@ -33,6 +33,9 @@ def test_consistency_search_includes_advanced_risks_without_stale_read_risk() ->
     )
     assert graph_data is not None
     snapshot = json.loads(graph_data.group())
+    assert {item["classification"] for item in snapshot["flow_diagnostics"]} == {
+        "potential_risk", "potential_lost_update", "potential_read_write_anomaly",
+    }
     snapshot["flow_diagnostics"] = [
         item for item in snapshot["flow_diagnostics"]
         if item["classification"] != "potential_risk"
@@ -54,9 +57,6 @@ def test_consistency_search_includes_advanced_risks_without_stale_read_risk() ->
             "#code-flows .code-flow-consistency"
         ).inner_text()
         assert "2 risques" in page.locator(
-            "#flow-mode-context-diagnostics"
-        ).inner_text()
-        assert "2 interactions possibles" in page.locator(
             "#flow-mode-context-diagnostics"
         ).inner_text()
         browser.close()

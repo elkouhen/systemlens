@@ -295,6 +295,158 @@ def test_concurrent_writes_require_matching_canonical_resource_and_key() -> None
     ]
 
 
+def test_distinct_causal_requests_can_have_concurrent_writes() -> None:
+    def writer(flow_id: str, causal_id: str) -> CodeFlow:
+        return replace(_flow(CodeFlowStep(
+            1, "data_write", "orders", "Writer.java", 10, 10,
+            resource="orders", resource_identity="db:orders",
+            key="id", key_identity="db:orders:id",
+            transaction_id=f"tx-{flow_id}", causal_id=causal_id,
+            concurrency="independent_handlers",
+        )), id=flow_id)
+
+    diagnostics = diagnose_flow_consistency_snapshot(
+        [writer("writer-a", "request-a"), writer("writer-b", "request-b")],
+        {"root": {"writer-a", "writer-b"}},
+    )
+    assert [(item.flow_id, item.classification) for item in diagnostics] == [
+        ("root", "potential_concurrent_write"),
+    ]
+
+
+def test_parallel_writes_in_one_flow_are_attributed_to_reachable_roots() -> None:
+    flow = replace(_flow(
+        CodeFlowStep(1, "data_write", "orders", "Writer.java", 10, 10,
+                     resource="orders", resource_identity="db:orders",
+                     key="id", key_identity="db:orders:id",
+                     transaction_id="tx-a", concurrency="parallel"),
+        CodeFlowStep(2, "data_write", "orders", "Writer.java", 11, 11,
+                     resource="orders", resource_identity="db:orders",
+                     key="id", key_identity="db:orders:id",
+                     transaction_id="tx-b", concurrency="parallel"),
+    ), id="handler")
+
+    diagnostics = diagnose_flow_consistency_snapshot(
+        [flow], {"root-a": {"handler"}, "root-b": {"handler"}},
+    )
+    assert [(item.flow_id, item.classification) for item in diagnostics] == [
+        ("root-a", "potential_concurrent_write"),
+        ("root-b", "potential_concurrent_write"),
+    ]
+
+
+def test_matching_conflict_guard_protects_concurrent_writes() -> None:
+    def writer(flow_id: str, guard_scope: str) -> CodeFlow:
+        return replace(_flow(CodeFlowStep(
+            1, "data_write", "orders", "Writer.java", 10, 10,
+            resource="orders", resource_identity="db:orders",
+            key="id", key_identity="db:orders:id", concurrency="parallel",
+            guard="version", guard_scope=guard_scope,
+        )), id=flow_id)
+
+    left = writer("left", "orders:id")
+    protected = writer("right", "orders:id")
+    unprotected = writer("right", "orders:other-id")
+    roots = {"root": {"left", "right"}}
+    protected_diagnostic, = diagnose_flow_consistency_snapshot(
+        [left, protected], roots,
+    )
+    risk_diagnostic, = diagnose_flow_consistency_snapshot(
+        [left, unprotected], roots,
+    )
+    assert protected_diagnostic.classification == "conflict_protection_identified"
+    assert risk_diagnostic.classification == "potential_concurrent_write"
+
+
+def test_read_write_anomalies_require_distinct_transactions() -> None:
+    read = CodeFlowStep(1, "data_read", "orders", "Reader.java", 10, 10,
+                        resource="orders", resource_identity="db:orders",
+                        key="id", key_identity="db:orders:id",
+                        transaction_id="tx-read", concurrency="parallel",
+                        isolation="read_uncommitted")
+    write = CodeFlowStep(2, "data_write", "orders", "Writer.java", 11, 11,
+                         resource="orders", resource_identity="db:orders",
+                         key="id", key_identity="db:orders:id",
+                         transaction_id="tx-write", phase="uncommitted")
+
+    diagnostic, = diagnose_flow_consistency(_flow(read, write))
+    assert diagnostic.classification == "potential_dirty_read"
+    uncertain, = diagnose_flow_consistency(_flow(
+        replace(read, transaction_id=None), write,
+    ))
+    assert uncertain.classification == "potential_interaction"
+    assert diagnose_flow_consistency(_flow(
+        replace(read, transaction_id="tx-write"), write,
+    )) == []
+
+
+def test_freshness_requirement_refines_concurrent_read_write_interaction() -> None:
+    diagnostic, = diagnose_flow_consistency(_flow(
+        CodeFlowStep(1, "data_read", "orders", "Reader.java", 10, 10,
+                     resource="orders", resource_identity="db:orders",
+                     key="id", key_identity="db:orders:id",
+                     concurrency="parallel", freshness_required=True),
+        CodeFlowStep(2, "data_write", "orders", "Writer.java", 11, 11,
+                     resource="orders", resource_identity="db:orders",
+                     key="id", key_identity="db:orders:id"),
+    ))
+    assert diagnostic.classification == "potential_read_write_anomaly"
+
+
+def test_lost_update_requires_two_value_dependent_transactions() -> None:
+    def rmw(flow_id: str, transaction_id: str, causal_id: str) -> CodeFlow:
+        return replace(_flow(
+            CodeFlowStep(1, "data_read", "orders", "Handler.java", 10, 10,
+                         resource="orders", resource_identity="db:orders",
+                         key="id", key_identity="db:orders:id",
+                         transaction_id=transaction_id, causal_id=causal_id,
+                         fields=("amount",)),
+            CodeFlowStep(2, "data_write", "orders", "Handler.java", 11, 11,
+                         resource="orders", resource_identity="db:orders",
+                         key="id", key_identity="db:orders:id",
+                         transaction_id=transaction_id, causal_id=causal_id,
+                         fields=("amount",), concurrency="independent_handlers",
+                         value_dependencies=(f"{flow_id}:1",)),
+        ), id=flow_id)
+
+    left = rmw("left", "tx-left", "request-left")
+    right = rmw("right", "tx-right", "request-right")
+    roots = {"root": {"left", "right"}}
+    diagnostics = diagnose_flow_consistency_snapshot([left, right], roots)
+    assert [item.classification for item in diagnostics] == ["potential_lost_update"]
+    assert diagnostics[0].write_dependency_step == 1
+    assert diagnostics[0].read_dependency_step == 1
+
+    no_dependency = replace(right, steps=(right.steps[0], replace(
+        right.steps[1], value_dependencies=(),
+    )))
+    assert all(
+        item.classification != "potential_lost_update"
+        for item in diagnose_flow_consistency_snapshot([left, no_dependency], roots)
+    )
+
+
+def test_lost_update_can_compare_parallel_transactions_in_one_flow() -> None:
+    steps = []
+    for order, transaction_id in ((1, "tx-a"), (3, "tx-b")):
+        steps.extend((
+            CodeFlowStep(order, "data_read", "orders", "Handler.java", order, order,
+                         resource="orders", resource_identity="db:orders",
+                         key="id", key_identity="db:orders:id",
+                         transaction_id=transaction_id, fields=("amount",)),
+            CodeFlowStep(order + 1, "data_write", "orders", "Handler.java",
+                         order + 1, order + 1,
+                         resource="orders", resource_identity="db:orders",
+                         key="id", key_identity="db:orders:id",
+                         transaction_id=transaction_id, fields=("amount",),
+                         concurrency="parallel",
+                         value_dependencies=(f"flow-1:{order}",)),
+        ))
+
+    diagnostics = diagnose_flow_consistency(_flow(*steps))
+    assert [item.classification for item in diagnostics] == ["potential_lost_update"]
+
+
 def test_conflicting_causal_ids_on_reachable_branches_are_insufficient() -> None:
     write = replace(_flow(CodeFlowStep(
         1, "data_write", "orders", "Writer.java", 10, 10,

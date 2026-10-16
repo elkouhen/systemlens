@@ -865,6 +865,12 @@
         diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, side }) => {
           const classification = ({
             potential_risk: "Risque possible",
+            potential_concurrent_write: "Écritures concurrentes possibles",
+            potential_lost_update: "Lost update possible",
+            potential_dirty_read: "Lecture non validée possible",
+            potential_read_write_anomaly: "Anomalie de fraîcheur possible",
+            potential_interaction: "Interaction possible",
+            conflict_protection_identified: "Protection de conflit identifiée",
             guarantee_identified: "Garantie identifiée",
             insufficient_evidence: "Preuves insuffisantes",
           })[diagnostic.classification] || diagnostic.classification || "Diagnostic";

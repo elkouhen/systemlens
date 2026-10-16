@@ -158,6 +158,15 @@ resource and key identities and require explicit concurrency facts. It reports
 potential risks, identified guards or guarantees, and insufficient evidence;
 it does not claim runtime incidents.
 
+Advanced checks compare distinct transactions even when their causal IDs differ:
+different requests can overlap. They include two parallel accesses in the same
+persisted flow and attribute the result to every reachable selectable root.
+Accesses with the same named transaction are not treated as concurrent
+transactions. A dirty-read candidate additionally requires distinct named
+transactions, an uncommitted write, and read-uncommitted isolation. A lost
+update subsumes generic interaction and concurrent-write candidates for the
+same two read-modify-write sequences.
+
 The detailed model below retains the fuller event-order design, pseudocode,
 and acceptance criteria from the detector design. Those sections
 describe design goals where they call for a lifecycle ordering graph or runtime
@@ -439,10 +448,11 @@ universal guarantee.
 
 ### Concurrent read-write interactions
 
-The third detector reports `potential_concurrent_read_write` when a read and a
-write may overlap on the same resolved resource and key. This is an interaction
-candidate, not automatically a defect: snapshot reads, atomic updates, or a
-freshness policy may make the overlap valid.
+The third detector records a `potential_concurrent_read_write` event with the
+`potential_interaction` classification when a read and a write may overlap on
+the same resolved resource and key. This is an interaction candidate, not
+automatically a defect: snapshot reads, atomic updates, or a freshness policy
+may make the overlap valid.
 
 The detector requires exact resource and key identity plus explicit
 `concurrency` evidence on at least one access. An async branch alone is not

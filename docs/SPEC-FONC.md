@@ -44,14 +44,19 @@ independently. The selected call graph shows pair badges on the matching
 microservice occurrences; selecting a badge highlights its pair. An export
 without the optional diagnostic array remains a valid older export.
 
-The selected call graph MAY also show `potential_concurrent_read_write`,
+The selected call graph MAY also show `potential_interaction`
+(`potential_concurrent_read_write` event type),
 `potential_concurrent_write`, `potential_lost_update`, `potential_dirty_read`,
 `potential_read_write_anomaly`, or `conflict_protection_identified` when their
 explicit flow evidence is available. Concurrency findings require positive
 concurrency metadata; an async branch alone is insufficient. Lost-update
 findings require paired read-to-write value dependencies and distinct named
 transactions. Dirty-read findings require an explicitly uncommitted write and
-read-uncommitted isolation evidence. Tooltips show the evidence and unresolved
+read-uncommitted isolation evidence in two distinct named transactions.
+
+Different causal IDs do not exclude concurrent operations when their overlap
+is explicitly documented. A lost-update finding replaces generic candidates
+for the same operation pairs. Tooltips show the evidence and unresolved
 conditions. Missing metadata MUST NOT be treated as proof of safety or as proof
 of concurrency. These static findings do not assert a runtime incident.
 

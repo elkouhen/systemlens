@@ -26,8 +26,8 @@ and eight mixed flows. Its generated HTML counterpart is
 `async-write-sync-read-complex-facts.html`.
 
 `supermarket-three-anomalies.json` is a compact synthetic call graph for one
-order flow. It demonstrates an asynchronous read-after-write risk, a concurrent
-read/write interaction, and a lost-update candidate on a shared product record.
+order flow. It demonstrates an asynchronous read-after-write risk, a possible
+freshness anomaly, and a lost-update candidate on a shared product record.
 Its generated graph is `supermarket-three-anomalies.html`. The shared database,
 concurrency, transaction, and value-dependency facts are illustrative inputs,
 not claims about the supermarket demo application's implementation. Canonical

@@ -115,7 +115,8 @@ def main() -> None:
             step(2, "data_read", "Product", services[1], 22, resource=resource, key=key,
                  resource_identity=product_identity, key_identity=product_key_identity,
                  action="read", branch="sync", causal_id="order-42", transaction_id="tx-inventory",
-                 concurrency="independent_handlers", phase="observe", fields=["stockQuantity"]),
+                 concurrency="independent_handlers", phase="observe", fields=["stockQuantity"],
+                 freshness_required=True),
             step(3, "data_write", "Product", services[1], 24, resource=resource, key=key,
                  resource_identity=product_identity, key_identity=product_key_identity,
                  action="update", branch="sync", causal_id="order-42", transaction_id="tx-inventory",
@@ -149,8 +150,8 @@ def main() -> None:
                          "namespace": "supermarket-three-anomalies"},
         "mode": "partial",
         "description": (
-            "One order call graph with an async read-after-write risk, a concurrent read/write "
-            "interaction, and a lost-update candidate. Uses synthetic shared-database facts."
+            "One order call graph with an async read-after-write risk, a freshness "
+            "anomaly candidate, and a lost-update candidate. Uses synthetic shared-database facts."
         ),
         "nodes": nodes,
         "edges": edges,
