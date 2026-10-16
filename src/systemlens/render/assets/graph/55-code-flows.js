@@ -1007,7 +1007,7 @@
           directionPorts.forEach((port, index) => {
             const anchor = document.createElement("span");
             anchor.className = `graph-node-port-reference is-${direction} is-${port.protocol}`;
-            anchor.textContent = port.label;
+            anchor.textContent = direction === "in" ? "IN" : "OUT";
             anchor.title = `${direction === "in" ? "Port d’entrée" : "Port de sortie"} · ${port.label}`;
             anchor.style.setProperty(
               "--port-offset",

@@ -284,6 +284,10 @@ method evidence is available. The method line MUST remain visually distinct
 from the service name and MUST retain its qualified name in the title. Long
 names may be clipped to the card width.
 
+Each occurrence MUST show only the IN and OUT ports referenced by the selected
+flow. The card labels MUST show the direction without the port number. Hovering
+a port MUST retain its tooltip with the port identity and source details.
+
 The call-tree context widget MUST summarize consistency diagnostics for the
 selected flow. It MUST show counts for possible risks, insufficient evidence,
 and identified guarantees, or state that no diagnostic was detected. Counts
