@@ -20,13 +20,27 @@
       graphState.callTreeVisibleNodeCount = nodeCount;
       graphState.callTreeVisibleEdgeCount = edgeCount;
       const stats = document.getElementById("flow-mode-context-stats");
-      if (!stats) return;
+      const diagnostics = document.getElementById("flow-mode-context-diagnostics");
       const active = Boolean(codeFlowSelection.flowId)
         && (graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree");
-      stats.hidden = !active;
-      stats.textContent = active
-        ? `Arbre : ${nodeCount} nœud${nodeCount === 1 ? "" : "s"} · ${edgeCount} arc${edgeCount === 1 ? "" : "s"}`
-        : "";
+      if (stats) {
+        stats.hidden = !active;
+        stats.textContent = active
+          ? `Arbre : ${nodeCount} nœud${nodeCount === 1 ? "" : "s"} · ${edgeCount} arc${edgeCount === 1 ? "" : "s"}`
+          : "";
+      }
+      if (diagnostics) {
+        const selected = active
+          ? flowDiagnostics.filter(item => item.flow_id === codeFlowSelection.flowId)
+          : [];
+        const risks = selected.filter(item => item.classification === "potential_risk").length;
+        const uncertain = selected.filter(item => item.classification === "insufficient_evidence").length;
+        const guarantees = selected.filter(item => item.classification === "guarantee_identified").length;
+        diagnostics.hidden = !active;
+        diagnostics.textContent = !active ? ""
+          : selected.length === 0 ? "Cohérence : aucun diagnostic détecté"
+            : `Cohérence : ${risks} risque${risks === 1 ? "" : "s"} · ${uncertain} analyse${uncertain === 1 ? "" : "s"} incertaine${uncertain === 1 ? "" : "s"} · ${guarantees} garantie${guarantees === 1 ? "" : "s"}`;
+      }
     }
     function codeFlowStepLabel(kind) {
       return ({
