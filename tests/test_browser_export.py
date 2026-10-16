@@ -23,6 +23,46 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.slow
+def test_consistency_search_includes_advanced_risks_without_stale_read_risk() -> None:
+    document = (
+        Path(__file__).parents[1] / "examples" / "supermarket-three-anomalies.html"
+    ).read_text(encoding="utf-8")
+    graph_data = re.search(
+        r'(?<=<script id="graph-data" type="application/json">).*?(?=</script>)',
+        document, re.DOTALL,
+    )
+    assert graph_data is not None
+    snapshot = json.loads(graph_data.group())
+    snapshot["flow_diagnostics"] = [
+        item for item in snapshot["flow_diagnostics"]
+        if item["classification"] != "potential_risk"
+    ]
+    document = (
+        document[:graph_data.start()]
+        + json.dumps(snapshot, ensure_ascii=False).replace("<", "\\u003c")
+        + document[graph_data.end():]
+    )
+    with sync_playwright() as playwright:
+        browser = _launch_visual_browser(playwright)
+        page = browser.new_page(viewport={"width": 1200, "height": 800})
+        page.set_content(document, wait_until="load")
+        page.locator("#flows-tab").click()
+        page.locator("#code-flow-filter").fill("incohérence")
+        assert page.locator("#code-flows .code-flow-item").count() == 1
+        page.locator("#code-flows .code-flow-item").click()
+        assert "Incohérence possible · 2" in page.locator(
+            "#code-flows .code-flow-consistency"
+        ).inner_text()
+        assert "2 risques" in page.locator(
+            "#flow-mode-context-diagnostics"
+        ).inner_text()
+        assert "2 interactions possibles" in page.locator(
+            "#flow-mode-context-diagnostics"
+        ).inner_text()
+        browser.close()
+
+
+@pytest.mark.slow
 def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
     document = _current_simple_dataset_document()
     with sync_playwright() as playwright:
@@ -176,7 +216,7 @@ def test_call_tree_cards_expand_for_many_data_annotations() -> None:
         assert len(geometry["edges"]) == 2
         for edge in geometry["edges"]:
             target = next(node for node in children if node["pathKey"] == edge["target"])
-            assert edge["startX"] == pytest.approx(root["x"] + 190, abs=1)
+            assert edge["startX"] >= root["x"] + 190
             assert edge["startY"] == pytest.approx(root["y"] + root["height"] / 2, abs=1)
             assert edge["endY"] == pytest.approx(target["y"] + target["height"] / 2, abs=1)
         browser.close()

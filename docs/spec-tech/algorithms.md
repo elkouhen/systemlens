@@ -146,13 +146,17 @@ without asserting that both happened. See
 
 ## 8. Data consistency diagnostics
 
-The current detector compares asynchronous writes and synchronous reads on
-shared reachable triggers, then applies canonical resource/key, causal,
-source-order, and visibility evidence. A shared root proves reachability only;
-cross-flow pairs also require matching causal IDs. Advanced checks require
-explicit resource/key and concurrency facts. The detector reports potential
-risks, identified guards or guarantees, and insufficient evidence; it does not
-claim runtime incidents.
+The current detector compares asynchronous writes and synchronous reads across
+all persisted flows reachable from each selectable root. A pair inside one
+descendant flow is attributed to every root that reaches it. A shared root
+proves reachability only; a cross-flow async-write/read risk also requires
+matching causal IDs.
+
+The detector applies canonical resource/key, explicit request order, and
+visibility evidence. Advanced checks group accesses only by matching canonical
+resource and key identities and require explicit concurrency facts. It reports
+potential risks, identified guards or guarantees, and insufficient evidence;
+it does not claim runtime incidents.
 
 The detailed model below retains the fuller event-order design, pseudocode,
 and acceptance criteria from the detector design. Those sections
@@ -181,9 +185,15 @@ Java literals. CodeQL-derived flows also trace unmodified scalar parameters
 through resolved calls and final scalar local aliases. The indexer does not
 resolve mutable aliases, fields, or serialized payload values. It also does not
 infer transaction scope, modified fields, value dependencies, isolation, or
-scheduler concurrency. Source-indexed flows therefore abstain from the advanced
-detectors. Direct flow manifests can carry reviewed evidence for those fields.
-The graph never treats missing facts as proof of safety or concurrency.
+scheduler concurrency.
+
+Source-indexed flows therefore abstain from the advanced detectors. Direct flow
+manifests can carry reviewed evidence for those fields.
+
+The indexer also does not infer request-before-read order from source line order.
+Source-indexed async-write/read pairs without explicit order evidence remain
+`insufficient_evidence`. The graph never treats missing facts as proof of safety
+or concurrency.
 
 > **Why & What - compare event order**
 >

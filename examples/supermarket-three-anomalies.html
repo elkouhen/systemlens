@@ -96,6 +96,9 @@
     .graph-call-tree-edge.is-rest { stroke: #d55e00; }
     .graph-call-tree-edge.is-kafka { stroke: #009e73; }
     .graph-call-tree-edge.is-hovered { stroke-width: 4; opacity: 1; }
+    .graph-call-tree-edge.is-path-context { stroke-width: 3; opacity: 1; }
+    .graph-call-tree-edge-label.is-path-context { font-weight: 900; }
+    .graph-call-tree-node.is-path-context { opacity: 1; }
     .graph-call-tree-edge-label { fill: #4338ca; font-size: 10px; font-weight: 800; paint-order: stroke; stroke: #f8fafc; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; }
     .graph-call-tree-edge.is-diagnostic-async, .graph-call-tree-edge-hit.is-diagnostic-async { stroke: #f59e0b !important; stroke-width: 4px; stroke-dasharray: 9 5; opacity: 1; }
     .graph-call-tree-edge.is-diagnostic-sync, .graph-call-tree-edge-hit.is-diagnostic-sync { stroke: #0284c7 !important; stroke-width: 4px; opacity: 1; }
@@ -105,7 +108,8 @@
     .graph-call-tree-edge-label.is-diagnostic-sync { fill: #0369a1; font-weight: 900; }
     .graph-call-tree-edge-label.is-diagnostic-interaction { fill: #7e22ce; font-weight: 900; }
     .graph-call-tree-edge-label.is-clickable { pointer-events: auto; cursor: pointer; }
-    .graph-call-tree-node { position: absolute; width: 150px; min-height: 82px; height: auto; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; cursor: pointer; pointer-events: auto; transition: box-shadow .12s ease, outline .12s ease; }
+    .graph-call-tree-edge.is-path-muted, .graph-call-tree-edge-label.is-path-muted, .graph-call-tree-node.is-path-muted { opacity: .16; }
+    .graph-call-tree-node { position: absolute; width: 190px; min-height: 108px; height: auto; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; cursor: pointer; pointer-events: auto; transition: box-shadow .12s ease, outline .12s ease; }
     .graph-call-tree-node.is-hovered { outline: 2px solid color-mix(in srgb, var(--card-accent, #64748b) 70%, transparent); outline-offset: 2px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 8px 22px rgba(15, 23, 42, .2); }
     .graph-call-tree-node.is-selected { outline: 2px solid #7c3aed; outline-offset: 3px; box-shadow: 0 0 0 5px rgba(124, 58, 237, .18), 0 8px 22px rgba(15, 23, 42, .22); }
     .graph-call-tree-node.is-diagnostic-async { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, .28), 0 8px 22px rgba(15, 23, 42, .2); }
@@ -118,7 +122,10 @@
     .graph-call-tree-access-badge { grid-column: 1 / 3; display: block; margin-top: 5px; padding: 3px 5px; border-radius: 4px; color: #155e75; background: #cffafe; font-size: 8px; font-weight: 800; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .graph-call-tree-node .graph-node-card-icon { grid-column: 2; grid-row: 1; }
     .graph-call-tree-node .graph-node-card-name { grid-column: 1; grid-row: 1; }
-    .graph-call-tree-node .graph-node-card-kind { grid-column: 1 / 3; grid-row: 2; }
+    .graph-call-tree-method { grid-column: 1 / 3; grid-row: 2; min-width: 0; margin-top: 6px; padding: 5px 7px; border-left: 3px solid var(--card-accent, #64748b); border-radius: 4px; color: #1e293b; background: color-mix(in srgb, var(--card-accent, #64748b) 12%, white); font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .graph-call-tree-method-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 800; }
+    .graph-call-tree-method-parameters { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .graph-call-tree-node .graph-node-card-kind { grid-column: 1 / 3; grid-row: 3; }
     .graph-call-tree-node .graph-node-port-reference { z-index: 3; }
     .graph-call-tree-node.is-frequency-2 { background: #eef2ff; }
     .graph-call-tree-node.is-frequency-3 { background: #c7d2fe; }
@@ -139,6 +146,7 @@
     :root[data-theme="dark"] .graph-call-tree-node.is-frequency-4 { background: #43578f; }
     :root[data-theme="dark"] .graph-call-tree-more-badge { border-color: #94a3b8; color: #e2e8f0; background: #334155; }
     :root[data-theme="dark"] .graph-call-tree-edge-label { fill: #c4b5fd; stroke: #0f172a; }
+    :root[data-theme="dark"] .graph-call-tree-method { color: #cbd5e1; }
     /* Only flow tooltips rise over fixed widgets; graph cards stay below. */
     #graph-flow-tooltips { position: fixed; inset: 0; z-index: 11; pointer-events: none; overflow: visible; }
     #graph-flow-status { position: fixed; z-index: 10; top: 16px; left: 50%; max-width: min(460px, calc(100vw - 32px)); margin: 0; padding: 8px 11px; transform: translateX(-50%); border: 1px solid #f59e0b; border-radius: 8px; color: #78350f; background: #fffbeb; box-shadow: 0 5px 16px rgba(15, 23, 42, .18); font-size: 11px; font-weight: 700; line-height: 1.35; text-align: center; pointer-events: none; }
@@ -481,6 +489,7 @@
     .code-flow-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .code-flow-summary { margin: 0; color: var(--ui-muted); font-size: 10px; line-height: 1.25; overflow-wrap: anywhere; }
     .code-flow-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; }
+    .code-flow-consistency { width: fit-content; padding: 3px 6px; border: 1px solid #f59e0b; border-radius: 5px; color: #92400e; background: #fffbeb; font-size: 9px; font-weight: 850; line-height: 1.2; }
     .code-flow-stat { display: flex; align-items: baseline; justify-content: center; gap: 3px; min-width: 0; padding: 3px 4px; border: 1px solid var(--ui-border); border-radius: 4px; color: var(--ui-muted); background: var(--ui-control); text-align: center; }
     .code-flow-stat strong { color: var(--ui-title); font-size: 11px; line-height: 1; }
     .code-flow-stat small { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
@@ -1667,6 +1676,7 @@
   border-radius: var(--widget-radius);
   box-shadow: none;
 }
+:root[data-theme="dark"] .code-flow-consistency { border-color: #92400e; color: #fef3c7; background: #451a03; }
 :root[data-theme="dark"] .reference-item:hover,
 :root[data-theme="dark"] .code-flow-item:hover { border-color: var(--ui-accent-border); }
 :root[data-theme="dark"] .code-flow-item.is-selected {
@@ -1685,6 +1695,7 @@
   background: #131e2b;
   box-shadow: 0 5px 16px rgba(0, 0, 0, .22);
 }
+:root[data-theme="dark"] .graph-call-tree-method { color: #e2e8f0; background: color-mix(in srgb, var(--card-accent, #64748b) 24%, #172033); }
 :root[data-theme="dark"] .graph-node-card-label .graph-node-card-kind,
 :root[data-theme="dark"] .graph-call-tree-node .graph-node-card-kind { color: var(--ui-muted); font-weight: 500; }
 :root[data-theme="dark"] .graph-node-card-name { color: var(--ui-title); font-weight: 600; }
@@ -1795,7 +1806,7 @@ body.catalogue-active #microservices-panel {
 body.catalogue-active #microservices-panel .references-header { max-width: none; }
 body.catalogue-active #microservices-panel .resource-catalogue-layout {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 260px;
+  grid-template-columns: 220px minmax(0, 1fr) 500px;
   gap: 14px;
   align-items: start;
 }
@@ -1806,6 +1817,10 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview {
   border: 1px solid var(--ui-border);
   border-radius: 10px;
   background: var(--ui-widget);
+}
+body.catalogue-active #microservices-panel .resource-catalogue-preview {
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
 }
 body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) .resource-catalogue-preview { display: none; }
 body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) { grid-template-columns: 220px minmax(0, 1fr); }
@@ -1859,7 +1874,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-table-head {
   grid-column: 1;
   grid-row: 2;
   width: 100%;
-  grid-template-columns: minmax(0, 1fr) 180px 150px;
+  grid-template-columns: minmax(0, 1fr) 160px 100px;
   gap: 10px;
   padding: 0 12px 8px;
   border-bottom: 1px solid var(--ui-border);
@@ -1889,6 +1904,136 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-owner {
   color: var(--ui-text);
   font-size: 12px;
 }
+body.catalogue-active #microservices-panel .resource-catalogue-back {
+  margin: 0 0 14px;
+  padding: 5px 8px;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: var(--ui-accent-text);
+  background: var(--ui-control);
+  font-size: 12px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-back[hidden] { display: none; }
+body.catalogue-active #microservices-panel .resource-catalogue-attributes {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-border);
+}
+body.catalogue-active #microservices-panel .resource-catalogue-attributes[hidden] { display: none; }
+body.catalogue-active #microservices-panel .resource-catalogue-attributes h4 {
+  margin: 0 0 10px;
+  color: var(--ui-title);
+  font-size: 12px;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-attributes-group {
+  margin: 10px 0 6px;
+  color: var(--ui-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-attributes-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-attributes-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: var(--ui-text);
+  background: var(--ui-control);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-attributes-list small,
+body.catalogue-active #microservices-panel .resource-catalogue-attributes-empty {
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-attribute-types {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  max-width: 75%;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-attribute-link {
+  width: auto;
+  height: auto;
+  padding: 2px 5px;
+  border: 1px solid var(--ui-accent-border);
+  border-radius: 4px;
+  color: var(--ui-accent-text);
+  background: var(--ui-accent-soft);
+  font-size: 11px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-attribute-link:hover,
+body.catalogue-active #microservices-panel .resource-catalogue-attribute-link:focus-visible {
+  background: var(--ui-selected);
+  color: var(--ui-on-accent);
+}
+body.catalogue-active #microservices-panel .resource-catalogue-related {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-border);
+}
+body.catalogue-active #microservices-panel .resource-catalogue-related h4 {
+  margin: 0 0 10px;
+  color: var(--ui-title);
+  font-size: 12px;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-related-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-related-link {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  height: auto;
+  min-height: 48px;
+  padding: 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: 7px;
+  color: var(--ui-text);
+  background: var(--ui-control);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-related-link:hover,
+body.catalogue-active #microservices-panel .resource-catalogue-related-link:focus-visible,
+body.catalogue-active #microservices-panel .resource-catalogue-back:hover,
+body.catalogue-active #microservices-panel .resource-catalogue-back:focus-visible {
+  border-color: var(--ui-accent-border);
+  background: var(--ui-accent-soft);
+}
+body.catalogue-active #microservices-panel .resource-catalogue-related-name {
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+body.catalogue-active #microservices-panel .resource-catalogue-related-link small,
+body.catalogue-active #microservices-panel .resource-catalogue-related-empty {
+  color: var(--ui-muted);
+  font-size: 11px;
+}
 body.catalogue-active #microservices-panel .resource-catalogue-summary {
   grid-column: 1;
   grid-row: 1;
@@ -1915,7 +2060,7 @@ body.catalogue-active #microservices-panel .reference-item .reference-action {
   min-width: 60px;
 }
 body.catalogue-active #microservices-panel .resource-catalogue-row {
-  grid-template-columns: minmax(0, 1fr) 180px 150px;
+  grid-template-columns: minmax(0, 1fr) 160px 100px;
   min-height: 58px;
   border-width: 0 0 1px;
   border-radius: 0;
@@ -1951,14 +2096,24 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
   color: var(--ui-muted); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
   overflow-wrap: anywhere;
 }
-@media (max-width: 980px) {
+@media (min-width: 1101px) and (max-width: 1380px) {
+  body.catalogue-active #microservices-panel .resource-catalogue-layout { grid-template-columns: 190px minmax(0, 1fr) 500px; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection) .resource-catalogue-table-head,
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection) .resource-catalogue-row { grid-template-columns: minmax(0, 1fr) 90px; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection) .resource-catalogue-table-head span:nth-child(2) { display: none; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection) .resource-catalogue-row > div:first-child { grid-column: 1; grid-row: 1; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection) .resource-catalogue-row .reference-meta { grid-column: 1; grid-row: 2; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection) .resource-catalogue-actions { grid-column: 2; grid-row: 1 / 3; }
+}
+@media (max-width: 1100px) {
   body.catalogue-active #microservices-panel .resource-catalogue-layout,
   body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) { grid-template-columns: 190px minmax(0, 1fr); }
   body.catalogue-active #microservices-panel .resource-catalogue-preview { grid-column: 1 / -1; min-height: 140px; }
 }
 @media (max-width: 700px) {
   body.catalogue-active .toolbar { padding: 12px; }
-  body.catalogue-active #microservices-panel .resource-catalogue-layout { grid-template-columns: 1fr; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout,
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) { grid-template-columns: 1fr; }
   body.catalogue-active #microservices-panel .resource-catalogue-sidebar,
   body.catalogue-active #microservices-panel .resource-catalogue-results,
   body.catalogue-active #microservices-panel .resource-catalogue-preview { grid-column: 1; }
@@ -2098,8 +2253,8 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       </div>
       <div class="resource-catalogue-layout">
         <aside class="resource-catalogue-sidebar"><h3>Types de ressources</h3><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher une ressource ou un service" autocomplete="off" aria-label="Rechercher une ressource ou un service"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="http_route">Routes HTTP</option><option value="openapi_contract">Contrats OpenAPI</option><option value="asyncapi_contract">Contrats AsyncAPI</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="dto">DTOs</option><option value="diagnostic">Diagnostics</option><option value="other">Autres ressources</option></select><select id="resource-service-filter" class="reference-filter-input" aria-label="Filtrer par microservice"><option value="all">Tous les microservices</option></select></div><div id="resource-catalogue-categories" class="resource-catalogue-categories"></div><p class="resource-catalogue-sidebar-help">Sélectionnez un type ou recherchez un nom pour réduire l’inventaire.</p></aside>
-        <section class="references-section resource-catalogue-results"><p id="resource-catalogue-summary" class="resource-catalogue-summary" role="status"></p><div class="resource-catalogue-table-head" aria-hidden="true"><span>Ressource</span><span>Propriétaire / relations</span><span>Action</span></div><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucune ressource ne correspond à ces filtres.</p></section>
-        <aside id="resource-catalogue-preview" class="resource-catalogue-preview"><p class="resource-catalogue-preview-kicker">Aperçu de la ressource</p><h3 id="resource-catalogue-preview-title">Aucune ressource sélectionnée</h3><p id="resource-catalogue-preview-copy">Sélectionnez une ligne dans le catalogue pour afficher son contexte, ses relations et sa source.</p></aside>
+        <section class="references-section resource-catalogue-results"><p id="resource-catalogue-summary" class="resource-catalogue-summary" role="status"></p><div class="resource-catalogue-table-head" aria-hidden="true"><span>Ressource</span><span>Contexte</span><span>Action</span></div><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucune ressource ne correspond à ces filtres.</p></section>
+        <aside id="resource-catalogue-preview" class="resource-catalogue-preview"><button id="resource-catalogue-back" class="resource-catalogue-back" type="button" hidden>← Retour</button><p class="resource-catalogue-preview-kicker">Aperçu de la ressource</p><h3 id="resource-catalogue-preview-title">Aucune ressource sélectionnée</h3><p id="resource-catalogue-preview-copy">Sélectionnez une ligne dans le catalogue pour afficher son contexte, ses attributs, ses relations et sa source.</p><section id="resource-catalogue-attributes" class="resource-catalogue-attributes" hidden></section><section id="resource-catalogue-related" class="resource-catalogue-related"></section></aside>
       </div>
     </div>
     <div id="issues-panel" class="toolbar-panel indexing-issues" role="tabpanel" aria-labelledby="issues-tab" hidden>
@@ -2118,7 +2273,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
         <p class="references-description">Parcours ordonnés issus du code source. Ils décrivent un comportement potentiel, pas une trace runtime.</p>
         <p id="code-flow-selection-help" class="code-flow-selection-help">Cliquez sur un flux pour ouvrir son graphe d’appel.</p>
       </div>
-    <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Rechercher un service, une donnée ou un topic" autocomplete="off" aria-label="Rechercher un service, une donnée ou un topic dans les flux de code"></div><p id="code-flow-filter-summary" class="code-flow-filter-summary"></p><p id="code-flows-summary" class="code-flows-summary"></p><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux d’appel indexé.</p></section>
+    <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Rechercher un service, une donnée, un topic ou « incohérence »" autocomplete="off" aria-label="Rechercher un service, une donnée, un topic ou un flux avec incohérence possible"></div><p id="code-flow-filter-summary" class="code-flow-filter-summary"></p><p id="code-flows-summary" class="code-flows-summary"></p><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux d’appel indexé.</p></section>
     </div>
     <div id="contracts-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="contracts-tab" hidden>
       <div class="references-header">
@@ -2191,6 +2346,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       <strong id="flow-mode-context-title"></strong>
       <span id="flow-mode-context-trigger" class="graph-mode-context-trigger" hidden></span>
       <span id="flow-mode-context-stats" class="graph-mode-context-stats" hidden></span>
+      <span id="flow-mode-context-diagnostics" class="graph-mode-context-stats" hidden></span>
       <span id="flow-mode-context-help"></span>
     </div>
     <div class="graph-mode-context-actions">
@@ -2241,7 +2397,7 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
       <div id="inspector-body" class="inspector-body"></div>
     </div>
   </div>
-  <script id="graph-data" type="application/json">{"nodes":[{"id":"microservice:inventory-service","kind":"microservice","name":"inventory-service","layer":"external","layer_label":"External","color":"#d97706","runtime_namespaces":[],"fact_namespaces":["supermarket-three-anomalies"],"architecture_layer":"external","ports":[{"label":"I1 → O1","direction":"in","type":"Kafka receive","system":"kafka","role":"consume","method":"\u003cunknown>","name":"supermarket.order.placed","path":"inventory-service/src/InventoryserviceFlow.java","line":20,"endpoint_id":"inventory-consume","message_type_status":"unknown","message_type_warning":"Type Java non déterminé","local_output_labels":["O1"],"local_outputs":[{"endpoint_id":"inventory-publish","label":"O1","type":"Kafka publish","name":"inventory.stock-reserved","method":"\u003cunknown>"}]},{"label":"O1","direction":"out","type":"Kafka publish","system":"kafka","role":"produce","method":"\u003cunknown>","name":"inventory.stock-reserved","path":"inventory-service/src/InventoryserviceFlow.java","line":28,"endpoint_id":"inventory-publish","message_type_status":"unknown","message_type_warning":"Type Java non déterminé"}],"http_calls":[],"http_callers":[],"kafka_endpoints":[{"role":"consume","topic":"supermarket.order.placed","message_type":null,"location":"inventory-service/src/InventoryserviceFlow.java:20","vscode_uri":"vscode://file//Users/elkouhen/systemlens/inventory-service/src/InventoryserviceFlow.java:20"},{"role":"produce","topic":"inventory.stock-reserved","message_type":null,"location":"inventory-service/src/InventoryserviceFlow.java:28","vscode_uri":"vscode://file//Users/elkouhen/systemlens/inventory-service/src/InventoryserviceFlow.java:28"}],"resources":[],"http_routes":[],"rest_dtos":[],"jpa_entities":[],"jpa_dtos":[],"kubernetes_workloads":[],"openapi_files":[],"openapi_contracts":[],"asyncapi_contracts":[],"label":"inventory-service","width":190,"height":42,"complexity":{"score":2,"level":"medium","relations":2,"breakdown":{"http":0,"kafka":2,"mongodb":0},"rank":2,"population":2,"tier_start":2,"tier_end":2},"size":50,"internal_flow_count":0},{"id":"microservice:order-service","kind":"microservice","name":"order-service","layer":"external","layer_label":"External","color":"#2563eb","runtime_namespaces":[],"fact_namespaces":["supermarket-three-anomalies"],"architecture_layer":"external","ports":[{"label":"I2 → O2","direction":"in","type":"HTTP receive","system":"rest","role":"serve","method":"\u003cunknown>","name":"POST /api/orders","path":"order-service/src/OrderserviceFlow.java","line":10,"endpoint_id":"orders-http","local_output_labels":["O2"],"local_outputs":[{"endpoint_id":"orders-publish","label":"O2","type":"Kafka publish","name":"supermarket.order.placed","method":"\u003cunknown>"}]},{"label":"O2","direction":"out","type":"Kafka publish","system":"kafka","role":"produce","method":"\u003cunknown>","name":"supermarket.order.placed","path":"order-service/src/OrderserviceFlow.java","line":14,"endpoint_id":"orders-publish","message_type_status":"unknown","message_type_warning":"Type Java non déterminé"}],"http_calls":[],"http_callers":[],"kafka_endpoints":[{"role":"produce","topic":"supermarket.order.placed","message_type":null,"location":"order-service/src/OrderserviceFlow.java:14","vscode_uri":"vscode://file//Users/elkouhen/systemlens/order-service/src/OrderserviceFlow.java:14"}],"resources":["POST /api/orders"],"http_routes":[{"role":"serve","route":"POST /api/orders","location":"order-service/src/OrderserviceFlow.java:10","endpoint_id":"orders-http","vscode_uri":"vscode://file//Users/elkouhen/systemlens/order-service/src/OrderserviceFlow.java:10"}],"rest_dtos":[],"jpa_entities":[],"jpa_dtos":[],"kubernetes_workloads":[],"openapi_files":[],"openapi_contracts":[],"asyncapi_contracts":[],"label":"order-service","width":190,"height":42,"complexity":{"score":1,"level":"low","relations":1,"breakdown":{"http":0,"kafka":1,"mongodb":0},"rank":1,"population":2,"tier_start":1,"tier_end":1},"size":50,"internal_flow_count":1},{"id":"kafka_topic:inventory.stock-reserved","kind":"kafka_topic","name":"inventory.stock-reserved","label":"inventory.stock-reserved","published_message_types":[],"consumed_message_types":[],"message_type_status":"unknown","width":190,"height":42,"technology":"kafka","owner_service":"inventory-service","architecture_layer":"external","namespace_source":"writer","complexity":{"score":1,"level":"low","relations":1,"breakdown":{"http":0,"kafka":1,"mongodb":0},"rank":1,"population":2,"tier_start":1,"tier_end":1},"color":"#2563eb","size":50},{"id":"kafka_topic:supermarket.order.placed","kind":"kafka_topic","name":"supermarket.order.placed","label":"supermarket.order.placed","published_message_types":[],"consumed_message_types":[],"message_type_status":"unknown","width":190,"height":42,"technology":"kafka","owner_service":"order-service","architecture_layer":"external","namespace_source":"writer","complexity":{"score":2,"level":"medium","relations":2,"breakdown":{"http":0,"kafka":2,"mongodb":0},"rank":2,"population":2,"tier_start":2,"tier_end":2},"color":"#d97706","size":50},{"id":"mongodb_collection:shared:inventory:products","kind":"mongodb_collection","name":"shared:inventory:products","label":"shared:inventory:products","width":190,"height":42,"status":"confirmed","technology":"postgresql","complexity":{"score":0,"level":"medium","relations":0,"breakdown":{"http":0,"kafka":0,"mongodb":0},"rank":2,"population":2,"tier_start":2,"tier_end":2},"color":"#d97706","size":50},{"id":"mongodb_collection:order-service:orders","kind":"mongodb_collection","name":"order-service:orders","label":"order-service:orders","width":190,"height":42,"status":"confirmed","technology":"postgresql","complexity":{"score":0,"level":"low","relations":0,"breakdown":{"http":0,"kafka":0,"mongodb":0},"rank":1,"population":2,"tier_start":1,"tier_end":1},"color":"#2563eb","size":50}],"links":[{"source":"kafka_topic:supermarket.order.placed","target":"microservice:inventory-service","kind":"kafka","direction":"incoming","label":"supermarket.order.placed","confidence":"proved","provenance":"manifest","endpoint_ids":["inventory-consume"],"unresolved":true,"message_type_status":"unknown","message_type_warning":"Type Java non déterminé ; relation conservée comme preuve partielle.","consumed_message_types":[]},{"source":"microservice:inventory-service","target":"kafka_topic:inventory.stock-reserved","kind":"kafka","direction":"outgoing","label":"inventory.stock-reserved","confidence":"proved","provenance":"manifest","endpoint_ids":["inventory-publish"],"unresolved":true,"message_type_status":"unknown","message_type_warning":"Type Java non déterminé ; relation conservée comme preuve partielle.","published_message_types":[]},{"source":"microservice:order-service","target":"kafka_topic:supermarket.order.placed","kind":"kafka","direction":"outgoing","label":"supermarket.order.placed","confidence":"proved","provenance":"manifest","endpoint_ids":["orders-publish"],"unresolved":true,"message_type_status":"unknown","message_type_warning":"Type Java non déterminé ; relation conservée comme preuve partielle.","published_message_types":[]},{"source":"microservice:order-service","target":"kafka_topic:supermarket.order.placed","kind":"enrichment_event","direction":"outgoing","label":"publishes","confidence":"high","status":"confirmed","provenance":"CLI graph enrichment","metadata":{"channel":"supermarket.order.placed"}},{"source":"kafka_topic:supermarket.order.placed","target":"microservice:inventory-service","kind":"enrichment_event","direction":"outgoing","label":"consumes","confidence":"high","status":"confirmed","provenance":"CLI graph enrichment","metadata":{"channel":"supermarket.order.placed"}},{"source":"microservice:inventory-service","target":"kafka_topic:inventory.stock-reserved","kind":"enrichment_event","direction":"outgoing","label":"publishes","confidence":"high","status":"confirmed","provenance":"CLI graph enrichment"}],"port_links":[],"internal_port_links":[{"input_endpoint_id":"inventory-consume","output_endpoint_id":"inventory-publish"},{"input_endpoint_id":"orders-http","output_endpoint_id":"orders-publish"}],"software_layers":["external"],"runtime_namespaces":[],"fact_namespaces":["supermarket-three-anomalies"],"groups":[],"kafka_dtos":[],"project_dto_definitions":[],"mongo_persistence_classes":[],"resource_descriptions":[],"asyncapi_contracts":[],"indexing_issues":[{"severity":"info","category":"Type Kafka inconnu","message":"inventory-service : le type Java du message sur 'inventory.stock-reserved' n'a pas ete deduit.","location":"inventory-service/src/InventoryserviceFlow.java:28","vscode_uri":"vscode://file//Users/elkouhen/systemlens/inventory-service/src/InventoryserviceFlow.java:28"},{"severity":"info","category":"Type Kafka inconnu","message":"inventory-service : le type Java du message sur 'supermarket.order.placed' n'a pas ete deduit.","location":"inventory-service/src/InventoryserviceFlow.java:20","vscode_uri":"vscode://file//Users/elkouhen/systemlens/inventory-service/src/InventoryserviceFlow.java:20"},{"severity":"info","category":"Type Kafka inconnu","message":"order-service : le type Java du message sur 'supermarket.order.placed' n'a pas ete deduit.","location":"order-service/src/OrderserviceFlow.java:14","vscode_uri":"vscode://file//Users/elkouhen/systemlens/order-service/src/OrderserviceFlow.java:14"}],"codeql_call_graph":{"nodes":[],"edges":[]},"all_flows_call_graph":{"nodes":["inventory-service","order-service"],"node_order":["order-service","inventory-service"],"traversal_levels":[["order-service"],["inventory-service"]],"call_tree":{"levels":[["order-service"],["inventory-service"]],"edges":[{"source":"order-service","target":"inventory-service","order":1}],"root_occurrence_ids":[],"occurrences":[]},"edges":[{"source":"order-service","target":"inventory-service","kind":"kafka","label":"supermarket.order.placed","order":1,"endpoint_ids":["orders-publish","inventory-consume"]}],"triggers":{"inventory-service":[{"flow_id":"inventory-handler","kind":"message_entry","name":"supermarket.order.placed","endpoint_id":"inventory-consume"}],"order-service":[{"flow_id":"orders-root","kind":"http_entry","name":"POST /api/orders","endpoint_id":"orders-http"}]}},"supporting_code_flows":[{"id":"inventory-handler","module":"inventory-service","method":"InventoryFlow.reserve","path":"inventory-service/src/InventoryserviceFlow.java","start_line":20,"end_line":50,"status":"potential","confidence":"high","reconciliation":"complete","alternative_count":1,"equivalent_count":1,"reason":"Synthetic, explicitly evidenced anomaly demonstration.","vscode_uri":"vscode://file//Users/elkouhen/systemlens/inventory-service/src/InventoryserviceFlow.java:20","call_graph_id":null,"steps":[{"order":1,"kind":"message_entry","name":"supermarket.order.placed","path":"inventory-service/src/InventoryserviceFlow.java","start_line":20,"end_line":20,"endpoint_id":"inventory-consume","port_label":"I1 → O1","operation":null,"action":null,"branch":null,"resource":null,"key":null,"causal_id":null,"expected_version":null,"completion":null,"query_shape":null},{"order":2,"kind":"data_read","name":"Product","path":"inventory-service/src/InventoryserviceFlow.java","start_line":22,"end_line":22,"endpoint_id":null,"port_label":null,"operation":null,"action":"read","branch":"sync","resource":"shared:inventory:products","key":"payload.productId","causal_id":"order-42","expected_version":null,"completion":null,"query_shape":null},{"order":3,"kind":"data_write","name":"Product","path":"inventory-service/src/InventoryserviceFlow.java","start_line":24,"end_line":24,"endpoint_id":null,"port_label":null,"operation":null,"action":"update","branch":"sync","resource":"shared:inventory:products","key":"payload.productId","causal_id":"order-42","expected_version":null,"completion":"unknown","query_shape":null},{"order":4,"kind":"message_publish","name":"inventory.stock-reserved","path":"inventory-service/src/InventoryserviceFlow.java","start_line":28,"end_line":28,"endpoint_id":"inventory-publish","port_label":"O1","operation":null,"action":null,"branch":null,"resource":null,"key":null,"causal_id":null,"expected_version":null,"completion":null,"query_shape":null}]}],"code_flows":[{"id":"orders-root","module":"order-service","method":"OrderFlow.place","path":"order-service/src/OrderserviceFlow.java","start_line":10,"end_line":40,"status":"potential","confidence":"high","reconciliation":"complete","alternative_count":1,"equivalent_count":1,"reason":"Synthetic, explicitly evidenced anomaly demonstration.","vscode_uri":"vscode://file//Users/elkouhen/systemlens/order-service/src/OrderserviceFlow.java:10","call_graph_id":"call-graph-1","steps":[{"order":1,"kind":"http_entry","name":"POST /api/orders","path":"order-service/src/OrderserviceFlow.java","start_line":10,"end_line":10,"endpoint_id":"orders-http","port_label":"I2 → O2","operation":null,"action":null,"branch":null,"resource":null,"key":null,"causal_id":null,"expected_version":null,"completion":null,"query_shape":null},{"order":2,"kind":"data_read","name":"Product","path":"order-service/src/OrderserviceFlow.java","start_line":12,"end_line":12,"endpoint_id":null,"port_label":null,"operation":null,"action":"read","branch":"sync","resource":"shared:inventory:products","key":"payload.productId","causal_id":null,"expected_version":null,"completion":null,"query_shape":null},{"order":3,"kind":"data_write","name":"Product","path":"order-service/src/OrderserviceFlow.java","start_line":13,"end_line":13,"endpoint_id":null,"port_label":null,"operation":null,"action":"update","branch":"sync","resource":"shared:inventory:products","key":"payload.productId","causal_id":null,"expected_version":null,"completion":null,"query_shape":null},{"order":4,"kind":"data_write","name":"OrderStatus","path":"order-service/src/OrderserviceFlow.java","start_line":14,"end_line":14,"endpoint_id":null,"port_label":null,"operation":null,"action":"update","branch":"async","resource":"order-service:orders","key":"request.orderId","causal_id":null,"expected_version":null,"completion":"ack_only","query_shape":null},{"order":5,"kind":"data_read","name":"OrderStatus","path":"order-service/src/OrderserviceFlow.java","start_line":15,"end_line":15,"endpoint_id":null,"port_label":null,"operation":null,"action":"read","branch":"sync","resource":"order-service:orders","key":"request.orderId","causal_id":null,"expected_version":null,"completion":null,"query_shape":null},{"order":6,"kind":"message_publish","name":"supermarket.order.placed","path":"order-service/src/OrderserviceFlow.java","start_line":16,"end_line":16,"endpoint_id":"orders-publish","port_label":"O2","operation":null,"action":null,"branch":null,"resource":null,"key":null,"causal_id":null,"expected_version":null,"completion":null,"query_shape":null}]}],"flow_data_accesses":{"orders-root":[{"flow_id":"inventory-handler","module":"inventory-service","kind":"data_read","action":"read","resource":"shared:inventory:products","path":"inventory-service/src/InventoryserviceFlow.java","line":22,"confidence":"high","branch":"sync","trigger_endpoint_id":"inventory-consume"},{"flow_id":"inventory-handler","module":"inventory-service","kind":"data_write","action":"update","resource":"shared:inventory:products","path":"inventory-service/src/InventoryserviceFlow.java","line":24,"confidence":"high","branch":"sync","trigger_endpoint_id":"inventory-consume"},{"flow_id":"orders-root","module":"order-service","kind":"data_read","action":"read","resource":"shared:inventory:products","path":"order-service/src/OrderserviceFlow.java","line":12,"confidence":"high","branch":"sync","trigger_endpoint_id":"orders-http"},{"flow_id":"orders-root","module":"order-service","kind":"data_write","action":"update","resource":"shared:inventory:products","path":"order-service/src/OrderserviceFlow.java","line":13,"confidence":"high","branch":"sync","trigger_endpoint_id":"orders-http"},{"flow_id":"orders-root","module":"order-service","kind":"data_write","action":"update","resource":"order-service:orders","path":"order-service/src/OrderserviceFlow.java","line":14,"confidence":"high","branch":"async","trigger_endpoint_id":"orders-http"},{"flow_id":"orders-root","module":"order-service","kind":"data_read","action":"read","resource":"order-service:orders","path":"order-service/src/OrderserviceFlow.java","line":15,"confidence":"high","branch":"sync","trigger_endpoint_id":"orders-http"}]},"flow_diagnostics":[{"id":"orders-root:consistency:inventory-handler:3:orders-root:2:potential_concurrent_read_write","flow_id":"orders-root","classification":"potential_interaction","severity":"P2","resource":"shared:inventory:products","key":"payload.productId","write_order":3,"read_order":2,"write_step":3,"read_step":2,"causal_evidence":"concurrence explicitement documentée pour au moins un accès","completion":"unknown","confidence":"low","limitation":"chevauchement possible; aucun défaut de fraîcheur établi","variant_count":1,"write_flow_id":"inventory-handler","read_flow_id":"orders-root","write_endpoint_id":null,"read_endpoint_id":null,"write_name":"Product","read_name":"Product","write_path_endpoint_ids":["orders-publish","inventory-consume"],"read_path_endpoint_ids":[],"event_type":"potential_concurrent_read_write","write_action":"update","read_action":"read","write_phase":"apply","read_phase":"observe","write_transaction_id":"tx-inventory","read_transaction_id":"tx-orders","write_fields":["stockQuantity"],"read_fields":["stockQuantity"],"guard":null,"guard_scope":null,"order_evidence":"concurrence explicitement documentée pour au moins un accès","write_dependency_step":null,"read_dependency_step":null,"write_site":{"module":"inventory-service","trigger_endpoint_id":"inventory-consume","path":"inventory-service/src/InventoryserviceFlow.java","line":24,"action":"update"},"read_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":12,"action":"read"},"async_endpoint_ids":[],"sync_endpoint_ids":[],"async_path_endpoint_ids":["orders-publish","inventory-consume"],"sync_path_endpoint_ids":[],"interaction_path_endpoint_ids":["orders-publish","inventory-consume"]},{"id":"orders-root:consistency:inventory-handler:3:orders-root:3:potential_lost_update","flow_id":"orders-root","classification":"potential_lost_update","severity":"P1","resource":"shared:inventory:products","key":"payload.productId","write_order":3,"read_order":3,"write_step":3,"read_step":3,"causal_evidence":"lecture 2 → écriture 3; lecture 2 → écriture 3","completion":"unknown","confidence":"medium","limitation":null,"variant_count":1,"write_flow_id":"inventory-handler","read_flow_id":"orders-root","write_endpoint_id":null,"read_endpoint_id":null,"write_name":"Product","read_name":"Product","write_path_endpoint_ids":["orders-publish","inventory-consume"],"read_path_endpoint_ids":[],"event_type":"potential_lost_update","write_action":"update","read_action":"update","write_phase":"apply","read_phase":"apply","write_transaction_id":"tx-inventory","read_transaction_id":"tx-orders","write_fields":["stockQuantity"],"read_fields":["stockQuantity"],"guard":null,"guard_scope":null,"order_evidence":"dépendances de valeur explicites; entrelacement possible selon les faits fournis","write_dependency_step":2,"read_dependency_step":2,"write_site":{"module":"inventory-service","trigger_endpoint_id":"inventory-consume","path":"inventory-service/src/InventoryserviceFlow.java","line":24,"action":"update"},"read_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":13,"action":"update"},"async_endpoint_ids":[],"sync_endpoint_ids":[],"async_path_endpoint_ids":["orders-publish","inventory-consume"],"sync_path_endpoint_ids":[],"interaction_path_endpoint_ids":["orders-publish","inventory-consume"],"write_dependency_site":{"module":"inventory-service","trigger_endpoint_id":"inventory-consume","path":"inventory-service/src/InventoryserviceFlow.java","line":22,"action":"read"},"read_dependency_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":12,"action":"read"}},{"id":"orders-root:consistency:orders-root:3:inventory-handler:2:potential_concurrent_read_write","flow_id":"orders-root","classification":"potential_interaction","severity":"P2","resource":"shared:inventory:products","key":"payload.productId","write_order":3,"read_order":2,"write_step":3,"read_step":2,"causal_evidence":"concurrence explicitement documentée pour au moins un accès","completion":"unknown","confidence":"low","limitation":"chevauchement possible; aucun défaut de fraîcheur établi","variant_count":1,"write_flow_id":"orders-root","read_flow_id":"inventory-handler","write_endpoint_id":null,"read_endpoint_id":null,"write_name":"Product","read_name":"Product","write_path_endpoint_ids":[],"read_path_endpoint_ids":["orders-publish","inventory-consume"],"event_type":"potential_concurrent_read_write","write_action":"update","read_action":"read","write_phase":"apply","read_phase":"observe","write_transaction_id":"tx-orders","read_transaction_id":"tx-inventory","write_fields":["stockQuantity"],"read_fields":["stockQuantity"],"guard":null,"guard_scope":null,"order_evidence":"concurrence explicitement documentée pour au moins un accès","write_dependency_step":null,"read_dependency_step":null,"write_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":13,"action":"update"},"read_site":{"module":"inventory-service","trigger_endpoint_id":"inventory-consume","path":"inventory-service/src/InventoryserviceFlow.java","line":22,"action":"read"},"async_endpoint_ids":[],"sync_endpoint_ids":[],"async_path_endpoint_ids":[],"sync_path_endpoint_ids":["orders-publish","inventory-consume"],"interaction_path_endpoint_ids":["orders-publish","inventory-consume"]},{"id":"orders-root:consistency:orders-root:3:inventory-handler:3:potential_concurrent_write:writes","flow_id":"orders-root","classification":"potential_concurrent_write","severity":"P1","resource":"shared:inventory:products","key":"payload.productId","write_order":3,"read_order":3,"write_step":3,"read_step":3,"causal_evidence":"concurrence explicitement documentée; ordre total absent","completion":"unknown","confidence":"low","limitation":"intervalles de transaction et garanties du stockage non établis","variant_count":1,"write_flow_id":"orders-root","read_flow_id":"inventory-handler","write_endpoint_id":null,"read_endpoint_id":null,"write_name":"Product","read_name":"Product","write_path_endpoint_ids":[],"read_path_endpoint_ids":["orders-publish","inventory-consume"],"event_type":"potential_concurrent_write","write_action":"update","read_action":"update","write_phase":"apply","read_phase":"apply","write_transaction_id":"tx-orders","read_transaction_id":"tx-inventory","write_fields":["stockQuantity"],"read_fields":["stockQuantity"],"guard":null,"guard_scope":null,"order_evidence":"concurrence explicitement documentée; ordre total absent","write_dependency_step":null,"read_dependency_step":null,"write_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":13,"action":"update"},"read_site":{"module":"inventory-service","trigger_endpoint_id":"inventory-consume","path":"inventory-service/src/InventoryserviceFlow.java","line":24,"action":"update"},"async_endpoint_ids":[],"sync_endpoint_ids":[],"async_path_endpoint_ids":[],"sync_path_endpoint_ids":["orders-publish","inventory-consume"],"interaction_path_endpoint_ids":["orders-publish","inventory-consume"]},{"id":"orders-root:consistency:orders-root:4:orders-root:5","flow_id":"orders-root","classification":"potential_risk","severity":"P1","resource":"order-service:orders","key":"request.orderId","write_order":4,"read_order":5,"write_step":4,"read_step":5,"causal_evidence":"déclencheur commun du flux","completion":"ack_only","confidence":"medium","limitation":"ack_only","variant_count":1,"write_flow_id":"orders-root","read_flow_id":"orders-root","write_endpoint_id":null,"read_endpoint_id":null,"write_name":"OrderStatus","read_name":"OrderStatus","write_path_endpoint_ids":[],"read_path_endpoint_ids":[],"event_type":"async_write_sync_read","write_action":"update","read_action":"read","write_phase":null,"read_phase":null,"write_transaction_id":null,"read_transaction_id":null,"write_fields":[],"read_fields":[],"guard":null,"guard_scope":null,"order_evidence":"déclencheur commun du flux","write_dependency_step":null,"read_dependency_step":null,"write_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":14,"action":"update"},"read_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":15,"action":"read"},"async_endpoint_ids":[],"sync_endpoint_ids":[],"async_path_endpoint_ids":[],"sync_path_endpoint_ids":[]}],"flow_descriptions":{},"call_graphs":{"call-graph-1":{"nodes":["inventory-service","order-service"],"node_order":["order-service","inventory-service"],"traversal_levels":[["order-service"],["inventory-service"]],"call_tree":{"levels":[["order-service"],["inventory-service"]],"edges":[{"source":"order-service","target":"inventory-service","order":1}]},"edges":[{"source":"order-service","target":"inventory-service","kind":"kafka","label":"supermarket.order.placed","order":1,"endpoint_ids":["orders-publish","inventory-consume"]}],"triggers":{"inventory-service":[{"flow_id":"inventory-handler","kind":"message_entry","name":"supermarket.order.placed","endpoint_id":"inventory-consume"}],"order-service":[{"flow_id":"orders-root","kind":"http_entry","name":"POST /api/orders","endpoint_id":"orders-http"}]},"call_trees_by_flow":{"orders-root":{"root_flow_ids":["orders-root"],"reachable_flow_ids":["inventory-handler","orders-root"],"transitions":{"inventory-handler":[],"orders-root":[{"edge":{"source":"order-service","target":"inventory-service","kind":"kafka","label":"supermarket.order.placed","order":1,"endpoint_ids":["orders-publish","inventory-consume"]},"target_flow_ids":["inventory-handler"]}]}}}}},"progress_notice":null}</script>
+  <script id="graph-data" type="application/json">{"nodes":[{"id":"microservice:inventory-service","kind":"microservice","name":"inventory-service","layer":"external","layer_label":"External","color":"#d97706","runtime_namespaces":[],"fact_namespaces":["supermarket-three-anomalies"],"architecture_layer":"external","ports":[{"label":"I1 → O1","direction":"in","type":"Kafka receive","system":"kafka","role":"consume","method":"\u003cunknown>","name":"supermarket.order.placed","path":"inventory-service/src/InventoryserviceFlow.java","line":20,"endpoint_id":"inventory-consume","message_type_status":"unknown","message_type_warning":"Type Java non déterminé","local_output_labels":["O1"],"local_outputs":[{"endpoint_id":"inventory-publish","label":"O1","type":"Kafka publish","name":"inventory.stock-reserved","method":"\u003cunknown>"}]},{"label":"O1","direction":"out","type":"Kafka publish","system":"kafka","role":"produce","method":"\u003cunknown>","name":"inventory.stock-reserved","path":"inventory-service/src/InventoryserviceFlow.java","line":28,"endpoint_id":"inventory-publish","message_type_status":"unknown","message_type_warning":"Type Java non déterminé"}],"http_calls":[],"http_callers":[],"kafka_endpoints":[{"role":"consume","topic":"supermarket.order.placed","message_type":null,"location":"inventory-service/src/InventoryserviceFlow.java:20","vscode_uri":"vscode://file//Users/elkouhen/systemlens/inventory-service/src/InventoryserviceFlow.java:20"},{"role":"produce","topic":"inventory.stock-reserved","message_type":null,"location":"inventory-service/src/InventoryserviceFlow.java:28","vscode_uri":"vscode://file//Users/elkouhen/systemlens/inventory-service/src/InventoryserviceFlow.java:28"}],"resources":[],"http_routes":[],"rest_dtos":[],"jpa_entities":[],"jpa_dtos":[],"kubernetes_workloads":[],"openapi_files":[],"openapi_contracts":[],"asyncapi_contracts":[],"label":"inventory-service","width":190,"height":42,"complexity":{"score":2,"level":"medium","relations":2,"breakdown":{"http":0,"kafka":2,"mongodb":0},"rank":2,"population":2,"tier_start":2,"tier_end":2},"size":50,"internal_flow_count":0},{"id":"microservice:order-service","kind":"microservice","name":"order-service","layer":"external","layer_label":"External","color":"#2563eb","runtime_namespaces":[],"fact_namespaces":["supermarket-three-anomalies"],"architecture_layer":"external","ports":[{"label":"I2 → O2","direction":"in","type":"HTTP receive","system":"rest","role":"serve","method":"\u003cunknown>","name":"POST /api/orders","path":"order-service/src/OrderserviceFlow.java","line":10,"endpoint_id":"orders-http","local_output_labels":["O2"],"local_outputs":[{"endpoint_id":"orders-publish","label":"O2","type":"Kafka publish","name":"supermarket.order.placed","method":"\u003cunknown>"}]},{"label":"O2","direction":"out","type":"Kafka publish","system":"kafka","role":"produce","method":"\u003cunknown>","name":"supermarket.order.placed","path":"order-service/src/OrderserviceFlow.java","line":14,"endpoint_id":"orders-publish","message_type_status":"unknown","message_type_warning":"Type Java non déterminé"}],"http_calls":[],"http_callers":[],"kafka_endpoints":[{"role":"produce","topic":"supermarket.order.placed","message_type":null,"location":"order-service/src/OrderserviceFlow.java:14","vscode_uri":"vscode://file//Users/elkouhen/systemlens/order-service/src/OrderserviceFlow.java:14"}],"resources":["POST /api/orders"],"http_routes":[{"role":"serve","route":"POST /api/orders","location":"order-service/src/OrderserviceFlow.java:10","endpoint_id":"orders-http","vscode_uri":"vscode://file//Users/elkouhen/systemlens/order-service/src/OrderserviceFlow.java:10"}],"rest_dtos":[],"jpa_entities":[],"jpa_dtos":[],"kubernetes_workloads":[],"openapi_files":[],"openapi_contracts":[],"asyncapi_contracts":[],"label":"order-service","width":190,"height":42,"complexity":{"score":1,"level":"low","relations":1,"breakdown":{"http":0,"kafka":1,"mongodb":0},"rank":1,"population":2,"tier_start":1,"tier_end":1},"size":50,"internal_flow_count":1},{"id":"kafka_topic:inventory.stock-reserved","kind":"kafka_topic","name":"inventory.stock-reserved","label":"inventory.stock-reserved","published_message_types":[],"consumed_message_types":[],"message_type_status":"unknown","width":190,"height":42,"technology":"kafka","owner_service":"inventory-service","architecture_layer":"external","namespace_source":"writer","complexity":{"score":1,"level":"low","relations":1,"breakdown":{"http":0,"kafka":1,"mongodb":0},"rank":1,"population":2,"tier_start":1,"tier_end":1},"color":"#2563eb","size":50},{"id":"kafka_topic:supermarket.order.placed","kind":"kafka_topic","name":"supermarket.order.placed","label":"supermarket.order.placed","published_message_types":[],"consumed_message_types":[],"message_type_status":"unknown","width":190,"height":42,"technology":"kafka","owner_service":"order-service","architecture_layer":"external","namespace_source":"writer","complexity":{"score":2,"level":"medium","relations":2,"breakdown":{"http":0,"kafka":2,"mongodb":0},"rank":2,"population":2,"tier_start":2,"tier_end":2},"color":"#d97706","size":50},{"id":"mongodb_collection:shared:inventory:products","kind":"mongodb_collection","name":"shared:inventory:products","label":"shared:inventory:products","width":190,"height":42,"status":"confirmed","technology":"postgresql","complexity":{"score":0,"level":"medium","relations":0,"breakdown":{"http":0,"kafka":0,"mongodb":0},"rank":2,"population":2,"tier_start":2,"tier_end":2},"color":"#d97706","size":50},{"id":"mongodb_collection:order-service:orders","kind":"mongodb_collection","name":"order-service:orders","label":"order-service:orders","width":190,"height":42,"status":"confirmed","technology":"postgresql","complexity":{"score":0,"level":"low","relations":0,"breakdown":{"http":0,"kafka":0,"mongodb":0},"rank":1,"population":2,"tier_start":1,"tier_end":1},"color":"#2563eb","size":50}],"links":[{"source":"kafka_topic:supermarket.order.placed","target":"microservice:inventory-service","kind":"kafka","direction":"incoming","label":"supermarket.order.placed","confidence":"proved","provenance":"manifest","endpoint_ids":["inventory-consume"],"unresolved":true,"message_type_status":"unknown","message_type_warning":"Type Java non déterminé ; relation conservée comme preuve partielle.","consumed_message_types":[]},{"source":"microservice:inventory-service","target":"kafka_topic:inventory.stock-reserved","kind":"kafka","direction":"outgoing","label":"inventory.stock-reserved","confidence":"proved","provenance":"manifest","endpoint_ids":["inventory-publish"],"unresolved":true,"message_type_status":"unknown","message_type_warning":"Type Java non déterminé ; relation conservée comme preuve partielle.","published_message_types":[]},{"source":"microservice:order-service","target":"kafka_topic:supermarket.order.placed","kind":"kafka","direction":"outgoing","label":"supermarket.order.placed","confidence":"proved","provenance":"manifest","endpoint_ids":["orders-publish"],"unresolved":true,"message_type_status":"unknown","message_type_warning":"Type Java non déterminé ; relation conservée comme preuve partielle.","published_message_types":[]},{"source":"microservice:order-service","target":"kafka_topic:supermarket.order.placed","kind":"enrichment_event","direction":"outgoing","label":"publishes","confidence":"high","status":"confirmed","provenance":"CLI graph enrichment","metadata":{"channel":"supermarket.order.placed"}},{"source":"kafka_topic:supermarket.order.placed","target":"microservice:inventory-service","kind":"enrichment_event","direction":"outgoing","label":"consumes","confidence":"high","status":"confirmed","provenance":"CLI graph enrichment","metadata":{"channel":"supermarket.order.placed"}},{"source":"microservice:inventory-service","target":"kafka_topic:inventory.stock-reserved","kind":"enrichment_event","direction":"outgoing","label":"publishes","confidence":"high","status":"confirmed","provenance":"CLI graph enrichment"}],"port_links":[],"internal_port_links":[{"input_endpoint_id":"inventory-consume","output_endpoint_id":"inventory-publish"},{"input_endpoint_id":"orders-http","output_endpoint_id":"orders-publish"}],"software_layers":["external"],"runtime_namespaces":[],"fact_namespaces":["supermarket-three-anomalies"],"groups":[],"kafka_dtos":[],"project_dto_definitions":[],"mongo_persistence_classes":[],"resource_descriptions":[],"asyncapi_contracts":[],"indexing_issues":[{"severity":"info","category":"Type Kafka inconnu","message":"inventory-service : le type Java du message sur 'inventory.stock-reserved' n'a pas ete deduit.","location":"inventory-service/src/InventoryserviceFlow.java:28","vscode_uri":"vscode://file//Users/elkouhen/systemlens/inventory-service/src/InventoryserviceFlow.java:28"},{"severity":"info","category":"Type Kafka inconnu","message":"inventory-service : le type Java du message sur 'supermarket.order.placed' n'a pas ete deduit.","location":"inventory-service/src/InventoryserviceFlow.java:20","vscode_uri":"vscode://file//Users/elkouhen/systemlens/inventory-service/src/InventoryserviceFlow.java:20"},{"severity":"info","category":"Type Kafka inconnu","message":"order-service : le type Java du message sur 'supermarket.order.placed' n'a pas ete deduit.","location":"order-service/src/OrderserviceFlow.java:14","vscode_uri":"vscode://file//Users/elkouhen/systemlens/order-service/src/OrderserviceFlow.java:14"}],"codeql_call_graph":{"nodes":[],"edges":[]},"all_flows_call_graph":{"nodes":["inventory-service","order-service"],"node_order":["order-service","inventory-service"],"traversal_levels":[["order-service"],["inventory-service"]],"call_tree":{"levels":[["order-service"],["inventory-service"]],"edges":[{"source":"order-service","target":"inventory-service","order":1}],"root_occurrence_ids":[],"occurrences":[]},"edges":[{"source":"order-service","target":"inventory-service","kind":"kafka","label":"supermarket.order.placed","order":1,"endpoint_ids":["orders-publish","inventory-consume"]}],"triggers":{"inventory-service":[{"flow_id":"inventory-handler","kind":"message_entry","name":"supermarket.order.placed","endpoint_id":"inventory-consume"}],"order-service":[{"flow_id":"orders-root","kind":"http_entry","name":"POST /api/orders","endpoint_id":"orders-http"}]}},"supporting_code_flows":[{"id":"inventory-handler","module":"inventory-service","method":"InventoryFlow.reserve","path":"inventory-service/src/InventoryserviceFlow.java","start_line":20,"end_line":50,"status":"potential","confidence":"high","reconciliation":"complete","alternative_count":1,"equivalent_count":1,"reason":"Synthetic, explicitly evidenced anomaly demonstration.","vscode_uri":"vscode://file//Users/elkouhen/systemlens/inventory-service/src/InventoryserviceFlow.java:20","call_graph_id":null,"steps":[{"order":1,"kind":"message_entry","name":"supermarket.order.placed","path":"inventory-service/src/InventoryserviceFlow.java","start_line":20,"end_line":20,"endpoint_id":"inventory-consume","port_label":"I1 → O1","operation":null,"action":null,"branch":null,"resource":null,"key":null,"causal_id":null,"expected_version":null,"completion":null,"query_shape":null,"request_before_reads":[],"visibility_before_reads":[]},{"order":2,"kind":"data_read","name":"Product","path":"inventory-service/src/InventoryserviceFlow.java","start_line":22,"end_line":22,"endpoint_id":null,"port_label":null,"operation":null,"action":"read","branch":"sync","resource":"shared:inventory:products","key":"payload.productId","causal_id":"order-42","expected_version":null,"completion":null,"query_shape":null,"request_before_reads":[],"visibility_before_reads":[]},{"order":3,"kind":"data_write","name":"Product","path":"inventory-service/src/InventoryserviceFlow.java","start_line":24,"end_line":24,"endpoint_id":null,"port_label":null,"operation":null,"action":"update","branch":"sync","resource":"shared:inventory:products","key":"payload.productId","causal_id":"order-42","expected_version":null,"completion":"unknown","query_shape":null,"request_before_reads":[],"visibility_before_reads":[]},{"order":4,"kind":"message_publish","name":"inventory.stock-reserved","path":"inventory-service/src/InventoryserviceFlow.java","start_line":28,"end_line":28,"endpoint_id":"inventory-publish","port_label":"O1","operation":null,"action":null,"branch":null,"resource":null,"key":null,"causal_id":null,"expected_version":null,"completion":null,"query_shape":null,"request_before_reads":[],"visibility_before_reads":[]}]}],"code_flows":[{"id":"orders-root","module":"order-service","method":"OrderFlow.place","path":"order-service/src/OrderserviceFlow.java","start_line":10,"end_line":40,"status":"potential","confidence":"high","reconciliation":"complete","alternative_count":1,"equivalent_count":1,"reason":"Synthetic, explicitly evidenced anomaly demonstration.","vscode_uri":"vscode://file//Users/elkouhen/systemlens/order-service/src/OrderserviceFlow.java:10","call_graph_id":"call-graph-1","steps":[{"order":1,"kind":"http_entry","name":"POST /api/orders","path":"order-service/src/OrderserviceFlow.java","start_line":10,"end_line":10,"endpoint_id":"orders-http","port_label":"I2 → O2","operation":null,"action":null,"branch":null,"resource":null,"key":null,"causal_id":null,"expected_version":null,"completion":null,"query_shape":null,"request_before_reads":[],"visibility_before_reads":[]},{"order":2,"kind":"data_read","name":"Product","path":"order-service/src/OrderserviceFlow.java","start_line":12,"end_line":12,"endpoint_id":null,"port_label":null,"operation":null,"action":"read","branch":"sync","resource":"shared:inventory:products","key":"payload.productId","causal_id":null,"expected_version":null,"completion":null,"query_shape":null,"request_before_reads":[],"visibility_before_reads":[]},{"order":3,"kind":"data_write","name":"Product","path":"order-service/src/OrderserviceFlow.java","start_line":13,"end_line":13,"endpoint_id":null,"port_label":null,"operation":null,"action":"update","branch":"sync","resource":"shared:inventory:products","key":"payload.productId","causal_id":null,"expected_version":null,"completion":null,"query_shape":null,"request_before_reads":[],"visibility_before_reads":[]},{"order":4,"kind":"data_write","name":"OrderStatus","path":"order-service/src/OrderserviceFlow.java","start_line":14,"end_line":14,"endpoint_id":null,"port_label":null,"operation":null,"action":"update","branch":"async","resource":"order-service:orders","key":"request.orderId","causal_id":"order-42","expected_version":null,"completion":"ack_only","query_shape":null,"request_before_reads":["orders-root:5"],"visibility_before_reads":[]},{"order":5,"kind":"data_read","name":"OrderStatus","path":"order-service/src/OrderserviceFlow.java","start_line":15,"end_line":15,"endpoint_id":null,"port_label":null,"operation":null,"action":"read","branch":"sync","resource":"order-service:orders","key":"request.orderId","causal_id":"order-42","expected_version":null,"completion":null,"query_shape":null,"request_before_reads":[],"visibility_before_reads":[]},{"order":6,"kind":"message_publish","name":"supermarket.order.placed","path":"order-service/src/OrderserviceFlow.java","start_line":16,"end_line":16,"endpoint_id":"orders-publish","port_label":"O2","operation":null,"action":null,"branch":null,"resource":null,"key":null,"causal_id":null,"expected_version":null,"completion":null,"query_shape":null,"request_before_reads":[],"visibility_before_reads":[]}]}],"flow_data_accesses":{"orders-root":[{"flow_id":"orders-root","module":"order-service","kind":"data_read","action":"read","resource":"shared:inventory:products","path":"order-service/src/OrderserviceFlow.java","line":12,"confidence":"high","branch":"sync","trigger_endpoint_id":"orders-http","trigger_method":"OrderFlow.place","trigger_kind":"http_entry","trigger_name":"POST /api/orders"},{"flow_id":"orders-root","module":"order-service","kind":"data_write","action":"update","resource":"shared:inventory:products","path":"order-service/src/OrderserviceFlow.java","line":13,"confidence":"high","branch":"sync","trigger_endpoint_id":"orders-http","trigger_method":"OrderFlow.place","trigger_kind":"http_entry","trigger_name":"POST /api/orders"},{"flow_id":"orders-root","module":"order-service","kind":"data_write","action":"update","resource":"order-service:orders","path":"order-service/src/OrderserviceFlow.java","line":14,"confidence":"high","branch":"async","trigger_endpoint_id":"orders-http","trigger_method":"OrderFlow.place","trigger_kind":"http_entry","trigger_name":"POST /api/orders"},{"flow_id":"orders-root","module":"order-service","kind":"data_read","action":"read","resource":"order-service:orders","path":"order-service/src/OrderserviceFlow.java","line":15,"confidence":"high","branch":"sync","trigger_endpoint_id":"orders-http","trigger_method":"OrderFlow.place","trigger_kind":"http_entry","trigger_name":"POST /api/orders"}],"inventory-handler":[{"flow_id":"inventory-handler","module":"inventory-service","kind":"data_read","action":"read","resource":"shared:inventory:products","path":"inventory-service/src/InventoryserviceFlow.java","line":22,"confidence":"high","branch":"sync","trigger_endpoint_id":"inventory-consume","trigger_method":"InventoryFlow.reserve","trigger_kind":"message_entry","trigger_name":"supermarket.order.placed"},{"flow_id":"inventory-handler","module":"inventory-service","kind":"data_write","action":"update","resource":"shared:inventory:products","path":"inventory-service/src/InventoryserviceFlow.java","line":24,"confidence":"high","branch":"sync","trigger_endpoint_id":"inventory-consume","trigger_method":"InventoryFlow.reserve","trigger_kind":"message_entry","trigger_name":"supermarket.order.placed"}]},"flow_data_access_call_paths":{},"flow_data_access_first_calls":{},"flow_data_access_flow_ids_by_root":{"orders-root":["inventory-handler","orders-root"]},"flow_diagnostics":[{"id":"orders-root:consistency:inventory-handler:3:orders-root:2:potential_concurrent_read_write","flow_id":"orders-root","classification":"potential_interaction","severity":"P2","resource":"shared:inventory:products","key":"payload.productId","write_order":3,"read_order":2,"write_step":3,"read_step":2,"causal_evidence":"concurrence explicitement documentée pour au moins un accès","completion":"unknown","confidence":"low","limitation":"chevauchement possible; aucun défaut de fraîcheur établi","variant_count":1,"write_flow_id":"inventory-handler","read_flow_id":"orders-root","write_endpoint_id":null,"read_endpoint_id":null,"write_name":"Product","read_name":"Product","write_path_endpoint_ids":["orders-publish","inventory-consume"],"read_path_endpoint_ids":[],"event_type":"potential_concurrent_read_write","write_action":"update","read_action":"read","write_phase":"apply","read_phase":"observe","write_transaction_id":"tx-inventory","read_transaction_id":"tx-orders","write_fields":["stockQuantity"],"read_fields":["stockQuantity"],"guard":null,"guard_scope":null,"order_evidence":"concurrence explicitement documentée pour au moins un accès","write_dependency_step":null,"read_dependency_step":null,"resource_identity":"postgresql:inventory:products","key_identity":"product:42","write_site":{"module":"inventory-service","trigger_endpoint_id":"inventory-consume","path":"inventory-service/src/InventoryserviceFlow.java","line":24,"action":"update"},"read_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":12,"action":"read"},"async_endpoint_ids":[],"sync_endpoint_ids":[],"async_path_endpoint_ids":["orders-publish","inventory-consume"],"sync_path_endpoint_ids":[],"interaction_path_endpoint_ids":["orders-publish","inventory-consume"]},{"id":"orders-root:consistency:inventory-handler:3:orders-root:3:potential_lost_update","flow_id":"orders-root","classification":"potential_lost_update","severity":"P1","resource":"shared:inventory:products","key":"payload.productId","write_order":3,"read_order":3,"write_step":3,"read_step":3,"causal_evidence":"lecture 2 → écriture 3; lecture 2 → écriture 3","completion":"unknown","confidence":"medium","limitation":null,"variant_count":1,"write_flow_id":"inventory-handler","read_flow_id":"orders-root","write_endpoint_id":null,"read_endpoint_id":null,"write_name":"Product","read_name":"Product","write_path_endpoint_ids":["orders-publish","inventory-consume"],"read_path_endpoint_ids":[],"event_type":"potential_lost_update","write_action":"update","read_action":"update","write_phase":"apply","read_phase":"apply","write_transaction_id":"tx-inventory","read_transaction_id":"tx-orders","write_fields":["stockQuantity"],"read_fields":["stockQuantity"],"guard":null,"guard_scope":null,"order_evidence":"dépendances de valeur explicites; entrelacement possible selon les faits fournis","write_dependency_step":2,"read_dependency_step":2,"resource_identity":"postgresql:inventory:products","key_identity":"product:42","write_site":{"module":"inventory-service","trigger_endpoint_id":"inventory-consume","path":"inventory-service/src/InventoryserviceFlow.java","line":24,"action":"update"},"read_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":13,"action":"update"},"async_endpoint_ids":[],"sync_endpoint_ids":[],"async_path_endpoint_ids":["orders-publish","inventory-consume"],"sync_path_endpoint_ids":[],"interaction_path_endpoint_ids":["orders-publish","inventory-consume"],"write_dependency_site":{"module":"inventory-service","trigger_endpoint_id":"inventory-consume","path":"inventory-service/src/InventoryserviceFlow.java","line":22,"action":"read"},"read_dependency_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":12,"action":"read"}},{"id":"orders-root:consistency:orders-root:3:inventory-handler:2:potential_concurrent_read_write","flow_id":"orders-root","classification":"potential_interaction","severity":"P2","resource":"shared:inventory:products","key":"payload.productId","write_order":3,"read_order":2,"write_step":3,"read_step":2,"causal_evidence":"concurrence explicitement documentée pour au moins un accès","completion":"unknown","confidence":"low","limitation":"chevauchement possible; aucun défaut de fraîcheur établi","variant_count":1,"write_flow_id":"orders-root","read_flow_id":"inventory-handler","write_endpoint_id":null,"read_endpoint_id":null,"write_name":"Product","read_name":"Product","write_path_endpoint_ids":[],"read_path_endpoint_ids":["orders-publish","inventory-consume"],"event_type":"potential_concurrent_read_write","write_action":"update","read_action":"read","write_phase":"apply","read_phase":"observe","write_transaction_id":"tx-orders","read_transaction_id":"tx-inventory","write_fields":["stockQuantity"],"read_fields":["stockQuantity"],"guard":null,"guard_scope":null,"order_evidence":"concurrence explicitement documentée pour au moins un accès","write_dependency_step":null,"read_dependency_step":null,"resource_identity":"postgresql:inventory:products","key_identity":"product:42","write_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":13,"action":"update"},"read_site":{"module":"inventory-service","trigger_endpoint_id":"inventory-consume","path":"inventory-service/src/InventoryserviceFlow.java","line":22,"action":"read"},"async_endpoint_ids":[],"sync_endpoint_ids":[],"async_path_endpoint_ids":[],"sync_path_endpoint_ids":["orders-publish","inventory-consume"],"interaction_path_endpoint_ids":["orders-publish","inventory-consume"]},{"id":"orders-root:consistency:orders-root:3:inventory-handler:3:potential_concurrent_write:writes","flow_id":"orders-root","classification":"potential_concurrent_write","severity":"P1","resource":"shared:inventory:products","key":"payload.productId","write_order":3,"read_order":3,"write_step":3,"read_step":3,"causal_evidence":"concurrence explicitement documentée; ordre total absent","completion":"unknown","confidence":"low","limitation":"intervalles de transaction et garanties du stockage non établis","variant_count":1,"write_flow_id":"orders-root","read_flow_id":"inventory-handler","write_endpoint_id":null,"read_endpoint_id":null,"write_name":"Product","read_name":"Product","write_path_endpoint_ids":[],"read_path_endpoint_ids":["orders-publish","inventory-consume"],"event_type":"potential_concurrent_write","write_action":"update","read_action":"update","write_phase":"apply","read_phase":"apply","write_transaction_id":"tx-orders","read_transaction_id":"tx-inventory","write_fields":["stockQuantity"],"read_fields":["stockQuantity"],"guard":null,"guard_scope":null,"order_evidence":null,"write_dependency_step":null,"read_dependency_step":null,"resource_identity":"postgresql:inventory:products","key_identity":"product:42","write_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":13,"action":"update"},"read_site":{"module":"inventory-service","trigger_endpoint_id":"inventory-consume","path":"inventory-service/src/InventoryserviceFlow.java","line":24,"action":"update"},"async_endpoint_ids":[],"sync_endpoint_ids":[],"async_path_endpoint_ids":[],"sync_path_endpoint_ids":["orders-publish","inventory-consume"],"interaction_path_endpoint_ids":["orders-publish","inventory-consume"]},{"id":"orders-root:consistency:orders-root:4:orders-root:5","flow_id":"orders-root","classification":"potential_risk","severity":"P1","resource":"order-service:orders","key":"request.orderId","write_order":4,"read_order":5,"write_step":4,"read_step":5,"causal_evidence":"identifiant causal partagé","completion":"ack_only","confidence":"medium","limitation":"ack_only","variant_count":1,"write_flow_id":"orders-root","read_flow_id":"orders-root","write_endpoint_id":null,"read_endpoint_id":null,"write_name":"OrderStatus","read_name":"OrderStatus","write_path_endpoint_ids":[],"read_path_endpoint_ids":[],"event_type":"async_write_sync_read","write_action":"update","read_action":"read","write_phase":null,"read_phase":null,"write_transaction_id":null,"read_transaction_id":null,"write_fields":[],"read_fields":[],"guard":null,"guard_scope":null,"order_evidence":"demande asynchrone avant la lecture","write_dependency_step":null,"read_dependency_step":null,"resource_identity":"postgresql:orders:statuses","key_identity":"order:42","write_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":14,"action":"update"},"read_site":{"module":"order-service","trigger_endpoint_id":"orders-http","path":"order-service/src/OrderserviceFlow.java","line":15,"action":"read"},"async_endpoint_ids":[],"sync_endpoint_ids":[],"async_path_endpoint_ids":[],"sync_path_endpoint_ids":[]}],"flow_descriptions":{},"call_graphs":{"call-graph-1":{"nodes":["inventory-service","order-service"],"node_order":["order-service","inventory-service"],"traversal_levels":[["order-service"],["inventory-service"]],"call_tree":{"levels":[["order-service"],["inventory-service"]],"edges":[{"source":"order-service","target":"inventory-service","order":1}]},"edges":[{"source":"order-service","target":"inventory-service","kind":"kafka","label":"supermarket.order.placed","order":1,"endpoint_ids":["orders-publish","inventory-consume"]}],"triggers":{"inventory-service":[{"flow_id":"inventory-handler","kind":"message_entry","name":"supermarket.order.placed","endpoint_id":"inventory-consume"}],"order-service":[{"flow_id":"orders-root","kind":"http_entry","name":"POST /api/orders","endpoint_id":"orders-http"}]},"call_trees_by_flow":{"orders-root":{"root_flow_ids":["orders-root"],"reachable_flow_ids":["inventory-handler","orders-root"],"transitions":{"inventory-handler":[],"orders-root":[{"edge":{"source":"order-service","target":"inventory-service","kind":"kafka","label":"supermarket.order.placed","order":1,"endpoint_ids":["orders-publish","inventory-consume"]},"target_flow_ids":["inventory-handler"]}]}}}}},"progress_notice":null}</script>
   <script type="module">// Ordered source module: 00-core.js
     const graphData = JSON.parse(document.getElementById("graph-data").textContent);
     const hiddenMicroservicesStorageKey = "systemlens:hidden-microservices";
@@ -6062,7 +6218,7 @@ const graphViewLifecycle = (() => {
     function architectureNodeReference(node, meta) {
       const item = referenceItem(nodeDisplayName(node), meta, "Voir", () => {
         if (document.body.classList.contains("catalogue-active")) {
-          renderCataloguePreview(node);
+          selectResourceCatalogueEntry(resourceCatalogueByNodeId.get(node.id));
           return;
         }
         setToolbarTab("graph");
@@ -6073,31 +6229,6 @@ const graphViewLifecycle = (() => {
         if (!event.target.closest("button, a")) item.querySelector("button")?.click();
       });
       return item;
-    }
-    function renderCataloguePreview(node) {
-      if (!resourceCataloguePreview) return;
-      const title = document.getElementById("resource-catalogue-preview-title");
-      const copy = document.getElementById("resource-catalogue-preview-copy");
-      const incoming = graphData.links.filter(link => link.target === node.id).length;
-      const outgoing = graphData.links.filter(link => link.source === node.id).length;
-      title.textContent = nodeDisplayName(node);
-      copy.replaceChildren();
-      const kind = document.createElement("span");
-      kind.className = "resource-catalogue-preview-kind";
-      kind.textContent = nodeKindLabel(node);
-      const stats = document.createElement("span");
-      stats.className = "resource-catalogue-preview-stats";
-      stats.textContent = `${incoming} entrée${incoming > 1 ? "s" : ""} · ${outgoing} sortie${outgoing > 1 ? "s" : ""}`;
-      copy.append(kind, stats);
-      const owner = node.owner || node.service || node.project_namespace;
-      resourceCataloguePreview.querySelectorAll(".resource-catalogue-preview-owner").forEach(item => item.remove());
-      if (owner) {
-        const ownerLine = document.createElement("p");
-        ownerLine.className = "resource-catalogue-preview-owner";
-        ownerLine.textContent = `Propriétaire · ${owner}`;
-        resourceCataloguePreview.append(ownerLine);
-      }
-      resourceCataloguePreview.classList.add("has-selection");
     }
     function createDetailsGroup(title, open = true) {
       const group = document.createElement("details");
@@ -6369,13 +6500,6 @@ const graphViewLifecycle = (() => {
       hideInlineDetailsAfterModal();
       inspectorBody.replaceChildren();
       inspectorBody.className = "inspector-body";
-      if (resourceCataloguePreview) {
-        resourceCataloguePreview.classList.remove("has-selection");
-        document.getElementById("resource-catalogue-preview-title").textContent = "Aucune ressource sélectionnée";
-        document.getElementById("resource-catalogue-preview-copy").textContent = "Sélectionnez une ligne dans le catalogue pour afficher son contexte, ses relations et sa source.";
-        resourceCataloguePreview.querySelectorAll(".resource-catalogue-preview-owner, .resource-catalogue-preview-source").forEach(item => item.remove());
-        microservicesList?.querySelectorAll(".is-selected").forEach(item => item.classList.remove("is-selected"));
-      }
       dtoNavigation.splice(0);
       mongoNavigation.splice(0);
       architectureInspectorHistory.splice(0);
@@ -6946,8 +7070,18 @@ const graphViewLifecycle = (() => {
       ["other", "Autres"],
     ]);
     let resourceCatalogueEntries = [];
+    let resourceCatalogueByKey = new Map();
+    let resourceCatalogueByNodeId = new Map();
+    let resourceCatalogueSelection = null;
+    const resourceCatalogueHistory = [];
+    const resourceCatalogueBack = document.getElementById("resource-catalogue-back");
+    const resourceCatalogueAttributes = document.getElementById("resource-catalogue-attributes");
+    const resourceCatalogueRelated = document.getElementById("resource-catalogue-related");
     function resourceCatalogueOwner(entry) {
       return entry.service || entry.owner || "";
+    }
+    function resourceCatalogueEntryLabel(entry) {
+      return entry.method ? `${entry.method} ${entry.name}` : entry.name;
     }
     function buildResourceCatalogueEntries() {
       const entries = [];
@@ -6973,21 +7107,27 @@ const graphViewLifecycle = (() => {
             method: match[1],
             source: node.openapi_files?.[0],
             meta: `${node.name} · route exposée`,
-          route: { route: match[0] },
+            route: { route: match[0] },
             ownerNode: node,
           });
         });
-        (node.http_routes || []).forEach(route => entries.push({
-          id: `route:${node.name}:${route.method || ""}:${route.route || route.path || ""}`,
-          kind: "http_route",
-          name: route.route || route.path || "Route HTTP",
-          service: node.name,
-          method: route.method || "HTTP",
-          source: route.location || route.path,
-          meta: `${node.name} · ${route.consumers?.length || route.callers?.length || 0} client(s)`,
-          route,
-          ownerNode: node,
-        }));
+        (node.http_routes || []).forEach(route => {
+          const routeText = route.route || route.path || "";
+          const match = routeText.match(/^(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+(.+)$/);
+          const method = route.method || match?.[1] || "HTTP";
+          const path = match?.[2] || routeText || "Route HTTP";
+          entries.push({
+            id: `route:${node.name}:${method}:${path}`,
+            kind: "http_route",
+            name: path,
+            service: node.name,
+            method,
+            source: route.location || route.path,
+            meta: `${node.name} · ${route.consumers?.length || route.callers?.length || 0} client(s)`,
+            route,
+            ownerNode: node,
+          });
+        });
         (node.openapi_contracts || []).forEach(contract => entries.push({
           id: `openapi:${node.name}:${contract.path}`,
           kind: "openapi_contract",
@@ -7019,6 +7159,8 @@ const graphViewLifecycle = (() => {
           source: item.source?.path,
           meta: `${item.owner || item.service || ""} · ${item.attributes?.length || 0} champ(s)`,
           description: item.qualified_name,
+          descriptionKind: item.kind,
+          attributes: item.attributes || [],
           dtoName: kind === "dto" ? (item.id || item.qualified_name || item.name) : undefined,
         });
       });
@@ -7029,6 +7171,8 @@ const graphViewLifecycle = (() => {
         service: dto.service || dto.owner || "",
         meta: `${dto.fields?.length || 0} champ(s) · ${dto.topics?.length || 0} topic(s)`,
         dtoName: dto.id || dto.name || dtoLabel(dto),
+        fields: dto.fields || [],
+        topics: dto.topics || [],
       }));
       (graphData.indexing_issues || []).forEach((issue, index) => entries.push({
         id: `diagnostic:${issue.id || index}`,
@@ -7041,17 +7185,27 @@ const graphViewLifecycle = (() => {
       const merged = new Map();
       entries.forEach(entry => {
         const identity = entry.kind === "dto"
-          ? `dto:${entry.service || ""}:${entry.name}`
+          ? `dto:${entry.dtoName || entry.id}`
           : entry.id;
         const previous = merged.get(identity);
         if (!previous) {
+          entry.catalogueKey = identity;
           merged.set(identity, entry);
           return;
         }
         if ((entry.meta || "").length > (previous.meta || "").length) previous.meta = entry.meta;
         previous.source ||= entry.source;
+        previous.service ||= entry.service;
         previous.dtoName ||= entry.dtoName;
         previous.description ||= entry.description;
+        previous.descriptionKind ||= entry.descriptionKind;
+        previous.attributes ||= entry.attributes;
+        previous.fields ||= entry.fields;
+        previous.topics ||= entry.topics;
+        if (entry.kind === "http_route" && entry.route) {
+          previous.route = entry.route;
+          previous.source = entry.source || previous.source;
+        }
       });
       return [...merged.values()].sort((left, right) => left.name.localeCompare(right.name));
     }
@@ -7067,6 +7221,8 @@ const graphViewLifecycle = (() => {
       if (!resourceCatalogueCategories || !resourceServiceFilter) return;
       resourceCatalogueCategories.replaceChildren();
       resourceCatalogueEntries = buildResourceCatalogueEntries();
+      resourceCatalogueByKey = new Map(resourceCatalogueEntries.map(entry => [entry.catalogueKey, entry]));
+      resourceCatalogueByNodeId = new Map(resourceCatalogueEntries.filter(entry => entry.node).map(entry => [entry.node.id, entry]));
       const counts = new Map();
       resourceCatalogueEntries.forEach(entry => counts.set(entry.kind, (counts.get(entry.kind) || 0) + 1));
       ["all", "microservice", "http_route", "openapi_contract", "asyncapi_contract", "kafka_topic", "mongodb_collection", "jpa_entity", "dto", "diagnostic", "other"].forEach(kind => {
@@ -7087,20 +7243,238 @@ const graphViewLifecycle = (() => {
       const services = [...new Set(resourceCatalogueEntries.map(resourceCatalogueOwner).filter(Boolean))].sort((a, b) => a.localeCompare(b));
       resourceServiceFilter.replaceChildren(new Option("Tous les microservices", "all"), ...services.map(service => new Option(service, service)));
     }
+    function resourceCatalogueRelationLabel(entry, link) {
+      const outgoing = link.source === entry.node.id;
+      const relationKind = String(link.kind || "");
+      if (relationKind === "kafka") {
+        if (entry.kind === "microservice") return outgoing ? "Publie sur" : "Consomme";
+        return outgoing ? "Consommé par" : "Publié par";
+      }
+      if (relationKind === "rest") return outgoing ? "Appelle" : "Appelé par";
+      if (relationKind === "jpa") return outgoing ? "Déclare" : "Déclaré par";
+      if (relationKind === "mongodb") return outgoing ? "Accède à" : "Utilisée par";
+      if (relationKind.startsWith("enrichment_")) return `Relation importée · ${link.label || relationKind}`;
+      return `${outgoing ? "Vers" : "Depuis"} · ${link.label || relationKind}`;
+    }
+    function resourceCatalogueRelatedEntries(entry) {
+      const related = new Map();
+      const add = (target, relation, rank = 0) => {
+        if (!target || target.catalogueKey === entry.catalogueKey) return;
+        const previous = related.get(target.catalogueKey);
+        if (!previous || rank > previous.rank) related.set(target.catalogueKey, { target, relation, rank });
+      };
+      if (entry.node) {
+        graphData.links.forEach(link => {
+          if (link.source !== entry.node.id && link.target !== entry.node.id) return;
+          const otherId = link.source === entry.node.id ? link.target : link.source;
+          add(resourceCatalogueByNodeId.get(otherId), resourceCatalogueRelationLabel(entry, link),
+            String(link.kind || "").startsWith("enrichment_") ? 1 : 3);
+        });
+      }
+      const ownerName = resourceCatalogueOwner(entry);
+      if (entry.kind === "microservice") {
+        resourceCatalogueEntries.forEach(candidate => {
+          if (!candidate.node && resourceCatalogueOwner(candidate) === entry.node.name) {
+            add(candidate, "Ressource du service", 2);
+          }
+        });
+      } else if (ownerName) {
+        const owner = resourceCatalogueEntries.find(candidate => candidate.node?.kind === "microservice" && candidate.node.name === ownerName);
+        add(owner, "Service propriétaire", 2);
+      }
+      if (["kafka_topic", "message_channel"].includes(entry.kind)) {
+        resourceCatalogueEntries.forEach(candidate => {
+          if (candidate.kind === "dto" && candidate.topics?.includes(entry.node.name)) add(candidate, "Type de message", 2);
+        });
+      } else if (entry.kind === "dto") {
+        (entry.topics || []).forEach(topic => {
+          const target = resourceCatalogueEntries.find(candidate => ["kafka_topic", "message_channel"].includes(candidate.node?.kind) && candidate.node.name === topic);
+          add(target, "Topic du message", 2);
+        });
+      }
+      const routeName = candidate => `${candidate.method} ${candidate.name}`;
+      const contractTopics = contract => new Set(Object.values(contract?.spec?.channels || {})
+        .map(channel => channel?.address).filter(Boolean));
+      if (entry.kind === "openapi_contract") {
+        const routes = new Set(entry.contract?.resources || []);
+        resourceCatalogueEntries.forEach(candidate => {
+          if (candidate.kind === "http_route" && candidate.service === entry.service && routes.has(routeName(candidate))) {
+            add(candidate, "Route du contrat", 2);
+          }
+        });
+      } else if (entry.kind === "http_route") {
+        resourceCatalogueEntries.forEach(candidate => {
+          if (candidate.kind === "openapi_contract" && candidate.service === entry.service
+              && candidate.contract?.resources?.includes(routeName(entry))) add(candidate, "Contrat OpenAPI", 2);
+        });
+      } else if (entry.kind === "asyncapi_contract") {
+        const topics = contractTopics(entry.contract);
+        resourceCatalogueEntries.forEach(candidate => {
+          if (["kafka_topic", "message_channel"].includes(candidate.kind) && topics.has(candidate.node.name)) {
+            add(candidate, "Canal du contrat", 2);
+          }
+        });
+      } else if (["kafka_topic", "message_channel"].includes(entry.kind)) {
+        resourceCatalogueEntries.forEach(candidate => {
+          if (candidate.kind === "asyncapi_contract" && contractTopics(candidate.contract).has(entry.node.name)) {
+            add(candidate, "Contrat AsyncAPI", 2);
+          }
+        });
+      }
+      return [...related.values()].sort((left, right) => right.rank - left.rank
+        || left.target.kind.localeCompare(right.target.kind)
+        || resourceCatalogueEntryLabel(left.target).localeCompare(resourceCatalogueEntryLabel(right.target)));
+    }
+    function selectResourceCatalogueEntry(entry, recordHistory = true) {
+      if (!entry) return;
+      if (recordHistory && resourceCatalogueSelection && resourceCatalogueSelection.catalogueKey !== entry.catalogueKey) {
+        resourceCatalogueHistory.push(resourceCatalogueSelection.catalogueKey);
+      }
+      resourceCatalogueSelection = entry;
+      const query = microservicesFilter.value.trim().toLocaleLowerCase();
+      if (!resourceCatalogueEntryMatches(entry, resourceKindFilter?.value || "all", query, resourceServiceFilter?.value || "all")) {
+        microservicesFilter.value = "";
+        resourceKindFilter.value = "all";
+        resourceServiceFilter.value = "all";
+        renderResourceCatalogue();
+      }
+      microservicesList.querySelectorAll(".resource-catalogue-row").forEach(row => {
+        row.classList.toggle("is-selected", row.dataset.catalogueKey === entry.catalogueKey);
+      });
+      renderResourceCataloguePreview(entry);
+      [...microservicesList.children].find(row => row.dataset.catalogueKey === entry.catalogueKey)
+        ?.scrollIntoView({ block: "nearest" });
+    }
+    function resourceCatalogueAttributeGroups(entry) {
+      if (entry.kind === "mongodb_collection") {
+        return (entry.node?.persistence_classes || []).map(item => ({
+          label: item.name,
+          fields: item.fields || [],
+        }));
+      }
+      if (entry.kind === "dto" || entry.kind === "jpa_entity" || entry.descriptionKind === "mongo_persistence_class") {
+        return [{ label: "", fields: entry.attributes?.length ? entry.attributes : entry.fields || entry.node?.fields || [] }];
+      }
+      return [];
+    }
+    function resourceCatalogueFieldTargets(entry, field) {
+      if (entry.kind !== "dto") return [];
+      return [...new Set(field.dto_references || [])]
+        .map(reference => resourceCatalogueByKey.get(`dto:${reference}`))
+        .filter(target => target && target.catalogueKey !== entry.catalogueKey);
+    }
+    function renderResourceCatalogueAttributes(entry) {
+      const groups = resourceCatalogueAttributeGroups(entry);
+      resourceCatalogueAttributes.replaceChildren();
+      resourceCatalogueAttributes.hidden = !groups.length && entry.kind !== "mongodb_collection";
+      if (resourceCatalogueAttributes.hidden) return;
+      const heading = document.createElement("h4");
+      heading.textContent = entry.kind === "mongodb_collection" ? "Champs des classes associées" : "Attributs indexés";
+      resourceCatalogueAttributes.append(heading);
+      if (!groups.length) {
+        const empty = document.createElement("p");
+        empty.className = "resource-catalogue-attributes-empty";
+        empty.textContent = "Aucun attribut indexé.";
+        resourceCatalogueAttributes.append(empty);
+        return;
+      }
+      groups.forEach(group => {
+        if (group.label) {
+          const label = document.createElement("p");
+          label.className = "resource-catalogue-attributes-group";
+          label.textContent = group.label;
+          resourceCatalogueAttributes.append(label);
+        }
+        if (!group.fields.length) {
+          const empty = document.createElement("p");
+          empty.className = "resource-catalogue-attributes-empty";
+          empty.textContent = "Aucun attribut indexé.";
+          resourceCatalogueAttributes.append(empty);
+          return;
+        }
+        const list = document.createElement("ul");
+        list.className = "resource-catalogue-attributes-list";
+        group.fields.forEach(field => {
+          const item = document.createElement("li");
+          const name = document.createElement("span");
+          name.textContent = field.name;
+          const types = document.createElement("div");
+          types.className = "resource-catalogue-attribute-types";
+          const targets = resourceCatalogueFieldTargets(entry, field);
+          const referenceCount = new Set(field.dto_references || []).size;
+          if (targets.length > 1) {
+            const type = document.createElement("small");
+            type.textContent = field.type || "Types possibles";
+            types.append(type);
+          }
+          targets.forEach(target => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "resource-catalogue-attribute-link";
+            const duplicateName = targets.some(other => other !== target && other.name === target.name);
+            const label = referenceCount === 1 ? field.type || target.name
+              : duplicateName ? target.dtoName : target.name;
+            button.textContent = `${label} ›`;
+            button.title = `Explorer les attributs de ${target.name}`;
+            button.addEventListener("click", () => selectResourceCatalogueEntry(target));
+            types.append(button);
+          });
+          if (!targets.length) {
+            const type = document.createElement("small");
+            type.textContent = field.type || "Type inconnu";
+            types.append(type);
+          }
+          item.append(name, types);
+          list.append(item);
+        });
+        resourceCatalogueAttributes.append(list);
+      });
+    }
     function renderResourceCataloguePreview(entry) {
       if (!resourceCataloguePreview) return;
       const title = document.getElementById("resource-catalogue-preview-title");
       const copy = document.getElementById("resource-catalogue-preview-copy");
       const incoming = entry.node ? graphData.links.filter(link => link.target === entry.node.id).length : 0;
       const outgoing = entry.node ? graphData.links.filter(link => link.source === entry.node.id).length : 0;
-      title.textContent = entry.name;
+      title.textContent = resourceCatalogueEntryLabel(entry);
       copy.replaceChildren();
       const kind = document.createElement("span"); kind.className = "resource-catalogue-preview-kind"; kind.textContent = resourceCatalogueKindLabels.get(entry.kind) || nodeKindLabel(entry.node || { kind: entry.kind });
       const stats = document.createElement("span"); stats.className = "resource-catalogue-preview-stats"; stats.textContent = entry.meta || `${incoming} entrée(s) · ${outgoing} sortie(s)`;
       copy.append(kind, stats);
       resourceCataloguePreview.querySelectorAll(".resource-catalogue-preview-owner, .resource-catalogue-preview-source").forEach(item => item.remove());
-      if (resourceCatalogueOwner(entry)) { const owner = document.createElement("p"); owner.className = "resource-catalogue-preview-owner"; owner.textContent = `Propriétaire · ${resourceCatalogueOwner(entry)}`; resourceCataloguePreview.append(owner); }
-      if (entry.source) { const source = document.createElement("p"); source.className = "resource-catalogue-preview-source"; source.textContent = `Source · ${entry.source}`; resourceCataloguePreview.append(source); }
+      if (resourceCatalogueOwner(entry)) { const owner = document.createElement("p"); owner.className = "resource-catalogue-preview-owner"; owner.textContent = `Propriétaire · ${resourceCatalogueOwner(entry)}`; resourceCatalogueAttributes.before(owner); }
+      if (entry.source) { const source = document.createElement("p"); source.className = "resource-catalogue-preview-source"; source.textContent = `Source · ${entry.source}`; resourceCatalogueAttributes.before(source); }
+      const previous = resourceCatalogueByKey.get(resourceCatalogueHistory.at(-1));
+      resourceCatalogueBack.hidden = !previous;
+      resourceCatalogueBack.textContent = previous ? `← ${resourceCatalogueEntryLabel(previous)}` : "← Retour";
+      renderResourceCatalogueAttributes(entry);
+      const heading = document.createElement("h4");
+      const relations = resourceCatalogueRelatedEntries(entry);
+      heading.textContent = `Ressources liées (${relations.length})`;
+      const list = document.createElement("ul");
+      list.className = "resource-catalogue-related-list";
+      relations.forEach(({ target, relation }) => {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "resource-catalogue-related-link";
+        const name = document.createElement("span");
+        name.className = "resource-catalogue-related-name";
+        name.textContent = resourceCatalogueEntryLabel(target);
+        const meta = document.createElement("small");
+        meta.textContent = `${resourceCatalogueKindLabels.get(target.kind) || nodeKindLabel(target.node || { kind: target.kind })} · ${relation}`;
+        button.append(name, meta);
+        button.addEventListener("click", () => selectResourceCatalogueEntry(target));
+        item.append(button);
+        list.append(item);
+      });
+      resourceCatalogueRelated.replaceChildren(heading, list);
+      if (!relations.length) {
+        const empty = document.createElement("p");
+        empty.className = "resource-catalogue-related-empty";
+        empty.textContent = "Aucune ressource liée dans l’index.";
+        resourceCatalogueRelated.append(empty);
+      }
       resourceCataloguePreview.classList.add("has-selection");
     }
     function renderResourceCatalogue() {
@@ -7121,13 +7495,11 @@ const graphViewLifecycle = (() => {
       if (resourceCatalogueSummary) resourceCatalogueSummary.textContent = `${visible.length} ressource${visible.length > 1 ? "s" : ""} affichée${visible.length > 1 ? "s" : "e"}`;
       microservicesEmpty.hidden = visible.length > 0;
       visible.forEach(entry => {
-        const selectResource = () => {
-          microservicesList.querySelectorAll(".is-selected").forEach(selected => selected.classList.remove("is-selected"));
-          item.classList.add("is-selected");
-          renderResourceCataloguePreview(entry);
-        };
-        const item = referenceItem(entry.method ? `${entry.method} ${entry.name}` : entry.name, entry.meta || `${resourceCatalogueKindLabels.get(entry.kind) || "Ressource"} · ${entry.service || ""}`, "", selectResource);
+        const selectResource = () => selectResourceCatalogueEntry(entry);
+        const item = referenceItem(resourceCatalogueEntryLabel(entry), entry.meta || `${resourceCatalogueKindLabels.get(entry.kind) || "Ressource"} · ${entry.service || ""}`, "", selectResource);
         item.classList.add("architecture-resource-reference", "resource-catalogue-row");
+        item.dataset.catalogueKey = entry.catalogueKey;
+        item.classList.toggle("is-selected", resourceCatalogueSelection?.catalogueKey === entry.catalogueKey);
         const text = item.firstElementChild;
         const meta = text?.querySelector(".reference-meta");
         if (text && meta) item.insertBefore(meta, item.lastElementChild);
@@ -7144,6 +7516,7 @@ const graphViewLifecycle = (() => {
           inspect.title = "Ouvrir les détails d’introspection";
           inspect.addEventListener("click", event => {
             event.stopPropagation();
+            selectResourceCatalogueEntry(entry);
             if (entry.dtoName) {
               openDtoInspector(entry.dtoName);
             } else if (entry.kind === "openapi_contract") {
@@ -7174,6 +7547,10 @@ const graphViewLifecycle = (() => {
     resourceKindFilter?.addEventListener("change", renderResourceCatalogue);
     resourceServiceFilter?.addEventListener("change", renderResourceCatalogue);
     microservicesFilter.addEventListener("input", renderResourceCatalogue);
+    resourceCatalogueBack?.addEventListener("click", () => {
+      const previous = resourceCatalogueByKey.get(resourceCatalogueHistory.pop());
+      selectResourceCatalogueEntry(previous, false);
+    });
     renderResourceCatalogueControls();
 
 // Ordered source module: 50-paths.js
@@ -8557,6 +8934,11 @@ const graphViewLifecycle = (() => {
     const codeFlowFilterReset = document.getElementById("code-flow-filter-reset");
     const codeFlowsTitle = document.getElementById("code-flows-title");
     const flowDiagnostics = Array.isArray(graphData.flow_diagnostics) ? graphData.flow_diagnostics : [];
+    const flowConsistencyRiskClassifications = new Set([
+      "potential_risk", "potential_concurrent_write", "potential_lost_update",
+      "potential_dirty_read", "potential_read_write_anomaly",
+    ]);
+    const flowConsistencyCountCache = new Map();
     let callTreePan = null;
     let callTreePanBound = false;
     let callTreeRenderSignature = "";
@@ -8565,13 +8947,28 @@ const graphViewLifecycle = (() => {
       graphState.callTreeVisibleNodeCount = nodeCount;
       graphState.callTreeVisibleEdgeCount = edgeCount;
       const stats = document.getElementById("flow-mode-context-stats");
-      if (!stats) return;
+      const diagnostics = document.getElementById("flow-mode-context-diagnostics");
       const active = Boolean(codeFlowSelection.flowId)
         && (graphState.viewMode === "call-graph" || graphState.callGraphDisplayMode === "tree");
-      stats.hidden = !active;
-      stats.textContent = active
-        ? `Arbre : ${nodeCount} nœud${nodeCount === 1 ? "" : "s"} · ${edgeCount} arc${edgeCount === 1 ? "" : "s"}`
-        : "";
+      if (stats) {
+        stats.hidden = !active;
+        stats.textContent = active
+          ? `Arbre : ${nodeCount} nœud${nodeCount === 1 ? "" : "s"} · ${edgeCount} arc${edgeCount === 1 ? "" : "s"}`
+          : "";
+      }
+      if (diagnostics) {
+        const counts = active ? flowConsistencyCounts({ id: codeFlowSelection.flowId }) : null;
+        diagnostics.hidden = !active;
+        diagnostics.textContent = !active ? ""
+          : counts.total === 0 ? "Cohérence : aucun diagnostic détecté"
+            : [
+              `Cohérence : ${counts.risks} risque${counts.risks === 1 ? "" : "s"}`,
+              counts.uncertain ? `${counts.uncertain} preuve${counts.uncertain === 1 ? "" : "s"} insuffisante${counts.uncertain === 1 ? "" : "s"}` : "",
+              counts.guarantees ? `${counts.guarantees} garantie${counts.guarantees === 1 ? "" : "s"}` : "",
+              counts.interactions ? `${counts.interactions} interaction${counts.interactions === 1 ? "" : "s"} possible${counts.interactions === 1 ? "" : "s"}` : "",
+              counts.other ? `${counts.other} autre${counts.other === 1 ? "" : "s"} diagnostic${counts.other === 1 ? "" : "s"}` : "",
+            ].filter(Boolean).join(" · ");
+      }
     }
     function codeFlowStepLabel(kind) {
       return ({
@@ -8643,6 +9040,30 @@ const graphViewLifecycle = (() => {
         ["Étapes", steps.length],
         ["Effets", steps.filter(step => ["message_publish", "http_call", "data_read", "data_write"].includes(step.kind)).length],
       ];
+    }
+
+    function flowConsistencyDiagnostics(flow) {
+      return flowDiagnostics.filter(item => item.flow_id === flow.id);
+    }
+
+    function flowConsistencyCounts(flow) {
+      if (flowConsistencyCountCache.has(flow.id)) return flowConsistencyCountCache.get(flow.id);
+      const diagnostics = flowConsistencyDiagnostics(flow);
+      const counts = { total: diagnostics.length, risks: 0, uncertain: 0, guarantees: 0, interactions: 0, other: 0 };
+      diagnostics.forEach(item => {
+        if (flowConsistencyRiskClassifications.has(item.classification)) counts.risks += 1;
+        else if (item.classification === "insufficient_evidence") counts.uncertain += 1;
+        else if (["guarantee_identified", "conflict_protection_identified"].includes(item.classification)) counts.guarantees += 1;
+        else if (item.classification === "potential_interaction") counts.interactions += 1;
+        else counts.other += 1;
+      });
+      flowConsistencyCountCache.set(flow.id, counts);
+      return counts;
+    }
+
+    function normalizeFlowSearch(value) {
+      return String(value || "").toLocaleLowerCase().normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
     }
 
     function codeFlowDescription(flow) {
@@ -8794,6 +9215,23 @@ const graphViewLifecycle = (() => {
         centerX: viewport.width / 2,
         centerY: viewport.height / 2,
       };
+    }
+
+    function highlightCallTreePath(pathKey) {
+      const overlay = graphCallTreeOverlay;
+      if (!overlay) return;
+      const isOnPath = candidate => Boolean(pathKey)
+        && (candidate === pathKey || pathKey.startsWith(`${candidate}>`));
+      overlay.querySelectorAll(".graph-call-tree-node").forEach(node => {
+        const active = isOnPath(node.dataset.pathKey);
+        node.classList.toggle("is-path-context", active);
+        node.classList.toggle("is-path-muted", Boolean(pathKey) && !active);
+      });
+      overlay.querySelectorAll(".graph-call-tree-edge, .graph-call-tree-edge-label").forEach(edge => {
+        const active = isOnPath(edge.dataset.targetPathKey);
+        edge.classList.toggle("is-path-context", active);
+        edge.classList.toggle("is-path-muted", Boolean(pathKey) && !active);
+      });
     }
 
     function renderCallTreeOverlay(preservedCamera = null) {
@@ -9025,15 +9463,6 @@ const graphViewLifecycle = (() => {
       }
       const treeTrigger = selectedFlow?.steps?.[0] || null;
       const treeTriggerRootName = rootsTree[0]?.name || null;
-      let leafIndex = 0;
-      const assignPositions = occurrence => {
-        occurrence.children.forEach(assignPositions);
-        occurrence.x = occurrence.depth;
-        occurrence.y = occurrence.children.length
-          ? occurrence.children.reduce((sum, child) => sum + child.y, 0) / occurrence.children.length
-          : leafIndex++;
-      };
-      rootsTree.forEach(assignPositions);
       const allOccurrences = [];
       const collect = occurrence => {
         allOccurrences.push(occurrence);
@@ -9164,72 +9593,39 @@ const graphViewLifecycle = (() => {
         annotationGroupsByOccurrence.set(occurrence, groups);
         return groups;
       };
-      const badgeCount = occurrence => annotationGroupsForOccurrence(occurrence).size;
       const visibleTreeEdgeCount = allOccurrences.reduce(
         (count, occurrence) => count + occurrence.children.length,
         0,
       );
       updateCallTreeStats(allOccurrences.length, visibleTreeEdgeCount);
       const occurrenceCounts = new Map();
+      const nodeByOccurrence = new Map();
       allOccurrences.forEach(occurrence => {
         occurrenceCounts.set(occurrence.name, (occurrenceCounts.get(occurrence.name) || 0) + 1);
       });
-      const edgeDisplayLabel = edge => {
+      const edgeDisplayLabel = (edge, maxLength = 36) => {
         const protocol = edge.kind === "kafka" ? "Kafka" : edge.kind === "rest" ? "HTTP" : edge.kind || "Appel";
         const prefix = edge.order ? `#${edge.order} · ` : "";
-        const label = edge.label || protocol;
-        const text = `${prefix}${label} · ${protocol}`;
-        return text.length > 58 ? `${text.slice(0, 55)}…` : text;
+        const suffix = ` · ${protocol}`;
+        const label = String(edge.label || protocol);
+        const labelWidth = Math.max(1, maxLength - prefix.length - suffix.length);
+        const compactLabel = label.length > labelWidth
+          ? `${label.slice(0, Math.max(0, labelWidth - 1))}…` : label;
+        return `${prefix}${compactLabel}${suffix}`;
       };
       const direction = "lr";
-      const maxBadges = Math.max(0, ...allOccurrences.map(badgeCount));
-      const cardHeight = Math.max(82, 42 + maxBadges * 20);
-      const gapY = Math.max(105, cardHeight + 23);
-      const cardWidth = 150;
+      const cardWidth = 190;
+      const siblingGap = 23;
       const maxEdgeLabelLength = allOccurrences.reduce((maximum, occurrence) => (
         occurrence.children.reduce((current, child) => (
           Math.max(current, edgeDisplayLabel(child.edge).length)
         ), maximum)
       ), 0);
       const estimatedEdgeLabelWidth = Math.min(320, maxEdgeLabelLength * 6);
-      const gapX = Math.max(280, cardWidth + estimatedEdgeLabelWidth + 32);
-      const logicalWidth = direction === "lr"
-        ? (Math.max(...allOccurrences.map(item => item.x)) + 1) * gapX
-        : Math.max(1, leafIndex) * gapX;
-      const logicalHeight = direction === "lr"
-        ? Math.max(1, leafIndex) * gapY
-        : (Math.max(...allOccurrences.map(item => item.x)) + 1) * gapY;
-      const scale = Math.min(1, (viewport.width - 32) / logicalWidth, (viewport.height - 32) / logicalHeight);
-      const offsetX = Math.max(16, (viewport.width - logicalWidth * scale) / 2);
-      const offsetY = Math.max(16, (viewport.height - logicalHeight * scale) / 2);
-      const position = occurrence => direction === "lr"
-        ? { x: occurrence.x * gapX, y: occurrence.y * gapY }
-        : { x: occurrence.y * gapX, y: occurrence.x * gapY };
+      const gapX = Math.max(320, cardWidth + estimatedEdgeLabelWidth + 32);
       const canvas = document.createElement("div");
       canvas.className = "graph-call-tree-canvas";
-      canvas.style.width = `${logicalWidth}px`;
-      canvas.style.height = `${logicalHeight}px`;
-      canvas.dataset.baseScale = String(scale);
-      let left = offsetX;
-      let top = offsetY;
-      let zoom = graphState.callTreeZoom || 1;
-      if (preservedCamera) {
-        const centerX = preservedCamera.centerX ?? viewport.width / 2;
-        const centerY = preservedCamera.centerY ?? viewport.height / 2;
-        const logicalCenterX = (centerX - preservedCamera.left) / preservedCamera.totalScale;
-        const logicalCenterY = (centerY - preservedCamera.top) / preservedCamera.totalScale;
-        zoom = Math.max(.5, Math.min(4, preservedCamera.totalScale / scale));
-        const totalScale = scale * zoom;
-        left = centerX - logicalCenterX * totalScale;
-        top = centerY - logicalCenterY * totalScale;
-      }
-      graphState.callTreeZoom = zoom;
-      canvas.style.left = `${left}px`;
-      canvas.style.top = `${top}px`;
-      canvas.style.transform = `scale(${scale * zoom})`;
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("width", String(logicalWidth));
-      svg.setAttribute("height", String(logicalHeight));
       svg.setAttribute("aria-hidden", "true");
       const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
       const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
@@ -9284,6 +9680,45 @@ const graphViewLifecycle = (() => {
           line: port?.line,
         };
       };
+      const methodForOccurrence = occurrence => {
+        const inputEndpointId = inputForOccurrence(occurrence);
+        const inputPort = inputEndpointId ? portsByEndpointId.get(inputEndpointId) : null;
+        const inputMethod = String(inputPort?.method || "").trim();
+        const preferredSignature = inputPort?.call_tree_signature;
+        let candidates;
+        if (preferredSignature) {
+          candidates = [{ method: preferredSignature.method, parameterTypes: preferredSignature.parameter_types }];
+        } else if (inputMethod.includes("::")) {
+          candidates = [{ method: inputMethod, parameterTypes: inputPort.parameter_types }];
+        } else {
+          candidates = occurrence.flowIds.map(id => {
+            const flow = flowById.get(id);
+            const method = String(flow?.method || "").trim();
+            const declaration = (graphData.codeql_call_graph?.nodes || []).find(node => (
+              node.method === method && node.path === flow?.path
+              && node.start_line === flow?.start_line
+            ));
+            return { method, parameterTypes: declaration?.parameter_types };
+          }).filter(item => item.method);
+        }
+        const signatures = [...new Map(candidates.map(item => [
+          JSON.stringify([item.method, item.parameterTypes]), item,
+        ])).values()].map(item => {
+          const separator = item.method.lastIndexOf("::");
+          const start = separator >= 0 ? separator + 2 : item.method.lastIndexOf(".") + 1;
+          const name = item.method.slice(start).split("(", 1)[0].trim();
+          const parameters = Array.isArray(item.parameterTypes)
+            ? `(${item.parameterTypes.join(", ")})` : null;
+          return { name, parameters, full: `${item.method}${parameters || ""}` };
+        }).filter(item => item.name);
+        if (!signatures.length) return null;
+        const labels = [...new Set(signatures.map(item => item.name))];
+        return {
+          label: labels.join(" · "),
+          parameters: signatures.length === 1 ? signatures[0].parameters : null,
+          title: signatures.map(item => item.full).join("\n"),
+        };
+      };
       const clearTreeTooltip = () => flowTooltipOverlay?.replaceChildren();
       const showTreeTooltip = (className, titleText, lines, clientX, clientY) => {
         if (!flowTooltipOverlay) return;
@@ -9333,6 +9768,8 @@ const graphViewLifecycle = (() => {
               : "Microservice",
           `Niveau ${occurrence.depth + 1}${occurrence.cycle || occurrence.continuationUnknown ? " · expansion arrêtée" : ""}`,
         ];
+        const method = methodForOccurrence(occurrence);
+        if (method) lines.push(`Méthode Java : ${method.title.replaceAll("\n", " · ")}`);
         const occurrenceCount = occurrenceCounts.get(occurrence.name) || 1;
         if (occurrenceCount > 1) lines.push(`Appelé ${occurrenceCount} fois dans l’arbre`);
         const input = occurrence.edge && treePort(occurrence.edge.endpoint_ids?.[1], "in");
@@ -9348,7 +9785,22 @@ const graphViewLifecycle = (() => {
           lines.push(`OUT ${outputText}${outputs.length > 3 ? " …" : ""}`);
         }
         diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, side }) => {
+          const classification = ({
+            potential_risk: "Risque possible",
+            guarantee_identified: "Garantie identifiée",
+            insufficient_evidence: "Preuves insuffisantes",
+          })[diagnostic.classification] || diagnostic.classification || "Diagnostic";
+          lines.push(`Diagnostic · ${classification}`);
+          if (diagnostic.resource_identity) lines.push(`Identité ressource · ${diagnostic.resource_identity}`);
+          else lines.push("Identité ressource · non établie");
           if (diagnostic.key) lines.push(`Clé · ${diagnostic.key}`);
+          if (diagnostic.key_identity) lines.push(`Identité clé · ${diagnostic.key_identity}`);
+          else if (diagnostic.key) lines.push("Identité clé · non établie");
+          if (diagnostic.causal_evidence) lines.push(`Lien causal · ${diagnostic.causal_evidence}`);
+          if (diagnostic.order_evidence && diagnostic.order_evidence !== diagnostic.causal_evidence) {
+            lines.push(`Ordre · ${diagnostic.order_evidence}`);
+          }
+          if (diagnostic.limitation) lines.push(`Limite · ${diagnostic.limitation}`);
           if (diagnostic[`${side}_phase`]) lines.push(`Phase · ${diagnostic[`${side}_phase`]}`);
           if (diagnostic[`${side}_transaction_id`]) lines.push(`Transaction · ${diagnostic[`${side}_transaction_id`]}`);
           if (diagnostic[`${side}_fields`]?.length) lines.push(`Champs · ${diagnostic[`${side}_fields`].join(", ")}`);
@@ -9384,115 +9836,6 @@ const graphViewLifecycle = (() => {
         };
       };
       allOccurrences.forEach(occurrence => {
-        const source = position(occurrence);
-        occurrence.children.forEach(child => {
-          const target = position(child);
-          const labelX = direction === "lr"
-            ? (source.x + cardWidth + target.x) / 2
-            : (source.x + target.x + cardWidth) / 2;
-          const labelY = direction === "lr"
-            ? (source.y + target.y + cardHeight) / 2 - 7
-            : (source.y + cardHeight + target.y) / 2 - 7;
-          const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-          if (direction === "lr") {
-            const startX = source.x + cardWidth;
-            const endX = target.x;
-            const middleX = (startX + endX) / 2;
-            line.setAttribute("d", `M ${startX} ${source.y + cardHeight / 2} C ${middleX} ${source.y + cardHeight / 2}, ${middleX} ${target.y + cardHeight / 2}, ${endX} ${target.y + cardHeight / 2}`);
-          } else {
-            const startY = source.y + cardHeight;
-            const endY = target.y;
-            const middleY = (startY + endY) / 2;
-            line.setAttribute("d", `M ${source.x + cardWidth / 2} ${startY} C ${source.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${middleY}, ${target.x + cardWidth / 2} ${endY}`);
-          }
-          const edgeHit = line.cloneNode();
-          edgeHit.classList.remove("graph-call-tree-edge");
-          edgeHit.classList.add("graph-call-tree-edge-hit");
-          const protocolClass = child.edge.kind === "rest" ? "is-rest" : child.edge.kind === "kafka" ? "is-kafka" : "";
-          line.classList.add("graph-call-tree-edge", protocolClass);
-          edgeHit.classList.add(protocolClass);
-          const edgeEndpointIds = new Set(child.edge.endpoint_ids || []);
-          const edgeDiagnosticKind = [...edgeEndpointIds].some(endpointId => interactionDiagnosticPathEndpoints.has(endpointId))
-            ? "interaction"
-            : [...edgeEndpointIds].some(endpointId => asyncDiagnosticPathEndpoints.has(endpointId))
-              ? "async"
-            : [...edgeEndpointIds].some(endpointId => syncDiagnosticPathEndpoints.has(endpointId))
-              ? "sync"
-              : null;
-          if (edgeDiagnosticKind) {
-            line.classList.add(`is-diagnostic-${edgeDiagnosticKind}`);
-            edgeHit.classList.add(`is-diagnostic-${edgeDiagnosticKind}`);
-          } else if (selectedDiagnostic) {
-            line.classList.add("is-diagnostic-muted");
-            edgeHit.classList.add("is-diagnostic-muted");
-          }
-          const edgeTooltip = treeEdgeTooltip(child.edge);
-          line.setAttribute("title", [edgeTooltip.title, ...edgeTooltip.lines].join(" · "));
-          line.addEventListener("mouseenter", event => {
-            line.classList.add("is-hovered");
-            showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
-          });
-          line.addEventListener("mousemove", event => {
-            const tooltip = flowTooltipOverlay?.firstElementChild;
-            if (tooltip) showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
-          });
-          line.addEventListener("mouseleave", () => { line.classList.remove("is-hovered"); clearTreeTooltip(); });
-          const topicNode = child.edge.kind === "kafka"
-            ? nodeForCallTreeTopic(child.edge.label)
-            : null;
-          const callTreeRoute = child.edge.kind === "rest"
-            ? routeForCallTreeEdge(child.edge)
-            : null;
-          if (topicNode || callTreeRoute) {
-            line.style.cursor = "pointer";
-            line.addEventListener("click", event => {
-              if (!event.shiftKey) return;
-              event.preventDefault();
-              event.stopPropagation();
-              openCallTreeEdgeInspector(child.edge);
-            });
-            edgeHit.addEventListener("click", event => {
-              if (!event.shiftKey) return;
-              event.preventDefault();
-              event.stopPropagation();
-              openCallTreeEdgeInspector(child.edge);
-            });
-          }
-          svg.append(edgeHit);
-          svg.append(line);
-          const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-          label.classList.add("graph-call-tree-edge-label");
-          if (edgeDiagnosticKind) {
-            label.classList.add(`is-diagnostic-${edgeDiagnosticKind}`, "is-diagnostic-badge-label");
-            const diagnosticLabel = edgeDiagnosticKind === "interaction"
-              ? flowDiagnosticTitle(selectedDiagnostic)
-              : edgeDiagnosticKind === "async"
-              ? `D${selectedDiagnosticIndex} · ÉCRITURE ASYNC`
-              : `D${selectedDiagnosticIndex} · LECTURE SYNC`;
-            label.textContent = `${diagnosticLabel} · ${edgeDisplayLabel(child.edge)}`;
-          } else if (selectedDiagnostic) {
-            label.classList.add("is-diagnostic-muted");
-          }
-          label.setAttribute("x", String(labelX));
-          label.setAttribute("y", String(labelY));
-          if (!edgeDiagnosticKind) label.textContent = edgeDisplayLabel(child.edge);
-          if (topicNode || callTreeRoute) {
-            label.classList.add("is-clickable");
-            label.addEventListener("click", event => {
-              if (!event.shiftKey) return;
-              event.preventDefault();
-              event.stopPropagation();
-              openCallTreeEdgeInspector(child.edge);
-            });
-          }
-          const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-          title.textContent = `${child.edge.order ? `Arc #${child.edge.order} · ` : ""}${child.edge.label || child.edge.kind || "Appel"}`;
-          label.append(title);
-          svg.append(label);
-        });
-      });
-      canvas.append(svg);
-      allOccurrences.forEach(occurrence => {
         const node = document.createElement("button");
         node.type = "button";
         const occurrenceCount = occurrenceCounts.get(occurrence.name) || 1;
@@ -9501,7 +9844,7 @@ const graphViewLifecycle = (() => {
             : occurrenceCount === 2 ? "is-frequency-2" : "";
         const isSelectedOccurrence = graphState.callTreeSelectedPathKey === occurrence.pathKey;
         node.className = `graph-call-tree-node${frequencyClass ? ` ${frequencyClass}` : ""}${occurrence.cycle ? " is-cycle" : ""}${isSelectedOccurrence ? " is-selected" : ""}`;
-        node.style.height = `${cardHeight}px`;
+        node.dataset.pathKey = occurrence.pathKey;
         const original = nodeIdForCodeFlowResource(occurrence.name, "microservice");
         const originalNode = original ? nodeDataById.get(original) : null;
         node.style.setProperty("--card-accent", originalNode?.color || "#64748b");
@@ -9510,16 +9853,31 @@ const graphViewLifecycle = (() => {
         const name = document.createElement("span");
         name.className = "graph-node-card-name";
         name.textContent = occurrence.name;
-        const kind = document.createElement("span");
-        kind.className = "graph-node-card-kind";
-        kind.textContent = occurrence.cycle
-          ? "Microservice · cycle"
-          : occurrence.continuationUnknown
-            ? "Microservice · suite inconnue"
-          : occurrence.hiddenChildrenCount
-            ? `Microservice · +${occurrence.hiddenChildrenCount} appels`
-            : "Microservice";
-        node.append(icon, name, kind);
+        const method = methodForOccurrence(occurrence);
+        if (method) {
+          const methodName = document.createElement("span");
+          methodName.className = "graph-call-tree-method";
+          const methodLabel = document.createElement("strong");
+          methodLabel.className = "graph-call-tree-method-name";
+          methodLabel.textContent = method.label;
+          methodName.append(methodLabel);
+          if (method.parameters !== null) {
+            const parameters = document.createElement("span");
+            parameters.className = "graph-call-tree-method-parameters";
+            parameters.textContent = method.parameters;
+            methodName.append(parameters);
+          }
+          methodName.title = method.title;
+          node.append(icon, name, methodName);
+        } else {
+          node.append(icon, name);
+        }
+        if (occurrence.continuationUnknown) {
+          const status = document.createElement("span");
+          status.className = "graph-node-card-kind";
+          status.textContent = "Suite inconnue";
+          node.append(status);
+        }
         const annotationGroups = [...annotationGroupsForOccurrence(occurrence).values()]
           .sort((a, b) => a.name.localeCompare(b.name, "fr")
             || a.resource.localeCompare(b.resource, "fr"));
@@ -9601,7 +9959,9 @@ const graphViewLifecycle = (() => {
           directionPorts.forEach((port, index) => {
             const anchor = document.createElement("span");
             anchor.className = `graph-node-port-reference is-${direction} is-${port.protocol}`;
-            anchor.textContent = port.label;
+            anchor.dataset.endpointId = port.endpointId || "";
+            anchor.dataset.direction = direction;
+            anchor.textContent = direction === "in" ? "IN" : "OUT";
             anchor.title = `${direction === "in" ? "Port d’entrée" : "Port de sortie"} · ${port.label}`;
             anchor.style.setProperty(
               "--port-offset",
@@ -9647,11 +10007,9 @@ const graphViewLifecycle = (() => {
           : occurrence.continuationUnknown
             ? `${occurrence.name} · suite inconnue`
           : `${occurrence.name} · occurrence ${occurrence.id}`;
-        const point = position(occurrence);
-        node.style.left = `${point.x}px`;
-        node.style.top = `${point.y}px`;
         node.addEventListener("pointerover", event => {
           if (event.target.closest?.(".graph-node-port-reference")) return;
+          highlightCallTreePath(occurrence.pathKey);
           node.classList.add("is-hovered");
           showTreeTooltip("graph-call-tree-entity-tooltip", occurrence.name, treeOccurrenceTooltipLines(occurrence), event.clientX, event.clientY);
         });
@@ -9659,7 +10017,13 @@ const graphViewLifecycle = (() => {
           if (event.target.closest?.(".graph-node-port-reference")) return;
           showTreeTooltip("graph-call-tree-entity-tooltip", occurrence.name, treeOccurrenceTooltipLines(occurrence), event.clientX, event.clientY);
         });
-        node.addEventListener("mouseleave", () => { node.classList.remove("is-hovered"); clearTreeTooltip(); });
+        node.addEventListener("mouseleave", () => {
+          node.classList.remove("is-hovered");
+          highlightCallTreePath(null);
+          clearTreeTooltip();
+        });
+        node.addEventListener("focus", () => highlightCallTreePath(occurrence.pathKey));
+        node.addEventListener("blur", () => highlightCallTreePath(null));
         node.addEventListener("click", event => {
           event.preventDefault();
           event.stopPropagation();
@@ -9671,8 +10035,200 @@ const graphViewLifecycle = (() => {
           renderCallTreeOverlay(captureCallTreeCamera());
         });
         canvas.append(node);
+        nodeByOccurrence.set(occurrence, node);
       });
       graphCallTreeOverlay.replaceChildren(canvas);
+      const cardHeightByOccurrence = new Map();
+      const measureSubtree = occurrence => {
+        const node = nodeByOccurrence.get(occurrence);
+        const cardHeight = node.offsetHeight;
+        cardHeightByOccurrence.set(occurrence, cardHeight);
+        const childHeights = occurrence.children.map(measureSubtree);
+        const childrenHeight = childHeights.reduce((sum, height) => sum + height, 0)
+          + Math.max(0, childHeights.length - 1) * siblingGap;
+        occurrence.subtreeHeight = Math.max(cardHeight, childrenHeight);
+        return occurrence.subtreeHeight;
+      };
+      rootsTree.forEach(measureSubtree);
+      const placeSubtree = (occurrence, bandTop) => {
+        const childrenHeight = occurrence.children.reduce(
+          (sum, child) => sum + child.subtreeHeight, 0,
+        ) + Math.max(0, occurrence.children.length - 1) * siblingGap;
+        occurrence.x = occurrence.depth * gapX;
+        occurrence.y = bandTop
+          + (occurrence.subtreeHeight - cardHeightByOccurrence.get(occurrence)) / 2;
+        let childTop = bandTop + (occurrence.subtreeHeight - childrenHeight) / 2;
+        occurrence.children.forEach(child => {
+          placeSubtree(child, childTop);
+          childTop += child.subtreeHeight + siblingGap;
+        });
+      };
+      let rootTop = 0;
+      rootsTree.forEach(root => {
+        placeSubtree(root, rootTop);
+        rootTop += root.subtreeHeight + siblingGap;
+      });
+      const logicalWidth = (Math.max(...allOccurrences.map(item => item.depth)) + 1) * gapX;
+      const logicalHeight = Math.max(1, rootTop - siblingGap);
+      const scale = Math.min(1, (viewport.width - 32) / logicalWidth, (viewport.height - 32) / logicalHeight);
+      const offsetX = Math.max(16, (viewport.width - logicalWidth * scale) / 2);
+      const offsetY = Math.max(16, (viewport.height - logicalHeight * scale) / 2);
+      let left = offsetX;
+      let top = offsetY;
+      let zoom = graphState.callTreeZoom || 1;
+      if (preservedCamera) {
+        const centerX = preservedCamera.centerX ?? viewport.width / 2;
+        const centerY = preservedCamera.centerY ?? viewport.height / 2;
+        const logicalCenterX = (centerX - preservedCamera.left) / preservedCamera.totalScale;
+        const logicalCenterY = (centerY - preservedCamera.top) / preservedCamera.totalScale;
+        zoom = Math.max(.5, Math.min(64, preservedCamera.totalScale / scale));
+        const totalScale = scale * zoom;
+        left = centerX - logicalCenterX * totalScale;
+        top = centerY - logicalCenterY * totalScale;
+      }
+      graphState.callTreeZoom = zoom;
+      canvas.style.width = `${logicalWidth}px`;
+      canvas.style.height = `${logicalHeight}px`;
+      canvas.dataset.baseScale = String(scale);
+      canvas.style.left = `${left}px`;
+      canvas.style.top = `${top}px`;
+      canvas.style.transform = `scale(${scale * zoom})`;
+      svg.setAttribute("width", String(logicalWidth));
+      svg.setAttribute("height", String(logicalHeight));
+      nodeByOccurrence.forEach((node, occurrence) => {
+        node.style.left = `${occurrence.x}px`;
+        node.style.top = `${occurrence.y}px`;
+      });
+      const portAnchorPoint = (occurrence, endpointId, direction) => {
+        const node = nodeByOccurrence.get(occurrence);
+        const canvasScale = Math.max(.001, scale * zoom);
+        const anchor = [...(node?.querySelectorAll(".graph-node-port-reference") || [])]
+          .find(port => port.dataset.direction === direction
+            && port.dataset.endpointId === String(endpointId || ""));
+        const cardHeight = cardHeightByOccurrence.get(occurrence);
+        if (!anchor) {
+          return {
+            x: occurrence.x + (direction === "out" ? cardWidth : 0),
+            y: occurrence.y + cardHeight / 2,
+          };
+        }
+        const nodeBounds = node.getBoundingClientRect();
+        const portBounds = anchor.getBoundingClientRect();
+        return {
+          // Use the rendered ellipse tip so the arc visibly leaves its outer edge.
+          x: occurrence.x + ((direction === "out" ? portBounds.right : portBounds.left)
+            - nodeBounds.left) / canvasScale,
+          y: occurrence.y + (portBounds.top + portBounds.height / 2 - nodeBounds.top) / canvasScale,
+        };
+      };
+      allOccurrences.forEach(occurrence => {
+        occurrence.children.forEach(child => {
+          const source = portAnchorPoint(occurrence, child.edge.endpoint_ids?.[0], "out");
+          const target = portAnchorPoint(child, child.edge.endpoint_ids?.[1], "in");
+          const labelX = (source.x + target.x) / 2;
+          const labelY = (source.y + target.y) / 2 - 7;
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          line.dataset.targetPathKey = child.pathKey;
+          if (direction === "lr") {
+            const startX = source.x;
+            const endX = target.x;
+            const middleX = (startX + endX) / 2;
+            line.setAttribute("d", `M ${startX} ${source.y} C ${middleX} ${source.y}, ${middleX} ${target.y}, ${endX} ${target.y}`);
+          } else {
+            const startY = source.y;
+            const endY = target.y;
+            const middleY = (startY + endY) / 2;
+            line.setAttribute("d", `M ${source.x} ${startY} C ${source.x} ${middleY}, ${target.x} ${middleY}, ${target.x} ${endY}`);
+          }
+          const edgeHit = line.cloneNode();
+          edgeHit.classList.remove("graph-call-tree-edge");
+          edgeHit.classList.add("graph-call-tree-edge-hit");
+          const protocolClass = child.edge.kind === "rest" ? "is-rest" : child.edge.kind === "kafka" ? "is-kafka" : "";
+          line.classList.add("graph-call-tree-edge", protocolClass);
+          edgeHit.classList.add(protocolClass);
+          const edgeEndpointIds = new Set(child.edge.endpoint_ids || []);
+          const edgeDiagnosticKind = [...edgeEndpointIds].some(endpointId => interactionDiagnosticPathEndpoints.has(endpointId))
+            ? "interaction"
+            : [...edgeEndpointIds].some(endpointId => asyncDiagnosticPathEndpoints.has(endpointId))
+              ? "async"
+            : [...edgeEndpointIds].some(endpointId => syncDiagnosticPathEndpoints.has(endpointId))
+              ? "sync"
+              : null;
+          if (edgeDiagnosticKind) {
+            line.classList.add(`is-diagnostic-${edgeDiagnosticKind}`);
+            edgeHit.classList.add(`is-diagnostic-${edgeDiagnosticKind}`);
+          } else if (selectedDiagnostic) {
+            line.classList.add("is-diagnostic-muted");
+            edgeHit.classList.add("is-diagnostic-muted");
+          }
+          const edgeTooltip = treeEdgeTooltip(child.edge);
+          line.setAttribute("title", [edgeTooltip.title, ...edgeTooltip.lines].join(" · "));
+          line.addEventListener("mouseenter", event => {
+            line.classList.add("is-hovered");
+            showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
+          });
+          line.addEventListener("mousemove", event => {
+            const tooltip = flowTooltipOverlay?.firstElementChild;
+            if (tooltip) showTreeTooltip("graph-edge-tooltip", edgeTooltip.title, edgeTooltip.lines, event.clientX, event.clientY);
+          });
+          line.addEventListener("mouseleave", () => { line.classList.remove("is-hovered"); clearTreeTooltip(); });
+          const topicNode = child.edge.kind === "kafka"
+            ? nodeForCallTreeTopic(child.edge.label)
+            : null;
+          const callTreeRoute = child.edge.kind === "rest"
+            ? routeForCallTreeEdge(child.edge)
+            : null;
+          if (topicNode || callTreeRoute) {
+            line.style.cursor = "pointer";
+            line.addEventListener("click", event => {
+              if (!event.shiftKey) return;
+              event.preventDefault();
+              event.stopPropagation();
+              openCallTreeEdgeInspector(child.edge);
+            });
+            edgeHit.addEventListener("click", event => {
+              if (!event.shiftKey) return;
+              event.preventDefault();
+              event.stopPropagation();
+              openCallTreeEdgeInspector(child.edge);
+            });
+          }
+          svg.append(edgeHit);
+          svg.append(line);
+          const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          label.classList.add("graph-call-tree-edge-label");
+          label.dataset.targetPathKey = child.pathKey;
+          if (edgeDiagnosticKind) {
+            label.classList.add(`is-diagnostic-${edgeDiagnosticKind}`, "is-diagnostic-badge-label");
+            const diagnosticLabel = `D${selectedDiagnosticIndex}`;
+            const diagnosticBudget = Math.max(12, 36 - diagnosticLabel.length - 3);
+            label.textContent = `${diagnosticLabel} · ${edgeDisplayLabel(child.edge, diagnosticBudget)}`;
+          } else if (selectedDiagnostic) {
+            label.classList.add("is-diagnostic-muted");
+          }
+          label.setAttribute("x", String(labelX));
+          label.setAttribute("y", String(labelY));
+          if (!edgeDiagnosticKind) label.textContent = edgeDisplayLabel(child.edge);
+          if (topicNode || callTreeRoute) {
+            label.classList.add("is-clickable");
+            label.addEventListener("click", event => {
+              if (!event.shiftKey) return;
+              event.preventDefault();
+              event.stopPropagation();
+              openCallTreeEdgeInspector(child.edge);
+            });
+          }
+          const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+          title.textContent = [
+            edgeDiagnosticKind ? flowDiagnosticTitle(selectedDiagnostic) : "",
+            treeEdgeTooltip(child.edge).title,
+            ...treeEdgeTooltip(child.edge).lines,
+          ].filter(Boolean).join(" · ");
+          label.append(title);
+          svg.append(label);
+        });
+      });
+      canvas.prepend(svg);
     }
     function zoomCallTree(factor, anchorX = null, anchorY = null) {
       if (graphState.callGraphDisplayMode !== "tree") return false;
@@ -9688,7 +10244,7 @@ const graphViewLifecycle = (() => {
       const top = Number.parseFloat(canvas.style.top) || 0;
       const logicalX = (x - left) / oldTotalScale;
       const logicalY = (y - top) / oldTotalScale;
-      const nextZoom = Math.max(.5, Math.min(4, oldZoom * factor));
+      const nextZoom = Math.max(.5, Math.min(64, oldZoom * factor));
       const nextTotalScale = baseScale * nextZoom;
       graphState.callTreeZoom = nextZoom;
       canvas.style.left = `${x - logicalX * nextTotalScale}px`;
@@ -10082,6 +10638,14 @@ const graphViewLifecycle = (() => {
         stat.append(valueElement, labelElement);
         stats.append(stat);
       });
+      const consistencyCounts = flowConsistencyCounts(flow);
+      if (consistencyCounts.risks) {
+        const consistency = document.createElement("span");
+        consistency.className = "code-flow-consistency is-risk";
+        consistency.textContent = `Incohérence possible · ${consistencyCounts.risks}`;
+        consistency.title = "Risque de cohérence détecté dans ce flux. L’analyse statique indique un risque possible, pas une observation à l’exécution.";
+        item.append(consistency);
+      }
       if (path) {
         item.tabIndex = 0;
         item.addEventListener("click", () => showCodeFlow(flow));
@@ -10136,23 +10700,34 @@ const graphViewLifecycle = (() => {
     }
 
     function renderCodeFlows() {
-      const query = codeFlowFilter.value.trim().toLocaleLowerCase();
+      const query = normalizeFlowSearch(codeFlowFilter.value.trim());
+      const queryWords = query.split(/\s+/).filter(Boolean);
+      const inconsistencySearch = queryWords.some(word => word === "incoherence" || word === "incoherences");
+      const textQuery = queryWords
+        .filter(word => word !== "incoherence" && word !== "incoherences")
+        .join(" ");
       const visible = codeFlows.filter(flow => {
+        const hasPotentialRisk = flowConsistencyCounts(flow).risks > 0;
         const accesses = (graphData.flow_data_access_flow_ids_by_root?.[flow.id] || [])
           .flatMap(id => graphData.flow_data_accesses?.[id] || []);
-        const haystack = [
+        const haystack = normalizeFlowSearch([
           flow.id,
           flow.module,
           flow.method,
           flow.reason,
           ...(flow.steps || []).flatMap(step => [step.kind, step.name, step.path]),
           ...accesses.flatMap(access => [access.action, access.resource, access.module]),
-        ].join(" ").toLocaleLowerCase();
-        return !query || haystack.includes(query);
+          ...(hasPotentialRisk ? ["incohérence possible risque de cohérence"] : []),
+        ].join(" "));
+        return (!inconsistencySearch || hasPotentialRisk)
+          && (!textQuery || haystack.includes(textQuery));
       });
       codeFlowsList.replaceChildren(...visible.sort(sortCodeFlows).map(codeFlowItem));
       syncCodeFlowSelection();
       codeFlowsEmpty.hidden = visible.length > 0;
+      codeFlowsEmpty.textContent = inconsistencySearch
+        ? "Aucun flux avec incohérence possible ne correspond à cette recherche."
+        : "Aucun flux d’appel indexé.";
       codeFlowsSummary.textContent = `${visible.length} flux d’appel affiché${visible.length > 1 ? "s" : ""} sur ${codeFlows.length}.`;
       updateCodeFlowFilterSummary();
       codeFlowsTitle.textContent = `Flux de code (${visible.length})`;

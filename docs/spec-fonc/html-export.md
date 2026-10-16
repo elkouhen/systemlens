@@ -18,6 +18,14 @@ graphs while retaining their services, calls, and flow selection. The default
 includes those annotations. The option requires `--html FILE` and does not
 change the persisted index or JSON export.
 
+Consistency diagnostics for a selected call graph cover its full persisted
+reachable flow topology. A diagnostic between accesses inside a descendant
+flow appears on each selected root that reaches that flow. The catalogue search
+term `incohérence` (or `incoherence`) finds flows with a possible consistency
+risk, including concurrent-write, lost-update, dirty-read, and freshness
+risks. Insufficient evidence and a possible interaction without an established
+consistency fault do not match that search.
+
 ```bash
 systemlens export microservices --html calls.html --call-graphs-only --no-call-graph-annotations
 ```

@@ -77,6 +77,10 @@ def main() -> None:
     resource = "shared:inventory:products"
     key = "payload.productId"
     order_resource = "order-service:orders"
+    product_identity = "postgresql:inventory:products"
+    product_key_identity = "product:42"
+    order_identity = "postgresql:orders:statuses"
+    order_key_identity = "order:42"
     endpoints = [
         endpoint("orders-http", services[0], "serve", "rest", "POST /api/orders", 10),
         endpoint("orders-publish", services[0], "produce", "kafka", topic, 14),
@@ -87,25 +91,33 @@ def main() -> None:
         flow("orders-root", services[0], "OrderFlow.place", 10, [
             step(1, "http_entry", "POST /api/orders", services[0], 10, endpoint_id="orders-http"),
             step(2, "data_read", "Product", services[0], 12, resource=resource, key=key,
+                 resource_identity=product_identity, key_identity=product_key_identity,
                  action="read", branch="sync", transaction_id="tx-orders",
                  concurrency="independent_handlers", phase="observe", fields=["stockQuantity"]),
             step(3, "data_write", "Product", services[0], 13, resource=resource, key=key,
+                 resource_identity=product_identity, key_identity=product_key_identity,
                  action="update", branch="sync", transaction_id="tx-orders",
                  concurrency="independent_handlers", phase="apply", fields=["stockQuantity"],
                  value_dependencies=["orders-root:2"]),
             step(4, "data_write", "OrderStatus", services[0], 14, resource=order_resource,
-                 key="request.orderId", action="update", branch="async",
+                 resource_identity=order_identity, key="request.orderId",
+                 key_identity=order_key_identity, action="update", branch="async",
+                 causal_id="order-42", request_before_reads=["orders-root:5"],
                  completion="ack_only"),
             step(5, "data_read", "OrderStatus", services[0], 15, resource=order_resource,
-                 key="request.orderId", action="read", branch="sync"),
+                 resource_identity=order_identity, key="request.orderId",
+                 key_identity=order_key_identity, action="read", branch="sync",
+                 causal_id="order-42"),
             step(6, "message_publish", topic, services[0], 16, endpoint_id="orders-publish"),
         ]),
         flow("inventory-handler", services[1], "InventoryFlow.reserve", 20, [
             step(1, "message_entry", topic, services[1], 20, endpoint_id="inventory-consume"),
             step(2, "data_read", "Product", services[1], 22, resource=resource, key=key,
+                 resource_identity=product_identity, key_identity=product_key_identity,
                  action="read", branch="sync", causal_id="order-42", transaction_id="tx-inventory",
                  concurrency="independent_handlers", phase="observe", fields=["stockQuantity"]),
             step(3, "data_write", "Product", services[1], 24, resource=resource, key=key,
+                 resource_identity=product_identity, key_identity=product_key_identity,
                  action="update", branch="sync", causal_id="order-42", transaction_id="tx-inventory",
                  concurrency="independent_handlers", phase="apply", fields=["stockQuantity"],
                  value_dependencies=["inventory-handler:2"], completion="unknown"),

@@ -12,6 +12,10 @@
     const codeFlowFilterReset = document.getElementById("code-flow-filter-reset");
     const codeFlowsTitle = document.getElementById("code-flows-title");
     const flowDiagnostics = Array.isArray(graphData.flow_diagnostics) ? graphData.flow_diagnostics : [];
+    const flowConsistencyRiskClassifications = new Set([
+      "potential_risk", "potential_concurrent_write", "potential_lost_update",
+      "potential_dirty_read", "potential_read_write_anomaly",
+    ]);
     const flowConsistencyCountCache = new Map();
     let callTreePan = null;
     let callTreePanBound = false;
@@ -31,16 +35,17 @@
           : "";
       }
       if (diagnostics) {
-        const selected = active
-          ? flowDiagnostics.filter(item => item.flow_id === codeFlowSelection.flowId)
-          : [];
-        const risks = selected.filter(item => item.classification === "potential_risk").length;
-        const uncertain = selected.filter(item => item.classification === "insufficient_evidence").length;
-        const guarantees = selected.filter(item => item.classification === "guarantee_identified").length;
+        const counts = active ? flowConsistencyCounts({ id: codeFlowSelection.flowId }) : null;
         diagnostics.hidden = !active;
         diagnostics.textContent = !active ? ""
-          : selected.length === 0 ? "Cohérence : aucun diagnostic détecté"
-            : `Cohérence : ${risks} risque${risks === 1 ? "" : "s"} · ${uncertain} analyse${uncertain === 1 ? "" : "s"} incertaine${uncertain === 1 ? "" : "s"} · ${guarantees} garantie${guarantees === 1 ? "" : "s"}`;
+          : counts.total === 0 ? "Cohérence : aucun diagnostic détecté"
+            : [
+              `Cohérence : ${counts.risks} risque${counts.risks === 1 ? "" : "s"}`,
+              counts.uncertain ? `${counts.uncertain} preuve${counts.uncertain === 1 ? "" : "s"} insuffisante${counts.uncertain === 1 ? "" : "s"}` : "",
+              counts.guarantees ? `${counts.guarantees} garantie${counts.guarantees === 1 ? "" : "s"}` : "",
+              counts.interactions ? `${counts.interactions} interaction${counts.interactions === 1 ? "" : "s"} possible${counts.interactions === 1 ? "" : "s"}` : "",
+              counts.other ? `${counts.other} autre${counts.other === 1 ? "" : "s"} diagnostic${counts.other === 1 ? "" : "s"}` : "",
+            ].filter(Boolean).join(" · ");
       }
     }
     function codeFlowStepLabel(kind) {
@@ -122,11 +127,14 @@
     function flowConsistencyCounts(flow) {
       if (flowConsistencyCountCache.has(flow.id)) return flowConsistencyCountCache.get(flow.id);
       const diagnostics = flowConsistencyDiagnostics(flow);
-      const counts = {
-        risks: diagnostics.filter(item => item.classification === "potential_risk").length,
-        uncertain: diagnostics.filter(item => item.classification === "insufficient_evidence").length,
-        guarantees: diagnostics.filter(item => item.classification === "guarantee_identified").length,
-      };
+      const counts = { total: diagnostics.length, risks: 0, uncertain: 0, guarantees: 0, interactions: 0, other: 0 };
+      diagnostics.forEach(item => {
+        if (flowConsistencyRiskClassifications.has(item.classification)) counts.risks += 1;
+        else if (item.classification === "insufficient_evidence") counts.uncertain += 1;
+        else if (["guarantee_identified", "conflict_protection_identified"].includes(item.classification)) counts.guarantees += 1;
+        else if (item.classification === "potential_interaction") counts.interactions += 1;
+        else counts.other += 1;
+      });
       flowConsistencyCountCache.set(flow.id, counts);
       return counts;
     }

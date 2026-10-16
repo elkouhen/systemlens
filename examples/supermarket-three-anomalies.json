@@ -148,6 +148,8 @@
           "end_line": 12,
           "resource": "shared:inventory:products",
           "key": "payload.productId",
+          "resource_identity": "postgresql:inventory:products",
+          "key_identity": "product:42",
           "action": "read",
           "branch": "sync",
           "transaction_id": "tx-orders",
@@ -166,6 +168,8 @@
           "end_line": 13,
           "resource": "shared:inventory:products",
           "key": "payload.productId",
+          "resource_identity": "postgresql:inventory:products",
+          "key_identity": "product:42",
           "action": "update",
           "branch": "sync",
           "transaction_id": "tx-orders",
@@ -186,9 +190,15 @@
           "start_line": 14,
           "end_line": 14,
           "resource": "order-service:orders",
+          "resource_identity": "postgresql:orders:statuses",
           "key": "request.orderId",
+          "key_identity": "order:42",
           "action": "update",
           "branch": "async",
+          "causal_id": "order-42",
+          "request_before_reads": [
+            "orders-root:5"
+          ],
           "completion": "ack_only"
         },
         {
@@ -199,9 +209,12 @@
           "start_line": 15,
           "end_line": 15,
           "resource": "order-service:orders",
+          "resource_identity": "postgresql:orders:statuses",
           "key": "request.orderId",
+          "key_identity": "order:42",
           "action": "read",
-          "branch": "sync"
+          "branch": "sync",
+          "causal_id": "order-42"
         },
         {
           "order": 6,
@@ -243,6 +256,8 @@
           "end_line": 22,
           "resource": "shared:inventory:products",
           "key": "payload.productId",
+          "resource_identity": "postgresql:inventory:products",
+          "key_identity": "product:42",
           "action": "read",
           "branch": "sync",
           "causal_id": "order-42",
@@ -262,6 +277,8 @@
           "end_line": 24,
           "resource": "shared:inventory:products",
           "key": "payload.productId",
+          "resource_identity": "postgresql:inventory:products",
+          "key_identity": "product:42",
           "action": "update",
           "branch": "sync",
           "causal_id": "order-42",

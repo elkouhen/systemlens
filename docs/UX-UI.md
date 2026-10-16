@@ -110,7 +110,7 @@ error states explain what is unavailable and what the user can do next.
 | Details widget | Show the selected graph element's immediate context and available analysis actions. | Identity, summary, relations, evidence, and actions for focus, modules, code flows, or source navigation. | It is contextual and may be hidden when an introspection window opens. It does not compete with the modal identity header. |
 | Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, description, ownership, relations, evidence, breadcrumb, and back or close action. | Opens as a dedicated window. Related resources remain selectable and update the same inspection history. |
 | Flow catalogue widget | Select a persisted code flow or flow group for call-graph analysis. | Compact flow rows, description, trigger, protocol, status, and summary statistics. | Selecting a row replaces the selected flow graph. Full details are shown in the selected-flow view, not in every row. |
-| Call-tree context widget | Explain and control the selected hierarchical call graph. | Flow identity, trigger event, visible tree node and arc counts, consistency diagnostic counts, depth, expand-all, and tree-specific status. | Collapsed by default. It controls the tree without repeating its nodes or arcs. Tree counts describe the visible projection and update when depth or expansion changes. Diagnostic counts cover the selected flow and distinguish possible risks, insufficient evidence, and identified guarantees. |
+| Call-tree context widget | Explain and control the selected hierarchical call graph. | Flow identity, trigger event, visible tree node and arc counts, consistency diagnostic counts, depth, expand-all, and tree-specific status. | Collapsed by default. It controls the tree without repeating its nodes or arcs. Tree counts describe the visible projection and update when depth or expansion changes. Diagnostic counts cover the selected flow and distinguish possible risks, insufficient evidence, identified guarantees, and possible interactions. |
 | Tooltip widget | Provide concise evidence for a hovered node, arc, row, or control. | Subject identity, relevant relation facts, and available status or type. | Appears on hover or focus and does not become a second navigation surface. It MUST NOT infer missing facts. |
 | Legend widget | Explain stable graph colours, shapes, strokes, and badges. | One entry per visual semantic and a concise label. | Collapsed by default. It explains the graph and does not replace node or arc tooltips. |
 | Analysis status widget | Report a transient selected port or arc and its related evidence. | Selected endpoint or arc, protocol, related resources, and a clear action. | Highlights the current analysis state without changing the graph data, camera, or persisted selection. |
@@ -292,8 +292,8 @@ at the leftmost point of its target IN port.
 
 The call-tree context widget MUST summarize consistency diagnostics for the
 selected flow. It MUST show counts for possible risks, insufficient evidence,
-and identified guarantees, or state that no diagnostic was detected. Counts
-MUST exclude diagnostics belonging to other flows.
+identified guarantees, and possible interactions, or state that no diagnostic
+was detected. Counts MUST exclude diagnostics belonging to other flows.
 
 The card MUST omit the repeated `Microservice` type label. An unknown
 continuation MUST retain its `Suite inconnue` status; cycles and hidden calls
@@ -382,8 +382,10 @@ entry exposes its complete description, trigger, service route, arc and step
 counts, effects, protocol, confidence, and topology status.
 
 Searching for `incohérence` or `incoherence` filters the catalogue to flows
-with a `potential_risk` consistency diagnostic. Those entries show an
-`Incohérence possible` badge. Insufficient evidence remains a separate state
+with any possible consistency risk: `potential_risk`,
+`potential_concurrent_write`, `potential_lost_update`, `potential_dirty_read`,
+or `potential_read_write_anomaly`. Those entries show an `Incohérence possible`
+badge. Insufficient evidence and `potential_interaction` remain separate states
 and MUST NOT match this search.
 
 Selecting a reconciled flow keeps the catalogue context available, shows the

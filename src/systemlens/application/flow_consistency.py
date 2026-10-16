@@ -227,7 +227,6 @@ def diagnose_flow_consistency_snapshot(
     reads_by_resource: dict[str, list[tuple[CodeFlow, CodeFlowStep]]] = defaultdict(list)
     reads_by_resource_identity: dict[str, list[tuple[CodeFlow, CodeFlowStep]]] = defaultdict(list)
     unknown_resource_reads: list[tuple[CodeFlow, CodeFlowStep]] = []
-    unknown_resource_identity_reads: list[tuple[CodeFlow, CodeFlowStep]] = []
     for read_flow, read in reads:
         resource = _resource(read)
         if resource is None:
@@ -236,8 +235,6 @@ def diagnose_flow_consistency_snapshot(
             reads_by_resource[resource].append((read_flow, read))
         if read.resource_identity:
             reads_by_resource_identity[read.resource_identity].append((read_flow, read))
-        else:
-            unknown_resource_identity_reads.append((read_flow, read))
 
     def candidate_reads(write: CodeFlowStep) -> Iterable[tuple[CodeFlow, CodeFlowStep]]:
         resource = _resource(write)
@@ -246,9 +243,15 @@ def diagnose_flow_consistency_snapshot(
             candidates.extend(reads)
         else:
             candidates.extend(reads_by_resource.get(resource, ()))
-            candidates.extend(unknown_resource_identity_reads)
             candidates.extend(reads_by_resource_identity.get(write.resource_identity, ()))
-        return dict.fromkeys(candidates)
+        seen: set[tuple[str, int]] = set()
+        result = []
+        for read_flow, read in candidates:
+            identity = (read_flow.id, read.order)
+            if identity not in seen:
+                seen.add(identity)
+                result.append((read_flow, read))
+        return result
 
     roots_by_flow: dict[str, set[str]] = defaultdict(set)
     for root, reachable in (causal_reachability or {}).items():
@@ -262,7 +265,8 @@ def diagnose_flow_consistency_snapshot(
             if not overlaps and overlap_limitation is None:
                 continue
             candidate_roots = (
-                [write_flow.id] if write_flow.id == read_flow.id
+                sorted(roots_by_flow[write_flow.id]) or [write_flow.id]
+                if write_flow.id == read_flow.id
                 else sorted(roots_by_flow[write_flow.id] & roots_by_flow[read_flow.id])
             )
             if write_flow.id == read_flow.id:
@@ -271,16 +275,21 @@ def diagnose_flow_consistency_snapshot(
                     None if write.causal_id and write.causal_id == read.causal_id
                     else "compatibilité du scénario d'exécution non établie"
                 )
-                diagnostics.append(_diagnose_pair(
-                    write_flow, write, read_flow, read, write_flow.id, evidence,
-                    scenario_limitation or (None if causal else "lien causal non prouvé"),
-                    visibility_precedes_read=(
-                        _event_id(read_flow, read) in write.visibility_before_reads
-                    ),
-                    request_precedes_read=(
-                        _event_id(read_flow, read) in write.request_before_reads
-                    ),
-                ))
+                if read.order < write.order and _event_id(read_flow, read) not in write.request_before_reads:
+                    scenario_limitation = "ordre de la demande avant la lecture non prouvé"
+                for display_root in candidate_roots:
+                    path = (causal_paths or {}).get(display_root, {}).get(write_flow.id, ())
+                    diagnostics.append(_diagnose_pair(
+                        write_flow, write, read_flow, read, display_root, evidence,
+                        scenario_limitation or (None if causal else "lien causal non prouvé"),
+                        path, path,
+                        visibility_precedes_read=(
+                            _event_id(read_flow, read) in write.visibility_before_reads
+                        ),
+                        request_precedes_read=(
+                            _event_id(read_flow, read) in write.request_before_reads
+                        ),
+                    ))
                 continue
             for display_root in candidate_roots:
                 if write.causal_id and read.causal_id and write.causal_id != read.causal_id:
@@ -303,7 +312,7 @@ def diagnose_flow_consistency_snapshot(
                     request_precedes_read,
                 ))
 
-    # Advanced detectors require exact identity and explicit concurrency facts.
+    # Advanced detectors require canonical identity and explicit concurrency facts.
     accesses_by_identity: dict[
         tuple[str, str], dict[str, list[tuple[CodeFlow, CodeFlowStep]]]
     ] = defaultdict(lambda: {"data_read": [], "data_write": []})
@@ -311,9 +320,11 @@ def diagnose_flow_consistency_snapshot(
         if flow.status == "cycle":
             continue
         for step in flow.steps:
-            resource = _resource(step)
-            if step.kind in {"data_read", "data_write"} and resource and step.key:
-                accesses_by_identity[(resource, step.key)][step.kind].append((flow, step))
+            if (step.kind in {"data_read", "data_write"}
+                    and step.resource_identity and step.key_identity):
+                accesses_by_identity[
+                    (step.resource_identity, step.key_identity)
+                ][step.kind].append((flow, step))
     rmw_sequences_by_identity: dict[
         tuple[str, str], list[tuple[CodeFlow, CodeFlowStep, CodeFlowStep]]
     ] = {}
@@ -343,12 +354,10 @@ def diagnose_flow_consistency_snapshot(
         rmw_sequences_by_identity[identity] = rmw_sequences
 
     lost_update_pairs: set[tuple[str, int, str, int]] = set()
-    for (resource, key), rmw_sequences in rmw_sequences_by_identity.items():
+    for rmw_sequences in rmw_sequences_by_identity.values():
         for index, (left_flow, left_read, left_write) in enumerate(rmw_sequences):
-            if _resource(left_write) != resource or left_write.key != key:
-                continue
             for right_flow, right_read, right_write in rmw_sequences[index + 1:]:
-                if right_flow.id == left_flow.id or _resource(right_write) != resource or right_write.key != key:
+                if right_flow.id == left_flow.id:
                     continue
                 if left_write.transaction_id == right_write.transaction_id:
                     continue
@@ -356,7 +365,7 @@ def diagnose_flow_consistency_snapshot(
                     continue
                 if left_write.fields and right_write.fields and not set(left_write.fields).intersection(right_write.fields):
                     continue
-                guard_identity = f"{resource}:{key}"
+                guard_identity = f"{_resource(left_write)}:{left_write.key}"
                 if _guard_applies(left_write, right_write, guard_identity):
                     continue
                 if left_write.causal_id and right_write.causal_id and left_write.causal_id != right_write.causal_id:
@@ -448,7 +457,7 @@ def diagnose_flow_consistency_snapshot(
     # Concurrent writes are reported only with exact key identity and explicit
     # overlap evidence. Distinct source locations or async branches alone do
     # not establish a race.
-    for (resource, key), grouped_accesses in accesses_by_identity.items():
+    for grouped_accesses in accesses_by_identity.values():
         writes_for_key = grouped_accesses["data_write"]
         for index, (left_flow, left_write) in enumerate(writes_for_key):
             for right_flow, right_write in writes_for_key[index + 1:]:
@@ -460,7 +469,7 @@ def diagnose_flow_consistency_snapshot(
                     continue
                 roots = sorted(roots_by_flow[left_flow.id] & roots_by_flow[right_flow.id])
                 for display_root in roots:
-                    guard_identity = f"{resource}:{key}"
+                    guard_identity = f"{_resource(left_write)}:{left_write.key}"
                     protected = _guard_applies(left_write, right_write, guard_identity)
                     fields_disjoint = bool(
                         left_write.fields and right_write.fields
@@ -484,7 +493,6 @@ def diagnose_flow_consistency_snapshot(
                         classification=event_type,
                         severity="info" if protected else "P1",
                         confidence="high" if protected else "low",
-                        key=key,
                         read_name=right_write.name,
                         read_action=right_write.action,
                         read_phase=right_write.phase,

@@ -1021,6 +1021,46 @@ def test_call_graph_enriches_data_siblings_and_pairs_async_write_with_sync_read(
                for item in data["flow_diagnostics"])
 
 
+def test_export_keeps_consistency_pair_inside_descendant_data_flow() -> None:
+    root_in = replace(_rest_endpoint("serve", "POST /orders", "Orders.java"), id="root-in")
+    message_out = replace(_kafka_endpoint("produce", "OrderEvent", "Orders.java"), id="event-out")
+    message_in = replace(_kafka_endpoint("consume", "OrderEvent", "Handler.java"), id="event-in")
+    root = CodeFlow("root", "orders", "Orders.place", "Orders.java", 1, 3,
+                    "potential", "medium", "test", (
+                        CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, root_in.id),
+                        CodeFlowStep(2, "message_publish", "orders.created", "Orders.java", 2, 2,
+                                     message_out.id),
+                    ))
+    handler = CodeFlow("handler", "inventory", "Handler.consume", "Handler.java", 1, 4,
+                       "potential", "medium", "test", (
+                           CodeFlowStep(1, "message_entry", "orders.created", "Handler.java", 1, 1,
+                                        message_in.id),
+                           CodeFlowStep(2, "data_write", "orders", "Handler.java", 2, 2,
+                                        branch="async", resource="orders",
+                                        resource_identity="db:orders", key="order.id",
+                                        key_identity="db:orders:id", causal_id="request-1",
+                                        request_before_reads=("handler:3",)),
+                           CodeFlowStep(3, "data_read", "orders", "Handler.java", 3, 3,
+                                        branch="sync", resource="orders",
+                                        resource_identity="db:orders", key="order.id",
+                                        key_identity="db:orders:id", causal_id="request-1"),
+                       ))
+
+    data = _html_graph_data(render_graph_html(
+        {"orders": [root_in, message_out], "inventory": [message_in]},
+        [GraphEdge("kafka", "orders", "inventory", message_out, message_in)],
+        code_flows=[root, handler],
+    ))
+
+    assert [item["id"] for item in data["code_flows"]] == ["root"]
+    assert len(data["flow_diagnostics"]) == 1
+    diagnostic = data["flow_diagnostics"][0]
+    assert diagnostic["flow_id"] == "root"
+    assert diagnostic["classification"] == "potential_risk"
+    assert diagnostic["write_flow_id"] == diagnostic["read_flow_id"] == "handler"
+    assert diagnostic["write_path_endpoint_ids"] == ["event-out", "event-in"]
+
+
 def test_microservice_widget_shows_only_internal_flows_and_marks_service() -> None:
     endpoint = _rest_endpoint("serve", "POST /orders", "OrderController.java")
     endpoint = replace(endpoint, id="receive-order", qualified_name="com.example.OrderController")

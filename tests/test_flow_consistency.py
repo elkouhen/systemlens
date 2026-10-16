@@ -243,6 +243,58 @@ def test_pair_is_reported_on_every_reachable_call_root() -> None:
     ]
 
 
+def test_pair_inside_descendant_flow_is_reported_on_each_call_root() -> None:
+    descendant = replace(_flow(
+        CodeFlowStep(1, "message_entry", "orders.created", "Handler.java", 1, 1),
+        CodeFlowStep(
+            2, "data_write", "orders", "Handler.java", 2, 2,
+            branch="async", resource="orders", resource_identity="db:orders",
+            key="order.id", key_identity="db:orders:id", causal_id="request-1",
+            request_before_reads=("handler:3",),
+        ),
+        CodeFlowStep(
+            3, "data_read", "orders", "Handler.java", 3, 3,
+            branch="sync", resource="orders", resource_identity="db:orders",
+            key="order.id", key_identity="db:orders:id", causal_id="request-1",
+        ),
+    ), id="handler")
+
+    diagnostics = diagnose_flow_consistency_snapshot(
+        [descendant],
+        {"root-a": {"handler"}, "root-b": {"handler"}},
+        {"root-a": {"handler": ("a-out", "handler-in")},
+         "root-b": {"handler": ("b-out", "handler-in")}},
+    )
+
+    assert [(item.flow_id, item.classification) for item in diagnostics] == [
+        ("root-a", "potential_risk"), ("root-b", "potential_risk"),
+    ]
+    assert diagnostics[0].write_path_endpoint_ids == ("a-out", "handler-in")
+    assert diagnostics[0].read_path_endpoint_ids == ("a-out", "handler-in")
+
+
+def test_concurrent_writes_require_matching_canonical_resource_and_key() -> None:
+    def writer(flow_id: str, resource_identity: str, key_identity: str) -> CodeFlow:
+        return replace(_flow(CodeFlowStep(
+            1, "data_write", "orders", "Writer.java", 10, 10,
+            resource="orders", resource_identity=resource_identity,
+            key="id", key_identity=key_identity, concurrency="parallel",
+        )), id=flow_id)
+
+    left = writer("writer-a", "db-a:orders", "db-a:orders:id")
+    different_store = writer("writer-b", "db-b:orders", "db-b:orders:id")
+    different_key = writer("writer-b", "db-a:orders", "db-a:orders:other-id")
+    same_record = writer("writer-b", "db-a:orders", "db-a:orders:id")
+    roots = {"root": {"writer-a", "writer-b"}}
+
+    assert diagnose_flow_consistency_snapshot([left, different_store], roots) == []
+    assert diagnose_flow_consistency_snapshot([left, different_key], roots) == []
+    diagnostics = diagnose_flow_consistency_snapshot([left, same_record], roots)
+    assert [(item.flow_id, item.classification) for item in diagnostics] == [
+        ("root", "potential_concurrent_write"),
+    ]
+
+
 def test_conflicting_causal_ids_on_reachable_branches_are_insufficient() -> None:
     write = replace(_flow(CodeFlowStep(
         1, "data_write", "orders", "Writer.java", 10, 10,

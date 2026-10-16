@@ -30,11 +30,13 @@ order flow. It demonstrates an asynchronous read-after-write risk, a concurrent
 read/write interaction, and a lost-update candidate on a shared product record.
 Its generated graph is `supermarket-three-anomalies.html`. The shared database,
 concurrency, transaction, and value-dependency facts are illustrative inputs,
-not claims about the supermarket demo application's implementation. Regenerate
-the dataset and graph with:
+not claims about the supermarket demo application's implementation. Canonical
+resource and key identities support the advanced comparisons; the explicit
+`request_before_reads` link supports the asynchronous risk. Regenerate the
+dataset and graph with:
 
 ```bash
-python scripts/generate_supermarket_anomaly_fixture.py
-systemlens export microservices --graph examples/supermarket-three-anomalies.json \
+uv run python scripts/generate_supermarket_anomaly_fixture.py
+uv run systemlens export microservices --graph examples/supermarket-three-anomalies.json \
   --html examples/supermarket-three-anomalies.html
 ```
