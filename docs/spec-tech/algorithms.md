@@ -283,10 +283,12 @@ compatibility cannot be resolved, the detector records `unknown` and abstains fr
 a definite ordering claim.
 
 The current implementation does not build the full lifecycle DAG described
-above. It accepts explicit per-access concurrency and lifecycle evidence and
-uses it only for conservative candidate classifications. Cyclic flow records
-are excluded from advanced concurrency pairing because they lack bounded
-execution occurrences.
+above. A supplied `visibility_before_reads` relation can identify a guarantee
+for a specific read when resource, key, causal, completion, and version evidence
+also match. The relation is not inferred from source order or reachability.
+Other explicit per-access concurrency and lifecycle evidence is used only for
+conservative candidate classifications. Cyclic flow records are excluded from
+advanced concurrency pairing because they lack bounded execution occurrences.
 
 #### Evidence states
 

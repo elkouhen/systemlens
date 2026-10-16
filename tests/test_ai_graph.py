@@ -2,7 +2,12 @@ import json
 
 import pytest
 
-from systemlens.application.ai_graph import AiGraphError, load_ai_graph, load_fact_manifest
+from systemlens.application.ai_graph import (
+    AiGraphError,
+    load_ai_graph,
+    load_direct_flow_manifest,
+    load_fact_manifest,
+)
 
 
 def test_load_ai_graph_projects_events_and_keeps_unresolved_claims(tmp_path):
@@ -87,3 +92,55 @@ def test_load_fact_manifest_rejects_duplicate_storage_ids(tmp_path):
 
     with pytest.raises(AiGraphError, match="identifiant de stockage dupliqué"):
         load_fact_manifest(path)
+
+
+def test_direct_flow_manifest_loads_visibility_order_for_specific_read(tmp_path):
+    path = tmp_path / "flows.json"
+    path.write_text(json.dumps({
+        "format": "systemlens-ai-graph-v1",
+        "flows": [{
+            "id": "orders-flow",
+            "module": "orders",
+            "method": "Orders.read",
+            "path": "src/Orders.java",
+            "start_line": 1,
+            "end_line": 20,
+            "steps": [{
+                "order": 1,
+                "kind": "data_write",
+                "name": "orders",
+                "path": "src/Orders.java",
+                "start_line": 5,
+                "visibility_before_reads": ["reader-flow:3"],
+            }],
+        }],
+    }), encoding="utf-8")
+
+    _endpoints, flows = load_direct_flow_manifest(path)
+
+    assert flows[0].steps[0].visibility_before_reads == ("reader-flow:3",)
+
+
+def test_direct_flow_manifest_rejects_invalid_visibility_order(tmp_path):
+    path = tmp_path / "flows.json"
+    path.write_text(json.dumps({
+        "format": "systemlens-ai-graph-v1",
+        "flows": [{
+            "id": "orders-flow",
+            "module": "orders",
+            "method": "Orders.read",
+            "path": "src/Orders.java",
+            "start_line": 1,
+            "steps": [{
+                "order": 1,
+                "kind": "data_write",
+                "name": "orders",
+                "path": "src/Orders.java",
+                "start_line": 5,
+                "visibility_before_reads": [""] ,
+            }],
+        }],
+    }), encoding="utf-8")
+
+    with pytest.raises(AiGraphError, match="visibility_before_reads"):
+        load_direct_flow_manifest(path)

@@ -55,7 +55,7 @@ def test_read_before_async_write_is_not_classified_as_stale_read_risk() -> None:
     assert "avant" in (diagnostic.limitation or "")
 
 
-def test_visibility_guarantee_is_not_reported_as_risk() -> None:
+def test_matching_visible_version_without_read_order_is_insufficient() -> None:
     diagnostics = diagnose_flow_consistency(_flow(
         CodeFlowStep(1, "message_entry", "orders.created", "Orders.java", 1, 1),
         CodeFlowStep(
@@ -69,8 +69,30 @@ def test_visibility_guarantee_is_not_reported_as_risk() -> None:
             expected_version="v2", query_shape="point",
         ),
     ))
-    assert diagnostics[0].classification == "guarantee_identified"
-    assert diagnostics[0].severity == "info"
+    assert diagnostics[0].classification == "insufficient_evidence"
+    assert diagnostics[0].limitation == "visibilité antérieure au début de la lecture non prouvée"
+
+
+def test_explicit_visibility_order_for_matching_version_identifies_guarantee() -> None:
+    flow = _flow(
+        CodeFlowStep(1, "message_entry", "orders.created", "Orders.java", 1, 1),
+        CodeFlowStep(
+            2, "data_write", "orders", "Orders.java", 10, 10,
+            branch="async", resource="orders", key="order-42",
+            expected_version="v2", completion="visible",
+            visibility_before_reads=("flow-1:3",),
+        ),
+        CodeFlowStep(
+            3, "data_read", "orders", "Orders.java", 20, 20,
+            branch="sync", resource="orders", key="order-42",
+            expected_version="v2", query_shape="point",
+        ),
+    )
+
+    diagnostic, = diagnose_flow_consistency(flow)
+
+    assert diagnostic.classification == "guarantee_identified"
+    assert diagnostic.severity == "info"
 
 
 def test_unknown_key_overlap_is_insufficient_evidence() -> None:
@@ -147,6 +169,34 @@ def test_accesses_in_distinct_handlers_need_a_shared_persisted_root() -> None:
     assert diagnostic.write_path_endpoint_ids == ("checkout-out", "writer-in")
     assert diagnostic.read_path_endpoint_ids == ("checkout-out", "shipping-event", "reader-in")
     assert diagnostic.classification == "potential_risk"
+
+
+def test_exact_pair_in_one_root_does_not_hide_uncertain_pair_in_another() -> None:
+    write = replace(_flow(CodeFlowStep(
+        1, "data_write", "orders", "Writer.java", 10, 10,
+        branch="async", resource="orders", key="request.orderId",
+    )), id="writer")
+    exact_read = replace(_flow(CodeFlowStep(
+        1, "data_read", "orders", "Reader.java", 20, 20,
+        branch="sync", resource="orders", key="request.orderId",
+    )), id="exact-reader")
+    uncertain_read = replace(_flow(CodeFlowStep(
+        1, "data_read", "orders", "OtherReader.java", 30, 30,
+        branch="sync", resource="orders", key="message.orderId",
+    )), id="uncertain-reader")
+
+    diagnostics = diagnose_flow_consistency_snapshot(
+        [write, exact_read, uncertain_read],
+        {
+            "exact-root": {"writer", "exact-reader"},
+            "uncertain-root": {"writer", "uncertain-reader"},
+        },
+    )
+
+    assert [(item.flow_id, item.classification) for item in diagnostics] == [
+        ("exact-root", "potential_risk"),
+        ("uncertain-root", "insufficient_evidence"),
+    ]
 
 
 def test_pair_is_reported_on_every_reachable_call_root() -> None:

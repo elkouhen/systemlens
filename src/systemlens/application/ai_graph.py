@@ -438,11 +438,18 @@ def load_direct_flow_manifest(
                     )
             fields = step.get("fields", [])
             dependencies = step.get("value_dependencies", [])
+            visibility_before_reads = step.get("visibility_before_reads", [])
             if not isinstance(fields, list) or not all(isinstance(value, str) for value in fields):
                 raise AiGraphError(f"flows[{index}].steps[{step_index}].fields doit être une liste de chaînes.")
             if not isinstance(dependencies, list) or not all(isinstance(value, str) for value in dependencies):
                 raise AiGraphError(
                     f"flows[{index}].steps[{step_index}].value_dependencies doit être une liste de chaînes."
+                )
+            if not isinstance(visibility_before_reads, list) or not all(
+                isinstance(value, str) and value for value in visibility_before_reads
+            ):
+                raise AiGraphError(
+                    f"flows[{index}].steps[{step_index}].visibility_before_reads doit être une liste de chaînes non vides."
                 )
             freshness_required = step.get("freshness_required")
             if freshness_required is not None and not isinstance(freshness_required, bool):
@@ -473,6 +480,7 @@ def load_direct_flow_manifest(
                 guard_scope=step.get("guard_scope") if isinstance(step.get("guard_scope"), str) else None,
                 isolation=step.get("isolation") if isinstance(step.get("isolation"), str) else None,
                 freshness_required=freshness_required,
+                visibility_before_reads=tuple(visibility_before_reads),
             ))
         flows.append(CodeFlow(
             id=flow_id, module=module, method=method, path=flow_path,

@@ -288,9 +288,10 @@ The card MUST omit the repeated `Microservice` type label. An unknown
 continuation MUST retain its `Suite inconnue` status; cycles and hidden calls
 use their existing badges.
 
-For a Strategy1 Kafka reception, the method block MUST show a uniquely called
-`consume` signature when its parameter types are indexed. Without that evidence,
-the block retains the annotated listener signature.
+For a Strategy1 Kafka reception, the method block MUST show the signature of a
+unique same-class `consume` method when its parameter types are indexed. A
+persisted call edge may disambiguate overloaded `consume` methods. If the method
+remains ambiguous, the block retains the annotated listener signature.
 
 Hovering or focusing an occurrence MUST highlight its path from the root and
 dim unrelated branches. Leaving the occurrence or moving focus MUST restore the

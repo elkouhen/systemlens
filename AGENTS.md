@@ -15,7 +15,7 @@ documents and summarizes the documentation hygiene expected in this repository.
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Package ownership, dependency direction, maintainer navigation | Before moving code across packages or changing an interface |
 | [`docs/UX-UI.md`](docs/UX-UI.md) | HTML presentation, graph controls, selection, and camera behavior | Before changing the generated interface |
 | [`docs/ADR.md`](docs/ADR.md) | Architecture decisions: context, choice, consequences | Before revisiting an existing technical choice |
-| [`BACKLOG.md`](BACKLOG.md) | Index of deferred work and its detailed plans | When planning or implementing deferred improvements |
+| [`docs/plans/async-write-read-consistency.md`](docs/plans/async-write-read-consistency.md) | Remaining work on asynchronous write and synchronous read consistency | When changing consistency diagnostics |
 | [`docs/plans/data-operations-in-internal-flows.md`](docs/plans/data-operations-in-internal-flows.md) | Scoped data-operation plan, status, and acceptance criteria | When working on data operations in internal flows |
 | [`../systemlens-skill/`](../systemlens-skill/) | Companion skill repo: agent workflow, bundled rule packs, operational guidance | Whenever a SystemLens change can affect the skill or its docs |
 | [`../systemlens-observability-lab/`](../systemlens-observability-lab/) | Infrastructure and a test application for observability/integration testing | When validating SystemLens against a real running app/infra, or working on observability-related integration tests |

@@ -182,9 +182,10 @@ onto input ports. Flow-only occurrences can use the matching persisted method
 declaration. Missing signatures remain absent; export does not parse Java source.
 
 For a Strategy1 Kafka input, the graph view model adds `call_tree_signature` to
-the port only when the persisted call graph has one direct `consume` callee with
-declared parameter types. The selected call tree uses this display signature;
-other port details continue to use the listener method.
+the port when one same-class `consume` declaration has indexed parameter types.
+If the class has overloaded `consume` declarations, one persisted call edge may
+disambiguate them. The selected call tree uses this display signature; other
+port details continue to use the listener method.
 
 The analysis banner derives a compact timeline from persisted step endpoint IDs
 and the exported port inventory. It displays port labels, protocol, resource/topic

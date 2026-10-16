@@ -29,7 +29,6 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 |---|---|
 | [README.md](../README.md) | Installing SystemLens or finding the first CLI workflow. |
 | [AGENTS.md](../AGENTS.md) | Applying repository rules, documentation ownership, or validation gates. |
-| [BACKLOG.md](../BACKLOG.md) | Finding open implementation work and its detailed plan. |
 
 ### Documentation owners and guides
 
@@ -78,6 +77,7 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 | File | Read when |
 |---|---|
 | [docs/plans/data-operations-in-internal-flows.md](plans/data-operations-in-internal-flows.md) | Working on the scoped data-operation plan and its acceptance criteria. |
+| [docs/plans/async-write-read-consistency.md](plans/async-write-read-consistency.md) | Working on stale-read detection, visibility ordering, or key matching. |
 | [docs/prompts/full-index-codeql-flow-descriptions.md](prompts/full-index-codeql-flow-descriptions.md) | Asking an agent to index with CodeQL and describe every flow. |
 | [docs/archive/layered-view.md](archive/layered-view.md) | Investigating historical layer and module rendering rules. |
 | [examples/README.md](../examples/README.md) | Importing or regenerating synthetic diagnostic examples. |

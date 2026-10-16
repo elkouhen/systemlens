@@ -198,9 +198,10 @@ method evidence omits the block; missing signature evidence omits the parameter
 line. Long names and types may be clipped to the card width.
 
 For a Strategy1 Kafka reception, the call-tree card shows the signature of a
-directly called `consume` method when exactly one such method has indexed
-parameter types. Otherwise, it shows the annotated listener signature. This
-display choice does not change the Kafka input port or indexed method facts.
+unique `consume` method in the listener's class when its parameter types are
+indexed. If the class has overloaded `consume` methods, a unique indexed call
+selects the signature. Otherwise, the card shows the annotated listener
+signature. This display choice does not change indexed method facts.
 
 The tree mode uses a fixed left-to-right orientation and an incremental depth
 control from 1 to 8 levels. The default is depth 1, showing only the root

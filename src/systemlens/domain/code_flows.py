@@ -48,6 +48,8 @@ class CodeFlowStep:
     guard_scope: str | None = None
     isolation: str | None = None
     freshness_required: bool | None = None
+    # Stable event IDs for reads proven to start after this write is visible.
+    visibility_before_reads: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

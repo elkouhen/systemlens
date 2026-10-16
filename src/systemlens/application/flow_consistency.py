@@ -126,6 +126,7 @@ def _diagnose_pair(
     causal_limitation: str | None = None,
     write_path_endpoint_ids: tuple[str, ...] = (),
     read_path_endpoint_ids: tuple[str, ...] = (),
+    visibility_precedes_read: bool = False,
 ) -> FlowConsistencyDiagnostic:
     overlaps, limitation = _overlap(write, read)
     if not overlaps and limitation is None:
@@ -133,10 +134,15 @@ def _diagnose_pair(
     limitation = causal_limitation or limitation
     if limitation is not None:
         classification, severity, confidence = "insufficient_evidence", "P1", "low"
+    elif (visibility_precedes_read and write.completion == "visible" and write.expected_version and (
+        write.expected_version == read.expected_version
+    )):
+        classification, severity, confidence = "guarantee_identified", "info", "high"
     elif write.completion == "visible" and write.expected_version and (
         write.expected_version == read.expected_version
     ):
-        classification, severity, confidence = "guarantee_identified", "info", "high"
+        classification, severity, confidence = "insufficient_evidence", "P1", "low"
+        limitation = "visibilité antérieure au début de la lecture non prouvée"
     else:
         classification, severity, confidence = "potential_risk", "P1", "medium"
         limitation = write.completion or "aucune garantie de visibilité attendue"
@@ -212,18 +218,26 @@ def diagnose_flow_consistency_snapshot(
             return reads
         return chain(reads_by_resource.get(resource, ()), unknown_resource_reads)
 
-    exact_matches: set[tuple[tuple[str, int], tuple[str, int]]] = set()
-    for write_flow, write in writes:
-        for read_flow, read in candidate_reads(write):
-            overlaps, limitation = _overlap(write, read)
-            if overlaps and limitation is None:
-                exact_matches.add(((write_flow.id, write.order), (read_flow.id, read.order)))
-    matched_writes = {write for write, _read in exact_matches}
-    matched_reads = {read for _write, read in exact_matches}
     roots_by_flow: dict[str, set[str]] = defaultdict(set)
     for root, reachable in (causal_reachability or {}).items():
         for flow_id in reachable:
             roots_by_flow[flow_id].add(root)
+    exact_matches_by_root: dict[
+        str, set[tuple[tuple[str, int], tuple[str, int]]]
+    ] = defaultdict(set)
+    for write_flow, write in writes:
+        for read_flow, read in candidate_reads(write):
+            overlaps, limitation = _overlap(write, read)
+            if not overlaps or limitation is not None:
+                continue
+            roots = (
+                {write_flow.id} if write_flow.id == read_flow.id
+                else roots_by_flow[write_flow.id] & roots_by_flow[read_flow.id]
+            )
+            for root in roots:
+                exact_matches_by_root[root].add((
+                    (write_flow.id, write.order), (read_flow.id, read.order),
+                ))
     flow_by_id = {flow.id: flow for flow in flows}
     diagnostics: list[FlowConsistencyDiagnostic] = []
     for write_flow, write in writes:
@@ -231,20 +245,30 @@ def diagnose_flow_consistency_snapshot(
             overlaps, overlap_limitation = _overlap(write, read)
             if not overlaps and overlap_limitation is None:
                 continue
-            if overlap_limitation == "correspondance entre les expressions de clé non établie" and (
-                (write_flow.id, write.order) in matched_writes
-                or (read_flow.id, read.order) in matched_reads
-            ):
-                continue
+            candidate_roots = (
+                [write_flow.id] if write_flow.id == read_flow.id
+                else sorted(roots_by_flow[write_flow.id] & roots_by_flow[read_flow.id])
+            )
+            if overlap_limitation == "correspondance entre les expressions de clé non établie":
+                write_identity = (write_flow.id, write.order)
+                read_identity = (read_flow.id, read.order)
+                if any(
+                    (exact_write == write_identity or exact_read == read_identity)
+                    for root in candidate_roots
+                    for exact_write, exact_read in exact_matches_by_root[root]
+                ):
+                    continue
             if write_flow.id == read_flow.id:
                 causal, evidence = _causal(write_flow, write, read)
                 diagnostics.append(_diagnose_pair(
                     write_flow, write, read_flow, read, write_flow.id, evidence,
                     "lecture située avant l'écriture dans le flux" if read.order < write.order
                     else None if causal else "lien causal non prouvé",
+                    visibility_precedes_read=(
+                        _event_id(read_flow, read) in write.visibility_before_reads
+                    ),
                 ))
                 continue
-            roots = sorted(roots_by_flow[write_flow.id] & roots_by_flow[read_flow.id])
             for display_root in roots:
                 if write.causal_id and read.causal_id and write.causal_id != read.causal_id:
                     evidence = "déclencheur commun, identifiants causaux différents"
@@ -274,6 +298,7 @@ def diagnose_flow_consistency_snapshot(
                     write_flow, write, read_flow, read, display_root, evidence, causal_limitation,
                     (causal_paths or {}).get(display_root, {}).get(write_flow.id, ()),
                     (causal_paths or {}).get(display_root, {}).get(read_flow.id, ()),
+                    _event_id(read_flow, read) in write.visibility_before_reads,
                 ))
 
     # Advanced detectors require exact identity and explicit concurrency facts.

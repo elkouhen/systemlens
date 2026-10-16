@@ -97,6 +97,10 @@ Direct-flow steps may also carry the optional anomaly evidence fields
 IDs use `flow_id:step_order`. Concurrency values are validated against the
 detector's supported vocabulary. These optional fields are stored in the
 existing JSON flow snapshot; older rows load with empty or null defaults.
+`visibility_before_reads` is an optional list of read event IDs in the form
+`flow_id:step_order`. It records explicit evidence that this write became
+visible before those specific reads began. It is not inferred from a shared
+trigger, causal ID, acknowledgement, or source-line order.
 
 The `export facts` command serializes a `graph_facts` namespace as the
 `systemlens-ai-graph-v1` manifest. It preserves the stored ID, evidence,
@@ -584,11 +588,14 @@ Matching causal IDs support the pair; conflicting IDs or different key expressio
 remain `insufficient_evidence`. A missing branch label is unknown and does not
 classify an access as synchronous.
 
-A visibility guarantee requires an explicit `visible` completion and the same
-non-empty expected version on both accesses. Each exported diagnostic retains its
-owning write and read flow IDs, operation endpoint IDs, and the endpoint paths
-from the trigger to each operation. Export also includes each operation's source
-path, line, module, action, and trigger endpoint as `write_site` or `read_site`.
+A visibility guarantee is not currently identified by the pair detector. An
+explicit `visible` completion and matching non-empty expected versions do not
+prove that visibility preceded the read. Such a pair remains
+`insufficient_evidence` until persisted ordering evidence links write visibility
+to read start. Each exported diagnostic retains its owning write and read flow
+IDs, operation endpoint IDs, and the endpoint paths from the trigger to each
+operation. Export also includes each operation's source path, line, module,
+action, and trigger endpoint as `write_site` or `read_site`.
 The renderer uses the endpoint paths to highlight the causal sequence. It places
 selectable diagnostic badges on call-tree service occurrences only when the
 operation's module and trigger endpoint match that occurrence.
@@ -597,6 +604,11 @@ The detector groups sync reads by resource and compares an async write with read
 of the same resource or reads whose resource is unknown. A write with an unknown
 resource remains eligible for every read. Inverted flow-to-root sets find shared
 roots without scanning every root for each pair.
+
+Each candidate pair is evaluated independently within its shared root. An exact
+key match in one flow or root does not suppress an uncertain key match in another
+pair. Textually equal key expressions remain a candidate match; without canonical
+resource and value provenance, they do not prove record identity.
 
 Advanced diagnostics require exact resource/key identity and positive
 `concurrency` evidence (`parallel`, `independent_handlers`, or `reentrant`).

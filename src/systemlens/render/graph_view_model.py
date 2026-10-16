@@ -336,18 +336,23 @@ def build_graph_view_model(
         callees_by_caller_id.setdefault(call_edge.caller_id, set()).add(call_edge.callee_id)
 
     def call_tree_consume_signature(endpoint: MessageEndpoint) -> dict[str, object] | None:
-        """Prefer a uniquely called Strategy1 consume method for call-tree display."""
+        """Use the same-class consume signature for Strategy1 call-tree display."""
         if not strategy1 or endpoint.system != "kafka" or endpoint.role != "consume":
             return None
         listener = method_by_endpoint_id.get(endpoint.id)
         if listener is None:
             return None
-        candidates = [
-            method_by_id[callee_id]
-            for callee_id in callees_by_caller_id.get(listener.id, set())
-            if callee_id in method_by_id
-            and method_by_id[callee_id].qualified_method.rsplit(".", 1)[-1] == "consume"
-        ]
+        listener_owner = listener.qualified_method.rpartition(".")[0]
+        candidates = [method for method in method_by_id.values() if (
+            method.id != listener.id
+            and method.module == listener.module
+            and method.path == listener.path
+            and method.qualified_method.rpartition(".")[0] == listener_owner
+            and method.qualified_method.rsplit(".", 1)[-1] == "consume"
+        )]
+        if len(candidates) > 1:
+            called_ids = callees_by_caller_id.get(listener.id, set())
+            candidates = [method for method in candidates if method.id in called_ids]
         if len(candidates) != 1 or candidates[0].parameter_types is None:
             return None
         candidate = candidates[0]

@@ -361,6 +361,30 @@ def test_store_replace_code_flows_defends_against_duplicate_ids(tmp_path: Path) 
     assert len({flow.id for flow in persisted}) == 2
 
 
+def test_store_round_trips_visibility_order_and_loads_old_step_json(tmp_path: Path) -> None:
+    flow = CodeFlow(
+        id="visibility-flow", module="orders", method="read", path="Orders.java",
+        start_line=1, end_line=20, status="potential", confidence="medium",
+        reason="fixture", steps=(CodeFlowStep(
+            1, "data_write", "orders", "Orders.java", 5, 5,
+            visibility_before_reads=("reader-flow:3",),
+        ),),
+    )
+
+    with Store(tmp_path) as store:
+        store.replace_code_flows([flow])
+        persisted = store.all_code_flows()[0]
+        store.conn.execute(
+            "UPDATE code_flows SET steps = ? WHERE id = ?",
+            ('[{"order":1,"kind":"data_read","name":"orders",'
+             '"path":"Orders.java","start_line":8,"end_line":8}]', flow.id),
+        )
+        old_snapshot = store.all_code_flows()[0]
+
+    assert persisted.steps[0].visibility_before_reads == ("reader-flow:3",)
+    assert old_snapshot.steps[0].visibility_before_reads == ()
+
+
 def test_materialize_code_flows_keeps_scheduled_kafka_publication_local(tmp_path: Path) -> None:
     module_root = tmp_path / "orders"
     relative_source = "orders/src/main/java/com/example/ScheduledPublisher.java"

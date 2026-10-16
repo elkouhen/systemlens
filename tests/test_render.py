@@ -293,7 +293,7 @@ def test_strategy1_call_tree_signature_uses_unique_called_consume_method() -> No
         "consume", "orders", "Orders.consume", "Listener.java", 10, 12,
         (), (), ("OrderCreated",),
     )
-    other_consume = replace(consume, id="other", qualified_method="Other.consume")
+    other_consume = replace(consume, id="other")
     call = CodeQLCallGraphEdge("listener", "consume", "Listener.java", 5, "exact")
     other_call = CodeQLCallGraphEdge("listener", "other", "Listener.java", 6, "possible")
 

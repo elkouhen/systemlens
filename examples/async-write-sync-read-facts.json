@@ -62,13 +62,13 @@
       "end_line": 118,
       "status": "potential",
       "confidence": "high",
-      "reason": "The write completion and visibility guarantee precede the read.",
+      "reason": "The source records visibility and a matching version, but not that visibility precedes the read.",
       "steps": [
         {"order": 1, "kind": "http_entry", "name": "PUT /orders/{id}/consistent", "path": "src/orders/OrdersController.java", "start_line": 92, "end_line": 92},
         {"order": 2, "kind": "data_write", "name": "orders", "path": "src/orders/OrderWriter.java", "start_line": 101, "end_line": 101, "branch": "async", "resource": "orders", "key": "request.orderId", "causal_id": "consistent-42", "expected_version": "v5", "completion": "visible"},
         {"order": 3, "kind": "data_read", "name": "orders", "path": "src/orders/OrderReader.java", "start_line": 114, "end_line": 114, "branch": "sync", "resource": "orders", "key": "request.orderId", "causal_id": "consistent-42", "expected_version": "v5", "query_shape": "point"}
       ],
-      "expected_diagnostics": ["guarantee_identified"]
+      "expected_diagnostics": ["insufficient_evidence"]
     },
     {
       "id": "flow-order-update-unknown-causality",
