@@ -246,9 +246,10 @@ window. Hovering a service occurrence displays its level and cycle state.
 
 The service occurrence tooltip displays its level, cycle state, and Java method
 when available. Call-tree ports use unlabelled markers: inputs sit on the left
-edge and outputs on the right. Hovering a port displays its direction, identity,
-source, and associated Java method. Hovering an arc displays its order, source,
-target, protocol, indexed relation label and message type when available.
+edge and outputs on the right. Hovering a port displays its direction, source,
+and associated Java method without showing the port number. Hovering an arc
+displays its order, source, target, protocol, indexed relation label and message
+type when available.
 
 The call-graph heading identifies the view without displaying a service or
 method sequence. Flow descriptions state the trigger and the observed effect

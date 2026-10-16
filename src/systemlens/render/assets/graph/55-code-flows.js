@@ -829,7 +829,7 @@
         const javaMethod = ownerSeparator > 0
           ? qualifiedMethod.slice(ownerSeparator + (separator >= 0 ? 2 : 1))
           : qualifiedMethod || "Méthode inconnue";
-        showTreeTooltip("graph-port-tooltip", `${port.label} · Port ${direction}`, [
+        showTreeTooltip("graph-port-tooltip", `Port ${direction}`, [
           `Classe Java : ${javaClass}`,
           `Méthode Java : ${javaMethod}`,
           `${port.type} · ${port.name}`,
@@ -1033,7 +1033,7 @@
             anchor.className = `graph-node-port-reference is-${direction} is-${port.protocol}`;
             anchor.dataset.endpointId = port.endpointId || "";
             anchor.dataset.direction = direction;
-            anchor.title = `${direction === "in" ? "Port d’entrée" : "Port de sortie"} · ${port.label}`;
+            anchor.title = direction === "in" ? "Port d’entrée" : "Port de sortie";
             anchor.style.setProperty(
               "--port-offset",
               `${((index + 1) / (directionPorts.length + 1)) * 100}%`

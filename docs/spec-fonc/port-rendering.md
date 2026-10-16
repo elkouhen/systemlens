@@ -36,7 +36,7 @@ concrete topic.
 
 In the call tree, referenced ports appear as small unlabelled markers. Their
 position on the left or right edge of a service card conveys direction; hovering
-reveals the port identity and direction.
+reveals the direction and endpoint details without the port number.
 
 Hovering a port displays its identifier, direction, protocol endpoint, statically
 inferred Java parameter/message type when known, source-relative evidence path

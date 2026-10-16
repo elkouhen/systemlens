@@ -104,9 +104,15 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
         assert page.locator(
             "#graph-call-tree .graph-node-port-reference.is-in"
         ).first.inner_text() == ""
+        assert page.locator(
+            "#graph-call-tree .graph-node-port-reference.is-in"
+        ).first.get_attribute("title") == "Port d’entrée"
         assert "Port IN" in page.locator(
             "#graph-flow-tooltips .graph-port-tooltip"
         ).inner_text()
+        assert page.locator(
+            "#graph-flow-tooltips .graph-port-tooltip strong"
+        ).inner_text() == "Port IN"
         page.locator("#flow-call-tree-depth-increase").click()
         page.locator("#flow-call-tree-depth-increase").click()
         inventory_nodes = page.locator("#graph-call-tree .graph-call-tree-node").filter(
