@@ -5,6 +5,7 @@ import os
 import re
 import struct
 import zlib
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 
@@ -145,6 +146,80 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
             "#graph-call-tree .graph-call-tree-node.is-diagnostic-sync, "
             "#graph-call-tree .graph-call-tree-node.is-diagnostic-interaction"
         ).count() > 0
+        browser.close()
+
+
+@pytest.mark.slow
+def test_crowded_architecture_cards_reveal_secondary_details_on_hover() -> None:
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1100, "height": 760})
+        page.set_content(document, wait_until="load")
+        for _ in range(12):
+            page.locator("#graph-zoom-out").click()
+        page.wait_for_function(
+            "Number(document.getElementById('graph').dataset.crowdedCardCount) > 0"
+        )
+        card = page.locator("#graph-node-labels .graph-node-card-label.is-crowded").first
+        kicker = card.locator(".graph-node-card-kind")
+        assert kicker.evaluate("element => getComputedStyle(element).opacity") == "0"
+        card.hover()
+        page.wait_for_function("document.querySelector('.graph-node-card-label.is-hovered')")
+        assert card.locator(".graph-node-card-kind").evaluate(
+            "element => getComputedStyle(element).opacity"
+        ) == "1"
+        browser.close()
+
+
+@pytest.mark.slow
+def test_large_call_tree_minimap_and_selection_camera() -> None:
+    document = _large_call_tree_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1280, "height": 900})
+        page.set_content(document, wait_until="load")
+        page.locator("#flows-tab").click()
+        page.locator("#code-flows .code-flow-item").first.click()
+        page.locator("#flow-mode-expand-all").click()
+        page.locator("#graph-minimap").wait_for(state="visible")
+        assert page.locator("#graph-call-tree .graph-call-tree-node").count() == 9
+        assert page.locator("#graph-call-tree .graph-call-tree-canvas.is-overview").count() == 1
+        canvas = page.locator("#graph-call-tree .graph-call-tree-canvas")
+        before_pan = canvas.evaluate("element => [element.style.left, element.style.top]")
+        map_bounds = page.locator("#graph-minimap-svg").bounding_box()
+        assert map_bounds is not None
+        page.mouse.click(map_bounds["x"] + 24, map_bounds["y"] + map_bounds["height"] / 2)
+        page.wait_for_function(
+            "left => document.querySelector('#graph-call-tree .graph-call-tree-canvas').style.left !== left",
+            arg=before_pan[0],
+        )
+        page.locator("#graph-call-tree .graph-call-tree-node").first.click()
+        selected = page.locator("#graph-call-tree .graph-call-tree-node.is-selected")
+        assert selected.count() == 1
+        page.locator("#flow-tree-center-selection").click()
+        selected_center = selected.evaluate("""element => {
+          const box = element.getBoundingClientRect();
+          const view = document.querySelector('#graph-call-tree').getBoundingClientRect();
+          return [box.left + box.width / 2 - view.left, box.top + box.height / 2 - view.top,
+            view.width / 2, view.height / 2];
+        }""")
+        assert selected_center[0] == pytest.approx(selected_center[2], abs=3)
+        assert selected_center[1] == pytest.approx(selected_center[3], abs=3)
+        page.locator("#flow-mode-center").click()
+        bounds = canvas.bounding_box()
+        view = page.locator("#graph-call-tree").bounding_box()
+        assert bounds is not None and view is not None
+        assert bounds["x"] >= view["x"] - 3
+        assert bounds["y"] >= view["y"] - 3
+        assert bounds["x"] + bounds["width"] <= view["x"] + view["width"] + 3
+        assert bounds["y"] + bounds["height"] <= view["y"] + view["height"] + 3
         browser.close()
 
 
@@ -1030,6 +1105,69 @@ def _current_simple_dataset_document() -> str:
         )
         .replace("__GRAPH_DATA__", match.group(1))
     )
+
+
+def _large_call_tree_document() -> str:
+    """Build a deterministic nine-occurrence chain for camera and minimap tests."""
+    source = _SIMPLE_DATASET_EXPORT.read_text(encoding="utf-8")
+    match = re.search(r'<script id="graph-data"[^>]*>([\s\S]*?)</script>', source)
+    assert match, "The simple export must contain graph data"
+    data = json.loads(match.group(1))
+    original_flow = data["code_flows"][0]
+    original_graph = data["call_graphs"][original_flow["call_graph_id"]]
+    services = [
+        node for node in data["nodes"] if node["kind"] == "microservice"
+    ][:9]
+    assert len(services) >= 3
+    flow_ids = [f"readability-flow-{index}" for index in range(9)]
+    service_names = [f"readability-service-{index}" for index in range(9)]
+    flows = []
+    service_nodes = []
+    for index, service_name in enumerate(service_names):
+        flow = deepcopy(original_flow)
+        flow.update({
+            "id": flow_ids[index], "module": service_name,
+            "method": f"{service_name}.handle", "call_graph_id": "readability-tree",
+        })
+        flows.append(flow)
+        template_node = services[index % len(services)]
+        node = deepcopy(template_node)
+        node.update({"id": f"microservice:{service_name}", "name": service_name,
+                     "ports": []})
+        service_nodes.append(node)
+    edges = [
+        {"source": service_names[index], "target": service_names[index + 1],
+         "kind": "rest", "label": f"GET /step/{index}", "order": index + 1,
+         "endpoint_ids": []}
+        for index in range(8)
+    ]
+    transitions = {
+        flow_ids[index]: ([{"edge": edges[index], "target_flow_ids": [flow_ids[index + 1]]}]
+                          if index < 8 else [])
+        for index in range(9)
+    }
+    graph = deepcopy(original_graph)
+    graph.update({
+        "nodes": service_names, "node_order": service_names,
+        "edges": edges,
+        "call_trees_by_flow": {
+            flow_ids[0]: {"root_flow_ids": [flow_ids[0]],
+                          "reachable_flow_ids": flow_ids,
+                          "transitions": transitions}
+        },
+    })
+    data["nodes"].extend(service_nodes)
+    data["code_flows"] = [flows[0]]
+    data["supporting_code_flows"] = flows[1:]
+    data["call_graphs"] = {"readability-tree": graph}
+    encoded = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
+    template = _GRAPH_TEMPLATE.read_text(encoding="utf-8")
+    return (template
+            .replace("__GRAPH_CSS__", "".join(path.read_text(encoding="utf-8")
+                                               for path in _GRAPH_CSS_MODULES))
+            .replace("__GRAPH_JS__", "\n".join(path.read_text(encoding="utf-8")
+                                                  for path in _GRAPH_JS_MODULES))
+            .replace("__GRAPH_DATA__", encoded))
 
 
 def _complex_dataset_document() -> str:

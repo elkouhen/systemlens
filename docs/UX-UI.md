@@ -235,12 +235,28 @@ Changing a relation-type filter rebuilds and relayouts the visible graph using
 only the selected dependency types. Excluded relations do not influence the
 resulting placement.
 
+Architecture cards keep their fixed screen-space geometry while the camera
+moves. When rendered card bounds overlap, the affected cards hide their type
+kicker while retaining the resource name and icon. Hovering or selecting a
+crowded card restores its type kicker. The card inspector and tooltip retain
+the complete resource details.
+
+Selecting an architecture node emphasizes its incident relations and the
+relations between its visible neighbors. Other visible relations remain
+present at reduced emphasis. Clearing the selection restores their usual
+weight. REST and Kafka relations keep distinct stroke patterns and colors.
+
 ## Camera and graph interaction
 
 The graph area supports pan, bounded wheel zoom, zoom controls, centering, and
 fit actions. `Tout le graphe` provides the complete overview. `Vue lisible`
 may zoom further to keep fixed-size cards readable. Pan and zoom move the
 camera, not graph nodes.
+
+The overview minimap appears for architecture graphs with more than 24 visible
+nodes or with nodes outside the workspace. It shows visible node positions and
+the current viewport. Clicking or dragging it recenters the camera without
+changing selection. The minimap samples at most 700 nodes.
 
 Wheel zoom MUST be handled once for the Sigma canvas and HTML card overlays. Hovering
 a card MUST NOT introduce a second native zoom behavior. Camera updates and
@@ -285,8 +301,9 @@ from the service name and MUST retain its qualified name in the title. Long
 names may be clipped to the card width.
 
 Each occurrence MUST show only the IN and OUT ports referenced by the selected
-flow. The card labels MUST show the direction without the port number. Hovering
-a port MUST retain its tooltip with the port identity and source details.
+flow. Ports appear as unlabelled markers on the left or right edge of the card;
+their position conveys direction. Hovering a port shows direction, endpoint
+details, and source information without its port number.
 Each call arc MUST begin at the rightmost point of its source OUT port and end
 at the leftmost point of its target IN port.
 
@@ -324,17 +341,33 @@ nodes expose `− replier`; collapsed nodes expose `+N appels`. `Déplier tous l
 nœuds` expands the visible tree using the current global depth limit.
 
 The tree workspace supports drag-to-pan and bounded zoom from 0.5x to 64x.
-Clicking a service occurrence keeps its selection action. The tree context
-widget identifies the projection, displays the indexed trigger event, and
-controls the tree without repeating the hierarchy.
+The initial fit keeps a minimum canvas scale of 0.66 so deep trees do not shrink
+cards without bound. At a total scale below 0.82, method parameters and operation
+badges become visually quiet while service names and diagnostic borders remain
+visible; hovering retains complete evidence in the tooltip. Clicking an
+occurrence selects it and preserves that occurrence's screen position when the
+tree changes. `Tout voir` fits the visible tree. `Sélection` recenters on the
+selected occurrence. The tree context widget identifies the projection,
+displays the indexed trigger event, and controls the tree without repeating the
+hierarchy.
+
+The call-tree minimap appears when more than 12 occurrences are visible, the
+total scale is below 0.82, or the tree exceeds the workspace by 15 percent. It
+shows occurrence positions and the current viewport. Clicking or dragging it
+moves the tree camera while preserving the selected occurrence. It samples at
+most 700 occurrences.
 
 Arc labels in the tree MUST use a compact form that retains the order when
 available, the relation label, and the protocol. Long relation labels may be
-truncated on the canvas; the arc tooltip MUST retain the full indexed details.
+truncated on the canvas. Label placement MUST avoid cards and other visible
+labels; when no clear position exists, the renderer hides that label while the
+arc and its tooltip remain available. The selected occurrence path receives
+label-placement priority. The arc tooltip MUST retain the full indexed details.
 
 Node tooltips MUST show the occurrence level, cycle state, microservice, and
 Java method when available. They MUST omit IN and OUT port inventories. Port
-tooltips MUST show direction, identity, source, and associated Java method.
+tooltips MUST show direction, endpoint details, source, and associated Java
+method without displaying the port number.
 Arc tooltips MUST show order, source, target, protocol, indexed relation label,
 and message type when available. Tooltip content is evidence already present
 in the snapshot; it MUST NOT infer a missing fact.

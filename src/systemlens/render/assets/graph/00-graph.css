@@ -34,8 +34,10 @@
     #graph-port-paths { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; }
     #graph-port-paths.is-selected-call-graph-front { z-index: 4; }
     .graph-port-path, .graph-call-path { fill: none; stroke: #7c3aed; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .9; pointer-events: stroke; }
-    .graph-architecture-path { fill: none; stroke: var(--graph-relation-color, #64748b); stroke-width: 2px; stroke-linecap: round; stroke-linejoin: round; opacity: .92; pointer-events: none; }
-    .graph-architecture-path.is-rest { stroke: #d55e00; }
+    .graph-architecture-path { fill: none; stroke: var(--graph-relation-color, #64748b); stroke-width: 1.6px; stroke-linecap: round; stroke-linejoin: round; opacity: .62; pointer-events: none; }
+    .graph-architecture-path.is-focus-context { stroke-width: 2.4px; opacity: .98; }
+    .graph-architecture-path.is-focus-muted { opacity: .2; }
+    .graph-architecture-path.is-rest { stroke: #d55e00; stroke-dasharray: 7 4; }
     .graph-architecture-path.is-kafka { stroke: #009e73; }
     :root[data-theme="dark"] .graph-architecture-path { stroke: var(--graph-relation-color, #94a3b8); }
     :root[data-theme="dark"] .graph-architecture-path.is-rest { stroke: #fbbf24; }
@@ -43,7 +45,7 @@
     .graph-dependency-hit-area { fill: none; stroke: transparent; stroke-width: 36px; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
     .graph-arc-hit-area { fill: none; stroke: transparent !important; stroke-width: 24px !important; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
     .graph-arc-hit-area.is-keyboard-selected { stroke: transparent !important; stroke-width: 14px !important; opacity: 1; filter: none; }
-    .graph-port-path.is-rest, .graph-call-path.is-rest { stroke: #d55e00; }
+    .graph-port-path.is-rest, .graph-call-path.is-rest { stroke: #d55e00; stroke-dasharray: 7 4; }
     .graph-port-path.is-kafka, .graph-call-path.is-kafka { stroke: #009e73; }
     .graph-port-path.is-analysis-selected { stroke-width: 4; opacity: 1; filter: drop-shadow(0 0 3px currentColor); }
     .graph-call-path.is-analysis-selected { stroke-width: 4; filter: drop-shadow(0 0 4px currentColor); }
@@ -69,14 +71,30 @@
     :root[data-theme="dark"] .graph-local-port-path.is-code-flow-path { stroke: #c4b5fd; }
     #graph-node-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
     #graph-call-tree { position: fixed; left: var(--workspace-left, 0px); right: var(--workspace-right, 0px); top: var(--workspace-top, 0px); bottom: var(--workspace-bottom, 0px); z-index: 5; overflow: hidden; background: color-mix(in srgb, #f8fafc 86%, transparent); cursor: grab; touch-action: none; }
+    .graph-minimap { position: fixed; right: calc(var(--workspace-right, 0px) + 16px); bottom: calc(var(--workspace-bottom, 0px) + 16px); z-index: 7; width: 196px; height: 126px; padding: 7px; border: 1px solid #94a3b8; border-radius: 9px; background: color-mix(in srgb, #f8fafc 94%, transparent); box-shadow: 0 4px 16px rgba(15, 23, 42, .22); cursor: crosshair; touch-action: none; }
+    .graph-minimap[hidden] { display: none; }
+    #graph-minimap-svg { display: block; width: 100%; height: 100%; overflow: hidden; }
+    .graph-minimap-frame { fill: transparent; stroke: #94a3b8; stroke-width: 1; }
+    .graph-minimap-node { fill: #64748b; opacity: .72; }
+    .graph-minimap-node.is-service { fill: #2563eb; }
+    .graph-minimap-node.is-topic { fill: #059669; }
+    .graph-minimap-node.is-selected { fill: #7c3aed; opacity: 1; }
+    .graph-minimap-viewport { fill: rgba(124, 58, 237, .12); stroke: #7c3aed; stroke-width: 1.5; pointer-events: none; }
+    :root[data-theme="dark"] .graph-minimap { border-color: #475569; background: color-mix(in srgb, #0f172a 94%, transparent); }
+    :root[data-theme="dark"] .graph-minimap-frame { stroke: #64748b; }
+    :root[data-theme="dark"] .graph-minimap-node { fill: #94a3b8; }
+    :root[data-theme="dark"] .graph-minimap-node.is-service { fill: #60a5fa; }
+    :root[data-theme="dark"] .graph-minimap-node.is-topic { fill: #34d399; }
+    :root[data-theme="dark"] .graph-minimap-node.is-selected { fill: #c4b5fd; }
+    :root[data-theme="dark"] .graph-minimap-viewport { fill: rgba(196, 181, 253, .16); stroke: #c4b5fd; }
     #graph-call-tree:active { cursor: grabbing; }
     #graph-call-tree[hidden] { display: none; }
     #graph.is-call-tree-hidden, #graph-port-paths.is-call-tree-hidden, #graph-node-labels.is-call-tree-hidden { visibility: hidden; }
     .graph-call-tree-canvas { position: absolute; transform-origin: 0 0; pointer-events: none; }
     .graph-call-tree-canvas > svg { pointer-events: auto; }
-    .graph-call-tree-edge { fill: none; stroke: #7c3aed; stroke-width: 2; opacity: .8; marker-end: url(#graph-call-tree-arrow); pointer-events: stroke; cursor: help; transition: stroke-width .12s ease, opacity .12s ease; }
+    .graph-call-tree-edge { fill: none; stroke: #7c3aed; stroke-width: 1.8; opacity: .64; marker-end: url(#graph-call-tree-arrow); pointer-events: stroke; cursor: help; transition: stroke-width .12s ease, opacity .12s ease; }
     .graph-call-tree-edge-hit { fill: none; stroke: transparent; stroke-width: 28px; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
-    .graph-call-tree-edge.is-rest { stroke: #d55e00; }
+    .graph-call-tree-edge.is-rest { stroke: #d55e00; stroke-dasharray: 7 4; }
     .graph-call-tree-edge.is-kafka { stroke: #009e73; }
     .graph-call-tree-edge.is-hovered { stroke-width: 4; opacity: 1; }
     .graph-call-tree-edge.is-path-context { stroke-width: 3; opacity: 1; }
@@ -86,12 +104,14 @@
     .graph-call-tree-edge.is-diagnostic-async, .graph-call-tree-edge-hit.is-diagnostic-async { stroke: #f59e0b !important; stroke-width: 4px; stroke-dasharray: 9 5; opacity: 1; }
     .graph-call-tree-edge.is-diagnostic-sync, .graph-call-tree-edge-hit.is-diagnostic-sync { stroke: #0284c7 !important; stroke-width: 4px; opacity: 1; }
     .graph-call-tree-edge.is-diagnostic-interaction, .graph-call-tree-edge-hit.is-diagnostic-interaction { stroke: #a855f7 !important; stroke-width: 4px; stroke-dasharray: 3 4; opacity: 1; }
-    .graph-call-tree-edge.is-diagnostic-muted, .graph-call-tree-edge-hit.is-diagnostic-muted, .graph-call-tree-edge-label.is-diagnostic-muted { opacity: .16; }
+    .graph-call-tree-edge.is-diagnostic-muted, .graph-call-tree-edge-hit.is-diagnostic-muted, .graph-call-tree-edge-label.is-diagnostic-muted { opacity: .28; }
     .graph-call-tree-edge-label.is-diagnostic-async { fill: #b45309; font-weight: 900; }
     .graph-call-tree-edge-label.is-diagnostic-sync { fill: #0369a1; font-weight: 900; }
     .graph-call-tree-edge-label.is-diagnostic-interaction { fill: #7e22ce; font-weight: 900; }
     .graph-call-tree-edge-label.is-clickable { pointer-events: auto; cursor: pointer; }
-    .graph-call-tree-edge.is-path-muted, .graph-call-tree-edge-label.is-path-muted, .graph-call-tree-node.is-path-muted { opacity: .16; }
+    .graph-call-tree-edge-label.is-collision-hidden { visibility: hidden; pointer-events: none; }
+    .graph-call-tree-edge.is-path-muted, .graph-call-tree-edge-label.is-path-muted, .graph-call-tree-node.is-path-muted { opacity: .32; }
+    .graph-call-tree-edge.is-path-context { opacity: 1; }
     .graph-call-tree-node { position: absolute; width: 190px; min-height: 108px; height: auto; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; cursor: pointer; pointer-events: auto; transition: box-shadow .12s ease, outline .12s ease; }
     .graph-call-tree-node.is-hovered { outline: 2px solid color-mix(in srgb, var(--card-accent, #64748b) 70%, transparent); outline-offset: 2px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--card-accent, #64748b) 18%, transparent), 0 8px 22px rgba(15, 23, 42, .2); }
     .graph-call-tree-node.is-selected { outline: 2px solid #7c3aed; outline-offset: 3px; box-shadow: 0 0 0 5px rgba(124, 58, 237, .18), 0 8px 22px rgba(15, 23, 42, .22); }
@@ -99,9 +119,9 @@
     .graph-call-tree-node.is-diagnostic-sync { border-color: #0284c7; box-shadow: 0 0 0 3px rgba(2, 132, 199, .28), 0 8px 22px rgba(15, 23, 42, .2); }
     .graph-call-tree-node.is-diagnostic-interaction { border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168, 85, 247, .28), 0 8px 22px rgba(15, 23, 42, .2); }
     .graph-call-tree-diagnostic-badge { grid-column: 1 / 3; display: block; margin-top: 5px; padding: 3px 5px; border-radius: 4px; font-size: 8px; font-weight: 900; line-height: 1.15; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
-    .graph-call-tree-diagnostic-badge.is-async { color: #92400e; background: #fef3c7; }
-    .graph-call-tree-diagnostic-badge.is-sync { color: #075985; background: #e0f2fe; }
-    .graph-call-tree-diagnostic-badge.is-interaction { color: #581c87; background: #f3e8ff; }
+    .graph-call-tree-diagnostic-badge.is-async { border-left: 3px dashed #b45309; color: #92400e; background: #fef3c7; }
+    .graph-call-tree-diagnostic-badge.is-sync { border-left: 3px solid #0284c7; color: #075985; background: #e0f2fe; }
+    .graph-call-tree-diagnostic-badge.is-interaction { border-left: 3px dotted #9333ea; color: #581c87; background: #f3e8ff; }
     .graph-call-tree-access-badge { grid-column: 1 / 3; display: block; margin-top: 5px; padding: 3px 5px; border-radius: 4px; color: #155e75; background: #cffafe; font-size: 8px; font-weight: 800; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .graph-call-tree-node .graph-node-card-icon { grid-column: 2; grid-row: 1; }
     .graph-call-tree-node .graph-node-card-name { grid-column: 1; grid-row: 1; }
@@ -110,6 +130,9 @@
     .graph-call-tree-method-parameters { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
     .graph-call-tree-node .graph-node-card-kind { grid-column: 1 / 3; grid-row: 3; }
     .graph-call-tree-node .graph-node-port-reference { z-index: 3; }
+    .graph-call-tree-canvas.is-overview .graph-call-tree-method-parameters,
+    .graph-call-tree-canvas.is-overview .graph-call-tree-access-badge,
+    .graph-call-tree-canvas.is-overview .graph-call-tree-diagnostic-badge { visibility: hidden; }
     .graph-call-tree-node.is-frequency-2 { background: #eef2ff; }
     .graph-call-tree-node.is-frequency-3 { background: #c7d2fe; }
     .graph-call-tree-node.is-frequency-4 { background: #a5b4fc; }
@@ -141,6 +164,7 @@
     }
     .graph-node-card-label { position: absolute; width: 110px; height: 70px; min-height: 70px; display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; align-content: center; column-gap: 4px; padding: 8px 9px; box-sizing: border-box; transform: translate(-50%, -50%) scale(var(--graph-card-scale, 1)); transform-origin: center; pointer-events: auto; cursor: pointer; border: 1px solid var(--card-accent, #64748b); border-radius: 8px; color: #172033; background: #ffffff; box-shadow: 0 5px 16px rgba(15, 23, 42, .12); font-size: 11px; line-height: 1.15; text-align: left; overflow-wrap: anywhere; overflow: visible; }
     .graph-node-card-label.is-resource { overflow-wrap: normal; }
+    .graph-node-card-label.is-crowded:not(.is-selected):not(.is-hovered) .graph-node-card-kind { opacity: 0; }
     .graph-node-card-label.is-resource .graph-node-card-name { font-size: 9px; overflow-wrap: normal; word-break: normal; }
     .graph-node-card-label.is-call-graph-arc-selected { outline: 3px solid #dc2626; outline-offset: 3px; box-shadow: 0 0 0 5px rgba(220, 38, 38, .2), 0 8px 22px rgba(220, 38, 38, .34); z-index: 4; }
     .graph-node-card-icon { position: static; grid-column: 2; grid-row: 1; align-self: center; display: grid; place-items: center; width: 14px; height: 14px; border: 0; border-radius: 0; color: var(--card-accent, #64748b); line-height: 1; }

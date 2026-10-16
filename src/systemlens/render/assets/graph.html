@@ -246,7 +246,8 @@ __ASYNCAPI_WEB_COMPONENT__
       <span id="flow-mode-context-help"></span>
     </div>
     <div class="graph-mode-context-actions">
-      <button id="flow-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue des flux" title="Recentrer la vue sur l’arbre d’appel visible" hidden>Centrer</button>
+      <button id="flow-mode-center" class="graph-action-label graph-secondary-action" type="button" title="Afficher l’arbre d’appel complet" hidden>Tout voir</button>
+      <button id="flow-tree-center-selection" class="graph-action-label graph-secondary-action" type="button" title="Centrer sur l’occurrence sélectionnée" hidden disabled>Sélection</button>
       <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom de l’arbre d’appel">
         <button id="flow-zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer dans l’arbre d’appel" title="Augmenter l’échelle de l’arbre d’appel" hidden>+</button>
         <button id="flow-zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer dans l’arbre d’appel" title="Réduire l’échelle de l’arbre d’appel" hidden>−</button>
@@ -285,6 +286,13 @@ __ASYNCAPI_WEB_COMPONENT__
   <svg id="graph-port-paths" aria-hidden="true"></svg>
   <div id="graph-node-labels" aria-hidden="true"></div>
   <div id="graph-call-tree" aria-label="Arbre hiérarchique des appels" hidden></div>
+  <div id="graph-minimap" class="graph-minimap" hidden>
+    <svg id="graph-minimap-svg" viewBox="0 0 180 110" role="presentation">
+      <rect class="graph-minimap-frame" x="0.5" y="0.5" width="179" height="109" rx="7"></rect>
+      <g id="graph-minimap-nodes"></g>
+      <rect id="graph-minimap-viewport" class="graph-minimap-viewport" rx="2"></rect>
+    </svg>
+  </div>
   <div id="graph-flow-tooltips" aria-hidden="true"></div>
   <p id="graph-flow-status" hidden></p>
   <div id="inspector-modal" class="inspector-modal" role="dialog" aria-modal="true" aria-labelledby="inspector-title" hidden>

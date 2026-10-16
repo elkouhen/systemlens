@@ -34,6 +34,7 @@
     const renderSymbolsButton = document.getElementById("render-symbols");
     const graphModeCenter = document.getElementById("graph-mode-center");
     const flowModeCenter = document.getElementById("flow-mode-center");
+    const flowTreeCenterSelection = document.getElementById("flow-tree-center-selection");
     const flowModeExpandAll = document.getElementById("flow-mode-expand-all");
     const flowDiagnosticFullView = document.getElementById("flow-diagnostic-full-view");
     const flowTreeDepthDecrease = document.getElementById("flow-call-tree-depth-decrease");
@@ -80,7 +81,10 @@
       scheduleFlowCameraFit({ nodes: [...orderedNodes, ...remainingNodes] });
     };
     graphModeCenter?.addEventListener("click", () => fitCameraToVisibleGraph(renderer, "readable"));
-    flowModeCenter?.addEventListener("click", centerFlow);
+    flowModeCenter?.addEventListener("click", () => {
+      if (!fitCallTree()) centerFlow();
+    });
+    flowTreeCenterSelection?.addEventListener("click", () => centerSelectedCallTreeOccurrence());
     flowModeExpandAll?.addEventListener("click", () => {
       expandAllCallTree();
     });

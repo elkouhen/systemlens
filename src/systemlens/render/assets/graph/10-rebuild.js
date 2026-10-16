@@ -807,6 +807,7 @@
           const expandAll = document.getElementById("flow-mode-expand-all");
           const diagnosticFullView = document.getElementById("flow-diagnostic-full-view");
           const flowCenter = document.getElementById("flow-mode-center");
+          const flowTreeCenterSelection = document.getElementById("flow-tree-center-selection");
           const flowZoomIn = document.getElementById("flow-zoom-in");
           const flowZoomOut = document.getElementById("flow-zoom-out");
           if (!graphContext || !flowContext || !graphTitle || !graphHelp || !flowTitle || !flowHelp) return;
@@ -822,6 +823,10 @@
           graphTitle.textContent = "Graphe d’architecture";
           graphHelp.textContent = "Actions rapides sur la vue du graphe.";
           if (flowCenter) flowCenter.hidden = !callGraphActive;
+          if (flowTreeCenterSelection) {
+            flowTreeCenterSelection.hidden = !callGraphActive;
+            flowTreeCenterSelection.disabled = !callGraphActive || !graphState.callTreeSelectedPathKey;
+          }
           if (flowZoomIn) flowZoomIn.hidden = !callGraphActive;
           if (flowZoomOut) flowZoomOut.hidden = !callGraphActive;
           const depthControl = document.getElementById("flow-call-tree-depth-control");
@@ -1013,6 +1018,30 @@
         });
         const adaptiveLabels = adaptiveSymbolLabelPlacements(nodePoints);
         graphCanvas.dataset.adaptiveLabelCount = String(adaptiveLabels.size);
+        const crowdedCardIds = new Set();
+        const cardBuckets = new Map();
+        const cardWidth = GRAPH_CARD_WIDTH;
+        const cardHeight = GRAPH_CARD_HEIGHT;
+        nodePoints.forEach((point, id) => {
+          const cellX = Math.floor(point.x / cardWidth);
+          const cellY = Math.floor(point.y / cardHeight);
+          for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+            for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+              for (const otherId of cardBuckets.get(`${cellX + offsetX}:${cellY + offsetY}`) || []) {
+                const other = nodePoints.get(otherId);
+                if (Math.abs(point.x - other.x) >= cardWidth
+                  || Math.abs(point.y - other.y) >= cardHeight) continue;
+                crowdedCardIds.add(id);
+                crowdedCardIds.add(otherId);
+              }
+            }
+          }
+          const key = `${cellX}:${cellY}`;
+          const bucket = cardBuckets.get(key) || [];
+          bucket.push(id);
+          cardBuckets.set(key, bucket);
+        });
+        graphCanvas.dataset.crowdedCardCount = String(crowdedCardIds.size);
         // Card dimensions stay constant. Overlap is an accepted overview
         // state; zoom and pan must never change card size or fight the camera.
         nodeLabelOverlay.replaceChildren();
@@ -1030,7 +1059,7 @@
           const isCodeFlowNode = codeFlowSelection.flowId && graphState.relatedNodes?.has(id);
           const isCodeFlowRoot = codeFlowSelection.flowId && codeFlowSelection.rootNodeId === id;
           const trigger = isCodeFlowRoot ? codeFlowSelection.trigger : null;
-          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${isJpaEntity ? " is-jpa-entity" : ""}${isCodeFlowRoot ? " is-graph-root" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}${isCodeFlowNode ? " is-code-flow-node" : ""}`;
+          label.className = `graph-node-card-label${isResource ? " is-resource" : ""}${isTopic ? " is-topic" : ""}${isDatabase ? " is-collection" : ""}${isJpaEntity ? " is-jpa-entity" : ""}${isCodeFlowRoot ? " is-graph-root" : ""}${crowdedCardIds.has(id) ? " is-crowded" : ""}${adaptiveLabelSide ? " has-adaptive-label" : ""}${adaptiveLabelSide === "left" ? " is-label-left" : ""}${graphState.selectedId === id ? " is-selected" : ""}${graphState.hoveredId === id ? " is-hovered" : ""}${graphState.selectedId && graphState.selectedId !== id && graphState.relatedNodes && !graphState.relatedNodes.has(id) ? " is-dimmed" : ""}${isCodeFlowNode ? " is-code-flow-node" : ""}`;
           label.dataset.nodeKind = node.kind;
           label.dataset.nodeId = id;
           const cardScale = GRAPH_CARD_SCALE;
@@ -1226,6 +1255,13 @@
             path.classList.add("graph-architecture-path");
             if (link.kind === "rest") path.classList.add("is-rest");
             if (link.kind === "kafka") path.classList.add("is-kafka");
+            if (graphState.selectedId) {
+              const related = graphState.relatedNodes;
+              const focused = link.source === graphState.selectedId
+                || link.target === graphState.selectedId
+                || (related?.has(link.source) && related?.has(link.target));
+              path.classList.add(focused ? "is-focus-context" : "is-focus-muted");
+            }
             path.style.setProperty("--graph-relation-color", relationColor(link));
             path.setAttribute("d", `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`);
             path.setAttribute("marker-end", "url(#graph-architecture-arrow)");

@@ -109,6 +109,41 @@ refreshes reuse the existing tree when that signature is unchanged. This
 avoids rebuilding every node, arc, port, and tooltip during ordinary canvas
 refreshes.
 
+The initial call-tree scale has a 0.66 lower bound so a large tree keeps its
+cards legible; explicit `Tout voir` fitting may go below that bound to include
+the full visible tree. Below a total scale of 0.82, secondary method parameters
+and status badges are hidden with `visibility`, preserving card geometry and
+arc attachment. Selecting an occurrence re-renders around its prior screen
+position when it remains visible. Separate controls fit the tree or center the
+selected occurrence.
+
+Call-tree arc labels are measured after the SVG enters the document. Candidate
+positions are tested against card rectangles and already accepted labels in
+160-pixel spatial buckets. Placement order is deterministic: focused-path
+labels, diagnostic labels, shorter labels, then lexical order. A colliding
+label is hidden while its arc and tooltip remain available. Measurement falls
+back to a character-width estimate when `getBBox` is unavailable. This keeps
+label placement near O((e + c) * b), where `e` is the edge count, `c` the
+candidate count and `b` the local bucket occupancy, rather than comparing all
+labels and cards pairwise.
+
+The shared graph minimap appears for architecture views above 24 visible nodes
+or when a node lies outside the viewport. For call trees it appears above 12
+occurrences, below 0.82 total scale, or when the tree exceeds the viewport by
+15 percent. It samples at most 700 nodes and always includes the selected
+occurrence. A click or drag moves the camera while leaving graph selection and
+snapshot data untouched. Architecture positions are projected from Sigma's
+camera; tree positions are derived from the tree canvas transform. Rendering
+is coalesced with `requestAnimationFrame` after pan, zoom, selection, and graph
+refresh.
+
+Architecture labels mark fixed cards as crowded when their projected 110×70
+screen envelopes overlap, using a spatial hash. Only the secondary type kicker
+is suppressed; selection or hover reveals it without changing node positions.
+The collision check is proportional to the number of cards and local bucket
+occupancy. The selected and hovered service name remains visible at every
+zoom level.
+
 The shared card size remains stable during navigation. Camera fitting starts
 from Sigma's native complete overview. `All nodes` uses that state unchanged.
 The default `Readable distance` mode zooms in by at least 1.6x, using projected

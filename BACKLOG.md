@@ -1,172 +1,171 @@
-# Backlog: consistency diagnostics in the call graph
+# Backlog: graph readability
 
-Status: planned. Owner: SystemLens implementer. This backlog defines the
-proposed “Cohérence des données” rendering mode for asynchronous writes and
-synchronous reads. It covers multiple diagnostics in the same graph and the
-inspection of each diagnostic's evidence. All tasks below await implementation.
+Status: implemented; browser verification pending. Owner: SystemLens.
+This backlog covers four
+rendering improvements for the architecture graph and selected call tree:
+progressive detail, arc labels, navigation, and visual hierarchy. No task is
+marked complete until its acceptance criteria and relevant checks pass.
 
-## 1. Backlog index
+## 1. Index and scope
 
-| Document | Purpose | Status |
-|---|---|---|
-| [Current tasks](#4-implementation-tasks) | Render and inspect multiple consistency diagnostics in one call graph. | Planned |
-| [Previous backlog](BACKLOG.previous.md) | Preserve the former root backlog and its links to data-operation work. | Historical copy |
-| [Consistency analysis plan](docs/plans/async-write-read-consistency.md) | Track detector evidence, implemented scope, and deferred source inference. | Consult the plan |
-| [Data operations plan](docs/plans/data-operations-in-internal-flows.md) | Track extraction, persistence, and data-operation follow-ups. | Consult the plan |
-
-The historical copy preserves `BACKLOG.md` from `2e6c9cf^`, immediately before
-its deletion in Git. Its status labels describe that snapshot. The linked
-plans own the current status of their work; archiving does not close it.
-
-## 2. Scope and rendering choice
-
-The analyst should see where diagnostics concentrate, select one pair of
-operations, and inspect why the detector classified it. A diagnostic identifies
-an asynchronous write and a synchronous read within a graph context. Several
-diagnostics can share either operation without duplicating its graph card.
-
-> **Why & What - Overview with selected detail**
->
-> **What:** Show aggregate badges and a diagnostic list, then highlight the
-> selected diagnostic's paths and pair relation.
->
-> **Why:** Shared operations remain readable when many pairs overlap. The
-> analyst must select a diagnostic to see its complete relationship.
->
-> **Alternative:** Draw every pair relation simultaneously. This exposes all
-> relationships at once but adds crossing lines around shared operations.
->
-> **Fallback:** Keep the list and evidence panel usable when a graph path
-> cannot be resolved; identify the missing location explicitly.
-
-This work consumes persisted diagnostics and preserves their classifications.
-Automatic Kafka payload correlation, branch compatibility, and visibility
-inference remain in the analysis plan. Runtime incident detection is outside
-this rendering backlog. Existing deferred HTML concerns remain governed by
-[AGENTS.md](AGENTS.md#deferred-html-accessibility-and-delivery-concerns).
-
-## 3. Implementation context
-
-| Area | Starting point |
+| Document | Purpose |
 |---|---|
-| Diagnostic projection and source sites | [HTML export](src/systemlens/render/html_export.py) |
-| Graph badges, tooltips, and focus | [Call graph renderer](src/systemlens/render/assets/graph/55-code-flows.js) |
-| Selection state and view lifecycle | [State](src/systemlens/render/assets/graph/00-core.js), [lifecycle](src/systemlens/render/assets/graph/06-view-lifecycle.js) |
-| Resource catalogue and inspection | [Catalogue](src/systemlens/render/assets/graph/42-resource-catalogue.js), [details](src/systemlens/render/assets/graph/40-details.js) |
-| Shared panel and graph styling | [Widgets](src/systemlens/render/assets/graph/10-widgets.css), [presentation](src/systemlens/render/assets/graph/20-presentation.css) |
-| Regression coverage | [Export tests](tests/test_render.py), [browser tests](tests/test_browser_export.py) |
+| [Archived consistency backlog](BACKLOG.consistency-diagnostics.md) | Historical snapshot of the former diagnostic rendering tasks. |
+| [Earlier backlog](BACKLOG.previous.md) | Historical index of data-operation work. |
+| [UX/UI rules](docs/UX-UI.md) | Authoritative visible behavior and interaction rules. |
+| [HTML behavior](docs/spec-fonc/html-export.md) | Authoritative export behavior. |
+| [Graph layout](docs/spec-tech/graph-layout.md) | Camera, coordinates, layout, and performance rules. |
 
-These files are integration points to inspect, not requirements to duplicate
-existing mechanisms. Keep the detector's persisted evidence separate from
-temporary selection, filtering, and camera state.
+The archived backlogs retain their original task status. The linked plans own
+the current status of deferred
+[consistency analysis](docs/plans/async-write-read-consistency.md) and
+[data operations](docs/plans/data-operations-in-internal-flows.md).
+This plan changes only the HTML projection. It does not alter persisted facts,
+flow detection, diagnostic classification, or source evidence. The HTML concerns
+deferred in
+[AGENTS.md](AGENTS.md#deferred-html-accessibility-and-delivery-concerns)
+remain outside this backlog.
 
-## 4. Implementation tasks
+## 2. Starting point and design direction
 
-Complete tasks in order. Each task includes its acceptance criteria. A checked
-task means its behavior and relevant tests pass; record unavailable validation
-explicitly instead of treating it as a pass.
+The architecture view uses fixed-size cards, a Sigma canvas, and HTML overlays.
+Its layout and camera logic live in
+[layout](src/systemlens/render/assets/graph/30-layouts.js) and
+[controls](src/systemlens/render/assets/graph/20-controls.js). The call tree
+uses measured card heights but a fixed 190-pixel width. It fits the complete
+tree to the viewport and places arc labels at edge midpoints in
+[call-tree rendering](src/systemlens/render/assets/graph/55-code-flows.js).
 
-### C01. Specify the mode and its state transitions
+> **Why & What - Progressive graph detail**
+>
+> **What:** Use the rendered screen size to choose how much detail appears on
+> each card, without changing its layout footprint during zoom.
+>
+> **Why:** A complete overview can make card text too small to read. Keeping
+> geometry fixed prevents a zoom step from moving ports and arcs.
+>
+> **Alternative:** Enlarge every card at low zoom. This preserves all content
+> but consumes more space and can increase overlap.
+>
+> **Fallback:** Keep the full details in selection and inspection views when
+> a card is too small for them.
 
-- [ ] Define entry from the call graph and from the diagnostics catalogue in
-  [UX/UI](docs/UX-UI.md) and [HTML behavior](docs/spec-fonc/html-export.md).
-- [ ] Specify overview, filtered list, selected diagnostic, and return to
-  overview. Reuse the existing Architecture and Resources workspaces.
-- [ ] Acceptance: the specification defines the active graph scope, selection
-  reset on graph changes, and return behavior for every entry path.
+> **Why & What - Selective arc labels**
+>
+> **What:** Place labels only when their measured bounds avoid cards and other
+> visible labels; preserve full edge details on inspection.
+>
+> **Why:** The call tree currently estimates label width from character count
+> and places labels at midpoints. Dense branches can still compete for space.
+>
+> **Alternative:** Reserve enough space for every full label. This makes every
+> label visible but can produce a very wide tree.
+>
+> **Fallback:** Hide a colliding label while retaining the arc and its tooltip.
 
-### C02. Define diagnostic identity and variant grouping
+## 3. Implementation tasks
 
-- [ ] Extend the HTML projection only where needed to associate each
-  diagnostic with its graph, write site, read site, and path variants.
-- [ ] Assign display labels D1, D2, and so on deterministically within one
-  exported graph. Filtering and sorting preserve those labels and IDs.
-- [ ] Group only proven variants of the same operation pair, resource identity,
-  causal scope, and classification. Keep distinct operations and incompatible
-  evidence separate; unresolved identity must not cause speculative merging.
-- [ ] Acceptance: export tests cover two reads sharing one write, two writes
-  sharing one read, duplicate paths, and identical labels at different sites.
-  Each group retains its member IDs, evidence, and variant count.
+Tasks are ordered by dependency. Each task names an inspectable output and a
+behavioral acceptance check. Update the owning specifications with the code.
 
-### C03. Add the diagnostic overview and filters
+### G01. Establish baselines and settle display rules
 
-- [ ] Add a diagnostic list in the right panel, with a preferred width of
-  500 px. Each row shows its label, resource, operation pair, and state.
-- [ ] Add filters by resource, service, and state. A service matches either
-  side of the pair. Show visible and total diagnostic counts for this graph.
-- [ ] Count grouped diagnostics separately from path variants. Show separate
-  totals for possible risks, insufficient evidence, and identified guarantees.
-- [ ] Acceptance: filters combine consistently, clear independently, and never
-  include diagnostics from another graph. “No diagnostics detected” and
-  “No matching diagnostics” have distinct empty states.
+- [ ] Record screenshots or browser snapshots for a small architecture, a dense
+  architecture, a shallow call tree, and a deep annotated call tree at 1440x900
+  and 900x700. Use checked-in examples or deterministic browser fixtures.
+- [x] Specify overview, readable, focused, and selected detail levels in
+  [UX/UI](docs/UX-UI.md). Define which facts stay visible at each level and
+  how a user obtains hidden details. Clarify the existing port text and tooltip
+  rules against the current call-tree implementation.
+- [ ] Acceptance: a reviewer can identify the service and graph direction in
+  the overview, and can reach the full method and evidence from a selected
+  occurrence. The specification matches current port behavior before later
+  tasks use it as a contract.
 
-### C04. Render shared-operation badges
+### G02. Apply progressive detail to architecture cards
 
-- [ ] Display the number of associated diagnostics on each affected operation
-  in overview mode. Reuse the existing service and method cards.
-- [ ] Show counts by state for operations with mixed classifications. Keep
-  orange for possible risk, gray for insufficient evidence, and green for an
-  identified guarantee, with text labels alongside color.
-- [ ] Clicking a badge filters the list to that operation's diagnostics.
-  Provide a visible action to remove this operation filter.
-- [ ] Acceptance: one write participating in three diagnostics has one card
-  with the correct counts. Multiple paths do not inflate diagnostic counts.
+- [x] Implement screen-size-based detail levels in
+  [graph rebuilding](src/systemlens/render/assets/graph/10-rebuild.js) and
+  [graph styling](src/systemlens/render/assets/graph/00-graph.css). Keep the
+  selected and hovered resource identifiable at every level.
+- [x] Preserve card coordinates, relation endpoints, and source facts when
+  zoom or fit changes the visible text. Expose omitted details through the
+  existing inspector or tooltip.
+- [ ] Acceptance: fit and zoom switch detail predictably without moving nodes,
+  losing selection, or hiding the selected name. Verify small and dense graphs
+  in both themes and at a constrained viewport width.
 
-### C05. Focus one diagnostic without losing graph context
+### G03. Apply progressive detail to call-tree cards
 
-- [ ] Highlight the selected write, read, and their supported paths. Attenuate
-  other branches while keeping the graph context visible.
-- [ ] Draw a dotted pair relation only for the selected diagnostic. Label it
-  as a diagnostic relationship, separate from actual call or message arcs.
-- [ ] Fit both operations and their common context when selecting a diagnostic.
-  “All diagnostics” restores the previous overview camera and expansion state.
-- [ ] Acceptance: switching D1 to D2 leaves no stale highlights. The display
-  never implies runtime chronology from card position or path layout.
+- [x] Use the same detail principles for service name, method, parameter types,
+  annotations, and status badges in
+  [call-tree rendering](src/systemlens/render/assets/graph/55-code-flows.js).
+  Keep all data reachable through existing inspection surfaces.
+- [x] Maintain measured layout bounds and port attachment while zooming. A
+  selected occurrence must retain an obvious visual marker at overview scale.
+- [ ] Acceptance: a deep tree can be read first as a sequence of services;
+  zooming or selecting reveals method and annotation detail. Zoom alone does
+  not reroute arcs or shift occurrence coordinates.
 
-### C06. Explain evidence in the detail panel
+### G04. Measure and prioritize call-tree arc labels
 
-- [ ] Show a classification-specific explanation, followed by resource and key
-  identity, causal evidence, visibility evidence, and unresolved limitations.
-- [ ] Show the service, emphasized Java method, parameter type, and operation
-  for each side when available. Missing facts remain explicitly unknown.
-- [ ] Link available publication, write, and read evidence to VS Code using
-  paths resolved through the export root. Persisted paths remain relative.
-- [ ] Acceptance: a shared topic or matching raw key text never appears as
-  proof. A guarantee identifies its visibility evidence. Missing paths disable
-  source navigation with an explanation. The 500 px panel fits a narrow viewport.
+- [x] Replace character-count spacing as the sole label fit rule. Measure
+  rendered labels, test candidate positions against cards and placed labels,
+  and choose a deterministic visible subset when space is insufficient.
+- [x] Prioritize the selected arc or highlighted path, then short labels that
+  fit. Keep order, protocol, and the complete indexed label in the arc tooltip.
+- [ ] Acceptance: labels do not cover cards or one another in the dense fixture;
+  every arc remains visible and inspectable. Repeated renders with identical
+  inputs produce the same labels and positions.
 
-### C07. Connect catalogue navigation and diagnostic selection
+### G05. Keep navigation stable during tree exploration
 
-- [ ] Opening a diagnostic from Resources selects its graph and detail panel.
-  Provide previous and next actions within the current filtered list.
-- [ ] Preserve filters while moving between list and detail. If a filter hides
-  the selected diagnostic, clear selection and return to the filtered overview.
-- [ ] Scope selection to the current graph and clear incompatible transient
-  state when switching graphs or leaving the mode.
-- [ ] Acceptance: list rows, graph badges, and catalogue entries select the
-  same diagnostic. First and last entries disable the unavailable navigation
-  direction. Returning to overview restores its list position and filters.
+- [x] Preserve the user's viewed region, selected occurrence, and zoom when
+  changing depth or expanding and collapsing a branch. Provide a direct action
+  to recenter on the selected occurrence and a separate action to fit the tree.
+- [x] Update
+  [call-tree controls](src/systemlens/render/assets/graph/55-code-flows.js)
+  and the shared
+  [camera controls](src/systemlens/render/assets/graph/20-controls.js)
+  only where each view needs them.
+- [ ] Acceptance: expanding a branch does not unexpectedly reset the camera;
+  recentering makes the selected occurrence visible; fitting still shows the
+  complete visible tree. Test repeated service occurrences and cycles.
 
-### C08. Add representative multi-diagnostic fixtures and tests
+### G06. Add a viewport overview for large graphs
 
-- [ ] Extend [synthetic examples](examples/README.md) with a graph containing
-  shared writes, shared reads, independent pairs, mixed states, and variants.
-- [ ] Add browser tests for filters, mixed-state badges, selected pair lines,
-  evidence display, previous/next navigation, and camera restoration.
-- [ ] Cover zero diagnostics, one diagnostic, missing evidence, graph changes,
-  light and dark themes, constrained widths, and a densely annotated graph.
-- [ ] Acceptance: assertions verify rendered behavior and selection state.
-  Existing call graph navigation remains covered. The dense fixture keeps
-  cards readable and the diagnostic list scrollable.
+- [x] Add a compact overview of the visible architecture graph and call tree,
+  including the current viewport. Allow a click or drag in the overview to
+  move the camera without changing graph selection or indexed data.
+- [x] Show the overview only when the visible graph exceeds the viewport by a
+  documented threshold. Bound its rendering cost for large architecture
+  graphs and a call tree near its existing occurrence limit.
+- [ ] Acceptance: overview and main viewport stay synchronized after zoom,
+  pan, filter, branch expansion, and resize. On a small graph, the overview
+  remains absent and existing controls work as before.
 
-### C09. Complete documentation and validation
+### G07. Clarify visual hierarchy and status semantics
 
-- [ ] Update [UX/UI](docs/UX-UI.md), [HTML behavior](docs/spec-fonc/html-export.md),
-  and example instructions alongside the implementation. Update the technical
-  data contract if the export projection changes.
-- [ ] Run the focused export tests and browser suite required by
-  [repository validation](AGENTS.md#validation). Run Python checks and companion
-  validation when their corresponding contracts change.
-- [ ] Acceptance: record the executed checks and any blocked prerequisites.
-  Confirm that all earlier acceptance criteria have evidence before marking
-  the rendering backlog complete.
+- [x] Consolidate normal, hovered, selected, path-focused, muted, and
+  diagnostic styling in the graph CSS modules. Keep protocol identity and
+  diagnostic state distinguishable with colour plus stroke or shape.
+- [x] Reduce the emphasis of unrelated relations during focus without making
+  them disappear. Keep multiple annotations available on an elastic card and
+  ensure the legend describes only visible semantics.
+- [ ] Acceptance: selection and diagnostic focus remain distinguishable in
+  light and dark themes and on a dense graph. Clearing focus restores the
+  ordinary appearance with no stale classes or hidden relations.
+
+### G08. Verify the combined reading workflow
+
+- [x] Add behavioral coverage in
+  [browser tests](tests/test_browser_export.py) for detail transitions, label
+  collisions, camera preservation, overview navigation, and visual state reset.
+  Use rendered bounds and state, not only generated HTML strings.
+- [x] Update [UX/UI](docs/UX-UI.md),
+  [HTML behavior](docs/spec-fonc/html-export.md), and
+  [graph layout](docs/spec-tech/graph-layout.md) for the final behavior.
+- [ ] Acceptance: the same fixtures support tracing a path from entry to leaf,
+  finding an arc's full label, and returning to the complete overview. Run the
+  focused Python checks and browser suite in [AGENTS.md](AGENTS.md#validation);
+  record any unavailable browser prerequisite explicitly.

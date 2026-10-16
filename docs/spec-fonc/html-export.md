@@ -213,14 +213,16 @@ signature. This display choice does not change indexed method facts.
 
 The tree mode uses a fixed left-to-right orientation and an incremental depth
 control from 1 to 8 levels. The default is depth 1, showing only the root
-occurrence. The `−` and `+` controls change one level at a time. Arc labels retain
-the order, relation label, and protocol when available. Long labels are shortened
-on the canvas; the arc tooltip retains the full indexed details. The renderer
-estimates label width at 6 pixels per character and adds the 190-pixel card width
-and 32 pixels of clearance, with a 320-pixel minimum distance between levels.
+occurrence. The `−` and `+` controls change one level at a time. Arc labels
+retain the order, relation label, and protocol when available. The renderer
+measures label bounds and hides labels that cannot be placed without covering a
+card or another visible label. Tooltips retain the full indexed details.
 
-The full tree scales to the available viewport, so deep trees can appear smaller
-and remain zoomable. When a branch reaches the configured depth, expansion stops.
+The full tree scales to the available viewport with a minimum initial scale of
+0.66. At total scale below 0.82, method parameters and operation badges become
+visually quiet while service names and diagnostic borders remain visible.
+Hovering retains complete evidence in the tooltip. The tree remains zoomable.
+When a branch reaches the configured depth, expansion stops.
 When a branch reaches an input endpoint already displayed on the current branch,
 the occurrence is rendered as a cycle endpoint and is not expanded further. A
 reachable target without an indexed consumer flow is rendered as a leaf with an
@@ -237,8 +239,8 @@ is the only call-graph rendering mode.
 
 The upper graph toolbar shows `Centrer`, zoom, fit, selection reset, layout, and
 node-rendering actions in the architecture view. In the call-graph view it keeps
-centering and zoom and adds the tree controls and `Déplier tous les nœuds`; it
-does not repeat the call hierarchy. The context widget is collapsed by default and
+centering, zoom, `Tout voir`, `Sélection`, and the tree controls including
+`Déplier tous les nœuds`; it does not repeat the call hierarchy. The context widget is collapsed by default and
 can be expanded with `Développer`. Dragging the empty tree workspace pans the
 tree, while clicking a service occurrence keeps its selection action. `Shift +
 click` on a service occurrence or call arc opens its dedicated introspection

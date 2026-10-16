@@ -286,20 +286,25 @@
       const baseScale = Number(canvas.dataset.baseScale) || 1;
       const totalScale = baseScale * (graphState.callTreeZoom || 1);
       if (!totalScale) return null;
+      const selectedNode = [...graphCallTreeOverlay.querySelectorAll(".graph-call-tree-node")]
+        .find(node => node.dataset.pathKey === graphState.callTreeSelectedPathKey);
+      const selectedBounds = selectedNode?.getBoundingClientRect();
       return {
         left: Number.parseFloat(canvas.style.left) || 0,
         top: Number.parseFloat(canvas.style.top) || 0,
         totalScale,
-        centerX: viewport.width / 2,
-        centerY: viewport.height / 2,
+        centerX: selectedBounds ? selectedBounds.left + selectedBounds.width / 2 - viewport.left : viewport.width / 2,
+        centerY: selectedBounds ? selectedBounds.top + selectedBounds.height / 2 - viewport.top : viewport.height / 2,
+        anchorPathKey: selectedNode?.dataset.pathKey || null,
       };
     }
 
     function highlightCallTreePath(pathKey) {
       const overlay = graphCallTreeOverlay;
       if (!overlay) return;
-      const isOnPath = candidate => Boolean(pathKey)
-        && (candidate === pathKey || pathKey.startsWith(`${candidate}>`));
+      const activePathKey = pathKey || graphState.callTreeSelectedPathKey;
+      const isOnPath = candidate => Boolean(activePathKey)
+        && (candidate === activePathKey || activePathKey.startsWith(`${candidate}>`));
       overlay.querySelectorAll(".graph-call-tree-node").forEach(node => {
         const active = isOnPath(node.dataset.pathKey);
         node.classList.toggle("is-path-context", active);
@@ -330,6 +335,7 @@
           if (!canvas) return;
           canvas.style.left = `${callTreePan.startLeft + event.clientX - callTreePan.startX}px`;
           canvas.style.top = `${callTreePan.startTop + event.clientY - callTreePan.startY}px`;
+          scheduleGraphMinimapRender();
         };
         graphCallTreeOverlay.addEventListener("pointerdown", event => {
           const interactiveEdge = event.target.closest?.(".graph-call-tree-edge-label.is-clickable")
@@ -1104,11 +1110,13 @@
           }
           graphState.callTreeSelectedPathKey = occurrence.pathKey;
           renderCallTreeOverlay(captureCallTreeCamera());
+          requestGraphRender();
         });
         canvas.append(node);
         nodeByOccurrence.set(occurrence, node);
       });
       graphCallTreeOverlay.replaceChildren(canvas);
+      highlightCallTreePath(graphState.callTreeSelectedPathKey);
       const cardHeightByOccurrence = new Map();
       const measureSubtree = occurrence => {
         const node = nodeByOccurrence.get(occurrence);
@@ -1141,7 +1149,11 @@
       });
       const logicalWidth = (Math.max(...allOccurrences.map(item => item.depth)) + 1) * gapX;
       const logicalHeight = Math.max(1, rootTop - siblingGap);
-      const scale = Math.min(1, (viewport.width - 32) / logicalWidth, (viewport.height - 32) / logicalHeight);
+      const fitScale = Math.min(1,
+        (viewport.width - 32) / logicalWidth,
+        (viewport.height - 32) / logicalHeight,
+      );
+      const scale = graphState.callTreeFitComplete ? fitScale : Math.max(.66, fitScale);
       const offsetX = Math.max(16, (viewport.width - logicalWidth * scale) / 2);
       const offsetY = Math.max(16, (viewport.height - logicalHeight * scale) / 2);
       let left = offsetX;
@@ -1150,8 +1162,15 @@
       if (preservedCamera) {
         const centerX = preservedCamera.centerX ?? viewport.width / 2;
         const centerY = preservedCamera.centerY ?? viewport.height / 2;
-        const logicalCenterX = (centerX - preservedCamera.left) / preservedCamera.totalScale;
-        const logicalCenterY = (centerY - preservedCamera.top) / preservedCamera.totalScale;
+        const anchorOccurrence = preservedCamera.anchorPathKey
+          ? allOccurrences.find(item => item.pathKey === preservedCamera.anchorPathKey)
+          : null;
+        const logicalCenterX = anchorOccurrence
+          ? anchorOccurrence.x + cardWidth / 2
+          : (centerX - preservedCamera.left) / preservedCamera.totalScale;
+        const logicalCenterY = anchorOccurrence
+          ? anchorOccurrence.y + cardHeightByOccurrence.get(anchorOccurrence) / 2
+          : (centerY - preservedCamera.top) / preservedCamera.totalScale;
         zoom = Math.max(.5, Math.min(64, preservedCamera.totalScale / scale));
         const totalScale = scale * zoom;
         left = centerX - logicalCenterX * totalScale;
@@ -1164,6 +1183,7 @@
       canvas.style.left = `${left}px`;
       canvas.style.top = `${top}px`;
       canvas.style.transform = `scale(${scale * zoom})`;
+      canvas.classList.toggle("is-overview", scale * zoom < .82);
       svg.setAttribute("width", String(logicalWidth));
       svg.setAttribute("height", String(logicalHeight));
       nodeByOccurrence.forEach((node, occurrence) => {
@@ -1280,6 +1300,7 @@
           label.setAttribute("x", String(labelX));
           label.setAttribute("y", String(labelY));
           if (!edgeDiagnosticKind) label.textContent = edgeDisplayLabel(child.edge);
+          label.dataset.displayLabel = label.textContent;
           if (topicNode || callTreeRoute) {
             label.classList.add("is-clickable");
             label.addEventListener("click", event => {
@@ -1300,6 +1321,74 @@
         });
       });
       canvas.prepend(svg);
+      const cardBounds = [...nodeByOccurrence].map(([occurrence, node]) => ({
+        left: occurrence.x,
+        right: occurrence.x + cardWidth,
+        top: occurrence.y,
+        bottom: occurrence.y + cardHeightByOccurrence.get(occurrence),
+      }));
+      const collisionCellSize = 160;
+      const collisionBuckets = new Map();
+      const collisionKeys = bounds => {
+        const keys = [];
+        for (let x = Math.floor(bounds.left / collisionCellSize);
+          x <= Math.floor(bounds.right / collisionCellSize); x += 1) {
+          for (let y = Math.floor(bounds.top / collisionCellSize);
+            y <= Math.floor(bounds.bottom / collisionCellSize); y += 1) {
+            keys.push(`${x}:${y}`);
+          }
+        }
+        return keys;
+      };
+      const addCollisionBounds = bounds => collisionKeys(bounds).forEach(key => {
+        const bucket = collisionBuckets.get(key) || [];
+        bucket.push(bounds);
+        collisionBuckets.set(key, bucket);
+      });
+      cardBounds.forEach(addCollisionBounds);
+      const collides = candidate => {
+        const seen = new Set();
+        return collisionKeys(candidate).some(key => (collisionBuckets.get(key) || []).some(other => {
+          if (seen.has(other)) return false;
+          seen.add(other);
+          return candidate.left < other.right && candidate.right > other.left
+            && candidate.top < other.bottom && candidate.bottom > other.top;
+        }));
+      };
+      const edgeLabels = [...svg.querySelectorAll(".graph-call-tree-edge-label")];
+      edgeLabels.sort((left, right) => (
+        Number(right.classList.contains("is-path-context"))
+          - Number(left.classList.contains("is-path-context"))
+        || Number(right.classList.contains("is-diagnostic-async")
+          || right.classList.contains("is-diagnostic-sync")
+          || right.classList.contains("is-diagnostic-interaction"))
+          - Number(left.classList.contains("is-diagnostic-async")
+            || left.classList.contains("is-diagnostic-sync")
+            || left.classList.contains("is-diagnostic-interaction"))
+        || left.dataset.displayLabel.length - right.dataset.displayLabel.length
+        || left.dataset.displayLabel.localeCompare(right.dataset.displayLabel)
+      ));
+      edgeLabels.forEach(label => {
+        let box;
+        try { box = label.getBBox(); } catch (_error) { box = null; }
+        const displayLabel = label.dataset.displayLabel || "";
+        const width = Math.max(12, box?.width || displayLabel.length * 5.5);
+        const height = Math.max(10, box?.height || 11);
+        const originalY = Number(label.getAttribute("y")) || 0;
+        const positions = [0, -12, 12, -24, 24, -36, 36];
+        const placement = positions.map(offset => {
+          const x = (Number(label.getAttribute("x")) || 0) - width / 2 - 4;
+          const top = originalY + offset - height + 2;
+          return { offset, left: x, right: x + width + 8, top, bottom: top + height + 4 };
+        }).find(candidate => !collides(candidate));
+        if (!placement) {
+          label.classList.add("is-collision-hidden");
+          return;
+        }
+        label.setAttribute("y", String(originalY + placement.offset));
+        addCollisionBounds(placement);
+      });
+      scheduleGraphMinimapRender();
     }
     function zoomCallTree(factor, anchorX = null, anchorY = null) {
       if (graphState.callGraphDisplayMode !== "tree") return false;
@@ -1321,6 +1410,8 @@
       canvas.style.left = `${x - logicalX * nextTotalScale}px`;
       canvas.style.top = `${y - logicalY * nextTotalScale}px`;
       canvas.style.transform = `scale(${nextTotalScale})`;
+      canvas.classList.toggle("is-overview", nextTotalScale < .82);
+      scheduleGraphMinimapRender();
       return true;
     }
     function expandAllCallTree() {
@@ -1331,6 +1422,30 @@
       graphState.callTreeCollapsed = new Set();
       renderCallTreeOverlay(camera);
       syncCallTreeDepthControl();
+      return true;
+    }
+    function fitCallTree() {
+      if (!codeFlowSelection.flowId || graphState.callGraphDisplayMode !== "tree") return false;
+      graphState.callTreeZoom = 1;
+      graphState.callTreeFitComplete = true;
+      callTreeRenderSignature = "";
+      renderCallTreeOverlay();
+      syncCallTreeDepthControl();
+      return true;
+    }
+    function centerSelectedCallTreeOccurrence() {
+      if (!codeFlowSelection.flowId || !graphState.callTreeSelectedPathKey) return false;
+      const canvas = graphCallTreeOverlay?.querySelector(".graph-call-tree-canvas");
+      const node = [...(canvas?.querySelectorAll(".graph-call-tree-node") || [])]
+        .find(item => item.dataset.pathKey === graphState.callTreeSelectedPathKey);
+      if (!canvas || !node) return false;
+      const viewport = graphCallTreeOverlay.getBoundingClientRect();
+      const totalScale = (Number(canvas.dataset.baseScale) || 1) * (graphState.callTreeZoom || 1);
+      const x = (Number.parseFloat(node.style.left) || 0) + node.offsetWidth / 2;
+      const y = (Number.parseFloat(node.style.top) || 0) + node.offsetHeight / 2;
+      canvas.style.left = `${viewport.width / 2 - x * totalScale}px`;
+      canvas.style.top = `${viewport.height / 2 - y * totalScale}px`;
+      scheduleGraphMinimapRender();
       return true;
     }
     function syncCallTreeDepthControl() {
@@ -1506,6 +1621,7 @@
       graphState.callTreeCollapsed = new Set();
       graphState.callTreeSelectedPathKey = null;
       graphState.callTreeZoom = 1;
+      graphState.callTreeFitComplete = false;
       // The owning module is the consumer for an input-triggered flow. The
       // visual root must follow the exported call-graph path instead: it is
       // the upstream producer when a single Kafka source is proven, and the

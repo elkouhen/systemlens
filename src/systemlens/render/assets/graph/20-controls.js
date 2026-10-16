@@ -2,6 +2,200 @@
     const details = document.getElementById("details");
     const quickSearch = document.getElementById("quick-search");
     const graphContext = document.getElementById("graph-context");
+    const graphMinimap = document.getElementById("graph-minimap");
+    const graphMinimapSvg = document.getElementById("graph-minimap-svg");
+    const graphMinimapNodes = document.getElementById("graph-minimap-nodes");
+    const graphMinimapViewport = document.getElementById("graph-minimap-viewport");
+    let graphMinimapModel = null;
+    let graphMinimapPointerId = null;
+    let graphMinimapRenderScheduled = false;
+    const MINIMAP_WIDTH = 180;
+    const MINIMAP_HEIGHT = 110;
+    const MINIMAP_PADDING = 10;
+    function renderGraphMinimap() {
+      if (!graphMinimap || !graphMinimapSvg || !graphMinimapNodes || !graphMinimapViewport) return;
+      const isTree = Boolean(codeFlowSelection.flowId)
+        && graphState.viewMode === "call-graph"
+        && graphState.callGraphDisplayMode === "tree";
+      const viewport = (isTree ? graphCallTreeOverlay : graphCanvas).getBoundingClientRect();
+      const items = [];
+      let thresholdReached = false;
+      if (isTree) {
+        const canvas = graphCallTreeOverlay.querySelector(".graph-call-tree-canvas");
+        if (!canvas || graphCallTreeOverlay.hidden) {
+          graphMinimap.hidden = true;
+          graphMinimapModel = null;
+          return;
+        }
+        const totalScale = Math.max(.001,
+          (Number(canvas.dataset.baseScale) || 1) * (graphState.callTreeZoom || 1));
+        const left = Number.parseFloat(canvas.style.left) || 0;
+        const top = Number.parseFloat(canvas.style.top) || 0;
+        const width = Number.parseFloat(canvas.style.width) || 1;
+        const height = Number.parseFloat(canvas.style.height) || 1;
+        const treeNodes = [...canvas.querySelectorAll(".graph-call-tree-node")];
+        const stride = Math.max(1, Math.ceil(treeNodes.length / 700));
+        treeNodes.forEach((node, index) => {
+          if (index % stride !== 0 && node.dataset.pathKey !== graphState.callTreeSelectedPathKey) return;
+          const x = left + ((Number.parseFloat(node.style.left) || 0) + node.offsetWidth / 2) * totalScale;
+          const y = top + ((Number.parseFloat(node.style.top) || 0) + node.offsetHeight / 2) * totalScale;
+          items.push({
+            x, y,
+            kind: "service",
+            selected: node.dataset.pathKey === graphState.callTreeSelectedPathKey,
+          });
+        });
+        thresholdReached = treeNodes.length > 12 || totalScale < .82
+          || width * totalScale > viewport.width * 1.15
+          || height * totalScale > viewport.height * 1.15;
+        graphMinimapModel = { kind: "tree", left, top, totalScale, width, height, viewport };
+      } else {
+        if (graphState.viewMode !== "architecture" || !graphCanvas) {
+          graphMinimap.hidden = true;
+          graphMinimapModel = null;
+          return;
+        }
+        const visibleIds = network.nodes().filter(id => {
+          const attributes = network.getNodeAttributes(id);
+          return isVisibleNodeId(id) && !attributes.hidden;
+        });
+        const stride = Math.max(1, Math.ceil(visibleIds.length / 700));
+        visibleIds.forEach((id, index) => {
+          if (index % stride !== 0 && id !== graphState.selectedId) return;
+          const attributes = network.getNodeAttributes(id);
+          const point = renderer.graphToViewport({ x: attributes.x, y: attributes.y });
+          if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
+          const data = nodeDataById.get(id);
+          items.push({
+            x: point.x, y: point.y,
+            kind: ["kafka_topic", "message_channel"].includes(data?.kind) ? "topic"
+              : data?.kind === "microservice" ? "service" : "resource",
+            selected: id === graphState.selectedId,
+            id,
+          });
+        });
+        thresholdReached = visibleIds.length > 24
+          || items.some(item => item.x < 0 || item.x > viewport.width
+            || item.y < 0 || item.y > viewport.height);
+        graphMinimapModel = { kind: "architecture", viewport };
+      }
+      if (!items.length || !thresholdReached) {
+        graphMinimap.hidden = true;
+        graphMinimapModel = null;
+        return;
+      }
+      graphMinimap.hidden = false;
+      const extent = {
+        left: Math.min(0, ...items.map(item => item.x)),
+        right: Math.max(viewport.width, ...items.map(item => item.x)),
+        top: Math.min(0, ...items.map(item => item.y)),
+        bottom: Math.max(viewport.height, ...items.map(item => item.y)),
+      };
+      const paddingX = (extent.right - extent.left) * .04;
+      const paddingY = (extent.bottom - extent.top) * .04;
+      extent.left -= paddingX;
+      extent.right += paddingX;
+      extent.top -= paddingY;
+      extent.bottom += paddingY;
+      const xAt = x => MINIMAP_PADDING
+        + (x - extent.left) / Math.max(1, extent.right - extent.left)
+          * (MINIMAP_WIDTH - MINIMAP_PADDING * 2);
+      const yAt = y => MINIMAP_PADDING
+        + (y - extent.top) / Math.max(1, extent.bottom - extent.top)
+          * (MINIMAP_HEIGHT - MINIMAP_PADDING * 2);
+      const sampledItems = items.length <= 700 ? items : [
+        ...items.filter(item => item.selected).slice(0, 1),
+        ...items.filter(item => !item.selected).slice(0, 699),
+      ];
+      const nodesFragment = document.createDocumentFragment();
+      sampledItems.forEach(item => {
+        const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        dot.classList.add("graph-minimap-node", `is-${item.kind}`);
+        if (item.selected) dot.classList.add("is-selected");
+        dot.setAttribute("cx", String(xAt(item.x)));
+        dot.setAttribute("cy", String(yAt(item.y)));
+        dot.setAttribute("r", item.selected ? "2.5" : "1.7");
+        nodesFragment.append(dot);
+      });
+      graphMinimapNodes.replaceChildren(nodesFragment);
+      graphMinimapViewport.setAttribute("x", String(xAt(0)));
+      graphMinimapViewport.setAttribute("y", String(yAt(0)));
+      graphMinimapViewport.setAttribute("width", String(Math.max(2, xAt(viewport.width) - xAt(0))));
+      graphMinimapViewport.setAttribute("height", String(Math.max(2, yAt(viewport.height) - yAt(0))));
+      graphMinimapModel.mapPoint = (event) => {
+        const svgRect = graphMinimapSvg.getBoundingClientRect();
+        const point = graphMinimapSvg.createSVGPoint();
+        point.x = event.clientX;
+        point.y = event.clientY;
+        let local;
+        try { local = point.matrixTransform(graphMinimapSvg.getScreenCTM().inverse()); }
+        catch (_error) {
+          local = {
+            x: (event.clientX - svgRect.left) / Math.max(1, svgRect.width) * MINIMAP_WIDTH,
+            y: (event.clientY - svgRect.top) / Math.max(1, svgRect.height) * MINIMAP_HEIGHT,
+          };
+        }
+        return {
+          x: extent.left + (local.x - MINIMAP_PADDING)
+            / (MINIMAP_WIDTH - MINIMAP_PADDING * 2) * (extent.right - extent.left),
+          y: extent.top + (local.y - MINIMAP_PADDING)
+            / (MINIMAP_HEIGHT - MINIMAP_PADDING * 2) * (extent.bottom - extent.top),
+        };
+      };
+    }
+    function scheduleGraphMinimapRender() {
+      if (graphMinimapRenderScheduled) return;
+      graphMinimapRenderScheduled = true;
+      requestAnimationFrame(() => {
+        graphMinimapRenderScheduled = false;
+        renderGraphMinimap();
+      });
+    }
+    function navigateGraphMinimap(event) {
+      if (!graphMinimapModel) return;
+      const point = graphMinimapModel.mapPoint(event);
+      if (graphMinimapModel.kind === "tree") {
+        const { viewport, totalScale, left, top } = graphMinimapModel;
+        const canvas = graphCallTreeOverlay.querySelector(".graph-call-tree-canvas");
+        if (!canvas) return;
+        const logicalX = (point.x - left) / totalScale;
+        const logicalY = (point.y - top) / totalScale;
+        canvas.style.left = `${viewport.width / 2 - logicalX * totalScale}px`;
+        canvas.style.top = `${viewport.height / 2 - logicalY * totalScale}px`;
+        graphMinimapModel.left = Number.parseFloat(canvas.style.left) || 0;
+        graphMinimapModel.top = Number.parseFloat(canvas.style.top) || 0;
+        renderGraphMinimap();
+        return;
+      }
+      const graphPoint = renderer.viewportToGraph({ x: point.x, y: point.y });
+      const projected = renderer.graphToViewport(graphPoint);
+      const camera = renderer.getCamera();
+      const state = camera.getState();
+      camera.setState({
+        ...state,
+        x: state.x - (viewport.width / 2 - projected.x) / Math.max(1, viewport.width),
+        y: state.y + (viewport.height / 2 - projected.y) / Math.max(1, viewport.height),
+      });
+      renderer.refresh();
+      requestGraphRender();
+    }
+    graphMinimap?.addEventListener("pointerdown", event => {
+      if (event.button !== 0 || !graphMinimapModel) return;
+      graphMinimapPointerId = event.pointerId;
+      graphMinimap.setPointerCapture?.(event.pointerId);
+      navigateGraphMinimap(event);
+      event.preventDefault();
+    });
+    graphMinimap?.addEventListener("pointermove", event => {
+      if (event.pointerId === graphMinimapPointerId) navigateGraphMinimap(event);
+    });
+    const finishGraphMinimap = event => {
+      if (event.pointerId !== graphMinimapPointerId) return;
+      graphMinimapPointerId = null;
+      try { graphMinimap.releasePointerCapture?.(event.pointerId); } catch (_error) { /* map was hidden */ }
+    };
+    graphMinimap?.addEventListener("pointerup", finishGraphMinimap);
+    graphMinimap?.addEventListener("pointercancel", finishGraphMinimap);
     const search = document.getElementById("search");
     const resetButton = document.getElementById("reset");
     const searchStatus = document.getElementById("search-status");

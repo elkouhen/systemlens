@@ -200,6 +200,7 @@
       callGraphDisplayMode: "tree",
       callTreeDepth: 1,
       callTreeZoom: 1,
+      callTreeFitComplete: false,
       callTreeSelectedPathKey: null,
       callTreeVisibleNodeCount: 0,
       callTreeVisibleEdgeCount: 0,
@@ -280,6 +281,7 @@
           renderFrameScheduled = false;
           try {
             renderOverlays?.();
+            renderGraphMinimap?.();
           } finally {
             resolve();
           }
