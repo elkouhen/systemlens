@@ -97,10 +97,27 @@ Direct-flow steps may also carry the optional anomaly evidence fields
 IDs use `flow_id:step_order`. Concurrency values are validated against the
 detector's supported vocabulary. These optional fields are stored in the
 existing JSON flow snapshot; older rows load with empty or null defaults.
+`request_before_reads` links an asynchronous write to read event IDs that the
+write request is proven to precede. It is separate from `visibility_before_reads`,
+which records when the write itself is visible before a read. The detector
+requires the request relation before classifying a possible stale-read risk.
 `visibility_before_reads` is an optional list of read event IDs in the form
 `flow_id:step_order`. It records explicit evidence that this write became
 visible before those specific reads began. It is not inferred from a shared
 trigger, causal ID, acknowledgement, or source-line order.
+
+Flow steps may also carry `resource_identity` and `key_identity`. These are
+canonical comparison identities, separate from the display `resource` and raw
+source `key` expression. Equal labels or expressions without matching canonical
+identities do not establish that two operations address the same record.
+Missing identities for otherwise matching labels produce insufficient evidence.
+Mongo operations use a module-scoped collection identity; JPA operations use a
+module-scoped entity identity. The extractor records raw arguments for
+supported `*ById` operations. It derives key identity for exact Java literals.
+For CodeQL-derived flows, it also traces unmodified scalar parameters through
+resolved Java calls. Parameter identities include the indexed entry method and
+parameter position. The trace follows final scalar local aliases and stops at
+mutable aliases, field accesses, mutable objects, and serialized payload values.
 
 The `export facts` command serializes a `graph_facts` namespace as the
 `systemlens-ai-graph-v1` manifest. It preserves the stored ID, evidence,
@@ -584,31 +601,41 @@ message publication. A sync read is a database read on an HTTP entry path. Reads
 in Kafka consumers and writes on other trigger types have no branch
 classification. Async-write/sync-read diagnostics pair these classified sites and
 matching resources across handlers reachable from the same persisted trigger.
-Matching causal IDs support the pair; conflicting IDs or different key expressions
-remain `insufficient_evidence`. A missing branch label is unknown and does not
-classify an access as synchronous.
+Matching causal IDs support the pair; conflicting IDs or unmapped key
+expressions remain `insufficient_evidence`. Distinct canonical key identities
+exclude a pair. A shared root proves reachability only: cross-flow pairs also
+need matching causal IDs to establish a compatible execution scenario. Missing
+or conflicting IDs remain `insufficient_evidence`. A missing branch label is
+unknown and does not classify an access as synchronous.
 
-A visibility guarantee is not currently identified by the pair detector. An
-explicit `visible` completion and matching non-empty expected versions do not
-prove that visibility preceded the read. Such a pair remains
-`insufficient_evidence` until persisted ordering evidence links write visibility
-to read start. Each exported diagnostic retains its owning write and read flow
-IDs, operation endpoint IDs, and the endpoint paths from the trigger to each
-operation. Export also includes each operation's source path, line, module,
-action, and trigger endpoint as `write_site` or `read_site`.
+A possible-risk classification also requires evidence that the asynchronous
+request precedes the read. An ordered request step within one flow or a request
+and read call site in the same source file under a shared root can establish
+that order. A shared root and matching causal IDs alone cannot.
+
+A visibility guarantee requires a persisted `visibility_before_reads` link from
+the write to that specific read, an explicit `visible` completion, matching
+non-empty expected versions, and established resource, key, and causal evidence.
+Visibility and matching versions alone remain `insufficient_evidence`. Each
+exported diagnostic retains its owning write and read flow IDs, operation
+endpoint IDs, and the endpoint paths from the trigger to each operation. Export
+also includes each operation's source path, line, module, action, and trigger
+endpoint as `write_site` or `read_site`.
 The renderer uses the endpoint paths to highlight the causal sequence. It places
 selectable diagnostic badges on call-tree service occurrences only when the
 operation's module and trigger endpoint match that occurrence.
 
-The detector groups sync reads by resource and compares an async write with reads
-of the same resource or reads whose resource is unknown. A write with an unknown
+The detector groups sync reads by display resource and canonical resource
+identity. It compares an async write with reads matching either identity or
+display resource, plus reads whose resource is unknown. A write with an unknown
 resource remains eligible for every read. Inverted flow-to-root sets find shared
 roots without scanning every root for each pair.
 
-Each candidate pair is evaluated independently within its shared root. An exact
-key match in one flow or root does not suppress an uncertain key match in another
-pair. Textually equal key expressions remain a candidate match; without canonical
-resource and value provenance, they do not prove record identity.
+The detector evaluates each candidate pair independently. An exact key match
+does not suppress an uncertain key match involving the same write or read.
+Textually equal key
+expressions without matching canonical resource and key identities remain
+insufficient evidence.
 
 Advanced diagnostics require exact resource/key identity and positive
 `concurrency` evidence (`parallel`, `independent_handlers`, or `reentrant`).

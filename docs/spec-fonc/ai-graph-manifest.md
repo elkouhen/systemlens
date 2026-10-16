@@ -77,6 +77,20 @@ without a SystemLens source index. An endpoint records its service, role,
 protocol, channel, relative evidence path, and line range. A flow records its
 service, method, status, confidence, reason, and ordered steps. Each step may
 reference an endpoint ID or carry a CRUD `action` for a data-access step.
+Data-access steps may include `resource_identity` and `key_identity` as
+canonical comparison identities. `resource` and `key` remain display and raw
+source-expression fields; matching text alone does not establish record
+identity. `visibility_before_reads` may list specific `flow_id:step_order` read
+events that the write is known to precede. These fields are optional, and
+missing evidence remains unknown in consistency diagnostics.
+`request_before_reads` may list read events that the asynchronous write request
+is proven to precede. This relation does not assert that the write was visible.
+Each visibility relation must be declared on a `data_write` step. When its
+target event is present in the manifest, that event must be a `data_read` step.
+The same declaration and target rules apply to `request_before_reads`.
+Unknown targets are accepted for partial manifests and do not establish a
+diagnostic classification unless the matching read is included in the analyzed
+snapshot.
 `import-facts` persists these arrays only in an
 empty source snapshot, so the call-graph export remains separate from indexed
 source facts.

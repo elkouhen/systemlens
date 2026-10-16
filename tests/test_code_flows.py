@@ -21,19 +21,22 @@ from systemlens.delivery.cli import app
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
-from systemlens.domain.module_inventory import DiscoveredModule, MongoMethod
+from systemlens.domain.module_inventory import DiscoveredModule, JpaMethod, MongoMethod
 from systemlens.indexing.code_flows import (
     CodeQLCallGraph,
     CodeQLCallGraphEdge,
     _data_access_branch,
     _deduplicate_code_flows,
     _ensure_unique_code_flow_ids,
+    _jpa_step,
+    _mongo_step,
     codeql_join_methods_signature,
 )
 from systemlens.indexing.code_flows import materialize_code_flows, reconcile_code_flows
 from systemlens.indexing.code_flows import materialize_codeql_code_flows
 from systemlens.indexing import codeql
 from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
+from systemlens.indexing.java_value_origins import trace_scalar_key_identity
 from systemlens.indexing.integration_methods import materialize_integration_methods
 from systemlens.indexing import service as indexing_service
 from systemlens.infrastructure.config import Config
@@ -51,6 +54,179 @@ def test_data_access_branch_only_marks_async_writes_and_sync_http_reads() -> Non
     assert _data_access_branch("http_entry", write=True) is None
     assert _data_access_branch("http_entry", write=False) == "sync"
     assert _data_access_branch("cron_entry", write=True) is None
+
+
+def test_data_steps_derive_key_identity_only_for_exact_literals() -> None:
+    mongo = _mongo_step(
+        MongoMethod(
+            operation="findById", receiver="orders", path="OrderRepo.java", line=12,
+            collection="orders", key_expression='"order-42"',
+        ),
+        "OrderRepo.java", 2, "message_entry", "orders-module",
+    )
+    assert mongo.resource_identity == "mongo:orders-module:orders"
+    assert mongo.key_identity == 'mongo:orders-module:orders:literal:"order-42"'
+
+    dynamic = _mongo_step(
+        MongoMethod(
+            operation="findById", receiver="orders", path="OrderRepo.java", line=12,
+            collection="orders", key_expression="request.orderId",
+        ),
+        "OrderRepo.java", 2, "message_entry", "orders-module",
+    )
+    assert dynamic.key == "request.orderId"
+    assert dynamic.key_identity is None
+
+    invalid_literal = _mongo_step(
+        MongoMethod(
+            operation="findById", receiver="orders", path="OrderRepo.java", line=12,
+            collection="orders", key_expression="10_",
+        ),
+        "OrderRepo.java", 2, "message_entry", "orders-module",
+    )
+    assert invalid_literal.key_identity is None
+
+    jpa = _jpa_step(
+        JpaMethod(
+            "findById", "example.Order", "repository", "OrderRepo.java", 12,
+            "load", '"order-42"',
+        ),
+        "OrderRepo.java", 2, "orders-module", "http_entry",
+    )
+    assert jpa.key_identity == 'jpa:orders-module:example.Order:literal:"order-42"'
+
+
+def test_key_identity_traces_an_unmodified_scalar_parameter_through_calls(tmp_path: Path) -> None:
+    entry_path = "src/Entry.java"
+    adapter_path = "src/Adapter.java"
+    (tmp_path / entry_path).parent.mkdir(parents=True)
+    (tmp_path / entry_path).write_text(
+        "package example; class Entry { void handle(String id) { "
+        "new Adapter().load(id); } }\n",
+        encoding="utf-8",
+    )
+    (tmp_path / adapter_path).write_text(
+        "package example; class Adapter { void load(String key) { "
+        "repository.findById(key); } }\n",
+        encoding="utf-8",
+    )
+    entry = IntegrationMethod(
+        "entry-method", "orders", "example.Entry.handle", entry_path,
+        1, 1, (), (),
+    )
+    adapter = IntegrationMethod(
+        "adapter-method", "orders", "example.Adapter.load", adapter_path,
+        1, 1, (), (),
+    )
+    call = CodeQLCall(
+        caller=entry.qualified_method, caller_path=entry.path, caller_line=1,
+        callee=adapter.qualified_method, callee_path=adapter.path, callee_line=1,
+        call_line=1,
+    )
+
+    identity = trace_scalar_key_identity(
+        tmp_path, [(adapter, call, False)], entry, adapter, "key",
+        "jpa:orders:example.Order",
+    )
+
+    assert identity == "jpa:orders:example.Order:parameter:entry-method:0"
+
+
+def test_key_identity_abstains_when_a_parameter_is_reassigned(tmp_path: Path) -> None:
+    path = "src/Adapter.java"
+    (tmp_path / path).parent.mkdir(parents=True)
+    (tmp_path / path).write_text(
+        "package example; class Adapter { void load(String key) { "
+        "key = \"other\"; repository.findById(key); } }\n",
+        encoding="utf-8",
+    )
+    method = IntegrationMethod(
+        "adapter-method", "orders", "example.Adapter.load", path, 1, 1, (), (),
+    )
+
+    assert trace_scalar_key_identity(
+        tmp_path, [], method, method, "key", "jpa:orders:example.Order",
+    ) is None
+
+    (tmp_path / path).write_text(
+        "package example; class Adapter { void load(String key) { "
+        "String alias = key; alias = \"other\"; repository.findById(alias); } }\n",
+        encoding="utf-8",
+    )
+    assert trace_scalar_key_identity(
+        tmp_path, [], method, method, "alias", "jpa:orders:example.Order",
+    ) is None
+
+
+def test_codeql_data_flow_uses_propagated_entry_parameter_identity(tmp_path: Path) -> None:
+    entry_path = "orders/src/Listener.java"
+    facade_path = "orders/src/OrderFacade.java"
+    adapter_path = "orders/src/Adapter.java"
+    sources = {
+        entry_path: (
+            "package example;\nclass Listener {\n"
+            "  void receive(String id) {\n    final String stableId = id;\n"
+            "    facade.remove(stableId);\n  }\n}\n"
+        ),
+        facade_path: (
+            "package example;\nclass OrderFacade {\n"
+            "  void remove(String item) {\n    final String stableItem = item;\n"
+            "    adapter.remove(stableItem);\n  }\n}\n"
+        ),
+        adapter_path: (
+            "package example;\nclass Adapter {\n"
+            "  void remove(String key) {\n    final String stableKey = key;\n"
+            "    repository.deleteById(stableKey);\n  }\n}\n"
+        ),
+    }
+    for path, source in sources.items():
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source, encoding="utf-8")
+
+    entry_endpoint = _endpoint("orders-in", "consume", "kafka", "orders.in", entry_path, 3)
+    entry_method = IntegrationMethod(
+        "entry-method", "orders", "example.Listener.receive", entry_path,
+        3, 6, (entry_endpoint.id,), (),
+    )
+    facade_method = IntegrationMethod(
+        "facade-method", "orders", "example.OrderFacade.remove", facade_path,
+        3, 6, (), (),
+    )
+    adapter_method = IntegrationMethod(
+        "adapter-method", "orders", "example.Adapter.remove", adapter_path,
+        3, 6, (), (),
+    )
+    operation = JpaMethod(
+        "deleteById", "example.Order", "repository", "src/Adapter.java", 5,
+        "remove", "stableKey",
+    )
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+        jpa_methods=(operation,),
+    )
+    calls = [CodeQLCall(
+        caller=entry_method.qualified_method, caller_path=entry_path, caller_line=3,
+        callee=facade_method.qualified_method, callee_path=facade_path,
+        callee_line=3, call_line=5,
+    ), CodeQLCall(
+        caller=facade_method.qualified_method, caller_path=facade_path, caller_line=3,
+        callee=adapter_method.qualified_method, callee_path=adapter_path,
+        callee_line=3, call_line=5,
+    )]
+
+    flows = materialize_codeql_code_flows(
+        [entry_method, facade_method, adapter_method], [entry_endpoint], calls,
+        repo_root=tmp_path, modules=[module],
+    )
+
+    data_steps = [step for flow in flows for step in flow.steps if step.kind == "data_write"]
+    assert len(data_steps) == 1
+    assert data_steps[0].key == "stableKey"
+    assert data_steps[0].key_identity == (
+        "jpa:orders:example.Order:parameter:entry-method:0"
+    )
 
 
 def _endpoint(
@@ -128,6 +304,7 @@ def test_materialize_code_flows_orders_same_method_effects(tmp_path: Path) -> No
         (3, "message_publish", "orders.created"),
         (4, "data_write", "orders"),
     ]
+    assert flows[0].steps[-1].resource_identity == "mongo:orders:orders"
 
     source.write_text(f"\n{source_text}", encoding="utf-8")
     shifted_module = replace(

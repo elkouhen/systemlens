@@ -722,7 +722,7 @@ def _extract_java_architecture(
             if call is None:
                 continue
             receiver, operation = call
-            receiver_node, _operation, _arguments = java_parser.invocation_parts(node, source)
+            receiver_node, _operation, arguments = java_parser.invocation_parts(node, source)
             if receiver_node is None or _node_text(source, receiver_node) not in {
                 receiver, f"this.{receiver}",
             }:
@@ -762,6 +762,11 @@ def _extract_java_architecture(
                     collection=collection,
                     evidence=_source_evidence(source, node, rel),
                     owner_method=_enclosing_method_name(source, node),
+                    key_expression=(
+                        java_parser.node_text(source, arguments[0]).strip()
+                        if operation in {"findById", "existsById", "deleteById"}
+                        and arguments else ""
+                    ),
                 ))
         _trace("module.architecture.walk_mongo.end", module=module_dir, path=rel)
     _trace("module.architecture.files.end", module=module_dir)
@@ -769,7 +774,9 @@ def _extract_java_architecture(
     sorted_collections = tuple(sorted(collections))
     _trace("module.architecture.sort_collections.end", module=module_dir)
     _trace("module.architecture.sort_methods.begin", module=module_dir, count=len(methods))
-    sorted_methods = tuple(sorted(methods, key=lambda item: (item.path, item.line, item.operation)))
+    sorted_methods = tuple(sorted(
+        methods, key=lambda item: (item.path, item.line, item.operation, item.key_expression),
+    ))
     _trace("module.architecture.sort_methods.end", module=module_dir)
     _trace("module.architecture.sort_blocking.begin", module=module_dir, count=len(blocking_points))
     sorted_blocking_points = tuple(sorted(
@@ -1039,7 +1046,7 @@ def discover_jpa_methods(
             for invocation in java_parser.walk(declaration):
                 if invocation.type != "method_invocation":
                     continue
-                receiver, operation, _args = java_parser.invocation_parts(invocation, source)
+                receiver, operation, arguments = java_parser.invocation_parts(invocation, source)
                 if receiver is None or receiver.type != "identifier" or operation not in supported:
                     continue
                 receiver_name = java_parser.node_text(source, receiver)
@@ -1066,6 +1073,9 @@ def discover_jpa_methods(
                         operation, entity, receiver_name,
                         java_file.relative_to(module_dir).as_posix(),
                         invocation.start_point.row + 1, owner_name,
+                        java_parser.node_text(source, arguments[0]).strip()
+                        if operation in {"findById", "existsById", "deleteById"}
+                        and arguments else "",
                     ))
     return tuple(sorted(results))
 

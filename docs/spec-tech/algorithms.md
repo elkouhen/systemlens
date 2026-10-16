@@ -147,10 +147,12 @@ without asserting that both happened. See
 ## 8. Data consistency diagnostics
 
 The current detector compares asynchronous writes and synchronous reads on
-shared reachable triggers, then applies resource, key, causal, source-order,
-and visibility evidence. Advanced checks require explicit resource/key and
-concurrency facts. The detector reports potential risks, identified guards or
-guarantees, and insufficient evidence; it does not claim runtime incidents.
+shared reachable triggers, then applies canonical resource/key, causal,
+source-order, and visibility evidence. A shared root proves reachability only;
+cross-flow pairs also require matching causal IDs. Advanced checks require
+explicit resource/key and concurrency facts. The detector reports potential
+risks, identified guards or guarantees, and insufficient evidence; it does not
+claim runtime incidents.
 
 The detailed model below retains the fuller event-order design, pseudocode,
 and acceptance criteria from the detector design. Those sections
@@ -172,13 +174,16 @@ value read earlier. The graph can show a candidate and its evidence; static
 indexing cannot claim that a runtime race occurred.
 
 `src/systemlens/application/flow_consistency.py` implements the classifications
-below when the persisted flow includes the required evidence. Existing source
-indexing still supplies only a subset: action, resource, and a trigger-derived
-branch. It does not yet infer transaction scope, record keys, modified fields,
-value dependencies, isolation, or scheduler concurrency. Such source-indexed
-flows therefore abstain from the advanced detectors. Direct flow manifests can
-carry reviewed evidence for those fields. The graph never treats missing facts
-as proof of safety or concurrency.
+below when the persisted flow includes the required evidence. Source indexing
+supplies action, canonical resource identity, raw key expressions for supported
+`*ById` calls, and a trigger-derived branch. It derives key identity for exact
+Java literals. CodeQL-derived flows also trace unmodified scalar parameters
+through resolved calls and final scalar local aliases. The indexer does not
+resolve mutable aliases, fields, or serialized payload values. It also does not
+infer transaction scope, modified fields, value dependencies, isolation, or
+scheduler concurrency. Source-indexed flows therefore abstain from the advanced
+detectors. Direct flow manifests can carry reviewed evidence for those fields.
+The graph never treats missing facts as proof of safety or concurrency.
 
 > **Why & What - compare event order**
 >
@@ -221,8 +226,9 @@ Each data event contains:
 | `guard` | Version check, conditional update, lock, or other conflict control with its scope |
 | `evidence` | Relative source path, line, method identity, and extraction confidence |
 
-The existing `CodeFlowStep` already has optional `branch`, `resource`, `key`,
-`causal_id`, `expected_version`, `completion`, `query_shape`, and `action` fields.
+`CodeFlowStep` carries optional `branch`, `resource`, `resource_identity`, `key`,
+`key_identity`, `causal_id`, `expected_version`, `completion`, `query_shape`, and
+`action` fields.
 These fields are useful inputs, but they do not currently encode field-level
 dependencies, transaction boundaries, or a complete event-order relation.
 
@@ -236,12 +242,13 @@ name the same recognized guard and its `guard_scope` equals
 `resource:key`. These fields are optional and old persisted flow snapshots
 remain valid.
 
-Resources compare equal only when the index can resolve them to the same data
-identity. Equal entity names in different services do not prove shared storage.
-Different key expressions mean unknown overlap unless alias or value-flow analysis
-proves they resolve to the same key. A query shape such as `point` narrows a
-search but does not identify a record by itself. Unknown resource or key
-information remains visible as uncertainty.
+Resources compare equal only when their canonical identities match. Equal entity
+names in different services do not prove shared storage. Key identity is
+separate from the raw source expression: matching text without canonical key
+identity remains insufficient evidence. Different expressions mean unknown
+overlap until value-flow analysis resolves them to one key. A query shape such
+as `point` narrows a search but does not identify a record by itself. Unknown
+resource or key information remains visible as uncertainty.
 
 ### Order and concurrency evidence
 
@@ -286,9 +293,14 @@ The current implementation does not build the full lifecycle DAG described
 above. A supplied `visibility_before_reads` relation can identify a guarantee
 for a specific read when resource, key, causal, completion, and version evidence
 also match. The relation is not inferred from source order or reachability.
-Other explicit per-access concurrency and lifecycle evidence is used only for
-conservative candidate classifications. Cyclic flow records are excluded from
-advanced concurrency pairing because they lack bounded execution occurrences.
+The async-write/sync-read detector classifies a pair as a possible risk only
+when `request_before_reads` explicitly links the write to the read. A shared
+root, matching causal ID, or source-line order alone does not establish that the
+request precedes the read. Without the relation, the detector reports
+insufficient evidence. Other explicit per-access concurrency and lifecycle
+evidence is used only for conservative candidate classifications. Cyclic flow
+records are excluded from advanced concurrency pairing because they lack
+bounded execution occurrences.
 
 #### Evidence states
 
@@ -315,14 +327,14 @@ The required evidence is:
 1. A source-backed asynchronous send or dispatch event.
 2. A reachable receiver operation classified as a write or update, or an explicit
    write annotation linked to that send.
-3. A reachable synchronous read from the same selected root or a causally linked root.
+3. A reachable synchronous read with a matching causal ID.
 4. Matching resource identity and either a matching record key or a supported query-overlap result.
 5. No established visibility barrier that orders write visibility before the read.
 
-The send-to-write link needs more than a shared topic name. Prefer a propagated
-`causal_id`, message key, or source-backed payload field that maps to the data
-key. If the link comes only from a topic and reachable handlers, report a
-lower-confidence candidate with the missing correlation shown.
+The current detector requires matching causal IDs for cross-flow pairs. A shared
+topic and reachable handlers establish reachability, but they do not establish
+that the write and read belong to one execution. The detector reports
+`insufficient_evidence` when causal compatibility is unknown.
 
 Algorithm:
 
@@ -579,8 +591,7 @@ across rendering while distinguishing repeated calls to the same source site.
 - A send, receiver write, and matching synchronous read produce one linked
   candidate only when causal and resource evidence support the relation.
 - A proven visibility barrier suppresses the stale-read candidate and records the barrier used.
-- A topic match without record-key or payload correlation produces
-  lower-confidence or insufficient evidence, never a high-confidence pairing.
+- A topic match without matching causal IDs produces `insufficient_evidence`.
 - Two disjoint keys or resources do not produce a conflict candidate.
 - Reachable writes without branch or scheduler evidence do not become concurrent-write findings.
 - A read/write pair with possible overlap is labelled as an interaction unless a

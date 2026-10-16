@@ -2,7 +2,6 @@
 
 from collections import defaultdict
 from dataclasses import asdict, dataclass, replace
-from itertools import chain
 from typing import Iterable, Mapping
 
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
@@ -47,6 +46,8 @@ class FlowConsistencyDiagnostic:
     order_evidence: str | None = None
     write_dependency_step: int | None = None
     read_dependency_step: int | None = None
+    resource_identity: str | None = None
+    key_identity: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -61,7 +62,7 @@ def _is_sync(step: CodeFlowStep) -> bool:
 
 
 def _resource(step: CodeFlowStep) -> str | None:
-    return step.resource or step.name or None
+    return step.resource or (step.name if step.name and step.name != "<dynamic>" else None)
 
 
 _CONCURRENCY_EVIDENCE = {"parallel", "independent_handlers", "reentrant"}
@@ -91,11 +92,18 @@ def _overlap(write: CodeFlowStep, read: CodeFlowStep) -> tuple[bool, str | None]
     write_resource, read_resource = _resource(write), _resource(read)
     if not write_resource or not read_resource:
         return False, "resource non identifié"
-    if write_resource != read_resource:
-        return False, None
+    if write.resource_identity and read.resource_identity:
+        if write.resource_identity != read.resource_identity:
+            return False, None
+    else:
+        return True, "identité canonique de la ressource non établie"
     if write.key and read.key:
+        if write.key_identity and read.key_identity:
+            if write.key_identity == read.key_identity:
+                return True, None
+            return False, None
         if write.key == read.key:
-            return True, None
+            return True, "identité canonique de la clé non établie"
         return False, "correspondance entre les expressions de clé non établie"
     if write.query_shape and read.query_shape:
         if write.query_shape in {"point", "upsert"} and read.query_shape == "point":
@@ -127,6 +135,7 @@ def _diagnose_pair(
     write_path_endpoint_ids: tuple[str, ...] = (),
     read_path_endpoint_ids: tuple[str, ...] = (),
     visibility_precedes_read: bool = False,
+    request_precedes_read: bool = False,
 ) -> FlowConsistencyDiagnostic:
     overlaps, limitation = _overlap(write, read)
     if not overlaps and limitation is None:
@@ -143,6 +152,9 @@ def _diagnose_pair(
     ):
         classification, severity, confidence = "insufficient_evidence", "P1", "low"
         limitation = "visibilité antérieure au début de la lecture non prouvée"
+    elif not request_precedes_read:
+        classification, severity, confidence = "insufficient_evidence", "P1", "low"
+        limitation = "demande asynchrone antérieure à la lecture non prouvée"
     else:
         classification, severity, confidence = "potential_risk", "P1", "medium"
         limitation = write.completion or "aucune garantie de visibilité attendue"
@@ -180,7 +192,16 @@ def _diagnose_pair(
         read_fields=read.fields,
         guard=write.guard if write.guard == read.guard else None,
         guard_scope=write.guard_scope if write.guard_scope == read.guard_scope else None,
-        order_evidence=causal_evidence,
+        order_evidence=(
+            "visibilité de l'écriture avant la lecture"
+            if visibility_precedes_read and write.completion == "visible"
+            else "demande asynchrone avant la lecture" if request_precedes_read else None
+        ),
+        resource_identity=write.resource_identity,
+        key_identity=(
+            write.key_identity
+            if write.key_identity and write.key_identity == read.key_identity else None
+        ),
     )
 
 
@@ -204,40 +225,35 @@ def diagnose_flow_consistency_snapshot(
         if step.kind == "data_read" and _is_sync(step)
     ]
     reads_by_resource: dict[str, list[tuple[CodeFlow, CodeFlowStep]]] = defaultdict(list)
+    reads_by_resource_identity: dict[str, list[tuple[CodeFlow, CodeFlowStep]]] = defaultdict(list)
     unknown_resource_reads: list[tuple[CodeFlow, CodeFlowStep]] = []
+    unknown_resource_identity_reads: list[tuple[CodeFlow, CodeFlowStep]] = []
     for read_flow, read in reads:
         resource = _resource(read)
         if resource is None:
             unknown_resource_reads.append((read_flow, read))
         else:
             reads_by_resource[resource].append((read_flow, read))
+        if read.resource_identity:
+            reads_by_resource_identity[read.resource_identity].append((read_flow, read))
+        else:
+            unknown_resource_identity_reads.append((read_flow, read))
 
     def candidate_reads(write: CodeFlowStep) -> Iterable[tuple[CodeFlow, CodeFlowStep]]:
         resource = _resource(write)
-        if resource is None:
-            return reads
-        return chain(reads_by_resource.get(resource, ()), unknown_resource_reads)
+        candidates = list(unknown_resource_reads)
+        if resource is None or not write.resource_identity:
+            candidates.extend(reads)
+        else:
+            candidates.extend(reads_by_resource.get(resource, ()))
+            candidates.extend(unknown_resource_identity_reads)
+            candidates.extend(reads_by_resource_identity.get(write.resource_identity, ()))
+        return dict.fromkeys(candidates)
 
     roots_by_flow: dict[str, set[str]] = defaultdict(set)
     for root, reachable in (causal_reachability or {}).items():
         for flow_id in reachable:
             roots_by_flow[flow_id].add(root)
-    exact_matches_by_root: dict[
-        str, set[tuple[tuple[str, int], tuple[str, int]]]
-    ] = defaultdict(set)
-    for write_flow, write in writes:
-        for read_flow, read in candidate_reads(write):
-            overlaps, limitation = _overlap(write, read)
-            if not overlaps or limitation is not None:
-                continue
-            roots = (
-                {write_flow.id} if write_flow.id == read_flow.id
-                else roots_by_flow[write_flow.id] & roots_by_flow[read_flow.id]
-            )
-            for root in roots:
-                exact_matches_by_root[root].add((
-                    (write_flow.id, write.order), (read_flow.id, read.order),
-                ))
     flow_by_id = {flow.id: flow for flow in flows}
     diagnostics: list[FlowConsistencyDiagnostic] = []
     for write_flow, write in writes:
@@ -249,27 +265,24 @@ def diagnose_flow_consistency_snapshot(
                 [write_flow.id] if write_flow.id == read_flow.id
                 else sorted(roots_by_flow[write_flow.id] & roots_by_flow[read_flow.id])
             )
-            if overlap_limitation == "correspondance entre les expressions de clé non établie":
-                write_identity = (write_flow.id, write.order)
-                read_identity = (read_flow.id, read.order)
-                if any(
-                    (exact_write == write_identity or exact_read == read_identity)
-                    for root in candidate_roots
-                    for exact_write, exact_read in exact_matches_by_root[root]
-                ):
-                    continue
             if write_flow.id == read_flow.id:
                 causal, evidence = _causal(write_flow, write, read)
+                scenario_limitation = (
+                    None if write.causal_id and write.causal_id == read.causal_id
+                    else "compatibilité du scénario d'exécution non établie"
+                )
                 diagnostics.append(_diagnose_pair(
                     write_flow, write, read_flow, read, write_flow.id, evidence,
-                    "lecture située avant l'écriture dans le flux" if read.order < write.order
-                    else None if causal else "lien causal non prouvé",
+                    scenario_limitation or (None if causal else "lien causal non prouvé"),
                     visibility_precedes_read=(
                         _event_id(read_flow, read) in write.visibility_before_reads
                     ),
+                    request_precedes_read=(
+                        _event_id(read_flow, read) in write.request_before_reads
+                    ),
                 ))
                 continue
-            for display_root in roots:
+            for display_root in candidate_roots:
                 if write.causal_id and read.causal_id and write.causal_id != read.causal_id:
                     evidence = "déclencheur commun, identifiants causaux différents"
                     causal_limitation = "identifiants causaux incompatibles"
@@ -277,28 +290,17 @@ def diagnose_flow_consistency_snapshot(
                     evidence = "identifiant causal partagé sur deux branches atteignables"
                     causal_limitation = None
                 else:
-                    evidence = "déclencheur commun et chemins persistés"
-                    causal_limitation = None
-                root_flow = flow_by_id.get(display_root)
-                write_path = (causal_paths or {}).get(display_root, {}).get(write_flow.id, ())
-                if root_flow is not None and write_path and causal_limitation is None:
-                    publication = next((step for step in root_flow.steps if (
-                        step.endpoint_id == write_path[0]
-                        and step.kind in {"message_publish", "http_call"}
-                    )), None)
-                    read_site = next((step for step in read_flow.steps[1:] if (
-                        step.kind in {"method_call", "data_read"}
-                    )), None)
-                    if publication is not None and read_site is not None and (
-                        read_site.path == publication.path and
-                        read_site.start_line < publication.start_line
-                    ):
-                        causal_limitation = "lecture située avant la publication dans la méthode d'entrée"
+                    evidence = "racine commune; compatibilité du scénario inconnue"
+                    causal_limitation = "compatibilité du scénario d'exécution non établie"
+                request_precedes_read = (
+                    _event_id(read_flow, read) in write.request_before_reads
+                )
                 diagnostics.append(_diagnose_pair(
                     write_flow, write, read_flow, read, display_root, evidence, causal_limitation,
                     (causal_paths or {}).get(display_root, {}).get(write_flow.id, ()),
                     (causal_paths or {}).get(display_root, {}).get(read_flow.id, ()),
                     _event_id(read_flow, read) in write.visibility_before_reads,
+                    request_precedes_read,
                 ))
 
     # Advanced detectors require exact identity and explicit concurrency facts.

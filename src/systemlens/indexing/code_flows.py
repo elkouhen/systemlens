@@ -25,9 +25,10 @@ from systemlens.domain.module_inventory import DiscoveredModule, JpaMethod, Mong
 from systemlens.domain.mongo_operations import mongo_action, mongo_facets
 from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
 from systemlens.indexing.java_symbols import JavaSymbols
+from systemlens.indexing.java_value_origins import is_java_literal, trace_scalar_key_identity
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v32-application-boundaries"
+CODE_FLOW_SIGNATURE = "code-flow-v35-call-key-propagation"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
@@ -255,10 +256,21 @@ def _data_access_branch(trigger_kind: str, *, write: bool) -> str | None:
     return None
 
 
+def _literal_key_identity(resource_identity: str | None, expression: str | None) -> str | None:
+    """Identify only an exact Java literal in a known canonical resource."""
+    if resource_identity is None or expression is None:
+        return None
+    literal = expression.strip()
+    if not is_java_literal(literal):
+        return None
+    return f"{resource_identity}:literal:{literal}"
+
+
 def _mongo_step(
-    method: MongoMethod, path: str, order: int, trigger_kind: str,
+    method: MongoMethod, path: str, order: int, trigger_kind: str, module: str,
 ) -> CodeFlowStep:
     operation = "write" if "write" in mongo_facets(method.operation) else "read"
+    resource_identity = f"mongo:{module}:{method.collection}" if method.collection else None
     return CodeFlowStep(
         order=order,
         kind=f"data_{operation}",
@@ -268,6 +280,10 @@ def _mongo_step(
         end_line=method.evidence.end_line if method.evidence else method.line,
         operation=method.operation,
         action=mongo_action(method.operation),
+        key=method.key_expression or None,
+        resource=method.collection,
+        resource_identity=resource_identity,
+        key_identity=_literal_key_identity(resource_identity, method.key_expression),
         branch=_data_access_branch(trigger_kind, write=operation == "write"),
     )
 
@@ -277,12 +293,16 @@ def _jpa_step(method: JpaMethod, path: str, order: int, module: str, trigger_kin
     action = "read" if read else (
         "delete" if method.operation.startswith("delete") else "create_or_update"
     )
+    resource_identity = f"jpa:{module}:{method.entity}"
     return CodeFlowStep(
         order=order, kind="data_read" if read else "data_write",
         name=method.entity.rsplit(".", 1)[-1], path=path,
         start_line=method.line, end_line=method.line,
         operation=method.operation, action=action,
+        key=method.key_expression or None,
         resource=f"jpa:{module}:{method.entity}",
+        resource_identity=resource_identity,
+        key_identity=_literal_key_identity(resource_identity, method.key_expression),
         branch=_data_access_branch(trigger_kind, write=not read),
     )
 
@@ -432,6 +452,7 @@ def materialize_code_flows(
                         if isinstance(effect, MessageEndpoint)
                         else _mongo_step(
                             effect, path, order, _endpoint_step(trigger, 1).kind,
+                            module_identity(module),
                         )
                         if isinstance(effect, MongoMethod)
                         else _jpa_step(effect, path, order, trigger.module, _endpoint_step(trigger, 1).kind)
@@ -503,7 +524,10 @@ def materialize_code_flows(
                     steps.append(
                         _endpoint_step(effect, order)
                         if isinstance(effect, MessageEndpoint)
-                        else _mongo_step(effect, path, order, scheduled_trigger.kind)
+                        else _mongo_step(
+                            effect, path, order, scheduled_trigger.kind,
+                            module_identity(module),
+                        )
                         if isinstance(effect, MongoMethod)
                         else _jpa_step(effect, path, order, owner_module, scheduled_trigger.kind)
                     )
@@ -1016,7 +1040,9 @@ def materialize_codeql_code_flows(
         method_name = method.qualified_method.rsplit(".", 1)[-1]
         for index in range(len(parts)):
             methods_by_source[(method.module, "/".join(parts[index:]), method_name)].append(method)
-    operations_by_method: dict[str, list[tuple[MongoMethod | JpaMethod, str]]] = defaultdict(list)
+    operations_by_method: dict[
+        str, list[tuple[MongoMethod | JpaMethod, str, str]]
+    ] = defaultdict(list)
     for discovered in modules:
         for operation in tuple[MongoMethod | JpaMethod, ...](
             (*discovered.mongo_methods, *discovered.jpa_methods)
@@ -1034,9 +1060,11 @@ def materialize_codeql_code_flows(
             ]
             if len(candidates) == 1:
                 operation_owner = candidates[0]
-                operations_by_method[operation_owner.id].append((operation, operation_owner.path))
+                operations_by_method[operation_owner.id].append((
+                    operation, operation_owner.path, module_identity(discovered),
+                ))
     for operations in operations_by_method.values():
-        operations.sort(key=lambda item: (item[0].line, item[0].operation, item[1]))
+        operations.sort(key=lambda item: (item[0].line, item[0].operation, item[1], item[2]))
 
     def report_reverse_chain(
         output_method: IntegrationMethod,
@@ -1289,7 +1317,7 @@ def materialize_codeql_code_flows(
 
             while queue:
                 current, route = queue.popleft()
-                for operation, operation_path in operations_by_method.get(current.id, ()):
+                for operation, operation_path, operation_module in operations_by_method.get(current.id, ()):
                     steps = [_endpoint_step(trigger, 1)]
                     for order, (hop, edge, _inferred) in enumerate(route, start=2):
                         steps.append(CodeFlowStep(
@@ -1297,13 +1325,27 @@ def materialize_codeql_code_flows(
                             path=edge.caller_path, start_line=edge.call_line,
                             end_line=edge.call_line,
                         ))
-                    steps.append(
+                    data_step = (
                         _mongo_step(
                             operation, operation_path, len(steps) + 1, steps[0].kind,
+                            operation_module,
                         )
                         if isinstance(operation, MongoMethod) else
-                        _jpa_step(operation, operation_path, len(steps) + 1, entry.module, steps[0].kind)
+                        _jpa_step(
+                            operation, operation_path, len(steps) + 1,
+                            operation_module, steps[0].kind,
+                        )
                     )
+                    traced_key_identity = (
+                        trace_scalar_key_identity(
+                            repo_root, route, entry, current,
+                            operation.key_expression, data_step.resource_identity,
+                        )
+                        if repo_root is not None else None
+                    )
+                    if traced_key_identity:
+                        data_step = replace(data_step, key_identity=traced_key_identity)
+                    steps.append(data_step)
                     possible = any(
                         edge.dispatch_confidence == "possible" or inferred
                         for _hop, edge, inferred in route

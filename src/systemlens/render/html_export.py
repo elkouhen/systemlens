@@ -288,6 +288,8 @@ def render_graph_html(
                     "expected_version": step.expected_version,
                     "completion": step.completion,
                     "query_shape": step.query_shape,
+                    "request_before_reads": list(step.request_before_reads),
+                    "visibility_before_reads": list(step.visibility_before_reads),
                 }
                 for step in flow.steps
                 if include_call_graph_annotations or step.kind not in {"data_read", "data_write"}

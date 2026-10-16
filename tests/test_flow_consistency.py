@@ -29,13 +29,16 @@ def test_async_write_then_causal_sync_read_is_a_potential_risk() -> None:
         CodeFlowStep(1, "message_entry", "orders.created", "Orders.java", 1, 1),
         CodeFlowStep(
             2, "data_write", "orders", "Orders.java", 10, 10,
-            branch="async", resource="orders", key="order-42",
-            expected_version="v2", completion="ack_only",
+            branch="async", resource="orders", resource_identity="db:orders",
+            key="order-42", key_identity="db:orders:42",
+            expected_version="v2", completion="ack_only", causal_id="request-1",
+            request_before_reads=("flow-1:3",),
         ),
         CodeFlowStep(
             3, "data_read", "orders", "Orders.java", 20, 20,
-            branch="sync", resource="orders", key="order-42",
-            expected_version="v2", query_shape="point",
+            branch="sync", resource="orders", resource_identity="db:orders",
+            key="order-42", key_identity="db:orders:42",
+            expected_version="v2", query_shape="point", causal_id="request-1",
         ),
     ))
     assert len(diagnostics) == 1
@@ -60,13 +63,15 @@ def test_matching_visible_version_without_read_order_is_insufficient() -> None:
         CodeFlowStep(1, "message_entry", "orders.created", "Orders.java", 1, 1),
         CodeFlowStep(
             2, "data_write", "orders", "Orders.java", 10, 10,
-            branch="async", resource="orders", key="order-42",
-            expected_version="v2", completion="visible",
+            branch="async", resource="orders", resource_identity="db:orders",
+            key="order-42", key_identity="db:orders:42",
+            expected_version="v2", completion="visible", causal_id="request-1",
         ),
         CodeFlowStep(
             3, "data_read", "orders", "Orders.java", 20, 20,
-            branch="sync", resource="orders", key="order-42",
-            expected_version="v2", query_shape="point",
+            branch="sync", resource="orders", resource_identity="db:orders",
+            key="order-42", key_identity="db:orders:42",
+            expected_version="v2", query_shape="point", causal_id="request-1",
         ),
     ))
     assert diagnostics[0].classification == "insufficient_evidence"
@@ -78,14 +83,16 @@ def test_explicit_visibility_order_for_matching_version_identifies_guarantee() -
         CodeFlowStep(1, "message_entry", "orders.created", "Orders.java", 1, 1),
         CodeFlowStep(
             2, "data_write", "orders", "Orders.java", 10, 10,
-            branch="async", resource="orders", key="order-42",
+            branch="async", resource="orders", resource_identity="db:orders",
+            key="order-42", key_identity="db:orders:42",
             expected_version="v2", completion="visible",
-            visibility_before_reads=("flow-1:3",),
+            visibility_before_reads=("flow-1:3",), causal_id="request-1",
         ),
         CodeFlowStep(
             3, "data_read", "orders", "Orders.java", 20, 20,
-            branch="sync", resource="orders", key="order-42",
-            expected_version="v2", query_shape="point",
+            branch="sync", resource="orders", resource_identity="db:orders",
+            key="order-42", key_identity="db:orders:42",
+            expected_version="v2", query_shape="point", causal_id="request-1",
         ),
     )
 
@@ -112,13 +119,19 @@ def test_distinct_pairs_are_reported_independently() -> None:
         _flow(
             CodeFlowStep(1, "message_entry", "orders.created", "Orders.java", 1, 1),
             CodeFlowStep(2, "data_write", "orders", "Orders.java", 10, 10,
-                         branch="async", resource="orders", key="a"),
+                         branch="async", resource="orders", resource_identity="db:orders",
+                         key="a", key_identity="db:orders:a", causal_id="request-1",
+                         request_before_reads=("flow-1:4",)),
             CodeFlowStep(3, "data_write", "orders", "Orders.java", 11, 11,
-                         branch="async", resource="orders", key="b"),
+                         branch="async", resource="orders", resource_identity="db:orders",
+                         key="b", key_identity="db:orders:b", causal_id="request-1",
+                         request_before_reads=("flow-1:5",)),
             CodeFlowStep(4, "data_read", "orders", "Orders.java", 20, 20,
-                         branch="sync", resource="orders", key="a"),
+                         branch="sync", resource="orders", resource_identity="db:orders",
+                         key="a", key_identity="db:orders:a", causal_id="request-1"),
             CodeFlowStep(5, "data_read", "orders", "Orders.java", 21, 21,
-                         branch="sync", resource="orders", key="b"),
+                         branch="sync", resource="orders", resource_identity="db:orders",
+                         key="b", key_identity="db:orders:b", causal_id="request-1"),
         )
     ])
     assert [(item.write_step, item.read_step) for item in diagnostics] == [(2, 4), (3, 5)]
@@ -127,12 +140,15 @@ def test_distinct_pairs_are_reported_independently() -> None:
 def test_resource_index_keeps_unknown_resources_and_excludes_unrelated_pairs() -> None:
     diagnostics = diagnose_flow_consistency(_flow(
         CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1),
-        CodeFlowStep(2, "data_write", "orders", "Orders.java", 2, 2,
-                     branch="async", resource="orders", key="id"),
+        CodeFlowStep(2, "data_write", "Orders", "Orders.java", 2, 2,
+                     branch="async", resource="Orders", resource_identity="db:orders",
+                     key="id", key_identity="db:orders:id", causal_id="request-1",
+                     request_before_reads=("flow-1:4",)),
         CodeFlowStep(3, "data_read", "products", "Orders.java", 3, 3,
                      branch="sync", resource="products", key="id"),
         CodeFlowStep(4, "data_read", "orders", "Orders.java", 4, 4,
-                     branch="sync", resource="orders", key="id"),
+                     branch="sync", resource="orders", resource_identity="db:orders",
+                     key="id", key_identity="db:orders:id", causal_id="request-1"),
         CodeFlowStep(5, "data_read", "", "Orders.java", 5, 5,
                      branch="sync", key="id"),
     ))
@@ -144,12 +160,15 @@ def test_resource_index_keeps_unknown_resources_and_excludes_unrelated_pairs() -
 def test_accesses_in_distinct_handlers_need_a_shared_persisted_root() -> None:
     write = _flow(CodeFlowStep(
         1, "data_write", "orders", "Writer.java", 10, 10,
-        endpoint_id="writer-in", branch="async", resource="orders", key="request.orderId",
+        endpoint_id="writer-in", branch="async", resource="orders", resource_identity="db:orders",
+        key="request.orderId", key_identity="db:orders:order-id",
         causal_id="request-id", completion="ack_only",
+        request_before_reads=("reader:1",),
     ))
     read = _flow(CodeFlowStep(
         1, "data_read", "orders", "Reader.java", 20, 20,
-        endpoint_id="reader-in", branch="sync", resource="orders", key="request.orderId",
+        endpoint_id="reader-in", branch="sync", resource="orders", resource_identity="db:orders",
+        key="request.orderId", key_identity="db:orders:order-id",
         causal_id="request-id",
     ))
     write, read = replace(write, id="writer"), replace(read, id="reader")
@@ -171,30 +190,34 @@ def test_accesses_in_distinct_handlers_need_a_shared_persisted_root() -> None:
     assert diagnostic.classification == "potential_risk"
 
 
-def test_exact_pair_in_one_root_does_not_hide_uncertain_pair_in_another() -> None:
+def test_exact_pair_does_not_hide_uncertain_pairs_in_shared_roots() -> None:
     write = replace(_flow(CodeFlowStep(
         1, "data_write", "orders", "Writer.java", 10, 10,
-        branch="async", resource="orders", key="request.orderId",
+        branch="async", resource="orders", resource_identity="db:orders",
+        key="request.orderId", key_identity="db:orders:order-id", causal_id="request-1",
+        request_before_reads=("exact-reader:1", "uncertain-reader:1"),
     )), id="writer")
     exact_read = replace(_flow(CodeFlowStep(
         1, "data_read", "orders", "Reader.java", 20, 20,
-        branch="sync", resource="orders", key="request.orderId",
+        branch="sync", resource="orders", resource_identity="db:orders",
+        key="request.orderId", key_identity="db:orders:order-id", causal_id="request-1",
     )), id="exact-reader")
     uncertain_read = replace(_flow(CodeFlowStep(
         1, "data_read", "orders", "OtherReader.java", 30, 30,
-        branch="sync", resource="orders", key="message.orderId",
+        branch="sync", resource="orders", key="message.orderId", causal_id="request-1",
     )), id="uncertain-reader")
 
     diagnostics = diagnose_flow_consistency_snapshot(
         [write, exact_read, uncertain_read],
         {
-            "exact-root": {"writer", "exact-reader"},
+            "exact-root": {"writer", "exact-reader", "uncertain-reader"},
             "uncertain-root": {"writer", "uncertain-reader"},
         },
     )
 
     assert [(item.flow_id, item.classification) for item in diagnostics] == [
         ("exact-root", "potential_risk"),
+        ("exact-root", "insufficient_evidence"),
         ("uncertain-root", "insufficient_evidence"),
     ]
 
@@ -202,11 +225,15 @@ def test_exact_pair_in_one_root_does_not_hide_uncertain_pair_in_another() -> Non
 def test_pair_is_reported_on_every_reachable_call_root() -> None:
     write = replace(_flow(CodeFlowStep(
         1, "data_write", "orders", "Writer.java", 10, 10,
-        branch="async", resource="orders", key="order-1",
+        branch="async", resource="orders", resource_identity="db:orders",
+        key="order-1", key_identity="db:orders:1",
+        causal_id="request-1", request_before_reads=("reader:1",),
     )), id="writer")
     read = replace(_flow(CodeFlowStep(
         1, "data_read", "orders", "Reader.java", 20, 20,
-        branch="sync", resource="orders", key="order-1",
+        branch="sync", resource="orders", resource_identity="db:orders",
+        key="order-1", key_identity="db:orders:1",
+        causal_id="request-1",
     )), id="reader")
     diagnostics = diagnose_flow_consistency_snapshot(
         [write, read], {"root-a": {"writer", "reader"}, "root-b": {"writer", "reader"}},
@@ -219,11 +246,13 @@ def test_pair_is_reported_on_every_reachable_call_root() -> None:
 def test_conflicting_causal_ids_on_reachable_branches_are_insufficient() -> None:
     write = replace(_flow(CodeFlowStep(
         1, "data_write", "orders", "Writer.java", 10, 10,
-        branch="async", resource="orders", key="order-1", causal_id="request-a",
+        branch="async", resource="orders", resource_identity="db:orders",
+        key="order-1", key_identity="db:orders:1", causal_id="request-a",
     )), id="writer")
     read = replace(_flow(CodeFlowStep(
         1, "data_read", "orders", "Reader.java", 20, 20,
-        branch="sync", resource="orders", key="order-1", causal_id="request-b",
+        branch="sync", resource="orders", resource_identity="db:orders",
+        key="order-1", key_identity="db:orders:1", causal_id="request-b",
     )), id="reader")
     diagnostic, = diagnose_flow_consistency_snapshot(
         [write, read], {"checkout-root": {"writer", "reader"}},
@@ -245,14 +274,44 @@ def test_different_key_expressions_are_reported_as_unknown_overlap() -> None:
     assert diagnostics[0].key is None
 
 
+def test_matching_source_text_without_canonical_identity_is_insufficient() -> None:
+    diagnostic, = diagnose_flow_consistency(_flow(
+        CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1),
+        CodeFlowStep(2, "data_write", "orders", "Orders.java", 10, 10,
+                     branch="async", resource="orders", resource_identity="db-a:orders",
+                     key="id", causal_id="request-1"),
+        CodeFlowStep(3, "data_read", "orders", "Orders.java", 20, 20,
+                     branch="sync", resource="orders", resource_identity="db-a:orders",
+                     key="id", causal_id="request-1"),
+    ))
+
+    assert diagnostic.classification == "insufficient_evidence"
+    assert diagnostic.key_identity is None
+
+
+def test_same_resource_and_key_labels_in_distinct_scopes_do_not_pair() -> None:
+    assert diagnose_flow_consistency(_flow(
+        CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1),
+        CodeFlowStep(2, "data_write", "orders", "Writer.java", 10, 10,
+                     branch="async", resource="orders", resource_identity="db-a:orders",
+                     key="id", key_identity="db-a:orders:id"),
+        CodeFlowStep(3, "data_read", "orders", "Reader.java", 20, 20,
+                     branch="sync", resource="orders", resource_identity="db-b:orders",
+                     key="id", key_identity="db-b:orders:id"),
+    )) == []
+
+
 def test_commit_without_matching_visible_version_is_not_a_guarantee() -> None:
     diagnostics = diagnose_flow_consistency(_flow(
         CodeFlowStep(1, "message_entry", "orders.updated", "Orders.java", 1, 1),
         CodeFlowStep(2, "data_write", "orders", "Writer.java", 10, 10,
-                     branch="async", resource="orders", key="order-1",
-                     expected_version="v2", completion="committed"),
+                     branch="async", resource="orders", resource_identity="db:orders",
+                     key="order-1", key_identity="db:orders:1",
+                     expected_version="v2", completion="committed", causal_id="request-1",
+                     request_before_reads=("flow-1:3",)),
         CodeFlowStep(3, "data_read", "orders", "Reader.java", 20, 20,
-                     branch="sync", resource="orders", key="order-1"),
+                     branch="sync", resource="orders", resource_identity="db:orders",
+                     key="order-1", key_identity="db:orders:1", causal_id="request-1"),
     ))
     assert diagnostics[0].classification == "potential_risk"
 

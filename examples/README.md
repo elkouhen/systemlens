@@ -16,6 +16,9 @@ systemlens import-facts /path/to/systemlens/examples/async-write-sync-read-facts
 The `expected_diagnostics` fields are fixture expectations for tests and review;
 they are not runtime observations. Source paths are deliberately relative and
 point to illustrative locations only.
+The risk examples provide `request_before_reads` evidence for each paired read.
+This relation establishes that the asynchronous request came first; it does not
+establish when the write became visible.
 
 For a larger demonstration, `async-write-sync-read-complex-facts.json` contains
 five services, 10 HTTP routes, 10 Kafka topics with producer and consumer arcs,

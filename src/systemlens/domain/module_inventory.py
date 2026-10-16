@@ -61,6 +61,7 @@ class MongoMethod:
     collection: str | None = None
     evidence: "SourceEvidence | None" = None
     owner_method: str | None = None
+    key_expression: str = ""
 
 
 @dataclass(frozen=True, order=True)
@@ -103,6 +104,7 @@ class JpaMethod:
     path: str
     line: int
     owner_method: str
+    key_expression: str = ""
 
 
 @dataclass(frozen=True, order=True)

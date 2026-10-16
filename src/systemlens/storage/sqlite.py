@@ -982,6 +982,7 @@ class Store:
                             "fields": tuple(step.get("fields", ())),
                             "value_dependencies": tuple(step.get("value_dependencies", ())),
                             "visibility_before_reads": tuple(step.get("visibility_before_reads", ())),
+                            "request_before_reads": tuple(step.get("request_before_reads", ())),
                         }
                     ) for step in json.loads(row["steps"])
                 ),

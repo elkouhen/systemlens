@@ -50,6 +50,11 @@ class CodeFlowStep:
     freshness_required: bool | None = None
     # Stable event IDs for reads proven to start after this write is visible.
     visibility_before_reads: tuple[str, ...] = ()
+    # Stable event IDs for reads proven to start after the async request.
+    request_before_reads: tuple[str, ...] = ()
+    # Canonical identities are separate from source expressions shown to users.
+    resource_identity: str | None = None
+    key_identity: str | None = None
 
 
 @dataclass(frozen=True)

@@ -144,3 +144,32 @@ def test_direct_flow_manifest_rejects_invalid_visibility_order(tmp_path):
 
     with pytest.raises(AiGraphError, match="visibility_before_reads"):
         load_direct_flow_manifest(path)
+
+
+def test_direct_flow_manifest_rejects_visibility_target_that_is_not_a_read(tmp_path):
+    path = tmp_path / "flows.json"
+    path.write_text(json.dumps({
+        "format": "systemlens-ai-graph-v1",
+        "flows": [
+            {
+                "id": "writer-flow", "module": "orders", "method": "Orders.write",
+                "path": "src/Orders.java", "start_line": 1,
+                "steps": [{
+                    "order": 1, "kind": "data_write", "name": "orders",
+                    "path": "src/Orders.java", "start_line": 5,
+                    "visibility_before_reads": ["reader-flow:2"],
+                }],
+            },
+            {
+                "id": "reader-flow", "module": "orders", "method": "Orders.publish",
+                "path": "src/Orders.java", "start_line": 10,
+                "steps": [{
+                    "order": 2, "kind": "message_publish", "name": "publish",
+                    "path": "src/Orders.java", "start_line": 11,
+                }],
+            },
+        ],
+    }), encoding="utf-8")
+
+    with pytest.raises(AiGraphError, match="n'est pas une lecture"):
+        load_direct_flow_manifest(path)

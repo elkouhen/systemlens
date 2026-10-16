@@ -894,7 +894,8 @@ def test_export_flow_diagnostic_retains_cross_handler_causal_paths() -> None:
             steps=(
                 CodeFlowStep(1, "message_entry", "stock.command", "DomainInventory.java", 1, 1, write_in.id),
                 CodeFlowStep(2, "data_write", "stock", "DomainInventory.java", 2, 2, write_in.id,
-                             branch="async", resource="stock", key="command.sku", causal_id="request-1"),
+                             branch="async", resource="stock", resource_identity="postgresql:domain-inventory:stock",
+                             key="command.sku", key_identity="postgresql:stock:sku", causal_id="request-1"),
             ),
         ),
         CodeFlow(
@@ -913,7 +914,8 @@ def test_export_flow_diagnostic_retains_cross_handler_causal_paths() -> None:
             steps=(
                 CodeFlowStep(1, "http_entry", "GET /stock", "DomainInventory.java", 8, 8, read_in.id),
                 CodeFlowStep(2, "data_read", "stock", "DomainInventory.java", 9, 9, read_in.id,
-                             branch="sync", resource="stock", key="command.sku", causal_id="request-1"),
+                             branch="sync", resource="stock", resource_identity="postgresql:domain-inventory:stock",
+                             key="command.sku", key_identity="postgresql:stock:sku", causal_id="request-1"),
             ),
         ),
     ]
@@ -944,6 +946,8 @@ def test_export_flow_diagnostic_retains_cross_handler_causal_paths() -> None:
         "module": "domain-inventory", "trigger_endpoint_id": "read-in",
         "path": "DomainInventory.java", "line": 9, "action": None,
     }
+    assert diagnostic["resource_identity"] == "postgresql:domain-inventory:stock"
+    assert diagnostic["key_identity"] == "postgresql:stock:sku"
     assert "shipping-out" in diagnostic["sync_path_endpoint_ids"]
     assert "shipping-in" in diagnostic["sync_path_endpoint_ids"]
 
@@ -1013,7 +1017,7 @@ def test_call_graph_enriches_data_siblings_and_pairs_async_write_with_sync_read(
         ("read", "read"), ("read-second", "read"), ("write", "update"),
     }
     assert not any(item["flow_id"] == "unrelated" for item in accesses)
-    assert any(item["flow_id"] == "publish" and item["classification"] == "potential_risk"
+    assert any(item["flow_id"] == "publish" and item["classification"] == "insufficient_evidence"
                for item in data["flow_diagnostics"])
 
 

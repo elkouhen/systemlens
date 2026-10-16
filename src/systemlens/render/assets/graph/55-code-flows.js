@@ -819,7 +819,22 @@
           lines.push(`OUT ${outputText}${outputs.length > 3 ? " …" : ""}`);
         }
         diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, side }) => {
+          const classification = ({
+            potential_risk: "Risque possible",
+            guarantee_identified: "Garantie identifiée",
+            insufficient_evidence: "Preuves insuffisantes",
+          })[diagnostic.classification] || diagnostic.classification || "Diagnostic";
+          lines.push(`Diagnostic · ${classification}`);
+          if (diagnostic.resource_identity) lines.push(`Identité ressource · ${diagnostic.resource_identity}`);
+          else lines.push("Identité ressource · non établie");
           if (diagnostic.key) lines.push(`Clé · ${diagnostic.key}`);
+          if (diagnostic.key_identity) lines.push(`Identité clé · ${diagnostic.key_identity}`);
+          else if (diagnostic.key) lines.push("Identité clé · non établie");
+          if (diagnostic.causal_evidence) lines.push(`Lien causal · ${diagnostic.causal_evidence}`);
+          if (diagnostic.order_evidence && diagnostic.order_evidence !== diagnostic.causal_evidence) {
+            lines.push(`Ordre · ${diagnostic.order_evidence}`);
+          }
+          if (diagnostic.limitation) lines.push(`Limite · ${diagnostic.limitation}`);
           if (diagnostic[`${side}_phase`]) lines.push(`Phase · ${diagnostic[`${side}_phase`]}`);
           if (diagnostic[`${side}_transaction_id`]) lines.push(`Transaction · ${diagnostic[`${side}_transaction_id`]}`);
           if (diagnostic[`${side}_fields`]?.length) lines.push(`Champs · ${diagnostic[`${side}_fields`].join(", ")}`);

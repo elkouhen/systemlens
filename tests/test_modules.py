@@ -589,6 +589,7 @@ interface OrderRepository extends MongoRepository<Order, String> {}
         ("find", "mongoTemplate", "orders_archive"),
         ("findById", "orderRepository", "orders"),
     ]
+    assert next(item for item in indexed.mongo_methods if item.operation == "findById").key_expression == '"id"'
     assert {item.owner_method for item in indexed.mongo_methods} == {"save"}
     assert indexed.openapi_files == ("src/main/resources/openapi.yaml",)
     proof = indexed.mongo_methods[0].evidence
@@ -1169,6 +1170,7 @@ def test_jpa_calls_require_typed_spring_data_repository(tmp_path: Path) -> None:
         ("findById", "example.Product", "load"),
         ("save", "example.Product", "store"),
     ]
+    assert methods[0].key_expression == '"a"'
 
 
 def test_index_repo_materializes_modules_snapshot(

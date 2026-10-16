@@ -431,14 +431,20 @@ def load_direct_flow_manifest(
                 raise AiGraphError(f"flows[{index}].steps[{step_index}].concurrency est invalide.")
             for optional_text in (
                 "transaction_id", "guard", "guard_scope", "isolation",
+                "resource_identity", "key_identity",
             ):
                 if step.get(optional_text) is not None and not isinstance(step[optional_text], str):
                     raise AiGraphError(
                         f"flows[{index}].steps[{step_index}].{optional_text} doit être une chaîne."
                     )
+                if step.get(optional_text) == "":
+                    raise AiGraphError(
+                        f"flows[{index}].steps[{step_index}].{optional_text} ne peut pas être vide."
+                    )
             fields = step.get("fields", [])
             dependencies = step.get("value_dependencies", [])
             visibility_before_reads = step.get("visibility_before_reads", [])
+            request_before_reads = step.get("request_before_reads", [])
             if not isinstance(fields, list) or not all(isinstance(value, str) for value in fields):
                 raise AiGraphError(f"flows[{index}].steps[{step_index}].fields doit être une liste de chaînes.")
             if not isinstance(dependencies, list) or not all(isinstance(value, str) for value in dependencies):
@@ -450,6 +456,13 @@ def load_direct_flow_manifest(
             ):
                 raise AiGraphError(
                     f"flows[{index}].steps[{step_index}].visibility_before_reads doit être une liste de chaînes non vides."
+                )
+            if not isinstance(request_before_reads, list) or not all(
+                isinstance(value, str) and value for value in request_before_reads
+            ):
+                raise AiGraphError(
+                    f"flows[{index}].steps[{step_index}].request_before_reads "
+                    "doit être une liste de chaînes non vides."
                 )
             freshness_required = step.get("freshness_required")
             if freshness_required is not None and not isinstance(freshness_required, bool):
@@ -481,6 +494,15 @@ def load_direct_flow_manifest(
                 isolation=step.get("isolation") if isinstance(step.get("isolation"), str) else None,
                 freshness_required=freshness_required,
                 visibility_before_reads=tuple(visibility_before_reads),
+                request_before_reads=tuple(request_before_reads),
+                resource_identity=(
+                    step.get("resource_identity")
+                    if isinstance(step.get("resource_identity"), str) else None
+                ),
+                key_identity=(
+                    step.get("key_identity")
+                    if isinstance(step.get("key_identity"), str) else None
+                ),
             ))
         flows.append(CodeFlow(
             id=flow_id, module=module, method=method, path=flow_path,
@@ -493,6 +515,33 @@ def load_direct_flow_manifest(
             alternative_count=int(raw.get("alternative_count", 1)),
         ))
         flow_ids.add(flow_id)
+    steps_by_event_id = {
+        f"{flow.id}:{step.order}": step
+        for flow in flows for step in flow.steps
+    }
+    for flow in flows:
+        for step in flow.steps:
+            for relation_name, event_ids in (
+                ("visibility_before_reads", step.visibility_before_reads),
+                ("request_before_reads", step.request_before_reads),
+            ):
+                if not event_ids:
+                    continue
+                if step.kind != "data_write":
+                    raise AiGraphError(
+                        f"flows[{flow.id}].steps[{step.order}].{relation_name} "
+                        "n'est valide que pour une écriture."
+                    )
+                for event_id in event_ids:
+                    target = steps_by_event_id.get(event_id)
+                    if target is None:
+                        # Partial manifests can refer to a read in another imported snapshot.
+                        continue
+                    if target.kind != "data_read":
+                        raise AiGraphError(
+                            f"flows[{flow.id}].steps[{step.order}].{relation_name} "
+                            f"référence un événement qui n'est pas une lecture: {event_id}."
+                        )
     return endpoints, flows
 
 
