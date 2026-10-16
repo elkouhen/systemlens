@@ -1171,6 +1171,7 @@
       });
       const portAnchorPoint = (occurrence, endpointId, direction) => {
         const node = nodeByOccurrence.get(occurrence);
+        const canvasScale = Math.max(.001, scale * zoom);
         const anchor = [...(node?.querySelectorAll(".graph-node-port-reference") || [])]
           .find(port => port.dataset.direction === direction
             && port.dataset.endpointId === String(endpointId || ""));
@@ -1181,10 +1182,13 @@
             y: occurrence.y + cardHeight / 2,
           };
         }
+        const nodeBounds = node.getBoundingClientRect();
+        const portBounds = anchor.getBoundingClientRect();
         return {
-          x: occurrence.x + anchor.offsetLeft
-            + (direction === "out" ? anchor.offsetWidth : 0),
-          y: occurrence.y + anchor.offsetTop + anchor.offsetHeight / 2,
+          // Use the rendered ellipse tip so the arc visibly leaves its outer edge.
+          x: occurrence.x + ((direction === "out" ? portBounds.right : portBounds.left)
+            - nodeBounds.left) / canvasScale,
+          y: occurrence.y + (portBounds.top + portBounds.height / 2 - nodeBounds.top) / canvasScale,
         };
       };
       allOccurrences.forEach(occurrence => {
