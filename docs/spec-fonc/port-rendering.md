@@ -34,10 +34,14 @@ labels within one microservice may share one unresolved topic node, but each
 endpoint relation remains visible. The topic uses the same visual label as a
 concrete topic.
 
+In the call tree, referenced ports appear as small unlabelled markers. Their
+position on the left or right edge of a service card conveys direction; hovering
+reveals the port identity and direction.
+
 Hovering a port displays its identifier, direction, protocol endpoint, statically
-inferred Java parameter/message type when known, source-relative evidence path and
-line, associated Java method and, for a resolved REST call, its resolved target;
-an external caller is never presented as an input's output. Arc tooltips carry
+inferred Java parameter/message type when known, source-relative evidence path
+and line, associated Java method and, for a resolved REST call, its resolved
+target; an external caller is never presented as an input's output. Arc tooltips carry
 every mapped local output (`O<n>`) and the source/target services; their `Port IN`
 and `Port OUT` headings identify the direction, so the topic or route is shown
 only once. Port tooltips remain limited to the endpoint itself. The tooltip does

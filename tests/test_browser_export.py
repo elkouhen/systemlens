@@ -101,6 +101,9 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
         assert "OUT " not in tooltip
         assert "ProductEntity" not in tooltip
         page.locator("#graph-call-tree .graph-node-port-reference.is-in").first.hover()
+        assert page.locator(
+            "#graph-call-tree .graph-node-port-reference.is-in"
+        ).first.inner_text() == ""
         assert "Port IN" in page.locator(
             "#graph-flow-tooltips .graph-port-tooltip"
         ).inner_text()

@@ -1033,7 +1033,6 @@
             anchor.className = `graph-node-port-reference is-${direction} is-${port.protocol}`;
             anchor.dataset.endpointId = port.endpointId || "";
             anchor.dataset.direction = direction;
-            anchor.textContent = direction === "in" ? "IN" : "OUT";
             anchor.title = `${direction === "in" ? "Port d’entrée" : "Port de sortie"} · ${port.label}`;
             anchor.style.setProperty(
               "--port-offset",
