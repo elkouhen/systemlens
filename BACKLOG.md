@@ -1,171 +1,211 @@
-# Backlog: graph readability
+# Backlog: async write and sync read consistency
 
-Status: implemented; browser verification pending. Owner: SystemLens.
-This backlog covers four
-rendering improvements for the architecture graph and selected call tree:
-progressive detail, arc labels, navigation, and visual hierarchy. No task is
-marked complete until its acceptance criteria and relevant checks pass.
+Status: planned; implementation has not started.
+Owner: SystemLens implementer. Reviewers: product owner and architecture
+maintainer.
+
+The detector already supports explicit identity, request-order, and visibility
+evidence. This backlog extends source extraction; it does not establish new
+defects in the existing detector. The
+[plan](docs/plans/async-write-read-consistency.md) records completed corrections.
+The [algorithm contract](docs/spec-tech/algorithms.md#8-data-consistency-diagnostics)
+owns current behavior. The tasks below are future acceptance criteria, not
+claims about implemented capabilities.
 
 ## 1. Index and scope
 
 | Document | Purpose |
 |---|---|
-| [Archived consistency backlog](BACKLOG.consistency-diagnostics.md) | Historical snapshot of the former diagnostic rendering tasks. |
+| [Consistency plan](docs/plans/async-write-read-consistency.md) | Findings, completed corrections, deferred extensions. |
+| [Archived consistency backlog](BACKLOG.consistency-diagnostics.md) | Historical rendering tasks. |
 | [Earlier backlog](BACKLOG.previous.md) | Historical index of data-operation work. |
-| [UX/UI rules](docs/UX-UI.md) | Authoritative visible behavior and interaction rules. |
-| [HTML behavior](docs/spec-fonc/html-export.md) | Authoritative export behavior. |
-| [Graph layout](docs/spec-tech/graph-layout.md) | Camera, coordinates, layout, and performance rules. |
 
-The archived backlogs retain their original task status. The linked plans own
-the current status of deferred
-[consistency analysis](docs/plans/async-write-read-consistency.md) and
-[data operations](docs/plans/data-operations-in-internal-flows.md).
-This plan changes only the HTML projection. It does not alter persisted facts,
-flow detection, diagnostic classification, or source evidence. The HTML concerns
-deferred in
-[AGENTS.md](AGENTS.md#deferred-html-accessibility-and-delivery-concerns)
-remain outside this backlog.
+## 2. Scope and invariants
 
-## 2. Starting point and design direction
+The first increment must demonstrate one source-derived asynchronous write
+request followed by a synchronous read of the same record. Start with a
+bounded Java message-handler scenario; C0 selects and documents the exact
+framework APIs before extraction work begins.
 
-The architecture view uses fixed-size cards, a Sigma canvas, and HTML overlays.
-Its layout and camera logic live in
-[layout](src/systemlens/render/assets/graph/30-layouts.js) and
-[controls](src/systemlens/render/assets/graph/20-controls.js). The call tree
-uses measured card heights but a fixed 190-pixel width. It fits the complete
-tree to the viewport and places arc labels at edge midpoints in
-[call-tree rendering](src/systemlens/render/assets/graph/55-code-flows.js).
+Preserve canonical resource identity, per-pair uncertainty, and existing
+manifest behavior. Equal topics, payload types, display names, or source lines
+are not proof of record identity or execution order. Unknown evidence must not
+become a guarantee. Exports consume persisted facts without re-parsing source.
 
-> **Why & What - Progressive graph detail**
->
-> **What:** Use the rendered screen size to choose how much detail appears on
-> each card, without changing its layout footprint during zoom.
->
-> **Why:** A complete overview can make card text too small to read. Keeping
-> geometry fixed prevents a zoom step from moving ports and arcs.
->
-> **Alternative:** Enlarge every card at low zoom. This preserves all content
-> but consumes more space and can increase overlap.
->
-> **Fallback:** Keep the full details in selection and inspection views when
-> a card is too small for them.
+General mutable heap analysis, arbitrary serialization, broker scheduling,
+query-overlap inference, and concurrent-write diagnostics are out of scope.
+Unsupported cases retain their current conservative classification.
 
-> **Why & What - Selective arc labels**
->
-> **What:** Place labels only when their measured bounds avoid cards and other
-> visible labels; preserve full edge details on inspection.
->
-> **Why:** The call tree currently estimates label width from character count
-> and places labels at midpoints. Dense branches can still compete for space.
->
-> **Alternative:** Reserve enough space for every full label. This makes every
-> label visible but can produce a very wide tree.
->
-> **Fallback:** Hide a colliding label while retaining the arc and its tooltip.
+## 3. Delivery order and dependencies
 
-## 3. Implementation tasks
+IDs C1-C6 are retained from the previous backlog; C0 is the new scoping gate.
+All tasks are pending. Validation availability must be checked, not assumed.
 
-Tasks are ordered by dependency. Each task names an inspectable output and a
-behavioral acceptance check. Update the owning specifications with the code.
+| ID | Deliverable | Prerequisites |
+|---|---|---|
+| C0 | Supported scenario, evidence mapping, and regression matrix | None |
+| C1 | Bounded record-key value propagation | C0 |
+| C2 | Message/request identity propagation | C1 |
+| C5 | Request-before-read evidence and first end-to-end risk | C2 |
+| C4 | Scoped visibility evidence and end-to-end guarantee | C5 |
+| C3 | Occurrence-scoped branch exclusion | C5 |
+| C6 | Recorded validation for each delivered increment | Each increment under validation |
 
-### G01. Establish baselines and settle display rules
+C4 and C3 are independent follow-up increments after C5. C6 runs after each
+increment; its initial baseline can run after C0 and does not block drafting
+fixtures. Missing tools block the affected checks, not unrelated work.
 
-- [ ] Record screenshots or browser snapshots for a small architecture, a dense
-  architecture, a shallow call tree, and a deep annotated call tree at 1440x900
-  and 900x700. Use checked-in examples or deterministic browser fixtures.
-- [x] Specify overview, readable, focused, and selected detail levels in
-  [UX/UI](docs/UX-UI.md). Define which facts stay visible at each level and
-  how a user obtains hidden details. Clarify the existing port text and tooltip
-  rules against the current call-tree implementation.
-- [ ] Acceptance: a reviewer can identify the service and graph direction in
-  the overview, and can reach the full method and evidence from a selected
-  occurrence. The specification matches current port behavior before later
-  tasks use it as a contract.
+## 4. Work packages and acceptance criteria
 
-### G02. Apply progressive detail to architecture cards
+### C0. Define the first supported scenario
 
-- [x] Implement screen-size-based detail levels in
-  [graph rebuilding](src/systemlens/render/assets/graph/10-rebuild.js) and
-  [graph styling](src/systemlens/render/assets/graph/00-graph.css). Keep the
-  selected and hovered resource identifiable at every level.
-- [x] Preserve card coordinates, relation endpoints, and source facts when
-  zoom or fit changes the visible text. Expose omitted details through the
-  existing inspector or tooltip.
-- [ ] Acceptance: fit and zoom switch detail predictably without moving nodes,
-  losing selection, or hiding the selected name. Verify small and dense graphs
-  in both themes and at a constrained viewport width.
+Document exact send, receive, serialization, storage, and synchronous-read APIs
+in a small Java fixture. Prefer existing fixtures and extraction helpers.
+Map each required fact to its source evidence and persisted representation.
+Do not start C1 until this mapping is reviewed.
 
-### G03. Apply progressive detail to call-tree cards
+Acceptance:
 
-- [x] Use the same detail principles for service name, method, parameter types,
-  annotations, and status badges in
-  [call-tree rendering](src/systemlens/render/assets/graph/55-code-flows.js).
-  Keep all data reachable through existing inspection surfaces.
-- [x] Maintain measured layout bounds and port attachment while zooming. A
-  selected occurrence must retain an obvious visual marker at overview scale.
-- [ ] Acceptance: a deep tree can be read first as a sequence of services;
-  zooming or selecting reveals method and annotation detail. Zoom alone does
-  not reroute arcs or shift occurrence coordinates.
+- The fixture identifies the send, receiver write, read occurrence, canonical
+  resource, record key, and causal scenario. Shared storage is established
+  independently of matching entity names.
+- The support matrix names supported APIs and rejected variants. It separates
+  record identity, causal identity, request ordering, and visibility.
+- A regression matrix states expected persisted facts and diagnostic results
+  for C1-C5. Baseline behavior is recorded before changes.
+- Any required schema or interface extension is specified before coding,
+  including additive migration and old-snapshot behavior.
 
-### G04. Measure and prioritize call-tree arc labels
+### C1. Propagate record keys through a bounded value path
 
-- [x] Replace character-count spacing as the sole label fit rule. Measure
-  rendered labels, test candidate positions against cards and placed labels,
-  and choose a deterministic visible subset when space is insufficient.
-- [x] Prioritize the selected arc or highlighted path, then short labels that
-  fit. Keep order, protocol, and the complete indexed label in the arc tooltip.
-- [ ] Acceptance: labels do not cover cards or one another in the dense fixture;
-  every arc remains visible and inspectable. Repeated renders with identical
-  inputs produce the same labels and positions.
+Support scalar copies and explicitly resolved payload-field assignments used
+by C0. Follow reaching definitions at the operation site, not expression text.
+Leave arbitrary object aliasing and unknown serializers unsupported.
 
-### G05. Keep navigation stable during tree exploration
+Acceptance:
 
-- [x] Preserve the user's viewed region, selected occurrence, and zoom when
-  changing depth or expanding and collapsing a branch. Provide a direct action
-  to recenter on the selected occurrence and a separate action to fit the tree.
-- [x] Update
-  [call-tree controls](src/systemlens/render/assets/graph/55-code-flows.js)
-  and the shared
-  [camera controls](src/systemlens/render/assets/graph/20-controls.js)
-  only where each view needs them.
-- [ ] Acceptance: expanding a branch does not unexpectedly reset the camera;
-  recentering makes the selected occurrence visible; fitting still shows the
-  complete visible tree. Test repeated service occurrences and cycles.
+- A supported producer-to-consumer mapping preserves canonical key identity
+  through construction, serialization, and receiver field access.
+- A scalar copy preserves identity until reassignment. A changed value must
+  not retain the original identity; ambiguous mutations remain unknown.
+- Equal field names in unrelated objects, shadowed variables, and unknown
+  transformations do not establish equal keys.
+- Re-indexing and reloading preserve identities and relative source evidence.
+  Existing literal and final-scalar propagation cases remain unchanged.
 
-### G06. Add a viewport overview for large graphs
+### C2. Propagate causal identity without conflating messages
 
-- [x] Add a compact overview of the visible architecture graph and call tree,
-  including the current viewport. Allow a click or drag in the overview to
-  move the camera without changing graph selection or indexed data.
-- [x] Show the overview only when the visible graph exceeds the viewport by a
-  documented threshold. Bound its rendering cost for large architecture
-  graphs and a call tree near its existing occurrence limit.
-- [ ] Acceptance: overview and main viewport stay synchronized after zoom,
-  pan, filter, branch expansion, and resize. On a small graph, the overview
-  remains absent and existing controls work as before.
+Connect the specific send and receiver occurrence from C0 using supported
+framework and payload mappings. Record the evidence separately from the key.
+The same record key does not imply the same request or message.
 
-### G07. Clarify visual hierarchy and status semantics
+Acceptance:
 
-- [x] Consolidate normal, hovered, selected, path-focused, muted, and
-  diagnostic styling in the graph CSS modules. Keep protocol identity and
-  diagnostic state distinguishable with colour plus stroke or shape.
-- [x] Reduce the emphasis of unrelated relations during focus without making
-  them disappear. Keep multiple annotations available on an elastic card and
-  ensure the legend describes only visible semantics.
-- [ ] Acceptance: selection and diagnostic focus remain distinguishable in
-  light and dark themes and on a dense graph. Clearing focus restores the
-  ordinary appearance with no stale classes or hidden relations.
+- The supported path gives the linked write and read compatible causal
+  evidence that survives persistence.
+- Two sends to one topic, including sends for the same record, are not merged
+  merely because their topic, payload type, or key matches.
+- Missing or conflicting correlation evidence remains insufficient. A causal
+  match alone neither establishes request order nor creates a guarantee.
 
-### G08. Verify the combined reading workflow
+### C5. Derive request-before-read order
 
-- [x] Add behavioral coverage in
-  [browser tests](tests/test_browser_export.py) for detail transitions, label
-  collisions, camera preservation, overview navigation, and visual state reset.
-  Use rendered bounds and state, not only generated HTML strings.
-- [x] Update [UX/UI](docs/UX-UI.md),
-  [HTML behavior](docs/spec-fonc/html-export.md), and
-  [graph layout](docs/spec-tech/graph-layout.md) for the final behavior.
-- [ ] Acceptance: the same fixtures support tracing a path from entry to leaf,
-  finding an arc's full label, and returning to the complete overview. Run the
-  focused Python checks and browser suite in [AGENTS.md](AGENTS.md#validation);
-  record any unavailable browser prerequisite explicitly.
+From C0's supported execution semantics, link the asynchronous request to a
+specific subsequent read with `request_before_reads`. Use resolved control
+flow and call behavior, not lexical line order or call-graph reachability.
+
+Acceptance:
+
+- With resource, key, and causal evidence supplied by C1-C2, the positive
+  source fixture persists the relation and reports
+  `classification=potential_risk` when visibility is unproven and no other
+  required evidence is missing. This is the existing JSON classification;
+  the algorithm design calls this case `potential_async_write_read`.
+- A read before the send receives no forward relation. Unresolved callbacks,
+  unordered execution, and shared-root-only paths remain insufficient.
+- The relation targets the correct read when a flow contains several reads.
+  Another exact pair must not suppress an uncertain pair.
+- An index-to-reload-to-JSON/HTML test observes the same classification and
+  explains the missing visibility evidence without re-parsing source.
+
+### C4. Derive a scoped visibility barrier
+
+Extend C0 with one documented framework barrier whose semantics establish
+visibility to the relevant read. Identify request, flush, commit, and visible
+events separately. Neither flush nor commit is a universal visibility barrier.
+
+Acceptance:
+
+- A supported barrier persists `visibility_before_reads` for one read and
+  produces `guarantee_identified` when all existing detector requirements,
+  including completion and version evidence, also hold.
+- Broker acknowledgement, method return, transaction annotation, flush alone,
+  rollback, and matching versions alone do not establish that guarantee.
+- A primary-store commit does not establish replica or cache visibility.
+  A barrier for another record or read does not apply to this pair.
+- If C0's framework has no provable barrier, record that limitation and select
+  a supported follow-up fixture before implementation. Do not weaken the
+  guarantee contract to complete this task.
+
+### C3. Exclude incompatible branches within one occurrence
+
+Initially support directly resolved alternatives of one `if/else` in a single
+execution occurrence. Do not infer general predicate equivalence or exclusivity
+across separate invocations.
+
+Acceptance:
+
+- A write and read on proven exclusive alternatives of that occurrence
+  produce no async-write/read candidate pair.
+- The same source sites in distinct invocations are not excluded by this rule.
+  Compatible paths preserve their existing diagnostics.
+- Unknown predicates or occurrence identity do not suppress a pair or prove
+  ordering. Loops and repeated handlers remain conservative unless bounded
+  occurrence evidence exists.
+
+### C6. Validate and record availability
+
+The plan reports earlier localhost, Chrome, and `scc` limitations. These are
+historical observations, not verified blockers in the current environment.
+
+Acceptance:
+
+- Record baseline and per-increment commands, outcomes, and any actual missing
+  prerequisites. Separate pre-existing failures from regressions.
+- Run focused regression cases, including `tests/test_flow_consistency.py`,
+  then Ruff, mypy, and the full default suite for extraction/storage changes.
+- Run browser and companion checks when applicable using the commands below.
+  A blocked check stays explicitly unverified; it is never reported as passed.
+- C6 is complete for an increment only when its required checks pass. Record
+  unresolved blockers without marking that increment fully validated.
+
+## 5. Definition of done and validation
+
+Every implementation task includes positive and negative behavior tests,
+persisted evidence checks, old-index compatibility, and uncertainty fallback.
+Store source paths relative to the indexed root; never persist local roots.
+Document performance implications and avoid unbounded path expansion.
+
+Update `docs/SPEC-FONC.md` for observable changes and `docs/SPEC-TECH.md` plus
+`docs/spec-tech/algorithms.md` for model or algorithm changes. Record durable
+design decisions in `docs/ADR.md`, and update the consistency plan's status
+only after delivery. Update the companion skill when its workflow is affected.
+
+```bash
+uv run ruff check src tests
+uv run pytest tests/test_flow_consistency.py
+uv run mypy
+uv run pytest
+```
+
+Also run the relevant extractor and persistence tests for each increment.
+For generated HTML interactions and workflow changes, respectively:
+
+```bash
+SYSTEMLENS_CHROME_BIN=/path/to/chrome uv run pytest -m slow tests/test_browser_export.py
+uv run python scripts/check_companion_contracts.py
+```
+
+Use an installed Chrome executable instead of the placeholder. If dependencies
+are missing, use the documented `uv sync --group dev` setup. Companion checks
+must not modify the laboratory checkout or reuse its persisted index.
