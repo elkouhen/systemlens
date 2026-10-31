@@ -49,8 +49,14 @@ from systemlens.application.code_flows import (
 from systemlens.application.flow_calculation import calculate_persisted_flows
 from systemlens.application.runtime_observations import (
     DEFAULT_API_KEY_ENV,
+    DEFAULT_BEARER_ENV,
+    HOTSPOT_METRICS,
+    collect_prometheus_observations,
     collect_runtime_observations,
+    compare_with_previous,
+    completeness_line,
     parse_service_map,
+    rank_hotspots,
     runtime_overlay,
     scheduled_entries,
     reconcile_observations,
@@ -88,7 +94,7 @@ from systemlens.application.engine_comparison import (
 from systemlens.callgraph.registry import load_engine
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.models import ExtractionDiagnostic
-from systemlens.domain.runtime import RuntimeErrorGroup, RuntimeObservation
+from systemlens.domain.runtime import RuntimeCollection, RuntimeErrorGroup, RuntimeObservation
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.discovery.build.modules import (
     discover_modules,
@@ -209,7 +215,7 @@ app.add_typer(microservices_app, name="microservices")
 app.add_typer(modules_app, name="projects")
 app.add_typer(modules_app, name="modules", hidden=True)
 observe_app = typer.Typer(
-    help="Comparer la topologie indexée au trafic agrégé d'Elastic APM.\n\nExemples : `systemlens observe elastic --url https://es:9200 --since 7d`, `systemlens observe report`."
+    help="Comparer la topologie indexée au trafic agrégé d'Elastic APM ou de Prometheus (OpenTelemetry).\n\nExemples : `systemlens observe elastic --url https://es:9200 --since 7d`, `systemlens observe prometheus --url http://prom:9090`, `systemlens observe report --hotspots 10 --by p95`."
 )
 app.add_typer(analyze_app, name="analyze")
 app.add_typer(observe_app, name="observe")
@@ -2007,6 +2013,7 @@ class _MicroserviceGraphData:
     flow_descriptions: dict[str, str] | None = None
     runtime_observations: list[RuntimeObservation] | None = None
     runtime_errors: list[RuntimeErrorGroup] | None = None
+    runtime_collections: list[RuntimeCollection] | None = None
 
 
 def _load_flow_descriptions(repo_root: Path) -> dict[str, str]:
@@ -2050,6 +2057,7 @@ def _load_microservice_graph(
         architecture_relations = store.all_architecture_relations()
         runtime_observations = store.all_runtime_observations()
         runtime_errors = store.all_runtime_error_groups()
+        runtime_collections = store.latest_runtime_collections()
     return _MicroserviceGraphData(
         projection.services_by_name,
         projection.edges,
@@ -2073,6 +2081,7 @@ def _load_microservice_graph(
         _load_flow_descriptions(repo_root),
         runtime_observations,
         runtime_errors,
+        runtime_collections,
     )
 
 
@@ -2093,6 +2102,7 @@ def _export_runtime_overlay(
             ignored_services,
             getattr(graph_data, "runtime_errors", None) or (),
             scheduled_entries(getattr(graph_data, "code_flows", None) or [], graph_data.services_by_name),
+            collections=getattr(graph_data, "runtime_collections", None) or (),
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -3251,11 +3261,25 @@ def _configured_runtime(repo_root: Path) -> tuple[dict[str, str], list[str]]:
     return config.runtime_service_map, config.runtime_ignore_services
 
 
-def _emit_runtime_report(repo_root: Path, service_map: list[str], json_output: bool) -> None:
+def _emit_runtime_report(
+    repo_root: Path,
+    service_map: list[str],
+    json_output: bool,
+    *,
+    hotspots: int | None = None,
+    by: str = "p95",
+    compare_previous: bool = False,
+) -> None:
     inventory = load_architecture_inventory(repo_root)
     with Store(repo_root, readonly=True) as store:
         observations = store.all_runtime_observations()
         errors = store.all_runtime_error_groups()
+        collections = store.latest_runtime_collections()
+        history = store.all_runtime_collections() if compare_previous else []
+        previous_rows = {
+            collection.id: store.all_runtime_observations(collection.id)
+            for collection in history
+        }
     configured_map, ignored_services = _configured_runtime(repo_root)
     try:
         result = reconcile_observations(
@@ -3266,7 +3290,12 @@ def _emit_runtime_report(repo_root: Path, service_map: list[str], json_output: b
             ignored_services,
             errors,
             scheduled_entries(getattr(inventory, "code_flows", []), inventory.endpoints_by_service),
+            collections=collections,
         )
+        if hotspots is not None:
+            result["hotspots"] = rank_hotspots(result, by, hotspots)
+        if compare_previous:
+            result["comparison"] = compare_with_previous(result, history, previous_rows)
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
@@ -3310,13 +3339,59 @@ def observe_elastic_cmd(
     _emit_runtime_report(repo_root, service_map, json_output)
 
 
-@observe_app.command("report")
-def observe_report_cmd(
+@observe_app.command("prometheus")
+def observe_prometheus_cmd(
+    url: str = typer.Option(..., "--url", help="URL du serveur Prometheus, sans identifiants."),
+    since: str = typer.Option("7d", "--since", help="Fenêtre observée, par exemple 24h ou 7d."),
+    bearer_env: str = typer.Option(
+        DEFAULT_BEARER_ENV, "--bearer-env",
+        help="Variable d'environnement contenant le jeton Bearer (jamais journalisé ni persisté).",
+    ),
+    ca_cert: Optional[Path] = typer.Option(None, "--ca-cert", help="Bundle d'autorités de certification."),
     service_map: list[str] = typer.Option([], "--service-map", help="Correspondance explicite APM=SERVICE."),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
+    """Collecter les métriques OpenTelemetry via l'API de requête Prometheus."""
+    repo_root = Path.cwd()
+    try:
+        result = collect_prometheus_observations(
+            repo_root, url, since=since, bearer_env=bearer_env, ca_cert=ca_cert,
+        )
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(
+        f"{len(result.observations)} observation(s) agrégée(s) persistée(s) · "
+        f"{completeness_line(result.collection)}",
+        err=True,
+    )
+    _emit_runtime_report(repo_root, service_map, json_output)
+
+
+@observe_app.command("report")
+def observe_report_cmd(
+    service_map: list[str] = typer.Option([], "--service-map", help="Correspondance explicite APM=SERVICE."),
+    hotspots: Optional[int] = typer.Option(
+        None, "--hotspots", min=1,
+        help="Lister les N points d'entrée les plus chauds selon --by.",
+    ),
+    by: str = typer.Option(
+        "p95", "--by", help=f"Mesure de classement : {', '.join(HOTSPOT_METRICS)}.",
+    ),
+    compare_previous: bool = typer.Option(
+        False, "--compare-previous",
+        help="Ajouter l'écart avec la collecte précédente de même source et intervalle.",
+    ),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
     """Rapprocher les observations persistées de l'index, sans accès réseau."""
-    _emit_runtime_report(Path.cwd(), service_map, json_output)
+    if by not in HOTSPOT_METRICS:
+        typer.echo(f"--by attend {', '.join(HOTSPOT_METRICS)}, reçu {by!r}.", err=True)
+        raise typer.Exit(code=2)
+    _emit_runtime_report(
+        Path.cwd(), service_map, json_output,
+        hotspots=hotspots, by=by, compare_previous=compare_previous,
+    )
 
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ from systemlens.domain.module_inventory import (
     ModuleDependency,
     SourceEvidence,
 )
-from systemlens.domain.runtime import RuntimeErrorGroup, RuntimeObservation
+from systemlens.domain.runtime import RuntimeCollection, RuntimeErrorGroup, RuntimeObservation
 from systemlens.infrastructure.paths import db_path
 from systemlens.storage.serialization import (
     CodeChunk,
@@ -55,6 +55,8 @@ from systemlens.storage.serialization import (
 
 SCHEMA_VERSION = "39"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
+# Collections kept per runtime source so two windows can be compared.
+RUNTIME_HISTORY_DEPTH = 3
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
 
@@ -118,6 +120,18 @@ def _glob_to_sqlite(pattern: str) -> str:
 
 class StoreError(Exception):
     pass
+
+
+def _row_to_runtime_collection(row: sqlite3.Row) -> RuntimeCollection:
+    return RuntimeCollection(
+        id=row["id"], source=row["source"], origin=row["origin"],
+        window_start=row["window_start"], window_end=row["window_end"],
+        interval=row["interval"], step=row["step"], collected_at=row["collected_at"],
+        page_counts=json.loads(row["page_counts"] or "{}"),
+        truncated=bool(row["truncated"]),
+        overflow_services=tuple(json.loads(row["overflow_services"] or "[]")),
+        notes=tuple(json.loads(row["notes"] or "[]")),
+    )
 
 
 class Store:
@@ -503,6 +517,22 @@ class Store:
                 window_end TEXT NOT NULL,
                 collected_at TEXT NOT NULL
             );
+            -- One row per collection run of a runtime source; the last three
+            -- per source are kept so windows can be compared.
+            CREATE TABLE IF NOT EXISTS runtime_collections (
+                id TEXT PRIMARY KEY,
+                source TEXT NOT NULL,
+                origin TEXT NOT NULL,
+                window_start TEXT NOT NULL,
+                window_end TEXT NOT NULL,
+                interval TEXT,
+                step TEXT,
+                collected_at TEXT NOT NULL,
+                page_counts TEXT NOT NULL DEFAULT '{}',
+                truncated INTEGER NOT NULL DEFAULT 0,
+                overflow_services TEXT NOT NULL DEFAULT '[]',
+                notes TEXT NOT NULL DEFAULT '[]'
+            );
             """
         )
         self._migrate_module_columns()
@@ -513,6 +543,7 @@ class Store:
         self._migrate_graph_fact_columns()
         self._migrate_code_flow_columns()
         self._migrate_integration_method_columns()
+        self._migrate_runtime_columns()
         if self.get_meta("schema_version") != SCHEMA_VERSION:
             self.set_meta("schema_version", SCHEMA_VERSION)
         self.conn.commit()
@@ -625,6 +656,31 @@ class Store:
         cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(integration_methods)")}
         if "parameter_types" not in cols:
             self.conn.execute("ALTER TABLE integration_methods ADD COLUMN parameter_types TEXT")
+
+    def _migrate_runtime_columns(self) -> None:
+        """Add latency percentiles and collection history additively.
+
+        Rows collected before this migration keep ``NULL`` percentiles and no
+        collection; readers report them as a single collection of unknown
+        interval until the next ``systemlens observe``.
+        """
+        cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(runtime_observations)")}
+        for name in ("duration_p50_us", "duration_p95_us", "duration_p99_us"):
+            if name not in cols:
+                self.conn.execute(f"ALTER TABLE runtime_observations ADD COLUMN {name} REAL")
+        if "collection_id" not in cols:
+            self.conn.execute("ALTER TABLE runtime_observations ADD COLUMN collection_id TEXT")
+        error_cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(runtime_error_groups)")}
+        if "collection_id" not in error_cols:
+            self.conn.execute("ALTER TABLE runtime_error_groups ADD COLUMN collection_id TEXT")
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_runtime_observations_collection"
+            " ON runtime_observations(collection_id)"
+        )
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_runtime_error_groups_collection"
+            " ON runtime_error_groups(collection_id)"
+        )
 
     # -- meta --
 
@@ -1180,62 +1236,141 @@ class Store:
         cur = self.conn.execute("DELETE FROM graph_facts WHERE id = ?", (fact_id,))
         return cur.rowcount > 0
 
-    def replace_runtime_observations(
-        self, source: str, observations: list[RuntimeObservation]
+    def add_runtime_collection(
+        self,
+        collection: RuntimeCollection,
+        observations: list[RuntimeObservation],
+        groups: list[RuntimeErrorGroup],
+        keep: int = RUNTIME_HISTORY_DEPTH,
     ) -> None:
-        """Replace every observation of one source with a new collection."""
-        self.conn.execute("DELETE FROM runtime_observations WHERE source = ?", (source,))
+        """Persist one collection and prune the source's history to ``keep``.
+
+        Rows of pruned collections leave both observation tables in the same
+        transaction, so a report never mixes a partial history. Legacy rows
+        without a collection belong to no history and are pruned as well
+        once a collection of their source exists.
+        """
+        self.conn.execute(
+            """INSERT INTO runtime_collections
+            (id, source, origin, window_start, window_end, interval, step, collected_at,
+             page_counts, truncated, overflow_services, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET origin=excluded.origin,
+            window_start=excluded.window_start, window_end=excluded.window_end,
+            interval=excluded.interval, step=excluded.step, collected_at=excluded.collected_at,
+            page_counts=excluded.page_counts, truncated=excluded.truncated,
+            overflow_services=excluded.overflow_services, notes=excluded.notes""",
+            (collection.id, collection.source, collection.origin, collection.window_start,
+             collection.window_end, collection.interval, collection.step,
+             collection.collected_at, json.dumps(collection.page_counts, sort_keys=True),
+             int(collection.truncated), json.dumps(list(collection.overflow_services)),
+             json.dumps(list(collection.notes))),
+        )
+        for table in ("runtime_observations", "runtime_error_groups"):
+            self.conn.execute(  # nosec B608 - table name from a fixed tuple
+                f"DELETE FROM {table} WHERE collection_id = ?"
+                f" OR (source = ? AND collection_id IS NULL)",
+                (collection.id, collection.source),
+            )
         self.conn.executemany(
             """INSERT INTO runtime_observations
             (id, source, origin, kind, service_name, target, target_type, calls,
-             failures, duration_sum_us, window_start, window_end, collected_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+             failures, duration_sum_us, window_start, window_end, collected_at,
+             duration_p50_us, duration_p95_us, duration_p99_us, collection_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (item.id, item.source, item.origin, item.kind, item.service_name,
                  item.target, item.target_type, item.calls, item.failures,
                  item.duration_sum_us, item.window_start, item.window_end,
-                 item.collected_at)
+                 item.collected_at, item.duration_p50_us, item.duration_p95_us,
+                 item.duration_p99_us, collection.id)
                 for item in observations
             ],
         )
-
-    def all_runtime_observations(self) -> list[RuntimeObservation]:
-        """Return persisted observations; older indexes may lack the table."""
-        try:
-            rows = self.conn.execute(
-                "SELECT * FROM runtime_observations ORDER BY source, kind, service_name, target"
-            ).fetchall()
-        except sqlite3.OperationalError:
-            return []
-        return [RuntimeObservation(**dict(row)) for row in rows]
-
-    def replace_runtime_error_groups(
-        self, source: str, groups: list[RuntimeErrorGroup]
-    ) -> None:
-        """Replace every error group of one source with a new collection."""
-        self.conn.execute("DELETE FROM runtime_error_groups WHERE source = ?", (source,))
         self.conn.executemany(
             """INSERT INTO runtime_error_groups
             (id, source, origin, service_name, grouping_key, exception_type, culprit,
-             transaction_name, occurrences, last_seen, window_start, window_end, collected_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+             transaction_name, occurrences, last_seen, window_start, window_end,
+             collected_at, collection_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (item.id, item.source, item.origin, item.service_name, item.grouping_key,
                  item.exception_type, item.culprit, item.transaction_name, item.occurrences,
-                 item.last_seen, item.window_start, item.window_end, item.collected_at)
+                 item.last_seen, item.window_start, item.window_end, item.collected_at,
+                 collection.id)
                 for item in groups
             ],
         )
+        stale = [
+            row["id"] for row in self.conn.execute(
+                "SELECT id FROM runtime_collections WHERE source = ?"
+                " ORDER BY collected_at DESC, id DESC LIMIT -1 OFFSET ?",
+                (collection.source, keep),
+            )
+        ]
+        for stale_id in stale:
+            self.conn.execute("DELETE FROM runtime_observations WHERE collection_id = ?", (stale_id,))
+            self.conn.execute("DELETE FROM runtime_error_groups WHERE collection_id = ?", (stale_id,))
+            self.conn.execute("DELETE FROM runtime_collections WHERE id = ?", (stale_id,))
 
-    def all_runtime_error_groups(self) -> list[RuntimeErrorGroup]:
-        """Return persisted APM error groups; older indexes may lack the table."""
+    def all_runtime_collections(self) -> list[RuntimeCollection]:
+        """Return the collection history, newest first; older indexes have none."""
         try:
             rows = self.conn.execute(
-                "SELECT * FROM runtime_error_groups"
-                " ORDER BY source, service_name, occurrences DESC, grouping_key"
+                "SELECT * FROM runtime_collections ORDER BY source, collected_at DESC, id DESC"
             ).fetchall()
         except sqlite3.OperationalError:
             return []
+        return [_row_to_runtime_collection(row) for row in rows]
+
+    def latest_runtime_collections(self) -> list[RuntimeCollection]:
+        """Return the newest collection of each source."""
+        latest: dict[str, RuntimeCollection] = {}
+        for collection in self.all_runtime_collections():
+            latest.setdefault(collection.source, collection)
+        return [latest[source] for source in sorted(latest)]
+
+    def _runtime_rows(self, table: str, order: str, collection_id: str | None) -> list[sqlite3.Row]:
+        """Rows of one collection, or of the newest collection of each source.
+
+        Rows written before collection history carry no collection and are
+        returned as the current rows of their source when it has none.
+        """
+        try:
+            if collection_id is not None:
+                return self.conn.execute(  # nosec B608 - table from a fixed set
+                    f"SELECT * FROM {table} WHERE collection_id = ? ORDER BY {order}",
+                    (collection_id,),
+                ).fetchall()
+            latest = {item.source: item.id for item in self.latest_runtime_collections()}
+            rows = self.conn.execute(  # nosec B608
+                f"SELECT * FROM {table} ORDER BY {order}"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        return [
+            row for row in rows
+            if (row["collection_id"] == latest.get(row["source"]))
+            or (row["collection_id"] is None and row["source"] not in latest)
+        ]
+
+    def all_runtime_observations(
+        self, collection_id: str | None = None,
+    ) -> list[RuntimeObservation]:
+        """Return the current observations; older indexes may lack the table."""
+        rows = self._runtime_rows(
+            "runtime_observations", "source, kind, service_name, target", collection_id,
+        )
+        return [RuntimeObservation(**dict(row)) for row in rows]
+
+    def all_runtime_error_groups(
+        self, collection_id: str | None = None,
+    ) -> list[RuntimeErrorGroup]:
+        """Return the current APM error groups; older indexes may lack the table."""
+        rows = self._runtime_rows(
+            "runtime_error_groups",
+            "source, service_name, occurrences DESC, grouping_key", collection_id,
+        )
         return [RuntimeErrorGroup(**dict(row)) for row in rows]
 
     def all_graph_facts(self) -> list[GraphFact]:

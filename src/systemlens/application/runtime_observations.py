@@ -2,35 +2,51 @@
 
 Observations are persisted apart from source and enrichment facts (ADR-60).
 Reconciliation is read-only: it reports agreement and gaps between both views
-without creating, confirming or removing any architecture fact.
+without creating, confirming or removing any architecture fact. Every runtime
+source implements :class:`RuntimeSource`; its rows share one vocabulary, so
+reconciliation, hotspots, and the export overlay never depend on the backend.
 """
 
 import os
 import re
 from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import cast
+from typing import Protocol, cast
 
+from systemlens.discovery import elastic_apm, prometheus_otel
 from systemlens.discovery.elastic_apm import (
     SOURCE,
     ElasticApmError,
     SearchFunction,
     cluster_origin,
-    collect_error_groups,
-    collect_observations,
     http_search,
     parse_window,
+)
+from systemlens.discovery.prometheus_otel import (
+    PrometheusError,
+    QueryFunction,
+    http_query,
+    prometheus_origin,
 )
 from systemlens.domain.code_flows import CodeFlow
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
-from systemlens.domain.runtime import RuntimeErrorGroup, RuntimeObservation
+from systemlens.domain.runtime import (
+    RuntimeCollection,
+    RuntimeCollectionResult,
+    RuntimeErrorGroup,
+    RuntimeObservation,
+)
 from systemlens.infrastructure.config import config_path
 from systemlens.storage.sqlite import Store
 
 DEFAULT_API_KEY_ENV = "SYSTEMLENS_ELASTIC_API_KEY"
+DEFAULT_BEARER_ENV = "SYSTEMLENS_PROMETHEUS_TOKEN"
+HOTSPOT_METRICS = ("p95", "p99", "failures", "errors")
+_SOURCE_LABELS = {SOURCE: "Elastic APM", prometheus_otel.SOURCE: "Prometheus (OpenTelemetry)"}
 _HTTP_METHODS = "GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS"
 _REQUEST_NAME = re.compile(rf"^({_HTTP_METHODS})\s+(/\S*)$")
 _MESSAGING_NAMES = (
@@ -48,6 +64,66 @@ _DATA_TARGETS = {
 }
 
 
+class RuntimeSource(Protocol):
+    """One backend that returns observations for a window.
+
+    A source folds its own metric model into ``RuntimeObservation`` rows,
+    ``RuntimeErrorGroup`` rows when the backend groups exceptions, and one
+    ``RuntimeCollection`` stating how complete the aggregation was. It never
+    reads source facts and never persists anything itself.
+    """
+
+    @property
+    def name(self) -> str: ...
+
+    def collect(self, window: timedelta, now: datetime | None) -> RuntimeCollectionResult: ...
+
+
+@dataclass(frozen=True)
+class ElasticApmSource:
+    """Elastic APM metric data streams through the Elasticsearch search API."""
+
+    search: SearchFunction
+    origin: str
+    interval: str = "auto"
+    name: str = SOURCE
+
+    def collect(self, window: timedelta, now: datetime | None) -> RuntimeCollectionResult:
+        return elastic_apm.collect(
+            self.search, origin=self.origin, window=window, interval=self.interval, now=now,
+            with_errors=True,
+        )
+
+
+@dataclass(frozen=True)
+class PrometheusSource:
+    """OpenTelemetry HTTP and messaging metrics through the Prometheus query API."""
+
+    query: QueryFunction
+    origin: str
+    name: str = prometheus_otel.SOURCE
+
+    def collect(self, window: timedelta, now: datetime | None) -> RuntimeCollectionResult:
+        return prometheus_otel.collect(self.query, origin=self.origin, window=window, now=now)
+
+
+def collect_runtime_source(
+    repo_root: Path, source: RuntimeSource, *, since: str = "7d", now: datetime | None = None,
+) -> RuntimeCollectionResult:
+    """Collect one window from a source and persist it as a new collection."""
+    if not config_path(repo_root).is_file():
+        raise RuntimeError("Configuration absente. Lancez d'abord systemlens init.")
+    try:
+        window = parse_window(since)
+        result = source.collect(window, now)
+    except (ElasticApmError, PrometheusError) as exc:
+        raise RuntimeError(str(exc)) from exc
+    with Store(repo_root) as store:
+        with store.transaction():
+            store.add_runtime_collection(result.collection, result.observations, result.errors)
+    return result
+
+
 def collect_runtime_observations(
     repo_root: Path,
     url: str,
@@ -59,26 +135,86 @@ def collect_runtime_observations(
     search: SearchFunction | None = None,
     now: datetime | None = None,
 ) -> tuple[list[RuntimeObservation], list[RuntimeErrorGroup]]:
-    """Collect one Elastic APM window and replace persisted observations and errors."""
-    if not config_path(repo_root).is_file():
-        raise RuntimeError("Configuration absente. Lancez d'abord systemlens init.")
+    """Collect one Elastic APM window and persist it with its error groups."""
     try:
         origin = cluster_origin(url)
-        window = parse_window(since)
-        searcher = search or http_search(
-            url, api_key=os.environ.get(api_key_env) or None, ca_cert=ca_cert,
-        )
-        observations = collect_observations(
-            searcher, origin=origin, window=window, interval=interval, now=now,
-        )
-        errors = collect_error_groups(searcher, origin=origin, window=window, now=now)
     except ElasticApmError as exc:
         raise RuntimeError(str(exc)) from exc
-    with Store(repo_root) as store:
-        with store.transaction():
-            store.replace_runtime_observations(SOURCE, observations)
-            store.replace_runtime_error_groups(SOURCE, errors)
-    return observations, errors
+    searcher = search or http_search(
+        url, api_key=os.environ.get(api_key_env) or None, ca_cert=ca_cert,
+    )
+    result = collect_runtime_source(
+        repo_root, ElasticApmSource(searcher, origin, interval), since=since, now=now,
+    )
+    return result.observations, result.errors
+
+
+def collect_prometheus_observations(
+    repo_root: Path,
+    url: str,
+    *,
+    since: str = "7d",
+    bearer_env: str = DEFAULT_BEARER_ENV,
+    ca_cert: Path | None = None,
+    query: QueryFunction | None = None,
+    now: datetime | None = None,
+) -> RuntimeCollectionResult:
+    """Collect one window of OpenTelemetry metrics from a Prometheus server.
+
+    The bearer token is read from ``bearer_env`` only; it is sent as an
+    ``Authorization`` header and never logged or persisted.
+    """
+    try:
+        origin = prometheus_origin(url)
+    except PrometheusError as exc:
+        raise RuntimeError(str(exc)) from exc
+    querier = query or http_query(url, bearer=os.environ.get(bearer_env) or None, ca_cert=ca_cert)
+    return collect_runtime_source(repo_root, PrometheusSource(querier, origin), since=since, now=now)
+
+
+def source_label(source: str) -> str:
+    return _SOURCE_LABELS.get(source, source)
+
+
+def completeness_line(collection: RuntimeCollection) -> str:
+    """One sentence on the window, interval, source, and completeness."""
+    parts = [
+        f"{source_label(collection.source)} {collection.origin}",
+        f"du {collection.window_start} au {collection.window_end}",
+        f"intervalle {collection.interval}" if collection.interval else "intervalle inconnu",
+    ]
+    if collection.step:
+        parts.append(f"pas de collecte {collection.step}")
+    if collection.overflow_services:
+        parts.append(
+            "débordement d'agrégation pour "
+            + ", ".join(collection.overflow_services)
+            + " (compteurs minimaux)"
+        )
+    if collection.truncated:
+        parts.append("pagination tronquée")
+    if not collection.overflow_services and not collection.truncated:
+        parts.append("ni débordement ni troncature")
+    return " · ".join(parts) + "."
+
+
+def completeness_dict(collection: RuntimeCollection) -> dict[str, object]:
+    return {
+        "collection_id": collection.id,
+        "source": collection.source,
+        "source_label": source_label(collection.source),
+        "origin": collection.origin,
+        "start": collection.window_start,
+        "end": collection.window_end,
+        "collected_at": collection.collected_at,
+        "interval": collection.interval,
+        "step": collection.step,
+        "page_counts": dict(collection.page_counts),
+        "truncated": collection.truncated,
+        "overflow_services": list(collection.overflow_services),
+        "notes": list(collection.notes),
+        "line": completeness_line(collection),
+    }
 
 
 def scheduled_entries(
@@ -168,6 +304,7 @@ def reconcile_observations(
     ignored_services: Collection[str] = (),
     errors: Collection[RuntimeErrorGroup] = (),
     scheduled: Mapping[str, Sequence[tuple[str, str, int]]] | None = None,
+    collections: Sequence[RuntimeCollection] = (),
 ) -> dict[str, object]:
     """Compare persisted observations with indexed integrations.
 
@@ -179,8 +316,15 @@ def reconcile_observations(
     :func:`scheduled_entries`); a transaction named ``Class.method`` matches
     the entry of that simple class and method. Unmatched names of that shape
     stay ``not_compared``: repository and helper spans share it.
+    ``collections`` describe the completeness of each source's latest run;
+    the window then names them, and a row of an overflowed service is
+    marked ``incomplete``.
     """
     services = set(endpoints_by_service)
+    overflowed = {
+        (collection.source, service)
+        for collection in collections for service in collection.overflow_services
+    }
     explicit = dict(service_map or {})
     unknown = sorted(set(explicit.values()) - services)
     if unknown:
@@ -269,6 +413,19 @@ def reconcile_observations(
             "status": status,
             "hint": hint,
             "endpoint_ids": endpoint_ids,
+            "source": observation.source,
+            "p50_us": observation.duration_p50_us,
+            "p95_us": observation.duration_p95_us,
+            "p99_us": observation.duration_p99_us,
+            "avg_us": (
+                observation.duration_sum_us / observation.calls
+                if observation.kind == "destination" and observation.duration_sum_us
+                and observation.calls else None
+            ),
+            "completeness": (
+                "incomplete" if (observation.source, observation.service_name) in overflowed
+                else "complete"
+            ),
             **({"edge": matched_edge} if matched_edge else {}),
         })
 
@@ -322,6 +479,8 @@ def reconcile_observations(
         window = {
             "origin": first.origin, "start": first.window_start,
             "end": first.window_end, "collected_at": first.collected_at,
+            "sources": sorted({item.source for item in observations}),
+            "collections": [completeness_dict(item) for item in collections],
         }
     return {
         "window": window,
@@ -491,10 +650,12 @@ def runtime_overlay(
             data_destinations[str(row["service"])].append({
                 "target": row["target"], "calls": row["calls"], "failures": row["failures"],
             })
+    hotspot_metric = "p95" if any(row.get("p95_us") is not None for row in rows) else "failures"
     return {
         "window": result["window"],
         "summary": result["summary"],
         "observations": rows,
+        "hotspots": rank_hotspots(result, hotspot_metric, 10),
         "endpoint_observations": dict(sorted(endpoint_observations.items())),
         "silent_endpoint_ids": sorted({
             endpoint_id
@@ -513,6 +674,215 @@ def runtime_overlay(
         },
         "unresolved_services": result["unresolved_services"],
     }
+
+
+def rank_hotspots(result: Mapping[str, object], by: str, limit: int) -> dict[str, object]:
+    """Rank entry points of the reconciliation by one runtime metric.
+
+    ``by`` is ``p95``, ``p99``, ``failures``, or ``errors`` (occurrences of
+    the error groups attached to the entry point). Ties break by service
+    then target, so the list is deterministic. Entry points whose row is
+    ``not_compared`` are listed apart, with the ``unverified`` indexed
+    entries of the window, because their value cannot be attributed to an
+    indexed entry point. Rows without the metric are counted, not ranked:
+    a missing percentile is not zero latency.
+    """
+    if by not in HOTSPOT_METRICS:
+        raise ValueError(f"--by attend {', '.join(HOTSPOT_METRICS)}, reçu {by!r}.")
+    rows = cast(list[dict[str, object]], result.get("observations", []))
+    errors = cast(list[dict[str, object]], result.get("errors", []))
+    window = result.get("window")
+    error_occurrences: dict[tuple[object, object], int] = defaultdict(int)
+    for error in errors:
+        error_occurrences[(error["service"], error["transaction"])] += int(
+            cast(int, error["occurrences"])
+        )
+
+    def value(row: dict[str, object]) -> float | None:
+        if by == "failures":
+            return float(cast(int, row["failures"]))
+        if by == "errors":
+            occurrences = error_occurrences.get((row["service"], row["target"]))
+            return float(occurrences) if occurrences is not None else 0.0
+        raw = row.get(f"{by}_us")
+        return float(cast(float, raw)) if raw is not None else None
+
+    def item(row: dict[str, object], metric: float | None) -> dict[str, object]:
+        return {
+            "service": row["service"] or row["service_name"],
+            "service_name": row["service_name"],
+            "target": row["target"],
+            "endpoint_ids": row["endpoint_ids"],
+            "status": row["status"],
+            "window": {k: window[k] for k in ("start", "end")} if isinstance(window, dict) else None,
+            "calls": row["calls"],
+            "failures": row["failures"],
+            "by": by,
+            "value": metric,
+            "p95_us": row.get("p95_us"),
+            "p99_us": row.get("p99_us"),
+            "completeness": row.get("completeness", "complete"),
+            "source": row.get("source"),
+        }
+
+    transactions = [row for row in rows if row["kind"] == "transaction"]
+    ranked: list[tuple[float, str, str, dict[str, object]]] = []
+    unranked: list[dict[str, object]] = []
+    apart: list[dict[str, object]] = []
+    for row in transactions:
+        metric = value(row)
+        entry = item(row, metric)
+        if row["status"] == "not_compared":
+            apart.append(entry)
+        elif metric is None:
+            unranked.append(entry)
+        else:
+            ranked.append((-metric, str(entry["service"]), str(row["target"]), entry))
+    ranked.sort(key=lambda candidate: candidate[:3])
+    unverified = cast(list[dict[str, object]], result.get("unverified", []))
+    return {
+        "by": by,
+        "limit": limit,
+        "rows": [entry for _value, _service, _target, entry in ranked[:limit]],
+        "without_metric": len(unranked),
+        "not_compared": apart[:limit],
+        "unverified": [
+            {"service": entry["service"], "name": entry["name"], "reason": entry["reason"]}
+            for entry in unverified
+        ],
+        "note": (
+            "Valeurs approximatives et minimales : percentiles calculés par le "
+            "backend sur des histogrammes agrégés, compteurs dépendants de "
+            "l'échantillonnage."
+        ),
+    }
+
+
+def compare_with_previous(
+    result: Mapping[str, object],
+    collections: Sequence[RuntimeCollection],
+    previous_rows: Mapping[str, Sequence[RuntimeObservation]],
+) -> dict[str, object]:
+    """Add the delta of calls, failure ratio, and p95 against the previous run.
+
+    A comparison needs a previous collection of the same source and
+    interval; ``previous_rows`` maps a collection ID to its observations.
+    Otherwise the result states why no comparison is shown.
+    """
+    by_source: dict[str, list[RuntimeCollection]] = defaultdict(list)
+    for collection in collections:
+        by_source[collection.source].append(collection)
+    comparisons: dict[str, object] = {}
+    rows = cast(list[dict[str, object]], result.get("observations", []))
+    for source, history in sorted(by_source.items()):
+        ordered = sorted(history, key=lambda item: (item.collected_at, item.id), reverse=True)
+        current = ordered[0]
+        previous = next((item for item in ordered[1:] if item.interval == current.interval), None)
+        if previous is None:
+            comparisons[source] = {
+                "previous": None,
+                "reason": (
+                    "aucune collecte antérieure de même source et de même intervalle"
+                    if len(ordered) == 1 else
+                    "les collectes antérieures ont un autre intervalle"
+                ),
+                "rows": [],
+            }
+            continue
+        earlier = {
+            (item.kind, item.service_name, item.target, item.target_type): item
+            for item in previous_rows.get(previous.id, ())
+        }
+        deltas = []
+        for row in rows:
+            if row.get("source") != source:
+                continue
+            key = (
+                str(row["kind"]), str(row["service_name"]), str(row["target"]),
+                cast(str | None, row["target_type"]),
+            )
+            before = earlier.get(key)
+            if before is None:
+                continue
+            calls = int(cast(int, row["calls"]))
+            failures = int(cast(int, row["failures"]))
+            ratio = failures / calls if calls else 0.0
+            before_ratio = before.failures / before.calls if before.calls else 0.0
+            p95 = cast(float | None, row.get("p95_us"))
+            deltas.append({
+                "kind": row["kind"], "service": row["service"], "service_name": row["service_name"],
+                "target": row["target"], "calls_delta": calls - before.calls,
+                "failure_ratio_delta": ratio - before_ratio,
+                "p95_delta_us": (
+                    p95 - before.duration_p95_us
+                    if p95 is not None and before.duration_p95_us is not None else None
+                ),
+            })
+        comparisons[source] = {
+            "previous": completeness_dict(previous),
+            "reason": None,
+            "rows": deltas,
+        }
+    return comparisons
+
+
+def _duration_label(micros: object) -> str:
+    if not isinstance(micros, int | float):
+        return "n/d"
+    return f"{micros / 1000:.0f} ms" if micros >= 1000 else f"{micros:.0f} µs"
+
+
+def render_hotspots_text(hotspots: Mapping[str, object]) -> list[str]:
+    by = str(hotspots["by"])
+    unit = {"p95": "p95", "p99": "p99", "failures": "échecs", "errors": "erreurs APM"}[by]
+    lines = [f"Points chauds par {unit} (minimum échantillonné, percentiles approximatifs) :"]
+    rows = cast(list[dict[str, object]], hotspots["rows"])
+    if not rows:
+        lines.append("  aucun point d'entrée rapproché ne porte cette mesure")
+    for index, row in enumerate(rows, start=1):
+        value = row["value"]
+        rendered = _duration_label(value) if by in {"p95", "p99"} else f"{int(cast(float, value))}"
+        incomplete = " · incomplet (débordement)" if row["completeness"] == "incomplete" else ""
+        endpoints = ", ".join(cast(list[str], row["endpoint_ids"])) or "aucun endpoint indexé"
+        lines.append(
+            f"  {index:>2}. {row['service']} {row['target']} · {unit} {rendered} · "
+            f"{row['calls']} appels · {row['status']}{incomplete} · {endpoints}"
+        )
+    without = int(cast(int, hotspots["without_metric"]))
+    if without:
+        lines.append(f"  {without} point(s) d'entrée sans cette mesure, non classé(s)")
+    apart = cast(list[dict[str, object]], hotspots["not_compared"])
+    if apart:
+        lines.append("  Non comparables (hors index ou non attribuables) :")
+        lines.extend(f"    {row['service']} {row['target']} ({row['calls']} appels)" for row in apart)
+    unverified = cast(list[dict[str, object]], hotspots["unverified"])
+    if unverified:
+        lines.append("  Indexés mais non vérifiables :")
+        lines.extend(f"    {row['service']} {row['name']} — {row['reason']}" for row in unverified)
+    return lines
+
+
+def render_comparison_text(comparisons: Mapping[str, object]) -> list[str]:
+    lines = ["Comparaison avec la collecte précédente :"]
+    for source, payload in comparisons.items():
+        data = cast(dict[str, object], payload)
+        if data["reason"]:
+            lines.append(f"  {source_label(source)} : {data['reason']}")
+            continue
+        previous = cast(dict[str, object], data["previous"])
+        lines.append(
+            f"  {source_label(source)} : contre la collecte du {previous['end']} "
+            f"(intervalle {previous['interval']})"
+        )
+        for row in cast(list[dict[str, object]], data["rows"]):
+            p95 = row["p95_delta_us"]
+            p95_text = f", p95 {'+' if cast(float, p95) >= 0 else ''}{_duration_label(abs(cast(float, p95)))}" if p95 is not None else ""
+            ratio = cast(float, row["failure_ratio_delta"]) * 100
+            lines.append(
+                f"    {row['service'] or row['service_name']} {row['kind']} {row['target']} : "
+                f"appels {cast(int, row['calls_delta']):+d}, échecs {ratio:+.1f} pt{p95_text}"
+            )
+    return lines
 
 
 _STATUS_LABELS = {
@@ -534,6 +904,10 @@ def render_runtime_report_text(result: Mapping[str, object]) -> str:
     lines.append(
         f"Observations {window['origin']} du {window['start']} au {window['end']}."
     )
+    for collection in cast(list[dict[str, object]], window.get("collections", [])):
+        lines.append(f"Complétude : {collection['line']}")
+        for note in cast(list[str], collection.get("notes", [])):
+            lines.append(f"  note : {note}")
     summary = result["summary"]
     assert isinstance(summary, dict)
     for status, label in _STATUS_LABELS.items():
@@ -603,6 +977,17 @@ def render_runtime_report_text(result: Mapping[str, object]) -> str:
             "Services indexés sans observation (télémétrie absente, pas forcément inactifs) : "
             + ", ".join(unobserved)
         )
+    hotspots = result.get("hotspots")
+    if isinstance(hotspots, dict):
+        lines.append("")
+        lines.extend(render_hotspots_text(hotspots))
+    comparison = result.get("comparison")
+    if isinstance(comparison, dict):
+        lines.append("")
+        lines.extend(render_comparison_text(comparison))
     lines.append("")
-    lines.append("Les compteurs sont des minima qui dépendent de l'échantillonnage APM.")
+    lines.append(
+        "Les compteurs sont des minima qui dépendent de l'échantillonnage ; "
+        "les percentiles sont des approximations du backend."
+    )
     return "\n".join(lines)

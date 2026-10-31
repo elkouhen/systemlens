@@ -23,7 +23,9 @@ class RuntimeObservation:
 
     ``kind`` is ``destination`` for outgoing calls or ``transaction`` for
     handled requests and messages. Counts are lower bounds: they depend on
-    the telemetry agent's sampling.
+    the telemetry agent's sampling. Percentiles exist only for transactions
+    and are approximations computed by the backend from pre-aggregated
+    histograms; a destination keeps a sum and no percentile.
     """
 
     id: str
@@ -39,6 +41,12 @@ class RuntimeObservation:
     window_start: str
     window_end: str
     collected_at: str
+    duration_p50_us: float | None = None
+    duration_p95_us: float | None = None
+    duration_p99_us: float | None = None
+    # Collection record this row belongs to; ``None`` on rows written before
+    # collection history existed.
+    collection_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -63,3 +71,38 @@ class RuntimeErrorGroup:
     window_start: str
     window_end: str
     collected_at: str
+    collection_id: str | None = None
+
+
+@dataclass(frozen=True)
+class RuntimeCollection:
+    """One collection run of a runtime source and its completeness facts.
+
+    ``page_counts`` maps each query to the number of result pages it read.
+    ``overflow_services`` names the services whose aggregation overflowed
+    (``_other`` buckets): their counts are lower bounds. ``truncated`` is
+    set when a query reached its page bound. ``notes`` carries any other
+    completeness remark, such as unavailable percentiles.
+    """
+
+    id: str
+    source: str
+    origin: str
+    window_start: str
+    window_end: str
+    interval: str | None
+    step: str | None
+    collected_at: str
+    page_counts: dict[str, int]
+    truncated: bool = False
+    overflow_services: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class RuntimeCollectionResult:
+    """What one runtime source returns for one window."""
+
+    collection: RuntimeCollection
+    observations: list[RuntimeObservation]
+    errors: list[RuntimeErrorGroup]

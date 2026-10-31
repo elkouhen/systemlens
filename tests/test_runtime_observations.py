@@ -11,8 +11,13 @@ import yaml
 from typer.testing import CliRunner
 
 from systemlens.application.runtime_observations import (
+    PrometheusSource,
+    collect_prometheus_observations,
     collect_runtime_observations,
+    compare_with_previous,
+    completeness_line,
     parse_service_map,
+    rank_hotspots,
     reconcile_observations,
     render_runtime_report_text,
     runtime_overlay,
@@ -20,9 +25,11 @@ from systemlens.application.runtime_observations import (
 )
 from systemlens.delivery import cli
 from systemlens.delivery.cli import app
+from systemlens.discovery import prometheus_otel
 from systemlens.discovery.elastic_apm import (
     ElasticApmError,
     cluster_origin,
+    collect,
     collect_error_groups,
     collect_observations,
     parse_window,
@@ -30,7 +37,7 @@ from systemlens.discovery.elastic_apm import (
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
-from systemlens.domain.runtime import RuntimeErrorGroup, RuntimeObservation
+from systemlens.domain.runtime import RuntimeCollection, RuntimeErrorGroup, RuntimeObservation
 from systemlens.infrastructure.config import ConfigError, config_path, init_config, load_config
 from systemlens.render import render_graph_html
 from systemlens.storage.sqlite import Store
@@ -91,9 +98,18 @@ def _destination(service: str, target: str, outcome: str, calls: int,
     }
 
 
-def _transaction(service: str, kind: str, name: str, outcome: str, count: int) -> dict[str, object]:
-    return {"key": {"service": service, "type": kind, "name": name, "outcome": outcome},
-            "doc_count": count}
+def _transaction(
+    service: str, kind: str, name: str, outcome: str, count: int,
+    percentiles: tuple[float | None, float | None, float | None] | None = None,
+) -> dict[str, object]:
+    """A transaction bucket: failures and percentiles are sub-aggregations."""
+    p50, p95, p99 = percentiles or (None, None, None)
+    return {
+        "key": {"service": service, "type": kind, "name": name},
+        "doc_count": count,
+        "failures": {"doc_count": count if outcome == "failure" else 0},
+        "duration": {"values": {"50.0": p50, "95.0": p95, "99.0": p99}},
+    }
 
 
 def test_collection_queries_only_aggregated_metrics_and_folds_outcomes() -> None:
@@ -121,12 +137,79 @@ def test_collection_queries_only_aggregated_metrics_and_folds_outcomes() -> None
             "gte": "2026-10-24T12:00:00Z", "lt": "2026-10-31T12:00:00Z",
         }}}
     assert search.requests[1][1]["aggs"]["groups"]["composite"]["after"] == {"page": 1}  # type: ignore[index]
+    transaction_request = search.requests[2][1]["aggs"]["groups"]  # type: ignore[index]
+    assert [list(source)[0] for source in transaction_request["composite"]["sources"]] == [  # type: ignore[index]
+        "service", "type", "name",
+    ]
+    assert transaction_request["aggs"] == {  # type: ignore[index]
+        "failures": {"filter": {"term": {"event.outcome": "failure"}}},
+        "duration": {"percentiles": {
+            "field": "transaction.duration.histogram", "percents": [50.0, 95.0, 99.0],
+        }},
+    }
     assert [(item.kind, item.target, item.calls, item.failures) for item in observations] == [
         ("destination", "kafka/orders.placed", 42, 2),
         ("transaction", "POST /api/orders", 33, 3),
     ]
     assert observations[0].duration_sum_us == 42_000
     assert observations[0].window_end == "2026-10-31T12:00:00Z"
+    assert observations[0].duration_p95_us is None
+    assert observations[0].collection_id == observations[1].collection_id
+
+
+def test_transactions_carry_backend_percentiles_or_null_with_a_note() -> None:
+    search = FakeElasticsearch({"transaction": [[
+        _transaction("orders", "request", "POST /api/orders", "success", 30, (1200.0, 4800.0, 9100.0)),
+        _transaction("orders", "request", "GET /api/orders", "success", 5),
+    ]]})
+
+    result = collect(search, origin="https://es:9200", window=timedelta(days=1), now=NOW)
+
+    by_target = {item.target: item for item in result.observations}
+    assert (
+        by_target["POST /api/orders"].duration_p50_us,
+        by_target["POST /api/orders"].duration_p95_us,
+        by_target["POST /api/orders"].duration_p99_us,
+    ) == (1200.0, 4800.0, 9100.0)
+    assert by_target["GET /api/orders"].duration_p95_us is None
+    assert result.collection.interval == "60m"
+    assert result.collection.overflow_services == ()
+    assert result.collection.page_counts == {
+        "metrics-apm.service_destination.60m-*": 1, "metrics-apm.transaction.60m-*": 1,
+    }
+    assert any("percentiles indisponibles pour 1 transaction" in note for note in result.collection.notes)
+    assert "ni débordement ni troncature" in completeness_line(result.collection)
+
+
+def test_overflow_buckets_mark_the_collection_and_name_the_service() -> None:
+    search = FakeElasticsearch({
+        "service_destination": [[
+            _destination("orders", "kafka/orders.placed", "success", 40, "kafka"),
+            _destination("orders", "_other", "success", 9, "kafka"),
+            _destination("_other", "payments:443", "success", 7, "http"),
+        ]],
+        "transaction": [[_transaction("orders", "request", "POST /api/orders", "success", 30)]],
+    })
+
+    result = collect(search, origin="https://es:9200", window=timedelta(days=1), now=NOW)
+
+    assert [item.target for item in result.observations] == ["kafka/orders.placed", "POST /api/orders"]
+    assert result.collection.overflow_services == ("_other", "orders")
+    assert "débordement d'agrégation pour _other, orders (compteurs minimaux)" in (
+        completeness_line(result.collection)
+    )
+    endpoints, edges = _lab_inventory()
+    reconciled = reconcile_observations(
+        [RuntimeObservation(**{**item.__dict__, "service_name": "order-service"})
+         for item in result.observations],
+        endpoints, edges,
+        collections=[RuntimeCollection(**{**result.collection.__dict__, "overflow_services": ("order-service",)})],
+    )
+    assert {row["completeness"] for row in reconciled["observations"]} == {"incomplete"}
+    assert reconciled["window"]["collections"][0]["overflow_services"] == ["order-service"]
+    report = render_runtime_report_text(reconciled)
+    assert "Complétude : Elastic APM https://es:9200" in report
+    assert "compteurs minimaux" in report
 
 
 def _error_bucket(service: str, key: str, exception: str | None, transaction: str | None,
@@ -612,7 +695,42 @@ def test_observe_commands_persist_then_report_without_network(
     with Store(tmp_path, readonly=True) as store:
         assert [item.calls for item in store.all_runtime_observations()] == [5]
         assert [item.exception_type for item in store.all_runtime_error_groups()] == ["OutOfStockException"]
+        assert [item.source for item in store.latest_runtime_collections()] == ["elastic_apm"]
     assert len(errors) == 1
+    assert "Complétude : Elastic APM https://es.example:9200" in CliRunner().invoke(
+        app, ["observe", "report"],
+    ).output
+
+    # A second collection of the same interval enables the comparison; the
+    # hotspot ranking reads the latest one.
+    later = FakeElasticsearch({
+        "service_destination": [[
+            _destination("order-service", "kafka/supermarket.order.placed", "success", 9, "kafka"),
+        ]],
+        "transaction": [[
+            _transaction("order-service", "request", "POST /api/orders", "failure", 4, (10.0, 90.0, 100.0)),
+            _transaction("inventory-service", "request", "GET /api/products/{id}", "success", 50, (5.0, 400.0, 900.0)),
+        ]],
+    })
+    collect_runtime_observations(
+        tmp_path, "https://es.example:9200", search=later, now=NOW + timedelta(days=1),
+    )
+    compared = CliRunner().invoke(
+        app, ["observe", "report", "--json", "--compare-previous", "--hotspots", "1", "--by", "p95"],
+    )
+    assert compared.exit_code == 0, compared.output
+    payload = json.loads(compared.output)
+    assert payload["comparison"]["elastic_apm"]["reason"] is None
+    assert [(row["target"], row["calls_delta"]) for row in payload["comparison"]["elastic_apm"]["rows"]] == [
+        ("kafka/supermarket.order.placed", 4),
+    ]
+    assert [(row["target"], row["value"]) for row in payload["hotspots"]["rows"]] == [
+        ("GET /api/products/{id}", 400.0),
+    ]
+    text = CliRunner().invoke(app, ["observe", "report", "--hotspots", "2", "--by", "failures"]).output
+    assert "Points chauds par échecs" in text
+    assert " 1. order-service POST /api/orders · échecs 4" in text
+    assert CliRunner().invoke(app, ["observe", "report", "--by", "latency"]).exit_code == 2
 
 
 @pytest.mark.slow
@@ -796,3 +914,281 @@ def test_runtime_overlay_annotates_the_selected_call_tree() -> None:
         page.wait_for_function("() => !document.querySelector('.graph-call-tree-runtime-badge')")
         assert page.locator("#flow-runtime-toggle").get_attribute("aria-pressed") == "false"
         browser.close()
+
+
+def _collection(source: str, end: str, interval: str | None = "60m", **extra: object) -> RuntimeCollection:
+    values: dict[str, object] = {
+        "id": f"{source}:{end}:{interval}", "source": source, "origin": "https://es:9200",
+        "window_start": "2026-10-24T12:00:00Z", "window_end": end, "interval": interval,
+        "step": None, "collected_at": end, "page_counts": {},
+    }
+    values.update(extra)
+    return RuntimeCollection(**values)  # type: ignore[arg-type]
+
+
+def test_collection_history_keeps_three_per_source_and_prunes_atomically(tmp_path: Path) -> None:
+    with Store(tmp_path) as store:
+        for day in range(4):
+            end = f"2026-10-{28 + day}T12:00:00Z"
+            collection = _collection("elastic_apm", end)
+            row = RuntimeObservation(**{
+                **_observation("transaction", "orders", "GET /a", "request", day).__dict__,
+                "id": f"row-{day}", "collection_id": collection.id, "window_end": end,
+            })
+            with store.transaction():
+                store.add_runtime_collection(collection, [row], [])
+        history = store.all_runtime_collections()
+        assert [item.window_end for item in history] == [
+            "2026-10-31T12:00:00Z", "2026-10-30T12:00:00Z", "2026-10-29T12:00:00Z",
+        ]
+        assert [item.calls for item in store.all_runtime_observations()] == [3]
+        assert [item.calls for item in store.all_runtime_observations(history[-1].id)] == [1]
+        remaining = store.conn.execute("SELECT COUNT(*) AS c FROM runtime_observations").fetchone()
+        assert remaining["c"] == 3
+
+
+def test_rows_without_collection_are_reported_until_the_next_collection(tmp_path: Path) -> None:
+    legacy = _observation("transaction", "orders", "GET /a", "request", 7)
+    with Store(tmp_path) as store:
+        store.conn.execute(
+            "INSERT INTO runtime_observations (id, source, origin, kind, service_name, target,"
+            " target_type, calls, failures, duration_sum_us, window_start, window_end, collected_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (legacy.id, legacy.source, legacy.origin, legacy.kind, legacy.service_name, legacy.target,
+             legacy.target_type, legacy.calls, legacy.failures, None, legacy.window_start,
+             legacy.window_end, legacy.collected_at),
+        )
+        store.conn.commit()
+        assert store.all_runtime_collections() == []
+        assert [(item.calls, item.duration_p95_us, item.collection_id) for item in store.all_runtime_observations()] == [
+            (7, None, None),
+        ]
+        collection = _collection("elastic_apm", "2026-11-01T12:00:00Z")
+        with store.transaction():
+            store.add_runtime_collection(collection, [RuntimeObservation(**{
+                **legacy.__dict__, "id": "new", "calls": 8, "collection_id": collection.id,
+            })], [])
+        assert [item.calls for item in store.all_runtime_observations()] == [8]
+
+
+def test_compare_previous_needs_the_same_source_and_interval() -> None:
+    endpoints, edges = _lab_inventory()
+    current = _collection("elastic_apm", "2026-10-31T12:00:00Z")
+    rows = [RuntimeObservation(**{
+        **_observation("transaction", "order-service", "POST /api/orders", "request", 12).__dict__,
+        "failures": 3, "duration_p95_us": 500.0, "collection_id": current.id,
+    })]
+    result = reconcile_observations(rows, endpoints, edges, collections=[current])
+
+    only_one = compare_with_previous(result, [current], {})
+    assert only_one["elastic_apm"]["reason"] == (
+        "aucune collecte antérieure de même source et de même intervalle"
+    )
+    other_interval = _collection("elastic_apm", "2026-10-30T12:00:00Z", interval="1m")
+    assert compare_with_previous(result, [current, other_interval], {})["elastic_apm"]["reason"] == (
+        "les collectes antérieures ont un autre intervalle"
+    )
+    previous = _collection("elastic_apm", "2026-10-30T12:00:00Z")
+    earlier = RuntimeObservation(**{
+        **rows[0].__dict__, "id": "old", "calls": 10, "failures": 1, "duration_p95_us": 400.0,
+        "collection_id": previous.id,
+    })
+    comparison = compare_with_previous(result, [current, previous], {previous.id: [earlier]})
+    [delta] = comparison["elastic_apm"]["rows"]
+    assert delta["calls_delta"] == 2
+    assert delta["failure_ratio_delta"] == pytest.approx(0.25 - 0.1)
+    assert delta["p95_delta_us"] == 100.0
+    assert "p95 +100 µs" in render_runtime_report_text({**result, "comparison": comparison})
+
+
+def test_hotspot_ranking_is_deterministic_and_lists_unattributed_rows_apart() -> None:
+    endpoints, edges = _lab_inventory()
+    collection = _collection("elastic_apm", "2026-10-31T12:00:00Z", overflow_services=("inventory-service",))
+
+    def row(service: str, target: str, kind: str, p95: float | None, failures: int = 0) -> RuntimeObservation:
+        return RuntimeObservation(**{
+            **_observation("transaction", service, target, kind, 20).__dict__,
+            "failures": failures, "duration_p95_us": p95, "collection_id": collection.id,
+        })
+
+    observations = [
+        row("order-service", "POST /api/orders", "request", 300.0, 2),
+        row("inventory-service", "GET /api/products/{id}", "request", 300.0),
+        row("inventory-service", "POST /api/reservations", "request", None, 5),
+        row("legacy-gateway", "GET /", "request", 900.0),
+        row("inventory-service", "postgresql", "db", 50.0),
+    ]
+    error = RuntimeErrorGroup(
+        id="e1", source="elastic_apm", origin="https://es:9200", service_name="order-service",
+        grouping_key="g1", exception_type="OutOfStockException", culprit=None,
+        transaction_name="POST /api/orders", occurrences=4, last_seen=None,
+        window_start="2026-10-24T12:00:00Z", window_end="2026-10-31T12:00:00Z",
+        collected_at="2026-10-31T12:00:00Z",
+    )
+    result = reconcile_observations(observations, endpoints, edges, errors=[error], collections=[collection])
+
+    by_p95 = rank_hotspots(result, "p95", 5)
+    assert [(item["service"], item["target"], item["completeness"]) for item in by_p95["rows"]] == [
+        ("inventory-service", "GET /api/products/{id}", "incomplete"),
+        ("order-service", "POST /api/orders", "complete"),
+    ]
+    assert by_p95["rows"][0]["endpoint_ids"] == ["inventory-service:rest:serve:GET /api/products/{productId}"]
+    assert by_p95["rows"][0]["window"] == {"start": "2026-10-24T12:00:00Z", "end": "2026-10-31T12:00:00Z"}
+    assert by_p95["without_metric"] == 1
+    assert [item["target"] for item in by_p95["not_compared"]] == ["GET /", "postgresql"]
+    assert "supermarket.order.placed" in {item["name"] for item in by_p95["unverified"]}
+    assert [(item["target"], item["value"]) for item in rank_hotspots(result, "failures", 1)["rows"]] == [
+        ("POST /api/reservations", 5.0),
+    ]
+    assert [(item["target"], item["value"]) for item in rank_hotspots(result, "errors", 1)["rows"]] == [
+        ("POST /api/orders", 4.0),
+    ]
+    with pytest.raises(ValueError, match="--by"):
+        rank_hotspots(result, "latency", 1)
+    overlay = runtime_overlay(result, endpoints)
+    assert overlay is not None and overlay["hotspots"]["by"] == "p95"
+    assert [item["target"] for item in overlay["hotspots"]["rows"]] == [
+        "GET /api/products/{id}", "POST /api/orders",
+    ]
+    text = render_runtime_report_text({**result, "hotspots": by_p95})
+    assert " 1. inventory-service GET /api/products/{id} · p95 300 µs · 20 appels · matched · incomplet" in text
+
+
+class FakePrometheus:
+    """Answer instant queries by metric name with the lab's OTel labels."""
+
+    def __init__(self, series: dict[str, list[tuple[dict[str, str], float]]]) -> None:
+        self.series = series
+        self.queries: list[str] = []
+
+    def __call__(self, expression: str, time: str) -> dict[str, object]:
+        self.queries.append(expression)
+        match = re.search(r"(?:increase|max)\(([a-z_]+)", expression)
+        name = match.group(1) if match else ""
+        quantile = re.match(r"histogram_quantile\(([\d.]+)", expression)
+        rows = self.series.get(name, [])
+        if quantile:
+            factor = {"0.5": 1.0, "0.95": 2.0, "0.99": 3.0}[quantile.group(1)]
+            rows = [(labels, value * factor) for labels, value in rows]
+        return {"status": "success", "data": {"resultType": "vector", "result": [
+            {"metric": labels, "value": [1761912000, str(value)]} for labels, value in rows
+        ]}}
+
+
+def _lab_prometheus() -> FakePrometheus:
+    orders = {"service_name": "order-service"}
+    inventory = {"job": "inventory-service"}
+    return FakePrometheus({
+        "http_server_request_duration_seconds_count": [
+            ({**orders, "http_request_method": "POST", "http_route": "/api/orders", "http_response_status_code": "201"}, 30),
+            ({**orders, "http_request_method": "POST", "http_route": "/api/orders", "http_response_status_code": "500"}, 3),
+            ({**inventory, "http_request_method": "GET", "http_route": "/api/products/{productId}", "http_response_status_code": "200"}, 12),
+            ({**inventory, "http_request_method": "GET", "http_response_status_code": "200"}, 100),
+        ],
+        "http_server_request_duration_seconds_bucket": [
+            ({**orders, "http_request_method": "POST", "http_route": "/api/orders"}, 0.2),
+        ],
+        "http_client_request_duration_seconds_count": [
+            ({**orders, "server_address": "inventory-service", "server_port": "8080", "http_response_status_code": "201"}, 30),
+            ({**orders, "server_address": "payments.example.com", "server_port": "443", "http_response_status_code": "404"}, 2),
+        ],
+        "http_client_request_duration_seconds_sum": [
+            ({**orders, "server_address": "inventory-service", "server_port": "8080", "http_response_status_code": "201"}, 6.0),
+        ],
+        "messaging_client_operation_duration_seconds_count": [
+            ({**orders, "messaging_destination_name": "supermarket.order.placed", "messaging_operation_type": "publish", "messaging_system": "kafka"}, 30),
+            ({"service_name": "supermarket-restock-service", "messaging_destination_name": "supermarket.stock.depleted", "messaging_operation_type": "process", "messaging_system": "kafka"}, 4),
+        ],
+        "prometheus_target_interval_length_seconds": [({"quantile": "0.5"}, 15.0)],
+    })
+
+
+def test_prometheus_collection_maps_otel_conventions_and_reconciles_like_elastic() -> None:
+    query = _lab_prometheus()
+
+    result = prometheus_otel.collect(query, origin="http://prom:9090", window=timedelta(days=7), now=NOW)
+
+    assert all("[7d]" in expression for expression in query.queries if "increase(" in expression)
+    rows = {(item.kind, item.service_name, item.target): item for item in result.observations}
+    orders = rows[("transaction", "order-service", "POST /api/orders")]
+    assert (orders.calls, orders.failures) == (33, 3)
+    assert (orders.duration_p50_us, orders.duration_p95_us, orders.duration_p99_us) == pytest.approx(
+        (200_000.0, 400_000.0, 600_000.0),
+    )
+    assert rows[("transaction", "inventory-service", "GET")].calls == 100
+    destination = rows[("destination", "order-service", "inventory-service:8080")]
+    assert (destination.target_type, destination.duration_sum_us, destination.duration_p95_us) == (
+        "http", 6_000_000.0, None,
+    )
+    assert rows[("destination", "order-service", "payments.example.com:443")].failures == 2
+    assert rows[("destination", "order-service", "kafka/supermarket.order.placed")].target_type == "kafka"
+    assert rows[("transaction", "supermarket-restock-service", "supermarket.stock.depleted process")].target_type == "messaging"
+    assert result.collection.source == "prometheus"
+    assert (result.collection.interval, result.collection.step) == ("7d", "15s")
+    assert any("sans étiquette http_route" in note for note in result.collection.notes)
+    assert result.errors == []
+
+    endpoints, edges = _lab_inventory()
+    elastic = reconcile_observations(_lab_observations(), endpoints, edges)
+    prometheus = reconcile_observations(result.observations, endpoints, edges, collections=[result.collection])
+    statuses = {(row["service_name"], row["target"]): row["status"] for row in prometheus["observations"]}
+    for key in (
+        ("order-service", "POST /api/orders"), ("order-service", "inventory-service:8080"),
+        ("order-service", "payments.example.com:443"), ("order-service", "kafka/supermarket.order.placed"),
+        ("supermarket-restock-service", "supermarket.stock.depleted process"),
+    ):
+        assert statuses[key] == {
+            (row["service_name"], row["target"]): row["status"] for row in elastic["observations"]
+        }[key]
+    assert statuses[("inventory-service", "GET")] == "not_compared"
+    assert prometheus["window"]["sources"] == ["prometheus"]
+    assert "Prometheus (OpenTelemetry) http://prom:9090" in render_runtime_report_text(prometheus)
+    assert "pas de collecte 15s" in render_runtime_report_text(prometheus)
+
+
+def test_prometheus_rejects_credentials_in_the_url_and_keeps_the_token_out_of_the_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    init_config(tmp_path)
+    monkeypatch.setenv("SYSTEMLENS_PROMETHEUS_TOKEN", "secret-token")
+    with pytest.raises(RuntimeError, match="identifiants"):
+        collect_prometheus_observations(tmp_path, "http://user:pw@prom:9090", query=_lab_prometheus(), now=NOW)
+    with pytest.raises(RuntimeError, match="http://"):
+        collect_prometheus_observations(tmp_path, "ftp://prom", query=_lab_prometheus(), now=NOW)
+
+    result = collect_prometheus_observations(tmp_path, "http://prom:9090/", query=_lab_prometheus(), now=NOW)
+
+    assert len(result.observations) == 7
+    with Store(tmp_path, readonly=True) as store:
+        assert {item.source for item in store.all_runtime_observations()} == {"prometheus"}
+        assert "secret-token" not in (tmp_path / ".systemlens" / "findings.db").read_bytes().decode("latin-1")
+    source = PrometheusSource(_lab_prometheus(), "http://prom:9090")
+    assert source.name == "prometheus"
+
+
+def test_observations_of_two_sources_coexist_and_the_report_names_both(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    init_config(tmp_path)
+    collect_runtime_observations(tmp_path, "https://es.example:9200", search=FakeElasticsearch({
+        "transaction": [[_transaction("order-service", "request", "POST /api/orders", "success", 9)]],
+    }), now=NOW)
+    collect_prometheus_observations(tmp_path, "http://prom:9090", query=_lab_prometheus(), now=NOW)
+    endpoints, edges = _lab_inventory()
+    monkeypatch.setattr(cli, "load_architecture_inventory", lambda _root: SimpleNamespace(
+        endpoints_by_service=endpoints, relations=[],
+    ))
+    monkeypatch.setattr(cli, "graph_edges_from_relations", lambda _relations, _endpoints: edges)
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(app, ["observe", "report", "--json"])
+
+    assert result.exit_code == 0, result.output
+    report = json.loads(result.output)
+    assert report["window"]["sources"] == ["elastic_apm", "prometheus"]
+    assert [item["source"] for item in report["window"]["collections"]] == ["elastic_apm", "prometheus"]
+    assert {row["source"] for row in report["observations"]} == {"elastic_apm", "prometheus"}
+    text = CliRunner().invoke(app, ["observe", "report"]).output
+    assert "Complétude : Elastic APM" in text and "Complétude : Prometheus (OpenTelemetry)" in text
+    with Store(tmp_path, readonly=True) as store:
+        assert [item.source for item in store.latest_runtime_collections()] == ["elastic_apm", "prometheus"]
