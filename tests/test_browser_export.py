@@ -159,19 +159,42 @@ def test_crowded_architecture_cards_reveal_secondary_details_on_hover() -> None:
             pytest.skip(f"No Chromium browser is available: {error}")
         page = browser.new_page(viewport={"width": 1100, "height": 760})
         page.set_content(document, wait_until="load")
+        # The initial fit resets the camera; zooming before it completes is lost.
+        page.wait_for_function("document.getElementById('graph').dataset.fitMode")
         for _ in range(12):
             page.locator("#graph-zoom-out").click()
         page.wait_for_function(
             "Number(document.getElementById('graph').dataset.crowdedCardCount) > 0"
         )
-        card = page.locator("#graph-node-labels .graph-node-card-label.is-crowded").first
+        # Crowded cards overlap by definition: hover one that is topmost at its
+        # own center. Cards are re-created on render, so address them by id.
+        target = page.evaluate("""() => {
+          for (const label of document.querySelectorAll(
+            '#graph-node-labels .graph-node-card-label.is-crowded'
+          )) {
+            const box = label.getBoundingClientRect();
+            const x = box.left + box.width / 2;
+            const y = box.top + box.height / 2;
+            if (label.contains(document.elementFromPoint(x, y))) {
+              return { id: label.dataset.nodeId, x, y };
+            }
+          }
+          return null;
+        }""")
+        assert target is not None
+        card = page.locator(
+            f'#graph-node-labels .graph-node-card-label[data-node-id="{target["id"]}"]'
+        )
         kicker = card.locator(".graph-node-card-kind")
         assert kicker.evaluate("element => getComputedStyle(element).opacity") == "0"
-        card.hover()
-        page.wait_for_function("document.querySelector('.graph-node-card-label.is-hovered')")
-        assert card.locator(".graph-node-card-kind").evaluate(
-            "element => getComputedStyle(element).opacity"
-        ) == "1"
+        # Cards sit above Sigma's canvas, so a card hover is a DOM hover.
+        page.mouse.move(target["x"], target["y"])
+        page.wait_for_function(
+            """id => getComputedStyle(document.querySelector(
+              `#graph-node-labels .graph-node-card-label[data-node-id="${id}"] .graph-node-card-kind`
+            )).opacity === '1'""",
+            arg=target["id"],
+        )
         browser.close()
 
 
@@ -254,8 +277,11 @@ def test_large_call_tree_minimap_and_selection_camera() -> None:
         page.locator("#flow-mode-expand-all").click()
         page.locator("#graph-minimap").wait_for(state="visible")
         assert page.locator("#graph-call-tree .graph-call-tree-node").count() == 9
-        assert page.locator("#graph-call-tree .graph-call-tree-canvas.is-overview").count() == 1
         canvas = page.locator("#graph-call-tree .graph-call-tree-canvas")
+        # Expanding preserves the camera; fitting the wide tree reaches overview.
+        assert canvas.evaluate("element => element.style.transform") == "scale(1)"
+        page.locator("#flow-mode-center").click()
+        assert page.locator("#graph-call-tree .graph-call-tree-canvas.is-overview").count() == 1
         before_pan = canvas.evaluate("element => [element.style.left, element.style.top]")
         map_bounds = page.locator("#graph-minimap-svg").bounding_box()
         assert map_bounds is not None
