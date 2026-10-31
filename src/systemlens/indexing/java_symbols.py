@@ -727,6 +727,10 @@ class JavaSymbols:
         if not declarations:
             declarations = [candidate for base, base_module in self.ancestors(owner, module)
                             for candidate in self.by_owner.get((base, name, len(arguments), base_module), [])]
+        if not declarations and not arguments:
+            # A record component is an implicit accessor; a declared
+            # accessor of the same name was found above and wins.
+            return self._record_component_type(owner, name, locations[0][0])
         if len({candidate.parameters for candidate in declarations}) != 1:
             return None
         returns: set[str | None] = set()
@@ -738,6 +742,26 @@ class JavaSymbols:
                 candidate.owner,
             ) if type_node is not None else None)
         return next(iter(returns)) if len(returns) == 1 else None
+
+    def _record_component_type(self, owner: str, name: str, path: str) -> str | None:
+        """Declared type of the record component ``name`` of ``owner``."""
+        for declaration_path, declaration in self._type_candidates(owner, path):
+            if declaration.type != "record_declaration":
+                continue
+            source = self.units[declaration_path].source
+            parameters = declaration.child_by_field_name("parameters")
+            for parameter in parameters.named_children if parameters is not None else []:
+                ident = parameter.child_by_field_name("name")
+                type_node = parameter.child_by_field_name("type")
+                if (
+                    parameter.type == "formal_parameter" and ident is not None and type_node is not None
+                    and parser.node_text(source, ident) == name
+                ):
+                    return self.resolve(
+                        declaration_path, parser.node_text(source, type_node), owner,
+                        allow_ambiguous=True,
+                    )
+        return None
 
     def _argument_assignable(self, parameter: str | None, argument: str | None) -> bool:
         if _argument_matches(parameter, argument):

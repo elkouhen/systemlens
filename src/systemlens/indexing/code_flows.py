@@ -30,7 +30,7 @@ from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import is_java_literal, trace_scalar_key_identity
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v44-placeholder-module-identity"
+CODE_FLOW_SIGNATURE = "code-flow-v45-record-accessors"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 

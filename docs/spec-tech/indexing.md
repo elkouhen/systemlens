@@ -246,6 +246,8 @@ For `D` inherited declarations in one signature group, hiding checks cost
 For a method invocation used as a receiver, the fallback reads source-declared
 return types through the receiver hierarchy. It requires one parameter signature
 and one resolved return type, and bounds nested receiver analysis to 16 calls.
+A zero-argument call with no declared method reads a record component of the
+same name as its implicit accessor; a declared accessor takes precedence.
 Generic return substitution and ambiguous overload selection are unsupported.
 These inferred calls retain `possible` dispatch and low flow confidence.
 Known positions in a partially resolved generic signature still constrain

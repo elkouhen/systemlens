@@ -333,3 +333,39 @@ def test_a_statically_imported_source_method_is_a_call(tmp_path: Path) -> None:
     # ``shared`` comes from two static wildcards and stays unresolved; a
     # ``helper`` declared by the caller's own type shadows the import.
     assert calls == [("q.User.go", "p.Util.helper", "exact")]
+
+
+def test_record_components_type_chained_receivers(tmp_path: Path) -> None:
+    path = "app/src/main/java/p/Records.java"
+    (tmp_path / path).parent.mkdir(parents=True)
+    (tmp_path / path).write_text(
+        "package p;\n"
+        "class Order { void process() {} }\n"
+        "class Audit { void log() {} }\n"
+        "record Pair(Order order, Order other) {\n"
+        "  public Audit other() { return new Audit(); }\n"
+        "}\n"
+        "class Svc {\n"
+        "  void run(Pair pair) { pair.order().process(); pair.other().log(); }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="app", path=tmp_path / "app", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    methods = materialize_integration_methods(tmp_path, [], [path], [module])
+    symbols = JavaSymbols(tmp_path, methods, [path])
+
+    calls = sorted(
+        (call.callee, call.dispatch_confidence)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+        if call.caller.endswith("Svc.run")
+    )
+
+    # The explicit ``other()`` accessor overrides the component's type.
+    assert calls == [
+        ("p.Audit.log", "exact"),
+        ("p.Order.process", "exact"),
+        ("p.Pair.other", "exact"),
+    ]
