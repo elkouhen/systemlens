@@ -4,6 +4,10 @@ import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 
+# Step kinds that reference a persisted data operation. ``data_access`` is an
+# operation whose effect the source does not establish.
+DATA_STEP_KINDS = frozenset({"data_read", "data_write", "data_access"})
+
 
 def compute_code_flow_id(
     module: str,
@@ -56,6 +60,8 @@ class CodeFlowStep:
     # Canonical identities are separate from source expressions shown to users.
     resource_identity: str | None = None
     key_identity: str | None = None
+    # Reference to the persisted ``data_operations`` fact behind a data step.
+    operation_id: str | None = None
 
 
 @dataclass(frozen=True)

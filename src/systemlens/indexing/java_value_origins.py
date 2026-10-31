@@ -8,6 +8,7 @@ from tree_sitter import Node
 
 from systemlens.discovery.java import parser
 from systemlens.domain.code_flows import IntegrationMethod
+from systemlens.domain.data_operations import JAVA_LITERAL as _JAVA_LITERAL
 from systemlens.callgraph.model import MethodCall
 
 
@@ -18,12 +19,6 @@ _SCALAR_TYPES = {
     "java.lang.Short", "java.lang.Integer", "java.lang.Long", "java.lang.Float",
     "java.lang.Double", "java.lang.Character", "java.lang.Boolean",
 }
-_JAVA_LITERAL = re.compile(
-    r'(?:"(?:[^"\\\r\n]|\\.)*"|\'(?:[^\'\\\r\n]|\\.)\'|'
-    r'(?:0[xX][0-9a-fA-F](?:_?[0-9a-fA-F])*|'
-    r'0[bB][01](?:_?[01])*|0(?:_?[0-7])*|[1-9](?:_?[0-9])*)(?:[lL])?|'
-    r'true|false)'
-)
 
 
 def is_java_literal(expression: str) -> bool:

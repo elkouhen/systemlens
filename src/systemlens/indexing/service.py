@@ -32,7 +32,9 @@ from systemlens.indexing.integration_methods import (
     path_module_resolver,
     scheduled_trigger_endpoints,
 )
+from systemlens.domain.data_operation_projection import data_operations_from_modules
 from systemlens.domain.code_flows import (
+    DATA_STEP_KINDS,
     CodeFlow,
     CallGraphEdge,
     IntegrationMethod,
@@ -569,6 +571,9 @@ def _index_repo(
         timer.begin("properties", "→ Indexation : inventaire des projets et propriétés...")
         _trace("store.modules.begin", count=len(discovered_modules))
         store.replace_modules(discovered_modules)
+        # Typed data operations live in their own table (relative paths only);
+        # module discovery is a full rescan, so the table is rebuilt with it.
+        store.replace_data_operations(data_operations_from_modules(repo_root, discovered_modules))
         module_dependencies = discover_module_dependencies(repo_root, discovered_modules)
         store.replace_module_dependencies(module_dependencies)
         _trace("store.modules.end")
@@ -577,6 +582,9 @@ def _index_repo(
         _report_progress(progress, "→ Indexation : propriétés et inventaire des projets désactivés, snapshot conservé.")
 
     relation_modules = discovered_modules if "properties" not in disabled else store.all_modules()
+    data_operations = store.all_data_operations() or data_operations_from_modules(
+        repo_root, relation_modules,
+    )
     relation_dependencies = (
         module_dependencies if "properties" not in disabled else store.all_module_dependencies()
     )
@@ -816,7 +824,9 @@ def _index_repo(
                 store.set_meta("codeql_join_methods_signature", current_join_methods_signature)
         else:
             store.set_meta("codeql_join_methods_signature", current_join_methods_signature)
-        flows = materialize_code_flows(repo_root, all_endpoints, relation_modules)
+        flows = materialize_code_flows(
+            repo_root, all_endpoints, relation_modules, data_operations,
+        )
         if (methods or refresh_codeql_view) and engine is not None:
             if not resume_codeql_join:
                 store.delete_meta("codeql_join_completed_entries")
@@ -874,6 +884,7 @@ def _index_repo(
                     progress_flows = materialize_call_graph_flows(
                         methods, flow_endpoints(), calls, repo_root=repo_root,
                         modules=relation_modules,
+                        operations=data_operations,
                         source_paths=list(current_hashes),
                         max_hops=config.codeql_max_hops,
                         codeql_edge_confidence=config.codeql_edge_confidence,
@@ -1051,6 +1062,7 @@ def _index_repo(
                 prepared_codeql_flows = materialize_call_graph_flows(
                     methods, flow_endpoints(), calls, repo_root=repo_root,
                     modules=relation_modules,
+                    operations=data_operations,
                     source_paths=list(current_hashes),
                     max_hops=config.codeql_max_hops,
                     codeql_edge_confidence=config.codeql_edge_confidence,
@@ -1110,6 +1122,7 @@ def _index_repo(
             codeql_flows = prepared_codeql_flows if prepared_codeql_flows is not None else materialize_call_graph_flows(
                 methods, flow_endpoints(), calls, repo_root=repo_root,
                 modules=relation_modules,
+                operations=data_operations,
                 source_paths=list(current_hashes),
                 max_hops=config.codeql_max_hops,
                 codeql_edge_confidence=config.codeql_edge_confidence,
@@ -1186,7 +1199,7 @@ def _index_repo(
             store.delete_meta("codeql_join_signature")
             store.delete_meta("codeql_join_completed_entries")
         data_path_count = sum(
-            bool(flow.steps) and flow.steps[-1].kind in {"data_read", "data_write"}
+            bool(flow.steps) and flow.steps[-1].kind in DATA_STEP_KINDS
             for flow in flows
         )
         _report_progress(
@@ -1221,7 +1234,7 @@ def _index_repo(
             if step.endpoint_id in endpoint_by_id and endpoint_by_id[step.endpoint_id].module
         }
         if not involved_modules or involved_modules == {flow.module}:
-            if flow.steps and flow.steps[-1].kind in {"data_read", "data_write"}:
+            if flow.steps and flow.steps[-1].kind in DATA_STEP_KINDS:
                 internal_data_paths_by_module[flow.module] += 1
             else:
                 internal_integrations_by_module[flow.module] += 1

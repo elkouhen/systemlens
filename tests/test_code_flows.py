@@ -19,6 +19,11 @@ from systemlens.application.code_flows import (
 from systemlens.application.flow_calculation import calculate_persisted_flows
 from systemlens.delivery.cli import app
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
+from systemlens.domain.data_operation_projection import (
+    jpa_data_operation,
+    mongo_data_operation,
+)
+from systemlens.domain.data_operations import DataOperation, compute_data_operation_id
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, JpaMethod, MongoMethod
@@ -28,8 +33,7 @@ from systemlens.indexing.code_flows import (
     _data_access_branch,
     _deduplicate_code_flows,
     _ensure_unique_code_flow_ids,
-    _jpa_step,
-    _mongo_step,
+    _operation_step,
     call_graph_join_methods_signature,
 )
 from systemlens.indexing.code_flows import materialize_code_flows, reconcile_code_flows
@@ -44,7 +48,7 @@ from systemlens.indexing.integration_methods import (
 from systemlens.indexing import service as indexing_service
 from systemlens.infrastructure.config import Config
 from systemlens.indexing.service import index_repo
-from systemlens.storage.sqlite import Store
+from systemlens.storage.sqlite import SCHEMA_VERSION, Store
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -60,43 +64,57 @@ def test_data_access_branch_only_marks_async_writes_and_sync_http_reads() -> Non
 
 
 def test_data_steps_derive_key_identity_only_for_exact_literals() -> None:
-    mongo = _mongo_step(
-        MongoMethod(
-            operation="findById", receiver="orders", path="OrderRepo.java", line=12,
-            collection="orders", key_expression='"order-42"',
-        ),
-        "OrderRepo.java", 2, "message_entry", "orders-module",
-    )
+    def mongo_step(key_expression: str) -> CodeFlowStep:
+        operation = mongo_data_operation(
+            MongoMethod(
+                operation="findById", receiver="orders", path="OrderRepo.java", line=12,
+                collection="orders", key_expression=key_expression, owner_method="load",
+            ),
+            "orders-module", "OrderRepo.java",
+        )
+        assert operation is not None
+        return _operation_step(operation, 2, "message_entry")
+
+    mongo = mongo_step('"order-42"')
     assert mongo.resource_identity == "mongo:orders-module:orders"
     assert mongo.key_identity == 'mongo:orders-module:orders:literal:"order-42"'
-
-    dynamic = _mongo_step(
-        MongoMethod(
-            operation="findById", receiver="orders", path="OrderRepo.java", line=12,
-            collection="orders", key_expression="request.orderId",
-        ),
-        "OrderRepo.java", 2, "message_entry", "orders-module",
+    assert mongo.kind == "data_read"
+    assert mongo.operation_id == compute_data_operation_id(
+        "orders-module", "OrderRepo.java", "load", 12, "mongodb", "findById",
     )
+
+    dynamic = mongo_step("request.orderId")
     assert dynamic.key == "request.orderId"
     assert dynamic.key_identity is None
 
-    invalid_literal = _mongo_step(
-        MongoMethod(
-            operation="findById", receiver="orders", path="OrderRepo.java", line=12,
-            collection="orders", key_expression="10_",
-        ),
-        "OrderRepo.java", 2, "message_entry", "orders-module",
-    )
-    assert invalid_literal.key_identity is None
+    assert mongo_step("10_").key_identity is None
 
-    jpa = _jpa_step(
-        JpaMethod(
-            "findById", "example.Order", "repository", "OrderRepo.java", 12,
-            "load", '"order-42"',
+    jpa = _operation_step(
+        jpa_data_operation(
+            JpaMethod(
+                "findById", "example.Order", "repository", "OrderRepo.java", 12,
+                "load", '"order-42"',
+            ),
+            "orders-module", "OrderRepo.java",
         ),
-        "OrderRepo.java", 2, "orders-module", "http_entry",
+        2, "http_entry",
     )
     assert jpa.key_identity == 'jpa:orders-module:example.Order:literal:"order-42"'
+    assert jpa.resource == "jpa:orders-module:example.Order"
+    assert jpa.branch == "sync"
+
+    unknown = _operation_step(
+        DataOperation(
+            id="op", module="orders-module", path="Dao.java", owner_method="run", line=3,
+            end_line=3, technology="jdbc", operation="update", action="unknown",
+            reads=False, writes=False, resource=None, resource_identity=None,
+            unresolved_reason="dynamic SQL",
+        ),
+        2, "http_entry",
+    )
+    assert unknown.kind == "data_access"
+    assert unknown.branch is None
+    assert unknown.name == "<unresolved>"
 
 
 def test_key_identity_traces_an_unmodified_scalar_parameter_through_calls(tmp_path: Path) -> None:
@@ -1714,7 +1732,7 @@ def test_store_additively_migrates_previous_schema_for_code_flows(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'codeql_call_edges'"
         ).fetchone()
         assert call_edges_table is not None
-        assert store.get_meta("schema_version") == "38"
+        assert store.get_meta("schema_version") == SCHEMA_VERSION
 
 
 def test_codeql_calls_join_ast_entry_and_output_methods(tmp_path: Path) -> None:

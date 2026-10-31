@@ -20,7 +20,7 @@ from systemlens.discovery.build.modules import (
     discover_modules,
     module_identity,
 )
-from systemlens.storage.sqlite import Store, StoreError
+from systemlens.storage.sqlite import SCHEMA_VERSION, Store, StoreError
 from systemlens.application.workspace import discover_workspace_services, load_federation
 
 runner = CliRunner()
@@ -1141,7 +1141,7 @@ def test_store_adds_jpa_inventory_to_existing_index(tmp_path: Path) -> None:
     with Store(tmp_path) as store:
         columns = {row["name"] for row in store.conn.execute("PRAGMA table_info(modules)")}
         assert "jpa_entities" in columns
-        assert store.get_meta("schema_version") == "38"
+        assert store.get_meta("schema_version") == SCHEMA_VERSION
 
 
 def test_jpa_calls_require_typed_spring_data_repository(tmp_path: Path) -> None:

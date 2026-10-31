@@ -13,6 +13,7 @@ from systemlens.indexing.code_flows import (
     materialize_call_graph_flows,
     reconcile_code_flows,
 )
+from systemlens.domain.data_operation_projection import data_operations_from_modules
 from systemlens.domain.module_inventory import module_identity
 from systemlens.indexing.integration_methods import (
     SCHEDULER_TRIGGER_PREFIX,
@@ -35,6 +36,11 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
     """
     endpoints = store.all_endpoints()
     modules = store.all_modules()
+    # Persisted operation facts drive data steps; an index created before the
+    # table existed is projected from its module inventory until reindexed.
+    operations = store.all_data_operations() or data_operations_from_modules(
+        store.repo_root, modules,
+    )
     persisted_flows = store.all_code_flows()
     current_endpoint_ids = {endpoint.id for endpoint in endpoints}
     methods = store.all_integration_methods()
@@ -76,6 +82,7 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
             modules=modules,
             persisted_edges=persisted_call_edges,
             persisted_methods=persisted_codeql_methods,
+            operations=operations,
         )
         if methods
         else []

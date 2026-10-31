@@ -28,6 +28,7 @@ from systemlens.domain.code_flows import (
     PersistedCallGraphMethod,
     ensure_unique_code_flow_ids,
 )
+from systemlens.domain.data_operations import DataOperation, sort_data_operations
 from systemlens.domain.module_inventory import (
     DiscoveredModule,
     JpaDto,
@@ -52,7 +53,7 @@ from systemlens.storage.serialization import (
     row_to_finding as _row_to_finding,
 )
 
-SCHEMA_VERSION = "38"
+SCHEMA_VERSION = "39"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 _COUNTABLE_DIMENSIONS = ("rule_id", "severity")
 _SQLITE_BIND_LIMIT = 900
@@ -438,6 +439,38 @@ class Store:
                 ON codeql_methods(path, start_line);
             CREATE INDEX IF NOT EXISTS idx_codeql_methods_module
                 ON codeql_methods(module);
+            -- Typed data operations, one row per supported source invocation.
+            -- Paths are repository-relative; flows reference rows by id.
+            CREATE TABLE IF NOT EXISTS data_operations (
+                id TEXT PRIMARY KEY,
+                module TEXT NOT NULL,
+                path TEXT NOT NULL,
+                owner_method TEXT NOT NULL,
+                line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL,
+                technology TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                action TEXT NOT NULL,
+                reads INTEGER NOT NULL DEFAULT 0,
+                writes INTEGER NOT NULL DEFAULT 0,
+                resource TEXT,
+                resource_identity TEXT,
+                key_expression TEXT,
+                key_property TEXT,
+                key_identity TEXT,
+                confidence TEXT NOT NULL DEFAULT 'medium',
+                unresolved_reason TEXT,
+                receiver TEXT,
+                transaction_id TEXT,
+                propagation TEXT,
+                isolation TEXT,
+                read_only INTEGER,
+                guard TEXT,
+                guard_scope TEXT,
+                value_dependencies TEXT NOT NULL DEFAULT '[]'
+            );
+            CREATE INDEX IF NOT EXISTS idx_data_operations_path ON data_operations(path);
+            CREATE INDEX IF NOT EXISTS idx_data_operations_module ON data_operations(module);
             -- Runtime observations are not part of the source snapshot:
             -- indexing never reads or clears them (ADR-60).
             CREATE TABLE IF NOT EXISTS runtime_observations (
@@ -950,6 +983,61 @@ class Store:
         ).fetchall()
         return [PersistedCallGraphMethod(**dict(row)) for row in rows]
 
+    # -- data operations --
+
+    def replace_data_operations(self, operations: list[DataOperation]) -> None:
+        """Replace the typed operation facts of the whole snapshot.
+
+        Module discovery rescans every module on each index run, so the table
+        is rebuilt as a whole; deleted files lose their rows through
+        :meth:`remove_files` as well.
+        """
+        operations = _ensure_unique_record_ids(sort_data_operations(operations))
+        self.conn.execute("DELETE FROM data_operations")
+        self.conn.executemany(
+            """INSERT INTO data_operations
+            (id, module, path, owner_method, line, end_line, technology, operation,
+             action, reads, writes, resource, resource_identity, key_expression,
+             key_property, key_identity, confidence, unresolved_reason, receiver,
+             transaction_id, propagation, isolation, read_only, guard, guard_scope,
+             value_dependencies)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                (
+                    item.id, item.module, item.path, item.owner_method, item.line,
+                    item.end_line, item.technology, item.operation, item.action,
+                    int(item.reads), int(item.writes), item.resource,
+                    item.resource_identity, item.key_expression, item.key_property,
+                    item.key_identity, item.confidence, item.unresolved_reason,
+                    item.receiver, item.transaction_id, item.propagation,
+                    item.isolation,
+                    None if item.read_only is None else int(item.read_only),
+                    item.guard, item.guard_scope, json.dumps(list(item.value_dependencies)),
+                )
+                for item in operations
+            ],
+        )
+
+    def all_data_operations(self) -> list[DataOperation]:
+        """Return persisted operations; older indexes may lack the table."""
+        try:
+            rows = self.conn.execute(
+                "SELECT * FROM data_operations"
+                " ORDER BY module, path, line, technology, operation, id"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        return [
+            DataOperation(**{
+                **dict(row),
+                "reads": bool(row["reads"]),
+                "writes": bool(row["writes"]),
+                "read_only": None if row["read_only"] is None else bool(row["read_only"]),
+                "value_dependencies": tuple(json.loads(row["value_dependencies"] or "[]")),
+            })
+            for row in rows
+        ]
+
     def all_call_edges(self) -> list[CallGraphEdge]:
         rows = self.conn.execute(
             """SELECT caller_id, callee_id, path, line,
@@ -1222,6 +1310,7 @@ class Store:
             return
         self._delete_rows_for_paths("files", paths)
         self._delete_rows_for_paths("findings", paths)
+        self._delete_rows_for_paths("data_operations", paths)
         self.replace_code_chunks_for_files(paths, [])
         self.replace_endpoints_for_files(paths, [])
         self.replace_extraction_diagnostics_for_files(paths, [])

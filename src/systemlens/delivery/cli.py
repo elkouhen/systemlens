@@ -76,7 +76,7 @@ from systemlens.domain.graph import (
     graph_edges_from_relations,
     group_endpoints_by_module,
 )
-from systemlens.domain.code_flows import CodeFlow, CallGraphEdge
+from systemlens.domain.code_flows import DATA_STEP_KINDS, CodeFlow, CallGraphEdge
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.indexing.service import CallGraphProgress, index_repo
 from systemlens.indexing.code_flows import materialize_call_graph_flows
@@ -1045,7 +1045,7 @@ def flows_calculate(
                 flow_count = calculate_persisted_flows(store, module=module)
             fact_count = len(store.all_graph_facts())
             data_path_count = sum(
-                bool(flow.steps) and flow.steps[-1].kind in {"data_read", "data_write"}
+                bool(flow.steps) and flow.steps[-1].kind in DATA_STEP_KINDS
                 for flow in store.all_code_flows()
             )
     except (ConfigError, StoreError, RuntimeError, ValueError) as exc:
@@ -1881,6 +1881,7 @@ def index_cmd(
                     }),
                     module=selected_module.name,
                     modules=store.all_modules(),
+                    operations=store.all_data_operations() or None,
                     codeql_edge_confidence=config.codeql_edge_confidence,
                 )
                 debug_flows = direct_flows
@@ -1896,6 +1897,7 @@ def index_cmd(
                     [],
                     module=selected_module.name,
                     modules=store.all_modules(),
+                    operations=store.all_data_operations(),
                     call_chain_progress=_echo_only_constructed_chains,
                     call_chain_module=selected_module.name,
                     persisted_edges=store.all_call_edges(),

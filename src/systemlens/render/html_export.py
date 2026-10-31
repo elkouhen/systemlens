@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, cast, Mapping
 
 from systemlens.domain.graph import GraphEdge, graph_edges_from_facts
-from systemlens.domain.code_flows import CodeFlow, CallGraphEdge, IntegrationMethod
+from systemlens.domain.code_flows import DATA_STEP_KINDS, CodeFlow, CallGraphEdge, IntegrationMethod
 from systemlens.application.flow_consistency import diagnose_flow_consistency_snapshot
 from systemlens.domain.models import (
     ArchitectureRelation,
@@ -164,7 +164,7 @@ def render_graph_html(
     call_flows = [
         flow for flow in export_flows
         if not flow.steps
-        or flow.steps[-1].kind not in {"data_read", "data_write"}
+        or flow.steps[-1].kind not in DATA_STEP_KINDS
         or any(step.kind in {"http_call", "message_publish"} for step in flow.steps)
     ]
     flow_edges = [
@@ -299,7 +299,7 @@ def render_graph_html(
                     "visibility_before_reads": list(step.visibility_before_reads),
                 }
                 for step in flow.steps
-                if include_call_graph_annotations or step.kind not in {"data_read", "data_write"}
+                if include_call_graph_annotations or step.kind not in DATA_STEP_KINDS
             ],
         }
 
@@ -332,7 +332,7 @@ def render_graph_html(
     source_resources_by_module_and_name: dict[tuple[str, str], set[str]] = {}
     for flow in export_flows:
         for step in flow.steps:
-            if step.kind not in {"data_read", "data_write"}:
+            if step.kind not in DATA_STEP_KINDS:
                 continue
             resource = step.resource or step.name
             simple_name = resource.rsplit(":", 1)[-1].rsplit(".", 1)[-1]
@@ -347,7 +347,7 @@ def render_graph_html(
                 continue
             accesses: dict[tuple[str, int, str, str, str], dict[str, object]] = {}
             for step in flow.steps:
-                if step.kind not in {"data_read", "data_write"}:
+                if step.kind not in DATA_STEP_KINDS:
                     continue
                 site = (
                     step.path, step.start_line, step.kind,

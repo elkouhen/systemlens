@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from systemlens.domain.data_operations import DataOperation
 from systemlens.domain.runtime import KubernetesWorkload
 
 
@@ -37,6 +38,9 @@ class DiscoveredModule:
     # Stable key carried by endpoints and relations. It equals ``name`` unless
     # another build module in the same index uses the same artifact name.
     identity: str = ""
+    # Typed data operations with repository-relative paths. They are persisted
+    # in the ``data_operations`` table, never in the module inventory JSON.
+    data_operations: tuple[DataOperation, ...] = ()
 
 
 def module_identity(module: DiscoveredModule) -> str:

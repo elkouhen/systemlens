@@ -5,6 +5,7 @@ from dataclasses import asdict
 import re
 
 from systemlens.domain.code_flows import (
+    DATA_STEP_KINDS,
     CallGraphEdge,
     CodeFlow,
     IntegrationMethod,
@@ -118,7 +119,7 @@ def list_code_flows(
 ) -> list[dict[str, object]]:
     flows = [
         flow for flow in flows
-        if not flow.steps or flow.steps[-1].kind not in {"data_read", "data_write"}
+        if not flow.steps or flow.steps[-1].kind not in DATA_STEP_KINDS
     ]
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints or []}
     flow_index = _build_flow_index(flows, endpoint_by_id)
@@ -166,7 +167,7 @@ def _is_internal_module_flow(
     last_endpoint = endpoints[endpoint_steps[-1].endpoint_id or ""]
     if first_endpoint.role not in {"serve", "consume"}:
         return False
-    if flow.steps[-1].kind in {"data_read", "data_write"}:
+    if flow.steps[-1].kind in DATA_STEP_KINDS:
         return False
     if last_endpoint.role not in {"call", "produce"}:
         return False
