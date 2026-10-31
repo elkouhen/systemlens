@@ -1,6 +1,6 @@
 # Backlog: Java indexing and call-graph discovery corrections
 
-Status: planned; implementation has not started.
+Status: delivered on 2026-10-31; see section 10 for the delivery record.
 Owner: SystemLens implementer. Reviewers: product owner and architecture
 maintainer.
 Review date: 2026-10-31, on commit `741670d`.
@@ -169,8 +169,9 @@ its receiver. This is the largest group of unresolved sites on the lab.
   `within_application_boundary`.
 - **Over-broad CodeQL source exclusion.** `_prepare_source_only_root`
   excludes any path containing a directory named `target` or `out`, so a
-  Java package such as `com/acme/target/` never enters the CodeQL database,
-  while it stays in the file inventory.
+  Java package such as `com/acme/target/` never enters the CodeQL database.
+  Correction found during delivery: the file inventory excluded such a
+  `target` package too, so J11 fixed both.
 - **Dead and quadratic code in `JavaSymbols`.** `_targets` is written and
   never read. `implementations()` scans the whole `dispatch` dictionary for
   each generic contract.
@@ -471,3 +472,82 @@ uv run python scripts/check_companion_contracts.py
 
 CodeQL-dependent assertions (J4, J10, J11) must be stated as unverified
 when no local CodeQL executable is available.
+
+## 10. Delivery record
+
+All tasks J1 to J15 were delivered on `main` on 2026-10-31. Each fix has a
+regression test that fails on the previous code. `CODE_FLOW_SIGNATURE` moved
+from `code-flow-v39-source-engine-closed-world` to
+`code-flow-v45-record-accessors`, so existing indexes rebuild their flows.
+
+| Task | Commit | Outcome |
+|---|---|---|
+| J1, J2, J3, J4 | `90bea87` | Scheduler anchors, trigger module, cross-module template dispatch, `medium` reachability under `exact`. |
+| J5, J6 | `a64ba65` | Anonymous bodies belong to the creating method (ADR-62); pruned dispatch stays `possible`. |
+| J7, J8 | `35524cc` | Scoped declarations and static imports type receivers. |
+| J9 | `397228a` | `entry_dispatch_allowed` replaces the lab class name in both modules. |
+| J10 | `5ad5d1c` | Placeholders and the engine projection use the discovered module identity. |
+| J11 | `8e1dda7` | `target` and `out` are build directories only outside `src`. |
+| J12 | `6158f26` | Record components act as implicit accessors. |
+| J13 | `e791409` | Dispatch signatures are indexed by owner, module, name and arity. |
+| J14 | `e02637a` | The parse cache follows the Java inventory, up to 20,000 files. |
+| J15 | this section | Regression matrix below. |
+
+J5 was implemented with option 1: anonymous methods are not indexed. CodeQL
+already reports their callers as `<anonymous class>.name`, and the join
+attaches them to the smallest enclosing indexed method, so both engines
+agree without a synthetic owner.
+
+### Regression matrix on the observability lab, 2026-10-31
+
+Measured on a fresh copy of `apps/supermarket-demo` (47 Java files) with
+`index --full`, before (`741670d`) and after (`e02637a`) the corrections.
+The CodeQL run used a database created with `--build-mode=none`.
+
+| Measure | Source before | Source after | CodeQL before | CodeQL after |
+|---|---|---|---|---|
+| Integration methods | 73 | 73 | 73 | 73 |
+| Call-graph methods | 73 | 73 | 123 | 123 |
+| Exact engine edges | 53 | 53 | 57 | 57 |
+| Possible engine edges | 0 | 0 | 17 | 17 |
+| Possible inferred edges | 6 | 6 | 20 | 20 |
+| Flows, potential and medium | 12 | 12 | 12 | 12 |
+| Flows, potential and low | 11 | 11 | 11 | 11 |
+| Flows with a scheduler trigger | 1 | 1 | 1 | 1 |
+
+The persisted flows are identical before and after, flow by flow, for both
+engines. The lab has a single scheduler, no anonymous class and no static
+import. Its template body, `AbstractKafkaMessageProcessor.consumeMessage`,
+lives in the `kafka-processing` helper module; the removed lab-specific rule
+already kept it on the entry consumer, and J3 with J9 now do so generically
+with the same result.
+
+Symbol-pass resolution of invocation sites on the same copy:
+
+| Category | Before | After |
+|---|---|---|
+| Resolved | 54 | 54 |
+| External receiver | 74 | 75 |
+| Untyped receiver | 70 | 65 |
+| No target on a source type | 33 | 37 |
+
+J7 and J12 typed five more receivers. The resolved count and the 59 symbol
+calls are unchanged: the new receivers' targets are external types or record
+accessors without a method declaration, so no new edge appears.
+
+### Companion check
+
+`scripts/check_companion_contracts.py` failed before this delivery, on the
+baseline commit too. Two expectations were stale, not the indexer:
+
+- Since `9dd6a7e`, the export lists access sites per access flow and
+  groups them per root in `flow_data_access_flow_ids_by_root`. The check
+  now accepts that grouping (`127b5fb`).
+- Since `044bc07` (ADR-59), a read that precedes the Kafka publication in
+  the fork handler yields no diagnostic. In the lab reservation handler,
+  `products.findById` precedes `stockDepleted.publish`, so the order call
+  graph has none. The check now rejects a `potential_risk` on that root
+  instead of requiring `insufficient_evidence` (`ad76114`).
+
+Both causes were located by bisection. The check now passes with CodeQL.
+
