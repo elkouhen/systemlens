@@ -1226,3 +1226,55 @@ def test_entry_dispatch_allowed(caller, callees, callee, allowed):
     from systemlens.domain.code_flows import entry_dispatch_allowed
 
     assert entry_dispatch_allowed("app.A.entry", caller, callee, callees) is allowed
+
+
+def test_placeholder_methods_carry_the_discovered_module_identity(tmp_path: Path):
+    """An engine method without an indexed row still respects app boundaries."""
+    sources = {
+        "orders/src/main/java/o/Entry.java": "package o;\npublic class Entry {\n  public void entry() { helper.relay(); }\n}\n",
+        "orders/src/main/java/o/Publisher.java": "package o;\npublic class Publisher {\n  public void output() {}\n}\n",
+        "billing/src/main/java/b/Helper.java": "package b;\npublic class Helper {\n  public void relay() { publisher.output(); }\n}\n",
+    }
+    for path, source in sources.items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(source)
+    # Maven identities differ from directory names.
+    modules = [
+        DiscoveredModule("orders", tmp_path / "orders", "maven", None, "application", True, "",
+                         identity="com.acme:orders-svc"),
+        DiscoveredModule("billing", tmp_path / "billing", "maven", None, "application", True, "",
+                         identity="com.acme:billing-svc"),
+    ]
+    orders_paths = [path for path in sources if path.startswith("orders/")]
+    methods = materialize_integration_methods(tmp_path, [], orders_paths, modules)
+    entry = next(method for method in methods if method.qualified_method == "o.Entry.entry")
+    output = next(method for method in methods if method.qualified_method == "o.Publisher.output")
+    endpoints = [
+        MessageEndpoint(id="in", role="serve", system="rest", topic="GET /in", topic_dynamic=False,
+                        source="code", framework="test", path=entry.path, start_line=3, end_line=3,
+                        snippet="", module=entry.module, qualified_name="o.Entry"),
+        MessageEndpoint(id="out", role="call", system="rest", topic="GET /out", topic_dynamic=False,
+                        source="code", framework="test", path=output.path, start_line=3, end_line=3,
+                        snippet="", module=output.module, qualified_name="o.Publisher"),
+    ]
+    methods = [
+        replace(method, input_endpoint_ids=("in",)) if method is entry
+        else replace(method, output_endpoint_ids=("out",)) if method is output else method
+        for method in methods
+    ]
+    helper = "billing/src/main/java/b/Helper.java"
+    calls = [
+        MethodCall("o.Entry.entry", entry.path, 2, "b.Helper.relay", helper, 2, 3),
+        MethodCall("b.Helper.relay", helper, 2, "o.Publisher.output", output.path, 2, 3),
+    ]
+    graphs = []
+
+    flows = materialize_call_graph_flows(
+        methods, endpoints, calls, repo_root=tmp_path, modules=modules,
+        source_paths=list(sources), call_graph_sink=graphs.append,
+    )
+
+    placeholder = next(method for method in graphs[0].methods if method.qualified_method == "b.Helper.relay")
+    assert placeholder.module == "com.acme:billing-svc"
+    # The billing application is another service: the route stops at its boundary.
+    assert flows == []

@@ -3,6 +3,7 @@
 import hashlib
 import json
 from collections import defaultdict
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import yaml
@@ -96,19 +97,40 @@ def _qualified_method_owner(declaration, root, source: bytes) -> str | None:
     return ".".join(parts)
 
 
-def _path_module(repo_root: Path, path: str, modules: list[DiscoveredModule]) -> str | None:
+def _path_module(repo_root: Path, path: str, modules: Sequence[DiscoveredModule]) -> str | None:
     """Return the innermost discovered module containing a repository path."""
-    module_candidates = []
+    return path_module_resolver(repo_root, modules)(path)
+
+
+def path_module_resolver(
+    repo_root: Path, modules: Sequence[DiscoveredModule],
+) -> Callable[[str], str | None]:
+    """Map a repository-relative path to its innermost discovered module.
+
+    Module roots are resolved once; each lookup walks the path's ancestors,
+    so it costs the path depth rather than the module count. A path outside
+    every discovered module has no module identity.
+    """
+    root = repo_root.resolve()
+    by_prefix: dict[str, str] = {}
     for discovered_module in modules:
         try:
-            prefix = discovered_module.path.resolve().relative_to(repo_root.resolve()).as_posix()
+            prefix = discovered_module.path.resolve().relative_to(root).as_posix()
         except ValueError:
             continue
         # A repository-root module has ``.`` as its relative prefix, while
         # its files still use paths such as ``src/main/java/Foo.java``.
-        if prefix == "." or path == prefix or path.startswith(f"{prefix}/"):
-            module_candidates.append((len(prefix), module_identity(discovered_module)))
-    return max(module_candidates, default=(0, None))[1]
+        by_prefix.setdefault("" if prefix == "." else prefix, module_identity(discovered_module))
+
+    def resolve(path: str) -> str | None:
+        parts = path.replace("\\", "/").removeprefix("./").split("/")
+        for end in range(len(parts), -1, -1):
+            module = by_prefix.get("/".join(parts[:end]))
+            if module is not None:
+                return module
+        return None
+
+    return resolve
 
 
 SCHEDULER_TRIGGER_PREFIX = "scheduler:"

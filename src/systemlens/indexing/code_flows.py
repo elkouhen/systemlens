@@ -25,12 +25,12 @@ from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, JpaMethod, MongoMethod, module_identity
 from systemlens.domain.mongo_operations import mongo_action, mongo_facets
 from systemlens.callgraph.model import MethodCall, MethodReachability
-from systemlens.indexing.integration_methods import SCHEDULER_TRIGGER
+from systemlens.indexing.integration_methods import SCHEDULER_TRIGGER, path_module_resolver
 from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import is_java_literal, trace_scalar_key_identity
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v43-generic-entry-dispatch"
+CODE_FLOW_SIGNATURE = "code-flow-v44-placeholder-module-identity"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
@@ -585,6 +585,7 @@ def _build_call_graph(
     persisted_edges: Sequence[CallGraphEdge] | None = None,
     persisted_methods: Sequence[PersistedCallGraphMethod] = (),
     closed_world: bool = False,
+    modules: Sequence[DiscoveredModule] = (),
 ) -> CallGraph:
     """Resolve engine call rows into the internal graph consumed by reconstruction."""
     def prefer_caller_module(
@@ -630,13 +631,20 @@ def _build_call_graph(
         methods_by_name[name].append(item)
         module_by_path.setdefault(path, item.module)
 
+    module_of_path = (
+        path_module_resolver(repo_root, modules)
+        if repo_root is not None and modules else (lambda _path: None)
+    )
+
     def placeholder(name: str, path: str, line: int) -> IntegrationMethod:
-        """Represent a non-port CodeQL method only inside the transient graph."""
+        """Represent a non-port CodeQL method only inside the transient graph.
+
+        Its module is the discovered build module owning the path, the same
+        identity indexed methods carry, so application boundaries apply to
+        it. A path outside every discovered module has no module.
+        """
         normalized_path = normalized_path_value(path)
-        module = module_by_path.get(
-            normalized_path,
-            normalized_path.split("/", 1)[0] if "/" in normalized_path else "",
-        )
+        module = module_by_path.get(normalized_path) or module_of_path(normalized_path) or ""
         method_id = "codeql:" + hashlib.sha256(
             f"{module}|{normalized_path}|{line}|{normalized_method_name(name)}".encode()
         ).hexdigest()[:24]
@@ -1021,6 +1029,7 @@ def materialize_call_graph_flows(
         persisted_edges=persisted_edges,
         persisted_methods=persisted_methods,
         closed_world=closed_world,
+        modules=modules,
     )
     dispatch_symbols = call_graph.symbols
     if call_graph_sink is not None:

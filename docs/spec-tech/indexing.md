@@ -48,7 +48,10 @@ entry point as a service boundary. From an entry module, it rejects Java call
 targets in another application module while retaining helper modules. It
 applies the same rule to direct CodeQL input-to-output pairs. A set of
 application module identities makes each boundary check constant time per
-candidate edge.
+candidate edge. An engine method without an indexed row, and each method of
+the persisted engine projection, takes the identity of the innermost
+discovered build module containing its path, so the boundary applies to it.
+A path outside every discovered module has no module identity.
 
 When module metadata is absent, the reconstruction cannot classify the
 boundary and retains the call-graph result without this filter.

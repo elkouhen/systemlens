@@ -29,6 +29,7 @@ from systemlens.indexing.code_flows import (
 )
 from systemlens.indexing.integration_methods import (
     materialize_integration_methods,
+    path_module_resolver,
     scheduled_trigger_endpoints,
 )
 from systemlens.domain.code_flows import (
@@ -761,13 +762,14 @@ def _index_repo(
                 for method in methods_projection
             }
             eligible_paths = set(current_hashes)
+            module_of_path = path_module_resolver(repo_root, relation_modules)
             for method in codeql_method_projection:
                 if method.path not in eligible_paths:
                     continue
                 locator = (method.qualified_method, method.path, method.start_line)
                 if locator in known_locators:
                     continue
-                module = method.path.split("/", 1)[0] if "/" in method.path else ""
+                module = module_of_path(method.path) or ""
                 methods_projection.append(PersistedCallGraphMethod(
                     id="codeql:" + hashlib.sha256(
                         f"{module}|{method.path}|{method.start_line}|{method.qualified_method}".encode()
