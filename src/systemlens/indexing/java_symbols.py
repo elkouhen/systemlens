@@ -61,6 +61,13 @@ def _written_type(source: bytes, parameter: Node) -> str:
     return text.rsplit(".", 1)[-1]
 
 
+def _refers_to_anonymous_instance(source: bytes, receiver: Node | None) -> bool:
+    """Whether a receiver inside an anonymous class body denotes that instance."""
+    if receiver is None or receiver.type in {"this", "super"}:
+        return True
+    return receiver.type == "field_access" and parser.node_text(source, receiver).startswith("this.")
+
+
 @dataclass
 class _Unit:
     source: bytes
@@ -94,7 +101,6 @@ class JavaSymbols:
         self.by_owner: dict[tuple[str, str, int, str], list[_Method]] = defaultdict(list)
         self.dispatch: dict[tuple[str, str, str, tuple[str | None, ...]], list[_Method]] = defaultdict(list)
         self._ancestors: dict[tuple[str, str], set[tuple[str, str]]] = {}
-        self._targets: dict[tuple[str, str, int, str], IntegrationMethod | None] = {}
         self.inherited_dispatch: dict[tuple[str, str], set[str]] = defaultdict(set)
         by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
         for method in methods:
@@ -389,18 +395,26 @@ class JavaSymbols:
         candidates = self.possible_targets(
             receiver_type, name, arity, module, path, argument_types=argument_types,
         )
-        if len(candidates) == 1:
-            self._targets[(receiver_type, name, arity, module)] = candidates[0]
-            return candidates[0]
-        return None
+        return candidates[0] if len(candidates) == 1 else None
 
     def possible_targets(
         self, receiver_type: str, name: str, arity: int, module: str, path: str,
         argument_types: tuple[str | None, ...] | None = None,
     ) -> list[IntegrationMethod]:
         """Return all source-backed targets compatible with a receiver call."""
-        key = (receiver_type, name, arity, module)
-        self._targets[key] = None
+        return self._candidate_targets(
+            receiver_type, name, arity, module, path, argument_types=argument_types,
+        )[0]
+
+    def _candidate_targets(
+        self, receiver_type: str, name: str, arity: int, module: str, path: str,
+        argument_types: tuple[str | None, ...] | None = None,
+    ) -> tuple[list[IntegrationMethod], bool]:
+        """Return compatible targets and whether module preference pruned some.
+
+        Preferring the caller's module is a heuristic, not a proof: a call
+        whose candidates it pruned never becomes an exact dispatch.
+        """
         receiver_locations = self._type_candidates(receiver_type, path)
         receiver_is_interface = any(node.type == "interface_declaration" for _path, node in receiver_locations)
         receiver_module = (
@@ -446,7 +460,7 @@ class JavaSymbols:
                     break
             signatures = {candidate.parameters for candidate in contracts}
         if len(signatures) != 1:
-            return []
+            return [], False
         candidates = {candidate.method.id: candidate for contract in contracts
                       for candidate in self.implementations(contract)
                       if any(
@@ -502,13 +516,12 @@ class JavaSymbols:
                 )
         remaining = [candidate for candidate in candidates.values() if candidate.owner not in hidden]
         local_remaining = [candidate for candidate in remaining if candidate.module == module]
-        if local_remaining and not inherited_candidates:
+        if local_remaining and (not inherited_candidates or receiver_is_interface):
+            pruned = len(local_remaining) < len(remaining)
             remaining = local_remaining
-        elif receiver_is_interface:
-            preferred = [candidate for candidate in remaining if candidate.module == module]
-            if preferred:
-                remaining = preferred
-        return [candidate.method for candidate in remaining]
+        else:
+            pruned = False
+        return [candidate.method for candidate in remaining], pruned
 
     def expression_type(
         self, info: _Method, node: Node | None, invocation: Node, depth: int = 0,
@@ -747,10 +760,11 @@ class JavaSymbols:
             for invocation in parser.walk(info.node):
                 if (
                     invocation.type not in {"method_invocation", "method_reference"}
-                    or parser.enclosing(invocation, "method_declaration") != info.node
+                    or parser.enclosing_method(invocation) != info.node
                 ):
                     continue
                 line = invocation.start_point.row + 1
+                in_anonymous_body = parser.enclosing(invocation, "method_declaration") != info.node
                 argument_types: tuple[str | None, ...] | None
                 if invocation.type == "method_reference":
                     # ``receiver::method`` names a method without its arity:
@@ -759,6 +773,8 @@ class JavaSymbols:
                     if len(parts) < 2 or parts[-1].type != "identifier":
                         continue
                     receiver, name = parts[0], parser.node_text(source, parts[-1])
+                    if in_anonymous_body and _refers_to_anonymous_instance(source, receiver):
+                        continue
                     receiver_type = self.receiver_type(info, receiver, invocation)
                     if receiver_type is None:
                         continue
@@ -768,6 +784,10 @@ class JavaSymbols:
                     arity, argument_types = next(iter(arities)), None
                 else:
                     receiver, name, arguments = parser.invocation_parts(invocation, source)
+                    if in_anonymous_body and _refers_to_anonymous_instance(source, receiver):
+                        # ``this`` is the anonymous instance, whose members
+                        # come from an often external supertype.
+                        continue
                     receiver_type = self.receiver_type(info, receiver, invocation)
                     if receiver_type is None:
                         continue
@@ -776,10 +796,7 @@ class JavaSymbols:
                         self.expression_type(info, argument, invocation) for argument in arguments
                     )
                 arguments_count = arity
-                target = self.target(
-                    receiver_type, name, arguments_count, info.module, info.method.path,
-                    argument_types=argument_types,
-                )
+                pruned = False
                 if receiver is not None and receiver.type == "super":
                     direct_bases = self.bases.get((info.owner, info.module), set())
                     targets = [
@@ -788,20 +805,24 @@ class JavaSymbols:
                         for candidate in self.by_owner.get((base_owner, name, arguments_count, base_module), [])
                     ]
                 else:
-                    targets = [target] if target is not None else self.possible_targets(
+                    targets, pruned = self._candidate_targets(
                         receiver_type, name, arguments_count, info.module, info.method.path,
                         argument_types=argument_types,
-                    ) or self._unimplemented_contract(receiver_type, name, arguments_count, info)
+                    )
+                    if not targets:
+                        targets = self._unimplemented_contract(receiver_type, name, arguments_count, info)
                 if not targets:
                     continue
                 # A concrete method declared by the receiver's own type is an
                 # exact call. Interface dispatch to a unique source
                 # implementation is exact only in a closed world, like
                 # CodeQL's ``exactVirtualMethod``; otherwise dependencies may
-                # add implementations and the call stays possible.
+                # add implementations and the call stays possible. A target
+                # left unique by preferring the caller's module stays
+                # possible: the preference is a heuristic, not a proof.
                 dispatch = (
                     "exact"
-                    if len(targets) == 1 and (
+                    if len(targets) == 1 and not pruned and (
                         self._declared_concretely(targets[0], receiver_type, info)
                         or closed_world and self._concrete(targets[0])
                     )

@@ -210,6 +210,9 @@ When a flow starts in a concrete subtype and then enters an inherited body,
 dispatch is restricted to that subtype and its ancestors so sibling overrides
 cannot cross into the flow. Owners are compared by qualified name, so the rule
 also holds when the inherited body is declared in a helper module. Explicit `super` calls target direct parent bodies.
+A method of an anonymous class is not indexed; its body belongs to the named
+method creating the instance, like a lambda body (ADR-62). In that body, a
+call on `this`, `super`, `this.field` or without receiver stays unresolved.
 Symbol collection scans source bytes and syntax nodes once per flow rebuild.
 `JavaSymbols.resolve` accepts explicit imports and qualified type names as
 signature identities even when dependency sources are absent. Callees still
@@ -302,7 +305,9 @@ helper methods remain available to the call graph.
 
 When several modules provide compatible implementations, the call graph prefers
 implementations from the caller's module. It retains cross-module candidates only
-when the caller's module has no compatible implementation.
+when the caller's module has no compatible implementation. This preference never
+raises confidence: a target left unique only because other modules' candidates
+were set aside keeps `possible` dispatch, even in the closed-world source pass.
 
 The BFS visits each
 method/confidence state

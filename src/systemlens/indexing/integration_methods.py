@@ -140,7 +140,7 @@ def scheduled_trigger_endpoints(
             continue
         source, root = parsed
         for declaration in java_parser.walk(root):
-            if declaration.type != "method_declaration":
+            if declaration.type != "method_declaration" or java_parser.is_anonymous_member(declaration):
                 continue
             annotation = next((
                 item for item in java_parser.annotations_of(declaration)
@@ -200,7 +200,9 @@ def materialize_integration_methods(
             continue
         source, root = parsed
         for declaration in java_parser.walk(root):
-            if declaration.type != "method_declaration":
+            # An anonymous class method has no source type of its own: its
+            # body is part of the named method that creates the instance.
+            if declaration.type != "method_declaration" or java_parser.is_anonymous_member(declaration):
                 continue
             name = java_parser.declaration_name(declaration, source)
             if name is None:

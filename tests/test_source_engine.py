@@ -166,3 +166,79 @@ def test_a_runtime_implemented_repository_method_is_a_possible_target(tmp_path: 
 
     # Spring generates the body: the declaration is the only source target.
     assert calls == [("p.OrderService.find", "p.OrderRepository.findByOrderId", "possible")]
+
+
+def test_an_anonymous_class_body_belongs_to_the_method_creating_it(tmp_path: Path) -> None:
+    path = "app/src/main/java/p/Outer.java"
+    (tmp_path / path).parent.mkdir(parents=True)
+    (tmp_path / path).write_text(
+        "package p;\n"
+        "class Worker { void work() {} }\n"
+        "class Outer {\n"
+        "  private Worker worker;\n"
+        "  void run() {}\n"
+        "  void schedule(Runnable task) {}\n"
+        "  void start() {\n"
+        "    schedule(new Runnable() { public void run() { worker.work(); run(); } });\n"
+        "  }\n"
+        "  void call() { Outer other = new Outer(); other.run(); }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="app", path=tmp_path / "app", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    methods = materialize_integration_methods(tmp_path, [], [path], [module])
+    symbols = JavaSymbols(tmp_path, methods, [path])
+
+    calls = sorted(
+        (call.caller.rsplit(".", 1)[-1], call.callee, call.call_line, call.dispatch_confidence)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+    )
+
+    # The anonymous ``run`` is no method of ``Outer``.
+    assert sorted(method.qualified_method for method in methods) == [
+        "p.Outer.call", "p.Outer.run", "p.Outer.schedule", "p.Outer.start", "p.Worker.work",
+    ]
+    assert calls == [
+        ("call", "p.Outer.run", 10, "exact"),
+        ("start", "p.Outer.schedule", 8, "exact"),
+        # The anonymous body runs on behalf of ``start``; its unqualified
+        # ``run()`` names the anonymous instance and stays unresolved.
+        ("start", "p.Worker.work", 8, "exact"),
+    ]
+
+
+def test_dispatch_left_unique_by_module_preference_stays_possible(tmp_path: Path) -> None:
+    files = {
+        "core/src/main/java/p/Port.java": "package p;\npublic interface Port { void send(); }\n",
+        "core/src/main/java/p/CoreAdapter.java": (
+            "package p;\npublic class CoreAdapter implements Port { public void send() {} }\n"
+        ),
+        "core/src/main/java/p/Caller.java": (
+            "package p;\npublic class Caller { private Port port; void go() { port.send(); } }\n"
+        ),
+        "app/src/main/java/p/AppAdapter.java": (
+            "package p;\npublic class AppAdapter implements Port { public void send() {} }\n"
+        ),
+    }
+    for path, text in files.items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(text, encoding="utf-8")
+    modules = [
+        DiscoveredModule(
+            name=name, path=tmp_path / name, build_system="maven", version=None,
+            kind="application", starts_application=True, configuration_example="",
+        )
+        for name in ("core", "app")
+    ]
+    methods = materialize_integration_methods(tmp_path, [], list(files), modules)
+    symbols = JavaSymbols(tmp_path, methods, list(files))
+
+    calls = [(call.callee, call.dispatch_confidence)
+             for call in symbols.fallback_calls(set(), closed_world=True)
+             if call.caller.endswith("Caller.go")]
+
+    # The caller's module is preferred, but the other implementation exists.
+    assert calls == [("p.CoreAdapter.send", "possible")]

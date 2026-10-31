@@ -16,7 +16,7 @@ functional or technical contract.
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch) |
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
-| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice) |
+| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -1255,3 +1255,28 @@ reports each data-access site in its own flow: grouped data accesses and the
 ADR-59 async-write/sync-read diagnostic still need `codeql`. The companion
 check validates whichever engine is installed.
 
+## ADR-62: Attribute anonymous class bodies to the creating method
+
+**Status:** Accepted. Amends ADR-61.
+
+**Context:** The method inventory named every `method_declaration` after its
+nearest named type. A method of `new Runnable() { public void run() {} }`
+inside `Outer.start()` became `Outer.run`. A real `Outer.run` then had two
+candidate bodies, so `o.run()` lost its `exact` dispatch. The anonymous body
+was also disconnected from `start()`, which hid routes through callbacks.
+
+**Decision:** An anonymous class method is not indexed. Its body belongs to
+the named method that creates the instance, as a lambda body already does.
+Endpoints, data accesses, and calls found in it are attributed to that
+method. Inside the body, a call on `this`, `super`, `this.field`, or without
+a receiver denotes the anonymous instance, whose supertype is often
+external; such a call stays unresolved. CodeQL already reports these callers
+as `<anonymous class>.name`, and the join attaches them to the smallest
+enclosing indexed method, which is now the same creating method.
+
+**Consequences:** Both engines agree on the caller of a callback body, and
+named methods keep exact dispatch. A route through the anonymous instance's
+own members is not reconstructed. An anonymous class created in a field
+initializer has no creating method, so its calls are not indexed. Persisted
+method identities of former anonymous rows disappear; the code-flow
+signature forces existing indexes to rebuild.

@@ -1051,7 +1051,7 @@ def discover_jpa_methods(
                     continue
                 receiver_name = java_parser.node_text(source, receiver)
                 entity = fields.get(receiver_name)
-                owner = java_parser.enclosing(invocation, "method_declaration")
+                owner = java_parser.enclosing_method(invocation)
                 if entity is None or owner is None or java_parser.enclosing(owner, "class_declaration") != declaration:
                     continue
                 shadowed = any(

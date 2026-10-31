@@ -121,9 +121,37 @@ def enclosing(node: Node, *types: str) -> Node | None:
     return None
 
 
-def enclosing_method_name(source: bytes, node: Node) -> str | None:
-    """Name of the method enclosing ``node``, if any."""
+def is_anonymous_member(declaration: Node) -> bool:
+    """Whether a declaration belongs to an anonymous class body.
+
+    ``new Runnable() { public void run() {...} }`` declares ``run`` in a
+    ``class_body`` owned by the ``object_creation_expression``. That body has
+    no source type name and executes on behalf of the method creating it.
+    """
+    body = declaration.parent
+    return (
+        body is not None
+        and body.type == "class_body"
+        and body.parent is not None
+        and body.parent.type == "object_creation_expression"
+    )
+
+
+def enclosing_method(node: Node) -> Node | None:
+    """Nearest named method declaration enclosing ``node``.
+
+    Methods of anonymous classes are skipped: their bodies belong to the
+    method that instantiates the anonymous class, like a lambda body.
+    """
     method = enclosing(node, "method_declaration")
+    while method is not None and is_anonymous_member(method):
+        method = enclosing(method, "method_declaration")
+    return method
+
+
+def enclosing_method_name(source: bytes, node: Node) -> str | None:
+    """Name of the named method enclosing ``node``, if any."""
+    method = enclosing_method(node)
     if method is None:
         return None
     name = method.child_by_field_name("name")

@@ -29,7 +29,7 @@ from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import is_java_literal, trace_scalar_key_identity
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v40-scheduler-anchor-module-dispatch"
+CODE_FLOW_SIGNATURE = "code-flow-v41-anonymous-bodies-pruned-dispatch"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
@@ -402,7 +402,7 @@ def materialize_code_flows(
         source, root = parsed
         method_nodes = [
             node for node in java_parser.walk(root)
-            if node.type == "method_declaration"
+            if node.type == "method_declaration" and not java_parser.is_anonymous_member(node)
         ]
         endpoints_by_owner: dict[int, list[MessageEndpoint]] = defaultdict(list)
         for endpoint in path_endpoints:
