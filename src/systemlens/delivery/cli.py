@@ -50,6 +50,7 @@ from systemlens.application.runtime_observations import (
     DEFAULT_API_KEY_ENV,
     collect_runtime_observations,
     parse_service_map,
+    runtime_overlay,
     reconcile_observations,
     render_runtime_report_text,
 )
@@ -80,6 +81,7 @@ from systemlens.indexing.code_flows import materialize_codeql_code_flows
 from systemlens.indexing.codeql import extract_codeql_calls, extract_codeql_methods
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.models import ExtractionDiagnostic
+from systemlens.domain.runtime import RuntimeObservation
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.discovery.build.modules import (
     discover_modules,
@@ -1943,6 +1945,7 @@ class _MicroserviceGraphData:
     architecture_relations: list[ArchitectureRelation] | None = None
     codeql_call_edges: list[CodeQLCallGraphEdge] | None = None
     flow_descriptions: dict[str, str] | None = None
+    runtime_observations: list[RuntimeObservation] | None = None
 
 
 def _load_flow_descriptions(repo_root: Path) -> dict[str, str]:
@@ -1984,6 +1987,7 @@ def _load_microservice_graph(
     with Store(repo_root, readonly=True) as store:
         graph_facts = store.all_graph_facts()
         architecture_relations = store.all_architecture_relations()
+        runtime_observations = store.all_runtime_observations()
     return _MicroserviceGraphData(
         projection.services_by_name,
         projection.edges,
@@ -2005,7 +2009,28 @@ def _load_microservice_graph(
         architecture_relations,
         inventory.codeql_call_edges,
         _load_flow_descriptions(repo_root),
+        runtime_observations,
     )
+
+
+def _export_runtime_overlay(
+    repo_root: Path, graph_data: _MicroserviceGraphData,
+) -> dict[str, object] | None:
+    """Reconcile persisted APM observations with the exported topology."""
+    observations = getattr(graph_data, "runtime_observations", None)
+    if not observations:
+        return None
+    try:
+        result = reconcile_observations(
+            observations,
+            graph_data.services_by_name,
+            graph_data.edges,
+            parse_service_map([], _configured_service_map(repo_root)),
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    return runtime_overlay(result, graph_data.services_by_name)
 
 
 def _load_ai_graph(path: Path) -> _MicroserviceGraphData:
@@ -2173,6 +2198,7 @@ def export_microservices_cmd(
                     "flow_descriptions": getattr(graph_data, "flow_descriptions", {}),
                     "call_graphs_only": call_graphs_only,
                     "include_call_graph_annotations": not no_call_graph_annotations,
+                    "runtime_overlay": _export_runtime_overlay(Path.cwd(), graph_data),
                 },
             )),
             encoding="utf-8",
@@ -3120,6 +3146,13 @@ def import_facts_cmd(
 
 
 
+def _configured_service_map(repo_root: Path) -> dict[str, str]:
+    try:
+        return load_config(repo_root).runtime_service_map
+    except ConfigError:
+        return {}
+
+
 def _emit_runtime_report(repo_root: Path, service_map: list[str], json_output: bool) -> None:
     inventory = load_architecture_inventory(repo_root)
     with Store(repo_root, readonly=True) as store:
@@ -3129,7 +3162,7 @@ def _emit_runtime_report(repo_root: Path, service_map: list[str], json_output: b
             observations,
             inventory.endpoints_by_service,
             graph_edges_from_relations(inventory.relations, inventory.endpoints_by_service),
-            parse_service_map(service_map),
+            parse_service_map(service_map, _configured_service_map(repo_root)),
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -3145,7 +3178,10 @@ def _emit_runtime_report(repo_root: Path, service_map: list[str], json_output: b
 def observe_elastic_cmd(
     url: str = typer.Option(..., "--url", help="URL du cluster Elasticsearch, sans identifiants."),
     since: str = typer.Option("7d", "--since", help="Fenêtre observée, par exemple 24h ou 7d."),
-    interval: str = typer.Option("60m", "--interval", help="Intervalle d'agrégation APM : 1m, 10m ou 60m."),
+    interval: str = typer.Option(
+        "auto", "--interval",
+        help="Intervalle d'agrégation APM : auto (le plus grossier disponible), 1m, 10m ou 60m.",
+    ),
     api_key_env: str = typer.Option(
         DEFAULT_API_KEY_ENV, "--api-key-env", help="Variable d'environnement contenant la clé d'API."
     ),

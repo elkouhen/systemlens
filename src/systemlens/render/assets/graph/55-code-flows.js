@@ -381,6 +381,7 @@
             [...graphState.callTreeCollapsed].sort().join(","),
             Math.round(viewport.width),
             Math.round(viewport.height),
+            runtimeOverlayEnabled() ? "runtime" : "",
           ].join("|")
         : "inactive";
       if (!preservedCamera && treeSignature === callTreeRenderSignature) return;
@@ -908,6 +909,7 @@
         if (targetPort.endpointId) lines.push(`IN ${targetPort.label} · ${targetPort.method}`);
         const messageTypes = [...new Set([sourcePort.messageType, targetPort.messageType].filter(Boolean))];
         if (messageTypes.length) lines.push(`Type de message : ${messageTypes.join(" · ")}`);
+        lines.push(...runtimeCallTreeEdgeLines(edge));
         return {
           title: `Arc${edge.order ? ` #${edge.order}` : ""}`,
           lines,
@@ -1021,6 +1023,7 @@
           triggerBadge.title = "Événement déclencheur du graphe d’appel sélectionné";
           node.append(triggerBadge);
         }
+        decorateRuntimeCallTreeNode(node, inputForOccurrence(occurrence));
         const ports = [
           occurrence.edge && treePort(occurrence.edge.endpoint_ids?.[1], "in"),
           ...occurrence.children.map(child => treePort(child.edge.endpoint_ids?.[0], "out")),
@@ -1237,6 +1240,7 @@
           const protocolClass = child.edge.kind === "rest" ? "is-rest" : child.edge.kind === "kafka" ? "is-kafka" : "";
           line.classList.add("graph-call-tree-edge", protocolClass);
           edgeHit.classList.add(protocolClass);
+          decorateRuntimeCallTreeEdge(line, child.edge);
           const edgeEndpointIds = new Set(child.edge.endpoint_ids || []);
           const edgeDiagnosticKind = [...edgeEndpointIds].some(endpointId => interactionDiagnosticPathEndpoints.has(endpointId))
             ? "interaction"

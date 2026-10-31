@@ -22,6 +22,8 @@ SearchFunction = Callable[[str, dict[str, object]], dict[str, object]]
 
 SOURCE = "elastic_apm"
 INTERVALS = ("1m", "10m", "60m")
+# Coarsest rollup first: it scans the fewest metric documents.
+_AUTO_INTERVAL_ORDER = ("60m", "10m", "1m")
 _PAGE_SIZE = 1000
 _MAX_PAGES = 100
 _TIMEOUT_SECONDS = 60
@@ -131,6 +133,30 @@ def _composite_buckets(
     )
 
 
+def detect_interval(search: SearchFunction, start: str, end: str) -> str:
+    """Return the coarsest rollup interval holding transactions in the window.
+
+    APM Server versions and configurations do not all write every rollup;
+    Elastic 9.5 in the observability lab writes only ``1m``. A wildcard index
+    without a match returns no hit instead of an error, so probe explicitly.
+    """
+    for interval in _AUTO_INTERVAL_ORDER:
+        response = search(f"metrics-apm.transaction.{interval}-*", {
+            "size": 0,
+            "track_total_hits": 1,
+            "query": {"range": {"@timestamp": {"gte": start, "lt": end}}},
+        })
+        hits = response.get("hits")
+        total = hits.get("total") if isinstance(hits, dict) else None
+        value = total.get("value") if isinstance(total, dict) else total
+        if isinstance(value, int) and value > 0:
+            return interval
+    raise ElasticApmError(
+        "Aucune métrique APM agrégée sur la fenêtre (intervalles 60m, 10m et 1m) : "
+        "vérifiez l'URL, les droits de lecture sur metrics-apm* et la fenêtre."
+    )
+
+
 def _terms(name: str, field: str, *, optional: bool = False) -> dict[str, object]:
     terms: dict[str, object] = {"field": field}
     if optional:
@@ -158,11 +184,15 @@ def collect_observations(
     now: datetime | None = None,
 ) -> list[RuntimeObservation]:
     """Fold service-destination and transaction metrics into observations."""
-    if interval not in INTERVALS:
-        raise ElasticApmError(f"Intervalle invalide {interval!r} : {', '.join(INTERVALS)}.")
+    if interval != "auto" and interval not in INTERVALS:
+        raise ElasticApmError(
+            f"Intervalle invalide {interval!r} : auto, {', '.join(INTERVALS)}."
+        )
     end_time = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).replace(microsecond=0)
     start = (end_time - window).isoformat().replace("+00:00", "Z")
     end = end_time.isoformat().replace("+00:00", "Z")
+    if interval == "auto":
+        interval = detect_interval(search, start, end)
     totals: dict[tuple[str, str, str, str | None], list[float]] = {}
 
     def add(kind: str, service: object, target: object, target_type: object,

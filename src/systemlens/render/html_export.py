@@ -41,6 +41,7 @@ _GRAPH_STYLE_FILENAMES = (
     "30-charter.css",
     "40-ergonomics.css",
     "50-obsidian.css",
+    "60-runtime.css",
 )
 _GRAPH_STYLE_MODULES = tuple(_ASSET_ROOT / "graph" / name for name in _GRAPH_STYLE_FILENAMES)
 _GRAPH_CSS = "".join(
@@ -56,6 +57,7 @@ _GRAPH_JS_FILENAMES = (
     "30-layouts.js",
     "40-details.js",
     "42-resource-catalogue.js",
+    "45-runtime.js",
     "50-paths.js",
     "55-code-flows.js",
     "60-bootstrap.js",
@@ -122,6 +124,7 @@ def render_graph_html(
     progress_notice: str | None = None,
     call_graphs_only: bool = False,
     include_call_graph_annotations: bool = True,
+    runtime_overlay: Mapping[str, object] | None = None,
 ) -> str:
     """Render a graph view model as one self-contained HTML document."""
     flow_annotation_facts = [
@@ -574,6 +577,10 @@ def render_graph_html(
             view_model[key] = []
         view_model["codeql_call_graph"] = {"nodes": [], "edges": []}
         view_model["call_graphs_only"] = True
+    if runtime_overlay and not call_graphs_only:
+        # Aggregated APM observations (ADR-60) stay a separate overlay; they
+        # never alter the static nodes, links, or ports above.
+        view_model["runtime"] = dict(runtime_overlay)
     graph_data = json.dumps(
         view_model,
         ensure_ascii=False,

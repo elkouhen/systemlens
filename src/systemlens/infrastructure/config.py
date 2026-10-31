@@ -36,6 +36,8 @@ class Config:
     codeql_edge_confidence: str = "possible"
     disabled_extractors: list[str] = field(default_factory=list)
     root_path: str | None = None
+    # Explicit APM service name to indexed service name (ADR-60).
+    runtime_service_map: dict[str, str] = field(default_factory=dict)
 
 
 def load_config(repo_root: Path) -> Config:
@@ -102,6 +104,17 @@ def load_config(repo_root: Path) -> Config:
             "analysis.codeql_verbosity invalide : "
             f"{codeql_verbosity!r}. Valeurs : {', '.join(VALID_CODEQL_VERBOSITIES)}."
         )
+    runtime = raw.get("runtime") or {}
+    if not isinstance(runtime, dict):
+        raise ConfigError("runtime doit être un objet YAML.")
+    runtime_service_map = runtime.get("service_map") or {}
+    if not isinstance(runtime_service_map, dict) or not all(
+        isinstance(name, str) and name.strip() and isinstance(service, str) and service.strip()
+        for name, service in runtime_service_map.items()
+    ):
+        raise ConfigError(
+            "runtime.service_map doit associer des noms de service APM à des services indexés."
+        )
 
     return Config(
         include=list(raw.get("include", DEFAULT_INCLUDE)),
@@ -118,6 +131,9 @@ def load_config(repo_root: Path) -> Config:
         codeql_edge_confidence=codeql_edge_confidence,
         disabled_extractors=list(analysis.get("disabled_extractors", [])),
         root_path=raw.get("root_path"),
+        runtime_service_map={
+            name.strip(): service.strip() for name, service in runtime_service_map.items()
+        },
     )
 
 

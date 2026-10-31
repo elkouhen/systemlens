@@ -18,6 +18,7 @@ documents and summarizes the documentation hygiene expected in this repository.
 | [`BACKLOG.md`](BACKLOG.md) | Current graph readability tasks and index of archived backlogs | When planning or implementing graph or call-tree readability improvements |
 | [`docs/plans/async-write-read-consistency.md`](docs/plans/async-write-read-consistency.md) | Remaining work on asynchronous write and synchronous read consistency | When changing consistency diagnostics |
 | [`docs/plans/data-operations-in-internal-flows.md`](docs/plans/data-operations-in-internal-flows.md) | Scoped data-operation plan, status, and acceptance criteria | When working on data operations in internal flows |
+| [`docs/plans/runtime-observations-in-export.md`](docs/plans/runtime-observations-in-export.md) | Elastic APM overlay in the HTML export | When showing runtime observations in an export |
 | [`../systemlens-skill/`](../systemlens-skill/) | Companion skill repo: agent workflow, bundled rule packs, operational guidance | Whenever a SystemLens change can affect the skill or its docs |
 | [`../systemlens-observability-lab/`](../systemlens-observability-lab/) | Infrastructure and a test application for observability/integration testing | When validating SystemLens against a real running app/infra, or working on observability-related integration tests |
 

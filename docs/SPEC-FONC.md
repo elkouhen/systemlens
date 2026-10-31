@@ -62,7 +62,8 @@ of concurrency. These static findings do not assert a runtime incident.
 
 `systemlens observe` compares the static topology with aggregated Elastic APM
 metrics. It reports runtime integrations missing from the index and indexed
-integrations without observed traffic, without changing source facts.
+integrations without observed traffic, without changing source facts. The
+HTML export shows the persisted observations as an optional overlay.
 
 ## Detailed sections
 

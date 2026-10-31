@@ -1145,3 +1145,23 @@ destination cardinality, not on traffic. Counts depend on the APM version and
 sampling, so missing traffic never proves absence. The command contacts a
 network service; credentials come from an environment variable and are never
 persisted. The new table is additive and does not change `SCHEMA_VERSION`.
+
+**Field validation:** Against the lab's Elastic 9.5 cluster, only the `1m`
+rollup exists and OTel names HTTP server transactions `POST` without a
+route. Collection therefore detects the available interval, and an indexed
+integration is `static_only` only when the service's telemetry proves it
+would name that traffic; otherwise it is `unverified`.
+
+**Export decision:** The microservices HTML export embeds the reconciled
+observations as a separate overlay, off by default and offered only when the
+index holds observations. It annotates existing arcs and service cards and
+draws no edge for `observed_only` traffic, which a gaps panel lists instead.
+The service map is persisted as `runtime.service_map` in the project config,
+so `observe report` and the export resolve services identically.
+
+**Export consequences:** Exports read observations from the index and never
+contact Elasticsearch. Without observations, the embedded snapshot is
+unchanged. A REST count measures a service pair, not a call site. The
+selected call tree therefore labels each card with the count of its own
+entry point, and shows an arc's emitted and received counts separately,
+never added together.

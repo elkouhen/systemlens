@@ -518,6 +518,7 @@
           ].filter(Boolean).join(" · ");
           if (details) addTooltipLine(tooltip, details, "graph-edge-tooltip-kind");
         }
+        appendRuntimeLinkTooltip(tooltip, link, addTooltipLine);
         placeGraphTooltip(
           tooltip,
           { left: clientX, right: clientX, top: clientY, bottom: clientY, width: 0, height: 0 },
@@ -556,6 +557,7 @@
           const classes = (node.persistence_classes || []).map(item => item.name).filter(Boolean);
           if (classes.length) addTooltipLine(tooltip, `Accès : ${classes.slice(0, 3).join(", ")}${classes.length > 3 ? "…" : ""}`, "graph-entity-tooltip-detail");
         }
+        appendRuntimeNodeTooltip(tooltip, node, addTooltipLine);
         placeGraphTooltip(tooltip, element.getBoundingClientRect(), event.clientX);
       };
       layoutNodes.forEach(node => network.addNode(node.id, {
@@ -675,7 +677,8 @@
           }
           if (graphState.selectedId && graphState.relatedEdges.has(edge)) return { ...data, size: 1.5 };
           if (graphState.selectedId) return { ...data, color: "#d8dee9", size: .35 };
-          return data;
+          const linkIndex = String(edge).match(/^edge-(\d+)$/)?.[1];
+          return linkIndex === undefined ? data : runtimeEdgeData(visibleLinks[Number(linkIndex)], data);
         },
       });
       function adaptiveSymbolLabelPlacements(nodePoints) {
@@ -1081,6 +1084,7 @@
           kind.textContent = isCodeFlowRoot ? `${kindLabel} · Racine` : kindLabel;
           label.append(icon);
           label.append(name, kind);
+          decorateRuntimeCard(label, node);
           if (isCodeFlowRoot) {
             const rootBadge = document.createElement("span");
             rootBadge.className = "graph-node-root-badge";
@@ -1263,6 +1267,7 @@
               path.classList.add(focused ? "is-focus-context" : "is-focus-muted");
             }
             path.style.setProperty("--graph-relation-color", relationColor(link));
+            decorateRuntimeArchitecturePath(path, link);
             path.setAttribute("d", `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`);
             path.setAttribute("marker-end", "url(#graph-architecture-arrow)");
             portPathOverlay.append(path);

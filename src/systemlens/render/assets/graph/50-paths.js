@@ -1101,7 +1101,8 @@
         const qualityGroup = createDetailsGroup("Diagnostics", false);
         appendFindings(node.findings || [], qualityGroup);
         discardEmptyDetailsGroup(qualityGroup);
-        const groupOrder = ["Relations", "Architecture", "Ports d'intégration", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Diagnostics"];
+        appendRuntimeDetails(node);
+        const groupOrder = ["Relations", "Trafic observé", "Architecture", "Ports d'intégration", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Diagnostics"];
         [...details.querySelectorAll(":scope > .details-group")]
           .sort((left, right) => {
             const leftRank = groupOrder.indexOf(left.querySelector("summary")?.textContent);

@@ -32,7 +32,7 @@ Parent: [Functional specification](../SPEC-FONC.md).
 | `systemlens analyze microservices calls\|dependencies\|external-apis\|orphan-integrations [NAME] [--root DIR] [--json]` | Lists a service's outgoing calls, dependencies, external APIs, or integrations with no resolved caller/callee, depending on the subcommand. `external-apis` and `orphan-integrations` accept an optional `NAME` to scope the result to one service. |
 | `systemlens analyze microservices impact NAME [--root DIR] [--json]` | Lists direct neighbors and bounded transitive impact paths for a microservice. REST impact travels from a provider to its callers; Kafka impact travels from a producer to its consumers. For a topic, API, or collection, the command keeps direct neighbors and returns no transitive paths. JSON keeps `neighbors` for direct compatibility and adds `paths` for the transitive result. `paths_truncated` reports whether the result reached the depth or result limit; `paths_max_depth` and `paths_limit` report those bounds. |
 | `systemlens analyze microservices path FROM TO [--root DIR] [--json] [--max-depth N] [--limit N]` | Lists bounded paths between services. |
-| `systemlens observe elastic --url URL [--since 7d] [--interval 60m] [--api-key-env NAME] [--ca-cert FILE] [--service-map APM=SERVICE] [--json]` | Opt-in network command. Collects aggregated Elastic APM metrics for the window, replaces the persisted observations, and prints the reconciliation. See [runtime observations](#runtime-observations). |
+| `systemlens observe elastic --url URL [--since 7d] [--interval auto] [--api-key-env NAME] [--ca-cert FILE] [--service-map APM=SERVICE] [--json]` | Opt-in network command. Collects aggregated Elastic APM metrics for the window, replaces the persisted observations, and prints the reconciliation. See [runtime observations](#runtime-observations). |
 | `systemlens observe report [--service-map APM=SERVICE] [--json]` | Reconciles the persisted observations with the persisted index, without network access. |
 | `systemlens export microservices (--html FILE | --json) [OPTIONS]` | Exports persisted topology. See [HTML export](html-export.md) for graph modes and [AI graph manifests](ai-graph-manifest.md) for `--graph`. |
 | `systemlens export projects --html FILE` | Exports the Maven/Gradle build-dependency view. |
@@ -323,6 +323,8 @@ CodeQL chooses its own limit.
 It reads only pre-aggregated APM metric data streams, never trace documents,
 so the transfer depends on service and destination cardinality, not traffic.
 Elastic APM 8.7 or later is required. `--since` accepts `h` and `d` suffixes.
+`--interval auto`, the default, picks the coarsest rollup that holds data;
+`1m`, `10m`, or `60m` forces one.
 
 The API key is read from the environment variable named by `--api-key-env`,
 `SYSTEMLENS_ELASTIC_API_KEY` by default. A URL containing credentials is
@@ -331,9 +333,19 @@ disabled. The command needs an initialized repository and stores only the
 cluster scheme, host, and port with the observations.
 
 The report groups observations by status: `matched`, `observed_only`,
-`external`, `static_only`, and `not_compared`. It lists APM services that are
-`unmapped` or `ambiguous`, and indexed services without any observation.
-Repeat `--service-map` to map an APM service name explicitly.
+`external`, `static_only`, `unverified`, and `not_compared`. `unverified`
+lists indexed integrations whose silence the telemetry cannot prove, such as
+routes of a service whose HTTP transactions carry no route. The report also
+lists APM services that are `unmapped` or `ambiguous`, and indexed services
+without any observation.
+Repeat `--service-map` to map an APM service name explicitly. Persistent
+mappings belong in `runtime.service_map` of the
+[configuration](configuration.md); the option overrides an entry with the
+same APM name.
+
+When observations exist, `systemlens export microservices --html` embeds
+them as an optional overlay described in the
+[HTML export behavior](html-export.md#runtime-observations-overlay).
 
 Counts are lower bounds that depend on sampling. `static_only` means no
 traffic in the window, not dead code. Observations never alter source facts.

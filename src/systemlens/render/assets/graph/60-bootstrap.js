@@ -335,6 +335,7 @@
       if (event.key === "Enter") { event.preventDefault(); runExploreSearch(); }
     });
     window.addEventListener("resize", () => updateWorkspaceViewport(true));
+    setupRuntimeOverlay();
     if (graphData.call_graphs_only) {
       setToolbarTab("flows");
       codeFlowsList.querySelector(".code-flow-item:not(.is-unavailable)")?.click();

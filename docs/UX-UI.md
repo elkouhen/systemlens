@@ -432,6 +432,23 @@ The focused tree is framed beside the toolbar on wide screens and below it
 when that region is larger. Fit preserves readable fixed-size cards and margins,
 does not zoom beyond the readable view, and reapplies after viewport resize.
 
+## Runtime overlay
+
+Aggregated APM traffic is an optional overlay on the architecture graph,
+off by default and offered in the legend only when the export holds
+observations. Toggling it MUST NOT move cards, the camera, or the selection,
+and turning it off MUST restore the static rendering exactly.
+
+Runtime annotations decorate existing arcs, cards, tooltips, and details.
+They MUST NOT draw a relation that the index lacks; unexplained traffic is
+listed in the runtime gaps inspector. A silent arc stays distinguishable from
+REST dashes. A missing service telemetry badge is neutral, not a warning.
+Tooltip runtime lines are the one exception to evidence-only tooltips: they
+state counts as sampled lower bounds. In a selected call tree, cards show
+the count of their own entry point. Arc tooltips keep emitted and received
+counts apart, because neither measures one call site. The flow toolbar
+mirrors the legend toggle, which is hidden outside the graph tab.
+
 ## Responsive behavior and deferred concerns
 
 At intermediate widths up to 1024 pixels, the left panel is limited to 320

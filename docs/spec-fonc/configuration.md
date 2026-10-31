@@ -39,6 +39,16 @@ but does not alter AST endpoint extraction.
 method-call engine, and disabled extractors. Under Strategy1, listener and
 sender topic keys match declared keys in `kafka.yml` or `kafka.yaml` after
 normalization.
+An optional `runtime` section maps APM service names to indexed services for
+`systemlens observe` and the HTML export overlay. It holds names only, never
+credentials. A non-string entry is a configuration error.
+
+```yaml
+runtime:
+  service_map:
+    prod-orders-api: order-service
+```
+
 `root_path` is local export configuration only:
 it resolves relative source evidence into VS Code links and is never persisted
 in the architecture snapshot.
