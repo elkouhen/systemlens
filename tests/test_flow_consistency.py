@@ -548,3 +548,140 @@ def test_checked_in_fact_base_matches_expected_classifications() -> None:
     }
     expected = {raw["id"]: raw["expected_diagnostics"] for raw in manifest["flows"]}
     assert actual == expected
+
+
+_SYSTEMS = {
+    "post-in": "rest", "kafka-out": "kafka", "consumer-in": "kafka",
+    "rest-out": "rest", "stock-in": "rest", "relay-out": "kafka", "relay-in": "kafka",
+}
+_ORDER = "jpa:orders:Order"
+
+
+def _graph_flow(flow_id: str, *steps: CodeFlowStep) -> CodeFlow:
+    return replace(_flow(*steps), id=flow_id)
+
+
+def _consumer(key_identity: str | None = None) -> CodeFlow:
+    return _graph_flow(
+        "consumer",
+        CodeFlowStep(1, "message_entry", "orders", "Consumer.java", 5, 5, endpoint_id="consumer-in"),
+        CodeFlowStep(2, "data_write", "Order", "Consumer.java", 9, 9, operation="save",
+                     resource=_ORDER, resource_identity=_ORDER, key="event.id()",
+                     key_identity=key_identity, branch="async"),
+    )
+
+
+def _read(order: int, line: int, key_identity: str | None = None) -> CodeFlowStep:
+    return CodeFlowStep(order, "data_read", "Order", "Orders.java", line, line,
+                        operation="findById", resource=_ORDER, resource_identity=_ORDER,
+                        key="id", key_identity=key_identity, branch="sync")
+
+
+def _publish(order: int, line: int) -> CodeFlowStep:
+    return CodeFlowStep(order, "message_publish", "orders", "Orders.java", line, line,
+                        endpoint_id="kafka-out")
+
+
+_TO_CONSUMER = ("kafka-out", "consumer-in")
+
+
+def test_call_graph_read_after_publish_is_a_potential_risk() -> None:
+    root = _graph_flow(
+        "root",
+        CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, endpoint_id="post-in"),
+        _publish(2, 10), _read(3, 20),
+    )
+    flows = [root, _consumer()]
+    paths = {"root": {"root": (), "consumer": _TO_CONSUMER}}
+
+    diagnostic, = diagnose_flow_consistency_snapshot(
+        flows, {"root": set(paths["root"])}, paths, _SYSTEMS,
+    )
+
+    assert diagnostic.flow_id == "root"
+    assert diagnostic.classification == "potential_risk"
+    assert diagnostic.confidence == "low"
+    assert "enregistrement commun non prouvé" in (diagnostic.limitation or "")
+    assert "Orders.java:10 avant Orders.java:20" in (diagnostic.order_evidence or "")
+    assert diagnostic.write_path_endpoint_ids == _TO_CONSUMER
+
+
+def test_call_graph_read_before_publish_is_not_reported() -> None:
+    root = _graph_flow(
+        "root",
+        CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, endpoint_id="post-in"),
+        _read(2, 10), _publish(3, 20),
+    )
+    paths = {"root": {"root": (), "consumer": _TO_CONSUMER}}
+
+    assert diagnose_flow_consistency_snapshot(
+        [root, _consumer()], {"root": set(paths["root"])}, paths, _SYSTEMS,
+    ) == []
+
+
+def test_call_graph_orders_sibling_flows_at_their_divergent_call_sites() -> None:
+    trigger = CodeFlowStep(1, "http_entry", "POST /orders", "Ctrl.java", 1, 1, endpoint_id="post-in")
+    call = CodeFlowStep(2, "method_call", "OrderService.create", "Ctrl.java", 12, 12)
+    publisher = _graph_flow("root-publish", trigger, call, replace(_publish(3, 30), path="Service.java"))
+    reader = _graph_flow("root-read", trigger, call, replace(_read(3, 40), path="Service.java"))
+    paths = {"root-publish": {"root-publish": (), "root-read": (), "consumer": _TO_CONSUMER}}
+
+    diagnostic, = diagnose_flow_consistency_snapshot(
+        [publisher, reader, _consumer()], {"root-publish": set(paths["root-publish"])},
+        paths, _SYSTEMS,
+    )
+
+    assert diagnostic.classification == "potential_risk"
+    assert "Service.java:30 avant Service.java:40" in (diagnostic.order_evidence or "")
+
+
+def test_call_graph_rest_read_branch_with_matching_key_has_medium_confidence() -> None:
+    root = _graph_flow(
+        "root",
+        CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, endpoint_id="post-in"),
+        _publish(2, 10),
+        CodeFlowStep(3, "http_call", "GET /stock", "Orders.java", 20, 20, endpoint_id="rest-out"),
+    )
+    stock = _graph_flow(
+        "stock",
+        CodeFlowStep(1, "http_entry", "GET /stock", "Stock.java", 1, 1, endpoint_id="stock-in"),
+        _read(2, 5, key_identity=f"{_ORDER}:id"),
+    )
+    paths = {"root": {"root": (), "consumer": _TO_CONSUMER, "stock": ("rest-out", "stock-in")}}
+
+    diagnostic, = diagnose_flow_consistency_snapshot(
+        [root, stock, _consumer(f"{_ORDER}:id")], {"root": set(paths["root"])}, paths, _SYSTEMS,
+    )
+
+    assert diagnostic.read_flow_id == "stock"
+    assert (diagnostic.classification, diagnostic.confidence, diagnostic.severity) == (
+        "potential_risk", "medium", "P1",
+    )
+
+
+def test_call_graph_skips_distinct_keys_and_asynchronous_read_branches() -> None:
+    root = _graph_flow(
+        "root",
+        CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, endpoint_id="post-in"),
+        _publish(2, 10),
+        CodeFlowStep(3, "message_publish", "relay", "Orders.java", 20, 20, endpoint_id="relay-out"),
+    )
+    relay = _graph_flow(
+        "relay",
+        CodeFlowStep(1, "message_entry", "relay", "Relay.java", 1, 1, endpoint_id="relay-in"),
+        replace(_read(2, 5), branch=None),
+    )
+    distinct = _graph_flow(
+        "root-distinct",
+        CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, endpoint_id="post-in"),
+        _publish(2, 10), _read(3, 20, key_identity=f"{_ORDER}:other"),
+    )
+    paths = {
+        "root": {"root": (), "consumer": _TO_CONSUMER, "relay": ("relay-out", "relay-in")},
+        "root-distinct": {"root-distinct": (), "consumer": _TO_CONSUMER},
+    }
+    flows = [root, relay, distinct, _consumer(f"{_ORDER}:id")]
+
+    assert diagnose_flow_consistency_snapshot(
+        flows, {root_id: set(items) for root_id, items in paths.items()}, paths, _SYSTEMS,
+    ) == []

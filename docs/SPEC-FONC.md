@@ -35,6 +35,13 @@ reachable from the same persisted trigger and their resource evidence overlaps.
 The wording MUST describe a potential ordering risk, never an observed runtime
 race.
 
+Without explicit causal or order facts, the selected call graph supplies the
+pairing. The path to the write crosses a Kafka hop, the path to the read stays
+synchronous, and both accesses share a canonical resource. When the fork
+handler's source places the publication before the read, the pair is a
+`potential_risk`. Its limitation states that conditional branches are not
+excluded and, when relevant, that the common record is unproven.
+
 Each pair is classified as `potential_risk`, `guarantee_identified`,
 `insufficient_evidence`, or omitted as not applicable. Different key
 expressions, conflicting causal IDs, and incomplete query overlap remain

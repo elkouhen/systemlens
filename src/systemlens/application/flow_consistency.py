@@ -124,6 +124,154 @@ def _causal(flow: CodeFlow, write: CodeFlowStep, read: CodeFlowStep) -> tuple[bo
     return False, "lien causal non prouvé"
 
 
+def _has_explicit_order_facts(step: CodeFlowStep) -> bool:
+    return bool(step.causal_id or step.request_before_reads or step.visibility_before_reads)
+
+
+def _branch_sites(
+    fork_flows: list[CodeFlow], target: str | CodeFlowStep,
+) -> list[tuple[CodeFlow, int]]:
+    """Locate where one branch leaves the fork handler: an output or the access."""
+    return [
+        (flow, index)
+        for flow in fork_flows
+        for index, step in enumerate(flow.steps)
+        if index > 0 and (step is target if isinstance(target, CodeFlowStep)
+                          else step.endpoint_id == target)
+    ]
+
+
+def _site_order(
+    write_site: tuple[CodeFlow, int], read_site: tuple[CodeFlow, int],
+) -> tuple[bool, str] | None:
+    """Compare two branch departures inside the same handler method.
+
+    Sibling flows share the trigger and the internal calls before their
+    divergence; the first differing steps are both direct sites of the last
+    shared method. Equal or cross-file sites remain unordered.
+    """
+    write_flow, write_index = write_site
+    read_flow, read_index = read_site
+    if write_flow.id == read_flow.id:
+        if write_index == read_index:
+            return None
+        first, second = sorted((write_index, read_index))
+        left, right = write_flow.steps[first], write_flow.steps[second]
+        return write_index < read_index, (
+            f"{left.path}:{left.start_line} avant {right.path}:{right.start_line}"
+        )
+    write_steps = write_flow.steps[1:write_index + 1]
+    read_steps = read_flow.steps[1:read_index + 1]
+    shared = 0
+    for left, right in zip(write_steps, read_steps):
+        if (left.kind, left.name, left.path, left.start_line) != (
+            right.kind, right.name, right.path, right.start_line
+        ):
+            break
+        shared += 1
+    if shared >= len(write_steps) or shared >= len(read_steps):
+        return None
+    write_step, read_step = write_steps[shared], read_steps[shared]
+    if write_step.path != read_step.path or write_step.start_line == read_step.start_line:
+        return None
+    earlier, later = sorted((write_step, read_step), key=lambda step: step.start_line)
+    return write_step.start_line < read_step.start_line, (
+        f"{earlier.path}:{earlier.start_line} avant {later.path}:{later.start_line}"
+    )
+
+
+def _call_graph_stale_reads(
+    flows: list[CodeFlow],
+    causal_paths: Mapping[str, Mapping[str, tuple[str, ...]]],
+    endpoint_systems: Mapping[str, str],
+) -> tuple[list[FlowConsistencyDiagnostic], set[tuple[str, str, int, str, int]]]:
+    """Pair accesses whose call-graph branches diverge into Kafka and sync work.
+
+    The call-graph path from one root supplies the causal relation. The write
+    branch must cross a Kafka hop after the fork handler; the read branch must
+    stay synchronous (REST hops only, or none). Source order of the two branch
+    departures in the fork handler decides whether the read can start before
+    the asynchronous write; conditional branches are not excluded.
+    """
+    flow_by_id = {flow.id: flow for flow in flows if flow.status != "cycle"}
+    diagnostics: list[FlowConsistencyDiagnostic] = []
+    decided: set[tuple[str, str, int, str, int]] = set()
+    for root, paths in causal_paths.items():
+        accesses: dict[str, dict[str, list[tuple[CodeFlow, CodeFlowStep]]]] = defaultdict(
+            lambda: {"data_read": [], "data_write": []}
+        )
+        flows_by_path: dict[tuple[str, ...], list[CodeFlow]] = defaultdict(list)
+        for flow_id, path in paths.items():
+            flow = flow_by_id.get(flow_id)
+            if flow is None:
+                continue
+            flows_by_path[path].append(flow)
+            for step in flow.steps:
+                if (step.kind in {"data_read", "data_write"} and step.resource_identity
+                        and not _has_explicit_order_facts(step)):
+                    accesses[step.resource_identity][step.kind].append((flow, step))
+        for grouped in accesses.values():
+            for write_flow, write in grouped["data_write"]:
+                for read_flow, read in grouped["data_read"]:
+                    if (write.key_identity and read.key_identity
+                            and write.key_identity != read.key_identity):
+                        continue
+                    write_path, read_path = paths[write_flow.id], paths[read_flow.id]
+                    hops = 0
+                    while (write_path[2 * hops:2 * hops + 2]
+                           and write_path[2 * hops:2 * hops + 2] == read_path[2 * hops:2 * hops + 2]):
+                        hops += 1
+                    prefix = write_path[:2 * hops]
+                    write_outputs = write_path[2 * hops::2]
+                    read_outputs = read_path[2 * hops::2]
+                    if not any(endpoint_systems.get(item) == "kafka" for item in write_outputs):
+                        continue
+                    if any(endpoint_systems.get(item) != "rest" for item in read_outputs):
+                        continue
+                    fork_flows = flows_by_path.get(prefix, [])
+                    write_sites = _branch_sites(fork_flows, write_outputs[0])
+                    read_sites = _branch_sites(
+                        fork_flows, read_outputs[0] if read_outputs else read,
+                    )
+                    orders = [
+                        order for write_site in write_sites for read_site in read_sites
+                        if (order := _site_order(write_site, read_site)) is not None
+                    ]
+                    write_first = [evidence for before, evidence in orders if before]
+                    pair = (root, write_flow.id, write.order, read_flow.id, read.order)
+                    decided.add(pair)
+                    if orders and not write_first:
+                        continue
+                    key_proven = bool(write.key_identity and write.key_identity == read.key_identity)
+                    diagnostic = _diagnose_pair(
+                        write_flow, write, read_flow, read, root,
+                        "même graphe d'appel : publication Kafka puis traitement synchrone",
+                        None, write_path, read_path, request_precedes_read=True,
+                    )
+                    if write_first:
+                        limitations = ["ordre déduit des lignes source; branches conditionnelles non exclues"]
+                        if not key_proven:
+                            limitations.append("enregistrement commun non prouvé")
+                        diagnostics.append(replace(
+                            diagnostic,
+                            classification="potential_risk",
+                            severity="P1" if key_proven else "P2",
+                            confidence="medium" if key_proven else "low",
+                            limitation="; ".join(limitations),
+                            order_evidence=f"publication asynchrone avant la lecture ({write_first[0]})",
+                        ))
+                    else:
+                        diagnostics.append(replace(
+                            diagnostic,
+                            classification="insufficient_evidence",
+                            severity="P1",
+                            confidence="low",
+                            limitation="ordre entre la publication et la lecture non établi",
+                            order_evidence=None,
+                        ))
+    return diagnostics, decided
+
+
 def _diagnose_pair(
     write_flow: CodeFlow,
     write: CodeFlowStep,
@@ -214,8 +362,17 @@ def diagnose_flow_consistency_snapshot(
     flows: list[CodeFlow],
     causal_reachability: Mapping[str, set[str]] | None = None,
     causal_paths: Mapping[str, Mapping[str, tuple[str, ...]]] | None = None,
+    endpoint_systems: Mapping[str, str] | None = None,
 ) -> list[FlowConsistencyDiagnostic]:
-    """Pair access evidence across flows reachable from a persisted trigger."""
+    """Pair access evidence across flows reachable from a persisted trigger.
+
+    With ``endpoint_systems``, source-indexed accesses without explicit order
+    facts are paired by their call-graph branches instead of branch labels.
+    """
+    diagnostics: list[FlowConsistencyDiagnostic] = []
+    decided: set[tuple[str, str, int, str, int]] = set()
+    if causal_paths and endpoint_systems:
+        diagnostics, decided = _call_graph_stale_reads(flows, causal_paths, endpoint_systems)
     writes = [
         (flow, step) for flow in flows for step in flow.steps
         if step.kind == "data_write" and _is_async(step)
@@ -264,13 +421,15 @@ def diagnose_flow_consistency_snapshot(
             return sorted(roots_by_flow[left.id]) or [left.id]
         return sorted(roots_by_flow[left.id] & roots_by_flow[right.id])
 
-    diagnostics: list[FlowConsistencyDiagnostic] = []
     for write_flow, write in writes:
         for read_flow, read in candidate_reads(write):
             overlaps, overlap_limitation = _overlap(write, read)
             if not overlaps and overlap_limitation is None:
                 continue
-            candidate_roots = common_roots(write_flow, read_flow)
+            candidate_roots = [
+                root for root in common_roots(write_flow, read_flow)
+                if (root, write_flow.id, write.order, read_flow.id, read.order) not in decided
+            ]
             if write_flow.id == read_flow.id:
                 causal, evidence = _causal(write_flow, write, read)
                 scenario_limitation = (

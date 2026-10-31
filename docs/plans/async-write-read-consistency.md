@@ -79,8 +79,11 @@ across sends and receivers or model mutually exclusive branches. Those
 source-derived analyses require framework and branch semantics that the
 current index does not persist.
 
-Implemented: cross-flow pairs without matching causal IDs, or with conflicting
-IDs, remain insufficient evidence even under a shared root. Source-derived
+Implemented: source-indexed pairs without explicit facts use call-graph
+branches (ADR-59). A Kafka write branch and a synchronous read branch from one
+fork handler give a potential risk when the publication precedes the read in
+source. Pairs with explicit but missing or conflicting causal IDs remain
+insufficient evidence even under a shared root. Source-derived
 propagation and mutually exclusive branch analysis remain open.
 
 ### 3.4 Diagnostic evidence

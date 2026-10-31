@@ -100,7 +100,8 @@ existing JSON flow snapshot; older rows load with empty or null defaults.
 `request_before_reads` links an asynchronous write to read event IDs that the
 write request is proven to precede. It is separate from `visibility_before_reads`,
 which records when the write itself is visible before a read. The detector
-requires the request relation before classifying a possible stale-read risk.
+requires the request relation before classifying a possible stale-read risk,
+except for source-indexed steps paired along call-graph branches (ADR-59).
 `visibility_before_reads` is an optional list of read event IDs in the form
 `flow_id:step_order`. It records explicit evidence that this write became
 visible before those specific reads began. It is not inferred from a shared
