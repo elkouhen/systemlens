@@ -46,6 +46,13 @@ from systemlens.application.code_flows import (
     show_code_flow,
 )
 from systemlens.application.flow_calculation import calculate_persisted_flows
+from systemlens.application.runtime_observations import (
+    DEFAULT_API_KEY_ENV,
+    collect_runtime_observations,
+    parse_service_map,
+    reconcile_observations,
+    render_runtime_report_text,
+)
 from systemlens.application.call_edge_diagnostic import (
     diagnose_call_edge,
     list_indexed_methods,
@@ -192,7 +199,11 @@ app.add_typer(flows_app, name="flows")
 app.add_typer(microservices_app, name="microservices")
 app.add_typer(modules_app, name="projects")
 app.add_typer(modules_app, name="modules", hidden=True)
+observe_app = typer.Typer(
+    help="Comparer la topologie indexée au trafic agrégé d'Elastic APM.\n\nExemples : `systemlens observe elastic --url https://es:9200 --since 7d`, `systemlens observe report`."
+)
 app.add_typer(analyze_app, name="analyze")
+app.add_typer(observe_app, name="observe")
 analyze_app.add_typer(analyze_microservices_app, name="microservices")
 
 
@@ -3106,6 +3117,63 @@ def import_facts_cmd(
         "Prochaine étape : systemlens flows calculate",
         err=True,
     )
+
+
+
+def _emit_runtime_report(repo_root: Path, service_map: list[str], json_output: bool) -> None:
+    inventory = load_architecture_inventory(repo_root)
+    with Store(repo_root, readonly=True) as store:
+        observations = store.all_runtime_observations()
+    try:
+        result = reconcile_observations(
+            observations,
+            inventory.endpoints_by_service,
+            graph_edges_from_relations(inventory.relations, inventory.endpoints_by_service),
+            parse_service_map(service_map),
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(
+        json.dumps(result, ensure_ascii=False)
+        if _option_json(json_output)
+        else render_runtime_report_text(result)
+    )
+
+
+@observe_app.command("elastic")
+def observe_elastic_cmd(
+    url: str = typer.Option(..., "--url", help="URL du cluster Elasticsearch, sans identifiants."),
+    since: str = typer.Option("7d", "--since", help="Fenêtre observée, par exemple 24h ou 7d."),
+    interval: str = typer.Option("60m", "--interval", help="Intervalle d'agrégation APM : 1m, 10m ou 60m."),
+    api_key_env: str = typer.Option(
+        DEFAULT_API_KEY_ENV, "--api-key-env", help="Variable d'environnement contenant la clé d'API."
+    ),
+    ca_cert: Optional[Path] = typer.Option(None, "--ca-cert", help="Bundle d'autorités de certification."),
+    service_map: list[str] = typer.Option([], "--service-map", help="Correspondance explicite APM=SERVICE."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Collecter les métriques APM agrégées puis les rapprocher de l'index."""
+    repo_root = Path.cwd()
+    try:
+        observations = collect_runtime_observations(
+            repo_root, url, since=since, interval=interval,
+            api_key_env=api_key_env, ca_cert=ca_cert,
+        )
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(f"{len(observations)} observation(s) agrégée(s) persistée(s).", err=True)
+    _emit_runtime_report(repo_root, service_map, json_output)
+
+
+@observe_app.command("report")
+def observe_report_cmd(
+    service_map: list[str] = typer.Option([], "--service-map", help="Correspondance explicite APM=SERVICE."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Rapprocher les observations persistées de l'index, sans accès réseau."""
+    _emit_runtime_report(Path.cwd(), service_map, json_output)
 
 
 if __name__ == "__main__":

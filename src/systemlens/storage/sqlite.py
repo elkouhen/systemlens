@@ -37,6 +37,7 @@ from systemlens.domain.module_inventory import (
     ModuleDependency,
     SourceEvidence,
 )
+from systemlens.domain.runtime import RuntimeObservation
 from systemlens.infrastructure.paths import db_path
 from systemlens.storage.serialization import (
     CodeChunk,
@@ -432,6 +433,23 @@ class Store:
                 ON codeql_methods(path, start_line);
             CREATE INDEX IF NOT EXISTS idx_codeql_methods_module
                 ON codeql_methods(module);
+            -- Runtime observations are not part of the source snapshot:
+            -- indexing never reads or clears them (ADR-60).
+            CREATE TABLE IF NOT EXISTS runtime_observations (
+                id TEXT PRIMARY KEY,
+                source TEXT NOT NULL,
+                origin TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                service_name TEXT NOT NULL,
+                target TEXT NOT NULL,
+                target_type TEXT,
+                calls INTEGER NOT NULL,
+                failures INTEGER NOT NULL,
+                duration_sum_us REAL,
+                window_start TEXT NOT NULL,
+                window_end TEXT NOT NULL,
+                collected_at TEXT NOT NULL
+            );
             """
         )
         self._migrate_module_columns()
@@ -1052,6 +1070,35 @@ class Store:
     def delete_graph_fact(self, fact_id: str) -> bool:
         cur = self.conn.execute("DELETE FROM graph_facts WHERE id = ?", (fact_id,))
         return cur.rowcount > 0
+
+    def replace_runtime_observations(
+        self, source: str, observations: list[RuntimeObservation]
+    ) -> None:
+        """Replace every observation of one source with a new collection."""
+        self.conn.execute("DELETE FROM runtime_observations WHERE source = ?", (source,))
+        self.conn.executemany(
+            """INSERT INTO runtime_observations
+            (id, source, origin, kind, service_name, target, target_type, calls,
+             failures, duration_sum_us, window_start, window_end, collected_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                (item.id, item.source, item.origin, item.kind, item.service_name,
+                 item.target, item.target_type, item.calls, item.failures,
+                 item.duration_sum_us, item.window_start, item.window_end,
+                 item.collected_at)
+                for item in observations
+            ],
+        )
+
+    def all_runtime_observations(self) -> list[RuntimeObservation]:
+        """Return persisted observations; older indexes may lack the table."""
+        try:
+            rows = self.conn.execute(
+                "SELECT * FROM runtime_observations ORDER BY source, kind, service_name, target"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        return [RuntimeObservation(**dict(row)) for row in rows]
 
     def all_graph_facts(self) -> list[GraphFact]:
         rows = self.conn.execute("SELECT * FROM graph_facts ORDER BY id").fetchall()

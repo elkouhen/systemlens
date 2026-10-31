@@ -15,6 +15,7 @@ functional or technical contract.
 | Indexed contracts and implementation boundaries | [ADR-25](#adr-25-separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26-organize-implementation-modules-by-architectural-ownership) |
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch) |
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows) |
+| Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -1117,3 +1118,30 @@ edges still connect separate internal flows. Existing indexes rebuild flows
 through a code-flow signature change; SQLite schema and source facts remain
 compatible. An application module deliberately embedded as a library loses
 these internal paths. Module metadata must be present to classify the boundary.
+
+## ADR-60: Compare static topology with aggregated Elastic APM metrics
+
+**Status:** Accepted.
+
+**Context:** Static indexing cannot show which integrations run, nor which
+runtime integrations the source index misses. At 50 services and hundreds of
+topics, raw APM traces are too large to download. Elastic APM Server already
+stores pre-aggregated service-destination and transaction metrics.
+
+**Decision:** An opt-in command queries only those metric data streams through
+paginated composite aggregations computed by Elasticsearch. It never downloads
+trace documents. The result is persisted as runtime observations, separate
+from source facts and enrichment facts, with its window and origin.
+
+Reconciliation runs on persisted data. It maps an APM service name to an
+indexed service by explicit mapping, exact name, then a unique token-bounded
+inclusion; anything else stays unresolved. Observations become `matched`,
+`observed_only`, `external`, or `not_compared`; indexed integrations of an
+observed service without traffic become `static_only`.
+
+**Consequences:** Analysts see unindexed runtime integrations and unexercised
+static ones without a trace export. Transfer size depends on service and
+destination cardinality, not on traffic. Counts depend on the APM version and
+sampling, so missing traffic never proves absence. The command contacts a
+network service; credentials come from an environment variable and are never
+persisted. The new table is additive and does not change `SCHEMA_VERSION`.

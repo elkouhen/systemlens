@@ -73,6 +73,7 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 | [docs/spec-tech/graph-layout.md](spec-tech/graph-layout.md) | Changing coordinates, camera mechanics, or layout fallbacks. |
 | [docs/spec-tech/indexing.md](spec-tech/indexing.md) | Changing index orchestration or flow reconstruction. |
 | [docs/spec-tech/persistence.md](spec-tech/persistence.md) | Changing SQLite schema, migrations, or compatibility. |
+| [docs/spec-tech/runtime-observations.md](spec-tech/runtime-observations.md) | Changing Elastic APM collection or runtime reconciliation. |
 | [docs/spec-tech/verification.md](spec-tech/verification.md) | Selecting tests, quality checks, or external test prerequisites. |
 
 ### Plans, procedures, examples, and fixtures

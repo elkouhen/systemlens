@@ -16,7 +16,7 @@ from systemlens.domain.module_inventory import (
     SourceEvidence,
     module_identity,
 )
-from systemlens.domain.runtime import KubernetesWorkload
+from systemlens.domain.runtime import KubernetesWorkload, RuntimeObservation
 
 __all__ = [
     "BlockingPoint",
@@ -36,4 +36,5 @@ __all__ = [
     "SourceEvidence",
     "module_identity",
     "KubernetesWorkload",
+    "RuntimeObservation",
 ]

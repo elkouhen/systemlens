@@ -77,6 +77,9 @@ the [functional specification](SPEC-FONC.md).
   active local `kubectl` context, matched conservatively to indexed projects.
 - Persisted potential code flows from an API or topic entry point to external
   effects located in the same Java method.
+- Opt-in comparison of the static topology with aggregated Elastic APM metrics:
+  runtime integrations missing from the index and indexed integrations without
+  observed traffic, without downloading traces.
 
 ### Planned
 
@@ -103,8 +106,8 @@ the [functional specification](SPEC-FONC.md).
 3. A changed or deleted source file must update or remove its facts on the next
    index run.
 4. The local inventory and its CLI queries must operate without network
-   access once indexing is complete. Kubernetes discovery is an opt-in network
-   exception.
+   access once indexing is complete. Kubernetes discovery and Elastic APM
+   collection are opt-in network exceptions.
 5. Graph, catalog and audit output must make uncertainty visible rather than
    inventing a dependency.
 6. A person analysing a codebase must be able to obtain a bounded answer,

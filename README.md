@@ -49,6 +49,7 @@ Choose an interface for the question you need to answer:
 | Inspect a service, API, Topic, or project in the terminal | `systemlens microservices`, `systemlens apis`, `systemlens topics`, `systemlens projects` |
 | List potential flows for one module | `systemlens flows list --module orders --explain` |
 | Export facts for another tool or agent | `systemlens export microservices --json` |
+| Compare the index with Elastic APM traffic | `systemlens observe elastic --url https://es.example:9200 --since 7d` |
 | Inspect the project and module hierarchy | `systemlens export modules --html modules.html` |
 
 `systemlens web` serves the persisted index at `http://127.0.0.1:8765/`. If an

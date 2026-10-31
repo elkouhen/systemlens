@@ -22,6 +22,7 @@ can evolve without one oversized specification.
 | Browser coordinates, camera, or placement | [Graph layout](spec-tech/graph-layout.md) |
 | Visible HTML presentation or interaction | [UX/UI rules](UX-UI.md) |
 | SQLite schema or migrations | [Persistence](spec-tech/persistence.md) |
+| Elastic APM observations and reconciliation | [Runtime observations](spec-tech/runtime-observations.md) |
 | Validation and quality gates | [Verification and test strategy](spec-tech/verification.md) |
 
 The indexing section specifies Java signature identity, inherited interface

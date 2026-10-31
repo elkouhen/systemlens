@@ -13,6 +13,12 @@ and `jpa_dtos` JSON columns to module
 inventory with empty defaults for existing indexes. Migration runs before
 indexing begins.
 
+The optional `runtime_observations` table holds aggregated APM traffic
+(ADR-60). It is created on the first write without a schema version change.
+Indexing never clears it, and a read-only open of an older index without the
+table returns no observations. See
+[runtime observations](runtime-observations.md#2-persistence).
+
 The database filename remains `findings.db` for backward compatibility; new
 AST-only behavior must not infer that it contains security findings.
 

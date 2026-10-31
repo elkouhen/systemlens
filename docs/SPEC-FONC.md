@@ -60,6 +60,10 @@ for the same operation pairs. Tooltips show the evidence and unresolved
 conditions. Missing metadata MUST NOT be treated as proof of safety or as proof
 of concurrency. These static findings do not assert a runtime incident.
 
+`systemlens observe` compares the static topology with aggregated Elastic APM
+metrics. It reports runtime integrations missing from the index and indexed
+integrations without observed traffic, without changing source facts.
+
 ## Detailed sections
 
 - [Configuration](spec-fonc/configuration.md)
