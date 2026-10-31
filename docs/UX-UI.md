@@ -508,6 +508,14 @@ the count of their own entry point. Arc tooltips keep emitted and received
 counts apart, because neither measures one call site. The flow toolbar
 mirrors the legend toggle, which is hidden outside the graph tab.
 
+The runtime legend states completeness before counts: one line per source
+with its interval and its overflow or truncation state, written explicitly
+when there is none. The hotspot inspector is a ranked list, not a chart;
+its rows MUST select through the same path as a route consumer link, so
+selection, inspector history, and camera behave identically. A row of an
+overflowed service MUST read "incomplet" next to its value, and a missing
+percentile MUST be shown as absent rather than as zero.
+
 ## Responsive behavior and deferred concerns
 
 At intermediate widths up to 1024 pixels, the left panel is limited to 320

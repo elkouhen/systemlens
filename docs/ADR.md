@@ -1332,3 +1332,37 @@ rebuild. Coverage output makes a JDBC-heavy module with dynamic SQL visibly
 partial. The aids on the lab produce one read-modify-write abstention and
 four dual-write pairs for one publication; the record in the backlog keeps
 the gate closed, and promoting the aids is a separate decision.
+
+## ADR-65: Abstract runtime sources behind one seam with percentiles and history
+
+**Status:** Accepted. Extends ADR-60.
+
+**Context:** ADR-60 compared the index with Elastic APM call sums only. A
+product review asked for latency percentiles, a ranked hotspot list, an
+explicit statement of completeness, and a second collection source based on
+OpenTelemetry metrics, without coupling reconciliation to one backend.
+
+**Decision:** Every backend implements a `RuntimeSource` seam that returns
+observations, error groups, and one collection record. The Elastic
+collector folds transactions per service, type, and name, with a failure
+filter and backend percentiles of `transaction.duration.histogram`; a
+Prometheus collector maps the OpenTelemetry HTTP and messaging conventions
+to the same rows through instant queries only. Percentiles are persisted as
+nullable columns and stated as backend approximations; a destination keeps
+an average. Each collection is persisted with its interval, page counts,
+overflow services, truncation flag, and notes; the last three per source
+are kept, and a comparison needs the same source and interval. Hotspots are
+a ranking of reconciled rows, listed apart when they cannot be attributed
+to an indexed entry point.
+
+**Consequences:** A new backend changes no reconciliation or overlay code.
+Observation IDs now include the collection, so rows of several windows
+coexist; rows written before history are reported until the next
+collection and prune then. The schema stays additive: new columns are
+nullable and the collection table is created on open. A missing
+percentile is reported as absent, never as zero, and an overflowed service
+is marked incomplete rather than dropped. The overlay draws no edge for a
+hotspot; a row selects through the existing route path. The lab's Elastic
+cluster and a Prometheus server were not reachable during delivery, so
+both collectors are validated against fakes until a lab run is recorded.
+

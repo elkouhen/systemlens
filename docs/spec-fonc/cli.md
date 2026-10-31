@@ -358,6 +358,21 @@ rejected. `--ca-cert` adds a trusted CA bundle; TLS verification cannot be
 disabled. The command needs an initialized repository and stores only the
 cluster scheme, host, and port with the observations.
 
+`systemlens observe prometheus --url URL --since 7d` reads OpenTelemetry
+HTTP and messaging metrics through the Prometheus HTTP query API only, with
+instant queries aggregated server side. The bearer token is read from the
+environment variable named by `--bearer-env`,
+`SYSTEMLENS_PROMETHEUS_TOKEN` by default; it is never logged or persisted.
+A URL containing credentials is rejected. `--ca-cert` applies as above.
+Observations are stored with `source = prometheus`; a Prometheus collection
+has no error group because the metrics carry no exception grouping.
+
+Each collection is persisted with its completeness: window, interval,
+pages read per query, overflow buckets (`_other`), truncation, and notes.
+The last three collections per source are kept. The report starts with
+one "Complétude" line per source and states explicitly when neither
+overflow nor truncation occurred.
+
 The report groups observations by status: `matched`, `observed_only`,
 `external`, `static_only`, `unverified`, and `not_compared`. `unverified`
 lists indexed integrations whose silence the telemetry cannot prove, such as
@@ -371,11 +386,31 @@ mappings belong in `runtime.service_map` of the
 same APM name. `runtime.ignore_services` removes infrastructure services,
 such as OTel collectors, from the unmapped list.
 
+Request transactions carry p50, p95, and p99 latencies computed by the
+backend from aggregated histograms; a destination keeps an average and no
+percentile. `--json` exposes them as `p50_us`, `p95_us`, `p99_us`, and
+`avg_us` on each row; existing fields keep their names and values.
+
+`systemlens observe report --hotspots N --by p95|p99|failures|errors`
+lists the N entry points with the highest value: service, target, indexed
+`endpoint_ids`, window, calls, value, status, and `incomplete` when the
+service overflowed in its collection. Ties break by service then target.
+Entry points that are `not_compared` and indexed entries that are
+`unverified` are listed apart. Rows without the measure are counted, not
+ranked. An unknown `--by` exits with code 2.
+
+`systemlens observe report --compare-previous` adds, per row matched on
+kind, service, target, and target type, the delta of calls, of the failure
+ratio, and of p95 against the previous collection of the same source and
+interval. Without such a collection the report says why no comparison is
+shown.
+
 When observations exist, `systemlens export microservices --html` embeds
 them as an optional overlay described in the
 [HTML export behavior](html-export.md#runtime-observations-overlay).
 
-Counts are lower bounds that depend on sampling. `static_only` means no
-traffic in the window, not dead code. Observations never alter source facts.
+Counts are lower bounds that depend on sampling; percentiles are backend
+approximations. `static_only` means no traffic in the window, not dead
+code. Observations never alter source facts.
 The [technical specification](../spec-tech/runtime-observations.md) defines
 the queries and matching rules.

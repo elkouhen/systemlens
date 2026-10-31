@@ -45,11 +45,14 @@ visual language or camera contract.
 
 ## Runtime observations overlay
 
-When the index holds observations from `systemlens observe elastic`, the
-legend offers a "Trafic observé (Elastic APM)" toggle with the collection
-window, its age, the cluster origin, and a status summary (matched, silent,
-unverifiable, unexplained). The toggle is on at every load. Without
-observations, neither the toggle nor any runtime data is exported.
+When the index holds observations from `systemlens observe`, the legend
+offers a "Trafic observé (<sources>)" toggle naming each source, with the
+collection window, its age, the backend origin, one completeness line per
+source (interval, overflow or truncation, stated explicitly when none, or
+"inconnue" for rows collected before collection history), and a status
+summary (matched, silent, unverifiable, unexplained). The toggle is on at
+every load. Without observations, neither the toggle nor any runtime data
+is exported.
 
 When on, the architecture view annotates existing elements only:
 
@@ -68,6 +71,13 @@ When on, the architecture view annotates existing elements only:
   unverifiable indexed integrations, `observed_only` and `external`
   traffic, unmapped APM services, and services without telemetry. Its count
   covers all of them.
+- "Points chauds" opens an inspector ranking the matched entry points by
+  p95 latency when the backend provides percentiles, otherwise by
+  failures, with calls and an "incomplet" mark for an overflowed service.
+  Selecting a row selects the service card and opens the route inspector
+  of its served route, so the arcs into it highlight through the existing
+  selection; entry points that are not comparable or not verifiable are
+  listed apart. Service details repeat the service's own hotspots.
 
 In a selected call tree, a "Trafic APM" button in the flow toolbar mirrors
 the legend toggle. Each card shows the observed executions of its entry

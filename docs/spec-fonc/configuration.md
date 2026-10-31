@@ -50,10 +50,14 @@ compatibility with existing configurations. Under Strategy1, listener and
 sender topic keys match declared keys in `kafka.yml` or `kafka.yaml` after
 normalization.
 An optional `runtime` section maps APM service names to indexed services for
-`systemlens observe` and the HTML export overlay. `ignore_services` lists APM
-services left out of reconciliation, such as OTel collectors: they stay
-`not_compared` and are never reported as unmapped. The section holds names
-only, never credentials. A non-string entry is a configuration error.
+`systemlens observe` and the HTML export overlay. It applies to every
+runtime source (`observe elastic` and `observe prometheus`) alike.
+`ignore_services` lists APM services left out of reconciliation, such as
+OTel collectors: they stay `not_compared` and are never reported as
+unmapped. The section holds names only, never credentials: the Elastic API
+key and the Prometheus bearer token come from the environment variables
+named by `--api-key-env` and `--bearer-env`. A non-string entry is a
+configuration error.
 
 ```yaml
 runtime:

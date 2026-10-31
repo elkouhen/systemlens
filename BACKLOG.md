@@ -503,9 +503,9 @@ measured precision, abstention rate, and reviewer time.
 | D7 | Open. |
 | D8 | Open. |
 | D9 | Open. |
-| R1 | Open. |
-| R2 | Open. |
-| R3 | Open. |
-| R4 | Open; lab Prometheus server is a prerequisite. |
-| R5 | Open. |
-| R6 | Open. |
+| R1 | Delivered. Transaction query folds per service, type, and name with a failure filter and p50/p95/p99 of `transaction.duration.histogram`; nullable percentile columns added additively; missing histogram yields `NULL` and a collection note. Validated with fakes (`uv run pytest tests/test_runtime_observations.py`); not run against the lab cluster, which was unreachable. |
+| R2 | Delivered. `observe report --hotspots N --by p95|p99|failures|errors`, `runtime.hotspots` in the export, "Points chauds" inspector whose row selects the service card and route inspector. Browser test `test_runtime_hotspot_row_selects_its_endpoint_without_moving_the_camera` passed three times with Chrome. The PRD measure is verified on a synthetic export, not on the lab export. |
+| R3 | Delivered. `runtime_collections` table, `collection_id` on both observation tables, last three collections per source pruned in the same transaction, `--compare-previous` deltas gated on same source and interval; legacy rows without collection reported until the next collection. |
+| R4 | Delivered against a fake query API: `RuntimeSource` seam, `discovery/prometheus_otel.py`, `observe prometheus --url --since --bearer-env --ca-cert`, OTel HTTP and messaging mapping, credentials in the URL rejected, token never persisted. Deviation: the Prometheus scrape interval is read from `prometheus_target_interval_length_seconds` when exposed, otherwise recorded as unknown. Unverified on the lab: no Prometheus server was reachable. |
+| R5 | Delivered. `_other` overflow buckets dropped and their services recorded; page counts per query; completeness line in the report, the legend, and the inspectors, explicit when none; hotspot rows of an overflowed service read "incomplet". Deviation: the 100-page bound still stops collection with an error (unchanged contract), so `truncated` is recorded but never set by the Elastic collector. |
+| R6 | Delivered. ADR-65, runtime specification restructured per source, CLI, configuration, export, UX, and PRD updated; skill rule extended to percentiles and hotspots. Lab validation of both sources is unverified: neither the Elastic cluster nor a Prometheus server answered from the delivery machine. |

@@ -77,9 +77,13 @@ the [functional specification](SPEC-FONC.md).
   active local `kubectl` context, matched conservatively to indexed projects.
 - Persisted potential code flows from an API or topic entry point to external
   effects located in the same Java method.
-- Opt-in comparison of the static topology with aggregated Elastic APM metrics:
+- Opt-in comparison of the static topology with aggregated runtime
+  metrics from Elastic APM or from OpenTelemetry metrics through Prometheus:
   runtime integrations missing from the index and indexed integrations without
   observed traffic, without downloading traces.
+- Latency percentiles per entry point, a ranked hotspot list with its
+  indexed evidence and completeness, and a comparison with the previous
+  collection of the same source and interval.
 
 ### Planned
 
@@ -106,8 +110,8 @@ the [functional specification](SPEC-FONC.md).
 3. A changed or deleted source file must update or remove its facts on the next
    index run.
 4. The local inventory and its CLI queries must operate without network
-   access once indexing is complete. Kubernetes discovery and Elastic APM
-   collection are opt-in network exceptions.
+   access once indexing is complete. Kubernetes discovery and runtime
+   collection (Elastic APM, Prometheus) are opt-in network exceptions.
 5. Graph, catalog and audit output must make uncertainty visible rather than
    inventing a dependency.
 6. A person analysing a codebase must be able to obtain a bounded answer,
@@ -125,6 +129,9 @@ the [functional specification](SPEC-FONC.md).
   matched workload kind, namespace, and name.
 - Coverage output distinguishes resolved relations from unresolved or dynamic
   facts, so an analyst can decline to assume a missing dependency.
+- On the lab export, an analyst sees the runtime hotspots ranked with
+  their indexed evidence and the completeness of the collection, without
+  any static fact being described as observed.
 - Incremental indexing touches only changed files unless an extractor signature,
   selected convention, or an analysis dependency (Spring configuration or build
   descriptor) changes.
