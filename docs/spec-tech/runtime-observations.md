@@ -65,7 +65,9 @@ Service mapping, in order:
    or string boundaries.
 
 Several candidates make the service `ambiguous`; none makes it `unmapped`.
-Observations of an unresolved service are `not_compared`.
+Observations of an unresolved service are `not_compared`. A service listed
+in `runtime.ignore_services` skips mapping: its observations are
+`not_compared`, it is not reported as unresolved, and it proves no coverage.
 
 | Observation | Rule | Status |
 |---|---|---|

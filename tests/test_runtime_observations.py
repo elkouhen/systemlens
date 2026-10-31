@@ -374,15 +374,23 @@ def test_service_map_comes_from_config_and_command_line_overrides_it(tmp_path: P
     raw["runtime"] = {"service_map": {"prod-orders": "orders", "prod-stock": "stock"}}
     path.write_text(yaml.safe_dump(raw))
 
-    configured = load_config(tmp_path).runtime_service_map
+    raw["runtime"]["ignore_services"] = ["otel-edge", " elastic-otel-collector "]
+    path.write_text(yaml.safe_dump(raw))
+    config = load_config(tmp_path)
+    configured = config.runtime_service_map
 
     assert configured == {"prod-orders": "orders", "prod-stock": "stock"}
+    assert config.runtime_ignore_services == ["otel-edge", "elastic-otel-collector"]
     assert parse_service_map(["prod-stock=inventory"], configured) == {
         "prod-orders": "orders", "prod-stock": "inventory",
     }
     raw["runtime"] = {"service_map": {"prod-orders": 3}}
     path.write_text(yaml.safe_dump(raw))
     with pytest.raises(ConfigError, match="runtime.service_map"):
+        load_config(tmp_path)
+    raw["runtime"] = {"ignore_services": "otel-edge"}
+    path.write_text(yaml.safe_dump(raw))
+    with pytest.raises(ConfigError, match="runtime.ignore_services"):
         load_config(tmp_path)
 
 
@@ -423,13 +431,37 @@ def test_export_rejects_a_service_map_that_targets_an_unindexed_service(
 
     with pytest.raises(typer.Exit):
         cli._export_runtime_overlay(tmp_path, graph_data)  # type: ignore[arg-type]
-    raw["runtime"] = {"service_map": {"supermarket-restock-service": "restock-service"}}
+    raw["runtime"] = {
+        "service_map": {"supermarket-restock-service": "restock-service"},
+        "ignore_services": ["legacy-gateway"],
+    }
     path.write_text(yaml.safe_dump(raw))
     overlay = cli._export_runtime_overlay(tmp_path, graph_data)  # type: ignore[arg-type]
     assert overlay is not None and overlay["services"]["restock-service"] == "observed"
+    assert overlay["unresolved_services"] == []
     assert cli._export_runtime_overlay(
         tmp_path, SimpleNamespace(runtime_observations=[]),  # type: ignore[arg-type]
     ) is None
+
+
+def test_ignored_apm_services_are_neither_gaps_nor_evidence() -> None:
+    endpoints, edges = _lab_inventory()
+    observations = [
+        *_lab_observations(),
+        _observation("transaction", "otel-edge", "POST", "request", 500),
+        _observation("destination", "otel-edge", "elasticsearch:9200", "http", 500),
+    ]
+
+    result = reconcile_observations(
+        observations, endpoints, edges, ignored_services=["otel-edge", "legacy-gateway"],
+    )
+
+    ignored = [row for row in result["observations"] if row["service_name"] in {"otel-edge", "legacy-gateway"}]
+    assert {(row["status"], row["service"], row["hint"]) for row in ignored} == {
+        ("not_compared", None, "service APM ignoré (runtime.ignore_services)"),
+    }
+    assert result["unresolved_services"] == []
+    assert result["summary"]["not_compared"] == 4
 
 
 def test_ambiguous_service_names_need_an_explicit_mapping() -> None:

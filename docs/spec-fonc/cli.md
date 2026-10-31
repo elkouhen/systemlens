@@ -341,7 +341,8 @@ without any observation.
 Repeat `--service-map` to map an APM service name explicitly. Persistent
 mappings belong in `runtime.service_map` of the
 [configuration](configuration.md); the option overrides an entry with the
-same APM name.
+same APM name. `runtime.ignore_services` removes infrastructure services,
+such as OTel collectors, from the unmapped list.
 
 When observations exist, `systemlens export microservices --html` embeds
 them as an optional overlay described in the

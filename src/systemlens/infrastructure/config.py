@@ -38,6 +38,8 @@ class Config:
     root_path: str | None = None
     # Explicit APM service name to indexed service name (ADR-60).
     runtime_service_map: dict[str, str] = field(default_factory=dict)
+    # APM service names left out of reconciliation, such as OTel collectors.
+    runtime_ignore_services: list[str] = field(default_factory=list)
 
 
 def load_config(repo_root: Path) -> Config:
@@ -115,6 +117,11 @@ def load_config(repo_root: Path) -> Config:
         raise ConfigError(
             "runtime.service_map doit associer des noms de service APM à des services indexés."
         )
+    runtime_ignore_services = runtime.get("ignore_services") or []
+    if not isinstance(runtime_ignore_services, list) or not all(
+        isinstance(name, str) and name.strip() for name in runtime_ignore_services
+    ):
+        raise ConfigError("runtime.ignore_services doit être une liste de noms de service APM.")
 
     return Config(
         include=list(raw.get("include", DEFAULT_INCLUDE)),
@@ -134,6 +141,7 @@ def load_config(repo_root: Path) -> Config:
         runtime_service_map={
             name.strip(): service.strip() for name, service in runtime_service_map.items()
         },
+        runtime_ignore_services=[name.strip() for name in runtime_ignore_services],
     )
 
 

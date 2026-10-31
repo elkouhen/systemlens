@@ -8,7 +8,7 @@ without creating, confirming or removing any architecture fact.
 import os
 import re
 from collections import Counter, defaultdict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import cast
@@ -138,8 +138,13 @@ def reconcile_observations(
     endpoints_by_service: Mapping[str, list[MessageEndpoint]],
     edges: list[GraphEdge],
     service_map: Mapping[str, str] | None = None,
+    ignored_services: Collection[str] = (),
 ) -> dict[str, object]:
-    """Compare persisted observations with indexed integrations."""
+    """Compare persisted observations with indexed integrations.
+
+    Observations of ``ignored_services`` stay in the report as
+    ``not_compared`` but never count as unresolved or as service evidence.
+    """
     services = set(endpoints_by_service)
     explicit = dict(service_map or {})
     unknown = sorted(set(explicit.values()) - services)
@@ -180,13 +185,17 @@ def reconcile_observations(
     observed_services: set[str] = set()
     unresolved: dict[str, dict[str, object]] = {}
     rows: list[dict[str, object]] = []
+    ignored = set(ignored_services)
     for observation in observations:
         resolution, mapped_service, candidates = resolve(observation.service_name)
         status: str = "not_compared"
         hint: str | None = None
         endpoint_ids: list[str] = []
         matched_edge: dict[str, str] | None = None
-        if mapped_service is None:
+        if observation.service_name in ignored:
+            mapped_service = None
+            hint = "service APM ignoré (runtime.ignore_services)"
+        elif mapped_service is None:
             unresolved[observation.service_name] = {
                 "name": observation.service_name, "status": resolution,
                 "candidates": candidates,

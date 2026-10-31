@@ -40,13 +40,16 @@ method-call engine, and disabled extractors. Under Strategy1, listener and
 sender topic keys match declared keys in `kafka.yml` or `kafka.yaml` after
 normalization.
 An optional `runtime` section maps APM service names to indexed services for
-`systemlens observe` and the HTML export overlay. It holds names only, never
-credentials. A non-string entry is a configuration error.
+`systemlens observe` and the HTML export overlay. `ignore_services` lists APM
+services left out of reconciliation, such as OTel collectors: they stay
+`not_compared` and are never reported as unmapped. The section holds names
+only, never credentials. A non-string entry is a configuration error.
 
 ```yaml
 runtime:
   service_map:
     prod-orders-api: order-service
+  ignore_services: [elastic-otel-collector, otel-edge]
 ```
 
 `root_path` is local export configuration only:

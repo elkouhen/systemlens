@@ -2020,12 +2020,14 @@ def _export_runtime_overlay(
     observations = getattr(graph_data, "runtime_observations", None)
     if not observations:
         return None
+    configured_map, ignored_services = _configured_runtime(repo_root)
     try:
         result = reconcile_observations(
             observations,
             graph_data.services_by_name,
             graph_data.edges,
-            parse_service_map([], _configured_service_map(repo_root)),
+            parse_service_map([], configured_map),
+            ignored_services,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -3146,23 +3148,27 @@ def import_facts_cmd(
 
 
 
-def _configured_service_map(repo_root: Path) -> dict[str, str]:
+def _configured_runtime(repo_root: Path) -> tuple[dict[str, str], list[str]]:
+    """Return the configured APM service map and ignored APM services."""
     try:
-        return load_config(repo_root).runtime_service_map
+        config = load_config(repo_root)
     except ConfigError:
-        return {}
+        return {}, []
+    return config.runtime_service_map, config.runtime_ignore_services
 
 
 def _emit_runtime_report(repo_root: Path, service_map: list[str], json_output: bool) -> None:
     inventory = load_architecture_inventory(repo_root)
     with Store(repo_root, readonly=True) as store:
         observations = store.all_runtime_observations()
+    configured_map, ignored_services = _configured_runtime(repo_root)
     try:
         result = reconcile_observations(
             observations,
             inventory.endpoints_by_service,
             graph_edges_from_relations(inventory.relations, inventory.endpoints_by_service),
-            parse_service_map(service_map, _configured_service_map(repo_root)),
+            parse_service_map(service_map, configured_map),
+            ignored_services,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
