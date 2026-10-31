@@ -1,7 +1,8 @@
 # Backlog: data operations and runtime observations
 
-Status: open. Owner: SystemLens implementer. Reviewers: product owner and
-architecture maintainer.
+Status: delivered on 2026-10-31; see section 7 for the delivery record and
+the open promotion gate of the review aids. Owner: SystemLens implementer.
+Reviewers: product owner and architecture maintainer.
 Review date: 2026-10-31, on commit `632af79` plus the uncommitted delivery of
 the widget readability backlog.
 
@@ -488,24 +489,40 @@ validation as unverified when the cluster, Chrome, or CodeQL is unavailable.
 
 ## 7. Delivery record
 
-No task is delivered yet. Record each task here with its commit, the
-validation that ran, any deviation from the work package, and, for D8, the
-measured precision, abstention rate, and reviewer time.
+Each task is recorded with its commit, the validation that ran, any
+deviation from the work package, and, for D8, the measured precision,
+abstention rate, and reviewer time. Stream D is delivered in commits
+`dbdffea` to `85a3783` (ADR-64); Stream R in `33bcddb` to `cf54f3b`
+(ADR-65). Validation on the merged tree: `uv run ruff check src tests`,
+`uv run mypy`, and `uv run pytest` (633 passed); the browser suite, the
+companion contract check, and the lab measurement are recorded per task.
 
 | ID | Outcome |
 |---|---|
-| D1 | Open. |
-| D2 | Open. |
-| D3 | Open. |
-| D4 | Open. |
-| D5 | Open. |
-| D6 | Open. |
-| D7 | Open. |
-| D8 | Open. |
-| D9 | Open. |
+| D1 | Delivered in `dbdffea`. `data_operations` table (schema 39), stable IDs from module, relative path, owner method, line, technology, and raw operation; flows read the table and project the module JSON of an older index. Acceptance verified by `tests/test_data_operations.py` (older index reopens and reindexes, deleted file loses its rows, identical IDs across two runs, identical steps from table and JSON). Deviation: the table is rebuilt as a whole on each run because module discovery is a full rescan; deleted paths are also purged by `remove_files`. |
+| D2 | Delivered in `525073d`. Receivers resolved by declared type (field, parameter, local; shadowing wins); Spring Data bases accepted through module-local interfaces with generic substitution; ambiguous or unindexed entity keeps an unresolved resource with a reason. The Mongo extractor reuses the resolver. Verified by the constructor-injected `CrudRepository`, inheritance, ambiguity, and non-repository tests. |
+| D3 | Delivered in `525073d`. Derived-query grammar in `domain/data_operations.py` (`findByCustomerId(id)` read keyed by `customerId`; `deleteByStatus` delete without key identity), literal `@Query` JPQL with `@Modifying`, native queries kept on a JDBC table, `Specification`/`Example`/Querydsl and non-literal queries unknown. Deviation: a key on a non-ID property scopes its identity with `#property` so it never matches the entity ID. |
+| D4 | Delivered in `525073d`. `persist`, `merge`, `remove`, `find`, `getReference`, literal `createQuery` and `createNativeQuery`; a parameter query string and a named query stay unknown. Verified by `test_entity_manager_operations_classify_arguments_and_literal_queries`. |
+| D5 | Delivered in `525073d` (`discovery/build/jdbc_operations.py`). Literal or same-class constant SQL, single-table resource `jdbc:<module>:<table>`, key bound from the single `column = ?` placeholder; joins, subqueries, several tables, procedures, multiple statements, concatenated and formatted strings unknown with a reason. `JdbcClient` receivers are accepted with the same rules. |
+| D6 | Delivered in `6c22d4a`. Scope ID from module, path, and `Class.method` (or the template lambda line); propagation defaults to `REQUIRED`, isolation stays unknown unless stated and reaches the step as `read_uncommitted`; helpers inherit nothing. Verified end to end by `test_isolation_evidence_reaches_the_flow_step_unchanged`. |
+| D7 | Delivered in `6c22d4a`. `optimistic_version` on every write to an entity whose `@Version` field is now inventoried, `pessimistic_lock` from `@Lock` on the declared method, `atomic_update` from the Mongo invocation text, `conditional_update` from a JDBC `WHERE` naming a version column. Deviation: a Mongo update built outside the call is not inspected and records no guard. |
+| D8 | Delivered in `c664b09`, behind `export microservices --review-aids`; the gate of plan section 6 stays closed. Lab measurement (source engine, fresh copy, 3 roots): read-modify-write: 1 distinct candidate (`ProductPersistenceAdapter.save`), a genuine pattern protected at runtime by `PESSIMISTIC_WRITE` inside the service transaction; the aid abstains with "verrou pessimiste présent, portée transactionnelle non établie" because the lock and the `@Transactional` live in different methods, so precision 1/1 as a candidate and abstention 1/1. Dual write: 4 distinct pairs for 1 real pattern (`reserve` writes four resources then publishes `StockDepleted` without outbox or after-commit listener), 0 false candidates. Reviewer time: about 10 minutes for the 5 pairs by the implementer, not an independent analyst. No second Spring application was available in the workspace, so the measurement on one more application is open and the aids remain review aids. |
+| D9 | Delivered in `d246fa2` and `85a3783`. `analyze coverage --json` on the lab reports MongoDB 2/2 and JPA 6/6 supported, JDBC 0, no unresolved operation; `flows show` and the HTML badge tooltip state operation, resource kind, key, guard, and transaction, verified after removing the source tree. ADR-64, extraction rules, persistence, data model, algorithms, CLI, export, UX, plan status, and the companion skill updated. `scripts/check_companion_contracts.py` and the browser suite: see the final validation note below. |
 | R1 | Delivered. Transaction query folds per service, type, and name with a failure filter and p50/p95/p99 of `transaction.duration.histogram`; nullable percentile columns added additively; missing histogram yields `NULL` and a collection note. Validated with fakes (`uv run pytest tests/test_runtime_observations.py`); not run against the lab cluster, which was unreachable. |
 | R2 | Delivered. `observe report --hotspots N --by p95|p99|failures|errors`, `runtime.hotspots` in the export, "Points chauds" inspector whose row selects the service card and route inspector. Browser test `test_runtime_hotspot_row_selects_its_endpoint_without_moving_the_camera` passed three times with Chrome. The PRD measure is verified on a synthetic export, not on the lab export. |
 | R3 | Delivered. `runtime_collections` table, `collection_id` on both observation tables, last three collections per source pruned in the same transaction, `--compare-previous` deltas gated on same source and interval; legacy rows without collection reported until the next collection. |
 | R4 | Delivered against a fake query API: `RuntimeSource` seam, `discovery/prometheus_otel.py`, `observe prometheus --url --since --bearer-env --ca-cert`, OTel HTTP and messaging mapping, credentials in the URL rejected, token never persisted. Deviation: the Prometheus scrape interval is read from `prometheus_target_interval_length_seconds` when exposed, otherwise recorded as unknown. Unverified on the lab: no Prometheus server was reachable. |
 | R5 | Delivered. `_other` overflow buckets dropped and their services recorded; page counts per query; completeness line in the report, the legend, and the inspectors, explicit when none; hotspot rows of an overflowed service read "incomplet". Deviation: the 100-page bound still stops collection with an error (unchanged contract), so `truncated` is recorded but never set by the Elastic collector. |
 | R6 | Delivered. ADR-65, runtime specification restructured per source, CLI, configuration, export, UX, and PRD updated; skill rule extended to percentiles and hotspots. Lab validation of both sources is unverified: neither the Elastic cluster nor a Prometheus server answered from the delivery machine. |
+
+Final validation on the merged tree (commit after `cf54f3b`):
+`uv run ruff check src tests`, `uv run mypy`, and `uv run pytest` passed
+(633 tests); `SYSTEMLENS_CHROME_BIN=... uv run pytest -m slow
+tests/test_browser_export.py` passed (40 tests, Chrome); and
+`uv run python scripts/check_companion_contracts.py` validated the skill
+and a CodeQL-backed index, fact import, and HTML export of a fresh lab
+copy. Not done: the lab's Elastic cluster and a Prometheus server were
+unreachable, so R1, R4, and R5 are validated with fakes only, and the
+checked-in live model `docs/models/simple-supermarket.html` was not
+regenerated; it predates the hotspot group and the badge facts and needs a
+lab reindex plus a runtime collection.
