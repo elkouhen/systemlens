@@ -13,3 +13,6 @@ htmlcov/
 .agentsroom/handoff-transcript-*.txt
 .agentsroom/handoff-summary-*.md
 .agentsroom/fork-context-*.txt
+
+# Agent worktrees are scratch checkouts, never part of the project.
+.claude/worktrees/

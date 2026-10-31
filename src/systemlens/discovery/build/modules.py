@@ -947,6 +947,7 @@ def discover_jpa_entities(
             name = java_parser.declaration_name(declaration, source)
             if name:
                 fields: list[JpaField] = []
+                version_field: str | None = None
                 for field_node in _walk(declaration):
                     if field_node.type != "field_declaration" or java_parser.enclosing(
                         field_node, "class_declaration", "record_declaration", "enum_declaration"
@@ -955,6 +956,10 @@ def discover_jpa_entities(
                     type_node = field_node.child_by_field_name("type")
                     if type_node is None:
                         continue
+                    versioned = any(
+                        java_parser.annotation_name(annotation, source) == "Version"
+                        for annotation in java_parser.annotations_of(field_node)
+                    )
                     for declarator in field_node.children:
                         if declarator.type != "variable_declarator":
                             continue
@@ -964,11 +969,14 @@ def discover_jpa_entities(
                                 java_parser.node_text(source, name_node),
                                 java_parser.node_text(source, type_node).strip(),
                             ))
+                            if versioned and version_field is None:
+                                version_field = java_parser.node_text(source, name_node)
                 entities.add(JpaEntity(
                     qualified_name=f"{package}.{name}" if package else name,
                     path=java_file.relative_to(repo_root).as_posix(),
                     line=declaration.start_point.row + 1,
                     fields=tuple(fields),
+                    version_field=version_field,
                 ))
     return tuple(sorted(entities))
 

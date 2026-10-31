@@ -801,6 +801,7 @@ class Store:
                             JpaField(field["name"], field["type"])
                             for field in item.get("fields", [])
                         ),
+                        version_field=item.get("version_field"),
                     )
                     for item in json.loads(row["jpa_entities"])
                 ),

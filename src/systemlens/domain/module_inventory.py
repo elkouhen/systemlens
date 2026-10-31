@@ -98,6 +98,8 @@ class JpaEntity:
     path: str
     line: int
     fields: tuple[JpaField, ...] = ()
+    # Name of the ``@Version`` field, the entity's optimistic-locking evidence.
+    version_field: str | None = None
 
 
 @dataclass(frozen=True, order=True)

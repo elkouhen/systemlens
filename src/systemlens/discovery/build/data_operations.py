@@ -10,7 +10,7 @@ resource with a reason rather than a guessed entity.
 
 import hashlib
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Sequence
 
@@ -601,6 +601,115 @@ def _jdbc_operation(
     )
 
 
+_ISOLATIONS = {
+    "READ_UNCOMMITTED": "read_uncommitted", "READ_COMMITTED": "read_committed",
+    "REPEATABLE_READ": "repeatable_read", "SERIALIZABLE": "serializable",
+}
+
+
+@dataclass(frozen=True)
+class TransactionScope:
+    transaction_id: str | None = None
+    propagation: str | None = None
+    isolation: str | None = None
+    read_only: bool | None = None
+
+
+def _transactional_annotation(node: Node, source: bytes) -> Node | None:
+    return next((
+        annotation for annotation in java_parser.annotations_of(node)
+        if java_parser.annotation_name(annotation, source) == "Transactional"
+    ), None)
+
+
+def _annotation_scope(annotation: Node, source: bytes, transaction_id: str) -> TransactionScope:
+    """Read ``@Transactional`` attributes; absent isolation stays unknown."""
+    propagation_node = java_parser.annotation_argument(annotation, source, "propagation")
+    isolation_node = java_parser.annotation_argument(annotation, source, "isolation")
+    read_only_node = java_parser.annotation_argument(annotation, source, "readOnly")
+    propagation = (
+        java_parser.node_text(source, propagation_node).rsplit(".", 1)[-1]
+        if propagation_node is not None else "REQUIRED"
+    )
+    isolation_name = (
+        java_parser.node_text(source, isolation_node).rsplit(".", 1)[-1]
+        if isolation_node is not None else "DEFAULT"
+    )
+    read_only = (
+        java_parser.node_text(source, read_only_node).strip() == "true"
+        if read_only_node is not None else False
+    )
+    return TransactionScope(
+        transaction_id, propagation, _ISOLATIONS.get(isolation_name), read_only,
+    )
+
+
+def transaction_scope(
+    module: str, path: str, invocation: Node, owner: Node, declaration: Node, source: bytes,
+) -> TransactionScope:
+    """Scope evidence of an operation: ``@Transactional`` or a template lambda.
+
+    A method without the annotation inherits the class annotation. A method
+    called from a transactional method inherits nothing: propagation is a
+    runtime decision. ``TransactionTemplate.execute`` lambdas form their own
+    scope, keyed by the lambda's line.
+    """
+    class_name = java_parser.declaration_name(declaration, source) or ""
+    method_name = java_parser.declaration_name(owner, source) or ""
+    qualified = f"{class_name}.{method_name}"
+    current: Node | None = invocation.parent
+    while current is not None and current != owner:
+        if current.type == "lambda_expression":
+            argument_list = current.parent
+            call = argument_list.parent if argument_list is not None else None
+            if (
+                argument_list is not None and argument_list.type == "argument_list"
+                and call is not None and call.type == "method_invocation"
+            ):
+                receiver_node, operation, _arguments = java_parser.invocation_parts(call, source)
+                receiver_name = _receiver_identifier(receiver_node, source)
+                receiver = (
+                    _declared_type(receiver_name, call, source) if receiver_name else None
+                )
+                if operation in {"execute", "executeWithoutResult"} and receiver is not None and (
+                    receiver.simple in _TRANSACTION_TEMPLATE_TYPES
+                ):
+                    return TransactionScope(stable_scope_id(
+                        module, path, f"{qualified}@{current.start_point.row + 1}",
+                    ))
+        current = current.parent
+    annotation = _transactional_annotation(owner, source) or _transactional_annotation(
+        declaration, source,
+    )
+    if annotation is None:
+        return TransactionScope()
+    return _annotation_scope(annotation, source, stable_scope_id(module, path, qualified))
+
+
+def _with_scope(operation: DataOperation, scope: TransactionScope) -> DataOperation:
+    if scope.transaction_id is None:
+        return operation
+    return replace(
+        operation, transaction_id=scope.transaction_id, propagation=scope.propagation,
+        isolation=scope.isolation, read_only=scope.read_only,
+    )
+
+
+def _with_optimistic_version(
+    operation: DataOperation, entities: Sequence[JpaEntity],
+) -> DataOperation:
+    """Every write on an entity with a ``@Version`` field carries the guard."""
+    if not operation.writes or operation.guard is not None or operation.resource is None:
+        return operation
+    versioned = any(
+        entity.qualified_name == operation.resource and entity.version_field
+        for entity in entities
+    )
+    if not versioned:
+        return operation
+    return replace(operation, guard="optimistic_version", guard_scope="resource")
+
+
 def _entity_manager_type(receiver: _Receiver, imports: set[str]) -> bool:
     if receiver.simple not in _ENTITY_MANAGER_TYPES:
         return False
@@ -674,7 +783,10 @@ def discover_data_operations(
                         context, invocation, owner_name, receiver_name, operation, arguments,
                     )
                 if result is not None:
-                    operations.append(result)
+                    result = _with_scope(result, transaction_scope(
+                        module, path, invocation, owner, declaration, source,
+                    ))
+                    operations.append(_with_optimistic_version(result, entities))
     return tuple(sort_data_operations(operations))
 
 

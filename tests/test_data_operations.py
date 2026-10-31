@@ -450,3 +450,175 @@ def test_literal_jdbc_statements_classify_single_table_statements_only() -> None
     assert operations[4].guard_scope == "operation"
     assert operations[0].guard is None
     assert [item.coverage for item in operations][:3] == ["supported", "partial", "unsupported"]
+
+
+# --- Transaction scope and conflict-control evidence ------------------------
+
+
+def _repository_sources(service_body: str, entity_fields: str = "@Id private String id;") -> dict[str, str]:
+    return {
+        "src/Order.java": (
+            "package shop;\nimport jakarta.persistence.Entity;\nimport jakarta.persistence.Id;\n"
+            "import jakarta.persistence.Version;\n"
+            f"@Entity public class Order {{ {entity_fields} }}\n"
+        ),
+        "src/OrderRepository.java": (
+            "package shop;\nimport org.springframework.data.jpa.repository.JpaRepository;\n"
+            "public interface OrderRepository extends JpaRepository<Order, String> {}\n"
+        ),
+        "src/Service.java": (
+            "package shop;\nimport org.springframework.transaction.annotation.Transactional;\n"
+            "import org.springframework.transaction.annotation.Isolation;\n"
+            "import org.springframework.transaction.annotation.Propagation;\n"
+            "import org.springframework.transaction.support.TransactionTemplate;\n"
+            f"{service_body}\n"
+        ),
+    }
+
+
+def test_operations_of_one_transactional_method_share_a_scope_and_helpers_do_not() -> None:
+    files = _parsed(_repository_sources(
+        "class Service {\n  OrderRepository repo; TransactionTemplate tx;\n"
+        "  @Transactional void move(String id) {\n"
+        "    repo.findById(id);\n    repo.save(new Order());\n    helper(id);\n  }\n"
+        "  void helper(String id) { repo.deleteById(id); }\n"
+        "  @Transactional(isolation = Isolation.READ_UNCOMMITTED, propagation = Propagation.REQUIRES_NEW, readOnly = true)\n"
+        "  void peek(String id) { repo.findById(id); }\n"
+        "  void template(String id) { tx.execute(status -> { repo.save(new Order()); return null; }); }\n"
+        "}"
+    ))
+
+    operations = discover_data_operations("shop", files, _entities("shop.Order"))
+
+    by_method = {}
+    for item in operations:
+        by_method.setdefault(item.owner_method, []).append(item)
+    move = by_method["move"]
+    assert len({item.transaction_id for item in move}) == 1 and move[0].transaction_id
+    assert (move[0].propagation, move[0].isolation, move[0].read_only) == ("REQUIRED", None, False)
+    [helper] = by_method["helper"]
+    assert helper.transaction_id is None and helper.propagation is None
+    [peek] = by_method["peek"]
+    assert (peek.propagation, peek.isolation, peek.read_only) == ("REQUIRES_NEW", "read_uncommitted", True)
+    assert peek.transaction_id != move[0].transaction_id
+    [template] = by_method["template"]
+    assert template.transaction_id and template.transaction_id != move[0].transaction_id
+    assert template.propagation is None and template.isolation is None
+
+
+def test_class_level_transactional_is_inherited_by_methods_without_one() -> None:
+    files = _parsed(_repository_sources(
+        "@Transactional(readOnly = true)\nclass Service {\n  OrderRepository repo;\n"
+        "  void load(String id) { repo.findById(id); }\n"
+        "  @Transactional void store() { repo.save(new Order()); }\n}"
+    ))
+
+    operations = discover_data_operations("shop", files, _entities("shop.Order"))
+
+    load, store = operations
+    assert load.transaction_id and load.read_only is True
+    assert store.transaction_id and store.read_only is False
+    assert load.transaction_id != store.transaction_id
+
+
+def test_isolation_evidence_reaches_the_flow_step_unchanged(tmp_path: Path) -> None:
+    _write(tmp_path / "pom.xml", (
+        "<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId>"
+        "<artifactId>shop</artifactId><version>1.0</version></project>"
+    ))
+    for path, text in _repository_sources(
+        "import org.springframework.web.bind.annotation.*;\n@RestController class Service {\n"
+        "  OrderRepository repo;\n"
+        "  @Transactional(isolation = Isolation.READ_UNCOMMITTED)\n"
+        "  @GetMapping(\"/orders/{id}\") Order get(@PathVariable String id) { return repo.findById(id).get(); }\n}"
+    ).items():
+        _write(tmp_path / "src" / "main" / "java" / "shop" / Path(path).name, text)
+
+    with Store(tmp_path) as store:
+        index_repo(tmp_path, CONFIG, store, full=True)
+        [flow] = [flow for flow in store.all_code_flows() if flow.steps[-1].operation_id]
+    step = flow.steps[-1]
+    assert step.isolation == "read_uncommitted"
+    assert step.transaction_id is not None
+    assert step.guard is None
+
+
+def test_version_field_marks_every_write_on_the_entity_and_only_writes() -> None:
+    body = (
+        "class Service {\n  OrderRepository repo;\n"
+        "  void run(String id) {\n    repo.findById(id);\n    repo.save(new Order());\n    repo.deleteById(id);\n  }\n}"
+    )
+    with_version = discover_data_operations(
+        "shop", _parsed(_repository_sources(body, "@Id private String id; @Version private long version;")),
+        (JpaEntity("shop.Order", "src/Order.java", 1, version_field="version"),),
+    )
+    without_version = discover_data_operations(
+        "shop", _parsed(_repository_sources(body)), _entities("shop.Order"),
+    )
+
+    assert [(item.operation, item.guard, item.guard_scope) for item in with_version] == [
+        ("findById", None, None),
+        ("save", "optimistic_version", "resource"),
+        ("deleteById", "optimistic_version", "resource"),
+    ]
+    assert all(item.guard is None for item in without_version)
+
+
+def test_jpa_entity_inventory_records_the_version_field(tmp_path: Path) -> None:
+    _write(tmp_path / "pom.xml", (
+        "<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId>"
+        "<artifactId>shop</artifactId><version>1.0</version></project>"
+    ))
+    _write(tmp_path / "src" / "main" / "java" / "shop" / "Order.java", (
+        "package shop;\nimport jakarta.persistence.*;\n"
+        "@Entity public class Order { @Id private String id; @Version private Long revision; }\n"
+    ))
+    with Store(tmp_path) as store:
+        index_repo(tmp_path, CONFIG, store, full=True)
+        [entity] = store.all_modules()[0].jpa_entities
+    assert entity.version_field == "revision"
+    assert [field.name for field in entity.fields] == ["id", "revision"]
+
+
+def test_pessimistic_lock_on_the_repository_method_is_an_operation_guard() -> None:
+    files = _parsed({
+        "src/OrderRepository.java": (
+            "package shop;\nimport jakarta.persistence.LockModeType;\n"
+            "import org.springframework.data.jpa.repository.JpaRepository;\n"
+            "import org.springframework.data.jpa.repository.Lock;\nimport java.util.Optional;\n"
+            "public interface OrderRepository extends JpaRepository<Order, String> {\n"
+            "  @Override @Lock(LockModeType.PESSIMISTIC_WRITE) Optional<Order> findById(String id);\n"
+            "  @Lock(LockModeType.OPTIMISTIC) Optional<Order> findByCode(String code);\n}\n"
+        ),
+        "src/Service.java": (
+            "package shop;\nclass Service { OrderRepository repo;\n"
+            "  void run(String id) {\n    repo.findById(id);\n    repo.findByCode(id);\n    repo.save(new Order());\n  } }\n"
+        ),
+    })
+
+    operations = discover_data_operations("shop", files, _entities("shop.Order"))
+
+    assert [(item.operation, item.guard, item.guard_scope) for item in operations] == [
+        ("findById", "pessimistic_lock", "operation"),
+        ("findByCode", None, None),
+        ("save", None, None),
+    ]
+
+
+def test_mongo_atomic_updates_are_recognised_from_the_invocation_only() -> None:
+    from systemlens.domain.data_operation_projection import mongo_atomic_guard
+
+    assert mongo_atomic_guard("findAndModify", "template.findAndModify(q, u, Order.class)") == "atomic_update"
+    assert mongo_atomic_guard("upsert", None) == "atomic_update"
+    assert mongo_atomic_guard(
+        "updateFirst", 'template.updateFirst(query(where("id").is(id)), new Update().inc("qty", -1), Order.class)',
+    ) == "atomic_update"
+    assert mongo_atomic_guard(
+        "updateFirst", 'template.updateFirst(query(where("id").is(id)), new Update().set("qty", 3), Order.class)',
+    ) is None
+    assert mongo_atomic_guard(
+        "updateFirst",
+        'template.updateFirst(query(where("id").is(id).and("version").is(v)), new Update().set("qty", 3), Order.class)',
+    ) == "atomic_update"
+    assert mongo_atomic_guard("updateFirst", "template.updateFirst(query, update, Order.class)") is None
+    assert mongo_atomic_guard("save", "repo.save(doc)") is None

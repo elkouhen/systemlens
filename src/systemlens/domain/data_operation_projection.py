@@ -1,5 +1,6 @@
 """Project module inventory facts of older indexes into data operations."""
 
+import re
 from pathlib import Path
 from typing import Sequence
 
@@ -33,6 +34,29 @@ def _repository_path(repo_root: Path | None, module: DiscoveredModule, path: str
     return (module_root / path).as_posix()
 
 
+_UPDATE_BUILDER = re.compile(r"\.(inc|set|unset|push|pull|addToSet|pop|rename|min|max|mul|currentDate|setOnInsert)\s*\(")
+
+
+def mongo_atomic_guard(operation: str, snippet: str | None) -> str | None:
+    """Recognise an atomic Mongo update from the invocation text only.
+
+    ``findAndModify`` and ``upsert`` are single-document atomic operations.
+    ``updateFirst``/``updateMulti`` count only when the inline ``Update``
+    uses ``$inc`` alone, or ``$set`` with a version predicate in the query.
+    An update built elsewhere is not inspected: no guard is recorded.
+    """
+    if operation in {"findAndModify", "upsert"}:
+        return "atomic_update"
+    if operation not in {"updateFirst", "updateMulti"} or not snippet:
+        return None
+    builders = {match.group(1) for match in _UPDATE_BUILDER.finditer(snippet)}
+    if builders and builders <= {"inc", "currentDate"}:
+        return "atomic_update"
+    if "set" in builders and "version" in snippet.lower():
+        return "atomic_update"
+    return None
+
+
 def mongo_data_operation(
     method: MongoMethod, module: str, path: str,
 ) -> DataOperation | None:
@@ -42,6 +66,9 @@ def mongo_data_operation(
         return None
     reads, writes = action_facets(action)
     identity = f"mongo:{module}:{method.collection}" if method.collection else None
+    guard = mongo_atomic_guard(
+        method.operation, method.evidence.snippet if method.evidence else None,
+    )
     return DataOperation(
         id=compute_data_operation_id(
             module, path, method.owner_method, method.line, "mongodb", method.operation,
@@ -56,6 +83,7 @@ def mongo_data_operation(
         confidence="medium" if identity else "low",
         unresolved_reason=None if identity else "collection expression is dynamic",
         receiver=method.receiver,
+        guard=guard, guard_scope="operation" if guard else None,
     )
 
 
