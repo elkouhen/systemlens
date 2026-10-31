@@ -1,6 +1,7 @@
 """Persisted, source-evidenced potential execution flows."""
 
 import hashlib
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 
 
@@ -146,3 +147,33 @@ class PersistedCallGraphMethod:
     path: str
     start_line: int
     end_line: int
+
+
+def entry_dispatch_allowed(
+    entry_method: str,
+    caller_method: str,
+    callee_method: str,
+    call_site_callees: Iterable[str],
+) -> bool:
+    """Keep an inherited call site's dispatch on the entry's own override.
+
+    This is the persisted-snapshot approximation of the entry-subtype rule,
+    used when no source symbols are available. A call site in a body that
+    does not belong to the entry's class may fan out to several overrides
+    of one method name. When one of them is declared by the entry's class,
+    the runtime receiver is that class, so sibling overrides are excluded.
+    Without such a fan-out, or without an override on the entry's class,
+    every edge stays allowed.
+    """
+    entry_owner = entry_method.rpartition(".")[0]
+    if caller_method.rpartition(".")[0] == entry_owner:
+        return True
+    callee_owner, _dot, name = callee_method.rpartition(".")
+    overrides = {
+        callee.rpartition(".")[0]
+        for callee in call_site_callees
+        if callee.rpartition(".")[2] == name
+    }
+    if len(overrides) < 2 or entry_owner not in overrides:
+        return True
+    return callee_owner == entry_owner

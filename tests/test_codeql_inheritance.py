@@ -1168,3 +1168,61 @@ def test_inherited_template_dispatch_stays_on_entry_subtype_across_modules(tmp_p
         ("app.First.entry", "app/First.java"),
         ("app.Second.entry", "app/Second.java"),
     }
+
+
+def test_persisted_rebuild_keeps_template_dispatch_on_entry_subtype(tmp_path: Path):
+    """``flows calculate`` has no source symbols: the fan-out rule applies."""
+    sources = {
+        "core/Base.java": """package core; public abstract class Base {
+  public void process() { send(); }
+  public abstract void send();
+}""",
+        "app/First.java": """package app; import core.Base; public class First extends Base {
+  public void entry() { process(); }
+  public void send() { output(); }
+  void output() {}
+}""",
+        "app/Second.java": """package app; import core.Base; public class Second extends Base {
+  public void entry() { process(); }
+  public void send() { otherOutput(); }
+  void otherOutput() {}
+}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    by_name = {method.qualified_method: method for method in methods}
+    process, send = by_name["core.Base.process"], by_name["core.Base.send"]
+    edges = [
+        CallGraphEdge(by_name[f"app.{owner}.entry"].id, process.id, f"app/{owner}.java", 2, "exact")
+        for owner in ("First", "Second")
+    ] + [
+        # The engine fans the abstract call out to every override.
+        CallGraphEdge(process.id, callee.id, "core/Base.java", 2, "possible")
+        for callee in (send, by_name["app.First.send"], by_name["app.Second.send"])
+    ] + [
+        CallGraphEdge(by_name["app.First.send"].id, by_name["app.First.output"].id,
+                      "app/First.java", 3, "exact"),
+        CallGraphEdge(by_name["app.Second.send"].id, by_name["app.Second.otherOutput"].id,
+                      "app/Second.java", 3, "exact"),
+    ]
+
+    flows = materialize_call_graph_flows(methods, endpoints, [], persisted_edges=edges)
+
+    assert {(flow.method, flow.steps[-1].path) for flow in flows} == {
+        ("app.First.entry", "app/First.java"),
+        ("app.Second.entry", "app/Second.java"),
+    }
+
+
+@pytest.mark.parametrize(("caller", "callees", "callee", "allowed"), [
+    # A fanned-out inherited site keeps the entry's own override only.
+    ("core.Base.process", ["app.A.send", "app.B.send"], "app.B.send", False),
+    ("core.Base.process", ["app.A.send", "app.B.send"], "app.A.send", True),
+    # Calls made by the entry's own class are never restricted.
+    ("app.A.run", ["app.A.send", "app.B.send"], "app.B.send", True),
+    # Without an override on the entry's class, no receiver is known.
+    ("core.Base.process", ["app.B.send", "app.C.send"], "app.C.send", True),
+])
+def test_entry_dispatch_allowed(caller, callees, callee, allowed):
+    from systemlens.domain.code_flows import entry_dispatch_allowed
+
+    assert entry_dispatch_allowed("app.A.entry", caller, callee, callees) is allowed

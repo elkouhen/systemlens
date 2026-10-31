@@ -4,7 +4,12 @@ from collections import defaultdict, deque
 from dataclasses import asdict
 import re
 
-from systemlens.domain.code_flows import CodeFlow, CallGraphEdge, IntegrationMethod
+from systemlens.domain.code_flows import (
+    CallGraphEdge,
+    CodeFlow,
+    IntegrationMethod,
+    entry_dispatch_allowed,
+)
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 
@@ -490,7 +495,7 @@ def _call_graph_flow_attempts(
                     key=lambda item: (item.path, item.line, item.callee_id),
                 )
                 if _call_graph_edge_allowed(
-                    edge, methods_by_id, input_method.qualified_method
+                    edge, methods_by_id, input_method.qualified_method, adjacency,
                 )
             ]
             if not outgoing:
@@ -634,7 +639,7 @@ def _shortest_method_path(
             adjacency.get(current, []),
             key=lambda item: (item.path, item.line, item.callee_id),
         ):
-            if not _call_graph_edge_allowed(edge, methods, entry_method):
+            if not _call_graph_edge_allowed(edge, methods, entry_method, adjacency):
                 continue
             if edge.callee_id in visited:
                 continue
@@ -651,13 +656,18 @@ def _call_graph_edge_allowed(
     edge: CallGraphEdge,
     methods: dict[str, IntegrationMethod],
     entry_method: str,
+    adjacency: dict[str, list[CallGraphEdge]],
 ) -> bool:
-    caller = methods[edge.caller_id].qualified_method
-    callee = methods[edge.callee_id].qualified_method
-    return not (
-        caller.endswith("AbstractKafkaMessageProcessor.consumeMessage")
-        and callee.endswith(".processMessage")
-        and entry_method.rsplit(".", 1)[0] != callee.rsplit(".", 1)[0]
+    return entry_dispatch_allowed(
+        entry_method,
+        methods[edge.caller_id].qualified_method,
+        methods[edge.callee_id].qualified_method,
+        (
+            methods[sibling.callee_id].qualified_method
+            for sibling in adjacency.get(edge.caller_id, [])
+            if sibling.path == edge.path and sibling.line == edge.line
+            and sibling.callee_id in methods
+        ),
     )
 
 

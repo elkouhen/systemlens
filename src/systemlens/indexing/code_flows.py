@@ -11,6 +11,7 @@ from tree_sitter import Node
 
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.code_flows import (
+    entry_dispatch_allowed,
     CodeFlow,
     CodeFlowStep,
     CallGraphEdge,
@@ -29,7 +30,7 @@ from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import is_java_literal, trace_scalar_key_identity
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v42-scoped-receivers-static-imports"
+CODE_FLOW_SIGNATURE = "code-flow-v43-generic-entry-dispatch"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
@@ -1295,14 +1296,14 @@ def materialize_call_graph_flows(
         entry: IntegrationMethod,
         current: IntegrationMethod,
         target: IntegrationMethod,
+        call: MethodCall,
     ) -> bool:
-        """Keep generic Kafka template dispatch on the receiving consumer.
+        """Keep dispatch from an inherited body on the entry's own subtype.
 
-        CodeQL can report every concrete override of the generic
-        ``AbstractKafkaMessageProcessor.processMessage`` call. The runtime
-        receiver is the concrete consumer that owns the indexed entry method;
-        crossing to another consumer creates impossible POC flows and false
-        cycles.
+        An engine can report every concrete override of a template method's
+        abstract call. The runtime receiver is the subtype that owns the
+        indexed entry method; crossing to a sibling override creates
+        impossible flows and false cycles.
         """
         if dispatch_symbols is not None:
             current_owner = current.qualified_method.rsplit(".", 1)[0]
@@ -1323,13 +1324,17 @@ def materialize_call_graph_flows(
                 and current_owner in entry_ancestors
             ):
                 return target_owner in entry_ancestors
-        if not current.qualified_method.endswith(
-            "AbstractKafkaMessageProcessor.consumeMessage"
-        ) or not target.qualified_method.endswith(".processMessage"):
             return True
-        entry_owner = entry.qualified_method.rsplit(".", 1)[0]
-        target_owner = target.qualified_method.rsplit(".", 1)[0]
-        return entry_owner == target_owner
+        # Without source symbols (a rebuild from persisted edges), keep a
+        # fanned-out inherited call site on the entry's own override.
+        return entry_dispatch_allowed(
+            entry.qualified_method, current.qualified_method, target.qualified_method,
+            (
+                callee.qualified_method
+                for callee, sibling, _inferred in adjacency.get(current.id, [])
+                if sibling.call_line == call.call_line and sibling.caller_path == call.caller_path
+            ),
+        )
 
     for entry in input_methods[resume_from_entry:]:
         component = component_by_method.get(entry.id, frozenset({entry.id}))
@@ -1412,7 +1417,7 @@ def materialize_call_graph_flows(
                     for target, call, signature_join in adjacency.get(current.id, [])
                     if target.id in component
                     and within_application_boundary(entry.module, target.module)
-                    and dispatch_matches_entry(entry, current, target)
+                    and dispatch_matches_entry(entry, current, target, call)
                 ), key=lambda item: (
                     item[1].caller_path, item[1].call_line, item[0].id,
                     item[1].dispatch_confidence, item[2],

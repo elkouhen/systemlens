@@ -219,7 +219,12 @@ overrides remain possible. A single override does not prove the runtime type.
 When a flow starts in a concrete subtype and then enters an inherited body,
 dispatch is restricted to that subtype and its ancestors so sibling overrides
 cannot cross into the flow. Owners are compared by qualified name, so the rule
-also holds when the inherited body is declared in a helper module. Explicit `super` calls target direct parent bodies.
+also holds when the inherited body is declared in a helper module.
+A rebuild from persisted edges has no source symbols. It approximates the rule
+per call site: when a site outside the entry's class fans out to several
+overrides of one method name and one is declared by the entry's class, only
+that override is followed. The `analyze` call-chain diagnostics apply the same
+rule. No application class name is special-cased. Explicit `super` calls target direct parent bodies.
 A method of an anonymous class is not indexed; its body belongs to the named
 method creating the instance, like a lambda body (ADR-62). In that body, a
 call on `this`, `super`, `this.field` or without receiver stays unresolved.
