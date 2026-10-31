@@ -26,8 +26,16 @@ risk, including concurrent-write, lost-update, dirty-read, and freshness
 risks. Insufficient evidence and a possible interaction without an established
 consistency fault do not match that search.
 
+`--review-aids` adds the read-modify-write and dual-write candidates to the
+consistency diagnostics of the HTML export. They are review aids under the
+gate of the data-operations plan: each says "protection not established" or
+"recovery not established", links both source sites, and never claims a
+defect. The option requires `--html FILE` and the call-graph annotations; it
+is off by default and changes neither the index nor the JSON export.
+
 ```bash
 systemlens export microservices --html calls.html --call-graphs-only --no-call-graph-annotations
+systemlens export microservices --html calls.html --review-aids
 ```
 
 The consolidated presentation and interaction contract is maintained in
@@ -237,6 +245,12 @@ When distinct resource IDs share a short entity name, the badges add a
 qualifier instead of merging those identities.
 
 When an anomaly concerns the entity, its badge remains selectable for diagnosis.
+
+Hovering a badge also states the persisted operation facts of its group: the
+technology (`mongo`, `jpa`, or `jdbc`), the guard with its scope or
+"not established", and the transaction scope or "unknown". A group with an
+operation whose action is unknown says so; such an operation contributes no
+CRUD letter.
 
 Call-tree cards grow to contain every data-operation and diagnostic badge. Their
 height depends on the annotations on that occurrence, so a card with many badges

@@ -359,7 +359,8 @@ The expanded widget also decodes the access annotations of the cards: `C`,
 `R`, `U`, and `D` for create, read, update, and delete, `(C/U)` for an
 undecided create or update, and `?` for an association with the handler whose
 internal route is not established. A handler-only badge also has a dashed
-outline.
+outline. A badge tooltip MUST state the technology, guard, and transaction
+of its operations as evidence or as not established, never as a guess.
 
 The card MUST omit the repeated `Microservice` type label. An unknown
 continuation MUST retain its `Suite inconnue` status; cycles and hidden calls

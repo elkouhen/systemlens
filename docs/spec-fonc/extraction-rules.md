@@ -60,14 +60,47 @@ summary lists their qualified Java names, and the persisted relation set has a `
 relation with source evidence. It does not infer a table name, JDBC driver,
 database engine, or read/write operation from the annotation.
 
-For Spring Data JPA, indexing resolves a source-declared `JpaRepository`
-interface to one indexed entity, then accepts calls on a field typed as that
-interface. Supported calls are `findById`, `findAll`, `existsById`, `count`,
-`save`, `saveAll`, `saveAndFlush`, `saveAllAndFlush`, and the listed `delete*`
-methods. Reads, deletes, and create-or-update attempts retain the entity and
-source line. Unknown repository types, derived queries, and dynamic calls
-create no operation fact. A reachable HTTP or Kafka entry has a separate
-potential path to each supported JPA call; an entity name is not a table name.
+For Spring Data JPA, indexing resolves a source-declared repository
+interface that extends `CrudRepository`, `ListCrudRepository`,
+`PagingAndSortingRepository`, `JpaRepository`, or `MongoRepository`, directly
+or through another interface of the same module whose type parameters are
+substituted. The entity must match exactly one indexed entity; an unknown or
+ambiguous entity keeps an unresolved resource with a reason, never a guess.
+A receiver is accepted by its declared type as a field, a constructor or
+method parameter, or a local variable; a shadowing name wins, and a method
+named `save` on another type creates no fact.
+
+CRUD methods classify as read, delete, or create-or-update. A declared
+method classifies by the Spring Data grammar: `find`, `read`, `get`,
+`query`, `search`, `stream`, `count`, and `exists` are reads, `delete` and
+`remove` are deletes. A single `By<Property>` equality with one argument
+records that argument as the key expression and the property as its scope.
+A literal `@Query` classifies JPQL `select` as read and `update` or `delete`
+as such only with `@Modifying`; a native query keeps a JDBC table resource.
+A non-literal query, a `Specification`, `Example`, or Querydsl argument, and
+a name outside the grammar remain unknown with a reason.
+
+On an `EntityManager` receiver, `persist` is an insert, `merge` is
+create-or-update, `remove` is a delete, and `find` or `getReference` is a
+read keyed by its second argument. The entity comes from the argument type
+or the class literal. `createQuery` with a literal string follows the JPQL
+rules; `createNativeQuery` follows the SQL rules; a query string built at
+runtime or a named query remains unknown.
+
+On a `JdbcTemplate` or `NamedParameterJdbcTemplate` receiver, `query*` calls
+are reads and `update`, `batchUpdate`, and `execute` classify by the first
+keyword of a literal single-statement SQL string, which may be a `static
+final` constant of the same class. The resource `jdbc:<module>:<table>`
+is recorded only when the statement names exactly one table; a single
+`column = ?` predicate binds the matching positional argument as the key.
+Joins, subqueries, several `FROM` tables, stored procedures, multiple
+statements, and concatenated or formatted strings remain unknown with a
+reason. `analyze coverage` lists each technology with its supported,
+partial, and unsupported counts and every unresolved operation.
+
+A reachable HTTP or Kafka entry has a separate potential path to each
+operation, including one whose action or resource is unknown; an entity
+name is not a table name.
 
 MongoDB calls on a field imported or fully qualified as a Spring Data Mongo
 template or operations interface, or on a resolved Mongo repository field,
@@ -84,6 +117,27 @@ containing class. Persisted data steps retain the action. HTML export uses
 them as potential annotations in microservice tooltips of selected call
 graphs, while its flow catalogue lists call flows only.
 Unknown collection names remain unresolved.
+
+Every operation records its transaction scope when the enclosing method or
+class carries `@Transactional`, or when it runs inside a
+`TransactionTemplate.execute` lambda: a stable scope ID, the propagation,
+the isolation when stated, and the read-only flag. A helper called from a
+transactional method inherits nothing, because propagation is a runtime
+decision, and the default isolation stays unknown. `@Transactional` is
+scope evidence only; it is never recorded as a guard.
+
+A guard is recorded only on explicit evidence: `optimistic_version` on
+every write to an entity with a `@Version` field, `pessimistic_lock` on a
+repository method declared with `@Lock(PESSIMISTIC_READ|WRITE)`,
+`atomic_update` on a Mongo `findAndModify`, `upsert`, or an inline update
+using `$inc` alone or `$set` with a version predicate, and
+`conditional_update` on a JDBC `UPDATE` whose `WHERE` names a version
+column. Anything else is absent evidence, never "unprotected".
+
+When a write's first argument is the unmodified result of a read in the
+same method, or a local initialised from it and never reassigned, the
+write records that read as a value dependency and inherits its key. Setter
+calls on the local are the "modify" step and keep the dependency.
 
 When the persisted Java call graph uniquely identifies the method containing
 a MongoDB call, each reachable HTTP or Kafka entry also gets a potential flow

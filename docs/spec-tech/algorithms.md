@@ -582,6 +582,29 @@ to the current stored value. It may still violate a separate business invariant.
 Keep that case classified as a distinct invariant risk unless the source
 establishes a lost update.
 
+### Review aids on source facts
+
+Behind `--review-aids`, two candidates are built without concurrency facts.
+They are review aids, not diagnostics: each says what was not established
+and links both source sites.
+
+A read-modify-write candidate requires a write whose persisted value
+dependencies name a read operation, the same resource identity, and the
+same method context: the trigger plus the ordered method calls, or a
+nested route. Protection is identified only by an optimistic, atomic, or
+conditional guard on the write, or a pessimistic lock on the read inside
+the same known transaction. Otherwise the candidate is `potential_lost_update`
+at low confidence with "protection not established", plus the unknown
+transaction or unproven record identity. It does not need two sequences.
+
+A dual-write candidate requires a data write and a Kafka publication under
+the same trigger. The last method both routes share is named as the fork.
+An outbox write under that trigger, or a publication inside a method
+annotated `@TransactionalEventListener`, downgrades the candidate to
+"recovery mechanism present, not verified". Both aids collapse alternative
+routes to the same source sites and cost O(writes × reads) and
+O(writes × publications) per export.
+
 ### Graph presentation
 
 Render each event on the service occurrence where its source evidence belongs. A

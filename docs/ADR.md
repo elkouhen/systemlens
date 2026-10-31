@@ -1302,3 +1302,33 @@ workspace. Fixed-size cards and badges take slightly more room, so long
 resource names wrap earlier inside their 110×70 envelope. The expand-all
 action no longer preserves the viewport, and its browser test asserts that
 every occurrence is inside the workspace instead.
+
+## ADR-64: Persist typed data operations and gate the review aids
+
+**Status:** Accepted.
+
+**Context:** Data operations lived inside the module inventory JSON and were
+re-derived per flow, so JPA coverage stopped at `JpaRepository` CRUD calls
+and nothing recorded transaction scope or conflict controls. The
+lost-update and dual-write review aids of the data-operations plan need
+those facts, but their precision is unmeasured.
+
+**Decision:** Persist one `data_operations` row per supported invocation,
+keyed by module, relative path, owner method, line, technology, and raw
+operation, with action, facets, resource identity, key, confidence, reason,
+transaction scope, guard, and value dependencies. Flow steps reference the
+row by `operation_id`; an unknown action yields a `data_access` step. An
+older index projects its module JSON until reindexed. Extraction resolves
+receivers by declared type, accepts the Spring Data base interfaces through
+module-local inheritance, and classifies derived queries, literal `@Query`,
+`EntityManager`, and literal single-statement JDBC; everything else stays
+unknown with a reason. Guards are recorded on explicit evidence only;
+`@Transactional` is scope, never a guard. The two review aids run only
+behind `export microservices --review-aids` until a precision, abstention,
+and reviewer-time record on the lab and one more Spring application exists.
+
+**Consequences:** Schema version 39 and a new flow signature trigger one
+rebuild. Coverage output makes a JDBC-heavy module with dynamic SQL visibly
+partial. The aids on the lab produce one read-modify-write abstention and
+four dual-write pairs for one publication; the record in the backlog keeps
+the gate closed, and promoting the aids is a separate decision.

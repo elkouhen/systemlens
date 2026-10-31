@@ -415,6 +415,13 @@ unsupported operations create no flow or relation effect. Older step JSON loads
 with `action=null`. This action is an API-level attempt, not evidence of a
 committed database change.
 
+Every data step references its persisted `data_operations` row through
+`operation_id` and copies the row's transaction, isolation, guard, guard
+scope, and value dependencies. An operation whose action the source does
+not establish yields a `data_access` step: it asserts no read or write
+relation, carries no branch label, and consumers handle the kind explicitly.
+A value dependency names the read operation ID, not a flow event.
+
 `flows calculate` still rebuilds paths from persisted module inventory, method,
 and call-edge facts. A MongoDB call joins one method only when module, relative
 source path, owner name, and line range identify it uniquely. A bounded directed
@@ -431,8 +438,12 @@ module without an application entry point remains eligible. The same boundary
 applies to direct CodeQL input-to-output pairs, so data access in another
 application cannot be assigned to the entry module through a Java call path.
 
-JPA data steps use `jpa:<module>:<qualified entity>` as their logical resource;
-the action is `read`, `delete`, or `create_or_update`. An HTTP entry labels a
+JPA data steps use `jpa:<module>:<qualified entity>` as their logical resource
+and JDBC steps use `jdbc:<module>:<table>`; a native query through a
+repository or `EntityManager` keeps the JDBC resource. The action is one of
+the shared vocabulary, including `insert` and `update` for `EntityManager`,
+JPQL, and SQL statements. A step with an unresolved resource keeps the
+`<unresolved>` name and no identity. An HTTP entry labels a
 reached blocking JPA access synchronous, and a Kafka entry labels it
 asynchronous relative to its producer. These labels describe the entry path,
 not transaction completion. A repository call in an ambiguous method or an
@@ -591,6 +602,12 @@ grouped badge selectable.
 The architecture graph and left widget receive no data-access badges. This
 projection does not infer a linear order or change persisted flow IDs.
 
+Each exported access also carries the operation name, its `operation_id`,
+the technology taken from the resource identity, and the guard, guard scope,
+transaction, and isolation of the persisted row. The badge tooltip states
+them as evidence, or as "not established" when the row holds none, and flags
+a group containing an operation without an established action.
+
 An imported access with a simple entity name uses a source resource ID only
 when exactly one resource with that name exists in the same module. Otherwise
 the exporter keeps the imported name and its unresolved identity separate.
@@ -650,6 +667,23 @@ only when the writer is explicitly uncommitted and the reader explicitly uses
 read-uncommitted isolation. A freshness requirement can refine a concurrent
 read/write interaction to `potential_read_write_anomaly`. Matching guard kind
 and exact `resource:key` scope produce `conflict_protection_identified`.
+
+With `export microservices --review-aids`, the detector adds two gated
+review aids built from source facts (ADR-64). A read-modify-write candidate
+pairs a write whose value dependencies name a persisted read on the same
+resource within the same method context; it is
+`conflict_protection_identified` when the write carries an optimistic,
+atomic, or conditional guard, or the read holds a pessimistic lock in the
+same known transaction, and otherwise `potential_lost_update` with
+"protection not established" and the missing transaction or key evidence
+listed. A dual-write candidate pairs a data write and a Kafka publication
+under the same trigger, names the method where they fork, and is
+`potential_dual_write` with "recovery not established"; an outbox write
+under the same trigger or a publication in a `@TransactionalEventListener`
+method downgrades it to `recovery_mechanism_present`. Alternative routes to
+the same two source sites are one item. Neither aid claims a defect, and
+both stay off by default until the precision record of the data-operations
+plan promotes them.
 
 The renderer includes action, phase, transaction, fields, guards, causal/order
 evidence, limitations, and paired read source locations in service tooltips.

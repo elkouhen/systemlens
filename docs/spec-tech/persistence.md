@@ -7,8 +7,15 @@ SQLite schema migration is additive where possible. `files` stores hash state,
 `endpoints` stores source facts, and normalized tables store modules,
 dependencies and relations. Each module has a collision-safe identity used by
 endpoints and relations; its artifact/project name remains a display alias.
-Schema version 36 adds the source-backed `codeql_methods` projection alongside
-the complete `codeql_call_edges` graph. Schema version 35 added `jpa_entities`
+Schema version 39 adds the `data_operations` table: one row per supported
+source invocation with its repository-relative path, owner method, line
+range, technology, raw operation, action, read and write facets, resource
+identity, key expression and identity, confidence, unresolved reason, and the
+transaction, guard, and value-dependency columns. It is rebuilt with the
+module inventory on each index run, loses the rows of deleted files, and is
+the source of data steps; an index created before it projects the module
+inventory JSON until reindexed. Schema version 36 adds the source-backed
+`codeql_methods` projection alongside the complete `codeql_call_edges` graph. Schema version 35 added `jpa_entities`
 and `jpa_dtos` JSON columns to module
 inventory with empty defaults for existing indexes. Migration runs before
 indexing begins.

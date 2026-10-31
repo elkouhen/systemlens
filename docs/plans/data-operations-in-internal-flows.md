@@ -5,13 +5,16 @@ potential internal flows. The first delivery covers supported MongoDB and
 Spring Data JPA calls. Literal JDBC statements are a later extension. A flow
 must retain an unknown action or resource when the code does not establish it.
 
-Status: in progress. Owner: SystemLens implementer. Reviewers: product owner
-and architecture maintainer. MongoDB classification, typed Spring Data JPA
-CRUD extraction, additive module persistence, interprocedural data paths, and
-call-root data projection are implemented. A dedicated operation table,
-derived JPA queries, record-key tracing, and ordering evidence remain open. The
-[product scope](../PRD.md), [functional specification](../SPEC-FONC.md),
-and [technical specification](../SPEC-TECH.md) remain authoritative.
+Status: delivered on 2026-10-31 (ADR-64), except the promotion gate of
+section 6. Owner: SystemLens implementer. Reviewers: product owner and
+architecture maintainer. The dedicated operation table (4.3), typed Spring
+Data JPA, derived-query, `EntityManager`, and literal JDBC extraction (4.4
+and section 5), transaction and guard facts, same-method value dependencies,
+and the gated review aids are implemented; see the delivery record in the
+[root backlog](../../BACKLOG.md). Ordering evidence across branches remains
+out of scope. The [product scope](../PRD.md), [functional
+specification](../SPEC-FONC.md), and [technical
+specification](../SPEC-TECH.md) remain authoritative.
 
 ## 1. Goal and boundaries
 
