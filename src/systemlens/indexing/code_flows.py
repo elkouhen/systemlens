@@ -29,12 +29,26 @@ from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import is_java_literal, trace_scalar_key_identity
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v39-source-engine-closed-world"
+CODE_FLOW_SIGNATURE = "code-flow-v40-scheduler-anchor-module-dispatch"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
 
 CallEdgeEntry = tuple[IntegrationMethod, MethodCall, bool]
+
+
+def _anchor_steps(flow: CodeFlow) -> list[CodeFlowStep]:
+    """Steps that identify a flow's ends: endpoints and scheduler triggers.
+
+    A scheduler trigger is transient and carries no endpoint ID, so its
+    source location is its identity. Without it, two schedulers reaching
+    the same publication would share one deduplication key.
+    """
+    return [step for step in flow.steps if step.endpoint_id or step.kind == "cron_entry"]
+
+
+def _step_anchor(step: CodeFlowStep) -> str:
+    return step.endpoint_id or f"{step.kind}:{step.path}:{step.start_line}"
 
 
 @dataclass(frozen=True)
@@ -166,7 +180,7 @@ def _deduplicate_code_flows(
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
 
     def flow_identity(flow: CodeFlow) -> tuple[object, ...]:
-        endpoint_steps = [step for step in flow.steps if step.endpoint_id]
+        endpoint_steps = _anchor_steps(flow)
         data_step = (
             flow.steps[-1] if flow.steps and flow.steps[-1].kind in {"data_read", "data_write"} else None
         )
@@ -182,12 +196,12 @@ def _deduplicate_code_flows(
         )
         return (
             flow.module,
-            endpoint_steps[0].endpoint_id if endpoint_steps else None,
+            _step_anchor(endpoint_steps[0]) if endpoint_steps else None,
             input_endpoint.topic if input_endpoint else (
                 endpoint_steps[0].name if endpoint_steps else None
             ),
             input_endpoint.message_type if input_endpoint else None,
-            endpoint_steps[-1].endpoint_id if endpoint_steps else None,
+            _step_anchor(endpoint_steps[-1]) if endpoint_steps else None,
             output_endpoint.topic if output_endpoint else (
                 endpoint_steps[-1].name if endpoint_steps else None
             ),
@@ -199,8 +213,7 @@ def _deduplicate_code_flows(
 
     grouped: dict[tuple[object, ...], list[CodeFlow]] = {}
     for flow in flows:
-        endpoint_steps = [step for step in flow.steps if step.endpoint_id]
-        if not endpoint_steps:
+        if not _anchor_steps(flow):
             key = flow_identity(flow) + (flow.id,)
         else:
             key = flow_identity(flow)
@@ -459,7 +472,7 @@ def materialize_code_flows(
                         if isinstance(effect, MessageEndpoint)
                         else _mongo_step(
                             effect, path, order, _endpoint_step(trigger, 1).kind,
-                            module_identity(module),
+                            trigger.module,
                         )
                         if isinstance(effect, MongoMethod)
                         else _jpa_step(effect, path, order, trigger.module, _endpoint_step(trigger, 1).kind)
@@ -533,7 +546,7 @@ def materialize_code_flows(
                         if isinstance(effect, MessageEndpoint)
                         else _mongo_step(
                             effect, path, order, scheduled_trigger.kind,
-                            module_identity(module),
+                            owner_module,
                         )
                         if isinstance(effect, MongoMethod)
                         else _jpa_step(effect, path, order, owner_module, scheduled_trigger.kind)
@@ -907,19 +920,13 @@ def materialize_call_graph_flows(
 
     def record_flow(flow: CodeFlow) -> None:
         """Keep one representative while counting distinct route alternatives."""
-        endpoint_steps = [
-            step for step in flow.steps if step.endpoint_id or step.kind == "cron_entry"
-        ]
+        endpoint_steps = _anchor_steps(flow)
         data_step = (
             flow.steps[-1] if flow.steps and flow.steps[-1].kind in {"data_read", "data_write"} else None
         )
-
-        def anchor(step: CodeFlowStep) -> str:
-            return step.endpoint_id or f"{step.kind}:{step.path}:{step.start_line}"
-
         key = (
-            anchor(endpoint_steps[0]) if endpoint_steps else flow.id,
-            anchor(endpoint_steps[-1]) if len(endpoint_steps) > 1 else
+            _step_anchor(endpoint_steps[0]) if endpoint_steps else flow.id,
+            _step_anchor(endpoint_steps[-1]) if len(endpoint_steps) > 1 else
             f"data:{data_step.path}:{data_step.start_line}:{data_step.operation}"
             if data_step is not None else "",
             flow.status,
@@ -1301,12 +1308,21 @@ def materialize_call_graph_flows(
             current_owner = current.qualified_method.rsplit(".", 1)[0]
             target_owner = target.qualified_method.rsplit(".", 1)[0]
             entry_owner = entry.qualified_method.rsplit(".", 1)[0]
-            target_module = target.module
-            if current_owner != target_owner and (current_owner, target_module) in dispatch_symbols.ancestors(target_owner, target_module):
-                if (current_owner, entry.module) in dispatch_symbols.ancestors(entry_owner, entry.module):
-                    return target_owner == entry_owner or target_owner in {
-                        owner for owner, _module in dispatch_symbols.ancestors(entry_owner, entry.module)
-                    }
+            # Ancestor keys carry the module of the declaring type, which can
+            # be a helper module: compare owners by qualified name so the
+            # rule also holds when the template body lives in another module.
+            target_ancestors = {
+                owner for owner, _module in dispatch_symbols.ancestors(target_owner, target.module)
+            }
+            entry_ancestors = {
+                owner for owner, _module in dispatch_symbols.ancestors(entry_owner, entry.module)
+            }
+            if (
+                current_owner != target_owner
+                and current_owner in target_ancestors
+                and current_owner in entry_ancestors
+            ):
+                return target_owner in entry_ancestors
         if not current.qualified_method.endswith(
             "AbstractKafkaMessageProcessor.consumeMessage"
         ) or not target.qualified_method.endswith(".processMessage"):
@@ -1572,7 +1588,8 @@ def materialize_call_graph_flows(
             item.source_path, item.source_line, item.source, item.confidence,
             item.target_path, item.target_line, item.target,
         )):
-            if codeql_edge_confidence == "exact" and relation.confidence != "exact":
+            # ``medium`` is an exact-only route; ``low`` needs possible dispatch.
+            if codeql_edge_confidence == "exact" and relation.confidence != "medium":
                 continue
             source_location = locate(relation.source, relation.source_path, relation.source_line)
             target_location = locate(relation.target, relation.target_path, relation.target_line)

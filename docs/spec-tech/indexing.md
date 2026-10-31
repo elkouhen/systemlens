@@ -95,6 +95,9 @@ representative prefers a route with method-call evidence. Confidence and route
 length remain secondary selection criteria, and the number of alternatives is
 retained. This keeps the representative useful for debugging without turning
 alternative routes into additional asserted flows.
+A transient scheduler trigger has no endpoint ID, so its source path and line
+anchor the flow instead. Two schedulers reaching one publication therefore
+remain two flows, even when their schedule labels are identical.
 
 The file inventory scans all eligible paths and hashes their contents on each
 index run. With `F` eligible files, `B` total bytes and `P` configured path
@@ -187,7 +190,8 @@ other classes gets an interprocedural flow. Without it, the dominant lab
 flow, a scheduler publishing `supermarket.order.placed` through a workflow
 class, had no selectable root.
 The same-method AST materializer records JPA and Mongo accesses in scheduled
-methods alongside their publications. It also persists a scheduled method
+methods alongside their publications. A data step's resource identity uses the
+module of the flow's trigger, never another discovered module. It also persists a scheduled method
 whose only indexed effect is a data access. Such a data-only flow remains
 supporting evidence rather than a selectable inter-service call graph.
 
@@ -204,7 +208,8 @@ For a statically declared base-class receiver, both the base body and known
 overrides remain possible. A single override does not prove the runtime type.
 When a flow starts in a concrete subtype and then enters an inherited body,
 dispatch is restricted to that subtype and its ancestors so sibling overrides
-cannot cross into the flow. Explicit `super` calls target direct parent bodies.
+cannot cross into the flow. Owners are compared by qualified name, so the rule
+also holds when the inherited body is declared in a helper module. Explicit `super` calls target direct parent bodies.
 Symbol collection scans source bytes and syntax nodes once per flow rebuild.
 `JavaSymbols.resolve` accepts explicit imports and qualified type names as
 signature identities even when dependency sources are absent. Callees still
@@ -260,7 +265,8 @@ CodeQL also runs an output-anchored transitive reachability query whose source a
 predicates are restricted to the already indexed input/output methods by
 relative path and start line. Exact input-to-output reachability is persisted
 with medium confidence; CodeQL-reported possible dispatch is persisted with
-low confidence.
+low confidence. With `codeql_edge_confidence = "exact"`, only `medium`
+relations are kept, because they are the routes made of exact edges.
 
 Module ownership uses repository-path ancestry rather than comparing every
 source path with every module. Call partitioning uses the same prefix map, so

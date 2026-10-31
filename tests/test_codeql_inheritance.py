@@ -1137,3 +1137,34 @@ def test_inherited_final_generic_method_has_source_backed_fallback(tmp_path: Pat
     )
     assert any(flow.steps[0].name.startswith("GET /") and
                flow.steps[-1].path == "app/Listener.java" for flow in flows)
+
+
+def test_inherited_template_dispatch_stays_on_entry_subtype_across_modules(tmp_path: Path):
+    sources = {
+        "core/Base.java": """package core; public abstract class Base {
+  public void process() { send(); }
+  public abstract void send();
+}""",
+        "app/First.java": """package app; import core.Base; public class First extends Base {
+  public void entry() { process(); }
+  public void send() { output(); }
+  void output() {}
+}""",
+        "app/Second.java": """package app; import core.Base; public class Second extends Base {
+  public void entry() { process(); }
+  public void send() { otherOutput(); }
+  void otherOutput() {}
+}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    modules = [
+        DiscoveredModule("app", tmp_path / "app", "maven", None, "application", True, ""),
+        DiscoveredModule("core", tmp_path / "core", "maven", None, "library", False, ""),
+    ]
+    flows = materialize_call_graph_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources), modules=modules,
+    )
+    assert {(flow.method, flow.steps[-1].path) for flow in flows} == {
+        ("app.First.entry", "app/First.java"),
+        ("app.Second.entry", "app/Second.java"),
+    }

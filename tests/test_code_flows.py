@@ -2769,3 +2769,124 @@ paths:
 
     place_order = next(method for method in methods if method.qualified_method.endswith(".placeOrder"))
     assert place_order.input_endpoint_ids == ("openapi-entry",)
+
+
+def test_two_schedulers_reaching_one_publication_keep_separate_flows(tmp_path: Path) -> None:
+    scheduler_path = "orders/src/main/java/com/example/Scheduler.java"
+    publisher_path = "orders/src/main/java/com/example/Publisher.java"
+    (tmp_path / scheduler_path).parent.mkdir(parents=True)
+    (tmp_path / scheduler_path).write_text(
+        """package com.example;
+class Scheduler {
+  private Publisher publisher;
+  @Scheduled(fixedRate = 1000) void tickA() { publisher.send(); }
+  @Scheduled(fixedRate = 1000) void tickB() { publisher.send(); }
+}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / publisher_path).write_text(
+        """package com.example;
+class Publisher {
+  void send() { kafka.send("orders.created", event); }
+}
+""",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    producer = replace(
+        _endpoint("publish", "produce", "kafka", "orders.created", publisher_path, 3),
+        qualified_name="com.example.Publisher",
+    )
+    paths = [scheduler_path, publisher_path]
+    triggers = scheduled_trigger_endpoints(tmp_path, paths, [producer], [module])
+    methods = materialize_integration_methods(tmp_path, [producer, *triggers], paths, [module])
+
+    flows = materialize_call_graph_flows(
+        methods, [producer, *triggers], [], repo_root=tmp_path, modules=[module],
+        source_paths=paths, closed_world=True,
+    )
+
+    # Both triggers share a schedule label: only their location tells them apart.
+    assert sorted(flow.method for flow in flows) == [
+        "com.example.Scheduler.tickA", "com.example.Scheduler.tickB",
+    ]
+    assert all(flow.alternative_count == 1 for flow in flows)
+
+
+def test_mongo_steps_carry_the_trigger_module(tmp_path: Path) -> None:
+    relative = "src/main/java/com/example/OrderController.java"
+    (tmp_path / "orders" / relative).parent.mkdir(parents=True)
+    (tmp_path / "orders" / relative).write_text(
+        """package com.example;
+class OrderController {
+  @Scheduled(fixedRate = 1000)
+  void handle() { template.save(order); }
+}
+""",
+        encoding="utf-8",
+    )
+    mongo = MongoMethod(
+        operation="save", receiver="template", path=relative, line=4,
+        collection="orders", owner_method="handle",
+    )
+    orders = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+        mongo_methods=(mongo,),
+    )
+    # A module discovered after the owner must not lend it its identity.
+    other = DiscoveredModule(
+        name="zzz-other", path=tmp_path / "zzz-other", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    serve = _endpoint("serve", "serve", "rest", "GET /orders", f"orders/{relative}", 4)
+
+    flows = materialize_code_flows(tmp_path, [serve], [orders, other])
+
+    identities = {
+        (flow.steps[0].kind, step.resource_identity)
+        for flow in flows for step in flow.steps if step.kind.startswith("data_")
+    }
+    assert identities == {
+        ("http_entry", "mongo:orders:orders"),
+        ("cron_entry", "mongo:orders:orders"),
+    }
+
+
+def test_exact_edge_confidence_keeps_an_exact_only_reachability(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    target = "orders/src/main/java/com/example/OrderPublisher.java"
+    for path, content in {
+        source: "package com.example;\nclass OrderController { void receive() { publisher.send(); } }\n",
+        target: "package com.example;\nclass OrderPublisher { void send() { kafka.send(); } }\n",
+    }.items():
+        file = tmp_path / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(content, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        _endpoint("entry", "consume", "kafka", "orders.in", source, 2),
+        replace(_endpoint("output", "produce", "kafka", "orders.out", target, 2),
+                qualified_name="com.example.OrderPublisher"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
+    entry = next(method for method in methods if method.input_endpoint_ids)
+    output = next(method for method in methods if method.output_endpoint_ids)
+    reachability = [MethodReachability(
+        entry.qualified_method, entry.path, entry.start_line,
+        output.qualified_method, output.path, output.start_line, "medium",
+    )]
+
+    flows = materialize_call_graph_flows(
+        methods, endpoints, [], reachability=reachability, codeql_edge_confidence="exact",
+    )
+
+    assert [(flow.steps[0].endpoint_id, flow.steps[-1].endpoint_id, flow.confidence)
+            for flow in flows] == [("entry", "output", "medium")]
