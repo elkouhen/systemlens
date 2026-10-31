@@ -5,7 +5,7 @@ ambiguous overloads remain unresolved. Names alone never establish dispatch.
 """
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from pathlib import Path
 import re
 from typing import Sequence
@@ -74,6 +74,10 @@ class _Unit:
     package: str
     imports: dict[str, str]
     wildcards: list[str]
+    # ``import static p.Util.helper;`` maps ``helper`` to ``p.Util``.
+    static_imports: dict[str, list[str]] = dataclass_field(default_factory=dict)
+    # ``import static p.Util.*;`` contributes ``p.Util``.
+    static_wildcards: list[str] = dataclass_field(default_factory=list)
 
 
 @dataclass
@@ -118,17 +122,28 @@ class JavaSymbols:
             package = ""
             imports: dict[str, str] = {}
             wildcards: list[str] = []
+            static_imports: dict[str, list[str]] = defaultdict(list)
+            static_wildcards: list[str] = []
             for child in tree.named_children:
                 text = parser.node_text(source, child)
                 if child.type == "package_declaration":
                     package = text.removeprefix("package").removesuffix(";").strip()
-                elif child.type == "import_declaration" and "static " not in text:
+                elif child.type == "import_declaration":
                     imported = text.removeprefix("import").removesuffix(";").strip()
-                    if imported.endswith(".*"):
+                    if imported.startswith("static "):
+                        imported = imported.removeprefix("static").strip()
+                        if imported.endswith(".*"):
+                            static_wildcards.append(imported[:-2])
+                        elif "." in imported:
+                            owner_name, member = imported.rsplit(".", 1)
+                            static_imports[member].append(owner_name)
+                    elif imported.endswith(".*"):
                         wildcards.append(imported[:-2])
                     else:
                         imports[imported.rsplit(".", 1)[-1]] = imported
-            self.units[path] = _Unit(source, package, imports, wildcards)
+            self.units[path] = _Unit(
+                source, package, imports, wildcards, dict(static_imports), static_wildcards,
+            )
             self.path_modules.setdefault(path, self.path_modules.get(path, path.split("/", 1)[0] if "/" in path else ""))
             nodes = list(parser.walk(tree))
             for node in nodes:
@@ -559,6 +574,9 @@ class JavaSymbols:
         # Only enclosing lexical blocks can contribute local declarations.
         scope = invocation.parent if not field_only else None
         while scope is not None and scope != info.node:
+            declared, scoped_type = self._scoped_declaration(info, scope, name, invocation)
+            if declared:
+                return scoped_type
             for declaration in reversed(scope.named_children):
                 if declaration.type != "local_variable_declaration" or declaration.end_byte > invocation.start_byte:
                     continue
@@ -600,6 +618,72 @@ class JavaSymbols:
             if found:
                 return next(iter(found)) if len(found) == 1 else None
         return None
+
+    def _scoped_declaration(
+        self, info: _Method, scope: Node, name: str, invocation: Node,
+    ) -> tuple[bool, str | None]:
+        """A variable that ``scope`` itself declares for the code it encloses.
+
+        Returns ``(True, type)`` when ``scope`` declares ``name``; the type is
+        ``None`` when it is not written (``var``, an untyped lambda
+        parameter, a multi-catch). Such a declaration still shadows fields.
+        """
+        path = info.method.path
+        source = self.units[path].source
+
+        def typed(type_node: Node | None, value: Node | None = None) -> tuple[bool, str | None]:
+            if type_node is None:
+                return True, None
+            text = parser.node_text(source, type_node).strip()
+            if text == "var":
+                return True, self.expression_type(info, value, invocation) if value is not None else None
+            return True, self.resolve(path, text, info.owner, allow_ambiguous=True)
+
+        def named(node: Node | None) -> bool:
+            return node is not None and parser.node_text(source, node) == name
+
+        if scope.type == "enhanced_for_statement":
+            body = scope.child_by_field_name("body")
+            if named(scope.child_by_field_name("name")) and body is not None and (
+                body.start_byte <= invocation.start_byte < body.end_byte
+            ):
+                type_node = scope.child_by_field_name("type")
+                if type_node is not None and parser.node_text(source, type_node).strip() == "var":
+                    return True, None
+                return typed(type_node)
+        elif scope.type == "catch_clause":
+            parameter = parser.child_by_type(scope, "catch_formal_parameter")
+            if parameter is not None and named(parameter.child_by_field_name("name")):
+                catch_type = parser.child_by_type(parameter, "catch_type")
+                alternatives = catch_type.named_children if catch_type is not None else []
+                return typed(alternatives[0]) if len(alternatives) == 1 else (True, None)
+        elif scope.type == "try_with_resources_statement":
+            resources = parser.child_by_type(scope, "resource_specification")
+            for resource in resources.named_children if resources is not None else []:
+                if (
+                    resource.type == "resource"
+                    and resource.end_byte <= invocation.start_byte
+                    and named(resource.child_by_field_name("name"))
+                ):
+                    return typed(resource.child_by_field_name("type"), resource.child_by_field_name("value"))
+        elif scope.type == "lambda_expression":
+            parameters = scope.child_by_field_name("parameters")
+            if parameters is not None and parameters.type == "identifier":
+                if named(parameters):
+                    return True, None
+            elif parameters is not None:
+                for parameter in parameters.named_children:
+                    if parameter.type == "identifier" and named(parameter):
+                        return True, None
+                    if parameter.type == "formal_parameter" and named(parameter.child_by_field_name("name")):
+                        return typed(parameter.child_by_field_name("type"))
+        elif scope.type == "method_declaration":
+            # The method of an anonymous class inside ``info``'s body.
+            parameters = scope.child_by_field_name("parameters")
+            for parameter in parameters.named_children if parameters is not None else []:
+                if parameter.type == "formal_parameter" and named(parameter.child_by_field_name("name")):
+                    return typed(parameter.child_by_field_name("type"))
+        return False, None
 
     def receiver_type(self, info: _Method, receiver: Node | None, invocation: Node, depth: int = 0) -> str | None:
         """Read declared receiver/return types without evaluating method bodies."""
@@ -743,6 +827,37 @@ class JavaSymbols:
             if owner in owners and method_name == name
         }
 
+    def _static_import_owner(self, info: _Method, name: str, arity: int) -> str | None:
+        """The source type a static import makes ``name`` refer to, if unique.
+
+        Java looks up a simple method name in the enclosing type, its
+        ancestors and its outer types before static imports: any declaration
+        of that name there, whatever its arity, shadows them. A single
+        static import wins over static wildcards; several wildcards that
+        declare the name stay ambiguous.
+        """
+        path = info.method.path
+        unit = self.units[path]
+        scope = info.owner
+        while scope and scope != unit.package:
+            if scope in self.types and self._declared_arities(scope, name, path, info.module):
+                return None
+            scope = scope.rpartition(".")[0]
+
+        def declaring(owners: list[str]) -> set[str]:
+            resolved = {self.resolve(path, owner, info.owner) for owner in owners}
+            return {
+                owner for owner in resolved
+                if owner is not None and owner in self.types
+                and arity in self._declared_arities(owner, name, path, info.module)
+            }
+
+        single = declaring(unit.static_imports.get(name, []))
+        if single:
+            return next(iter(single)) if len(single) == 1 else None
+        wildcard = declaring(unit.static_wildcards)
+        return next(iter(wildcard)) if len(wildcard) == 1 else None
+
     def fallback_calls(
         self, resolved_sites: set[tuple[str, int, str]], *, closed_world: bool = False,
     ) -> list[MethodCall]:
@@ -809,6 +924,14 @@ class JavaSymbols:
                         receiver_type, name, arguments_count, info.module, info.method.path,
                         argument_types=argument_types,
                     )
+                    if not targets and receiver is None:
+                        static_owner = self._static_import_owner(info, name, arguments_count)
+                        if static_owner is not None:
+                            receiver_type = static_owner
+                            targets, pruned = self._candidate_targets(
+                                receiver_type, name, arguments_count, info.module,
+                                info.method.path, argument_types=argument_types,
+                            )
                     if not targets:
                         targets = self._unimplemented_contract(receiver_type, name, arguments_count, info)
                 if not targets:

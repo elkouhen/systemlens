@@ -242,3 +242,94 @@ def test_dispatch_left_unique_by_module_preference_stays_possible(tmp_path: Path
 
     # The caller's module is preferred, but the other implementation exists.
     assert calls == [("p.CoreAdapter.send", "possible")]
+
+
+_SCOPED = """package p;
+import java.util.List;
+class Order { void process() {} void fail() {} }
+class Failure extends RuntimeException { void report() {} }
+class Resource implements AutoCloseable { void use() {} public void close() {} }
+class Svc {
+  private Order order;
+  Resource open() { return new Resource(); }
+  void run(List<Order> orders) {
+    for (Order o : orders) { o.process(); }
+    try (Resource r = open()) { r.use(); } catch (Failure e) { e.report(); }
+    orders.forEach((Order x) -> x.fail());
+    orders.forEach(order -> order.fail());
+  }
+}
+"""
+
+
+def test_variables_declared_by_enclosing_statements_type_their_receivers(tmp_path: Path) -> None:
+    path = "app/src/main/java/p/Svc.java"
+    (tmp_path / path).parent.mkdir(parents=True)
+    (tmp_path / path).write_text(_SCOPED, encoding="utf-8")
+    module = DiscoveredModule(
+        name="app", path=tmp_path / "app", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    methods = materialize_integration_methods(tmp_path, [], [path], [module])
+    symbols = JavaSymbols(tmp_path, methods, [path])
+
+    calls = sorted(
+        (call.callee, call.call_line, call.dispatch_confidence)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+        if call.caller.endswith("Svc.run")
+    )
+
+    def line(text: str) -> int:
+        return next(number for number, value in enumerate(_SCOPED.splitlines(), 1) if text in value)
+
+    assert calls == [
+        ("p.Failure.report", line("catch (Failure"), "exact"),
+        ("p.Order.fail", line("(Order x)"), "exact"),
+        ("p.Order.process", line("for (Order o"), "exact"),
+        ("p.Resource.use", line("try (Resource"), "exact"),
+        ("p.Svc.open", line("try (Resource"), "exact"),
+    ]
+    # The untyped lambda parameter ``order`` shadows the field of the same
+    # name: only the typed lambda ``x`` yields ``fail``.
+    assert sum(callee == "p.Order.fail" for callee, _line, _dispatch in calls) == 1
+
+
+def test_a_statically_imported_source_method_is_a_call(tmp_path: Path) -> None:
+    files = {
+        "app/src/main/java/p/Util.java": (
+            "package p;\npublic class Util { public static void helper() {} }\n"
+        ),
+        "app/src/main/java/p/Other.java": (
+            "package p;\npublic class Other { public static void shared() {} }\n"
+        ),
+        "app/src/main/java/p/Third.java": (
+            "package p;\npublic class Third { public static void shared() {} }\n"
+        ),
+        "app/src/main/java/q/User.java": (
+            "package q;\nimport static p.Util.helper;\nimport static p.Other.*;\n"
+            "import static p.Third.*;\n"
+            "class User { void go() { helper(); shared(); } }\n"
+        ),
+        "app/src/main/java/q/Shadow.java": (
+            "package q;\nimport static p.Util.helper;\n"
+            "class Shadow { void helper(int x) {} void go() { helper(); } }\n"
+        ),
+    }
+    for path, text in files.items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(text, encoding="utf-8")
+    module = DiscoveredModule(
+        name="app", path=tmp_path / "app", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    methods = materialize_integration_methods(tmp_path, [], list(files), [module])
+    symbols = JavaSymbols(tmp_path, methods, list(files))
+
+    calls = sorted(
+        (call.caller, call.callee, call.dispatch_confidence)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+    )
+
+    # ``shared`` comes from two static wildcards and stays unresolved; a
+    # ``helper`` declared by the caller's own type shadows the import.
+    assert calls == [("q.User.go", "p.Util.helper", "exact")]

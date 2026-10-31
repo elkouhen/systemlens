@@ -29,7 +29,7 @@ from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import is_java_literal, trace_scalar_key_identity
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v41-anonymous-bodies-pruned-dispatch"
+CODE_FLOW_SIGNATURE = "code-flow-v42-scoped-receivers-static-imports"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 

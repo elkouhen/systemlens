@@ -166,6 +166,16 @@ it fills the gaps. A receiver is typed from a field, parameter, local or
 `var` initializer, a declared return type, a field access (`obj.field`,
 `Type.CONSTANT`, enum constants), or a capitalized type name for a static
 call; `receiver::name` is a call when that name has one declared arity.
+Variables declared by an enclosing statement also type receivers: an enhanced
+`for` variable, a single-type `catch` parameter, a try-with-resources
+resource, and an explicitly typed lambda parameter. An untyped lambda
+parameter, a `var` loop variable or a multi-catch parameter has no type, but
+still shadows a field of the same name.
+An unqualified call that the enclosing type, its ancestors and its outer
+types do not declare under that name, at any arity, resolves through a
+single static import, then through the one static wildcard import whose
+source type declares that name and arity. Several candidates stay
+unresolved.
 Literals, `new`, casts, and typed variables give argument types, which
 narrow same-arity overloads with boxing, then by assignability to a source
 ancestor. An override whose parameter type comes from an external wildcard
