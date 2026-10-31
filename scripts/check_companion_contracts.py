@@ -158,8 +158,13 @@ def _validate_lab(
             raise ValueError("Data access paths are selectable call flows in the HTML export")
         # Grouping related data-access sites in one flow needs typed calls:
         # the source engine reports each site on its own (ADR-61).
+        # Access sites are stored per access flow and grouped under each
+        # selectable root by reference (export snapshot contract).
         if codeql is not None and not any(
             len(accesses) > 1 for accesses in graph_data["flow_data_accesses"].values()
+        ) and not any(
+            len(access_flow_ids) > 1
+            for access_flow_ids in graph_data.get("flow_data_access_flow_ids_by_root", {}).values()
         ):
             raise ValueError("The laboratory call flows do not expose related data access sites")
         order_roots = {
