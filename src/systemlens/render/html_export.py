@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, cast, Mapping
 
 from systemlens.domain.graph import GraphEdge, graph_edges_from_facts
-from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
+from systemlens.domain.code_flows import CodeFlow, CallGraphEdge, IntegrationMethod
 from systemlens.application.flow_consistency import diagnose_flow_consistency_snapshot
 from systemlens.domain.models import (
     ArchitectureRelation,
@@ -119,7 +119,7 @@ def render_graph_html(
     architecture_relations: list[ArchitectureRelation] | None = None,
     code_flows: list[CodeFlow] | None = None,
     integration_methods: list[IntegrationMethod] | None = None,
-    codeql_call_edges: list[CodeQLCallGraphEdge] | None = None,
+    codeql_call_edges: list[CallGraphEdge] | None = None,
     flow_descriptions: dict[str, str] | None = None,
     progress_notice: str | None = None,
     call_graphs_only: bool = False,

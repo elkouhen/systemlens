@@ -95,7 +95,7 @@ def _copy_lab_application(lab_root: Path, destination: Path) -> None:
 
 def _validate_lab(
     systemlens: Path,
-    codeql: Path,
+    codeql: Path | None,
     lab_root: Path,
     skill_root: Path,
 ) -> None:
@@ -112,15 +112,21 @@ def _validate_lab(
         )
         _run([str(systemlens), "version"], cwd=application)
         _run([str(systemlens), "init"], cwd=application)
-        (application / ".codeql").mkdir()
-        _run([
-            str(codeql), "database", "create", ".codeql/systemlens-java",
-            "--language=java", "--source-root=.", "--build-mode=none",
-        ], cwd=application)
-        _run([
-            str(systemlens), "index", "--full", "--call-graph-engine", "codeql",
-            "--codeql-database", ".codeql/systemlens-java",
-        ], cwd=application)
+        if codeql is not None:
+            (application / ".codeql").mkdir()
+            _run([
+                str(codeql), "database", "create", ".codeql/systemlens-java",
+                "--language=java", "--source-root=.", "--build-mode=none",
+            ], cwd=application)
+            _run([
+                str(systemlens), "index", "--full", "--call-graph-engine", "codeql",
+                "--codeql-database", ".codeql/systemlens-java",
+            ], cwd=application)
+        else:
+            # The skill's documented alternative when CodeQL is unavailable.
+            _run([
+                str(systemlens), "index", "--full", "--call-graph-engine", "source",
+            ], cwd=application)
         _run([
             str(systemlens), "import-facts", enrichment_manifest.name,
             "--namespace", "direct-analysis", "--complete",
@@ -150,7 +156,9 @@ def _validate_lab(
         if any(flow["steps"][-1]["kind"] in {"data_read", "data_write"}
                for flow in graph_data["code_flows"]):
             raise ValueError("Data access paths are selectable call flows in the HTML export")
-        if not any(
+        # Grouping related data-access sites in one flow needs typed calls:
+        # the source engine reports each site on its own (ADR-61).
+        if codeql is not None and not any(
             len(accesses) > 1 for accesses in graph_data["flow_data_accesses"].values()
         ):
             raise ValueError("The laboratory call flows do not expose related data access sites")
@@ -158,7 +166,7 @@ def _validate_lab(
             flow["id"] for flow in graph_data["code_flows"]
             if flow["steps"][0]["name"] == "POST /api/orders"
         }
-        if not any(
+        if codeql is not None and not any(
             item["flow_id"] in order_roots
             and item["classification"] == "insufficient_evidence"
             for item in graph_data["flow_diagnostics"]
@@ -172,9 +180,9 @@ def _validate_lab(
                 "UNION ALL SELECT 'code_flows', COUNT(*) FROM code_flows"
             ).fetchall())
         if counts["indexed_endpoints"] == 0 or counts["modules"] == 0:
-            raise ValueError("The CodeQL-backed workflow indexed no source facts")
+            raise ValueError("The indexing workflow indexed no source facts")
         if counts["graph_facts"] == 0 or counts["code_flows"] == 0:
-            raise ValueError("The CodeQL-backed workflow produced no graph facts or flows")
+            raise ValueError("The indexing workflow produced no graph facts or flows")
 
 
 def main() -> None:
@@ -198,16 +206,15 @@ def main() -> None:
     arguments = parser.parse_args()
 
     _validate_skill(arguments.skill_root.resolve())
-    if arguments.codeql is None:
-        raise FileNotFoundError("CodeQL CLI not found; install it before validation")
     _validate_lab(
         arguments.systemlens.resolve(),
-        arguments.codeql.resolve(),
+        arguments.codeql.resolve() if arguments.codeql is not None else None,
         arguments.lab_root.resolve(),
         arguments.skill_root.resolve(),
     )
+    engine = "CodeQL-backed" if arguments.codeql is not None else "source-engine (no CodeQL CLI)"
     print(
-        "Companion contracts validated: skill metadata/links/JSON, CodeQL-backed "
+        f"Companion contracts validated: skill metadata/links/JSON, {engine} "
         "indexing, complementary fact import, and HTML export on the Java laboratory."
     )
 

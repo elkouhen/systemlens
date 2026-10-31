@@ -36,7 +36,11 @@ excluded. Maven modules whose artifact identifier or directory name contains
 but does not alter AST endpoint extraction.
 
 `analysis` is the versionable source of truth for the topic convention,
-method-call engine, and disabled extractors. Under Strategy1, listener and
+method-call engine, and disabled extractors. `call_graph_engine` is `codeql`,
+`source`, or `none`; with `codeql: false` and no explicit engine, it is
+`source`. `codeql_timeout_seconds`, `codeql_max_hops`, and
+`codeql_edge_confidence` apply to every engine; their names are kept for
+compatibility with existing configurations. Under Strategy1, listener and
 sender topic keys match declared keys in `kafka.yml` or `kafka.yaml` after
 normalization.
 An optional `runtime` section maps APM service names to indexed services for

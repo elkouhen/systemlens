@@ -12,7 +12,9 @@ from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 
-_INPUT_ROLES = {("rest", "serve"), ("kafka", "consume")}
+# A scheduler trigger is transient: it exists only while flows are built.
+SCHEDULER_TRIGGER = ("scheduler", "trigger")
+_INPUT_ROLES = {("rest", "serve"), ("kafka", "consume"), SCHEDULER_TRIGGER}
 _OUTPUT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
 
@@ -94,6 +96,80 @@ def _qualified_method_owner(declaration, root, source: bytes) -> str | None:
     return ".".join(parts)
 
 
+def _path_module(repo_root: Path, path: str, modules: list[DiscoveredModule]) -> str | None:
+    """Return the innermost discovered module containing a repository path."""
+    module_candidates = []
+    for discovered_module in modules:
+        try:
+            prefix = discovered_module.path.resolve().relative_to(repo_root.resolve()).as_posix()
+        except ValueError:
+            continue
+        # A repository-root module has ``.`` as its relative prefix, while
+        # its files still use paths such as ``src/main/java/Foo.java``.
+        if prefix == "." or path == prefix or path.startswith(f"{prefix}/"):
+            module_candidates.append((len(prefix), module_identity(discovered_module)))
+    return max(module_candidates, default=(0, None))[1]
+
+
+SCHEDULER_TRIGGER_PREFIX = "scheduler:"
+
+
+def scheduled_trigger_endpoints(
+    repo_root: Path,
+    java_paths: list[str],
+    endpoints: list[MessageEndpoint],
+    modules: list[DiscoveredModule],
+) -> list[MessageEndpoint]:
+    """Return transient triggers for Spring ``@Scheduled`` methods.
+
+    They let interprocedural flow construction start at a scheduler, like an
+    HTTP route or a Kafka listener. They are never persisted as endpoints, so
+    the architecture topology is unchanged; flow steps built from them carry
+    no endpoint ID.
+    """
+    module_by_path = {
+        endpoint.path: endpoint.module for endpoint in endpoints
+        if endpoint.module and endpoint.source == "code"
+    }
+    triggers: list[MessageEndpoint] = []
+    for path in sorted(set(java_paths)):
+        if not path.endswith(".java"):
+            continue
+        parsed = java_parser.parse_java(str(repo_root.resolve()), path)
+        if parsed is None or b"Scheduled" not in parsed[0]:
+            continue
+        source, root = parsed
+        for declaration in java_parser.walk(root):
+            if declaration.type != "method_declaration":
+                continue
+            annotation = next((
+                item for item in java_parser.annotations_of(declaration)
+                if java_parser.annotation_name(item, source) == "Scheduled"
+            ), None)
+            if annotation is None:
+                continue
+            module = module_by_path.get(path) or _path_module(repo_root, path, modules)
+            if module is None:
+                continue
+            schedule = "@Scheduled"
+            for key in ("cron", "fixedRate", "fixedDelay"):
+                argument = java_parser.annotation_argument(annotation, source, key)
+                if argument is not None:
+                    value = java_parser.node_text(source, argument).strip().strip('"')
+                    schedule = f"@Scheduled({key}={value})"
+                    break
+            line = declaration.start_point.row + 1
+            triggers.append(MessageEndpoint(
+                id=f"{SCHEDULER_TRIGGER_PREFIX}{module}:{path}:{line}",
+                role=SCHEDULER_TRIGGER[1], system=SCHEDULER_TRIGGER[0],
+                topic=schedule, topic_dynamic=False, source="code",
+                framework="spring-scheduling", path=path, start_line=line, end_line=line,
+                snippet="", module=module,
+                qualified_name=_qualified_method_owner(declaration, root, source),
+            ))
+    return triggers
+
+
 def materialize_integration_methods(
     repo_root: Path, endpoints: list[MessageEndpoint], java_paths: list[str], modules: list[DiscoveredModule]
 ) -> list[IntegrationMethod]:
@@ -149,18 +225,7 @@ def materialize_integration_methods(
                 # attribute it from a sibling integration method in its file.
                 module = next((endpoint.module for endpoint in path_endpoints if endpoint.module), None)
             if module is None:
-                module_candidates = []
-                for discovered_module in modules:
-                    try:
-                        prefix = discovered_module.path.resolve().relative_to(repo_root.resolve()).as_posix()
-                    except ValueError:
-                        continue
-                    # A repository-root module has ``.`` as its relative
-                    # prefix, while its files still use paths such as
-                    # ``src/main/java/Foo.java``.
-                    if prefix == "." or path == prefix or path.startswith(f"{prefix}/"):
-                        module_candidates.append((len(prefix), module_identity(discovered_module)))
-                module = max(module_candidates, default=(0, None))[1]
+                module = _path_module(repo_root, path, modules)
             if module is None:
                 continue
             owner = _qualified_method_owner(declaration, root, source)

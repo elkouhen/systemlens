@@ -22,14 +22,20 @@ produces facts, and `Store` owns SQLite.
 ## Runtime layers
 
 ```text
-delivery/ + render/
-        |
-application/ + indexing/
+delivery/ + render/           engines/ (optional analyzers)
+        |                          |
+application/ + indexing/ ----> callgraph/ (engine seam)
         |
 discovery/ + scanner/ + storage/
         |
 domain/ + infrastructure/
 ```
+
+`callgraph/` holds the engine-neutral call types, the `CallGraphEngine`
+protocol, the tree-sitter `source` engine, and a registry that loads other
+engines by module path. `engines/codeql.py` implements that protocol for
+CodeQL and depends on `callgraph/`, never the reverse: no core module imports
+it (ADR-61).
 
 The package root contains only `__init__.py` and directories. Implementation
 modules must live in the package that owns their responsibility:
@@ -37,6 +43,8 @@ modules must live in the package that owns their responsibility:
 | Package | Responsibility |
 |---|---|
 | `domain/` | Stable facts, graph primitives, module inventory types, runtime facts |
+| `callgraph/` | Engine-neutral call types, engine protocol, source engine, registry |
+| `engines/` | Optional call-graph engines backed by external analyzers (CodeQL) |
 | `application/` | Read-only architecture queries, federation, audits and shared projections |
 | `indexing/` | Atomic index orchestration, incremental policy and snapshot materialization |
 | `discovery/` | Maven, Gradle, Java parser, configuration and Kubernetes adapters |
@@ -164,6 +172,9 @@ they are not cross-module entry points.
 | Kubernetes runtime discovery | `discovery/kubernetes.py` |
 | Shared module inventory types | `domain/module_inventory.py` |
 | Same-method potential flow materialization | `indexing/code_flows.py` |
+| Call-graph engine contract or selection | `callgraph/engine.py`, `callgraph/registry.py` |
+| CodeQL queries and database lifecycle | `engines/codeql.py` |
+| Maven/Gradle source generation | `indexing/source_generation.py` |
 | File eligibility or incremental refresh policy | `indexing/file_inventory.py` |
 | Persisted architecture relation derivation | `indexing/relations.py` |
 | Persisted contract materialization | `indexing/materializers.py` |

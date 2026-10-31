@@ -11,7 +11,7 @@ from systemlens.domain.graph import GraphEdge
 from systemlens.domain.code_flows import (
     CodeFlow,
     CodeFlowStep,
-    CodeQLCallGraphEdge,
+    CallGraphEdge,
     IntegrationMethod,
 )
 from systemlens.discovery.kubernetes import KubernetesWorkload
@@ -243,7 +243,7 @@ def test_export_includes_persisted_codeql_call_graph() -> None:
         {"orders": []},
         [],
         integration_methods=[caller, callee],
-        codeql_call_edges=[CodeQLCallGraphEdge("a", "b", "Orders.java", 3, "exact")],
+        codeql_call_edges=[CallGraphEdge("a", "b", "Orders.java", 3, "exact")],
     ))
 
     assert data["codeql_call_graph"] == {
@@ -294,11 +294,11 @@ def test_strategy1_call_tree_signature_uses_unique_called_consume_method() -> No
         (), (), ("OrderCreated",),
     )
     other_consume = replace(consume, id="other")
-    call = CodeQLCallGraphEdge("listener", "consume", "Listener.java", 5, "exact")
-    other_call = CodeQLCallGraphEdge("listener", "other", "Listener.java", 6, "possible")
+    call = CallGraphEdge("listener", "consume", "Listener.java", 5, "exact")
+    other_call = CallGraphEdge("listener", "other", "Listener.java", 6, "possible")
 
     def port_for(
-        framework: str, extra_edges: list[CodeQLCallGraphEdge], *, strategy1: bool = True
+        framework: str, extra_edges: list[CallGraphEdge], *, strategy1: bool = True
     ) -> dict:
         endpoint = replace(listener_endpoint, framework=framework)
         data = _html_graph_data(render_graph_html(

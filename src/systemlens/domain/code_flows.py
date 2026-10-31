@@ -125,7 +125,7 @@ class IntegrationMethod:
 
 
 @dataclass(frozen=True)
-class CodeQLCallGraphEdge:
+class CallGraphEdge:
     """One source-backed directed edge in the persisted Java call graph."""
 
     caller_id: str
@@ -137,7 +137,7 @@ class CodeQLCallGraphEdge:
 
 
 @dataclass(frozen=True)
-class PersistedCodeQLMethod:
+class PersistedCallGraphMethod:
     """One source-backed method in the persisted CodeQL projection."""
 
     id: str

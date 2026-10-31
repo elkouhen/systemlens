@@ -7,7 +7,7 @@ from systemlens.delivery.cli import app
 from systemlens.domain.code_flows import (
     CodeFlow,
     CodeFlowStep,
-    CodeQLCallGraphEdge,
+    CallGraphEdge,
     IntegrationMethod,
 )
 from systemlens.storage.sqlite import Store
@@ -42,14 +42,14 @@ def _given_persisted_snapshot(
     root: Path,
     methods: list[IntegrationMethod],
     *,
-    edges: list[CodeQLCallGraphEdge] | None = None,
+    edges: list[CallGraphEdge] | None = None,
     flows: list[CodeFlow] | None = None,
     signature: str = POSSIBLE_EDGE_SIGNATURE,
     flow_status: str = "complete",
 ) -> None:
     with Store(root) as store:
         store.replace_integration_methods(methods)
-        store.replace_codeql_call_edges(edges or [])
+        store.replace_call_edges(edges or [])
         store.replace_code_flows(flows or [])
         store.set_meta("code_flow_signature", signature)
         store.set_meta("codeql_call_graph_status", "complete")
@@ -161,7 +161,7 @@ def test_call_edge_reports_a_possible_edge_filtered_by_exact_mode(
     # Given a possible edge and a snapshot configured to accept exact edges only.
     caller = _method("caller", "orders.Controller.create", inputs=("in",))
     callee = _method("callee", "orders.Service.reserve", outputs=("out",))
-    edge = CodeQLCallGraphEdge(
+    edge = CallGraphEdge(
         "caller", "callee", "src/Controller.java", 15, "possible", inferred=True,
     )
     _given_persisted_snapshot(
@@ -216,7 +216,7 @@ def test_call_edge_matches_interface_query_to_concrete_dispatch_target(
         "implementation", "orders", "orders.OrderServiceImpl.reserve",
         "orders/OrderServiceImpl.java", 3, 3, (), (),
     )
-    edge = CodeQLCallGraphEdge(
+    edge = CallGraphEdge(
         "caller", "implementation", "orders/OrderController.java", 12, "possible",
     )
     _given_persisted_snapshot(
@@ -277,7 +277,7 @@ def test_call_edge_accepts_an_explicit_module_context(
         "billing-callee", "billing", "billing.Service.reserve",
         "billing/Service.java", 10, 20, (), (),
     )
-    edge = CodeQLCallGraphEdge(
+    edge = CallGraphEdge(
         "billing-caller", "billing-callee", "billing/Controller.java", 15, "exact",
     )
     _given_persisted_snapshot(
@@ -303,8 +303,8 @@ def test_call_edges_lists_persisted_calls_independently_of_flows(
         "billing/Service.java", 10, 20, (), (),
     )
     edges = [
-        CodeQLCallGraphEdge("caller", "callee", "orders/Controller.java", 15, "possible"),
-        CodeQLCallGraphEdge("caller", "callee", "orders/Controller.java", 16, "possible", inferred=True),
+        CallGraphEdge("caller", "callee", "orders/Controller.java", 15, "possible"),
+        CallGraphEdge("caller", "callee", "orders/Controller.java", 16, "possible", inferred=True),
     ]
     _given_persisted_snapshot(tmp_path, [caller, callee], edges=edges)
 
@@ -408,7 +408,7 @@ def test_call_edge_text_output_shows_an_edge_used_by_a_flow(tmp_path: Path) -> N
     # Given an exact edge already used by a persisted IN-to-OUT flow.
     caller = _method("caller", "orders.Controller.create", inputs=("in",))
     callee = _method("callee", "orders.Service.reserve", outputs=("out",))
-    edge = CodeQLCallGraphEdge(
+    edge = CallGraphEdge(
         "caller", "callee", "src/Controller.java", 15, "exact",
     )
     flow = CodeFlow(
@@ -461,7 +461,7 @@ def test_call_edge_reports_when_the_caller_is_outside_every_input_path(
     # Given an exact edge whose caller cannot be reached from an indexed IN port.
     caller = _method("caller", "orders.Helper.prepare")
     callee = _method("callee", "orders.Service.reserve", outputs=("out",))
-    edge = CodeQLCallGraphEdge(
+    edge = CallGraphEdge(
         "caller", "callee", "src/Helper.java", 15, "exact",
     )
     _given_persisted_snapshot(tmp_path, [caller, callee], edges=[edge])

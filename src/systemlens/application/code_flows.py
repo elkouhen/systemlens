@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 from dataclasses import asdict
 import re
 
-from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
+from systemlens.domain.code_flows import CodeFlow, CallGraphEdge, IntegrationMethod
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 
@@ -15,6 +15,9 @@ def _endpoint_summary(
     endpoint_steps = [step for step in flow.steps if step.endpoint_id]
     if not endpoint_steps:
         return None, None
+    if flow.steps[0].endpoint_id is None:
+        # A scheduled trigger has no endpoint: every endpoint step is an output.
+        return None, endpoints.get(endpoint_steps[-1].endpoint_id or "")
     first = endpoints.get(endpoint_steps[0].endpoint_id or "")
     last = endpoints.get(endpoint_steps[-1].endpoint_id or "") if len(endpoint_steps) > 1 else None
     return first, last
@@ -238,7 +241,7 @@ def _flow_construction(
 def internal_flow_debug(
     flows: list[CodeFlow], endpoints: list[MessageEndpoint], module: str,
     integration_methods: list[IntegrationMethod] | None = None,
-    codeql_call_edges: list[CodeQLCallGraphEdge] | None = None,
+    codeql_call_edges: list[CallGraphEdge] | None = None,
 ) -> dict[str, object]:
     """Describe found or missing internal flows for one module."""
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
@@ -350,7 +353,7 @@ def _call_graph_flow_examples(
     endpoints: list[MessageEndpoint],
     module: str,
     methods: list[IntegrationMethod],
-    edges: list[CodeQLCallGraphEdge],
+    edges: list[CallGraphEdge],
 ) -> list[dict[str, object]]:
     """Find one Java call-graph path for every internal IN-to-OUT pair."""
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
@@ -372,7 +375,7 @@ def _call_graph_flow_examples(
         for endpoint_id in method.output_endpoint_ids
         if (endpoint := endpoint_by_id.get(endpoint_id)) is not None
     ]
-    adjacency: dict[str, list[CodeQLCallGraphEdge]] = defaultdict(list)
+    adjacency: dict[str, list[CallGraphEdge]] = defaultdict(list)
     for edge in edges:
         if edge.caller_id in methods_by_id and edge.callee_id in methods_by_id:
             adjacency[edge.caller_id].append(edge)
@@ -444,7 +447,7 @@ def _call_graph_flow_attempts(
     endpoints: list[MessageEndpoint],
     module: str,
     methods: list[IntegrationMethod],
-    edges: list[CodeQLCallGraphEdge],
+    edges: list[CallGraphEdge],
     *,
     limit: int = 10,
 ) -> list[dict[str, object]]:
@@ -464,7 +467,7 @@ def _call_graph_flow_attempts(
         for method in methods
         if method.id in module_methods and method.output_endpoint_ids
     }
-    adjacency: dict[str, list[CodeQLCallGraphEdge]] = defaultdict(list)
+    adjacency: dict[str, list[CallGraphEdge]] = defaultdict(list)
     for edge in edges:
         if edge.caller_id in methods_by_id and edge.callee_id in methods_by_id:
             adjacency[edge.caller_id].append(edge)
@@ -475,7 +478,7 @@ def _call_graph_flow_attempts(
     ):
         if len(attempts) >= limit:
             break
-        queue: deque[tuple[str, list[str], list[CodeQLCallGraphEdge]]] = deque([
+        queue: deque[tuple[str, list[str], list[CallGraphEdge]]] = deque([
             (input_method.id, [input_method.id], [])
         ])
         visited_paths: set[tuple[str, ...]] = set()
@@ -562,7 +565,7 @@ def _call_graph_flow_attempts(
 def _flow_attempt(
     input_endpoint: MessageEndpoint,
     method_ids: list[str],
-    edge_path: list[CodeQLCallGraphEdge],
+    edge_path: list[CallGraphEdge],
     methods: dict[str, IntegrationMethod],
     stop_reason: str,
 ) -> dict[str, object]:
@@ -615,11 +618,11 @@ def _invocation_name(snippet: str) -> str | None:
 def _shortest_method_path(
     start: str,
     target: str,
-    adjacency: dict[str, list[CodeQLCallGraphEdge]],
+    adjacency: dict[str, list[CallGraphEdge]],
     methods: dict[str, IntegrationMethod],
     entry_method: str,
-) -> tuple[list[str], list[CodeQLCallGraphEdge]] | None:
-    queue: deque[tuple[str, list[str], list[CodeQLCallGraphEdge]]] = deque([
+) -> tuple[list[str], list[CallGraphEdge]] | None:
+    queue: deque[tuple[str, list[str], list[CallGraphEdge]]] = deque([
         (start, [start], [])
     ])
     visited = {start}
@@ -645,7 +648,7 @@ def _shortest_method_path(
 
 
 def _call_graph_edge_allowed(
-    edge: CodeQLCallGraphEdge,
+    edge: CallGraphEdge,
     methods: dict[str, IntegrationMethod],
     entry_method: str,
 ) -> bool:

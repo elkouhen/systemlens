@@ -23,9 +23,9 @@ from systemlens.domain.models import (
 from systemlens.domain.code_flows import (
     CodeFlow,
     CodeFlowStep,
-    CodeQLCallGraphEdge,
+    CallGraphEdge,
     IntegrationMethod,
-    PersistedCodeQLMethod,
+    PersistedCallGraphMethod,
     ensure_unique_code_flow_ids,
 )
 from systemlens.domain.module_inventory import (
@@ -126,6 +126,11 @@ class Store:
         self._conn: sqlite3.Connection | None = None
         self._readonly = readonly
         self._transaction_active = False
+
+    @property
+    def repo_root(self) -> Path:
+        """The indexed repository root this store belongs to."""
+        return self._repo_root
 
     def __enter__(self) -> "Store":
         if self._readonly:
@@ -898,7 +903,7 @@ class Store:
             for row in rows
         ]
 
-    def replace_codeql_call_edges(self, edges: list[CodeQLCallGraphEdge]) -> None:
+    def replace_call_edges(self, edges: list[CallGraphEdge]) -> None:
         """Replace the source-backed CodeQL call graph edges."""
         rows = _deduplicate_keyed_rows(
             [
@@ -923,7 +928,7 @@ class Store:
             rows,
         )
 
-    def replace_codeql_methods(self, methods: list[PersistedCodeQLMethod]) -> None:
+    def replace_call_graph_methods(self, methods: list[PersistedCallGraphMethod]) -> None:
         """Replace the source-backed CodeQL method projection."""
         methods = _ensure_unique_record_ids(methods)
         self.conn.execute("DELETE FROM codeql_methods")
@@ -938,14 +943,14 @@ class Store:
             ],
         )
 
-    def all_codeql_methods(self) -> list[PersistedCodeQLMethod]:
+    def all_call_graph_methods(self) -> list[PersistedCallGraphMethod]:
         rows = self.conn.execute(
             """SELECT id, module, qualified_method, path, start_line, end_line
                FROM codeql_methods ORDER BY module, path, start_line, id"""
         ).fetchall()
-        return [PersistedCodeQLMethod(**dict(row)) for row in rows]
+        return [PersistedCallGraphMethod(**dict(row)) for row in rows]
 
-    def all_codeql_call_edges(self) -> list[CodeQLCallGraphEdge]:
+    def all_call_edges(self) -> list[CallGraphEdge]:
         rows = self.conn.execute(
             """SELECT caller_id, callee_id, path, line,
                       dispatch_confidence, inferred
@@ -954,7 +959,7 @@ class Store:
                         dispatch_confidence, inferred"""
         ).fetchall()
         return [
-            CodeQLCallGraphEdge(
+            CallGraphEdge(
                 caller_id=row["caller_id"],
                 callee_id=row["callee_id"],
                 path=row["path"],

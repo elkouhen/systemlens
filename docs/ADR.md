@@ -16,6 +16,7 @@ functional or technical contract.
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch) |
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
+| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -1207,3 +1208,37 @@ and last occurrence. Messages are never read or persisted, because they can
 carry business data or secrets. Errors attach to the indexed entry point of
 their transaction and never change a reconciliation status. Errors caught by
 the application leave no error document and show only as failures.
+
+## ADR-61: Make the call-graph engine a pluggable choice
+
+**Status:** Accepted. Amends ADR-29 and ADR-38.
+
+**Context:** Interprocedural flows came from CodeQL, with a tree-sitter
+symbol pass filling missing edges. The indexing core imported the CodeQL
+module directly. CodeQL needs its CLI, a query pack, minutes of analysis,
+and a license that may not cover proprietary code. Without it, the symbol
+pass already built flows, but only as an implicit fallback named `none`.
+
+**Decision:** The core depends on an engine-neutral seam, `callgraph/`: call
+types, a `CallGraphEngine` protocol whose session reports calls, methods,
+reachability, and Kafka payload types, and a registry that loads engines by
+name. `codeql` lives in `engines/codeql.py` and is imported lazily. `source`
+is a first-class engine: it reports no call itself, and the shared
+tree-sitter symbol pass becomes the whole call graph. `none` builds no
+interprocedural path. An unavailable engine is announced, then replaced by
+`source`. Source calls are `exact` only when the receiver's own declared
+class owns one concrete matching method; interface dispatch stays
+`possible`. `analyze compare-engines` measures two engines on one index.
+
+**Consequences:** Users can choose the engine per project or per run, and
+SystemLens works fully without CodeQL. Configurations with `codeql: false`
+keep their previous behavior through `source`. Persisted identifiers keep
+their `codeql` names (tables, meta keys, the export's `codeql_call_graph`
+key, `codeql_*` settings) so existing indexes and exports stay compatible.
+Flow reasons and progress messages no longer name CodeQL. A source flow
+whose calls are all exact now reaches `medium` confidence instead of `low`.
+On the observability lab, the source engine finds every flow CodeQL-free, but
+reports each data-access site in its own flow: grouped data accesses and the
+ADR-59 async-write/sync-read diagnostic still need `codeql`. The companion
+check validates whichever engine is installed.
+

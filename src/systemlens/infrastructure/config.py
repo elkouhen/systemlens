@@ -4,13 +4,14 @@ from pathlib import Path
 import yaml
 
 from systemlens.infrastructure.paths import config_path, state_dir
+from systemlens.callgraph.registry import ENGINE_NAMES
 
 DEFAULT_INCLUDE = ["**/*"]
 DEFAULT_EXCLUDE = [".git/**", ".venv/**", "node_modules/**", ".systemlens/**"]
 DEFAULT_MIN_SEVERITY = "INFO"
 VALID_SEVERITIES = ("INFO", "WARNING", "ERROR")
 VALID_TOPIC_STRATEGIES = ("default", "strategy1")
-VALID_CALL_GRAPH_ENGINES = ("codeql", "none")
+VALID_CALL_GRAPH_ENGINES = ENGINE_NAMES
 VALID_CODEQL_EDGE_CONFIDENCES = ("exact", "possible")
 VALID_CODEQL_VERBOSITIES = ("errors", "progress", "progress+", "progress++", "progress+++")
 
@@ -73,7 +74,8 @@ def load_config(repo_root: Path) -> Config:
     if not isinstance(codeql_enabled, bool):
         raise ConfigError("analysis.codeql doit être un booléen.")
     call_graph_engine = analysis.get(
-        "call_graph_engine", "codeql" if codeql_enabled else "none"
+        # ``codeql: false`` historically kept the source symbol pass.
+        "call_graph_engine", "codeql" if codeql_enabled else "source"
     )
     if call_graph_engine not in VALID_CALL_GRAPH_ENGINES:
         raise ConfigError(

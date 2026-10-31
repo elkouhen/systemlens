@@ -5,8 +5,8 @@ from collections.abc import Mapping, Sequence
 import re
 
 from systemlens.application.architecture_inventory import ArchitectureInventory
-from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
-from systemlens.indexing.codeql import CodeQLMethod
+from systemlens.domain.code_flows import CodeFlow, CallGraphEdge, IntegrationMethod
+from systemlens.callgraph.model import SourceMethod
 from systemlens.indexing.java_symbols import JavaSymbols
 
 
@@ -24,7 +24,7 @@ def _method_fact(method: IntegrationMethod) -> dict[str, object]:
 
 
 def _presence(
-    edges: Sequence[CodeQLCallGraphEdge],
+    edges: Sequence[CallGraphEdge],
     callers: Sequence[IntegrationMethod],
     callees: Sequence[IntegrationMethod],
     *,
@@ -147,7 +147,7 @@ def _interface_implementation_ids(
 
 def _direct_codeql_method_ids(
     methods: Sequence[IntegrationMethod],
-    codeql_methods: Sequence[CodeQLMethod],
+    codeql_methods: Sequence[SourceMethod],
 ) -> set[str]:
     """Join selected persisted methods with methods returned directly by CodeQL."""
     facts = {
@@ -179,8 +179,8 @@ def _signature_settings(signature: str | None) -> dict[str, object]:
 
 
 def _effective_edges(
-    edges: Sequence[CodeQLCallGraphEdge], edge_confidence: object,
-) -> list[CodeQLCallGraphEdge]:
+    edges: Sequence[CallGraphEdge], edge_confidence: object,
+) -> list[CallGraphEdge]:
     if edge_confidence != "exact":
         return list(edges)
     return [
@@ -190,7 +190,7 @@ def _effective_edges(
 
 
 def _reachable(
-    starts: set[str], target: str, edges: Sequence[CodeQLCallGraphEdge],
+    starts: set[str], target: str, edges: Sequence[CallGraphEdge],
 ) -> bool:
     if target in starts:
         return True
@@ -211,7 +211,7 @@ def _reachable(
 
 
 def _can_reach_any(
-    start: str, targets: set[str], edges: Sequence[CodeQLCallGraphEdge],
+    start: str, targets: set[str], edges: Sequence[CallGraphEdge],
 ) -> bool:
     if start in targets:
         return True
@@ -254,7 +254,7 @@ def diagnose_call_edge(
     *,
     module: str | None = None,
     snapshot_metadata: Mapping[str, str | None] | None = None,
-    codeql_methods: Sequence[CodeQLMethod] | None = None,
+    codeql_methods: Sequence[SourceMethod] | None = None,
 ) -> dict[str, object]:
     """Classify where one expected call edge disappears from the pipeline."""
     metadata = dict(snapshot_metadata or {})

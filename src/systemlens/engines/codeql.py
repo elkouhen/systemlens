@@ -1,87 +1,44 @@
 """Local CodeQL call-graph adapter for Java integration flows."""
 
 import csv
-import errno
-import os
 import re
-import signal
 import shutil
 import subprocess
 import tempfile
-import time
-from threading import Timer
 from contextlib import contextmanager
-from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Iterable, Mapping
-from typing import Callable, Iterator, Sequence
+from typing import Any, Callable, Iterator, Sequence, cast
 
+from systemlens.callgraph.engine import EngineRequest
+from systemlens.callgraph.model import (
+    CallGraphError,
+    CallGraphTimeout,
+    MethodCall,
+    MethodReachability,
+    PayloadTypeEvidence,
+    SourceMethod,
+)
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.indexing.file_inventory import is_build_output
+from systemlens.indexing.source_generation import (
+    generate_sources as _generate_sources,
+    prepare_generation_workspace as _prepare_generation_workspace,
+    remaining_timeout as _remaining_timeout,
+    run_with_progress as _run_with_progress,
+)
 
 
-@dataclass(frozen=True)
-class CodeQLCall:
-    caller: str
-    caller_path: str
-    caller_line: int
-    callee: str
-    callee_path: str
-    callee_line: int
-    call_line: int
-    dispatch_confidence: str = "exact"
-
-
-@dataclass(frozen=True)
-class CodeQLMethod:
-    """One source-backed Java method returned directly by CodeQL."""
-
-    qualified_method: str
-    path: str
-    start_line: int
-
-
-@dataclass(frozen=True)
-class CodeQLReachability:
-    """A direct CodeQL answer for one indexed input/output method pair."""
-
-    source: str
-    source_path: str
-    source_line: int
-    target: str
-    target_path: str
-    target_line: int
-    confidence: str
-
-
-@dataclass(frozen=True)
-class CodeQLKafkaMessageType:
-    """A source-backed payload type found at a Strategy1 Kafka send site."""
-
-    path: str
-    line: int
-    message_type: str
-
-
-class CodeQLError(RuntimeError):
+class CodeQLError(CallGraphError):
     pass
 
 
-class CodeQLTimeout(subprocess.TimeoutExpired):
+class CodeQLTimeout(CallGraphTimeout, subprocess.TimeoutExpired):
     """A CodeQL deadline with any rows recovered from a completed result."""
 
-    def __init__(self, command: list[str], timeout: float, *, calls: list[CodeQLCall] | None = None):
-        super().__init__(command, timeout)
+    def __init__(self, command: list[str], timeout: float, *, calls: list[MethodCall] | None = None):
+        subprocess.TimeoutExpired.__init__(self, command, timeout)
         self.calls = calls or []
-
-
-def _remaining_timeout(timeout_seconds: float, deadline: float | None) -> float:
-    if deadline is None:
-        return timeout_seconds
-    remaining = deadline - time.monotonic()
-    if remaining <= 0:
-        raise subprocess.TimeoutExpired(["codeql"], timeout_seconds)
-    return min(timeout_seconds, remaining)
 
 
 # Keep the query pack reproducible and offline during indexing.  Users install
@@ -370,84 +327,6 @@ def codeql_executable() -> str | None:
     return shutil.which("codeql")
 
 
-def _run_with_progress(
-    command: list[str],
-    *,
-    timeout: float,
-    progress: Callable[[str], None] | None,
-    cwd: Path | None = None,
-) -> subprocess.CompletedProcess[str]:
-    """Run CodeQL with one timeout and process-group cleanup policy."""
-    process = subprocess.Popen(
-        command, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT if progress is not None else subprocess.PIPE,
-        text=True, bufsize=1, cwd=cwd, start_new_session=os.name == "posix",
-    )
-
-    def stop() -> None:
-        try:
-            if os.name == "posix":
-                os.killpg(process.pid, signal.SIGKILL)
-            else:
-                process.kill()
-        except ProcessLookupError:
-            pass
-        except PermissionError:
-            # A process can exit between poll() and killpg(), or the platform
-            # can reject the group operation during interpreter shutdown. Fall
-            # back to the direct child and never turn cleanup into an indexing
-            # failure.
-            try:
-                process.kill()
-            except ProcessLookupError:
-                pass
-        except OSError as exc:
-            if exc.errno not in {errno.ESRCH, errno.EPERM}:
-                raise
-
-    if progress is None:
-        try:
-            stdout, stderr = process.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired as exc:
-            stop()
-            stdout, stderr = process.communicate()
-            raise subprocess.TimeoutExpired(
-                command, timeout, output=stdout, stderr=stderr
-            ) from exc
-        finally:
-            stop()
-            process.wait()
-        return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
-
-    output: list[str] = []
-    expired = False
-
-    def expire() -> None:
-        nonlocal expired
-        expired = True
-        stop()
-
-    timer = Timer(timeout, expire)
-    timer.daemon = True
-    timer.start()
-    try:
-        assert process.stdout is not None
-        for line in process.stdout:
-            output.append(line)
-            progress(line.rstrip())
-        returncode = process.wait()
-        if expired:
-            raise subprocess.TimeoutExpired(command, timeout, output="".join(output))
-    finally:
-        timer.cancel()
-        timer.join()
-        stop()
-        process.wait()
-        if process.stdout is not None:
-            process.stdout.close()
-    return subprocess.CompletedProcess(command, returncode, "".join(output), "")
-
-
 def _prepare_source_only_root(
     repo_root: Path, destination: Path, *, include_target_java_sources: bool = False,
     allowed_paths: Sequence[str] | None = None,
@@ -497,80 +376,6 @@ def _decode_bqrs(
         timeout=timeout,
         progress=None,
     )
-
-
-def _prepare_generation_workspace(repo_root: Path, destination: Path) -> None:
-    """Copy the project to a disposable workspace before source generation."""
-    shutil.copytree(
-        repo_root,
-        destination,
-        ignore=shutil.ignore_patterns(
-            ".git", ".systemlens", ".venv", "node_modules", "target", "build", "out"
-        ),
-    )
-
-
-def _generation_roots(workspace: Path) -> list[Path]:
-    """Return outermost Maven or Gradle projects that can generate sources.
-
-    A workspace-level descriptor owns its nested modules. When it is absent,
-    independent module descriptors are generated from their own directories.
-    This keeps multi-module repositories supported without requiring a synthetic
-    aggregator at the repository root.
-    """
-    if (workspace / "pom.xml").is_file() or (workspace / "gradlew").is_file():
-        return [workspace]
-
-    descriptors = [
-        path.parent
-        for path in workspace.rglob("pom.xml")
-        if not any(part in {".git", ".systemlens", "target", "build", "out"}
-                   for part in path.relative_to(workspace).parts)
-    ]
-    if descriptors:
-        candidates = sorted(set(descriptors), key=lambda path: (len(path.parts), str(path)))
-    else:
-        candidates = sorted(
-            {
-                path.parent
-                for path in workspace.rglob("gradlew")
-                if path.is_file()
-                and not any(
-                    part in {".git", ".systemlens", "target", "build", "out"}
-                    for part in path.relative_to(workspace).parts
-                )
-            },
-            key=lambda path: (len(path.parts), str(path)),
-        )
-    return [
-        candidate
-        for candidate in candidates
-        if not any(parent in candidates for parent in candidate.parents)
-    ]
-
-
-def _generate_sources(
-    workspace: Path, *, timeout: float, progress: Callable[[str], None] | None,
-) -> None:
-    """Run build-tool source generation only, never compilation or tests."""
-    deadline = time.monotonic() + timeout
-    roots = _generation_roots(workspace)
-    for root in roots:
-        if (root / "pom.xml").is_file():
-            command = ["mvn", "-B", "-ntp", "-o", "generate-sources"]
-        elif (root / "gradlew").is_file():
-            command = ["./gradlew", "--no-daemon", "generateSources"]
-        else:
-            continue
-        completed = _run_with_progress(
-            command,
-            timeout=_remaining_timeout(timeout, deadline),
-            progress=progress,
-            cwd=root,
-        )
-        if completed.returncode != 0:
-            detail = (completed.stderr or completed.stdout).strip()
-            raise CodeQLError(f"Source generation failed in {root}: {detail}")
 
 
 @contextmanager
@@ -642,7 +447,7 @@ def extract_codeql_calls(
     verbosity: str | None = None,
     progress: Callable[[str], None] | None = None,
     deadline: float | None = None,
-) -> list[CodeQLCall]:
+) -> list[MethodCall]:
     """Return statically resolved Java method calls from one CodeQL database.
 
     A database created for a build module reports paths relative to that
@@ -684,7 +489,7 @@ def extract_codeql_calls(
                 command, timeout=_remaining_timeout(timeout_seconds, deadline), progress=progress,
             )
         except subprocess.TimeoutExpired as exc:
-            partial_calls: list[CodeQLCall] = []
+            partial_calls: list[MethodCall] = []
             if bqrs.is_file():
                 try:
                     decoded_partial = _decode_bqrs(
@@ -726,7 +531,7 @@ def extract_codeql_methods(
     verbosity: str | None = None,
     progress: Callable[[str], None] | None = None,
     deadline: float | None = None,
-) -> list[CodeQLMethod]:
+) -> list[SourceMethod]:
     """Return source-backed Java methods queried directly from CodeQL."""
     if not database.is_dir():
         raise CodeQLError(f"CodeQL database not found: {database}")
@@ -770,13 +575,13 @@ def extract_codeql_methods(
         except OSError as exc:
             raise CodeQLError("CodeQL did not produce a CSV method inventory.") from exc
     normalized_prefix = path_prefix.strip("/")
-    methods: list[CodeQLMethod] = []
+    methods: list[SourceMethod] = []
     for row in rows:
         try:
             path = row["path"]
             if normalized_prefix and path:
                 path = f"{normalized_prefix}/{path.lstrip('/')}"
-            methods.append(CodeQLMethod(
+            methods.append(SourceMethod(
                 qualified_method=row["qualified_method"],
                 path=path,
                 start_line=int(row["start_line"]),
@@ -786,7 +591,7 @@ def extract_codeql_methods(
     return methods
 
 
-def _parse_codeql_calls(rows: Iterable[Mapping[str, str]], path_prefix: str) -> list[CodeQLCall]:
+def _parse_codeql_calls(rows: Iterable[Mapping[str, str]], path_prefix: str) -> list[MethodCall]:
     normalized_prefix = path_prefix.strip("/")
 
     def repository_path(path: str) -> str:
@@ -794,10 +599,10 @@ def _parse_codeql_calls(rows: Iterable[Mapping[str, str]], path_prefix: str) -> 
             return path
         return f"{normalized_prefix}/{path.lstrip('/')}"
 
-    calls: list[CodeQLCall] = []
+    calls: list[MethodCall] = []
     for row in rows:
         try:
-            calls.append(CodeQLCall(
+            calls.append(MethodCall(
                 caller=row["caller"], caller_path=repository_path(row["caller_path"]),
                 caller_line=int(row["caller_line"]), callee=row["callee"],
                 callee_path=repository_path(row["callee_path"]), callee_line=int(row["callee_line"]),
@@ -817,7 +622,7 @@ def extract_codeql_kafka_message_types(
     threads: int = 1,
     ram_mb: int | None = None,
     deadline: float | None = None,
-) -> list[CodeQLKafkaMessageType]:
+) -> list[PayloadTypeEvidence]:
     """Return unique payload types for Strategy1 Kafka producer calls."""
     if not database.is_dir():
         raise CodeQLError(f"CodeQL database not found: {database}")
@@ -858,10 +663,10 @@ def extract_codeql_kafka_message_types(
                 rows = list(csv.DictReader(handle))
         except OSError as exc:
             raise CodeQLError("CodeQL did not produce a Kafka message-type CSV.") from exc
-    result: list[CodeQLKafkaMessageType] = []
+    result: list[PayloadTypeEvidence] = []
     for row in rows:
         try:
-            result.append(CodeQLKafkaMessageType(
+            result.append(PayloadTypeEvidence(
                 path=row["path"], line=int(row["line"]), message_type=row["message_type"],
             ))
         except (KeyError, TypeError, ValueError) as exc:
@@ -878,7 +683,7 @@ def extract_codeql_reachability(
     threads: int = 1,
     ram_mb: int | None = None,
     deadline: float | None = None,
-) -> list[CodeQLReachability]:
+) -> list[MethodReachability]:
     """Return unbounded CodeQL reachability between indexed input/output methods."""
     if not database.is_dir():
         raise CodeQLError(f"CodeQL database not found: {database}")
@@ -923,10 +728,10 @@ def extract_codeql_reachability(
                 rows = list(csv.DictReader(handle))
         except OSError as exc:
             raise CodeQLError("CodeQL did not produce a reachability CSV.") from exc
-    reachability: list[CodeQLReachability] = []
+    reachability: list[MethodReachability] = []
     for row in rows:
         try:
-            reachability.append(CodeQLReachability(
+            reachability.append(MethodReachability(
                 source=row["source"], source_path=row["source_path"],
                 source_line=int(row["source_line"]), target=row["target"],
                 target_path=row["target_path"], target_line=int(row["target_line"]),
@@ -935,3 +740,112 @@ def extract_codeql_reachability(
         except (KeyError, TypeError, ValueError) as exc:
             raise CodeQLError("CodeQL returned an unexpected reachability schema.") from exc
     return reachability
+
+
+def _deadline_bound(
+    function: Callable[..., object], *args: object, **kwargs: object,
+) -> object:
+    """Report any CodeQL or process deadline as a call-graph timeout."""
+    try:
+        return function(*args, **kwargs)
+    except CodeQLTimeout:
+        raise
+    except subprocess.TimeoutExpired as exc:
+        raise CodeQLTimeout(list(exc.cmd or ["codeql"]), exc.timeout) from exc
+
+
+class _CodeQLSession:
+    """Queries against one CodeQL database, valid inside ``CodeQLEngine.open``."""
+
+    def __init__(self, engine: "CodeQLEngine", database: Path, request: EngineRequest) -> None:
+        self._engine = engine
+        self._database = database
+        self._request = request
+
+    def _common(self) -> dict[str, object]:
+        return {
+            "timeout_seconds": self._request.timeout_seconds,
+            "threads": self._engine.threads,
+            "ram_mb": self._engine.ram_mb,
+            "deadline": self._request.deadline,
+        }
+
+    def _logging(self) -> dict[str, object]:
+        verbose = self._request.verbose
+        return {
+            "verbosity": "progress++" if verbose else None,
+            "progress": self._request.progress if verbose else None,
+        }
+
+    def calls(self) -> list[MethodCall]:
+        return cast(list[MethodCall], _deadline_bound(
+            extract_codeql_calls, self._database, **self._common(), **self._logging(),
+        ))
+
+    def methods(self, source_prefix: str = "") -> list[SourceMethod]:
+        return cast(list[SourceMethod], _deadline_bound(
+            extract_codeql_methods, self._database, **self._common(), **self._logging(),
+            source_prefix=source_prefix,
+        ))
+
+    def reachability(self, methods: Sequence[IntegrationMethod]) -> list[MethodReachability]:
+        return cast(list[MethodReachability], _deadline_bound(
+            extract_codeql_reachability, self._database, methods, **self._common(),
+        ))
+
+    def payload_types(self) -> list[PayloadTypeEvidence]:
+        return cast(list[PayloadTypeEvidence], _deadline_bound(
+            extract_codeql_kafka_message_types, self._database, **self._common(),
+        ))
+
+
+class CodeQLEngine:
+    """CodeQL as a call-graph engine: typed virtual dispatch, needs the CLI."""
+
+    name = "codeql"
+    label = "CodeQL"
+    supports_module_refresh = True
+    resolves_types = True
+
+    def __init__(self, *, database: Path | None = None, threads: int = 1,
+                 ram_mb: int | None = None) -> None:
+        self.database = database
+        self.threads = threads
+        self.ram_mb = ram_mb
+
+    def available(self) -> bool:
+        return self.database is not None or codeql_executable() is not None
+
+    @contextmanager
+    def open(self, request: EngineRequest) -> Iterator[_CodeQLSession]:
+        if self.database is not None:
+            yield _CodeQLSession(self, self.database, request)
+            return
+        options: dict[str, Any] = {
+            "timeout_seconds": request.timeout_seconds,
+            "threads": self.threads,
+            "ram_mb": self.ram_mb,
+            "allowed_paths": list(request.allowed_paths),
+            "deadline": request.deadline,
+        }
+        if request.verbose:
+            options.update(verbosity="progress++", progress=request.progress)
+        if request.include_generated_sources:
+            # Source generation already ran before the inventory; reuse its
+            # files instead of running the build tool twice.
+            options.update(generate_sources=False, include_target_java_sources=True)
+        try:
+            with automatic_codeql_database(request.repo_root, **options) as database:
+                if database is None:
+                    raise CodeQLError("CodeQL executable not found.")
+                yield _CodeQLSession(self, database, request)
+        except CodeQLTimeout:
+            raise
+        except subprocess.TimeoutExpired as exc:
+            raise CodeQLTimeout(list(exc.cmd or ["codeql"]), exc.timeout) from exc
+
+
+def create_engine(*, database: Path | None = None, threads: int = 1,
+                  ram_mb: int | None = None) -> CodeQLEngine:
+    """Registry entry point used by ``systemlens.callgraph.registry``."""
+    return CodeQLEngine(database=database, threads=threads, ram_mb=ram_mb)

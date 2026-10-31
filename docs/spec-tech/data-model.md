@@ -514,9 +514,11 @@ graph snapshot instead of reconstructing call sequences from display labels.
 Kafka publications are not expanded into cross-service persisted CodeFlow
 candidates. The flow views follow a publication to opposite-role endpoints on
 the same concrete topic only when a compatible topology relation exists. A
-publication without an input trigger does not become a flow root. A publisher
-annotated with `@Scheduled` still creates a local source flow whose first step
-is `cron_entry`, followed by its publication.
+publication without an input trigger does not become a flow root. A method
+annotated with `@Scheduled` is an entry like an HTTP route or a Kafka
+listener: interprocedural construction starts there, and its first step is
+`cron_entry`. Its schedule names the step, such as
+`@Scheduled(cron=${order.cron})`; the step carries no `endpoint_id`.
 Known message types must match when both endpoints provide one. Missing type
 evidence does not prevent the topology relation, while conflicting known types
 prevent it.

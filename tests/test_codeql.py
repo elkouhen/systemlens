@@ -8,7 +8,8 @@ import time
 import pytest
 
 from systemlens.domain.code_flows import IntegrationMethod
-from systemlens.indexing import codeql
+from systemlens.engines import codeql
+from systemlens.indexing import source_generation
 
 
 def test_query_scopes_source_calls_and_folds_dispatch_resolution() -> None:
@@ -99,7 +100,7 @@ def test_reachability_decodes_named_columns(tmp_path: Path, monkeypatch) -> None
 
     monkeypatch.setattr(codeql, "_run_with_progress", run)
     assert codeql.extract_codeql_reachability(tmp_path, methods, executable="codeql") == [
-        codeql.CodeQLReachability("C.in", "C.java", 1, "C.out", "C.java", 2, "medium")
+        codeql.MethodReachability("C.in", "C.java", 1, "C.out", "C.java", 2, "medium")
     ]
 
 
@@ -169,8 +170,8 @@ def test_generate_sources_runs_only_the_maven_generation_phase(tmp_path: Path, m
         observed.append((command, kwargs.get("cwd")))
         return CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr(codeql, "_run_with_progress", run)
-    codeql._generate_sources(tmp_path, timeout=42, progress=None)
+    monkeypatch.setattr(source_generation, "run_with_progress", run)
+    source_generation.generate_sources(tmp_path, timeout=42, progress=None)
 
     assert observed == [(["mvn", "-B", "-ntp", "-o", "generate-sources"], tmp_path)]
 
@@ -191,8 +192,8 @@ def test_generate_sources_runs_independent_nested_maven_projects(
         observed.append(kwargs.get("cwd"))
         return CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr(codeql, "_run_with_progress", run)
-    codeql._generate_sources(tmp_path, timeout=42, progress=None)
+    monkeypatch.setattr(source_generation, "run_with_progress", run)
+    source_generation.generate_sources(tmp_path, timeout=42, progress=None)
 
     assert observed == [first, second]
 
@@ -288,7 +289,7 @@ def test_extract_codeql_calls_uses_pinned_local_pack_without_installing(
         database, executable="custom-codeql", timeout_seconds=42, threads=4, ram_mb=4096
     )
 
-    assert calls == [codeql.CodeQLCall(
+    assert calls == [codeql.MethodCall(
         "com.example.A.run", "A.java", 1, "com.example.B.send", "B.java", 2, 3,
     )]
     assert all("pack" not in command[1:3] for command, _timeout in commands)
@@ -320,7 +321,7 @@ def test_extract_codeql_methods_reads_source_nodes_directly(
         database, executable="custom-codeql", timeout_seconds=42, threads=4,
     )
 
-    assert methods == [codeql.CodeQLMethod(
+    assert methods == [codeql.SourceMethod(
         "com.example.Service.reserve", "Service.java", 7,
     )]
 
@@ -346,7 +347,7 @@ def test_extract_codeql_kafka_message_types_reads_strategy1_payload_type(
         database, executable="custom-codeql", timeout_seconds=42, threads=4, ram_mb=4096
     )
 
-    assert types == [codeql.CodeQLKafkaMessageType("Publisher.java", 7, "OrderCreated")]
+    assert types == [codeql.PayloadTypeEvidence("Publisher.java", 7, "OrderCreated")]
 
 
 def test_extract_codeql_calls_prefixes_module_relative_evidence_paths(

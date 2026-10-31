@@ -10,10 +10,14 @@ from systemlens.domain.graph import (
 from systemlens.indexing.code_flows import (
     _deduplicate_code_flows,
     _ensure_unique_code_flow_ids,
-    materialize_codeql_code_flows,
+    materialize_call_graph_flows,
     reconcile_code_flows,
 )
 from systemlens.domain.module_inventory import module_identity
+from systemlens.indexing.integration_methods import (
+    SCHEDULER_TRIGGER_PREFIX,
+    scheduled_trigger_endpoints,
+)
 from systemlens.scanner import local_spring_application_names
 from systemlens.storage.sqlite import Store
 
@@ -21,9 +25,10 @@ from systemlens.storage.sqlite import Store
 def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
     """Reconstruct all persisted call-graph flows with source and AI topology.
 
-    This function deliberately does not index source files or invoke CodeQL.
-    It reads the endpoint, integration-method, CodeQL-edge, module and
-    enrichment snapshots already stored in SQLite, rebuilds the derived flow
+    This function deliberately does not index source files or run a
+    call-graph engine. It reads the endpoint, integration-method, call-edge,
+    module and enrichment snapshots already stored in SQLite, rebuilds the
+    derived flow
     set in memory, and persists only that derived result. When ``module`` is
     provided, only input methods owned by that module are reconstructed; the
     global persisted method graph remains available for helper calls.
@@ -33,8 +38,18 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
     persisted_flows = store.all_code_flows()
     current_endpoint_ids = {endpoint.id for endpoint in endpoints}
     methods = store.all_integration_methods()
-    persisted_call_edges = store.all_codeql_call_edges()
-    persisted_codeql_methods = store.all_codeql_methods()
+    # Scheduler triggers are transient: re-read only the Java files of the
+    # persisted methods that reference one, to recover their schedules.
+    scheduler_paths = sorted({
+        method.path for method in methods
+        if any(item.startswith(SCHEDULER_TRIGGER_PREFIX) for item in method.input_endpoint_ids)
+    })
+    flow_endpoints = [
+        *endpoints,
+        *scheduled_trigger_endpoints(store.repo_root, scheduler_paths, endpoints, modules),
+    ] if scheduler_paths else endpoints
+    persisted_call_edges = store.all_call_edges()
+    persisted_codeql_methods = store.all_call_graph_methods()
     facts = store.all_graph_facts()
     endpoints_by_service = group_endpoints_by_module(endpoints)
     strategy = store.get_meta("topic_strategy") or "default"
@@ -53,9 +68,9 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
     )
     fact_edges = graph_edges_from_facts(facts, endpoints_by_service)
     reconstructed_flows = (
-        materialize_codeql_code_flows(
+        materialize_call_graph_flows(
             methods,
-            endpoints,
+            flow_endpoints,
             [],
             module=module,
             modules=modules,

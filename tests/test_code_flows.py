@@ -23,21 +23,24 @@ from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, JpaMethod, MongoMethod
 from systemlens.indexing.code_flows import (
-    CodeQLCallGraph,
-    CodeQLCallGraphEdge,
+    CallGraph,
+    CallGraphEdge,
     _data_access_branch,
     _deduplicate_code_flows,
     _ensure_unique_code_flow_ids,
     _jpa_step,
     _mongo_step,
-    codeql_join_methods_signature,
+    call_graph_join_methods_signature,
 )
 from systemlens.indexing.code_flows import materialize_code_flows, reconcile_code_flows
-from systemlens.indexing.code_flows import materialize_codeql_code_flows
-from systemlens.indexing import codeql
-from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
+from systemlens.indexing.code_flows import materialize_call_graph_flows
+from systemlens.engines import codeql
+from systemlens.callgraph.model import MethodCall, MethodReachability
 from systemlens.indexing.java_value_origins import trace_scalar_key_identity
-from systemlens.indexing.integration_methods import materialize_integration_methods
+from systemlens.indexing.integration_methods import (
+    materialize_integration_methods,
+    scheduled_trigger_endpoints,
+)
 from systemlens.indexing import service as indexing_service
 from systemlens.infrastructure.config import Config
 from systemlens.indexing.service import index_repo
@@ -118,7 +121,7 @@ def test_key_identity_traces_an_unmodified_scalar_parameter_through_calls(tmp_pa
         "adapter-method", "orders", "example.Adapter.load", adapter_path,
         1, 1, (), (),
     )
-    call = CodeQLCall(
+    call = MethodCall(
         caller=entry.qualified_method, caller_path=entry.path, caller_line=1,
         callee=adapter.qualified_method, callee_path=adapter.path, callee_line=1,
         call_line=1,
@@ -206,17 +209,17 @@ def test_codeql_data_flow_uses_propagated_entry_parameter_identity(tmp_path: Pat
         kind="application", starts_application=True, configuration_example="",
         jpa_methods=(operation,),
     )
-    calls = [CodeQLCall(
+    calls = [MethodCall(
         caller=entry_method.qualified_method, caller_path=entry_path, caller_line=3,
         callee=facade_method.qualified_method, callee_path=facade_path,
         callee_line=3, call_line=5,
-    ), CodeQLCall(
+    ), MethodCall(
         caller=facade_method.qualified_method, caller_path=facade_path, caller_line=3,
         callee=adapter_method.qualified_method, callee_path=adapter_path,
         callee_line=3, call_line=5,
     )]
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         [entry_method, facade_method, adapter_method], [entry_endpoint], calls,
         repo_root=tmp_path, modules=[module],
     )
@@ -448,7 +451,7 @@ def test_internal_flow_debug_lists_attempted_paths_when_no_flow_is_found() -> No
         ),
     ]
     edges = [
-        CodeQLCallGraphEdge(
+        CallGraphEdge(
             "consumer", "service", "Consumer.java", 11, "exact",
         )
     ]
@@ -599,6 +602,66 @@ class ScheduledPublisher {
     assert {flow.steps[0].name for flow in flows} == {"0 * * * * *"}
 
 
+def test_scheduled_method_seeds_an_interprocedural_flow(tmp_path: Path) -> None:
+    scheduler_path = "orders/src/main/java/com/example/Scheduler.java"
+    publisher_path = "orders/src/main/java/com/example/Publisher.java"
+    (tmp_path / scheduler_path).parent.mkdir(parents=True)
+    (tmp_path / scheduler_path).write_text(
+        """package com.example;
+
+class Scheduler {
+  private final Publisher publisher;
+  @Scheduled(fixedRate = 5000)
+  void tick() { publisher.send(); }
+}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / publisher_path).write_text(
+        """package com.example;
+
+class Publisher {
+  void send() {
+    kafka.send("orders.created", event);
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    producer = replace(
+        _endpoint("publish", "produce", "kafka", "orders.created", publisher_path, 5),
+        qualified_name="com.example.Publisher",
+    )
+
+    triggers = scheduled_trigger_endpoints(
+        tmp_path, [scheduler_path, publisher_path], [producer], [module],
+    )
+    methods = materialize_integration_methods(
+        tmp_path, [producer, *triggers], [scheduler_path, publisher_path], [module],
+    )
+    calls = [MethodCall(
+        caller="com.example.Scheduler.tick", caller_path=scheduler_path, caller_line=5,
+        callee="com.example.Publisher.send", callee_path=publisher_path, callee_line=4,
+        call_line=6,
+    )]
+    flows = materialize_call_graph_flows(
+        methods, [producer, *triggers], calls, repo_root=tmp_path, modules=[module],
+    )
+
+    assert [(trigger.topic, trigger.module, trigger.start_line) for trigger in triggers] == [
+        ("@Scheduled(fixedRate=5000)", "orders", 5),
+    ]
+    [flow] = flows
+    assert [step.kind for step in flow.steps] == ["cron_entry", "method_call", "message_publish"]
+    assert flow.steps[0].endpoint_id is None
+    assert flow.steps[0].name == "@Scheduled(fixedRate=5000)"
+    assert flow.steps[-1].endpoint_id == "publish"
+
+
 def test_scheduled_methods_keep_data_access_with_and_without_publication(tmp_path: Path) -> None:
     relative_source = "orders/src/main/java/ScheduledPublisher.java"
     source = tmp_path / relative_source
@@ -724,9 +787,9 @@ def test_codeql_call_graph_groups_edges_without_reversing_direction() -> None:
     caller = IntegrationMethod("a", "orders", "A.receive", "A.java", 1, 1, ("in",), ())
     middle = IntegrationMethod("b", "orders", "B.process", "B.java", 1, 1, (), ())
     target = IntegrationMethod("c", "orders", "C.send", "C.java", 1, 1, (), ("out",))
-    call_ab = CodeQLCall("A.receive", "A.java", 1, "B.process", "B.java", 1, 1)
-    call_bc = CodeQLCall("B.process", "B.java", 1, "C.send", "C.java", 1, 1)
-    graph = CodeQLCallGraph(
+    call_ab = MethodCall("A.receive", "A.java", 1, "B.process", "B.java", 1, 1)
+    call_bc = MethodCall("B.process", "B.java", 1, "C.send", "C.java", 1, 1)
+    graph = CallGraph(
         adjacency={
             caller.id: [(middle, call_ab, False)],
             middle.id: [(target, call_bc, False)],
@@ -1273,13 +1336,13 @@ def test_index_uses_automatic_codeql_database_when_available(
     )
     observed_roots = []
     materializations = []
-    original_materialize = indexing_service.materialize_codeql_code_flows
+    original_materialize = indexing_service.materialize_call_graph_flows
 
     def counted_materialize(*args, **kwargs):
         materializations.append(1)
         return original_materialize(*args, **kwargs)
 
-    monkeypatch.setattr(indexing_service, "materialize_codeql_code_flows", counted_materialize)
+    monkeypatch.setattr(indexing_service, "materialize_call_graph_flows", counted_materialize)
 
     @contextmanager
     def automatic_database(
@@ -1297,16 +1360,16 @@ def test_index_uses_automatic_codeql_database_when_available(
         assert ram_mb is None
         yield tmp_path / "codeql-db"
 
-    monkeypatch.setattr(indexing_service, "codeql_executable", lambda: "codeql")
-    monkeypatch.setattr(indexing_service, "automatic_codeql_database", automatic_database)
+    monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql, "automatic_codeql_database", automatic_database)
     monkeypatch.setattr(
-        indexing_service, "extract_codeql_calls", lambda _database, **_kwargs: []
+        codeql, "extract_codeql_calls", lambda _database, **_kwargs: []
     )
     monkeypatch.setattr(
-        indexing_service, "extract_codeql_methods", lambda _database, **_kwargs: []
+        codeql, "extract_codeql_methods", lambda _database, **_kwargs: []
     )
     monkeypatch.setattr(
-        indexing_service, "extract_codeql_reachability",
+        codeql, "extract_codeql_reachability",
         lambda _database, _methods, **_kwargs: [],
     )
 
@@ -1386,16 +1449,16 @@ def test_module_codeql_view_refresh_reuses_the_persisted_call_graph(
     def automatic_database(*_args, **_kwargs):
         yield tmp_path / "codeql-db"
 
-    monkeypatch.setattr(indexing_service, "codeql_executable", lambda: "codeql")
-    monkeypatch.setattr(indexing_service, "automatic_codeql_database", automatic_database)
+    monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql, "automatic_codeql_database", automatic_database)
     monkeypatch.setattr(
-        indexing_service, "extract_codeql_calls", lambda _database, **_kwargs: []
+        codeql, "extract_codeql_calls", lambda _database, **_kwargs: []
     )
     monkeypatch.setattr(
-        indexing_service, "extract_codeql_methods", lambda _database, **_kwargs: []
+        codeql, "extract_codeql_methods", lambda _database, **_kwargs: []
     )
     monkeypatch.setattr(
-        indexing_service, "extract_codeql_reachability",
+        codeql, "extract_codeql_reachability",
         lambda _database, _methods, **_kwargs: [],
     )
 
@@ -1405,20 +1468,20 @@ def test_module_codeql_view_refresh_reuses_the_persisted_call_graph(
     def unexpected_global_call_query(*_args, **_kwargs):
         raise AssertionError("module refresh must reuse the persisted call graph")
 
-    monkeypatch.setattr(indexing_service, "extract_codeql_calls", unexpected_global_call_query)
+    monkeypatch.setattr(codeql, "extract_codeql_calls", unexpected_global_call_query)
     queried_prefixes: list[str] = []
 
     def query_module_methods(_database, **kwargs):
         queried_prefixes.append(kwargs["source_prefix"])
         return []
 
-    monkeypatch.setattr(indexing_service, "extract_codeql_methods", query_module_methods)
+    monkeypatch.setattr(codeql, "extract_codeql_methods", query_module_methods)
     with Store(repo) as store:
         index_repo(
             repo,
             Config(),
             store,
-            codeql_database=tmp_path / "codeql-db",
+            call_graph_engine=codeql.CodeQLEngine(database=tmp_path / "codeql-db"),
             refresh_codeql_view=True,
             show_call_chains_module="orders",
         )
@@ -1443,8 +1506,8 @@ def test_codeql_timeout_commits_partial_snapshot_and_runs_post_processing(
         raise subprocess.TimeoutExpired(["codeql"], kwargs.get("timeout_seconds", 600))
         yield  # pragma: no cover - keeps this a contextmanager for the patch
 
-    monkeypatch.setattr(indexing_service, "codeql_executable", lambda: "codeql")
-    monkeypatch.setattr(indexing_service, "automatic_codeql_database", timed_out_database)
+    monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql, "automatic_codeql_database", timed_out_database)
     progress: list[str] = []
 
     with Store(repo) as store:
@@ -1475,7 +1538,7 @@ def test_real_codeql_database_creation_timeout_is_soft_boundary(
     def timeout(*_args, **kwargs):
         raise subprocess.TimeoutExpired(["codeql", "database", "create"], kwargs["timeout"])
 
-    monkeypatch.setattr(indexing_service, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
     monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
     monkeypatch.setattr(codeql, "_run_with_progress", timeout)
     progress: list[str] = []
@@ -1501,7 +1564,7 @@ def test_codeql_module_roots_assign_each_java_file_to_its_deepest_project(tmp_pa
         DiscoveredModule("second", second, "gradle", None, "library", False, ""),
     ]
 
-    roots = indexing_service._codeql_module_roots(
+    roots = indexing_service._call_graph_module_roots(
         tmp_path,
         [
             "first/src/main/java/A.java",
@@ -1526,17 +1589,17 @@ def test_global_codeql_calls_are_partitioned_without_losing_cross_project_edges(
         ("second", tmp_path / "second", "second"),
     ]
     calls = [
-        CodeQLCall(
+        MethodCall(
             "first.Controller.handle", "first/src/Controller.java", 10,
             "second.Client.send", "second/src/Client.java", 20, 11,
         ),
-        CodeQLCall(
+        MethodCall(
             "second.Client.send", "second/src/Client.java", 20,
             "first.Repository.save", "first/src/Repository.java", 30, 21,
         ),
     ]
 
-    partitioned = indexing_service._partition_codeql_calls(calls, roots)
+    partitioned = indexing_service._partition_calls(calls, roots)
 
     assert [name for name, _calls in partitioned] == ["first", "second"]
     assert partitioned[0][1] == [calls[0]]
@@ -1603,7 +1666,7 @@ class Generator {
     )
 
     with Store(repo) as store:
-        index_repo(repo, Config(codeql_enabled=False, call_graph_engine="none"), store, full=True)
+        index_repo(repo, Config(codeql_enabled=False, call_graph_engine="source"), store, full=True)
         flows = store.all_code_flows()
 
     assert len(flows) == 1
@@ -1612,8 +1675,13 @@ class Generator {
         ("method_call", "example.Generator.generate"),
         ("message_publish", "orders"),
     ]
-    assert flows[0].confidence == "low"
+    # The receiver's declared class owns the concrete method: an exact call.
+    assert flows[0].confidence == "medium"
     assert "source-declared" in flows[0].reason
+
+    with Store(repo) as store:
+        index_repo(repo, Config(codeql_enabled=False, call_graph_engine="none"), store, full=True)
+        assert store.all_code_flows() == []
 
 
 def test_cli_codeql_progress_html_requires_codeql(tmp_path: Path) -> None:
@@ -1681,13 +1749,13 @@ class OrderPublisher {
     ]
     methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
     calls = [
-        CodeQLCall("com.example.OrderController.receive", source, 3,
+        MethodCall("com.example.OrderController.receive", source, 3,
                    "com.example.OrderController.publish", source, 4, 3),
-        CodeQLCall("com.example.OrderController.publish", source, 4,
+        MethodCall("com.example.OrderController.publish", source, 4,
                    "com.example.OrderPublisher.send", target, 3, 4),
     ]
     persisted_edges = []
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods,
         endpoints,
         calls,
@@ -1702,14 +1770,14 @@ class OrderPublisher {
         (methods[0].id, methods[1].id, 3),
         (methods[1].id, methods[2].id, 4),
     ]
-    reconstructed = materialize_codeql_code_flows(
+    reconstructed = materialize_call_graph_flows(
         methods, endpoints, [], persisted_edges=persisted_edges,
     )
     assert len(reconstructed) == 1
     assert [step.kind for step in reconstructed[0].steps] == [
         "message_entry", "method_call", "method_call", "message_publish",
     ]
-    scoped = materialize_codeql_code_flows(
+    scoped = materialize_call_graph_flows(
         methods,
         endpoints,
         [],
@@ -1717,7 +1785,7 @@ class OrderPublisher {
         persisted_edges=persisted_edges,
     )
     assert len(scoped) == 1
-    assert materialize_codeql_code_flows(
+    assert materialize_call_graph_flows(
         methods,
         endpoints,
         [],
@@ -1749,7 +1817,7 @@ class OrderController {
     methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
     messages: list[str] = []
 
-    assert materialize_codeql_code_flows(
+    assert materialize_call_graph_flows(
         methods,
         endpoints,
         [],
@@ -1766,7 +1834,7 @@ class OrderController {
     ]
 
     orphan_messages: list[str] = []
-    assert materialize_codeql_code_flows(
+    assert materialize_call_graph_flows(
         [],
         endpoints,
         [],
@@ -1805,13 +1873,13 @@ class OrderFlow {
     ]
     methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
     calls = [
-        CodeQLCall("com.example.OrderFlow.first", source, 3,
+        MethodCall("com.example.OrderFlow.first", source, 3,
                    "com.example.OrderFlow.publish", source, 5, 3),
-        CodeQLCall("com.example.OrderFlow.second", source, 4,
+        MethodCall("com.example.OrderFlow.second", source, 4,
                    "com.example.OrderFlow.publish", source, 5, 4),
     ]
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, calls, resume_from_entry=1
     )
 
@@ -1835,7 +1903,7 @@ def test_codeql_materializes_same_method_contract_input_and_output(tmp_path: Pat
     methods = materialize_integration_methods(tmp_path, [entry, output], [source], [module])
     assert methods[0].parameter_types == ("String", "int")
 
-    flows = materialize_codeql_code_flows(methods, [entry, output], [])
+    flows = materialize_call_graph_flows(methods, [entry, output], [])
 
     assert len(flows) == 1
     assert [step.kind for step in flows[0].steps] == ["http_entry", "http_call"]
@@ -1858,7 +1926,7 @@ def test_codeql_join_methods_signature_changes_when_input_method_facts_change(
 
     changed = [replace(methods[0], end_line=methods[0].end_line + 1), *methods[1:]]
 
-    assert codeql_join_methods_signature(methods) != codeql_join_methods_signature(changed)
+    assert call_graph_join_methods_signature(methods) != call_graph_join_methods_signature(changed)
 
 
 def test_possible_signature_only_call_uses_explicit_low_confidence_join(tmp_path: Path) -> None:
@@ -1885,8 +1953,8 @@ class OrderPublisher { void send() { kafka.send(); } }
                 qualified_name="com.example.OrderPublisher"),
     ]
     methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
-    flows = materialize_codeql_code_flows(methods, endpoints, [
-        CodeQLCall("com.example.OrderController.receive:void()", source, 2,
+    flows = materialize_call_graph_flows(methods, endpoints, [
+        MethodCall("com.example.OrderController.receive:void()", source, 2,
                    "com.example.OrderPublisher.send:void()", "", 0, 2, "possible"),
     ])
 
@@ -1918,8 +1986,8 @@ def test_codeql_call_normalizes_method_signature_and_path_spelling(tmp_path: Pat
     ]
     methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
 
-    flows = materialize_codeql_code_flows(methods, endpoints, [
-        CodeQLCall(
+    flows = materialize_call_graph_flows(methods, endpoints, [
+        MethodCall(
             "com.example.OrderController.receive:void()", source, 1,
             "com.example.OrderPublisher.send(java.lang.String)",
             target.replace("/", "\\"), 1, 1,
@@ -1950,15 +2018,15 @@ def test_codeql_edge_confidence_can_exclude_possible_dispatch(tmp_path: Path) ->
                 qualified_name="com.example.OrderPublisher"),
     ]
     methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
-    call = CodeQLCall(
+    call = MethodCall(
         "com.example.OrderController.receive", source, 1,
         "com.example.OrderPublisher.send", target, 1, 1, "possible",
     )
 
-    assert materialize_codeql_code_flows(
+    assert materialize_call_graph_flows(
         methods, endpoints, [call], codeql_edge_confidence="exact"
     ) == []
-    assert len(materialize_codeql_code_flows(
+    assert len(materialize_call_graph_flows(
         methods, endpoints, [call], codeql_edge_confidence="possible"
     )) == 1
 
@@ -1985,11 +2053,11 @@ def test_exact_edge_confidence_excludes_low_confidence_reachability(tmp_path: Pa
     methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
     entry = next(method for method in methods if method.input_endpoint_ids)
     output = next(method for method in methods if method.output_endpoint_ids)
-    reachability = [CodeQLReachability(
+    reachability = [MethodReachability(
         entry.qualified_method, entry.path, entry.start_line,
         output.qualified_method, output.path, output.start_line, "low",
     )]
-    assert materialize_codeql_code_flows(
+    assert materialize_call_graph_flows(
         methods, endpoints, [], reachability=reachability, codeql_edge_confidence="exact",
     ) == []
 
@@ -2022,8 +2090,8 @@ class OrderPublisher { void send() { kafka.send(); } }
     ]
     methods = materialize_integration_methods(tmp_path, endpoints, [source, target], modules)
 
-    flows = materialize_codeql_code_flows(methods, endpoints, [
-        CodeQLCall(
+    flows = materialize_call_graph_flows(methods, endpoints, [
+        MethodCall(
             "com.example.OrderController.receive", source, 2,
             "com.example.OrderPublisher.send", "external/OrderPublisher.java", 1, 2,
         ),
@@ -2057,8 +2125,8 @@ def test_codeql_call_bridges_unique_cross_module_output_implementation(tmp_path:
     ]
     methods = materialize_integration_methods(tmp_path, endpoints, [source, port, target], modules)
 
-    flows = materialize_codeql_code_flows(methods, endpoints, [
-        CodeQLCall(
+    flows = materialize_call_graph_flows(methods, endpoints, [
+        MethodCall(
             "com.example.OrderController.receive", source, 1,
             "com.example.StockPort.publish", port, 1, 1,
         ),
@@ -2102,19 +2170,19 @@ class OrderPublisher {
     persisted_edges = []
     persisted_methods = []
 
-    def persist_graph(graph: CodeQLCallGraph) -> None:
+    def persist_graph(graph: CallGraph) -> None:
         persisted_edges.extend(graph.edges())
         persisted_methods.extend(graph.methods)
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods,
         endpoints,
         [
-            CodeQLCall(
+            MethodCall(
                 "com.example.OrderController.receive", source, 3,
                 "com.example.OrderController.helper", source, 4, 3,
             ),
-            CodeQLCall(
+            MethodCall(
                 "com.example.OrderController.helper", source, 4,
                 "com.example.OrderPublisher.send", target, 3, 4,
             ),
@@ -2125,7 +2193,7 @@ class OrderPublisher {
 
     assert len(flows) == 1
     assert any(step.name == "com.example.OrderController.helper" for step in flows[0].steps)
-    reconstructed = materialize_codeql_code_flows(
+    reconstructed = materialize_call_graph_flows(
         methods,
         endpoints,
         [],
@@ -2168,8 +2236,8 @@ class OrderPublisher {
         ),
     ]
     methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
-    flows = materialize_codeql_code_flows(methods, endpoints, [
-        CodeQLCall("<anonymous class>.run", source, 4,
+    flows = materialize_call_graph_flows(methods, endpoints, [
+        MethodCall("<anonymous class>.run", source, 4,
                    "com.example.OrderPublisher.send", target, 3, 4),
     ])
 
@@ -2216,13 +2284,13 @@ class SecondPublisher { void send() { kafka.send(); } }
         tmp_path, endpoints, [source, first_target, second_target], [module]
     )
     calls = [
-        CodeQLCall("com.example.OrderController.receive", source, 2,
+        MethodCall("com.example.OrderController.receive", source, 2,
                    "com.example.FirstPublisher.send", first_target, 2, 2, "possible"),
-        CodeQLCall("com.example.OrderController.receive", source, 2,
+        MethodCall("com.example.OrderController.receive", source, 2,
                    "com.example.SecondPublisher.send", second_target, 2, 2, "possible"),
     ]
 
-    flows = materialize_codeql_code_flows(methods, endpoints, calls)
+    flows = materialize_call_graph_flows(methods, endpoints, calls)
 
     assert {flow.steps[-1].name for flow in flows} == {"orders.first", "orders.second"}
     assert {flow.confidence for flow in flows} == {"low"}
@@ -2251,10 +2319,10 @@ def test_codeql_flow_materialization_bounds_exploration(tmp_path: Path) -> None:
     methods = materialize_integration_methods(tmp_path, endpoints, [source, target], [module])
     stats: dict[str, int] = {}
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods,
         endpoints,
-        [CodeQLCall("com.example.OrderController.receive", source, 1,
+        [MethodCall("com.example.OrderController.receive", source, 1,
                     "com.example.OrderPublisher.send", target, 1, 1)],
         stats=stats,
     )
@@ -2288,12 +2356,12 @@ def test_mongo_operations_get_independent_source_backed_paths(tmp_path: Path) ->
         ),
     )
     edges = [
-        CodeQLCallGraphEdge("entry-method", "mongo-method", entry_path, 5, "exact"),
-        CodeQLCallGraphEdge("entry-method", "output-method", entry_path, 8, "exact"),
-        CodeQLCallGraphEdge("mongo-method", "entry-method", helper_path, 6, "exact"),
+        CallGraphEdge("entry-method", "mongo-method", entry_path, 5, "exact"),
+        CallGraphEdge("entry-method", "output-method", entry_path, 8, "exact"),
+        CallGraphEdge("mongo-method", "entry-method", helper_path, 6, "exact"),
     ]
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, [entry, output], [], persisted_edges=edges, modules=[module],
     )
 
@@ -2327,7 +2395,7 @@ def test_mongo_operations_get_independent_source_backed_paths(tmp_path: Path) ->
 
     ambiguous = replace(module, mongo_methods=module.mongo_methods[:1])
     duplicate_owner = replace(methods[1], id="overload", start_line=3, end_line=5)
-    ambiguous_flows = materialize_codeql_code_flows(
+    ambiguous_flows = materialize_call_graph_flows(
         [*methods, duplicate_owner], [entry, output], [],
         persisted_edges=edges, modules=[ambiguous],
     )
@@ -2377,16 +2445,16 @@ def test_codeql_data_paths_do_not_enter_another_application_module(tmp_path: Pat
         ),
     ]
     edges = [
-        CodeQLCallGraphEdge("orders-entry-method", "inventory-data-method", orders_path, 4, "possible"),
-        CodeQLCallGraphEdge("orders-entry-method", "inventory-output-method", orders_path, 5, "possible"),
-        CodeQLCallGraphEdge("orders-entry-method", "shared-data-method", orders_path, 6, "exact"),
-        CodeQLCallGraphEdge("inventory-entry-method", "inventory-data-method", inventory_path, 4, "exact"),
+        CallGraphEdge("orders-entry-method", "inventory-data-method", orders_path, 4, "possible"),
+        CallGraphEdge("orders-entry-method", "inventory-output-method", orders_path, 5, "possible"),
+        CallGraphEdge("orders-entry-method", "shared-data-method", orders_path, 6, "exact"),
+        CallGraphEdge("inventory-entry-method", "inventory-data-method", inventory_path, 4, "exact"),
     ]
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, [orders_entry, inventory_entry, inventory_output], [],
         persisted_edges=edges, modules=modules,
-        reachability=(CodeQLReachability(
+        reachability=(MethodReachability(
             "Orders.receive", orders_path, 2,
             "Inventory.publish", inventory_path, 8, "exact",
         ),),
@@ -2425,11 +2493,12 @@ class OrderController {
     ]
     methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
 
-    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path)
+    flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path)
 
     assert len(flows) == 1
     assert flows[0].steps[-1].name == "orders.one"
-    assert flows[0].confidence == "low"
+    # Arity selects one concrete method of the receiver's own class.
+    assert flows[0].confidence == "medium"
 
 
 def test_ast_fallback_uses_declared_receiver_hierarchy(tmp_path: Path) -> None:
@@ -2461,7 +2530,7 @@ class OrderController {
     ]
     methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
 
-    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path)
+    flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path)
 
     assert len(flows) == 1
     assert flows[0].steps[-1].name == "orders.stock"
@@ -2514,7 +2583,7 @@ def test_ast_fallback_prefers_same_module_for_duplicate_qualified_types(tmp_path
         tmp_path, endpoints, [source_a, source_b, controller], modules
     )
 
-    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path)
+    flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path)
 
     assert len(flows) == 1
     assert flows[0].steps[-1].name == "orders.out"
@@ -2547,7 +2616,7 @@ class OrderController {
     ]
     methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
 
-    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path)
+    flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path)
 
     assert flows == []
 

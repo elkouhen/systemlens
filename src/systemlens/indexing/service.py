@@ -1,6 +1,5 @@
 import hashlib
 import os
-import subprocess
 import sys
 import time
 from collections import Counter, defaultdict
@@ -25,30 +24,30 @@ from systemlens.indexing.materializers import materialize_asyncapi_contracts, ma
 from systemlens.indexing.code_flows import (
     CODE_FLOW_SIGNATURE, _deduplicate_code_flows, _ensure_unique_code_flow_ids,
     materialize_code_flows,
-    CodeQLCallGraph, codeql_join_methods_signature, materialize_codeql_code_flows,
+    CallGraph, call_graph_join_methods_signature, materialize_call_graph_flows,
     reconcile_code_flows,
 )
-from systemlens.indexing.integration_methods import materialize_integration_methods
+from systemlens.indexing.integration_methods import (
+    materialize_integration_methods,
+    scheduled_trigger_endpoints,
+)
 from systemlens.domain.code_flows import (
     CodeFlow,
-    CodeQLCallGraphEdge,
+    CallGraphEdge,
     IntegrationMethod,
-    PersistedCodeQLMethod,
+    PersistedCallGraphMethod,
 )
-from systemlens.indexing.codeql import (
-    CodeQLCall,
-    CodeQLMethod,
-    CodeQLReachability,
-    CodeQLError,
-    CodeQLTimeout,
-    extract_codeql_kafka_message_types,
-    automatic_codeql_database,
-    codeql_executable,
-    extract_codeql_calls,
-    extract_codeql_methods,
-    extract_codeql_reachability,
-    _generate_sources,
+from systemlens.callgraph.engine import CallGraphEngine, CallGraphSession, EngineRequest
+from systemlens.callgraph.model import (
+    CallGraphError,
+    CallGraphTimeout,
+    MethodCall,
+    MethodReachability,
+    SourceMethod,
 )
+from systemlens.callgraph.registry import load_engine
+from systemlens.callgraph.source import SourceEngine
+from systemlens.indexing.source_generation import generate_sources as _generate_sources
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import (
     ArchitectureRelation,
@@ -120,7 +119,7 @@ class CallGraphProgress:
 CallGraphProgressCallback = Callable[[CallGraphProgress], None]
 
 
-def _codeql_module_roots(
+def _call_graph_module_roots(
     repo_root: Path, java_paths: Sequence[str], modules: Sequence[DiscoveredModule]
 ) -> list[tuple[str, Path, str]]:
     """Return the source-owning build roots for module-scoped CodeQL runs.
@@ -159,12 +158,12 @@ def _codeql_module_roots(
     return result
 
 
-def _partition_codeql_calls(
-    calls: Sequence[CodeQLCall],
+def _partition_calls(
+    calls: Sequence[MethodCall],
     roots: Sequence[tuple[str, Path, str]],
-) -> list[tuple[str, list[CodeQLCall]]]:
+) -> list[tuple[str, list[MethodCall]]]:
     """Partition global CodeQL results by caller project for checkpoints."""
-    by_project: dict[str, list[CodeQLCall]] = {
+    by_project: dict[str, list[MethodCall]] = {
         name: [] for name, _root, _prefix in roots
     }
     by_prefix = {prefix: name for name, _root, prefix in roots}
@@ -240,7 +239,7 @@ def _index_repo(
     progress: ProgressCallback | None = None,
     kubernetes: bool = False,
     kubernetes_namespace: str | None = None,
-    codeql_database: Path | None = None,
+    call_graph_engine: CallGraphEngine | None = None,
     call_graph_progress: CallGraphProgressCallback | None = None,
     codeql_progress: bool = False,
     generate_sources: bool = False,
@@ -250,21 +249,15 @@ def _index_repo(
     refresh_codeql_view: bool = False,
 ) -> IndexReport:
     timer = _IndexStageTimer(progress)
-    # CodeQL diagnostics are opt-in.  Do not inherit the verbosity from older
-    # configs, otherwise a repository initialized before the quiet default
-    # would still flood the index command's output.
-    codeql_verbosity = "progress++" if codeql_progress else None
+    # Engine diagnostics are opt-in (``codeql_progress``); older configs
+    # never make the index command verbose.
     if refresh_codeql_view and show_call_chains_module is None:
         raise ValueError("Refreshing the CodeQL view requires a selected module.")
-    if refresh_codeql_view and config.call_graph_engine != "codeql":
-        raise ValueError("Refreshing the CodeQL view requires the codeql method-call engine.")
     if refresh_codeql_view and store.get_meta("codeql_call_graph_status") != "complete":
         raise ValueError(
             "Refreshing one module requires a complete global CodeQL graph; "
             "run a global index first."
         )
-    if codeql_database is not None and config.call_graph_engine != "codeql":
-        raise ValueError("A CodeQL database requires the codeql method-call engine.")
     topic_strategy = topic_strategy or config.strategy
     strategy1_enabled = topic_strategy == "strategy1"
     disabled = disabled or frozenset(config.disabled_extractors)
@@ -379,11 +372,27 @@ def _index_repo(
     # Strategy1 resolves service declarations against contracts in model-*
     # modules. Only a change to that cross-module join requires a full pass;
     # ordinary Java/configuration changes keep the incremental fast path.
-    call_graph_engine = config.call_graph_engine
-    engine_available = call_graph_engine == "codeql" and codeql_executable() is not None
+    explicit_engine = call_graph_engine is not None
+    engine: CallGraphEngine | None = call_graph_engine or load_engine(
+        config.call_graph_engine,
+        threads=config.codeql_threads,
+        ram_mb=config.codeql_ram_mb,
+    )
+    if engine is not None and not engine.available():
+        _report_progress(
+            progress,
+            f"→ Indexation : {engine.label} indisponible ; moteur source (tree-sitter) utilisé.",
+        )
+        engine = SourceEngine()
+    if refresh_codeql_view and (engine is None or not engine.supports_module_refresh):
+        raise ValueError(
+            "Refreshing one module requires an engine that supports module refresh (codeql)."
+        )
+    engine_name = engine.name if engine is not None else "none"
+    engine_label = engine.label if engine is not None else "Graphe d'appel"
     flow_signature = (
-        f"{CODE_FLOW_SIGNATURE}|engine={call_graph_engine}|"
-        f"available={engine_available}|hops={config.codeql_max_hops}"
+        f"{CODE_FLOW_SIGNATURE}|engine={engine_name}|"
+        f"hops={config.codeql_max_hops}"
         f"|edge-confidence={config.codeql_edge_confidence}"
     )
     join_signature = f"{flow_signature}|inputs={analysis_inputs_signature}"
@@ -413,7 +422,7 @@ def _index_repo(
         resume_join_flows = store.all_code_flows()
         _report_progress(
             progress,
-            f"→ CodeQL : reprise de la jointure après la méthode IN "
+            f"→ {engine_label} : reprise de la jointure après la méthode IN "
             f"{resume_join_entries} ({len(resume_join_flows)} flux persisté(s)).",
         )
     codeql_timed_out = False
@@ -593,15 +602,23 @@ def _index_repo(
         full
         or changed
         or deleted
-        or codeql_database is not None
+        or explicit_engine
         or refresh_codeql_view
         or store.get_meta("code_flow_signature") != flow_signature
     )
     if should_index_flows:
         timer.begin("flows", "→ Indexation : matérialisation des flux de code...")
         all_endpoints = store.all_endpoints()
+        scheduler_triggers = scheduled_trigger_endpoints(
+            repo_root, list(current_hashes), all_endpoints, relation_modules
+        )
+
+        def flow_endpoints() -> list[MessageEndpoint]:
+            # Scheduler triggers only seed flows; they are never persisted.
+            return [*all_endpoints, *scheduler_triggers]
+
         methods = materialize_integration_methods(
-            repo_root, all_endpoints, list(current_hashes), relation_modules
+            repo_root, flow_endpoints(), list(current_hashes), relation_modules
         )
         store.replace_integration_methods(methods)
         reported_chain_signatures: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
@@ -648,33 +665,25 @@ def _index_repo(
                 )
                 _report_progress(progress, f"  ↳ Chaîne construite : {rendered}")
 
-        persisted_codeql_edges: list[CodeQLCallGraphEdge] = []
-        persisted_codeql_methods: list[PersistedCodeQLMethod] = []
+        persisted_codeql_edges: list[CallGraphEdge] = []
+        persisted_codeql_methods: list[PersistedCallGraphMethod] = []
         if refresh_codeql_view:
-            persisted_codeql_edges = store.all_codeql_call_edges()
-            persisted_codeql_methods = store.all_codeql_methods()
+            persisted_codeql_edges = store.all_call_edges()
+            persisted_codeql_methods = store.all_call_graph_methods()
         else:
-            store.replace_codeql_call_edges([])
-            store.replace_codeql_methods([])
+            store.replace_call_edges([])
+            store.replace_call_graph_methods([])
             store.delete_meta("codeql_call_graph_status")
             store.delete_meta("codeql_call_graph_edge_count")
         store.delete_meta("codeql_input_output_status")
         store.delete_meta("codeql_input_output_flow_count")
 
-        def enrich_strategy1_kafka_types(
-            database: Path, *, deadline: float | None = None
-        ) -> None:
-            """Complete missing Strategy1 producer types from CodeQL evidence."""
+        def enrich_strategy1_kafka_types(session: CallGraphSession) -> None:
+            """Complete missing Strategy1 producer types from engine evidence."""
             nonlocal all_endpoints, relations
             if topic_strategy != "strategy1":
                 return
-            evidence = extract_codeql_kafka_message_types(
-                database,
-                timeout_seconds=config.codeql_timeout_seconds,
-                threads=config.codeql_threads,
-                ram_mb=config.codeql_ram_mb,
-                deadline=deadline,
-            )
+            evidence = session.payload_types()
             by_site: dict[tuple[str, int], set[str]] = {}
             for item in evidence:
                 by_site.setdefault((item.path, item.line), set()).add(item.message_type)
@@ -720,16 +729,16 @@ def _index_repo(
             store.replace_architecture_relations(relations)
             _report_progress(
                 progress,
-                f"→ CodeQL : {completed_count} "
+                f"→ {engine_label} : {completed_count} "
                 "type(s) Kafka Strategy1 complété(s).",
             )
 
-        def persist_call_graph(call_graph: CodeQLCallGraph) -> None:
+        def persist_call_graph(call_graph: CallGraph) -> None:
             edges = list(call_graph.edges())
             if refresh_codeql_view and codeql_view_prefix:
                 prefix = codeql_view_prefix.rstrip("/") + "/"
                 methods_projection = [
-                    method for method in store.all_codeql_methods()
+                    method for method in store.all_call_graph_methods()
                     if not (
                         method.path == codeql_view_prefix
                         or method.path.startswith(prefix)
@@ -759,7 +768,7 @@ def _index_repo(
                 if locator in known_locators:
                     continue
                 module = method.path.split("/", 1)[0] if "/" in method.path else ""
-                methods_projection.append(PersistedCodeQLMethod(
+                methods_projection.append(PersistedCallGraphMethod(
                     id="codeql:" + hashlib.sha256(
                         f"{module}|{method.path}|{method.start_line}|{method.qualified_method}".encode()
                     ).hexdigest()[:24],
@@ -770,8 +779,8 @@ def _index_repo(
                     end_line=method.start_line,
                 ))
                 known_locators.add(locator)
-            store.replace_codeql_methods(methods_projection)
-            store.replace_codeql_call_edges(edges)
+            store.replace_call_graph_methods(methods_projection)
+            store.replace_call_edges(edges)
             store.set_meta(
                 "codeql_call_graph_status",
                 "partial" if codeql_timed_out else "complete",
@@ -780,10 +789,10 @@ def _index_repo(
             store.commit_checkpoint()
             _report_progress(
                 progress,
-                f"→ CodeQL : checkpoint graphe d'appels persisté · {len(edges)} arête(s).",
+                f"→ {engine_label} : checkpoint graphe d'appels persisté · {len(edges)} arête(s).",
             )
 
-        current_join_methods_signature = codeql_join_methods_signature(methods)
+        current_join_methods_signature = call_graph_join_methods_signature(methods)
         if resume_codeql_join:
             input_method_count = sum(bool(method.input_endpoint_ids) for method in methods)
             checkpoint_matches = (
@@ -793,7 +802,7 @@ def _index_repo(
             if not checkpoint_matches:
                 _report_progress(
                     progress,
-                    "→ CodeQL : checkpoint de reprise incompatible avec les méthodes "
+                    f"→ {engine_label} : checkpoint de reprise incompatible avec les méthodes "
                     "IN courantes ; reprise complète de la jointure.",
                 )
                 resume_join_entries = 0
@@ -803,22 +812,18 @@ def _index_repo(
         else:
             store.set_meta("codeql_join_methods_signature", current_join_methods_signature)
         flows = materialize_code_flows(repo_root, all_endpoints, relation_modules)
-        if (methods or refresh_codeql_view) and call_graph_engine != "none" and (
-            (call_graph_engine == "codeql" and codeql_database is not None) or engine_available
-            or refresh_codeql_view
-        ):
-            engine_label = "CodeQL"
+        if (methods or refresh_codeql_view) and engine is not None:
             if not resume_codeql_join:
                 store.delete_meta("codeql_join_completed_entries")
                 store.set_meta("codeql_join_signature", join_signature)
                 store.set_meta("codeql_join_completed_entries", "0")
                 store.set_meta("code_flow_snapshot_status", "partial")
             _report_progress(progress, f"→ {engine_label} : préparation de l'analyse interprocédurale...")
-            reachability: list[CodeQLReachability] = []
+            reachability: list[MethodReachability] = []
             prepared_codeql_flows: list[CodeFlow] | None = None
             codeql_stats: dict[str, int] = {}
-            calls: list[CodeQLCall] = []
-            codeql_method_projection: list[CodeQLMethod] = []
+            calls: list[MethodCall] = []
+            codeql_method_projection: list[SourceMethod] = []
             codeql_view_prefix = ""
             selected_view_module: DiscoveredModule | None = None
             if refresh_codeql_view and show_call_chains_module is not None:
@@ -842,7 +847,7 @@ def _index_repo(
                 completed_projects: int,
                 total_projects: int,
                 project_name: str,
-                calls: list[CodeQLCall],
+                calls: list[MethodCall],
                 project_prefix: str = "",
                 skip_materialization: bool = False,
             ) -> None:
@@ -861,8 +866,8 @@ def _index_repo(
                         )
                     ]
                 else:
-                    progress_flows = materialize_codeql_code_flows(
-                        methods, all_endpoints, calls, repo_root=repo_root,
+                    progress_flows = materialize_call_graph_flows(
+                        methods, flow_endpoints(), calls, repo_root=repo_root,
                         modules=relation_modules,
                         source_paths=list(current_hashes),
                         max_hops=config.codeql_max_hops,
@@ -909,14 +914,14 @@ def _index_repo(
                 ) or "aucun"
                 _report_progress(
                     progress,
-                    f"→ CodeQL : checkpoint {completed_projects}/{total_projects} "
+                    f"→ {engine_label} : checkpoint {completed_projects}/{total_projects} "
                     f"persisté · module {project_name} · "
                     f"IN [{input_names}] · OUT [{output_names}] · "
                     f"{len(partial_flows)} flux provisoire(s).",
                 )
                 if call_graph_progress is not None:
                     call_graph_progress(CallGraphProgress(
-                        engine=call_graph_engine,
+                        engine=engine_name,
                         completed_projects=completed_projects,
                         total_projects=total_projects,
                         project_name=project_name,
@@ -947,15 +952,15 @@ def _index_repo(
                 store.commit_checkpoint()
                 _report_progress(
                     progress,
-                    f"→ CodeQL : checkpoint jointure {completed_methods}/{total_methods} "
+                    f"→ {engine_label} : checkpoint jointure {completed_methods}/{total_methods} "
                     f"méthode(s) IN · {len(partial_flows)} flux provisoire(s).",
                 )
                 if call_graph_progress is not None:
                     call_graph_progress(CallGraphProgress(
-                        engine=call_graph_engine,
+                        engine=engine_name,
                         completed_projects=1,
                         total_projects=1,
-                        project_name="jointure CodeQL",
+                        project_name=f"jointure {engine_label}",
                         endpoints=all_endpoints,
                         modules=relation_modules,
                         relations=relations,
@@ -969,16 +974,16 @@ def _index_repo(
                     ))
 
             def report_module_progress(
-                project_calls_by_module: Sequence[tuple[str, list[CodeQLCall]]],
+                project_calls_by_module: Sequence[tuple[str, list[MethodCall]]],
                 roots: Sequence[tuple[str, Path, str]],
             ) -> None:
                 """Report module progress and optionally publish checkpoints."""
-                completed_calls: list[CodeQLCall] = []
+                completed_calls: list[MethodCall] = []
                 for number, (name, project_calls) in enumerate(project_calls_by_module, start=1):
                     module_started_at = time.perf_counter()
                     _report_progress(
                         progress,
-                        f"  • CodeQL module {number}/{len(roots)} : {name}",
+                        f"  • {engine_label} module {number}/{len(roots)} : {name}",
                     )
                     completed_calls.extend(project_calls)
                     project_prefix = next(
@@ -999,20 +1004,30 @@ def _index_repo(
                         f"en {time.perf_counter() - module_started_at:.2f} s.",
                     )
 
-            codeql_deadline = time.monotonic() + config.codeql_timeout_seconds
+            engine_deadline = time.monotonic() + config.codeql_timeout_seconds
+            roots = _call_graph_module_roots(
+                repo_root,
+                [path for path in current_hashes if path.endswith(".java")],
+                relation_modules,
+            ) or [(f"projet {engine_label}", repo_root, "")]
             try:
-                if codeql_database is not None:
-                    timer.begin(
-                        "codeql-extract",
-                        "→ CodeQL : rafraîchissement des méthodes du module..."
-                        if refresh_codeql_view
-                        else "→ CodeQL : extraction globale des appels Java depuis la base fournie...",
-                    )
-                    roots = _codeql_module_roots(
-                        repo_root,
-                        [path for path in current_hashes if path.endswith(".java")],
-                        relation_modules,
-                    ) or [("base CodeQL fournie", repo_root, "")]
+                stage = f"{engine.name}-database"
+                timer.begin(
+                    stage,
+                    f"→ {engine_label} : préparation et rafraîchissement du module..."
+                    if refresh_codeql_view
+                    else f"→ {engine_label} : préparation et extraction globale...",
+                )
+                with engine.open(EngineRequest(
+                    repo_root=repo_root,
+                    allowed_paths=list(current_hashes),
+                    timeout_seconds=config.codeql_timeout_seconds,
+                    deadline=engine_deadline,
+                    include_generated_sources=generate_sources,
+                    progress=progress,
+                    verbose=codeql_progress,
+                )) as session:
+                    enrich_strategy1_kafka_types(session)
                     if refresh_codeql_view and selected_view_module is not None:
                         roots = [(
                             module_identity(selected_view_module),
@@ -1021,204 +1036,56 @@ def _index_repo(
                         )]
                         calls = []
                     else:
-                        calls = extract_codeql_calls(
-                            codeql_database, timeout_seconds=config.codeql_timeout_seconds,
-                            threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
-                            verbosity=codeql_verbosity,
-                            progress=progress if codeql_verbosity is not None else None,
-                            deadline=codeql_deadline,
-                        )
-                    method_prefix = codeql_view_prefix if refresh_codeql_view else ""
-                    codeql_method_projection = extract_codeql_methods(
-                        codeql_database,
-                        timeout_seconds=config.codeql_timeout_seconds,
-                        threads=config.codeql_threads,
-                        ram_mb=config.codeql_ram_mb,
-                        verbosity=codeql_verbosity,
-                        progress=progress if codeql_verbosity is not None else None,
-                        deadline=codeql_deadline,
-                        source_prefix=method_prefix,
+                        calls = session.calls()
+                    codeql_method_projection = session.methods(
+                        codeql_view_prefix if refresh_codeql_view else ""
                     )
-                    enrich_strategy1_kafka_types(codeql_database, deadline=codeql_deadline)
-                    scoped_project_calls = _partition_codeql_calls(calls, roots)
-                    timer.end(
-                        "codeql-extract",
-                        "rafraîchissement des méthodes CodeQL"
-                        if refresh_codeql_view
-                        else "extraction des appels CodeQL",
-                    )
-                    reachability = [] if refresh_codeql_view else extract_codeql_reachability(
-                        codeql_database, methods,
-                        timeout_seconds=config.codeql_timeout_seconds,
-                        threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
-                        deadline=codeql_deadline,
-                    )
-                    prepared_codeql_flows = materialize_codeql_code_flows(
-                        methods, all_endpoints, calls, repo_root=repo_root,
-                        modules=relation_modules,
-                        source_paths=list(current_hashes),
-                        max_hops=config.codeql_max_hops,
-                        codeql_edge_confidence=config.codeql_edge_confidence,
-                        stats=codeql_stats, reachability=reachability,
-                        progress=progress,
-                        call_chain_progress=progress if show_call_chains else None,
-                        call_chain_module=show_call_chains_module,
-                        join_checkpoint=publish_join_checkpoint,
-                        resume_from_entry=resume_join_entries,
-                        initial_flows=resume_join_flows,
-                        call_graph_sink=persist_call_graph,
-                        persisted_edges=persisted_codeql_edges if refresh_codeql_view else None,
-                        persisted_methods=persisted_codeql_methods,
-                    )
-                    report_module_progress(scoped_project_calls, roots)
-                else:
-                    roots = _codeql_module_roots(
-                        repo_root,
-                        [path for path in current_hashes if path.endswith(".java")],
-                        relation_modules,
-                    )
-                    stage = f"{call_graph_engine}-database"
-                    timer.begin(
-                        stage,
-                        f"→ {engine_label} : création et rafraîchissement du module..."
-                        if refresh_codeql_view
-                        else f"→ {engine_label} : création et extraction globale...",
-                    )
-                    if call_graph_engine == "codeql":
-                        if codeql_verbosity is None:
-                            if generate_sources:
-                                database_context = automatic_codeql_database(
-                                    repo_root,
-                                    timeout_seconds=config.codeql_timeout_seconds,
-                                    threads=config.codeql_threads,
-                                    ram_mb=config.codeql_ram_mb,
-                                    # Source generation already ran before the
-                                    # repository inventory. Reuse its generated
-                                    # files instead of running Maven twice.
-                                    generate_sources=False,
-                                    include_target_java_sources=True,
-                                    allowed_paths=list(current_hashes),
-                                    deadline=codeql_deadline,
-                                )
-                            else:
-                                database_context = automatic_codeql_database(
-                                    repo_root,
-                                    timeout_seconds=config.codeql_timeout_seconds,
-                                    threads=config.codeql_threads,
-                                    ram_mb=config.codeql_ram_mb,
-                                    allowed_paths=list(current_hashes),
-                                    deadline=codeql_deadline,
-                                )
-                        elif generate_sources:
-                            database_context = automatic_codeql_database(
-                                repo_root,
-                                timeout_seconds=config.codeql_timeout_seconds,
-                                threads=config.codeql_threads,
-                                ram_mb=config.codeql_ram_mb,
-                                verbosity=codeql_verbosity,
-                                progress=progress,
-                                # Source generation already ran before the
-                                # repository inventory. Reuse its generated
-                                # files instead of running Maven twice.
-                                generate_sources=False,
-                                include_target_java_sources=True,
-                                allowed_paths=list(current_hashes),
-                                deadline=codeql_deadline,
-                            )
-                        else:
-                            database_context = automatic_codeql_database(
-                                repo_root,
-                                timeout_seconds=config.codeql_timeout_seconds,
-                                threads=config.codeql_threads,
-                                ram_mb=config.codeql_ram_mb,
-                                verbosity=codeql_verbosity,
-                                progress=progress,
-                                allowed_paths=list(current_hashes),
-                                deadline=codeql_deadline,
-                            )
-                        with database_context as database:
-                            assert database is not None
-                            enrich_strategy1_kafka_types(database, deadline=codeql_deadline)
-                            if refresh_codeql_view and selected_view_module is not None:
-                                roots = [(
-                                    module_identity(selected_view_module),
-                                    selected_view_module.path,
-                                    codeql_view_prefix,
-                                )]
-                                calls = []
-                            else:
-                                calls = extract_codeql_calls(
-                                    database,
-                                    timeout_seconds=config.codeql_timeout_seconds,
-                                    threads=config.codeql_threads,
-                                    ram_mb=config.codeql_ram_mb,
-                                    verbosity=codeql_verbosity,
-                                    progress=progress if codeql_verbosity is not None else None,
-                                    deadline=codeql_deadline,
-                                )
-                            method_prefix = codeql_view_prefix if refresh_codeql_view else ""
-                            codeql_method_projection = extract_codeql_methods(
-                                database,
-                                timeout_seconds=config.codeql_timeout_seconds,
-                                threads=config.codeql_threads,
-                                ram_mb=config.codeql_ram_mb,
-                                verbosity=codeql_verbosity,
-                                progress=progress if codeql_verbosity is not None else None,
-                                deadline=codeql_deadline,
-                                source_prefix=method_prefix,
-                            )
-                            scoped_project_calls = _partition_codeql_calls(calls, roots)
-                            reachability = [] if refresh_codeql_view else extract_codeql_reachability(
-                                database, methods,
-                                timeout_seconds=config.codeql_timeout_seconds,
-                                threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
-                                deadline=codeql_deadline,
-                            )
-                        prepared_codeql_flows = materialize_codeql_code_flows(
-                            methods, all_endpoints, calls, repo_root=repo_root,
-                            source_paths=list(current_hashes),
-                            max_hops=config.codeql_max_hops,
-                            codeql_edge_confidence=config.codeql_edge_confidence,
-                            stats=codeql_stats, reachability=reachability,
-                            progress=progress,
-                            call_chain_progress=progress if show_call_chains else None,
-                            call_chain_module=show_call_chains_module,
-                            join_checkpoint=publish_join_checkpoint,
-                            resume_from_entry=resume_join_entries,
-                            initial_flows=resume_join_flows,
-                            call_graph_sink=persist_call_graph,
-                            persisted_edges=persisted_codeql_edges if refresh_codeql_view else None,
-                            persisted_methods=persisted_codeql_methods,
-                        )
-                        report_module_progress(scoped_project_calls, roots)
-                    timer.end(
-                        stage,
-                        f"création et rafraîchissement du module {engine_label}"
-                        if refresh_codeql_view
-                        else f"création et extraction globale {engine_label}",
-                    )
-            except CodeQLTimeout as exc:
+                    scoped_project_calls = _partition_calls(calls, roots)
+                    reachability = [] if refresh_codeql_view else session.reachability(methods)
+                prepared_codeql_flows = materialize_call_graph_flows(
+                    methods, flow_endpoints(), calls, repo_root=repo_root,
+                    modules=relation_modules,
+                    source_paths=list(current_hashes),
+                    max_hops=config.codeql_max_hops,
+                    codeql_edge_confidence=config.codeql_edge_confidence,
+                    stats=codeql_stats, reachability=reachability,
+                    progress=progress,
+                    call_chain_progress=progress if show_call_chains else None,
+                    call_chain_module=show_call_chains_module,
+                    join_checkpoint=publish_join_checkpoint,
+                    resume_from_entry=resume_join_entries,
+                    initial_flows=resume_join_flows,
+                    call_graph_sink=persist_call_graph,
+                    persisted_edges=persisted_codeql_edges if refresh_codeql_view else None,
+                    persisted_methods=persisted_codeql_methods,
+                )
+                if not engine.resolves_types:
+                    # Without typed calls, a same-method path is already an
+                    # AST flow; only interprocedural paths add evidence.
+                    prepared_codeql_flows = [
+                        flow for flow in prepared_codeql_flows
+                        if any(step.kind == "method_call" for step in flow.steps)
+                    ]
+                report_module_progress(scoped_project_calls, roots)
+                timer.end(
+                    stage,
+                    f"préparation et rafraîchissement du module {engine_label}"
+                    if refresh_codeql_view
+                    else f"préparation et extraction globale {engine_label}",
+                )
+            except CallGraphTimeout as exc:
+                # A deadline is a soft indexing boundary. AST facts, relations
+                # and any calls obtained before it remain useful; continue so
+                # the committed snapshot can still be exported as partial.
                 calls = exc.calls
                 codeql_timed_out = True
                 reachability = []
                 _report_progress(
                     progress,
-                    "→ CodeQL : délai dépassé ; poursuite avec les faits déjà indexés "
+                    f"→ {engine_label} : délai dépassé ; poursuite avec les faits déjà indexés "
                     "et exécution des post-traitements.",
                 )
-            except subprocess.TimeoutExpired:
-                # A CodeQL deadline is a soft indexing boundary. AST facts,
-                # relations and any calls obtained before the deadline remain
-                # useful; continue with the post-processing pipeline so the
-                # committed snapshot can still be exported as a partial graph.
-                codeql_timed_out = True
-                reachability = []
-                _report_progress(
-                    progress,
-                    "→ CodeQL : délai dépassé ; poursuite avec les faits déjà indexés "
-                    "et exécution des post-traitements.",
-                )
-            except (CodeQLError, OSError) as exc:
+            except (CallGraphError, OSError) as exc:
                 raise RuntimeError(str(exc)) from exc
             if refresh_codeql_view:
                 _report_progress(
@@ -1233,8 +1100,8 @@ def _index_repo(
                     "jointure des méthodes...",
                 )
             timer.begin("call-graph-join", f"→ {engine_label} : jointure des méthodes et matérialisation des flux...")
-            codeql_flows = prepared_codeql_flows if prepared_codeql_flows is not None else materialize_codeql_code_flows(
-                methods, all_endpoints, calls, repo_root=repo_root,
+            codeql_flows = prepared_codeql_flows if prepared_codeql_flows is not None else materialize_call_graph_flows(
+                methods, flow_endpoints(), calls, repo_root=repo_root,
                 modules=relation_modules,
                 source_paths=list(current_hashes),
                 max_hops=config.codeql_max_hops,
@@ -1269,7 +1136,7 @@ def _index_repo(
             store.commit_checkpoint()
             _report_progress(
                 progress,
-                f"→ CodeQL : checkpoint input → output persisté · "
+                f"→ {engine_label} : checkpoint input → output persisté · "
                 f"{len(codeql_flows)} flux interprocédural(aux).",
             )
             timer.end("call-graph-join", f"jointure {engine_label} et matérialisation des flux")
@@ -1280,32 +1147,6 @@ def _index_repo(
                 f"{codeql_stats['explored_paths']} transition(s), "
                 f"{len(codeql_flows)} flux interprocédural(aux), "
                 f"{len(reachability)} reachability(s) directe(s).",
-            )
-        elif methods and call_graph_engine != "none":
-            _report_progress(
-                progress,
-                f"→ Indexation : {call_graph_engine} indisponible ; "
-                "parcours AST conservateurs uniquement.",
-            )
-        if methods and (
-            call_graph_engine == "none"
-            or (not engine_available and codeql_database is None)
-        ):
-            source_candidates = materialize_codeql_code_flows(
-                methods, all_endpoints, [], repo_root=repo_root,
-                modules=relation_modules,
-                source_paths=list(current_hashes),
-                max_hops=config.codeql_max_hops,
-                codeql_edge_confidence=config.codeql_edge_confidence,
-                call_chain_progress=progress if show_call_chains else None,
-                call_chain_module=show_call_chains_module,
-            )
-            source_flows = [
-                flow for flow in source_candidates
-                if any(step.kind == "method_call" for step in flow.steps)
-            ]
-            flows = _ensure_unique_code_flow_ids(
-                _deduplicate_code_flows([*flows, *source_flows], all_endpoints)
             )
         service_aliases = {
             module_identity(module): local_spring_application_names(module.path, None)
@@ -1435,7 +1276,7 @@ def index_repo(
     progress: ProgressCallback | None = None,
     kubernetes: bool = False,
     kubernetes_namespace: str | None = None,
-    codeql_database: Path | None = None,
+    call_graph_engine: CallGraphEngine | None = None,
     call_graph_progress: CallGraphProgressCallback | None = None,
     codeql_progress: bool = False,
     generate_sources: bool = False,
@@ -1444,7 +1285,11 @@ def index_repo(
     show_call_chains_module: str | None = None,
     refresh_codeql_view: bool = False,
 ) -> IndexReport:
-    """Index one repository, publishing explicit CodeQL checkpoints when needed."""
+    """Index one repository, publishing explicit call-graph checkpoints when needed.
+
+    ``call_graph_engine`` overrides the engine named by the configuration,
+    for instance a CodeQL engine bound to an existing database.
+    """
     with store.transaction():
         return _index_repo(
             repo_root,
@@ -1457,7 +1302,7 @@ def index_repo(
             progress=progress,
             kubernetes=kubernetes,
             kubernetes_namespace=kubernetes_namespace,
-            codeql_database=codeql_database,
+            call_graph_engine=call_graph_engine,
             call_graph_progress=call_graph_progress,
             codeql_progress=codeql_progress,
             generate_sources=generate_sources,

@@ -15,7 +15,7 @@ from playwright.sync_api import Playwright, sync_playwright
 
 from systemlens.domain.models import GraphFact, MessageEndpoint, compute_endpoint_id
 from systemlens.domain.graph import GraphEdge
-from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, CodeQLCallGraphEdge, IntegrationMethod
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, CallGraphEdge, IntegrationMethod
 from systemlens.domain.module_inventory import DiscoveredModule, JpaEntity, MongoField, MongoPersistenceClass
 from systemlens.render import render_graph_html
 
@@ -404,7 +404,7 @@ def test_strategy1_call_tree_shows_called_consume_signature() -> None:
         {"publisher": [producer], "orders": [consumer]},
         [GraphEdge("kafka", "publisher", "orders", producer, consumer)],
         code_flows=[flow], integration_methods=[listener, consume],
-        codeql_call_edges=[CodeQLCallGraphEdge(
+        codeql_call_edges=[CallGraphEdge(
             "listener", "consume", "Listener.java", 5, "exact",
         )],
         strategy1=True,

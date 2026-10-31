@@ -155,10 +155,20 @@ dependencies. The configured CodeQL thread count and optional RAM limit are
 passed to database creation and query execution only; they tune performance and
 do not alter or invalidate persisted architecture facts.
 
-When CodeQL is disabled or unavailable, a source symbol pass follows
-receiver-typed calls between indexed Java methods. It keeps these candidates at
-low confidence and drops ambiguous overloads, while retaining an ambiguous
-receiver type long enough to apply module-scoped interface dispatch.
+Indexing asks the configured engine (ADR-61) for calls through
+`callgraph.engine.CallGraphEngine`; it never imports an engine module. A
+source symbol pass then follows receiver-typed calls between indexed Java
+methods: with the `source` engine it is the whole call graph, with `codeql`
+it fills the gaps. A call is `exact` when the receiver's own declared class
+owns one concrete matching method, and `possible` otherwise. The pass drops
+ambiguous overloads while retaining an ambiguous receiver type long enough
+to apply module-scoped interface dispatch.
+Each Spring `@Scheduled` method yields a transient scheduler trigger, used
+only while flows are built and never persisted as an endpoint. It makes the
+method an input of the call graph, so a scheduler that publishes through
+other classes gets an interprocedural flow. Without it, the dominant lab
+flow, a scheduler publishing `supermarket.order.placed` through a workflow
+class, had no selectable root.
 The same-method AST materializer records JPA and Mongo accesses in scheduled
 methods alongside their publications. It also persists a scheduled method
 whose only indexed effect is a data access. Such a data-only flow remains

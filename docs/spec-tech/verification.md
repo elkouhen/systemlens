@@ -79,7 +79,9 @@ instead of claiming which of those two internal steps lost the call.
 
 Tests that verify AST extraction, module identity, DTO persistence, same-method
 flows, or workspace federation configure `call_graph_engine="none"`. They must
-not start a real CodeQL analysis as an incidental side effect.
+not start a real CodeQL analysis as an incidental side effect. Tests of the
+CodeQL engine patch `systemlens.engines.codeql`; `test_call_graph_engines.py`
+checks that the indexing core never imports that adapter.
 
 Three default tests wait for a one-second subprocess deadline. They verify that
 CodeQL progress handling times out while reading stdout and terminates a child

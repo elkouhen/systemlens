@@ -8,7 +8,7 @@ from tree_sitter import Node
 
 from systemlens.discovery.java import parser
 from systemlens.domain.code_flows import IntegrationMethod
-from systemlens.indexing.codeql import CodeQLCall
+from systemlens.callgraph.model import MethodCall
 
 
 _SCALAR_TYPES = {
@@ -137,7 +137,7 @@ def _is_reassigned(body: Node, source: bytes, name: str) -> bool:
 
 
 def _call_argument(
-    root: Node, source: bytes, caller_node: Node, call: CodeQLCall,
+    root: Node, source: bytes, caller_node: Node, call: MethodCall,
     callee_name: str, index: int,
 ) -> str | None:
     candidates: list[list[Node]] = []
@@ -158,7 +158,7 @@ def _call_argument(
 
 def trace_scalar_key_identity(
     repo_root: Path,
-    route: Sequence[tuple[IntegrationMethod, CodeQLCall, bool]],
+    route: Sequence[tuple[IntegrationMethod, MethodCall, bool]],
     entry: IntegrationMethod,
     current: IntegrationMethod,
     expression: str | None,

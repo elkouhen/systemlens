@@ -2,7 +2,8 @@ import json
 import os
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Literal, Optional, cast
+from collections.abc import Callable
+from typing import Literal, Optional, TypeVar, cast
 
 import typer
 
@@ -74,11 +75,16 @@ from systemlens.domain.graph import (
     graph_edges_from_relations,
     group_endpoints_by_module,
 )
-from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge
+from systemlens.domain.code_flows import CodeFlow, CallGraphEdge
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.indexing.service import CallGraphProgress, index_repo
-from systemlens.indexing.code_flows import materialize_codeql_code_flows
-from systemlens.indexing.codeql import extract_codeql_calls, extract_codeql_methods
+from systemlens.indexing.code_flows import materialize_call_graph_flows
+from systemlens.callgraph.engine import CallGraphSession, EngineRequest
+from systemlens.application.engine_comparison import (
+    compare_engines,
+    render_engine_comparison_text,
+)
+from systemlens.callgraph.registry import load_engine
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.models import ExtractionDiagnostic
 from systemlens.domain.runtime import RuntimeErrorGroup, RuntimeObservation
@@ -1210,7 +1216,7 @@ def analyze_call_edge(
             )
         }
     direct_codeql_methods = (
-        extract_codeql_methods(codeql_database)
+        _database_session_query(repo_root, codeql_database, lambda session: session.methods())
         if codeql_database is not None else None
     )
     result = diagnose_call_edge(
@@ -1240,6 +1246,46 @@ def analyze_call_edges(
         json.dumps(result)
         if _option_json(json_output)
         else render_call_edges_text(result)
+    )
+
+
+@analyze_app.command("compare-engines")
+def analyze_compare_engines(
+    engines: str = typer.Option(
+        "codeql,source", "--engines",
+        help="Deux moteurs séparés par une virgule, parmi codeql et source.",
+    ),
+    root: Path | None = typer.Option(
+        None, "--root", help="Répertoire indexé à analyser."
+    ),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Comparer les flux et arêtes d'appel de deux moteurs, sans rien persister."""
+    repo_root = _option_root(root)
+    names = [name.strip() for name in engines.split(",") if name.strip()]
+    try:
+        config = load_config(repo_root)
+        loaded = [
+            load_engine(name, threads=config.codeql_threads, ram_mb=config.codeql_ram_mb)
+            for name in names
+        ]
+        if any(engine is None for engine in loaded):
+            raise ValueError("Le moteur `none` ne construit aucun graphe d'appel à comparer.")
+        with Store(repo_root, readonly=True) as store:
+            result = compare_engines(
+                store,
+                [engine for engine in loaded if engine is not None],
+                timeout_seconds=config.codeql_timeout_seconds,
+                max_hops=config.codeql_max_hops,
+                edge_confidence=config.codeql_edge_confidence,
+            )
+    except (ConfigError, StoreError, ValueError, RuntimeError) as exc:
+        typer.echo(f"Comparaison impossible : {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(
+        json.dumps(result, ensure_ascii=False)
+        if _option_json(json_output)
+        else render_engine_comparison_text(result)
     )
 
 
@@ -1512,12 +1558,15 @@ def index_cmd(
     no_codeql: bool = typer.Option(
         False,
         "--no-codeql",
-        help="Désactive CodeQL pour cette indexation ; conserve les flux AST locaux.",
+        help="Désactive CodeQL pour cette indexation ; équivaut à `--call-graph-engine source`.",
     ),
-    call_graph_engine: Optional[Literal["codeql", "none"]] = typer.Option(
+    call_graph_engine: Optional[Literal["codeql", "source", "none"]] = typer.Option(
         None,
         "--call-graph-engine",
-        help="Moteur des flux interprocéduraux : codeql ou none.",
+        help=(
+            "Moteur des flux interprocéduraux : codeql (types résolus, CLI CodeQL requise), "
+            "source (tree-sitter, sans dépendance) ou none (flux d'une seule méthode)."
+        ),
     ),
     codeql_edge_confidence: Optional[Literal["exact", "possible"]] = typer.Option(
         None,
@@ -1623,7 +1672,7 @@ def index_cmd(
                 store.all_endpoints(),
                 selected_module.name,
                 store.all_integration_methods(),
-                store.all_codeql_call_edges(),
+                store.all_call_edges(),
             )
         typer.echo(render_internal_flow_debug_text(debug))
         return
@@ -1660,8 +1709,8 @@ def index_cmd(
     if generate_sources and codeql_database is not None:
         typer.echo("`--generate-sources` ne peut pas être combiné avec `--codeql-database`.", err=True)
         raise typer.Exit(code=2)
-    if no_codeql and call_graph_engine not in (None, "none"):
-        typer.echo("`--no-codeql` ne peut pas être combiné avec un moteur d'appels de méthodes.", err=True)
+    if no_codeql and call_graph_engine not in (None, "source"):
+        typer.echo("`--no-codeql` ne peut pas être combiné avec un autre moteur que `source`.", err=True)
         raise typer.Exit(code=2)
     try:
         config = load_config(repo_root)
@@ -1669,7 +1718,7 @@ def index_cmd(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
     if no_codeql:
-        config = replace(config, codeql_enabled=False, call_graph_engine="none")
+        config = replace(config, codeql_enabled=False, call_graph_engine="source")
     elif call_graph_engine is not None:
         config = replace(config, call_graph_engine=call_graph_engine)
     if codeql_edge_confidence is not None:
@@ -1740,7 +1789,13 @@ def index_cmd(
                 topic_strategy=topic_strategy,
                 kubernetes=kubernetes,
                 kubernetes_namespace=kubernetes_namespace,
-                codeql_database=codeql_database,
+                call_graph_engine=(
+                    load_engine(
+                        "codeql", database=codeql_database,
+                        threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                    )
+                    if codeql_database is not None else None
+                ),
                 call_graph_progress=write_codeql_progress if codeql_progress_html is not None else None,
                 codeql_progress=codeql_progress,
                 generate_sources=generate_sources,
@@ -1786,7 +1841,7 @@ def index_cmd(
         with Store(repo_root, readonly=True) as store:
             debug_flows = store.all_code_flows()
             direct_methods = store.all_integration_methods()
-            persisted_codeql_methods = store.all_codeql_methods()
+            persisted_codeql_methods = store.all_call_graph_methods()
             debug_methods: list[IntegrationMethod] | None = [
                 *direct_methods,
                 *[
@@ -1804,13 +1859,15 @@ def index_cmd(
                     if method.id not in {item.id for item in direct_methods}
                 ],
             ]
-            debug_edges: list[CodeQLCallGraphEdge] | None = store.all_codeql_call_edges()
+            debug_edges: list[CallGraphEdge] | None = store.all_call_edges()
             if codeql_database is not None and not persisted_codeql_methods:
                 # Persisted call edges intentionally contain only the endpoint
                 # anchors. Re-query the supplied database so ordinary methods
                 # between IN and OUT remain visible in this diagnostic.
-                direct_calls = extract_codeql_calls(codeql_database)
-                direct_flows = materialize_codeql_code_flows(
+                direct_calls = _database_session_query(
+                    repo_root, codeql_database, lambda session: session.calls(),
+                )
+                direct_flows = materialize_call_graph_flows(
                     direct_methods,
                     store.all_endpoints(),
                     direct_calls,
@@ -1832,7 +1889,7 @@ def index_cmd(
                 # No indexing stage ran. Replay the live reverse walk from the
                 # persisted CodeQL graph so --show-call-chains remains useful
                 # on an unchanged snapshot.
-                materialize_codeql_code_flows(
+                materialize_call_graph_flows(
                     store.all_integration_methods(),
                     store.all_endpoints(),
                     [],
@@ -1840,8 +1897,8 @@ def index_cmd(
                     modules=store.all_modules(),
                     call_chain_progress=_echo_only_constructed_chains,
                     call_chain_module=selected_module.name,
-                    persisted_edges=store.all_codeql_call_edges(),
-                    persisted_methods=store.all_codeql_methods(),
+                    persisted_edges=store.all_call_edges(),
+                    persisted_methods=store.all_call_graph_methods(),
                 )
             debug = internal_flow_debug(
                 debug_flows,
@@ -1943,7 +2000,7 @@ class _MicroserviceGraphData:
     code_flows: list[CodeFlow] | None = None
     integration_methods: list[IntegrationMethod] | None = None
     architecture_relations: list[ArchitectureRelation] | None = None
-    codeql_call_edges: list[CodeQLCallGraphEdge] | None = None
+    codeql_call_edges: list[CallGraphEdge] | None = None
     flow_descriptions: dict[str, str] | None = None
     runtime_observations: list[RuntimeObservation] | None = None
     runtime_errors: list[RuntimeErrorGroup] | None = None
@@ -3150,6 +3207,19 @@ def import_facts_cmd(
         err=True,
     )
 
+
+
+_QueryResult = TypeVar("_QueryResult")
+
+
+def _database_session_query(
+    repo_root: Path, database: Path, query: Callable[[CallGraphSession], _QueryResult],
+) -> _QueryResult:
+    """Run one query against an existing CodeQL database through its engine."""
+    engine = load_engine("codeql", database=database)
+    assert engine is not None
+    with engine.open(EngineRequest(repo_root=repo_root, allowed_paths=(), timeout_seconds=600)) as session:
+        return query(session)
 
 
 def _configured_runtime(repo_root: Path) -> tuple[dict[str, str], list[str]]:

@@ -22,7 +22,7 @@ from systemlens.domain.module_inventory import (
     MongoPersistenceClass,
     module_identity,
 )
-from systemlens.domain.code_flows import CodeFlow, CodeQLCallGraphEdge, IntegrationMethod
+from systemlens.domain.code_flows import CodeFlow, CallGraphEdge, IntegrationMethod
 from systemlens.domain.mongo_operations import mongo_facets
 from systemlens.render.namespaces import project_namespace, project_namespace_path
 from systemlens.render.software_layers import software_layer
@@ -151,7 +151,7 @@ def build_graph_view_model(
     architecture_relations: list[ArchitectureRelation] | None = None,
     integration_methods: list[IntegrationMethod] | None = None,
     code_flows: list[CodeFlow] | None = None,
-    codeql_call_edges: list[CodeQLCallGraphEdge] | None = None,
+    codeql_call_edges: list[CallGraphEdge] | None = None,
 ) -> dict[str, object]:
     """Render an interactive Sigma.js graph as a self-contained HTML document.
 

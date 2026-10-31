@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 
 from systemlens.domain.code_flows import (
-    CodeQLCallGraphEdge,
+    CallGraphEdge,
     IntegrationMethod,
-    PersistedCodeQLMethod,
+    PersistedCallGraphMethod,
 )
 from systemlens.domain.models import (
     ArchitectureRelation,
@@ -58,20 +58,20 @@ def test_storage_preserves_duplicate_generated_ids(tmp_path: Path) -> None:
 
 def test_storage_deduplicates_exact_composite_rows(tmp_path: Path) -> None:
     dependency = ModuleDependency("orders", "billing")
-    edge = CodeQLCallGraphEdge("caller", "callee", "Orders.java", 10, "exact", False)
+    edge = CallGraphEdge("caller", "callee", "Orders.java", 10, "exact", False)
     diagnostic = ExtractionDiagnostic("Orders.java", "java", "parse_failed", "warning", "partial")
     with Store(tmp_path) as store:
         store.replace_module_dependencies([dependency, dependency])
-        store.replace_codeql_call_edges([edge, edge])
+        store.replace_call_edges([edge, edge])
         store.replace_extraction_diagnostics_for_files(["Orders.java"], [diagnostic, diagnostic])
 
         assert store.all_module_dependencies() == [dependency]
-        assert store.all_codeql_call_edges() == [edge]
+        assert store.all_call_edges() == [edge]
         assert store.all_extraction_diagnostics() == [diagnostic]
 
 
 def test_storage_persists_codeql_method_projection(tmp_path: Path) -> None:
-    method = PersistedCodeQLMethod(
+    method = PersistedCallGraphMethod(
         id="codeql:helper",
         module="orders",
         qualified_method="orders.Service.helper",
@@ -80,9 +80,9 @@ def test_storage_persists_codeql_method_projection(tmp_path: Path) -> None:
         end_line=16,
     )
     with Store(tmp_path) as store:
-        store.replace_codeql_methods([method])
+        store.replace_call_graph_methods([method])
 
-        assert store.all_codeql_methods() == [method]
+        assert store.all_call_graph_methods() == [method]
 
 
 def test_integration_method_signatures_survive_storage_and_legacy_migration(tmp_path: Path) -> None:

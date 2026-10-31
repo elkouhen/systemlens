@@ -14,7 +14,7 @@ from tree_sitter import Node
 
 from systemlens.discovery.java import parser
 from systemlens.domain.code_flows import IntegrationMethod
-from systemlens.indexing.codeql import CodeQLCall
+from systemlens.callgraph.model import MethodCall
 
 
 _TYPES = {"class_declaration", "interface_declaration", "record_declaration", "enum_declaration"}
@@ -495,8 +495,12 @@ class JavaSymbols:
             ) if type_node is not None else None)
         return next(iter(returns)) if len(returns) == 1 else None
 
-    def fallback_calls(self, resolved_sites: set[tuple[str, int, str]]) -> list[CodeQLCall]:
-        calls: list[CodeQLCall] = []
+    def _declared_concretely(self, method: IntegrationMethod, receiver_type: str) -> bool:
+        info = self.methods.get(method.id)
+        return info is not None and info.concrete and info.owner == receiver_type
+
+    def fallback_calls(self, resolved_sites: set[tuple[str, int, str]]) -> list[MethodCall]:
+        calls: list[MethodCall] = []
         for info in self.methods.values():
             if not info.concrete:
                 continue
@@ -525,11 +529,19 @@ class JavaSymbols:
                     )
                 if not targets:
                     continue
+                # A concrete method declared by the receiver's own type is an
+                # exact call. Interface dispatch to a unique source
+                # implementation stays possible: dependencies may add others.
+                dispatch = (
+                    "exact"
+                    if len(targets) == 1 and self._declared_concretely(targets[0], receiver_type)
+                    else "possible"
+                )
                 for target in targets:
                     if (info.method.id, line, target.id) in resolved_sites:
                         continue
-                    calls.append(CodeQLCall(
+                    calls.append(MethodCall(
                         info.method.qualified_method, info.method.path, info.method.start_line,
-                        target.qualified_method, target.path, target.start_line, line, "possible",
+                        target.qualified_method, target.path, target.start_line, line, dispatch,
                     ))
         return calls

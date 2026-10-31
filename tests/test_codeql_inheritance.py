@@ -8,11 +8,11 @@ import shutil
 import pytest
 
 from systemlens.domain.models import MessageEndpoint
-from systemlens.domain.code_flows import CodeQLCallGraphEdge, PersistedCodeQLMethod
+from systemlens.domain.code_flows import CallGraphEdge, PersistedCallGraphMethod
 from systemlens.domain.module_inventory import DiscoveredModule
-from systemlens.indexing.code_flows import materialize_codeql_code_flows
-from systemlens.indexing.codeql import (
-    CodeQLCall, CodeQLReachability, automatic_codeql_database,
+from systemlens.indexing.code_flows import materialize_call_graph_flows
+from systemlens.engines.codeql import (
+    MethodCall, MethodReachability, automatic_codeql_database,
     extract_codeql_calls, extract_codeql_reachability,
 )
 from systemlens.indexing.integration_methods import materialize_integration_methods
@@ -75,7 +75,7 @@ public class Other {
 
 def test_ast_cross_module_abstract_dispatch_through_empty_base_and_helper(tmp_path: Path):
     methods, endpoints = _project(tmp_path, SOURCES)
-    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(SOURCES))
+    flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(SOURCES))
     assert len(flows) == 1
     assert flows[0].steps[-1].path == "impl/Concrete.java"
     assert flows[0].confidence == "low"
@@ -95,10 +95,10 @@ def test_codeql_unnamed_package_marker_joins_to_indexed_method(tmp_path: Path):
     output = next(method for method in methods if method.qualified_method == "Controller.output")
     persisted_edges = []
 
-    materialize_codeql_code_flows(
+    materialize_call_graph_flows(
         methods,
         endpoints,
-        [CodeQLCall(
+        [MethodCall(
             "$.Controller.entry", entry.path, entry.start_line,
             "$.Controller.output", output.path, output.start_line,
             entry.start_line,
@@ -131,7 +131,7 @@ public class OrderController {
     }
     methods, endpoints = _project(tmp_path, sources)
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods,
         endpoints,
         [],
@@ -171,10 +171,10 @@ public class OrderController {
     )
     persisted_edges = []
 
-    materialize_codeql_code_flows(
+    materialize_call_graph_flows(
         methods,
         endpoints,
-        [CodeQLCall(
+        [MethodCall(
             "orders.OrderController.entry",
             "orders/OrderController.java",
             4,
@@ -230,7 +230,7 @@ public class OrderController {
         if method.qualified_method == "orders.OrderServiceImpl.reserve"
     )
     persisted_methods = [
-        PersistedCodeQLMethod(
+        PersistedCallGraphMethod(
             id=method.id,
             module=method.module,
             qualified_method=method.qualified_method,
@@ -240,7 +240,7 @@ public class OrderController {
         )
         for method in methods
     ]
-    persisted_edges = [CodeQLCallGraphEdge(
+    persisted_edges = [CallGraphEdge(
         caller_id=entry.id,
         callee_id=interface_method.id,
         path=entry.path,
@@ -248,7 +248,7 @@ public class OrderController {
         dispatch_confidence="possible",
     )]
     rehydrated_edges = []
-    materialize_codeql_code_flows(
+    materialize_call_graph_flows(
         methods,
         endpoints,
         [],
@@ -280,13 +280,13 @@ public class OrderController {
     methods, endpoints = _project(tmp_path, sources)
     caller = next(method for method in methods if method.qualified_method.endswith("OrderController.entry"))
     helper = next(method for method in methods if method.qualified_method.endswith("OrderController.helper"))
-    calls = [CodeQLCall(
+    calls = [MethodCall(
         caller.qualified_method, caller.path, caller.start_line,
         helper.qualified_method, helper.path, helper.start_line,
         caller.start_line, "exact",
     )]
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, calls, repo_root=tmp_path, source_paths=list(sources),
     )
 
@@ -318,7 +318,7 @@ public class OrderController {
     }
     methods, endpoints = _project(tmp_path, sources)
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
     )
 
@@ -427,7 +427,7 @@ public class OrderHandler {
     }
     methods, endpoints = _project(tmp_path, sources)
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods,
         endpoints,
         [],
@@ -452,7 +452,7 @@ public abstract class Base {
 """,
                "web/Controller.java": SOURCES["web/Controller.java"].replace("service.execute(value)", "service.process(value)")}
     methods, endpoints = _project(tmp_path, sources)
-    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources))
+    flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources))
     assert len(flows) == 1
     assert [step.name for step in flows[0].steps[1:-1]] == [
         "api.Base.process", "impl.Concrete.execute", "impl.Concrete.output",
@@ -478,7 +478,7 @@ public class Consumer extends BaseConsumer {
     }
     methods, endpoints = _project(tmp_path, sources)
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources)
     )
 
@@ -493,7 +493,7 @@ public class Consumer extends BaseConsumer {
 def test_duplicate_qualified_types_across_modules_keep_ambiguous_candidates(tmp_path: Path):
     sources = {**SOURCES, "duplicate/Concrete.java": SOURCES["impl/Concrete.java"]}
     methods, endpoints = _project(tmp_path, sources)
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources)
     )
     assert {flow.steps[-1].path for flow in flows} == {
@@ -545,7 +545,7 @@ public class Concrete extends api.Base {
         "web/Controller.java": "package web; public class Controller { impl.Concrete service; public void entry() { service.execute(); } }",
     }
     methods, endpoints = _project(tmp_path, sources)
-    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources))
+    flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources))
     assert len(flows) == 1
     assert flows[0].steps[-1].path == "impl/Concrete.java"
 
@@ -554,9 +554,9 @@ def test_abstract_bridge_checks_signature_and_hierarchy(tmp_path: Path):
     methods, endpoints = _project(tmp_path, SOURCES)
     entry = next(method for method in methods if method.input_endpoint_ids)
     contract = next(method for method in methods if method.qualified_method == "api.Base.execute")
-    call = CodeQLCall(entry.qualified_method, entry.path, entry.start_line,
+    call = MethodCall(entry.qualified_method, entry.path, entry.start_line,
                       contract.qualified_method, contract.path, contract.start_line, entry.start_line, "possible")
-    flows = materialize_codeql_code_flows(methods, endpoints, [call], repo_root=tmp_path, source_paths=list(SOURCES))
+    flows = materialize_call_graph_flows(methods, endpoints, [call], repo_root=tmp_path, source_paths=list(SOURCES))
     assert len(flows) == 1
     assert flows[0].steps[-1].path == "impl/Concrete.java"
 
@@ -570,16 +570,16 @@ def test_unrelated_or_incompatible_method_does_not_bridge(tmp_path: Path, implem
     methods, endpoints = _project(tmp_path, sources)
     entry = next(method for method in methods if method.input_endpoint_ids)
     contract = next(method for method in methods if method.qualified_method == "api.Base.execute")
-    call = CodeQLCall(entry.qualified_method, entry.path, entry.start_line,
+    call = MethodCall(entry.qualified_method, entry.path, entry.start_line,
                       contract.qualified_method, contract.path, contract.start_line, entry.start_line, "possible")
-    assert materialize_codeql_code_flows(methods, endpoints, [call], repo_root=tmp_path, source_paths=list(sources)) == []
+    assert materialize_call_graph_flows(methods, endpoints, [call], repo_root=tmp_path, source_paths=list(sources)) == []
 
 
 def test_multiple_real_implementations_remain_unresolved(tmp_path: Path):
     sources = {**SOURCES, "impl/Second.java":
                "package impl; public class Second extends api.Base { public void execute(String v) { otherOutput(); } void otherOutput() {} }"}
     methods, endpoints = _project(tmp_path, sources)
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources)
     )
     assert {flow.steps[-1].path for flow in flows} == {
@@ -606,7 +606,7 @@ def test_interface_dispatch_prefers_the_callers_module(tmp_path: Path):
     }
     methods, endpoints = _project(tmp_path, sources)
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources)
     )
 
@@ -632,7 +632,7 @@ def test_internal_flow_scopes_duplicate_interface_implementations_by_module(tmp_
     }
     methods, endpoints = _project(tmp_path, sources)
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods,
         endpoints,
         [],
@@ -662,7 +662,7 @@ def test_internal_flow_resolves_ambiguous_shared_interfaces_by_caller_module(tmp
     }
     methods, endpoints = _project(tmp_path, sources)
 
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods,
         endpoints,
         [],
@@ -677,7 +677,7 @@ def test_qualified_import_does_not_merge_same_simple_type_names(tmp_path: Path):
     sources = {**SOURCES, "unrelated/Base.java": "package unrelated; public abstract class Base { public abstract void execute(String v); }",
                "unrelated/Other.java": "package unrelated; public class Other extends Base { public void execute(String v) { otherOutput(); } void otherOutput() {} }"}
     methods, endpoints = _project(tmp_path, sources)
-    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources))
+    flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources))
     assert len(flows) == 1
     assert flows[0].steps[-1].path == "impl/Concrete.java"
 
@@ -686,9 +686,9 @@ def test_partial_reachability_keeps_fallback_and_direct_pair(tmp_path: Path):
     methods, endpoints = _project(tmp_path, SOURCES)
     entry = next(method for method in methods if method.input_endpoint_ids)
     target = next(method for method in methods if method.qualified_method == "unrelated.Other.otherOutput")
-    relation = CodeQLReachability(entry.qualified_method, entry.path, entry.start_line,
+    relation = MethodReachability(entry.qualified_method, entry.path, entry.start_line,
                                   target.qualified_method, target.path, target.start_line, "medium")
-    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path,
+    flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path,
                                         source_paths=list(SOURCES), reachability=[relation])
     assert {flow.steps[-1].path for flow in flows} == {"impl/Concrete.java", "unrelated/Other.java"}
     direct = next(flow for flow in flows if flow.steps[-1].path == target.path)
@@ -700,9 +700,9 @@ def test_direct_proof_replaces_fallback_without_synthetic_witness(tmp_path: Path
     methods, endpoints = _project(tmp_path, SOURCES)
     entry = next(method for method in methods if method.input_endpoint_ids)
     target = next(method for method in methods if method.qualified_method == "impl.Concrete.output")
-    relation = CodeQLReachability(entry.qualified_method, entry.path, entry.start_line,
+    relation = MethodReachability(entry.qualified_method, entry.path, entry.start_line,
                                   target.qualified_method, target.path, target.start_line, "medium")
-    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path,
+    flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path,
                                         source_paths=list(SOURCES), reachability=[relation])
     assert len(flows) == 1
     assert flows[0].confidence == "medium"
@@ -736,9 +736,9 @@ def test_many_direct_outputs_share_one_predecessor_search(tmp_path: Path, monkey
     targets = [replace(template, id=f"method-{i}", qualified_method=f"impl.Sink{i}.output",
                        path=f"impl/Sink{i}.java", output_endpoint_ids=(f"output-{i}",)) for i in range(100)]
     target_endpoints = [replace(endpoint, id=method.output_endpoint_ids[0], path=method.path) for method in targets]
-    calls = [CodeQLCall(entry.qualified_method, entry.path, entry.start_line,
+    calls = [MethodCall(entry.qualified_method, entry.path, entry.start_line,
                         target.qualified_method, target.path, target.start_line, entry.start_line) for target in targets]
-    relations = [CodeQLReachability(entry.qualified_method, entry.path, entry.start_line,
+    relations = [MethodReachability(entry.qualified_method, entry.path, entry.start_line,
                                     target.qualified_method, target.path, target.start_line, "medium") for target in targets]
     popped = 0
 
@@ -750,7 +750,7 @@ def test_many_direct_outputs_share_one_predecessor_search(tmp_path: Path, monkey
 
     monkeypatch.setattr("systemlens.indexing.code_flows.deque", CountedDeque)
     stats = {}
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         [entry, *targets], [*endpoints, *target_endpoints], calls,
         reachability=relations, stats=stats,
     )
@@ -767,12 +767,12 @@ def test_medium_proof_never_uses_shorter_possible_dispatch_route(tmp_path: Path)
     target = next(method for method in methods if method.qualified_method == "impl.Concrete.output")
 
     def call(source, target, confidence="exact"):
-        return CodeQLCall(source.qualified_method, source.path, source.start_line,
+        return MethodCall(source.qualified_method, source.path, source.start_line,
                           target.qualified_method, target.path, target.start_line, source.start_line, confidence)
 
-    relation = CodeQLReachability(entry.qualified_method, entry.path, entry.start_line,
+    relation = MethodReachability(entry.qualified_method, entry.path, entry.start_line,
                                   target.qualified_method, target.path, target.start_line, "medium")
-    flows = materialize_codeql_code_flows(methods, endpoints,
+    flows = materialize_call_graph_flows(methods, endpoints,
                                         [call(entry, target, "possible"), call(entry, helper), call(helper, target)],
                                         reachability=[relation])
     assert len(flows) == 1
@@ -789,7 +789,7 @@ public class Controller {
 }
 """}
     methods, endpoints = _project(tmp_path, sources)
-    flows = materialize_codeql_code_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources))
+    flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources))
     assert len(flows) == 1
     assert flows[0].steps[-1].path == "impl/Concrete.java"
 
@@ -809,7 +809,7 @@ def test_real_codeql_cross_module_inheritance_and_csv_contract(tmp_path: Path):
         relations = extract_codeql_reachability(database, methods, timeout_seconds=180, threads=2)
     assert any(call.callee == "impl.Concrete.output" for call in calls)
     assert any(relation.target == "impl.Concrete.output" for relation in relations)
-    flows = materialize_codeql_code_flows(methods, endpoints, calls, reachability=relations)
+    flows = materialize_call_graph_flows(methods, endpoints, calls, reachability=relations)
     assert any(flow.steps[-1].path == "impl/Concrete.java" for flow in flows)
 
 
@@ -844,7 +844,7 @@ public class OrderController {
         and call.callee.endswith(("OrderService.reserve", "OrderServiceImpl.reserve"))
         for call in calls
     )
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, calls, reachability=relations,
         repo_root=tmp_path, source_paths=list(sources),
     )
@@ -884,11 +884,11 @@ public class Controller {{
     methods, endpoints = _project(tmp_path, sources)
     caller = next(m for m in methods if m.qualified_method == "app.Controller.entry")
     contract = next(m for m in methods if m.qualified_method == "app.Port.send")
-    calls = [CodeQLCall(caller.qualified_method, caller.path, caller.start_line,
+    calls = [MethodCall(caller.qualified_method, caller.path, caller.start_line,
                         contract.qualified_method, contract.path, contract.start_line,
                         caller.start_line, "possible")] if contract_call else []
     edges = []
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, calls, repo_root=tmp_path, source_paths=list(sources),
         call_graph_sink=lambda graph: edges.extend(graph.edges()),
     )
@@ -924,10 +924,10 @@ def test_interface_implementation_inherited_from_unrelated_base(
     methods, endpoints = _project(tmp_path, sources)
     caller = next(m for m in methods if m.qualified_method == "app.Controller.entry")
     contract = next(m for m in methods if m.qualified_method == "app.Port.send")
-    calls = [CodeQLCall(caller.qualified_method, caller.path, caller.start_line,
+    calls = [MethodCall(caller.qualified_method, caller.path, caller.start_line,
                         contract.qualified_method, contract.path, contract.start_line,
                         caller.start_line, "possible")] if contract_call else []
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, calls, repo_root=tmp_path, source_paths=list(sources),
     )
     assert {f.steps[-1].path for f in flows} == (
@@ -954,7 +954,7 @@ def test_declared_getter_return_type_reaches_interface_implementation(tmp_path: 
 }}""",
     }
     methods, endpoints = _project(tmp_path, sources)
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
     )
     assert len(flows) == 1
@@ -980,7 +980,7 @@ def test_unresolved_or_overloaded_getter_does_not_guess_receiver(tmp_path: Path,
 }}""",
     }
     methods, endpoints = _project(tmp_path, sources)
-    assert materialize_codeql_code_flows(
+    assert materialize_call_graph_flows(
         methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
     ) == []
 
@@ -1028,7 +1028,7 @@ def test_static_base_receiver_keeps_base_and_known_override_candidates(tmp_path:
 }""",
     }
     methods, endpoints = _project(tmp_path, sources)
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
     )
     assert {flow.steps[-1].path for flow in flows} == {
@@ -1054,7 +1054,7 @@ def test_inherited_template_dispatch_stays_on_entry_subtype(tmp_path: Path):
 }""",
     }
     methods, endpoints = _project(tmp_path, sources)
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
     )
     assert {(flow.method, flow.steps[-1].path) for flow in flows} == {
@@ -1074,7 +1074,7 @@ def test_super_dispatch_targets_direct_parent_body(tmp_path: Path):
 }""",
     }
     methods, endpoints = _project(tmp_path, sources)
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
     )
     assert len(flows) == 1
@@ -1108,7 +1108,7 @@ def test_generic_interface_keeps_known_parameter_constraints(tmp_path: Path):
 }""",
     }
     methods, endpoints = _project(tmp_path, sources)
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
     )
     assert len(flows) == 1
@@ -1132,7 +1132,7 @@ def test_inherited_final_generic_method_has_source_backed_fallback(tmp_path: Pat
         and call.callee == "shared.Base.consumeMessage"
         for call in symbols.fallback_calls(set())
     )
-    flows = materialize_codeql_code_flows(
+    flows = materialize_call_graph_flows(
         methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
     )
     assert any(flow.steps[0].name.startswith("GET /") and

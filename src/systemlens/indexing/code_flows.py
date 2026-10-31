@@ -13,49 +13,50 @@ from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.code_flows import (
     CodeFlow,
     CodeFlowStep,
-    CodeQLCallGraphEdge,
+    CallGraphEdge,
     compute_code_flow_id,
     ensure_unique_code_flow_ids,
-    PersistedCodeQLMethod,
+    PersistedCallGraphMethod,
 )
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, JpaMethod, MongoMethod, module_identity
 from systemlens.domain.mongo_operations import mongo_action, mongo_facets
-from systemlens.indexing.codeql import CodeQLCall, CodeQLReachability
+from systemlens.callgraph.model import MethodCall, MethodReachability
+from systemlens.indexing.integration_methods import SCHEDULER_TRIGGER
 from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import is_java_literal, trace_scalar_key_identity
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v35-call-key-propagation"
+CODE_FLOW_SIGNATURE = "code-flow-v36-scheduled-entries"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
 
-CodeQLEdge = tuple[IntegrationMethod, CodeQLCall, bool]
+CallEdgeEntry = tuple[IntegrationMethod, MethodCall, bool]
 
 
 @dataclass(frozen=True)
-class CodeQLCallGraph:
+class CallGraph:
     """The source-backed internal call graph used for flow reconstruction."""
 
-    adjacency: dict[str, list[CodeQLEdge]]
-    synthetic_calls: set[CodeQLCall]
+    adjacency: dict[str, list[CallEdgeEntry]]
+    synthetic_calls: set[MethodCall]
     call_count: int
     locate: Callable[[str, str, int], tuple[IntegrationMethod, bool] | None]
-    methods: tuple[PersistedCodeQLMethod, ...] = ()
+    methods: tuple[PersistedCallGraphMethod, ...] = ()
     symbols: JavaSymbols | None = None
 
     @property
     def joined_calls(self) -> int:
         return sum(len(targets) for targets in self.adjacency.values())
 
-    def edges(self) -> tuple[CodeQLCallGraphEdge, ...]:
+    def edges(self) -> tuple[CallGraphEdge, ...]:
         """Return deterministic persisted edges for the internal call graph."""
         return tuple(sorted(
             (
-                CodeQLCallGraphEdge(
+                CallGraphEdge(
                     caller_id=caller_id,
                     callee_id=callee.id,
                     path=call.caller_path.replace("\\", "/").removeprefix("./"),
@@ -111,7 +112,7 @@ class CodeQLCallGraph:
         return tuple(sorted(components, key=lambda component: min(component)))
 
 
-def codeql_join_methods_signature(methods: Sequence[IntegrationMethod]) -> str:
+def call_graph_join_methods_signature(methods: Sequence[IntegrationMethod]) -> str:
     """Fingerprint the ordered input-method list used by resumable joins."""
     input_methods = [method for method in methods if method.input_endpoint_ids]
     payload = repr([
@@ -230,6 +231,12 @@ _ensure_unique_code_flow_ids = ensure_unique_code_flow_ids
 
 
 def _endpoint_step(endpoint: MessageEndpoint, order: int) -> CodeFlowStep:
+    if (endpoint.system, endpoint.role) == SCHEDULER_TRIGGER:
+        # Scheduler triggers are transient, so the step names no endpoint.
+        return CodeFlowStep(
+            order=order, kind="cron_entry", name=endpoint.topic, path=endpoint.path,
+            start_line=endpoint.start_line, end_line=endpoint.end_line,
+        )
     kind = {
         ("rest", "serve"): "http_entry",
         ("kafka", "consume"): "message_entry",
@@ -554,17 +561,17 @@ def materialize_code_flows(
     ))
 
 
-def _build_codeql_call_graph(
+def _build_call_graph(
     methods: list[IntegrationMethod],
-    calls: list[CodeQLCall],
+    calls: list[MethodCall],
     *,
     repo_root: Path | None,
     source_paths: Sequence[str],
     progress: Callable[[str], None] | None,
-    persisted_edges: Sequence[CodeQLCallGraphEdge] | None = None,
-    persisted_methods: Sequence[PersistedCodeQLMethod] = (),
-) -> CodeQLCallGraph:
-    """Resolve CodeQL rows into the internal graph consumed by reconstruction."""
+    persisted_edges: Sequence[CallGraphEdge] | None = None,
+    persisted_methods: Sequence[PersistedCallGraphMethod] = (),
+) -> CallGraph:
+    """Resolve engine call rows into the internal graph consumed by reconstruction."""
     def prefer_caller_module(
         candidates: Sequence[IntegrationMethod], caller: IntegrationMethod,
     ) -> tuple[IntegrationMethod, ...]:
@@ -666,9 +673,9 @@ def _build_codeql_call_graph(
         method.id: method for method in [*methods, *transient_methods.values()]
     }
 
-    def method_facts(values: dict[str, IntegrationMethod]) -> tuple[PersistedCodeQLMethod, ...]:
+    def method_facts(values: dict[str, IntegrationMethod]) -> tuple[PersistedCallGraphMethod, ...]:
         return tuple(
-            PersistedCodeQLMethod(
+            PersistedCallGraphMethod(
                 id=method.id,
                 module=method.module,
                 qualified_method=method.qualified_method,
@@ -704,7 +711,7 @@ def _build_codeql_call_graph(
                 return candidates[0], True
         return None
 
-    def locate_caller(call: CodeQLCall) -> IntegrationMethod | None:
+    def locate_caller(call: MethodCall) -> IntegrationMethod | None:
         resolved = locate(call.caller, call.caller_path, call.caller_line)
         if resolved is not None:
             return resolved[0]
@@ -716,15 +723,15 @@ def _build_codeql_call_graph(
         ]
         return min(enclosing, key=lambda item: item.end_line - item.start_line) if enclosing else None
 
-    adjacency: dict[str, list[CodeQLEdge]] = defaultdict(list)
+    adjacency: dict[str, list[CallEdgeEntry]] = defaultdict(list)
     symbols = JavaSymbols(repo_root, methods, source_paths) if repo_root is not None else None
     implementation_targets: dict[tuple[str, str], tuple[IntegrationMethod, ...]] = {}
     resolved_sites: set[tuple[str, int, str]] = set()
     seen_edges: set[tuple[str, str, int, str, bool]] = set()
-    synthetic_calls: set[CodeQLCall] = set()
+    synthetic_calls: set[MethodCall] = set()
 
     def add_edge(
-        caller: IntegrationMethod, callee: IntegrationMethod, call: CodeQLCall,
+        caller: IntegrationMethod, callee: IntegrationMethod, call: MethodCall,
         inferred: bool = False,
     ) -> None:
         key = (caller.id, callee.id, call.call_line, call.dispatch_confidence, inferred)
@@ -755,7 +762,7 @@ def _build_codeql_call_graph(
             add_edge(
                 caller,
                 callee,
-                CodeQLCall(
+                MethodCall(
                     caller=caller.qualified_method,
                     caller_path=caller.path,
                     caller_line=caller.start_line,
@@ -779,7 +786,7 @@ def _build_codeql_call_graph(
                         ),
                     )
                     for candidate in candidates:
-                        synthetic = CodeQLCall(
+                        synthetic = MethodCall(
                             caller=caller.qualified_method,
                             caller_path=caller.path,
                             caller_line=caller.start_line,
@@ -791,7 +798,7 @@ def _build_codeql_call_graph(
                         )
                         synthetic_calls.add(synthetic)
                         add_edge(caller, candidate, synthetic, True)
-        return CodeQLCallGraph(
+        return CallGraph(
             adjacency=adjacency,
             synthetic_calls=synthetic_calls,
             call_count=len(persisted_edges),
@@ -806,7 +813,7 @@ def _build_codeql_call_graph(
         now = time.monotonic()
         if now - last_report_at >= 5.0:
             report(
-                f"→ CodeQL : rattachement des appels en cours · "
+                f"→ Graphe d'appel : rattachement des appels en cours · "
                 f"{call_number - 1}/{len(calls)} appel(s) analysé(s) · "
                 f"{sum(len(targets) for targets in adjacency.values())} "
                 f"rattachement(s) · {now - started_at:.0f} s."
@@ -848,9 +855,11 @@ def _build_codeql_call_graph(
             resolved_target = locate(call.callee, call.callee_path, call.callee_line)
             if caller is not None and resolved_target is not None:
                 synthetic_calls.add(call)
-                add_edge(caller, resolved_target[0], call, True)
+                # An exact source call names its target from the declared
+                # receiver type; only candidate dispatch is an inference.
+                add_edge(caller, resolved_target[0], call, call.dispatch_confidence != "exact")
 
-    return CodeQLCallGraph(
+    return CallGraph(
         adjacency=adjacency,
         synthetic_calls=synthetic_calls,
         call_count=len(calls),
@@ -860,12 +869,12 @@ def _build_codeql_call_graph(
     )
 
 
-def materialize_codeql_code_flows(
-    methods: list[IntegrationMethod], endpoints: list[MessageEndpoint], calls: list[CodeQLCall],
+def materialize_call_graph_flows(
+    methods: list[IntegrationMethod], endpoints: list[MessageEndpoint], calls: list[MethodCall],
     *, repo_root: Path | None = None, max_hops: int = 12,
     module: str | None = None,
     stats: dict[str, int] | None = None,
-    reachability: Sequence[CodeQLReachability] = (),
+    reachability: Sequence[MethodReachability] = (),
     source_paths: Sequence[str] = (),
     progress: Callable[[str], None] | None = None,
     call_chain_progress: Callable[[str], None] | None = None,
@@ -873,15 +882,15 @@ def materialize_codeql_code_flows(
     join_checkpoint: Callable[[list[CodeFlow], int, int], None] | None = None,
     resume_from_entry: int = 0,
     initial_flows: Sequence[CodeFlow] = (),
-    call_graph_sink: Callable[[CodeQLCallGraph], None] | None = None,
+    call_graph_sink: Callable[[CallGraph], None] | None = None,
     codeql_edge_confidence: str = "possible",
-    persisted_edges: Sequence[CodeQLCallGraphEdge] | None = None,
-    persisted_methods: Sequence[PersistedCodeQLMethod] = (),
+    persisted_edges: Sequence[CallGraphEdge] | None = None,
+    persisted_methods: Sequence[PersistedCallGraphMethod] = (),
     modules: Sequence[DiscoveredModule] = (),
 ) -> list[CodeFlow]:
-    """Reconstruct endpoint flows from the internal CodeQL call graph.
+    """Reconstruct endpoint flows from the internal method-call graph.
 
-    The call graph is built first from source-located CodeQL rows. This phase
+    The call graph is built first from source-located engine rows. This phase
     then traverses its edges from indexed inputs to indexed outputs. Missing or
     imperfect virtual-dispatch edges may be completed by the transient source
     symbol index, but every synthetic edge remains possible/low-confidence.
@@ -894,13 +903,19 @@ def materialize_codeql_code_flows(
 
     def record_flow(flow: CodeFlow) -> None:
         """Keep one representative while counting distinct route alternatives."""
-        endpoint_steps = [step for step in flow.steps if step.endpoint_id]
+        endpoint_steps = [
+            step for step in flow.steps if step.endpoint_id or step.kind == "cron_entry"
+        ]
         data_step = (
             flow.steps[-1] if flow.steps and flow.steps[-1].kind in {"data_read", "data_write"} else None
         )
+
+        def anchor(step: CodeFlowStep) -> str:
+            return step.endpoint_id or f"{step.kind}:{step.path}:{step.start_line}"
+
         key = (
-            (endpoint_steps[0].endpoint_id or flow.id) if endpoint_steps else flow.id,
-            (endpoint_steps[-1].endpoint_id or "") if len(endpoint_steps) > 1 else
+            anchor(endpoint_steps[0]) if endpoint_steps else flow.id,
+            anchor(endpoint_steps[-1]) if len(endpoint_steps) > 1 else
             f"data:{data_step.path}:{data_step.start_line}:{data_step.operation}"
             if data_step is not None else "",
             flow.status,
@@ -958,7 +973,7 @@ def materialize_codeql_code_flows(
     def report_live_chain(
         entry: IntegrationMethod,
         trigger: MessageEndpoint,
-        route: list[tuple[IntegrationMethod, CodeQLCall, bool]],
+        route: list[tuple[IntegrationMethod, MethodCall, bool]],
         *,
         output: MessageEndpoint | None = None,
         stop_reason: str | None = None,
@@ -981,11 +996,11 @@ def materialize_codeql_code_flows(
         call_chain_progress(f"  ↳ {prefix} : {' -> '.join(parts)}")
 
     report(
-        f"→ CodeQL : jointure de {len(calls)} appel(s) avec "
+        f"→ Graphe d'appel : jointure de {len(calls)} appel(s) avec "
         f"{len(methods)} méthode(s) Java..."
     )
     call_join_started_at = time.monotonic()
-    call_graph = _build_codeql_call_graph(
+    call_graph = _build_call_graph(
         methods,
         calls,
         repo_root=repo_root,
@@ -1003,7 +1018,7 @@ def materialize_codeql_code_flows(
     locate = call_graph.locate
     if codeql_edge_confidence not in {"exact", "possible"}:
         raise ValueError(
-            f"Invalid CodeQL edge confidence {codeql_edge_confidence!r}; "
+            f"Invalid call-graph edge confidence {codeql_edge_confidence!r}; "
             "expected 'exact' or 'possible'."
         )
     if codeql_edge_confidence == "exact":
@@ -1017,7 +1032,7 @@ def materialize_codeql_code_flows(
         }
     joined_calls = sum(len(targets) for targets in adjacency.values())
     report(
-        f"→ CodeQL : graphe d'appels interne construit · {joined_calls} "
+        f"→ Graphe d'appel : graphe d'appels interne construit · {joined_calls} "
         f"arête(s) rattachée(s) à {len(adjacency)} méthode(s) appelante(s)."
     )
 
@@ -1069,7 +1084,7 @@ def materialize_codeql_code_flows(
     def report_reverse_chain(
         output_method: IntegrationMethod,
         output: MessageEndpoint,
-        route: list[tuple[IntegrationMethod, CodeQLCall, bool]],
+        route: list[tuple[IntegrationMethod, MethodCall, bool]],
         *,
         input_endpoint: MessageEndpoint | None = None,
         stop_reason: str | None = None,
@@ -1099,7 +1114,7 @@ def materialize_codeql_code_flows(
 
     methods_by_id = {method.id: method for method in methods}
     reverse_adjacency: dict[
-        str, list[tuple[IntegrationMethod, CodeQLCall, bool]]
+        str, list[tuple[IntegrationMethod, MethodCall, bool]]
     ] = defaultdict(list)
     for caller_id, targets in adjacency.items():
         caller = methods_by_id.get(caller_id)
@@ -1125,16 +1140,16 @@ def materialize_codeql_code_flows(
                     continue
                 reported_output_endpoint_ids.add(output.id)
                 queue = deque[
-                    tuple[IntegrationMethod, list[tuple[IntegrationMethod, CodeQLCall, bool]]]
+                    tuple[IntegrationMethod, list[tuple[IntegrationMethod, MethodCall, bool]]]
                 ]([(output_method, [])])
                 reverse_terminal_routes: dict[
                     tuple[tuple[str, ...], str],
-                    list[tuple[IntegrationMethod, CodeQLCall, bool]],
+                    list[tuple[IntegrationMethod, MethodCall, bool]],
                 ] = {}
                 report_reverse_chain(output_method, output, [], explored=True)
 
                 def remember_reverse_terminal(
-                    route: list[tuple[IntegrationMethod, CodeQLCall, bool]],
+                    route: list[tuple[IntegrationMethod, MethodCall, bool]],
                     reason: str,
                 ) -> None:
                     key = (
@@ -1203,10 +1218,10 @@ def materialize_codeql_code_flows(
         for method_id in component
     }
     report(
-        f"→ CodeQL : {len(components)} composante(s) connexe(s) dans le "
+        f"→ Graphe d'appel : {len(components)} composante(s) connexe(s) dans le "
         "graphe d'appels interne."
     )
-    report("→ CodeQL : reconstruction des parcours input → output...")
+    report("→ Graphe d'appel : reconstruction des parcours input → output...")
 
     # Contract-only HTTP inputs (for example generated OpenAPI interfaces)
     # have no source endpoint path for the AST materializer. If the same
@@ -1226,7 +1241,7 @@ def materialize_codeql_code_flows(
 
     if resume_from_entry < 0 or resume_from_entry > len(input_methods):
         raise ValueError(
-            f"Invalid CodeQL join resume offset {resume_from_entry}; "
+            f"Invalid call-graph join resume offset {resume_from_entry}; "
             f"expected 0..{len(input_methods)}."
         )
     explored_entries = resume_from_entry
@@ -1301,15 +1316,15 @@ def materialize_codeql_code_flows(
             trigger = endpoint_by_id.get(trigger_id)
             if trigger is None:
                 continue
-            queue = deque[tuple[IntegrationMethod, list[tuple[IntegrationMethod, CodeQLCall, bool]]]]([(entry, [])])
+            queue = deque[tuple[IntegrationMethod, list[tuple[IntegrationMethod, MethodCall, bool]]]]([(entry, [])])
             visited: set[tuple[str, bool]] = {(entry.id, False)}
             terminal_routes: dict[
                 tuple[tuple[str, ...], str],
-                list[tuple[IntegrationMethod, CodeQLCall, bool]],
+                list[tuple[IntegrationMethod, MethodCall, bool]],
             ] = {}
 
             def remember_terminal(
-                route: list[tuple[IntegrationMethod, CodeQLCall, bool]],
+                route: list[tuple[IntegrationMethod, MethodCall, bool]],
                 reason: str,
             ) -> None:
                 key = (tuple(hop.qualified_method for hop, _call, _inferred in route), reason)
@@ -1388,7 +1403,7 @@ def materialize_codeql_code_flows(
                     now = time.monotonic()
                     if now - last_exploration_report_at >= 5.0:
                         report(
-                            f"→ CodeQL : jointure en cours · méthode IN "
+                            f"→ Graphe d'appel : jointure en cours · méthode IN "
                             f"{explored_entries + 1}/{len(input_methods)} · "
                             f"{explored} transition(s) explorée(s) · "
                             f"{len(current_flows())} flux... "
@@ -1420,7 +1435,7 @@ def materialize_codeql_code_flows(
                                 for _hop, edge, signature in next_route
                             ) else "medium",
                             reason=(
-                                "CodeQL found a cyclic call path from this indexed entry method."
+                                "The call graph has a cyclic call path from this indexed entry method."
                             ),
                             steps=tuple(steps),
                         ))
@@ -1460,12 +1475,12 @@ def materialize_codeql_code_flows(
                                     "A source-declared Java dispatch fallback connects an indexed entry to an output through qualified types and compatible method signatures."
                                     if any(edge in synthetic_calls for _hop, edge, _signature in next_route)
                                     else
-                                    "A unique indexed method signature joined a module-local CodeQL call."
+                                    "A unique indexed method signature joined a module-local engine call."
                                     if has_signature_join
                                     else
-                                    "CodeQL found a possible virtual-dispatch path from an indexed entry method to an indexed output method."
+                                    "The call graph has a possible virtual-dispatch path from an indexed entry method to an indexed output method."
                                     if has_possible_dispatch
-                                    else "CodeQL resolved a static call path from an indexed entry method to an indexed output method."
+                                    else "The call graph resolved a static call path from an indexed entry method to an indexed output method."
                                 ),
                                 steps=tuple([*steps, _endpoint_step(output, len(steps) + 1)]),
                             ))
@@ -1487,7 +1502,7 @@ def materialize_codeql_code_flows(
             or now - last_exploration_report_at >= 5.0
         ):
             report(
-                f"→ CodeQL : jointure en cours · méthode IN "
+                f"→ Graphe d'appel : jointure en cours · méthode IN "
                 f"{explored_entries}/{len(input_methods)} · "
                 f"{explored} transition(s) explorée(s) · {len(current_flows())} flux... "
                 f"({now - call_join_started_at:.0f} s)"
@@ -1504,19 +1519,19 @@ def materialize_codeql_code_flows(
     if reachability:
         # One predecessor tree per source/confidence, not a BFS per pair.
         tree_cache: dict[
-            tuple[str, str], dict[str, tuple[str, IntegrationMethod, CodeQLCall, bool]]
+            tuple[str, str], dict[str, tuple[str, IntegrationMethod, MethodCall, bool]]
         ] = {}
         max_cached_trees = 8
         direct_flows: dict[tuple[str, str], CodeFlow] = {}
 
         def representative_route(
             source: IntegrationMethod, target: IntegrationMethod, confidence: str
-        ) -> list[tuple[IntegrationMethod, CodeQLCall, bool]]:
+        ) -> list[tuple[IntegrationMethod, MethodCall, bool]]:
             key = (source.id, confidence)
             if key not in tree_cache:
                 if len(tree_cache) >= max_cached_trees:
                     tree_cache.pop(next(iter(tree_cache)))
-                predecessors: dict[str, tuple[str, IntegrationMethod, CodeQLCall, bool]] = {}
+                predecessors: dict[str, tuple[str, IntegrationMethod, MethodCall, bool]] = {}
                 queue = deque([source.id])
                 visited = {source.id}
                 while queue:
@@ -1537,7 +1552,7 @@ def materialize_codeql_code_flows(
                         queue.append(candidate.id)
                 tree_cache[key] = predecessors
             predecessors = tree_cache[key]
-            route: list[tuple[IntegrationMethod, CodeQLCall, bool]] = []
+            route: list[tuple[IntegrationMethod, MethodCall, bool]] = []
             current_id = target.id
             while current_id != source.id:
                 previous = predecessors.get(current_id)
@@ -1593,10 +1608,10 @@ def materialize_codeql_code_flows(
                         end_line=source_method.end_line,
                         status="potential", confidence=relation.confidence,
                         reason=(
-                            "CodeQL directly proved reverse reachability from the indexed output "
+                            "The engine directly proved reverse reachability from the indexed output "
                             "method to the indexed input method."
                             if not route else
-                            "CodeQL proved reverse reachability and the indexed method-call graph "
+                            "The engine proved reverse reachability and the indexed method-call graph "
                             "provided a representative intermediate route."
                         ),
                         steps=tuple([*steps, _endpoint_step(output, len(steps) + 1)]),
@@ -1608,7 +1623,7 @@ def materialize_codeql_code_flows(
         ]
         replace_flows([*retained_flows, *direct_flows.values()])
     report(
-        f"→ CodeQL : jointure terminée · {explored} transition(s), "
+        f"→ Graphe d'appel : jointure terminée · {explored} transition(s), "
         f"{len(reachability)} reachability(s), {len(current_flows())} flux dédupliqué(s)."
     )
     return _ensure_unique_code_flow_ids(_deduplicate_code_flows(current_flows(), endpoints))

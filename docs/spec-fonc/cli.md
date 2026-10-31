@@ -121,7 +121,7 @@ manifests:
 - Module diagnostics: `--refresh-codeql-view`, `--internal-flows-only`, and
   `--show-call-chains`.
 - Runtime inventory: `--kubernetes` and `--kubernetes-namespace NAME`.
-- Method calls: `--call-graph-engine codeql|none`,
+- Method calls: `--call-graph-engine codeql|source|none`,
   `--codeql-edge-confidence exact|possible`, `--codeql-database DIR`,
   `--generate-sources`, and the `--no-codeql` alias.
 - Progress and recovery: `--codeql-progress`, `--codeql-progress-html FILE`,
@@ -159,8 +159,10 @@ persisted snapshot and prints only the selected module's internal-flow
 diagnosis. The snapshot can include shared Java methods and cross-module call
 edges from the preceding global index.
 
-With `--no-codeql`, the CLI reports that the result is AST-only and that
-dynamic or interprocedural calls may remain incomplete. After
+With `--no-codeql` or `--call-graph-engine source`, interprocedural calls come
+from the tree-sitter source engine: declared receiver types, imports,
+inheritance, and unique interface implementations. Dynamic calls, lambdas,
+and generic dispatch may remain incomplete. After
 `systemlens import-facts`, the JSON result remains on stdout; the CLI prints
 `systemlens flows calculate` on stderr as the next step for interactive users.
 
@@ -254,7 +256,14 @@ source-owning project for the same module progress reporting.
 
 `--strategy strategy1` is opt-in. The selected strategy is persisted with
 the index and reused by incremental indexing and all derived views.
-`analysis.call_graph_engine` accepts `codeql` (default) or `none`.
+`analysis.call_graph_engine` accepts `codeql` (default), `source`, or `none`.
+
+- `codeql` resolves calls from CodeQL's typed program model. It needs the
+  CodeQL CLI. When the CLI is missing, indexing says so and uses `source`.
+- `source` resolves calls from tree-sitter syntax and declared types. It needs
+  no external tool. A call is `exact` only when the receiver's own declared
+  class owns one concrete matching method; interface dispatch stays `possible`.
+- `none` builds no interprocedural path: only same-method flows remain.
 `analysis.codeql_edge_confidence` accepts `exact` or `possible`. The default
 `possible` keeps possible dispatch and inferred bridges as low-confidence flow
 evidence; `exact` excludes them from flow reconstruction.
@@ -263,7 +272,12 @@ The automatic CodeQL projection preserves Java sources below
 `target/generated-sources` so generated AsyncAPI/OpenAPI types remain
 available; other build outputs and build descriptors are excluded.
 `--call-graph-engine` selects the method-call engine for one run and does not modify
-`.systemlens/config.yml`. `--no-codeql` remains a legacy AST-only alias.
+`.systemlens/config.yml`. `--no-codeql` is an alias of `--call-graph-engine source`.
+
+`systemlens analyze compare-engines [--engines codeql,source] [--root DIR]
+[--json]` rebuilds interprocedural flows from the persisted index with two
+engines and reports the flows and call edges both find, those only one finds,
+and confidence changes. It persists nothing. Both engines must be available.
 
 `--codeql-progress-html FILE` is an opt-in progress aid: after each completed
 CodeQL project it atomically replaces `FILE` with a graph labelled as
