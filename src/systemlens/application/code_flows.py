@@ -1014,13 +1014,32 @@ def render_code_flow_text(item: dict[str, object]) -> str:
         assert isinstance(step, dict)
         lines.append(
             f"  {step['order']}. {step['kind']} {step['name']} "
-            f"({step['path']}:{step['start_line']})"
+            f"({step['path']}:{step['start_line']}){_data_step_suffix(step)}"
         )
     tree = item.get("tree")
     if isinstance(tree, dict):
         lines.append("Call tree:")
         _render_flow_tree_text(tree, lines)
     return "\n".join(lines)
+
+
+def _data_step_suffix(step: dict[str, object]) -> str:
+    """Describe the persisted operation facts behind a data step."""
+    if step.get("kind") not in DATA_STEP_KINDS:
+        return ""
+    parts = [f"{step.get('operation') or '?'} -> {step.get('action') or 'unknown'}"]
+    resource = step.get("resource_identity") or step.get("resource")
+    parts.append(f"resource={resource or 'unresolved'}")
+    if step.get("key"):
+        parts.append(f"key={step['key']}")
+    parts.append(f"guard={step.get('guard') or 'none-established'}")
+    transaction = step.get("transaction_id")
+    isolation = step.get("isolation")
+    parts.append(
+        f"transaction={transaction}{f' isolation={isolation}' if isolation else ''}"
+        if transaction else "transaction=unknown"
+    )
+    return "  [" + " ".join(parts) + "]"
 
 
 def _render_flow_tree_text(

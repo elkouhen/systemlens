@@ -2446,7 +2446,7 @@ def _render_inventory_coverage(repo_root: Path, json_output: bool) -> None:
         inventory.relations,
         strategy1=inventory.strategy1,
     )
-    result = inventory_coverage(catalog, list(catalog.relations))
+    result = inventory_coverage(catalog, list(catalog.relations), inventory.data_operations)
     _emit_architecture(result, json_output)
 
 

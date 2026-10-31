@@ -17,6 +17,7 @@ from systemlens.domain.graph import (
     graph_edge_rest_resource,
     resolve_rest_target_service,
 )
+from systemlens.domain.data_operations import TECHNOLOGIES, DataOperation
 from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 
@@ -838,8 +839,53 @@ def endpoint_implementation(catalog: ArchitectureCatalog, endpoint_id: str) -> d
     }
 
 
+def persistence_coverage(operations: Sequence[DataOperation]) -> dict[str, object]:
+    """Count supported, partial and unsupported operations per technology.
+
+    Every technology the extractors know is listed, with zero counts when
+    the index holds no operation of that kind, so a JDBC-heavy module whose
+    statements are dynamic is visibly partial rather than silently absent.
+    Each operation with an unresolved reason is listed individually.
+    """
+    by_technology: dict[str, dict[str, int]] = {
+        technology: {"operations": 0, "supported": 0, "partial": 0, "unsupported": 0}
+        for technology in TECHNOLOGIES
+    }
+    unresolved: list[dict[str, object]] = []
+    for operation in operations:
+        counts = by_technology.setdefault(
+            operation.technology,
+            {"operations": 0, "supported": 0, "partial": 0, "unsupported": 0},
+        )
+        counts["operations"] += 1
+        counts[operation.coverage] += 1
+        if operation.unresolved_reason:
+            unresolved.append({
+                "module": operation.module,
+                "technology": operation.technology,
+                "operation": operation.operation,
+                "action": operation.action,
+                "resource": operation.resource,
+                "path": operation.path,
+                "line": operation.line,
+                "reason": operation.unresolved_reason,
+            })
+    return {
+        "technologies": by_technology,
+        "unresolved_operations": unresolved,
+        "note": (
+            "Operations are source-level attempts. Supported means action and "
+            "resource are established; partial means one of them is; unsupported "
+            "means neither. JDBC covers literal single-statement SQL on "
+            "JdbcTemplate receivers only."
+        ),
+    }
+
+
 def inventory_coverage(
-    catalog: ArchitectureCatalog, relations: list[ArchitectureRelation]
+    catalog: ArchitectureCatalog,
+    relations: list[ArchitectureRelation],
+    data_operations: Sequence[DataOperation] = (),
 ) -> dict[str, object]:
     """Summarize known and unresolved architecture facts without source code."""
     kafka_endpoints = [endpoint for endpoint in catalog.endpoints if endpoint.system == "kafka"]
@@ -885,6 +931,7 @@ def inventory_coverage(
             "unmatched_http_calls": [unresolved(endpoint) for endpoint in unmatched_calls[:20]],
             "truncated": any(len(items) > 20 for items in (dynamic_topics, unknown_types, unmatched_calls)),
         },
+        "persistence": persistence_coverage(data_operations),
     }
 
 

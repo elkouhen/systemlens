@@ -13,6 +13,8 @@ from typing import Literal, cast
 
 from systemlens.domain.graph import group_endpoints_by_module
 from systemlens.domain.code_flows import CodeFlow, CallGraphEdge, IntegrationMethod
+from systemlens.domain.data_operation_projection import data_operations_from_modules
+from systemlens.domain.data_operations import DataOperation
 from systemlens.indexing.freshness import endpoint_inventory_warning
 from systemlens.domain.models import ArchitectureRelation, ExtractionDiagnostic, Finding, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
@@ -76,6 +78,8 @@ class ArchitectureInventory:
     kafka_dto_definitions: list[dict[str, object]] | None = None
     openapi_contracts: list[dict[str, object]] | None = None
     asyncapi_contracts: list[dict[str, object]] | None = None
+    # Typed data operations; an older index projects its module inventory.
+    data_operations: list[DataOperation] = field(default_factory=list)
 
     @property
     def strategy1(self) -> bool:
@@ -167,6 +171,9 @@ def load_architecture_inventory(
         kafka_dto_definitions = store.all_kafka_dto_definitions()
         openapi_contracts = store.all_openapi_contracts()
         asyncapi_contracts = store.all_asyncapi_contracts()
+        data_operations = store.all_data_operations() or data_operations_from_modules(
+            repo_root, modules,
+        )
         warning = endpoint_inventory_warning(
             store.get_meta("endpoint_inventory_signature"),
             scope="ce projet",
@@ -214,4 +221,5 @@ def load_architecture_inventory(
         kafka_dto_definitions=kafka_dto_definitions,
         openapi_contracts=openapi_contracts,
         asyncapi_contracts=asyncapi_contracts,
+        data_operations=data_operations,
     )

@@ -828,3 +828,99 @@ def test_materialized_flows_carry_value_dependencies_and_after_commit_phase(tmp_
         ("dual_write", "potential_dual_write"),
         ("read_modify_write", "potential_lost_update"),
     ]
+
+
+# --- Surfaces: coverage, flows show, export annotations ---------------------
+
+import json  # noqa: E402
+import re  # noqa: E402
+
+from typer.testing import CliRunner  # noqa: E402
+
+from systemlens.application.architecture import persistence_coverage  # noqa: E402
+from systemlens.delivery.cli import app  # noqa: E402
+from systemlens.render import render_graph_html  # noqa: E402
+
+
+def _mixed_repository(root: Path) -> None:
+    controller = _jpa_repository(root)
+    _write(controller.parent / "ReportDao.java", (
+        "package example;\nimport org.springframework.jdbc.core.JdbcTemplate;\n"
+        "import org.springframework.kafka.core.KafkaTemplate;\n"
+        "import org.springframework.web.bind.annotation.*;\n"
+        "@RestController class ReportDao {\n  private JdbcTemplate jdbc;\n"
+        "  private KafkaTemplate<String, String> kafka;\n"
+        "  @GetMapping(\"/reports\") int count(String table) {\n"
+        "    jdbc.update(\"DELETE FROM reports WHERE id = ?\", 1);\n"
+        "    kafka.send(\"reports.events\", table);\n"
+        "    return jdbc.queryForObject(\"SELECT count(*) FROM \" + table, Integer.class);\n"
+        "  }\n}\n"
+    ))
+
+
+def test_analyze_coverage_lists_persistence_technologies_and_unknown_operations(tmp_path: Path) -> None:
+    _mixed_repository(tmp_path)
+    with Store(tmp_path) as store:
+        index_repo(tmp_path, CONFIG, store, full=True)
+
+    result = CliRunner().invoke(app, ["analyze", "coverage", "--root", str(tmp_path), "--json"])
+
+    assert result.exit_code == 0, result.output
+    persistence = json.loads(result.output)["persistence"]
+    assert persistence["technologies"] == {
+        "mongodb": {"operations": 0, "supported": 0, "partial": 0, "unsupported": 0},
+        "jpa": {"operations": 2, "supported": 2, "partial": 0, "unsupported": 0},
+        "jdbc": {"operations": 2, "supported": 1, "partial": 1, "unsupported": 0},
+    }
+    [unresolved] = persistence["unresolved_operations"]
+    assert unresolved["technology"] == "jdbc" and unresolved["operation"] == "queryForObject"
+    assert unresolved["reason"] == "SQL string is concatenated"
+    assert unresolved["path"].endswith("ReportDao.java") and not unresolved["path"].startswith("/")
+    assert "source-level attempts" in persistence["note"]
+    assert persistence_coverage([])["technologies"]["jdbc"]["operations"] == 0
+
+
+def test_flows_show_and_html_describe_the_same_operation_without_sources(tmp_path: Path) -> None:
+    _mixed_repository(tmp_path)
+    with Store(tmp_path) as store:
+        index_repo(tmp_path, CONFIG, store, full=True)
+        flows = store.all_code_flows()
+        endpoints = store.all_endpoints()
+    shutil.rmtree(tmp_path / "src")
+    delete_flow = next(
+        flow for flow in flows
+        if any(step.operation == "update" and step.kind == "data_write" for step in flow.steps)
+    )
+    delete_step = next(step for step in delete_flow.steps if step.operation == "update")
+
+    shown = CliRunner().invoke(app, ["flows", "show", delete_flow.id, "--root", str(tmp_path)])
+    assert shown.exit_code == 0, shown.output
+    step_line = next(line for line in shown.output.splitlines() if "data_write" in line)
+    assert "update -> delete" in step_line
+    assert "resource=jdbc:orders:reports" in step_line
+    assert "key=1" in step_line
+    assert "guard=none-established" in step_line and "transaction=unknown" in step_line
+
+    shown_json = CliRunner().invoke(app, ["flows", "show", delete_flow.id, "--root", str(tmp_path), "--json"])
+    steps = json.loads(shown_json.output)["steps"]
+    assert delete_step.operation_id in {step["operation_id"] for step in steps}
+
+    document = render_graph_html(
+        {"orders": endpoints}, [], code_flows=flows, modules_by_service={},
+    )
+    match = re.search(r'<script id="graph-data" type="application/json">(.*)</script>', document)
+    assert match is not None
+    data = json.loads(match.group(1))
+    accesses = [
+        access for items in data["flow_data_accesses"].values() for access in items
+        if access.get("operation_id") == delete_step.operation_id
+    ]
+    assert accesses and accesses[0]["technology"] == "jdbc"
+    assert accesses[0]["resource"] == "jdbc:orders:reports"
+    assert accesses[0]["guard"] is None and accesses[0]["transaction_id"] is None
+    concatenated = [
+        access for items in data["flow_data_accesses"].values() for access in items
+        if access.get("operation") == "queryForObject"
+    ]
+    assert concatenated and concatenated[0]["technology"] is None
+    assert concatenated[0]["resource"] == "<unresolved>" and concatenated[0]["action"] == "read"

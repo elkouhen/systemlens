@@ -369,6 +369,15 @@ def render_graph_html(
                     "line": step.start_line,
                     "confidence": flow.confidence,
                     "branch": step.branch,
+                    "operation": step.operation,
+                    "operation_id": step.operation_id,
+                    "technology": (
+                        (step.resource_identity or "").split(":", 1)[0] or None
+                    ),
+                    "guard": step.guard,
+                    "guard_scope": step.guard_scope,
+                    "transaction_id": step.transaction_id,
+                    "isolation": step.isolation,
                     "trigger_endpoint_id": flow.steps[0].endpoint_id if flow.steps else None,
                     "trigger_method": flow.method,
                     "trigger_kind": flow.steps[0].kind if flow.steps else None,

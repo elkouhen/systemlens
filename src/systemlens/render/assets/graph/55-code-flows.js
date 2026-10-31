@@ -658,7 +658,8 @@
           if (!groups.has(key)) groups.set(key, {
             resource: key, name: dataEntityLabel(resource), letters: new Set(),
             createOrUpdate: false, handlerOnly: false, flowIds: new Set(),
-            kinds: new Set(), annotations: [],
+            kinds: new Set(), annotations: [], technologies: new Set(),
+            guards: new Set(), transactions: new Set(), unknownAction: false,
           });
           return groups.get(key);
         };
@@ -667,6 +668,10 @@
           addCrudAction(group, access.action, access.kind);
           group.flowIds.add(access.flow_id);
           if (access.handler_only) group.handlerOnly = true;
+          if (access.technology) group.technologies.add(access.technology);
+          if (access.guard) group.guards.add(`${access.guard} (${access.guard_scope || "portée inconnue"})`);
+          if (access.transaction_id) group.transactions.add(access.transaction_id);
+          if (access.kind === "data_access" || !access.action) group.unknownAction = true;
         });
         diagnosticAnnotationsForOccurrence(occurrence).forEach(({ diagnostic, side }) => {
           const group = groupFor(diagnostic.resource);
@@ -996,6 +1001,18 @@
             ? `${group.name} (${qualifier})` : group.name;
           badge.textContent = `${letters} ${entityName}${group.handlerOnly ? " ?" : ""}`;
           if (ambiguousName) badge.title = group.resource;
+          // Persisted operation facts: technology, protection and scope are
+          // stated as evidence or as "not established", never guessed.
+          const factLines = [];
+          if (group.technologies.size) factLines.push(`Technologie · ${[...group.technologies].sort().join(", ")}`);
+          if (group.unknownAction) factLines.push("Action non établie pour au moins une opération");
+          factLines.push(group.guards.size
+            ? `Protection · ${[...group.guards].sort().join(", ")}`
+            : "Protection · non établie");
+          factLines.push(group.transactions.size
+            ? `Transaction · ${[...group.transactions].sort().join(", ")}`
+            : "Transaction · inconnue");
+          badge.title = `${badge.title ? `${badge.title} · ` : ""}${factLines.join(" · ")}`;
           if (group.handlerOnly) {
             badge.classList.add("is-handler-only");
             badge.title = `${badge.title ? `${badge.title} · ` : ""}Association possible au handler ; parcours interne non établi`;
