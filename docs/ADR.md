@@ -1147,10 +1147,13 @@ network service; credentials come from an environment variable and are never
 persisted. The new table is additive and does not change `SCHEMA_VERSION`.
 
 **Field validation:** Against the lab's Elastic 9.5 cluster, only the `1m`
-rollup exists and OTel names HTTP server transactions `POST` without a
-route. Collection therefore detects the available interval, and an indexed
-integration is `static_only` only when the service's telemetry proves it
-would name that traffic; otherwise it is `unverified`.
+rollup exists, and request transactions named only `POST` appear: they are
+Micrometer's OTLP metric exports, recorded as root HTTP client spans, which
+aggregated metrics cannot tell apart from unrouted requests. Collection
+therefore detects the available interval, and an indexed integration is
+`static_only` only when the service's telemetry proves it would name that
+traffic; otherwise it is `unverified`. REST orders sent to the lab were then
+matched end to end: route, service-pair destination, and downstream route.
 
 **Export decision:** The microservices HTML export embeds the reconciled
 observations as a separate overlay, off by default and offered only when the

@@ -95,9 +95,10 @@ would name that traffic. Otherwise it is `unverified`, with a reason:
 | Kafka consumer | Messaging transactions naming a topic, and none without one |
 | Kafka producer | At least one Kafka destination |
 
-OTel agents without `http.route` name server transactions `POST`; the lab
-does. Such traffic exists but cannot be attributed to a route, so silence
-would be a false claim. Services with no observation are listed apart:
+A request transaction named only by its method cannot be attributed to a
+route: it may be an unrouted server request or a root HTTP client span. In
+the lab, Micrometer's OTLP metric exports appear this way. Asserting
+silence there would be a false claim. Services with no observation are listed apart:
 missing telemetry is not evidence of an unused integration.
 `rest_call_covered` lists services with at least one HTTP destination; only
 their unmatched REST calls are shown as silent in the export.

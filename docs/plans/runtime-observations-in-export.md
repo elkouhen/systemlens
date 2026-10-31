@@ -170,8 +170,9 @@ workflow or a documented JSON shape changes.
   installed; report it as not run otherwise.
 - Against the lab's Elastic 9.5 cluster: done on 2026-10-31. Field names
   and composite queries work. Two corrections followed: interval detection,
-  because only `1m` exists, and the `unverified` status, because HTTP
-  transactions carry no route there.
+  because only `1m` exists, and the `unverified` status, because metric
+  exports appear as request transactions named `POST`. Three REST orders
+  sent with `make order-service-command` were matched end to end.
 
 ## 6. Risks
 
