@@ -1247,6 +1247,7 @@
           // Keep Kafka hit areas above overlapping relations so their inspector remains reachable.
           const architectureLinks = visibleLinks.filter(link => link.kind !== "kafka");
           visibleLinks.forEach(link => { if (link.kind === "kafka") architectureLinks.push(link); });
+          const runtimeLinkLabels = [];
           architectureLinks.forEach(link => {
             const source = nodePoints.get(link.source);
             const target = nodePoints.get(link.target);
@@ -1271,6 +1272,8 @@
             path.setAttribute("d", `M ${start[0]} ${start[1]} L ${end[0]} ${end[1]}`);
             path.setAttribute("marker-end", "url(#graph-architecture-arrow)");
             portPathOverlay.append(path);
+            const runtimeLabel = runtimeArchitectureLinkLabel(link, start, end);
+            if (runtimeLabel) runtimeLinkLabels.push(runtimeLabel);
             const hitArea = document.createElementNS(svgNamespace, "path");
             hitArea.classList.add("graph-dependency-hit-area");
             hitArea.setAttribute("d", `M ${source.x} ${source.y} L ${target.x} ${target.y}`);
@@ -1291,6 +1294,8 @@
             }
             portPathOverlay.append(hitArea);
           });
+          // Volumes go last so no later relation strikes through them.
+          portPathOverlay.append(...runtimeLinkLabels);
         }
         if (graphState.renderMode === "symbols" || !codeFlowSelection.flowId) return;
         const svgNamespace = "http://www.w3.org/2000/svg";

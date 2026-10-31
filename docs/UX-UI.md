@@ -434,10 +434,12 @@ does not zoom beyond the readable view, and reapplies after viewport resize.
 
 ## Runtime overlay
 
-Aggregated APM traffic is an optional overlay on the architecture graph,
-off by default and offered in the legend only when the export holds
-observations. Toggling it MUST NOT move cards, the camera, or the selection,
-and turning it off MUST restore the static rendering exactly.
+Aggregated APM traffic is an overlay on the architecture graph, on at load
+and offered in the legend only when the export holds observations. It MUST
+read without hover: counts are written on arcs, and cards state entry-point
+coverage rather than raw volume, which health probes dominate. Toggling it
+MUST NOT move cards, the camera, or the selection, and turning it off MUST
+restore the static rendering exactly.
 
 Runtime annotations decorate existing arcs, cards, tooltips, and details.
 They MUST NOT draw a relation that the index lacks; unexplained traffic is

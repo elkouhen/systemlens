@@ -69,8 +69,9 @@ Record the decisions as an ADR-60 consequence or a new ADR. Recommended:
 - Persist the service map as `runtime.service_map` in the project config
   (`APM name: indexed service`). `--service-map` overrides it per command.
   The map holds names only, never secrets.
-- The overlay is off by default. A legend toggle appears only when the
-  index holds observations.
+- The overlay was planned off by default; the lab review switched it on at
+  load (ADR-60). A legend toggle appears only when the index holds
+  observations.
 - No `observed_only` edge is drawn in this plan. Drawing one later needs a
   distinct visual grammar and its own decision.
 

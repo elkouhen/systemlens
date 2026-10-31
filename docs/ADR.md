@@ -1156,8 +1156,10 @@ traffic; otherwise it is `unverified`. REST orders sent to the lab were then
 matched end to end: route, service-pair destination, and downstream route.
 
 **Export decision:** The microservices HTML export embeds the reconciled
-observations as a separate overlay, off by default and offered only when the
-index holds observations. It annotates existing arcs and service cards and
+observations as a separate overlay, offered only when the index holds
+observations and on at load: an export only carries it when the user
+collected traffic, and an overlay hidden behind a toggle went unnoticed in
+the lab review. It annotates existing arcs and service cards and
 draws no edge for `observed_only` traffic, which a gaps panel lists instead.
 The service map is persisted as `runtime.service_map` in the project config,
 so `observe report` and the export resolve services identically.
@@ -1167,4 +1169,5 @@ contact Elasticsearch. Without observations, the embedded snapshot is
 unchanged. A REST count measures a service pair, not a call site. The
 selected call tree therefore labels each card with the count of its own
 entry point, and shows an arc's emitted and received counts separately,
-never added together.
+never added together. Service cards state entry-point coverage, not raw
+volume: in the lab, health probes made up most inbound transactions.

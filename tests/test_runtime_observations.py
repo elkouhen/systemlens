@@ -541,11 +541,16 @@ def test_runtime_overlay_annotates_the_graph_without_moving_it() -> None:
         card_boxes = """() => [...document.querySelectorAll('.graph-node-card-label')]
             .map(card => [card.dataset.nodeId, Math.round(card.getBoundingClientRect().x),
                           Math.round(card.getBoundingClientRect().y)]).sort()"""
+        # The overlay starts enabled because the export carries observations.
+        page.wait_for_function(
+            "() => document.querySelectorAll('.graph-architecture-path.is-runtime-observed').length > 0"
+        )
         before = page.evaluate(card_boxes)
-        assert page.locator(".graph-node-runtime-badge").count() == 0
-        assert page.locator(".is-runtime-observed, .is-runtime-silent").count() == 0
-
         page.locator("#graph-legend summary").click()
+        assert page.locator("#graph-runtime-toggle").is_checked()
+        page.locator("#graph-runtime-toggle").uncheck()
+        page.wait_for_function("() => !document.querySelector('.graph-node-runtime-badge')")
+        assert page.evaluate(card_boxes) == before
         page.locator("#graph-runtime-toggle").check()
         page.wait_for_function(
             "() => document.querySelectorAll('.graph-architecture-path.is-runtime-observed').length > 0"
@@ -553,10 +558,15 @@ def test_runtime_overlay_annotates_the_graph_without_moving_it() -> None:
 
         assert page.evaluate(card_boxes) == before
         assert page.locator(".graph-architecture-path.is-runtime-silent").count() >= 1
+        arc_labels = page.locator("#graph-port-paths .graph-runtime-link-label").all_text_contents()
+        assert "aucun trafic" in arc_labels
+        assert any(label.endswith("msg") or "appel" in label for label in arc_labels)
         inventory = page.locator(
             '.graph-node-card-label[data-node-id="microservice:inventory-service"] .graph-node-runtime-badge'
         )
-        assert "1 écart" in inventory.inner_text()
+        assert "entrée" in inventory.inner_text() and "active" in inventory.inner_text()
+        assert "hors index" in (inventory.get_attribute("title") or "")
+        assert "rapprochée" in page.locator(".legend-runtime-summary").inner_text()
         billing = page.locator(
             '.graph-node-card-label[data-node-id="microservice:billing-service"] .graph-node-runtime-badge'
         )
@@ -569,6 +579,7 @@ def test_runtime_overlay_annotates_the_graph_without_moving_it() -> None:
         assert "kafka/audit.events" in gaps
         assert "payments.example.com:443" in gaps
         assert "legacy-gateway" in gaps
+        assert "INDEXÉES SANS TRAFIC SUR LA FENÊTRE" in gaps.upper()
         page.locator("#inspector-close").click()
 
         page.locator("#graph-runtime-toggle").uncheck()
@@ -649,10 +660,8 @@ def test_runtime_overlay_annotates_the_selected_call_tree() -> None:
         page.locator("#code-flows .code-flow-item").first.click()
         page.locator("#graph-call-tree .graph-call-tree-node").first.wait_for()
         page.locator("#flow-mode-expand-all").click()
-        assert page.locator(".graph-call-tree-runtime-badge").count() == 0
-
-        page.locator("#flow-runtime-toggle").click()
         page.locator(".graph-call-tree-runtime-badge").first.wait_for()
+        assert page.locator("#flow-runtime-toggle").get_attribute("aria-pressed") == "true"
 
         badges = page.locator(".graph-call-tree-runtime-badge")
         assert badges.all_inner_texts() == ["APM · 40 appels · 25 % d’échecs", "APM · aucun trafic"]
@@ -663,6 +672,8 @@ def test_runtime_overlay_annotates_the_selected_call_tree() -> None:
         assert "APM · émis : 38 appels (tous consommateurs du topic)" in title
         assert "APM · reçu : Aucun trafic observé sur la fenêtre" in title
         assert page.locator("#graph-runtime-toggle").is_checked()
+        edge_label = page.locator("#graph-call-tree .graph-call-tree-edge-label").first.text_content() or ""
+        assert "APM · 38 msg" in edge_label
 
         page.locator("#flow-runtime-toggle").click()
         page.wait_for_function("() => !document.querySelector('.graph-call-tree-runtime-badge')")

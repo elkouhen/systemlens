@@ -1305,6 +1305,7 @@
           label.setAttribute("y", String(labelY));
           if (!edgeDiagnosticKind) label.textContent = edgeDisplayLabel(child.edge);
           label.dataset.displayLabel = label.textContent;
+          decorateRuntimeCallTreeEdgeLabel(label, child.edge, labelX);
           if (topicNode || callTreeRoute) {
             label.classList.add("is-clickable");
             label.addEventListener("click", event => {

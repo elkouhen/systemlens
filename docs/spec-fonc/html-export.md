@@ -39,26 +39,31 @@ visual language or camera contract.
 
 When the index holds observations from `systemlens observe elastic`, the
 legend offers a "Trafic observé (Elastic APM)" toggle with the collection
-window, its age, and the cluster origin. The toggle is off on every load.
-Without observations, neither the toggle nor any runtime data is exported.
+window, its age, the cluster origin, and a status summary (matched, silent,
+unverifiable, unexplained). The toggle is on at every load. Without
+observations, neither the toggle nor any runtime data is exported.
 
 When on, the architecture view annotates existing elements only:
 
-- Arcs with traffic thicken with volume; a failure ratio of 5 percent or more
-  turns them red. Silent indexed arcs become faint and dotted; an arc whose
+- Arcs with traffic thicken with volume and carry their count ("3 appels",
+  "105 msg"); a failure ratio of 5 percent or more turns them red. Silent
+  indexed arcs turn grey and dashed and read "aucun trafic"; an arc whose
   silence the telemetry cannot prove keeps its static style.
-- Service cards show inbound transactions and the number of gaps, or "Sans
-  télémétrie APM" for an indexed service without any observation.
-- Arc and card tooltips add counts. Service details add a "Trafic observé"
-  group: matched, silent, unverifiable, and unexplained integrations.
-- "Écarts runtime" opens an inspector listing `observed_only` and `external`
-  traffic, unmapped APM services, and services without telemetry.
+- Service cards show entry-point coverage, such as "APM · 2/3 entrées
+  actives", amber when an entry is silent or traffic is unexplained.
+  An indexed service without any observation shows "Sans télémétrie APM".
+- Card tooltips detail active, silent, unverifiable, and unexplained entries
+  and the inbound volume. Service details add a "Trafic observé" group.
+- "Écarts runtime" opens an inspector listing silent and unverifiable
+  indexed integrations, `observed_only` and `external` traffic, unmapped APM
+  services, and services without telemetry. Its count covers all of them.
 
 In a selected call tree, a "Trafic APM" button in the flow toolbar mirrors
 the legend toggle. Each card shows the observed executions of its entry
 route or consumer, or "APM · aucun trafic" for a silent indexed entry.
-Arcs thicken with volume. Their tooltip lists the emitted count, per topic
-or service pair, and the received count, from all sources, separately.
+Arcs thicken with volume, and their label gains an "APM · …" line. Their
+tooltip lists the emitted count, per topic or service pair, and the received
+count, from all sources, separately.
 
 The overlay draws no new arc and never changes layout, camera, filters, or
 selection. Counts are sampled lower bounds; REST counts measure a service
