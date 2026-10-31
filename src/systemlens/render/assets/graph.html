@@ -164,10 +164,8 @@ __ASYNCAPI_WEB_COMPONENT__
     </div>
     <div id="flows-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="flows-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker">Parcours potentiels du code</p>
+        <p class="references-kicker" title="Parcours ordonnés issus du code source. Ils décrivent un comportement potentiel, pas une trace runtime.">Parcours potentiels, pas une trace runtime</p>
         <div class="code-flow-title-row"><h2 id="code-flows-title" class="references-title">Flux de code</h2></div>
-        <p class="references-description">Parcours ordonnés issus du code source. Ils décrivent un comportement potentiel, pas une trace runtime.</p>
-        <p id="code-flow-selection-help" class="code-flow-selection-help">Cliquez sur un flux pour ouvrir son graphe d’appel.</p>
       </div>
     <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Rechercher un service, une donnée, un topic ou « incohérence »" autocomplete="off" aria-label="Rechercher un service, une donnée, un topic ou un flux avec incohérence possible"></div><p id="code-flow-filter-summary" class="code-flow-filter-summary"></p><p id="code-flows-summary" class="code-flows-summary"></p><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux d’appel indexé.</p></section>
     </div>
@@ -244,8 +242,17 @@ __ASYNCAPI_WEB_COMPONENT__
       <span id="flow-mode-context-stats" class="graph-mode-context-stats" hidden></span>
       <span id="flow-mode-context-diagnostics" class="graph-mode-context-stats" hidden></span>
       <span id="flow-mode-context-help"></span>
+      <dl id="flow-mode-context-key" class="flow-access-key" aria-label="Clé des annotations d’accès aux données">
+        <dt>C</dt><dd>création</dd>
+        <dt>R</dt><dd>lecture</dd>
+        <dt>U</dt><dd>mise à jour</dd>
+        <dt>D</dt><dd>suppression</dd>
+        <dt>(C/U)</dt><dd>création ou mise à jour, sans trancher</dd>
+        <dt>?</dt><dd>associée au handler, parcours interne non établi</dd>
+      </dl>
     </div>
     <div class="graph-mode-context-actions">
+      <button id="flow-context-toggle" class="graph-action-label graph-secondary-action flow-context-toggle" type="button" aria-expanded="false" aria-controls="flow-mode-context-copy" title="Afficher le contexte et la clé des annotations de l’arbre d’appel">Développer</button>
       <button id="flow-mode-center" class="graph-action-label graph-secondary-action" type="button" title="Afficher l’arbre d’appel complet" hidden>Tout voir</button>
       <button id="flow-tree-center-selection" class="graph-action-label graph-secondary-action" type="button" title="Centrer sur l’occurrence sélectionnée" hidden disabled>Sélection</button>
       <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom de l’arbre d’appel">
@@ -265,21 +272,35 @@ __ASYNCAPI_WEB_COMPONENT__
   <details id="graph-legend" class="legend" aria-label="Légende du graphe">
     <summary>Légende</summary>
     <div class="legend-content">
-      <div class="legend-row"><span class="legend-mark" style="background:#2563eb"></span>Connectivité relative basse (premier tiers)</div>
-      <div class="legend-row"><span class="legend-mark" style="background:#d97706"></span>Connectivité relative médiane (tiers central)</div>
-      <div class="legend-row"><span class="legend-mark" style="background:#dc2626"></span>Connectivité relative élevée (dernier tiers)</div>
-      <div class="legend-row">La connectivité est relative à chaque type de ressource, pas un niveau de risque.</div>
-      <div class="legend-row"><span class="legend-mark legend-resource-mark microservice"></span>Microservice</div>
-      <div class="legend-row"><span class="legend-mark legend-resource-mark topic"></span>Topic</div>
-      <div class="legend-row"><span class="legend-mark legend-resource-mark collection"></span>Donnée</div>
-      <div class="legend-row"><span class="legend-line" style="background:#D55E00"></span>Appel d’API</div>
-      <div class="legend-row"><span class="legend-line" style="background:#009E73"></span>Publication de Topic</div>
-      <div class="legend-row"><span class="legend-line" style="background:#0072B2"></span>Consommation de Topic</div>
-      <div class="legend-row"><span class="legend-line" style="background:#7C3AED"></span>Pattern request/reply de Topic</div>
-      <div class="legend-row"><span class="legend-line" style="background:#CC79A7"></span>Accès aux données</div>
-      <div class="legend-row"><span class="legend-mark" style="background:#16a34a"></span>Preuve source : code ou manifeste</div>
-      <div class="legend-row"><span class="legend-mark" style="background:#d97706"></span>Déduction contractuelle : OpenAPI ou inventaire</div>
-      <div class="legend-row"><span class="legend-mark" style="background:#7c3aed"></span>Convention d’architecture : Strategy1</div>
+      <details class="legend-group" open>
+        <summary>Types de nœuds</summary>
+        <div class="legend-row"><span class="legend-shape is-microservice"></span>Microservice</div>
+        <div class="legend-row"><span class="legend-shape is-topic"></span>Topic, contour tireté</div>
+        <div class="legend-row"><span class="legend-shape is-data"></span>Donnée MongoDB</div>
+        <div class="legend-row"><span class="legend-shape is-jpa"></span>Entité JPA, contour pointillé</div>
+      </details>
+      <details class="legend-group" open>
+        <summary>Relations</summary>
+        <div class="legend-row"><span class="legend-line is-rest"></span>Appel d’API, tireté</div>
+        <div class="legend-row"><span class="legend-line is-kafka"></span>Message Kafka</div>
+        <div class="legend-row"><span class="legend-line is-mongodb"></span>Accès MongoDB</div>
+        <div class="legend-row"><span class="legend-line is-jpa"></span>Accès JPA</div>
+        <p class="legend-note">La flèche pointe vers la cible de la relation.</p>
+      </details>
+      <details class="legend-group">
+        <summary>Connectivité, couleur du contour</summary>
+        <div class="legend-row"><span class="legend-outline is-low"></span>Basse : premier tiers</div>
+        <div class="legend-row"><span class="legend-outline is-medium"></span>Médiane : tiers central</div>
+        <div class="legend-row"><span class="legend-outline is-high"></span>Élevée : dernier tiers</div>
+        <p class="legend-note">Relative à chaque type de ressource, pas un niveau de risque.</p>
+      </details>
+      <details class="legend-group">
+        <summary>Niveau de preuve</summary>
+        <div class="legend-row"><span class="legend-term">Prouvée</span>code ou manifeste</div>
+        <div class="legend-row"><span class="legend-term">Inférée</span>OpenAPI ou inventaire</div>
+        <div class="legend-row"><span class="legend-term">Convention</span>Strategy1</div>
+        <p class="legend-note">Affiché dans les détails d’un nœud.</p>
+      </details>
     </div>
   </details>
   <div id="graph" aria-label="Graphe des interactions"></div>

@@ -46,6 +46,10 @@
     if (toolbar && graphPanel) {
       if (graphModeContext) toolbar.insertBefore(graphModeContext, graphPanel);
       if (flowModeContext) toolbar.insertBefore(flowModeContext, graphPanel);
+      // Search is the primary action of the Graphe view; camera and
+      // rendering controls follow it.
+      const quickSearchBlock = document.getElementById("quick-search");
+      if (quickSearchBlock && graphModeContext) toolbar.insertBefore(quickSearchBlock, graphModeContext);
     }
     const graphFilterSummary = document.getElementById("graph-filter-summary");
     const graphFilterControls = [
@@ -97,12 +101,11 @@
     flowTreeDepthIncrease?.addEventListener("click", () => {
       adjustCallTreeDepth(1);
     });
-    const toggleContextCollapse = (context, control) => {
+    document.getElementById("flow-context-toggle")?.addEventListener("click", () => {
       graphState.analysisContextCollapsed = !graphState.analysisContextCollapsed;
-      context?.classList.toggle("is-collapsed", graphState.analysisContextCollapsed);
-      control?.setAttribute("aria-expanded", String(!graphState.analysisContextCollapsed));
-      if (control) control.textContent = graphState.analysisContextCollapsed ? "Développer" : "Réduire";
-    };
+      syncFlowContextCollapse();
+    });
+    syncFlowContextCollapse();
     function updateFitModeControls(mode) {
       [
         [null, "overview"],
@@ -289,6 +292,33 @@
     // The first projection starts after every widget has registered its handlers.
     // The viewport is established below before the initial layout runs.
     setToolbarTab("graph", { deferLayout: true });
+    // An open legend reserves its footprint so a fit never places a card
+    // under it: a right column on wide screens, or a bottom band when that
+    // column would leave the graph too narrow. Compact viewports keep the
+    // full workspace and stack the legend below the panel instead.
+    const workspaceLegend = document.getElementById("graph-legend");
+    const MIN_GRAPH_WIDTH_BESIDE_LEGEND = 560;
+    function legendReservation(reservedLeft = 0) {
+      const none = { right: 0, bottom: 0 };
+      if (!workspaceLegend || workspaceLegend.hidden || !workspaceLegend.open) return none;
+      if (window.innerWidth <= 720) return none;
+      const bounds = workspaceLegend.getBoundingClientRect();
+      if (!bounds.width) return none;
+      const right = Math.round(window.innerWidth - bounds.left + 12);
+      if (window.innerWidth - reservedLeft - right >= MIN_GRAPH_WIDTH_BESIDE_LEGEND) return { right, bottom: 0 };
+      return { right: 0, bottom: Math.round(window.innerHeight - bounds.top + 12) };
+    }
+    let lastLegendReservation = "0:0";
+    if (workspaceLegend) {
+      new MutationObserver(() => {
+        const left = Number.parseFloat(document.documentElement.style.getPropertyValue("--workspace-left")) || 0;
+        const next = legendReservation(left);
+        const key = `${next.right}:${next.bottom}`;
+        if (key === lastLegendReservation) return;
+        lastLegendReservation = key;
+        updateWorkspaceViewport(!workspaceLegend.hidden);
+      }).observe(workspaceLegend, { attributes: true, attributeFilter: ["open", "hidden"] });
+    }
     function updateWorkspaceViewport(refit = false) {
       const root = document.documentElement;
       const toolbarBounds = toolbar?.getBoundingClientRect();
@@ -297,9 +327,10 @@
         ? 0
         : Math.min((toolbarBounds?.width || 0) + (toolbarBounds?.left || 0) + 24, window.innerWidth * .48);
       root.style.setProperty("--workspace-left", `${Math.round(reservedLeft)}px`);
-      root.style.setProperty("--workspace-right", "0px");
+      const legendSpace = legendReservation(reservedLeft);
+      root.style.setProperty("--workspace-right", `${legendSpace.right}px`);
       root.style.setProperty("--workspace-top", "0px");
-      root.style.setProperty("--workspace-bottom", "0px");
+      root.style.setProperty("--workspace-bottom", `${legendSpace.bottom}px`);
       renderer?.refresh();
       requestGraphRender();
       if (refit) {

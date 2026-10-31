@@ -158,7 +158,7 @@
         setActiveLayout(previousLayout);
         restoreInitialNodePositions();
         renderer.refresh();
-        layoutStatus.textContent = `La disposition ${label} a echoue ; la disposition initiale est restauree.`;
+        layoutStatus.textContent = `La disposition ${label} a échoué ; la disposition initiale est restaurée.`;
         return;
       }
       if (request !== graphState.layoutRequest) return;
@@ -175,6 +175,6 @@
         centerCameraOnPath({ nodes: [...graphState.relatedNodes] });
       }
       requestGraphRender();
-      layoutStatus.textContent = `${label} actif.`;
+      layoutStatus.textContent = `Disposition active : ${label}.`;
     }
     const nodesByNormalizedName = new Map();

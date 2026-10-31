@@ -142,6 +142,19 @@ moves. This keeps pointer-to-graph mapping stable through a drag. Rendering is
 coalesced with `requestAnimationFrame` after pan, zoom, selection, and graph
 refresh.
 
+An open legend changes the workspace rectangle instead of overlaying it.
+`updateWorkspaceViewport` sets `--workspace-right` to the legend column when
+at least 560 pixels of graph width remain beside it, and `--workspace-bottom`
+to the legend band otherwise; both stay zero at 720 pixels or less. A
+`MutationObserver` on the legend's `open` and `hidden` attributes recomputes
+the reservation and refits only when it changes, so tab switches that keep the
+same reservation do not move the camera.
+
+`expandAllCallTree` sets the depth to the maximum, clears per-branch overrides,
+and renders with a fresh fit, as `fitCallTree` does. A global expansion changes
+the tree extent, so the previous camera no longer frames it. Branch expansion
+with `+N appels` still preserves the camera.
+
 Architecture labels mark fixed cards as crowded when their projected 110×70
 screen envelopes overlap, using a spatial hash. Only the secondary type kicker
 is suppressed; selection or hover reveals it without changing node positions.

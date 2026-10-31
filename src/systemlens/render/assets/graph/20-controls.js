@@ -570,6 +570,10 @@
         ids,
       };
     }
+    // The project root carries no module identity worth navigating to.
+    function isRootClusterPath(path) {
+      return !path || [".", "root", "ROOT"].includes(String(path));
+    }
     function clusterPathForNode(node) {
       const data = nodeDataById.get(node);
       const owner = ownerCandidatesForNode(node)

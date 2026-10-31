@@ -128,6 +128,13 @@ rectangular control radius. The `--ui-*` palette is the only source for widget
 chrome: title, body, muted and accent text; panel, nested-widget and control
 surfaces; borders, focus and selection.
 
+The contract viewers consume the same palette. `65-contracts.css` restyles
+Swagger UI under the dark theme, because it renders in the page. The AsyncAPI
+component renders in a shadow root, so `asyncapi_theme.css` is appended to its
+vendor stylesheet inside the compressed asset. Each rule there reads a
+`--aui-*` property inherited from the host, with the vendor's light colour as
+fallback; only the dark theme defines those properties.
+
 Light and dark themes override those tokens rather than individual components.
 Selectors may retain local colours only when they visualize graph data or a
 semantic status such as warning, confidence, relation type, or resource type.

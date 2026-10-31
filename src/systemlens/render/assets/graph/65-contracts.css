@@ -1,0 +1,97 @@
+/* Contract viewers follow the interface theme. Swagger UI renders in the page
+   and is restyled directly; the AsyncAPI component renders in a shadow root
+   and reads the `--aui-*` properties inherited from its host element. */
+:root[data-theme="dark"] asyncapi-component {
+  --aui-surface: var(--ui-panel);
+  --aui-surface-muted: var(--ui-widget);
+  --aui-surface-strong: var(--ui-control);
+  --aui-accent-soft: var(--ui-accent-soft);
+  --aui-accent: var(--ui-accent-text);
+  --aui-danger-soft: #3b1d22;
+  --aui-text: var(--ui-text);
+  --aui-title: var(--ui-title);
+  --aui-muted: var(--ui-muted);
+  --aui-border: var(--ui-border);
+  color: var(--ui-text);
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] .inspector-body.swagger-ui { color-scheme: dark; }
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .info p,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .info li,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .info table,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .markdown p,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .markdown li,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .renderedMarkdown p,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .opblock-description-wrapper p,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .opblock-external-docs-wrapper p,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .opblock-title_normal p,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .opblock .opblock-section-header > label,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .tab li,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .parameter__name,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .response-col_status,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .response-col_links,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .responses-inner h4,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .responses-inner h5,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui table thead tr td,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui table thead tr th,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .model,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .response-control-media-type__title,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .servers-title,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .servers > label,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui label,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .btn { color: var(--ui-text); }
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .info .title,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .opblock-tag,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .opblock .opblock-summary-path,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .opblock .opblock-summary-operation-id,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .opblock .opblock-section-header h4,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui section.models h4,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .model-title { color: var(--ui-title); }
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .opblock .opblock-summary-description,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .parameter__in,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .parameter__type,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .parameter__extension,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .model .property.primitive,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .model-hint { color: var(--ui-muted); }
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .info a,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .prop-type,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .markdown code,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .renderedMarkdown code { color: var(--ui-accent-text); }
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .scheme-container {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--widget-radius);
+  background: var(--ui-widget);
+  box-shadow: none;
+}
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .opblock .opblock-section-header {
+  background: var(--ui-widget);
+  box-shadow: none;
+}
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .opblock-tag,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui table thead tr td,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui table thead tr th,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .responses-inner,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui section.models,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui section.models.is-open h4 { border-color: var(--ui-border); }
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui section.models .model-container,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .model-box { background: var(--ui-widget); }
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui input[type=text],
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui input[type=search],
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui textarea,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui select {
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+  background-color: var(--ui-control);
+  box-shadow: none;
+}
+/* The vendor select arrow is a dark inline image; use the native one. */
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui select { appearance: auto; background-image: none; }
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .btn { border-color: var(--ui-border); background: transparent; box-shadow: none; }
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui svg.arrow,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .expand-operation svg,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .models-control svg,
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .opblock-control-arrow svg { fill: var(--ui-text); }
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .model-toggle:after { filter: invert(1); }
+:root[data-theme="dark"] .inspector-body.swagger-ui .swagger-ui .loading-container .loading:after { color: var(--ui-text); }

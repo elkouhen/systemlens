@@ -74,11 +74,10 @@
       font-weight: 850;
     }
     .brand strong { align-self: end; color: var(--ink); font-size: 14px; letter-spacing: -.01em; }
-    .brand-subtitle { align-self: start; color: var(--muted); font-size: 10px; font-weight: 600; }
-    .graph-actions { gap: 5px; }
+    .brand-subtitle { align-self: start; color: var(--muted); font-size: var(--type-caption); font-weight: 600; }
     .graph-control-group { gap: 2px; padding: 3px; }
     .graph-control-group button { height: var(--control-height); }
-    .graph-actions .graph-action-label { padding: 0 5px; font-size: 10px; }
+    .graph-actions .graph-action-label { padding: 0 5px; font-size: var(--type-caption); }
     .fit-controls .graph-action-label,
     .render-controls .graph-action-label { height: var(--control-height); }
     .toolbar button { transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease; }
@@ -93,10 +92,6 @@
       border: 1px solid var(--widget-border);
       border-radius: var(--widget-radius);
       background: #f1f4f9;
-    }
-    .toolbar-tabs {
-      gap: 3px;
-      padding: 3px;
     }
     .toolbar-tab,
     .graph-control-group button {
@@ -122,11 +117,6 @@
       background: #f8fbff;
       overflow-wrap: normal;
     }
-    .graph-node-card-label.is-resource .graph-node-card-name {
-      font-size: 9px;
-      overflow-wrap: normal;
-      word-break: normal;
-    }
     .graph-node-card-label.is-resource .graph-node-card-kind {
       color: #315f9b;
       font-weight: 750;
@@ -147,12 +137,12 @@
       border-color: var(--line);
       color: #556277;
       background: rgba(248, 250, 252, .9);
-      font-size: 10px;
+      font-size: var(--type-caption);
     }
     .code-flow-selection-help {
       margin: 4px 0 0;
       color: var(--ui-muted);
-      font-size: 11px;
+      font-size: var(--type-control);
       line-height: 1.4;
     }
     .toolbar input:not([type="checkbox"]) {
@@ -170,11 +160,6 @@
       border: 1px solid var(--widget-border);
       border-radius: var(--widget-radius);
       background: var(--widget-surface);
-    }
-    .display-controls > summary, .advanced-controls > summary, .advanced-tools > summary {
-      display: flex;
-      align-items: center;
-      min-height: 38px;
     }
     .display-controls[open], .advanced-controls[open], .advanced-tools[open] { padding-bottom: 10px; }
     .resource-analyses { border-color: var(--widget-border); }
@@ -209,7 +194,6 @@
     .inspector-header { min-height: 58px; padding: 14px 20px; background: linear-gradient(145deg, #fbfcff, #f2f5fb); }
     .inspector-title { letter-spacing: -.02em; }
     .inspector-close { border-color: var(--widget-border); border-radius: var(--control-radius); }
-    .inspector-body { padding: 22px; }
     .dto-section { border-color: var(--line); border-radius: 13px; background: var(--surface-soft); }
 
     /* SystemLens presentation layer: a deep blue canvas, quiet chrome,
@@ -237,7 +221,6 @@
       --ui-focus: rgba(142, 167, 255, .24);
       color-scheme: dark; color: var(--ink); background: #0c1525;
     }
-    :root[data-theme="dark"] body { background: #0c1525; }
     :root[data-theme="dark"] #graph {
       background: radial-gradient(circle at 72% 18%, rgba(76, 104, 190, .25), transparent 28%),
         radial-gradient(circle at 34% 84%, rgba(18, 126, 151, .17), transparent 31%),
@@ -265,7 +248,6 @@
     :root[data-theme="dark"] .graph-control-group button { color: var(--ui-text); background: transparent; }
     :root[data-theme="dark"] .graph-control-group button:hover { background: var(--ui-control) !important; }
     :root[data-theme="dark"] .fit-controls .fit-mode.is-active, :root[data-theme="dark"] .render-controls .render-mode.is-active { color: var(--ui-on-accent); background: var(--ui-selected); }
-    :root[data-theme="dark"] #graph-node-labels.is-symbol-mode .graph-node-card-name { color: #e5edf8; background: rgba(15, 27, 46, .84); }
     :root[data-theme="dark"] .toolbar-tab { color: var(--ui-text) !important; }
     :root[data-theme="dark"] .toolbar .toolbar-mode-tab { color: var(--ui-muted); background: transparent; }
     :root[data-theme="dark"] .toolbar .toolbar-mode-tab:hover { color: var(--ui-accent-text); background: var(--ui-control) !important; }
@@ -283,7 +265,7 @@
     :root[data-theme="dark"] .graph-summary-item { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
     :root[data-theme="dark"] .explore-search-label,
     :root[data-theme="dark"] .display-controls > summary, :root[data-theme="dark"] .advanced-controls > summary, :root[data-theme="dark"] .advanced-tools > summary,
-    :root[data-theme="dark"] .path-controls summary, :root[data-theme="dark"] .legend summary { color: var(--ui-accent-text); }
+    :root[data-theme="dark"] .path-controls summary, :root[data-theme="dark"] .legend > summary { color: var(--ui-accent-text); }
     :root[data-theme="dark"] .reference-item, :root[data-theme="dark"] .indexing-issue,
     :root[data-theme="dark"] .service-kafka-item, :root[data-theme="dark"] .details-section li,
     :root[data-theme="dark"] .relation-link, :root[data-theme="dark"] .dto-section {

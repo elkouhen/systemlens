@@ -16,6 +16,7 @@ functional or technical contract.
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch) |
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
+| HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor) |
 | Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
@@ -1280,3 +1281,24 @@ own members is not reconstructed. An anonymous class created in a field
 initializer has no creating method, so its calls are not indexed. Persisted
 method identities of former anonymous rows disappear; the code-flow
 signature forces existing indexes to rebuild.
+
+## ADR-63: Reserve widget footprints and set a 10-pixel type floor
+
+**Status:** Accepted.
+
+**Context:** A widget review found an open legend covering graph cards, badge
+text at 8 pixels, and a call-tree context widget whose content was never
+displayed. The legend overlaid the graph because the workspace ignored it.
+`Déplier tout le graphe` kept a camera that no longer framed the larger tree.
+
+**Decision:** Widget text never goes below 10 pixels and uses the `--type-*`
+tokens. An open legend reserves its footprint through the workspace variables,
+as the left panel already does: a right column when 560 pixels of graph width
+remain, a bottom band otherwise, nothing on compact viewports. A global tree
+expansion refits like `Tout voir`; a branch expansion keeps the camera.
+
+**Consequences:** Opening the legend refits the graph once and shrinks its
+workspace. Fixed-size cards and badges take slightly more room, so long
+resource names wrap earlier inside their 110×70 envelope. The expand-all
+action no longer preserves the viewport, and its browser test asserts that
+every occurrence is inside the workspace instead.

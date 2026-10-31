@@ -538,7 +538,10 @@
           addTooltipLine(tooltip, `${inputs.length} entrée${inputs.length === 1 ? "" : "s"} · ${outputs.length} sortie${outputs.length === 1 ? "" : "s"}`);
           const topics = [...new Set((node.ports || []).filter(port => /kafka|topic|message/i.test(port.type || "")).map(port => port.name))];
           if (topics.length) addTooltipLine(tooltip, `Messages : ${topics.slice(0, 4).join(", ")}${topics.length > 4 ? "…" : ""}`, "graph-entity-tooltip-detail");
-          if (node.technology || node.build_system) addTooltipLine(tooltip, [node.technology, node.build_system].filter(Boolean).join(" · "), "graph-entity-tooltip-detail");
+          if (node.technology || node.build_system) addTooltipLine(tooltip, [
+            node.technology ? `Technologie : ${node.technology}` : "",
+            node.build_system ? `Build : ${node.build_system}` : "",
+          ].filter(Boolean).join(" · "), "graph-entity-tooltip-detail");
         } else if (node.kind === "kafka_topic") {
           const producers = new Set(graphData.links
             .filter(link => link.kind === "kafka" && link.target === node.id)
@@ -823,22 +826,33 @@
           graphContext.hidden = !architectureActive;
           flowContext.hidden = !flowsTabActive;
           graphContext.classList.toggle("is-collapsed", Boolean(graphState.analysisContextCollapsed));
+          syncFlowContextCollapse();
           graphTitle.textContent = "Graphe d’architecture";
           graphHelp.textContent = "Actions rapides sur la vue du graphe.";
-          if (flowCenter) flowCenter.hidden = !callGraphActive;
+          // The tree controls keep their place before a flow is selected so
+          // that opening a flow never pushes the catalogue under the pointer.
+          [flowCenter, flowZoomIn, flowZoomOut].forEach(control => {
+            if (!control) return;
+            control.hidden = false;
+            control.disabled = !callGraphActive;
+          });
           if (flowTreeCenterSelection) {
-            flowTreeCenterSelection.hidden = !callGraphActive;
+            flowTreeCenterSelection.hidden = false;
             flowTreeCenterSelection.disabled = !callGraphActive || !graphState.callTreeSelectedPathKey;
           }
-          if (flowZoomIn) flowZoomIn.hidden = !callGraphActive;
-          if (flowZoomOut) flowZoomOut.hidden = !callGraphActive;
           const depthControl = document.getElementById("flow-call-tree-depth-control");
           const depthValue = document.getElementById("flow-call-tree-depth-value");
           const depthDecrease = document.getElementById("flow-call-tree-depth-decrease");
           const depthIncrease = document.getElementById("flow-call-tree-depth-increase");
-          if (expandAll) expandAll.hidden = !callGraphActive;
+          if (expandAll) {
+            expandAll.hidden = false;
+            expandAll.disabled = !callGraphActive;
+          }
           if (diagnosticFullView) diagnosticFullView.hidden = !callGraphActive || !graphState.selectedDiagnosticId;
-          if (depthControl) depthControl.hidden = !callGraphActive;
+          if (depthControl) {
+            depthControl.hidden = false;
+            depthControl.classList.toggle("is-disabled", !callGraphActive);
+          }
           if (depthValue) depthValue.textContent = String(graphState.callTreeDepth || 1);
           if (depthDecrease) depthDecrease.disabled = !callGraphActive || graphState.callTreeDepth <= 1;
           if (depthIncrease) depthIncrease.disabled = !callGraphActive || graphState.callTreeDepth >= 8;

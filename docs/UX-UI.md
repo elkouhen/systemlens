@@ -41,10 +41,10 @@ catalogue containing all indexed resource types, including Diagnostics; type
 categories and filters refine that list without introducing a second top-level
 navigation surface. Each workspace and local view MUST have one clear active state.
 
-The legend is collapsed by default. The context widget is collapsed by default
-for a selected call tree and can be opened with `Développer`. Secondary widgets
-use the same surface, spacing, status, and interactive-row treatment as the
-main details panel.
+The legend is collapsed by default. The call-tree context widget is also
+collapsed by default: `Développer` opens it, `Réduire` closes it, and changing
+view collapses it again. Secondary widgets use the same surface, spacing,
+status, and interactive-row treatment as the main details panel.
 
 When the Flux or Quality view is active, resource navigation MAY be hidden to
 preserve the analysis context. It MUST return when the user selects another
@@ -55,6 +55,11 @@ it hides navigation content while retaining its header controls and leaves the
 graph workspace unchanged. On constrained viewports, the panel uses one bounded
 scroll region so the graph remains visible while users inspect details.
 
+In the Graphe view, the search block comes first. Camera and node-rendering
+controls follow, then the index status and the filters. The index status reads
+`Index : complet` or `Index : N faits à vérifier`. The layout status is a full
+sentence such as `Disposition active : vue par graphe.`
+
 The resource catalogue MUST present one searchable list across indexed
 microservices and architecture resources. Its search control MUST remain above
 the category list and results. Opening Ressources MUST initially show all
@@ -62,6 +67,11 @@ resource types; category selection and filters refine the same list without
 changing the graph or persisted selection. Each row MUST expose the resource
 kind and relationship counts when available. Selecting a row opens its docked
 preview; `Inspecter` opens the shared inspector for deeper details.
+
+The catalogue title carries the visible and total counts once. Each category
+shows its own count; an empty category stays listed but is disabled. The
+Contexte column always reads `kind · owner · detail`. Every row offers
+`Inspecter`, or the muted label `Aperçu seul` when no dedicated inspector exists.
 
 For a DTO, JPA entity, or Mongo persistence class, the preview shows indexed
 attribute names and types. A Mongo collection shows fields grouped by its
@@ -106,13 +116,13 @@ error states explain what is unavailable and what the user can do next.
 | Navigation widget | Switch between graph, flow, resource, contract, and diagnostics views. | View groups, active view, and collapse control. | Changes the workspace view and clears incompatible transient details. It does not contain resource facts. |
 | Graph workspace widget | Provide the primary visual reading surface for architecture or one selected call tree. | Graph canvas, rendered nodes, relations, camera controls, and view-specific controls. | Pan, zoom, fit, and selection affect the current projection only. The graph remains visible while supporting widgets change. |
 | Graph context widget | Expose the controls and summary needed to interpret the current graph. | Search or filters, layout and display actions, counts, and the active selection summary. | May be collapsed. Actions change the projection or transient state without duplicating the graph hierarchy. |
-| Resource catalogue widget | Browse indexed topics, Mongo collections, routes, contracts, or persistence resources. | Search or filters, compact rows, resource type, attributes when indexed, and relevant counts or status. | Selecting a resource updates the docked preview and its related-resource links. `Inspecter` opens the shared inspector. Resource details MUST NOT expand inline in the result list. |
+| Resource catalogue widget | Browse indexed topics, Mongo collections, routes, contracts, or persistence resources. | Search or filters, compact rows, a Contexte column in `kind · owner · detail` order, attributes when indexed, and one total count in the title. | Selecting a resource updates the docked preview and its related-resource links. `Inspecter` opens the shared inspector; a row without inspector says `Aperçu seul`. Resource details MUST NOT expand inline in the result list. |
 | Details widget | Show the selected graph element's immediate context and available analysis actions. | Identity, summary, relations, evidence, and actions for focus, modules, code flows, or source navigation. | It is contextual and may be hidden when an introspection window opens. It does not compete with the modal identity header. |
-| Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, description, ownership, relations, evidence, breadcrumb, and back or close action. | Opens as a dedicated window. Related resources remain selectable and update the same inspection history. |
-| Flow catalogue widget | Select a persisted code flow or flow group for call-graph analysis. | Compact flow rows, description, trigger, protocol, status, and summary statistics. | Selecting a row replaces the selected flow graph. Full details are shown in the selected-flow view, not in every row. |
-| Call-tree context widget | Explain and control the selected hierarchical call graph. | Flow identity, trigger event, visible tree node and arc counts, consistency diagnostic counts, depth, expand-all, and tree-specific status. | Collapsed by default. It controls the tree without repeating its nodes or arcs. Tree counts describe the visible projection and update when depth or expansion changes. Diagnostic counts cover the selected flow and distinguish possible risks, insufficient evidence, identified guarantees, and possible interactions. |
+| Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, description, ownership, relations, evidence, breadcrumb from the second level, and back or close action. | Opens as a dedicated window. Related resources remain selectable and update the same inspection history. Each fact appears in one section only. |
+| Flow catalogue widget | Select a persisted code flow or flow group for call-graph analysis. | A one-line kicker and the title with its count, compact flow rows, description, trigger, protocol, status, and summary statistics. | Selecting a row replaces the selected flow graph without moving the list. Full details are shown in the selected-flow view, not in every row. |
+| Call-tree context widget | Explain and control the selected hierarchical call graph. | Flow identity, trigger event, visible tree node and arc counts, consistency diagnostic counts, the key of the access annotations, depth, expand-all, and tree-specific status. | Collapsed by default and opened with `Développer`. It controls the tree without repeating its nodes or arcs. Tree counts describe the visible projection and update when depth or expansion changes. Diagnostic counts cover the selected flow and distinguish possible risks, insufficient evidence, identified guarantees, and possible interactions. |
 | Tooltip widget | Provide concise evidence for a hovered node, arc, row, or control. | Subject identity, relevant relation facts, and available status or type. | Appears on hover or focus and does not become a second navigation surface. It MUST NOT infer missing facts. |
-| Legend widget | Explain stable graph colours, shapes, strokes, and badges. | One entry per visual semantic and a concise label. | Collapsed by default. It explains the graph and does not replace node or arc tooltips. |
+| Legend widget | Explain stable graph colours, shapes, strokes, and badges. | Collapsible groups for node types, relations, connectivity, and evidence level, with one single-line entry per visual semantic. | Collapsed by default. When open, it reserves its footprint so no fitted card lies under it. It explains the graph and does not replace node or arc tooltips. |
 | Analysis status widget | Report a transient selected port or arc and its related evidence. | Selected endpoint or arc, protocol, related resources, and a clear action. | Highlights the current analysis state without changing the graph data, camera, or persisted selection. |
 
 ### Shared states and visual rules
@@ -134,6 +144,10 @@ Widget surfaces MUST use the shared border, radius, background, text, muted
 text, focus, and selection tokens. Type or protocol colours MAY remain local
 only when they encode graph semantics or an indexed status. Titles, controls,
 rows, tags, and action placement MUST remain consistent across widget families.
+
+Widget text uses the `--type-*` tokens, from `--type-caption` at 10 pixels to
+`--type-entity-title`. No widget text is smaller than 10 pixels, including
+card kickers, badges, and tooltips. Glyph-only controls MAY use larger sizes.
 
 An interactive resource has one selection contract wherever it appears. In the
 Architecture view, resource nodes and Topic relation arcs are selectable;
@@ -159,6 +173,12 @@ communicates resource type and relative connectivity; the fill MUST NOT encode
 connectivity or risk. Shapes distinguish microservices, Topics, Data, message
 channels, and other resource categories.
 
+The legend groups its entries into node types, relations, connectivity, and
+evidence level. Node types use 14-pixel shapes that match the card outlines.
+Relation samples use the strokes actually drawn in the current theme. The
+connectivity group shows the three outline colours, and the evidence group
+defines the terms shown in node details without a colour of its own.
+
 The architecture graph keeps topology relations visible even when a relation
 was not used as a placement edge. Isolated microservices remain visible in a
 separate area so “no indexed dependency” is not confused with “missing”.
@@ -173,6 +193,11 @@ overlap the underlying graph layer.
 Light and dark themes MUST preserve contrast, hierarchy, protocol meaning, and
 selection state. Theme changes MUST NOT alter indexed data, graph structure, or
 selection.
+
+The OpenAPI and AsyncAPI viewers follow the interface theme. In the dark theme,
+their surfaces, text, borders, and form controls use the `--ui-*` tokens, while
+HTTP method colours, protocol badges, and code highlighting keep their own
+palette. The light theme keeps each viewer's original colours.
 
 Obsidian is the default dark presentation for the architecture workspace.
 It uses a graphite canvas (`#0b1018`), slate panels (`#101823`), neutral cards
@@ -209,7 +234,15 @@ available after details are displayed in a modal.
 Selecting a module title highlights that module and lists its currently visible
 direct members in sorted order. Selecting one listed member returns to ordinary
 node details. A module path is shown once in the Architecture section rather
-than repeated in badges and raw metadata.
+than repeated in badges and raw metadata. The project root module carries no
+navigable identity and is not listed.
+
+The introspection title names the current element; its breadcrumb appears only
+after the user has navigated to a related element. A microservice lists every
+outgoing HTTP call once, under `Routes appelées`; a call without a matching
+route remains selectable as an unmatched call. The relation badges sum to the
+displayed relation count; relations without an indexed evidence level are
+counted as `N sans niveau de preuve`.
 
 Filters MUST state their active effect and provide one action to clear the
 additional filters. Hiding a resource removes its node and incident relations
@@ -262,6 +295,11 @@ minimap samples at most 700 nodes.
 
 The minimap MUST NOT overlap the legend, open or closed. It sits to the left of
 the legend, or above it when the viewport is too narrow.
+
+An open legend reserves its footprint in the graph workspace. It reserves a
+right column when at least 560 pixels of graph width remain beside it, and a
+bottom band otherwise. Opening or closing it refits the graph once. Below 721
+pixels it reserves nothing and stays below the left panel.
 
 Wheel zoom MUST be handled once for the Sigma canvas and HTML card overlays. Hovering
 a card MUST NOT introduce a second native zoom behavior. Camera updates and
@@ -317,6 +355,12 @@ selected flow. It MUST show counts for possible risks, insufficient evidence,
 identified guarantees, and possible interactions, or state that no diagnostic
 was detected. Counts MUST exclude diagnostics belonging to other flows.
 
+The expanded widget also decodes the access annotations of the cards: `C`,
+`R`, `U`, and `D` for create, read, update, and delete, `(C/U)` for an
+undecided create or update, and `?` for an association with the handler whose
+internal route is not established. A handler-only badge also has a dashed
+outline.
+
 The card MUST omit the repeated `Microservice` type label. An unknown
 continuation MUST retain its `Suite inconnue` status; cycles and hidden calls
 use their existing badges.
@@ -342,8 +386,10 @@ a service name with a different input port is not by itself a cycle.
 
 Nodes at the depth boundary expose the number of hidden calls. `+N appels`
 expands one more level for that branch without changing the viewport. Expanded
-nodes expose `− replier`; collapsed nodes expose `+N appels`. `Déplier tous les
-nœuds` expands the visible tree using the current global depth limit.
+nodes expose `− replier`; collapsed nodes expose `+N appels`. `Déplier tout le
+graphe` expands every branch to the maximum depth and refits the tree like
+`Tout voir`, because the tree extent changes. The selected occurrence stays
+selected.
 
 The tree workspace supports drag-to-pan and bounded zoom from 0.5x to 64x.
 The initial fit keeps a minimum canvas scale of 0.66 so deep trees do not shrink
@@ -414,6 +460,12 @@ MUST NOT add architecture facts.
 The Flux de code catalogue provides one entry for every available persisted
 flow. Selecting an entry replaces the current tree; flows are not merged and
 no side-by-side comparison is offered.
+
+The catalogue header is a one-line kicker, `Parcours potentiels, pas une trace
+runtime`, and the title with its count. Without an active filter, the filter
+summary is muted text rather than a control. The tree controls keep their
+place and stay disabled until a flow is selected, so opening a flow does not
+move the list under the pointer.
 
 The catalogue may filter by confidence, protocol, Kafka message type, and cycle
 status. A compact summary reports the visible count. Hovering or focusing an

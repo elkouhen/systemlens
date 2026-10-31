@@ -14,6 +14,22 @@
       ["diagnostic", "Diagnostics"],
       ["other", "Autres"],
     ]);
+    // The Contexte column always reads `kind · owner · detail`.
+    const resourceCatalogueSingularLabels = new Map([
+      ["microservice", "Microservice"],
+      ["external_microservice", "Microservice externe"],
+      ["http_route", "Route HTTP"],
+      ["openapi_contract", "Contrat OpenAPI"],
+      ["asyncapi_contract", "Contrat AsyncAPI"],
+      ["kafka_topic", "Topic"],
+      ["mongodb_collection", "Collection"],
+      ["jpa_entity", "Entité JPA"],
+      ["dto", "DTO"],
+      ["diagnostic", "Diagnostic"],
+      ["mongo_persistence_class", "Classe persistée MongoDB"],
+    ]);
+    const resourceCatalogueCount = (count, word) => `${count} ${word}${count > 1 ? "s" : ""}`;
+    const resourceCatalogueContext = (...parts) => parts.filter(Boolean).join(" · ");
     let resourceCatalogueEntries = [];
     let resourceCatalogueByKey = new Map();
     let resourceCatalogueByNodeId = new Map();
@@ -51,7 +67,7 @@
             service: node.name,
             method: match[1],
             source: node.openapi_files?.[0],
-            meta: `${node.name} · route exposée`,
+            meta: resourceCatalogueContext("Route exposée", node.name),
             route: { route: match[0] },
             ownerNode: node,
           });
@@ -68,7 +84,12 @@
             service: node.name,
             method,
             source: route.location || route.path,
-            meta: `${node.name} · ${route.consumers?.length || route.callers?.length || 0} client(s)`,
+            meta: route.role === "call"
+              ? resourceCatalogueContext("Route appelée", node.name)
+              : resourceCatalogueContext(
+                "Route exposée", node.name,
+                resourceCatalogueCount(route.consumers?.length || route.callers?.length || 0, "client"),
+              ),
             route,
             ownerNode: node,
           });
@@ -79,7 +100,7 @@
           name: contract.path,
           service: node.name,
           source: contract.path,
-          meta: `${node.name} · ${contract.resources?.length || 0} ressource(s)`,
+          meta: resourceCatalogueContext("Contrat OpenAPI", node.name, resourceCatalogueCount(contract.resources?.length || 0, "ressource")),
           contract,
           ownerNode: node,
         }));
@@ -89,7 +110,7 @@
           name: contract.path,
           service: node.name,
           source: contract.path,
-          meta: `${node.name} · contrat de messages`,
+          meta: resourceCatalogueContext("Contrat AsyncAPI", node.name),
           contract,
           ownerNode: node,
         }));
@@ -102,7 +123,12 @@
           name: item.name || item.qualified_name || "Ressource",
           service: item.owner || item.service || "",
           source: item.source?.path,
-          meta: `${item.owner || item.service || ""} · ${item.attributes?.length || 0} champ(s)`,
+          meta: resourceCatalogueContext(
+            resourceCatalogueSingularLabels.get(item.kind) || "Ressource",
+            item.owner || item.service,
+            resourceCatalogueCount(item.attributes?.length || 0, "champ"),
+          ),
+          mongoClassId: item.kind === "mongo_persistence_class" ? item.id : undefined,
           description: item.qualified_name,
           descriptionKind: item.kind,
           attributes: item.attributes || [],
@@ -114,7 +140,11 @@
         kind: "dto",
         name: dto.name || dtoLabel(dto),
         service: dto.service || dto.owner || "",
-        meta: `${dto.fields?.length || 0} champ(s) · ${dto.topics?.length || 0} topic(s)`,
+        meta: resourceCatalogueContext(
+          "DTO", dto.service || dto.owner,
+          resourceCatalogueCount(dto.fields?.length || 0, "champ"),
+          resourceCatalogueCount(dto.topics?.length || 0, "topic"),
+        ),
         dtoName: dto.id || dto.name || dtoLabel(dto),
         fields: dto.fields || [],
         topics: dto.topics || [],
@@ -123,7 +153,7 @@
         id: `diagnostic:${issue.id || index}`,
         kind: "diagnostic",
         name: issue.message || issue.category || "Fait à vérifier",
-        meta: `${issue.severity === "warning" ? "À corriger" : "À vérifier"} · ${issue.category || "Indexation"}`,
+        meta: resourceCatalogueContext("Diagnostic", issue.severity === "warning" ? "À corriger" : "À vérifier", issue.category || "Indexation"),
         source: issue.location || issue.path,
         description: issue.message || issue.category || "Problème d’indexation",
       }));
@@ -176,9 +206,14 @@
         button.className = "resource-catalogue-category";
         button.dataset.kind = kind;
         button.textContent = resourceCatalogueKindLabels.get(kind);
-        const count = document.createElement("small");
-        count.textContent = kind === "all" ? resourceCatalogueEntries.length : counts.get(kind) || 0;
-        button.append(count);
+        // The title carries the total; categories carry their own count and
+        // an empty category stays listed but cannot be chosen.
+        if (kind !== "all") {
+          const count = document.createElement("small");
+          count.textContent = counts.get(kind) || 0;
+          button.append(count);
+          button.disabled = !counts.get(kind);
+        }
         button.addEventListener("click", () => {
           resourceKindFilter.value = kind;
           renderResourceCatalogue();
@@ -383,7 +418,7 @@
       const outgoing = entry.node ? graphData.links.filter(link => link.source === entry.node.id).length : 0;
       title.textContent = resourceCatalogueEntryLabel(entry);
       copy.replaceChildren();
-      const kind = document.createElement("span"); kind.className = "resource-catalogue-preview-kind"; kind.textContent = resourceCatalogueKindLabels.get(entry.kind) || nodeKindLabel(entry.node || { kind: entry.kind });
+      const kind = document.createElement("span"); kind.className = "resource-catalogue-preview-kind"; kind.textContent = resourceCatalogueSingularLabels.get(entry.descriptionKind || entry.kind) || nodeKindLabel(entry.node || { kind: entry.kind });
       const stats = document.createElement("span"); stats.className = "resource-catalogue-preview-stats"; stats.textContent = entry.meta || `${incoming} entrée(s) · ${outgoing} sortie(s)`;
       copy.append(kind, stats);
       resourceCataloguePreview.querySelectorAll(".resource-catalogue-preview-owner, .resource-catalogue-preview-source").forEach(item => item.remove());
@@ -407,7 +442,7 @@
         name.className = "resource-catalogue-related-name";
         name.textContent = resourceCatalogueEntryLabel(target);
         const meta = document.createElement("small");
-        meta.textContent = `${resourceCatalogueKindLabels.get(target.kind) || nodeKindLabel(target.node || { kind: target.kind })} · ${relation}`;
+        meta.textContent = `${resourceCatalogueSingularLabels.get(target.descriptionKind || target.kind) || nodeKindLabel(target.node || { kind: target.kind })} · ${relation}`;
         button.append(name, meta);
         button.addEventListener("click", () => selectResourceCatalogueEntry(target));
         item.append(button);
@@ -437,11 +472,17 @@
       microservicesTitle.textContent = kind === "diagnostic"
         ? `Diagnostics (${visible.length}/${resourceCatalogueEntries.length})`
         : `Catalogue des ressources (${visible.length}/${resourceCatalogueEntries.length})`;
-      if (resourceCatalogueSummary) resourceCatalogueSummary.textContent = `${visible.length} ressource${visible.length > 1 ? "s" : ""} affichée${visible.length > 1 ? "s" : "e"}`;
+      if (resourceCatalogueSummary) {
+        resourceCatalogueSummary.textContent = "";
+        resourceCatalogueSummary.hidden = true;
+      }
       microservicesEmpty.hidden = visible.length > 0;
       visible.forEach(entry => {
         const selectResource = () => selectResourceCatalogueEntry(entry);
-        const item = referenceItem(resourceCatalogueEntryLabel(entry), entry.meta || `${resourceCatalogueKindLabels.get(entry.kind) || "Ressource"} · ${entry.service || ""}`, "", selectResource);
+        const item = referenceItem(resourceCatalogueEntryLabel(entry), entry.meta || resourceCatalogueContext(
+          resourceCatalogueSingularLabels.get(entry.kind) || "Ressource",
+          entry.service && entry.service !== entry.name ? entry.service : "",
+        ), "", selectResource);
         item.classList.add("architecture-resource-reference", "resource-catalogue-row");
         item.dataset.catalogueKey = entry.catalogueKey;
         item.classList.toggle("is-selected", resourceCatalogueSelection?.catalogueKey === entry.catalogueKey);
@@ -453,7 +494,7 @@
         actionGroup.className = "resource-catalogue-actions";
         action?.replaceWith(actionGroup);
         const inspectTarget = entry.node || entry.ownerNode;
-        if (entry.dtoName || entry.contract || inspectTarget) {
+        if (entry.dtoName || entry.contract || entry.mongoClassId || inspectTarget) {
           const inspect = document.createElement("button");
           inspect.type = "button";
           inspect.className = "reference-action resource-catalogue-inspect";
@@ -464,6 +505,8 @@
             selectResourceCatalogueEntry(entry);
             if (entry.dtoName) {
               openDtoInspector(entry.dtoName);
+            } else if (entry.mongoClassId) {
+              openMongoPersistenceInspector(entry.mongoClassId);
             } else if (entry.kind === "openapi_contract") {
               openOpenApiContract(entry.contract);
             } else if (entry.kind === "asyncapi_contract") {
@@ -478,7 +521,11 @@
           });
           actionGroup.append(inspect);
         } else {
-          actionGroup.remove();
+          const unavailable = document.createElement("span");
+          unavailable.className = "resource-catalogue-no-inspector";
+          unavailable.textContent = "Aperçu seul";
+          unavailable.title = "Aucun inspecteur dédié : l’aperçu présente les faits indexés.";
+          actionGroup.append(unavailable);
         }
         item.addEventListener("click", event => { if (!event.target.closest("button, a")) selectResource(); });
         microservicesList.append(item);

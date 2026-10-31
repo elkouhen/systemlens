@@ -113,7 +113,7 @@
     function codeFlowStats(flow) {
       const steps = flow.steps || [];
       return [
-        ["Microservices", servicesForCodeFlow(flow).length],
+        ["Services", servicesForCodeFlow(flow).length],
         ["Appels", callGraphArcCount(flow)],
         ["Étapes", steps.length],
         ["Effets", steps.filter(step => ["message_publish", "http_call", "data_read", "data_write"].includes(step.kind)).length],
@@ -192,6 +192,7 @@
 
     function updateCodeFlowFilterSummary() {
       const filters = activeCodeFlowFilters();
+      codeFlowFilterSummary.classList.toggle("is-active", filters.length > 0);
       codeFlowFilterSummary.textContent = filters.length
         ? `${filters.length} filtre${filters.length > 1 ? "s" : ""} actif${filters.length > 1 ? "s" : ""} · ${filters.join(" · ")}`
         : "Aucun filtre additionnel";
@@ -992,6 +993,7 @@
           badge.textContent = `${letters} ${entityName}${group.handlerOnly ? " ?" : ""}`;
           if (ambiguousName) badge.title = group.resource;
           if (group.handlerOnly) {
+            badge.classList.add("is-handler-only");
             badge.title = `${badge.title ? `${badge.title} · ` : ""}Association possible au handler ; parcours interne non établi`;
           }
           if (group.flowIds.size) {
@@ -1426,11 +1428,15 @@
     }
     function expandAllCallTree() {
       if (!codeFlowSelection.flowId || graphState.callGraphDisplayMode !== "tree") return false;
-      const camera = captureCallTreeCamera();
       graphState.callTreeDepth = 8;
       graphState.callTreeExpanded = new Set();
       graphState.callTreeCollapsed = new Set();
-      renderCallTreeOverlay(camera);
+      // A global expansion changes the tree extent, so it refits like
+      // `Tout voir`. The selected occurrence stays selected.
+      graphState.callTreeZoom = 1;
+      graphState.callTreeFitComplete = true;
+      callTreeRenderSignature = "";
+      renderCallTreeOverlay();
       syncCallTreeDepthControl();
       return true;
     }
@@ -1467,7 +1473,7 @@
       const depthValue = document.getElementById("flow-call-tree-depth-value");
       const depthDecrease = document.getElementById("flow-call-tree-depth-decrease");
       const depthIncrease = document.getElementById("flow-call-tree-depth-increase");
-      if (depthControl) depthControl.hidden = !active;
+      if (depthControl) depthControl.classList.toggle("is-disabled", !active);
       if (depthValue) depthValue.textContent = String(depth);
       if (depthDecrease) depthDecrease.disabled = !active || depth <= 1;
       if (depthIncrease) depthIncrease.disabled = !active || depth >= 8;

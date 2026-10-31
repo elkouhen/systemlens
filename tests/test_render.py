@@ -1789,7 +1789,10 @@ def test_graph_html_embeds_the_official_asyncapi_component_only_when_needed() ->
     assets = json.loads(gzip.decompress(b64decode(payload.group(1))))
     vendor = Path(__file__).parents[1] / "src/systemlens/render/assets/vendor"
     assert assets["js"] == (vendor / "asyncapi-web-component-3.1.8.js").read_text()
-    assert assets["css"] == (vendor / "asyncapi-react-component-3.1.8.min.css").read_text()
+    theme_bridge = (vendor.parent / "asyncapi_theme.css").read_text()
+    assert assets["css"] == (
+        (vendor / "asyncapi-react-component-3.1.8.min.css").read_text() + "\n" + theme_bridge
+    )
     assert len(with_contract) - len(without_contract) < 1_000_000
 
 def test_graph_html_deduplicates_repository_and_module_relative_openapi_paths() -> None:

@@ -134,6 +134,9 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
             ".graph-call-tree-access-badge, .graph-call-tree-diagnostic-badge"
         ).all_inner_texts()
         assert "C/U StockMovementEntity ?" in first_badges
+        assert inventory_nodes.first.locator(
+            ".graph-call-tree-access-badge.is-handler-only"
+        ).count() > 0
         assert sum(label.endswith("ProductEntity") for label in first_badges) <= 1
         assert inventory_nodes.last.locator(
             ".graph-call-tree-access-badge, .graph-call-tree-diagnostic-badge"
@@ -256,8 +259,8 @@ def test_architecture_minimap_keeps_world_map_fixed_while_panning() -> None:
             && map.top < legend.bottom && map.bottom > legend.top;
         }"""
         assert page.evaluate(overlap_script) is False
-        page.locator("#graph-legend summary").click()
-        page.wait_for_timeout(200)
+        page.locator("#graph-legend > summary").click()
+        page.wait_for_timeout(400)
         assert page.evaluate(overlap_script) is False
         browser.close()
 
@@ -278,8 +281,9 @@ def test_large_call_tree_minimap_and_selection_camera() -> None:
         page.locator("#graph-minimap").wait_for(state="visible")
         assert page.locator("#graph-call-tree .graph-call-tree-node").count() == 9
         canvas = page.locator("#graph-call-tree .graph-call-tree-canvas")
-        # Expanding preserves the camera; fitting the wide tree reaches overview.
-        assert canvas.evaluate("element => element.style.transform") == "scale(1)"
+        # A global expansion refits the wide tree like `Tout voir`.
+        assert page.locator("#graph-call-tree .graph-call-tree-canvas.is-overview").count() == 1
+        _assert_every_tree_occurrence_is_inside_the_workspace(page)
         page.locator("#flow-mode-center").click()
         assert page.locator("#graph-call-tree .graph-call-tree-canvas.is-overview").count() == 1
         before_pan = canvas.evaluate("element => [element.style.left, element.style.top]")
@@ -863,7 +867,7 @@ def test_resource_catalogue_updates_docked_preview() -> None:
         assert page.locator("#inspector-modal").is_hidden()
         assert page.locator("#resource-catalogue-preview-title").inner_text() == "order-service"
         assert page.locator("#resource-catalogue-preview").get_by_text(
-            "Microservices", exact=True
+            "Microservice", exact=True
         ).is_visible()
         assert page.locator("#microservices-panel").is_visible()
         related = page.locator("#resource-catalogue-related")
@@ -1034,7 +1038,7 @@ def test_topic_catalogue_uses_shared_resource_inspector() -> None:
         assert page.locator("#inspector-modal").is_hidden()
         assert page.locator("#resource-catalogue-preview").is_visible()
         assert page.locator("#resource-catalogue-preview .resource-catalogue-preview-kind").inner_text() in {
-            "Topics",
+            "Topic",
             "Topic Kafka",
         }
         page.locator("#architecture-mode-tab").click()
@@ -1514,6 +1518,31 @@ def test_obsidian_default_and_saved_theme_preserve_graph_state() -> None:
         assert page.locator("html").get_attribute("data-theme") == "dark"
         context.close()
         browser.close()
+
+
+def _assert_no_card_under_open_legend(page) -> None:
+    """An open legend reserves its column, so no fitted card lies under it."""
+    overlaps = page.evaluate("""() => {
+      const legend = document.querySelector('#graph-legend').getBoundingClientRect();
+      return [...document.querySelectorAll('.graph-node-card-label')].filter(card => {
+        const box = card.getBoundingClientRect();
+        return box.width && box.left < legend.right && box.right > legend.left
+          && box.top < legend.bottom && box.bottom > legend.top;
+      }).map(card => card.textContent.trim());
+    }""")
+    assert overlaps == []
+
+
+def _assert_every_tree_occurrence_is_inside_the_workspace(page) -> None:
+    outside = page.evaluate("""() => {
+      const view = document.querySelector('#graph-call-tree').getBoundingClientRect();
+      return [...document.querySelectorAll('#graph-call-tree .graph-call-tree-node')].filter(node => {
+        const box = node.getBoundingClientRect();
+        return box.left < view.left - 2 || box.right > view.right + 2
+          || box.top < view.top - 2 || box.bottom > view.bottom + 2;
+      }).length;
+    }""")
+    assert outside == 0
 
 
 def _chrome_executable(playwright: Playwright) -> str | None:
@@ -2115,13 +2144,13 @@ def test_graph_view_has_no_layer_or_module_rendering() -> None:
         assert page.locator(".view-controls, #layout-forceatlas2-noverlap").count() == 0
         assert page.locator("#graph-layers, #graph-groups, #layout-elk, #layout-cluster").count() == 0
         assert page.locator(".graph-layer-band, .graph-namespace-group, .graph-project-group").count() == 0
-        page.locator("#layout-status").filter(has_text="vue par graphe actif.").wait_for()
+        page.locator("#layout-status").filter(has_text="Disposition active : vue par graphe.").wait_for()
         page.locator("#advanced-controls > summary").click()
         page.locator("#layout-noverlap").click()
-        page.locator("#layout-status").filter(has_text="éviter les chevauchements actif.").wait_for()
+        page.locator("#layout-status").filter(has_text="Disposition active : éviter les chevauchements.").wait_for()
         assert page.locator("#layout-noverlap").get_attribute("aria-pressed") == "true"
         page.locator("#layout-forceatlas2").click()
-        page.locator("#layout-status").filter(has_text="regroupement des liens actif.").wait_for()
+        page.locator("#layout-status").filter(has_text="Disposition active : regroupement des liens.").wait_for()
         assert page.locator("#layout-noverlap").get_attribute("aria-pressed") == "false"
         assert page.locator("#layout-forceatlas2").get_attribute("aria-pressed") == "true"
         browser.close()
@@ -2173,7 +2202,7 @@ def test_complex_dataset_graph_geometry() -> None:
         graph = page.locator("#graph")
         assert graph.get_attribute("data-visible-node-count") == "180"
         assert graph.get_attribute("data-relation-count") == "300"
-        page.locator("#layout-status").filter(has_text="vue par graphe actif.").wait_for(state="visible")
+        page.locator("#layout-status").filter(has_text="Disposition active : vue par graphe.").wait_for(state="visible")
         card_size = _assert_architecture_cards_have_uniform_size(page)
         _assert_architecture_cards_do_not_overlap(page)
         _capture_render_snapshot(page, "complex-graph-initial")
@@ -2274,11 +2303,11 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         assert page.locator("#details").evaluate(
             "details => details.parentElement.classList.contains('toolbar')"
         )
-        page.locator("#layout-status").filter(has_text="vue par graphe actif.").wait_for(state="visible")
+        page.locator("#layout-status").filter(has_text="Disposition active : vue par graphe.").wait_for(state="visible")
         card_size = _assert_architecture_cards_have_uniform_size(page)
         _assert_architecture_cards_do_not_overlap(page)
         assert page.locator("#graph-summary").count() == 0
-        assert page.locator("#inventory-status").inner_text() == "Index complet"
+        assert page.locator("#inventory-status").inner_text() == "Index : complet"
         assert page.locator("#node-suggestions option").count() == 5
         display_controls = page.locator("#display-controls")
         display_controls.locator(":scope > summary").click()
@@ -2456,4 +2485,190 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         assert graph.get_attribute("data-invalid-coordinates") == "false"
         assert not errors
         context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_call_tree_context_widget_keys_badges_and_keeps_the_catalogue_still() -> None:
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator("#flows-tab").click()
+        expand_all = page.locator("#flow-mode-expand-all")
+        assert expand_all.is_visible() and expand_all.is_disabled()
+        entry = page.locator("#code-flows .code-flow-item").filter(has_text="GET /api/error")
+        before = entry.bounding_box()
+        entry.click()
+        page.locator("#graph-call-tree").wait_for(state="visible")
+        after = entry.bounding_box()
+        assert before is not None and after is not None
+        assert after["y"] == pytest.approx(before["y"], abs=1)
+        assert expand_all.is_enabled()
+        toggle = page.locator("#flow-context-toggle")
+        diagnostics = page.locator("#flow-mode-context-diagnostics")
+        key = page.locator("#flow-mode-context-key")
+        assert toggle.inner_text() == "Développer"
+        assert diagnostics.is_hidden() and key.is_hidden()
+        toggle.click()
+        assert toggle.inner_text() == "Réduire"
+        assert toggle.get_attribute("aria-expanded") == "true"
+        assert diagnostics.is_visible()
+        assert diagnostics.inner_text().startswith("Cohérence :")
+        assert page.locator("#flow-mode-context-stats").inner_text().startswith("Arbre :")
+        assert key.is_visible()
+        assert key.locator("dt").all_inner_texts() == ["C", "R", "U", "D", "(C/U)", "?"]
+        page.locator("#flow-call-tree-depth-increase").click()
+        badge_sizes = page.locator(
+            "#graph-call-tree .graph-call-tree-access-badge, #graph-call-tree .graph-call-tree-diagnostic-badge"
+        ).evaluate_all("items => items.map(item => parseFloat(getComputedStyle(item).fontSize))")
+        assert badge_sizes and min(badge_sizes) >= 10
+        page.locator("#graph-tab").click()
+        page.locator("#flows-tab").click()
+        assert toggle.inner_text() == "Développer"
+        browser.close()
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("width,height", [(1440, 900), (1024, 768), (390, 844)])
+def test_open_legend_never_covers_cards_or_the_panel(width: int, height: int) -> None:
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": width, "height": height})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator(".graph-node-card-label").first.wait_for()
+        page.locator("#graph-legend > summary").click()
+        page.wait_for_timeout(500)
+        rows = page.locator("#graph-legend .legend-group[open] .legend-row").evaluate_all(
+            "rows => rows.map(row => row.scrollWidth <= row.clientWidth + 1)"
+        )
+        assert rows and all(rows)
+        shapes = page.locator("#graph-legend .legend-shape").evaluate_all(
+            "items => items.map(item => item.getBoundingClientRect().width)"
+        )
+        assert shapes and min(shapes) >= 14
+        if width > 720:
+            _assert_no_card_under_open_legend(page)
+        else:
+            assert page.evaluate("""() => {
+              const legend = document.querySelector('#graph-legend').getBoundingClientRect();
+              const panel = document.querySelector('#architecture-toolbar').getBoundingClientRect();
+              return legend.top >= panel.bottom || legend.left >= panel.right;
+            }""")
+        browser.close()
+
+
+@pytest.mark.slow
+def test_graph_panel_inspector_and_catalogue_read_without_repetition() -> None:
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        card = page.locator(".graph-node-card-label").filter(has_text="order-service").first
+        card.wait_for()
+        assert page.evaluate("""() => {
+          const search = document.querySelector('#quick-search');
+          const controls = document.querySelector('#graph-mode-context');
+          return Boolean(search.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING);
+        }""")
+        assert page.locator("#inventory-status").inner_text().startswith("Index : ")
+        card.hover()
+        tooltip = page.locator(".graph-entity-tooltip").filter(has_text="order-service").first
+        assert "Build : maven" in tooltip.inner_text()
+        card.click(modifiers=["Shift"])
+        modal = page.locator("#inspector-modal")
+        modal.wait_for(state="visible")
+        headings = modal.locator("h2").all_text_contents()
+        assert "Routes appelées" in headings
+        assert "APIs consommées" not in headings
+        assert page.locator("#inspector-breadcrumb > *").count() == 0
+        assert modal.get_by_role("button", name=".", exact=True).count() == 0
+        badges = modal.locator(".details-meta .detail-badge").all_inner_texts()
+        total = next(
+            int(text.split(":")[1]) for text in badges
+            if text.startswith("Affichées") or text.startswith("Relations :")
+        )
+        qualified = [
+            int(text.split()[0]) for text in badges
+            if re.match(r"^\d+ (prouvée|inférée|conventionnelle|sans niveau de preuve)", text)
+        ]
+        assert not qualified or sum(qualified) == total
+        page.locator("#inspector-close").click()
+        page.locator("#contracts-mode-tab").click()
+        categories = page.locator("#resource-catalogue-categories button")
+        assert categories.first.locator("small").count() == 0
+        for index in range(categories.count()):
+            button = categories.nth(index)
+            count = button.locator("small")
+            if count.count() and count.inner_text() == "0":
+                assert button.is_disabled()
+        assert page.locator("#resource-catalogue-summary").is_hidden()
+        rows = page.locator("#microservices-list .resource-catalogue-row")
+        contexts = rows.locator(".reference-meta").all_inner_texts()
+        assert contexts and not any(text.startswith("order-service ·") for text in contexts)
+        for index in range(rows.count()):
+            row = rows.nth(index)
+            assert row.locator(".resource-catalogue-inspect, .resource-catalogue-no-inspector").count() == 1
+        browser.close()
+
+
+@pytest.mark.slow
+def test_contract_viewers_follow_the_interface_theme(tmp_path: Path) -> None:
+    contract = {
+        "module": "orders", "path": "orders.asyncapi.yaml",
+        "spec": {"asyncapi": "3.0.0", "info": {"title": "Orders", "version": "v1"},
+                 "servers": {"main": {"host": "broker:9092", "protocol": "kafka",
+                                      "description": "Shared broker."}},
+                 "channels": {}},
+    }
+    document = render_graph_html({"orders": []}, [], asyncapi_contracts=[contract])
+    document = document.replace(
+        "async function openAsyncApiContract(contract)",
+        "window.openAsyncApiContract = openAsyncApiContract; async function openAsyncApiContract(contract)",
+    )
+    target = tmp_path / "contracts.html"
+    target.write_text(document)
+    surface = """() => {
+      const root = document.querySelector('asyncapi-component').shadowRoot;
+      const panel = root.querySelector('.bg-white, .bg-gray-100');
+      return getComputedStyle(panel).backgroundColor;
+    }"""
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1280, "height": 900})
+        page.set_default_timeout(10_000)
+        page.goto(target.as_uri(), wait_until="load")
+        backgrounds = {}
+        for theme in ("dark", "light"):
+            if page.locator("html").get_attribute("data-theme") != theme:
+                page.locator("#theme-toggle").click()
+            page.evaluate("contract => openAsyncApiContract(contract)", contract)
+            page.wait_for_function(
+                "document.querySelector('asyncapi-component')?.shadowRoot"
+                "?.querySelector('.bg-white, .bg-gray-100')"
+            )
+            backgrounds[theme] = page.evaluate(surface)
+            badges = page.locator(".asyncapi-summary-badge").all_inner_texts()
+            assert badges[0] == "v1"
+            page.locator("#inspector-close").click()
+        assert backgrounds["light"] in {"rgb(255, 255, 255)", "rgb(247, 250, 252)"}
+        assert backgrounds["dark"] not in {"rgb(255, 255, 255)", "rgb(247, 250, 252)"}
         browser.close()

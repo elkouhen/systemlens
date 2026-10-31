@@ -864,6 +864,15 @@
         badge.title = `Relation ${confidenceLabels[confidence]} : ${[...new Set(edges.filter(link => link.confidence === confidence).map(link => link.provenance))].join(", ")}`;
         meta.append(badge);
       });
+      const qualifiedCount = edges.filter(link => confidenceLabels[link.confidence]).length;
+      if (qualifiedCount && qualifiedCount < edges.length) {
+        const remainder = edges.length - qualifiedCount;
+        const badge = document.createElement("span");
+        badge.className = "detail-badge";
+        badge.textContent = `${remainder} sans niveau de preuve`;
+        badge.title = "Relations pour lesquelles l’index ne porte pas de niveau de preuve";
+        meta.append(badge);
+      }
       if (complexity) {
         const scoreBadge = document.createElement("span");
         scoreBadge.className = `detail-badge complexity ${complexity.level}`;
@@ -876,7 +885,8 @@
       header.append(kicker, title, meta);
       details.append(header);
       if (!isMicroservice) {
-        const clusterPath = clusterPathForNode(id);
+        const nodeClusterPath = clusterPathForNode(id);
+        const clusterPath = isRootClusterPath(nodeClusterPath) ? null : nodeClusterPath;
         const architectureGroup = createDetailsGroup("Architecture");
         appendList("Layer", [architectureLayerForNode(id)], architectureGroup);
         appendActionList("Module", clusterPath ? [{
@@ -910,7 +920,7 @@
         const layer = node.layer_label || node.layer;
         if (layer && layer.toLowerCase() !== "unknown") appendList("Layer", [layer], architectureGroup);
         if (node.technology) appendList("Technologie", [node.technology], architectureGroup);
-        const modulePath = clusterPath && !["root", "ROOT"].includes(clusterPath) ? clusterPath : null;
+        const modulePath = isRootClusterPath(clusterPath) ? null : clusterPath;
         appendActionList("Module", modulePath ? [{
           label: modulePath,
           title: `Naviguer vers le module ${modulePath}`,
@@ -1010,6 +1020,15 @@
           ));
           return { call: call || { service: "Service inconnu", route: route.route, location: route.location }, targetNode, targetRoute };
         });
+        // One section lists every outgoing HTTP call: indexed calls without a
+        // matching route entry are added as unmatched calls.
+        const calledRouteLabels = new Set(calledRoutes.map(({ call }) => `${call.service} · ${call.route}`));
+        httpCalls.forEach(call => {
+          const label = `${call.service} · ${call.route}`;
+          if (calledRouteLabels.has(label)) return;
+          calledRouteLabels.add(label);
+          calledRoutes.push({ call, targetNode: null, targetRoute: null });
+        });
         appendActionList("Routes appelées", calledRoutes.map(({ call, targetNode, targetRoute }) => (
           targetNode && targetRoute
             ? {
@@ -1031,9 +1050,6 @@
                 location: call.location,
               }, call),
             }
-        )), relationsGroup);
-        appendList("APIs consommées", httpCalls.map(item => (
-          `${item.service} · ${item.route}`
         )), relationsGroup);
         appendActionList("Appelants HTTP", httpCallers.map(item => ({
           label: `${item.service} · ${item.route}`,

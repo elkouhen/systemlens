@@ -1,7 +1,18 @@
 // Ordered source module: 07-navigation.js
 // Owns toolbar navigation and panel visibility.
+    // The call-tree context widget is collapsed by default and whenever the
+    // user changes view; its toggle names the action it will perform.
+    function syncFlowContextCollapse() {
+      const context = document.getElementById("flow-mode-context");
+      const control = document.getElementById("flow-context-toggle");
+      const collapsed = Boolean(graphState.analysisContextCollapsed);
+      context?.classList.toggle("is-collapsed", collapsed);
+      control?.setAttribute("aria-expanded", String(!collapsed));
+      if (control) control.textContent = collapsed ? "Développer" : "Réduire";
+    }
     function setToolbarTab(tab, options = {}) {
       graphState.analysisContextCollapsed = true;
+      syncFlowContextCollapse();
       document.body.classList.toggle("catalogue-active", tab === "microservices");
       const { showingGraph, showingFlows, showingFlowGraph, graphVisible, resetView } = graphViewLifecycle.activate(tab, options);
       // The two navigation surfaces have different meanings: Graphe is the

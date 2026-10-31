@@ -21,7 +21,7 @@
     .advanced-tools > summary,
     .path-controls summary,
     .resource-analyses summary,
-    .legend summary { color: var(--ui-accent-text); }
+    .legend > summary { color: var(--ui-accent-text); }
     .brand-subtitle,
     .explore-search-help,
     .layout-status,
@@ -56,8 +56,8 @@
     .code-flow-step { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
     .code-flow-reason,
     .code-flow-step code { color: var(--ui-muted); }
-    .code-flow-services { color: var(--ui-text); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
-    .code-flow-services-label { color: var(--ui-muted); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+    .code-flow-services { color: var(--ui-text); font-size: var(--type-control); line-height: 1.4; overflow-wrap: anywhere; }
+    .code-flow-services-label { color: var(--ui-muted); font-size: var(--type-caption); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
     .code-flow-service-list { display: grid; gap: 2px; margin: 3px 0 0 17px; padding: 0; }
     .code-flow-services-unresolved { color: var(--ui-muted); margin-top: 3px; }
     .code-flow-step-kind { color: var(--ui-accent-text); }
@@ -127,7 +127,7 @@
     .service-kafka-meta a,
     .service-kafka-meta span { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
     .dto-tag { color: var(--ui-accent-text); background: var(--ui-accent-soft); }
-    .theme-toggle { width: auto !important; padding: 0 9px !important; font-size: 11px !important; font-weight: 750; }
+    .theme-toggle { width: auto !important; padding: 0 9px !important; font-size: var(--type-control) !important; font-weight: 750; }
     .toolbar-collapse { width: 32px !important; padding: 0 !important; font-size: 22px !important; }
     .dependency-focus-control { border-color: var(--ui-border); color: var(--ui-text); background: var(--ui-control); }
     .dependency-analysis-controls { border-color: var(--ui-border); background: var(--ui-widget); }
@@ -145,7 +145,7 @@
       .toolbar-header { align-items: start; }
       .brand-subtitle { display: none; }
       .graph-actions { gap: 6px; }
-      .graph-actions .graph-action-label { padding: 0 7px; font-size: 10px; }
+      .graph-actions .graph-action-label { padding: 0 7px; font-size: var(--type-caption); }
       .legend { right: 10px; bottom: 10px; }
       .inspector-modal { padding: 10px; }
       .inspector-dialog { border-radius: 16px; }

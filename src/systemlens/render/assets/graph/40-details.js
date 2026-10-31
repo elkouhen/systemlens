@@ -20,8 +20,8 @@
       inventoryStatus.hidden = false;
       inventoryStatus.classList.toggle("is-warning", indexingIssues.length > 0);
       inventoryStatus.textContent = indexingIssues.length
-        ? `${indexingIssues.length} fait${indexingIssues.length > 1 ? "s" : ""} à vérifier`
-        : "Index complet";
+        ? `Index : ${indexingIssues.length} fait${indexingIssues.length > 1 ? "s" : ""} à vérifier`
+        : "Index : complet";
       inventoryStatus.title = indexingIssues.length
         ? "Ouvrir les problèmes d'indexation"
         : "Aucun fait non résolu dans cet inventaire";
@@ -619,6 +619,9 @@
       inspectorBreadcrumb.replaceChildren();
       if (!architectureInspectorNode) return;
       const path = [...architectureInspectorHistory, architectureInspectorNode];
+      // The title already names the current element; the breadcrumb only
+      // helps once the user has navigated through related elements.
+      if (path.length < 2) return;
       path.forEach((node, index) => {
         if (index) {
           const separator = document.createElement("span");
@@ -838,7 +841,7 @@
       const meta = document.createElement("div");
       meta.className = "asyncapi-summary-meta";
       [
-        `v${spec.info?.version || "?"}`,
+        /^v/i.test(String(spec.info?.version || "")) ? String(spec.info.version) : `v${spec.info?.version || "?"}`,
         `${Object.keys(spec.channels || {}).length} canal${Object.keys(spec.channels || {}).length > 1 ? "s" : ""}`,
         `${Object.keys(spec.operations || {}).length} opération${Object.keys(spec.operations || {}).length > 1 ? "s" : ""}`,
       ].forEach(label => {

@@ -89,6 +89,11 @@ inspections reuse the viewer. If browser decompression or viewer initialization
 fails, the inspector displays the persisted contract as JSON. Closing or
 switching the inspector cancels the pending display update.
 
+The OpenAPI and AsyncAPI inspectors follow the light or dark theme of the
+export. The AsyncAPI summary shows the contract version once, for example `v1`
+whether the contract declares `1` or `v1`. The OpenAPI viewer still loads from
+its CDN, so it needs network access the first time it opens.
+
 
 Microservice cards in the Explorer view remain compact rectangles. A card with
 persisted internal code flows displays their count, so services with discovered
@@ -143,9 +148,21 @@ associated persistence classes.
 
 The resource catalogue keeps its filtered result list visible during resource
 inspection. Relations to other graph nodes remain interactive and reopen the
-inspector on the target. The inspector displays the visited path, makes
-previous architecture elements selectable in the breadcrumb, and provides a
-back action without closing the component.
+inspector on the target. Once the user has followed a relation, the
+inspector displays the visited path, makes previous architecture elements
+selectable in the breadcrumb, and provides a back action without closing the
+component. A first-level inspector shows no breadcrumb.
+
+A microservice inspector lists each outgoing HTTP call once under `Routes
+appelées`. Its relation badges sum to the displayed relation count, with
+`N sans niveau de preuve` for relations that carry no evidence level. The
+project root module is not listed.
+
+The catalogue title shows the visible and total counts, for example
+`Catalogue des ressources (24/24)`. Categories show their own counts, and an
+empty category is disabled. The Contexte column reads `kind · owner · detail`,
+for example `Route exposée · order-service · 2 clients`. A row without a
+dedicated inspector shows `Aperçu seul` instead of `Inspecter`.
 
 Selecting a catalogue row shows its type, owner, source, and indexed related
 resources in the right-hand preview. Each related-resource link selects that
@@ -282,8 +299,12 @@ is the only call-graph rendering mode.
 The upper graph toolbar shows `Centrer`, zoom, fit, selection reset, layout, and
 node-rendering actions in the architecture view. In the call-graph view it keeps
 centering, zoom, `Tout voir`, `Sélection`, and the tree controls including
-`Déplier tous les nœuds`; it does not repeat the call hierarchy. The context widget is collapsed by default and
-can be expanded with `Développer`. Dragging the empty tree workspace pans the
+`Déplier tout le graphe`; it does not repeat the call hierarchy. These controls
+stay in place, disabled, until a flow is selected. `Déplier tout le graphe`
+refits the expanded tree. The context widget is collapsed by default;
+`Développer` shows the flow identity, trigger, tree counts, consistency summary,
+and the key of the access annotations, and `Réduire` hides them. Changing view
+collapses it again. Dragging the empty tree workspace pans the
 tree, while clicking a service occurrence keeps its selection action. `Shift +
 click` on a service occurrence or call arc opens its dedicated introspection
 window. Hovering a service occurrence displays its level and cycle state.
@@ -326,7 +347,17 @@ The exported Explorer presents the graph in a shared workspace: a compact
 control surface, a searchable graph context, summary counters, and a separate
 legend and inspector. The visual treatment adapts to light and dark themes and
 constrained viewports without changing graph data, selection state, or the
-meaning of the existing controls. Secondary widgets use the same surface,
+meaning of the existing controls. No widget text is smaller than 10 pixels.
+
+The Graphe panel starts with the search field, followed by camera and
+rendering controls. The index status reads `Index : complet` or
+`Index : N faits à vérifier`, and the layout status reads
+`Disposition active : <disposition>.` A microservice tooltip labels its build
+tool, for example `Build : maven`.
+
+The legend groups node types, relations, connectivity, and evidence level.
+When open, it reserves a right column or a bottom band of the graph workspace,
+so no fitted card lies under it. Secondary widgets use the same surface,
 spacing, status, and interactive-row treatment for details, filters, code
 flows, references, and indexing issues.
 

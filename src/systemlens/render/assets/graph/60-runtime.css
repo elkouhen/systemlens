@@ -2,7 +2,7 @@
     .graph-architecture-path.is-runtime-observed { stroke-width: var(--runtime-stroke, 2.4px); opacity: .95; }
     .graph-architecture-path.is-runtime-observed.is-runtime-failing { stroke: #dc2626; }
     .graph-architecture-path.is-runtime-silent { stroke: #94a3b8; stroke-width: 1.6px; stroke-dasharray: 5 5; opacity: .8; }
-    .graph-node-runtime-badge { position: absolute; bottom: -9px; left: 50%; z-index: 2; transform: translateX(-50%); padding: 2px 5px; border: 1px solid #0f766e; border-radius: 8px; color: #134e4a; background: #f0fdfa; box-shadow: 0 1px 4px rgba(15, 23, 42, .14); font-size: 9.5px; font-weight: 750; line-height: 1; white-space: nowrap; }
+    .graph-node-runtime-badge { position: absolute; bottom: -9px; left: 50%; z-index: 2; transform: translateX(-50%); padding: 2px 5px; border: 1px solid #0f766e; border-radius: 8px; color: #134e4a; background: #f0fdfa; box-shadow: 0 1px 4px rgba(15, 23, 42, .14); font-size: var(--type-caption); font-weight: 750; line-height: 1; white-space: nowrap; }
     .graph-node-runtime-badge.has-gaps { border-color: #b45309; color: #78350f; background: #fffbeb; }
     .graph-node-runtime-badge.is-failing { border-color: #b91c1c; color: #7f1d1d; background: #fef2f2; }
     .graph-node-runtime-badge.is-no_telemetry { border-style: dashed; border-color: #94a3b8; color: #475569; background: #f8fafc; }
@@ -15,14 +15,14 @@
 .legend-line.legend-runtime-failing { height: 4px; background: #dc2626; }
 .legend-runtime-summary { font-weight: 750; color: #0f766e; }
 /* Volume written on arcs; the halo keeps it legible over crossing links. */
-.graph-runtime-link-label { fill: #0f766e; font-size: 10px; font-weight: 800; paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+.graph-runtime-link-label { fill: #0f766e; font-size: var(--type-caption); font-weight: 800; paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
 .graph-runtime-link-label.is-runtime-silent { fill: #64748b; font-style: italic; font-weight: 700; }
 .graph-runtime-link-label.is-runtime-failing { fill: #b91c1c; }
 :root[data-theme="dark"] .graph-runtime-link-label { fill: #5eead4; stroke: #0b1220; }
 :root[data-theme="dark"] .graph-runtime-link-label.is-runtime-silent { fill: #94a3b8; }
 :root[data-theme="dark"] .graph-runtime-link-label.is-runtime-failing { fill: #fca5a5; }
 :root[data-theme="dark"] .legend-runtime-summary { color: #5eead4; }
-    .legend-runtime-gaps { justify-self: start; height: 27px; padding: 0 8px; border: 1px solid var(--ui-accent-border, #93c5fd); border-radius: 7px; color: var(--ui-accent-text, #1d4ed8); background: var(--ui-control, #fff); font: inherit; font-size: 10px; font-weight: 750; cursor: pointer; }
+    .legend-runtime-gaps { justify-self: start; height: 27px; padding: 0 8px; border: 1px solid var(--ui-accent-border, #93c5fd); border-radius: 7px; color: var(--ui-accent-text, #1d4ed8); background: var(--ui-control, #fff); font: inherit; font-size: var(--type-caption); font-weight: 750; cursor: pointer; }
     :root[data-theme="dark"] .graph-architecture-path.is-runtime-silent { stroke: #64748b; }
     :root[data-theme="dark"] .graph-node-runtime-badge { border-color: #5eead4; color: #ccfbf1; background: #134e4a; }
     :root[data-theme="dark"] .graph-node-runtime-badge.has-gaps { border-color: #fbbf24; color: #fef3c7; background: #78350f; }

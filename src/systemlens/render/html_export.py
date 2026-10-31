@@ -42,6 +42,7 @@ _GRAPH_STYLE_FILENAMES = (
     "40-ergonomics.css",
     "50-obsidian.css",
     "60-runtime.css",
+    "65-contracts.css",
 )
 _GRAPH_STYLE_MODULES = tuple(_ASSET_ROOT / "graph" / name for name in _GRAPH_STYLE_FILENAMES)
 _GRAPH_CSS = "".join(
@@ -70,8 +71,11 @@ _ASYNCAPI_WEB_COMPONENT_JS = (
 _ASYNCAPI_WEB_COMPONENT_CSS = (
     _ASSET_ROOT / "vendor" / "asyncapi-react-component-3.1.8.min.css"
 ).read_text(encoding="utf-8")
+# The theme bridge follows the vendor rules inside the component's shadow root.
+_ASYNCAPI_THEME_CSS = (_ASSET_ROOT / "asyncapi_theme.css").read_text(encoding="utf-8")
 _ASYNCAPI_COMPRESSED_ASSETS = b64encode(gzip.compress(
-    json.dumps({"js": _ASYNCAPI_WEB_COMPONENT_JS, "css": _ASYNCAPI_WEB_COMPONENT_CSS},
+    json.dumps({"js": _ASYNCAPI_WEB_COMPONENT_JS,
+                "css": f"{_ASYNCAPI_WEB_COMPONENT_CSS}\n{_ASYNCAPI_THEME_CSS}"},
                separators=(",", ":")).encode("utf-8"),
     mtime=0,
 )).decode("ascii")
