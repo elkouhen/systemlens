@@ -171,12 +171,19 @@ def _validate_lab(
             flow["id"] for flow in graph_data["code_flows"]
             if flow["steps"][0]["name"] == "POST /api/orders"
         }
-        if codeql is not None and not any(
+        if not order_roots:
+            raise ValueError("The laboratory export has no POST /api/orders call flow")
+        # ADR-59: the reservation handler reads the product before it
+        # publishes StockDepleted, so the order call graph reports no
+        # async-write/sync-read risk.
+        if any(
             item["flow_id"] in order_roots
-            and item["classification"] == "insufficient_evidence"
+            and item["classification"] == "potential_risk"
             for item in graph_data["flow_diagnostics"]
         ):
-            raise ValueError("The order call flow has no conservative async-write/read diagnostic")
+            raise ValueError(
+                "The order call flow reports a stale read although its read precedes the publication"
+            )
         with sqlite3.connect(application / ".systemlens" / "findings.db") as connection:
             counts = dict(connection.execute(
                 "SELECT 'indexed_endpoints', COUNT(*) FROM endpoints WHERE source != 'manifest' "
