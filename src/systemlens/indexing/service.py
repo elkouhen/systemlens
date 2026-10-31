@@ -327,6 +327,9 @@ def _index_repo(
         include_strategy1_generated_sources=strategy1_enabled,
         include_generated_sources=generate_sources,
     )
+    # Extractors, method inventory, symbol pass and flow materialization all
+    # read the same Java trees: keep one parse per file for this pass.
+    java_parser.reserve_parse_cache(sum(path.endswith(".java") for path in current_hashes))
     if kubernetes:
         _report_progress(progress, "→ Indexation : découverte des workloads Kubernetes...")
         try:

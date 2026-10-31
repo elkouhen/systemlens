@@ -19,6 +19,7 @@ import os
 import re
 import sys
 import time
+from collections import OrderedDict
 from functools import lru_cache
 from pathlib import Path
 
@@ -71,7 +72,17 @@ def java_parser(owner: str = "") -> Parser:
     return _JAVA_PARSER
 
 
-@lru_cache(maxsize=512)
+# Parsed trees kept for one indexing pass, most recently used last. The
+# default bound suits ad-hoc callers; an index pass widens it to its Java
+# inventory so every extractor and the call-graph stage share one parse.
+_DEFAULT_PARSE_CACHE_SIZE = 512
+# Upper bound on retained trees, whatever the inventory size: memory grows
+# with the number of retained trees and their source size.
+_MAX_PARSE_CACHE_SIZE = 20_000
+_parse_cache: OrderedDict[tuple[str, str], tuple[bytes, Node] | None] = OrderedDict()
+_parse_cache_size = _DEFAULT_PARSE_CACHE_SIZE
+
+
 def parse_java(repo_root_str: str, rel_path: str) -> tuple[bytes, Node] | None:
     """Parse a `.java` file once and return ``(source_bytes, root_node)``.
 
@@ -80,21 +91,50 @@ def parse_java(repo_root_str: str, rel_path: str) -> tuple[bytes, Node] | None:
     still providing useful declarations and integrations elsewhere. Callers
     must inspect ``root_node.has_error`` and surface incomplete coverage when
     needed. Cached: the same tree is reused for every extractor that visits the
-    file during one indexation. Cleared by :func:`clear_caches` (wired into
+    file during one indexation, within the bound set by
+    :func:`reserve_parse_cache`. Cleared by :func:`clear_caches` (wired into
     ``scanner.clear_analysis_caches``).
     """
+    # Callers pass the root resolved or not: one key per real file.
+    key = (_real_root(repo_root_str), rel_path)
+    if key in _parse_cache:
+        _parse_cache.move_to_end(key)
+        return _parse_cache[key]
     path = Path(repo_root_str) / rel_path
     try:
         source = path.read_bytes()
     except OSError:
-        return None
-    tree = java_parser("parse_java").parse(source)
-    return source, tree.root_node
+        result = None
+    else:
+        tree = java_parser("parse_java").parse(source)
+        result = (source, tree.root_node)
+    _parse_cache[key] = result
+    while len(_parse_cache) > _parse_cache_size:
+        _parse_cache.popitem(last=False)
+    return result
+
+
+@lru_cache(maxsize=64)
+def _real_root(repo_root_str: str) -> str:
+    return os.path.realpath(repo_root_str)
+
+
+def reserve_parse_cache(file_count: int) -> None:
+    """Retain up to ``file_count`` parsed trees for the current indexing pass.
+
+    The bound never drops below the default and never exceeds
+    ``_MAX_PARSE_CACHE_SIZE``. Above that size, files beyond the bound are
+    parsed again by later stages.
+    """
+    global _parse_cache_size
+    _parse_cache_size = max(_DEFAULT_PARSE_CACHE_SIZE, min(file_count, _MAX_PARSE_CACHE_SIZE))
 
 
 def clear_caches() -> None:
-    """Purge le cache des arbres parsés (à appeler en tête d'indexation)."""
-    parse_java.cache_clear()
+    """Purge parsed trees and restore the default bound (start of an index)."""
+    global _parse_cache_size
+    _parse_cache.clear()
+    _parse_cache_size = _DEFAULT_PARSE_CACHE_SIZE
 
 
 # --- Traversal primitives ------------------------------------------------

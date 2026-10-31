@@ -228,6 +228,10 @@ per call site: when a site outside the entry's class fans out to several
 overrides of one method name and one is declared by the entry's class, only
 that override is followed. The `analyze` call-chain diagnostics apply the same
 rule. No application class name is special-cased. Explicit `super` calls target direct parent bodies.
+Each indexing pass sizes the parsed-tree cache to its Java inventory, bounded
+by 20,000 files, so extractors, the method inventory, the symbol pass and flow
+materialization share one parse per file. Retained memory therefore grows with
+the inventory up to that bound; larger repositories reparse the excess files.
 A method of an anonymous class is not indexed; its body belongs to the named
 method creating the instance, like a lambda body (ADR-62). In that body, a
 call on `this`, `super`, `this.field` or without receiver stays unresolved.

@@ -1278,3 +1278,47 @@ def test_placeholder_methods_carry_the_discovered_module_identity(tmp_path: Path
     assert placeholder.module == "com.acme:billing-svc"
     # The billing application is another service: the route stops at its boundary.
     assert flows == []
+
+
+def test_flow_stage_parses_each_java_file_once_beyond_the_default_cache(tmp_path: Path, monkeypatch):
+    from systemlens.discovery.java import parser
+    from systemlens.indexing.code_flows import materialize_code_flows
+    from systemlens.indexing.integration_methods import scheduled_trigger_endpoints
+
+    sources = {f"app/p/C{index}.java": f"package p; class C{index} {{ void m() {{}} }}" for index in range(6)}
+    modules = [DiscoveredModule("app", tmp_path / "app", "maven", None, "application", True, "")]
+    for path, source in sources.items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(source)
+    parsed: list[int] = []
+    real_parser = parser.java_parser
+
+    class Counting:
+        def __init__(self, owner: str = "") -> None:
+            self.inner = real_parser(owner)
+
+        def parse(self, source: bytes):
+            parsed.append(1)
+            return self.inner.parse(source)
+
+    def run_flow_stage() -> int:
+        parsed.clear()
+        paths = list(sources)
+        triggers = scheduled_trigger_endpoints(tmp_path, paths, [], modules)
+        methods = materialize_integration_methods(tmp_path, triggers, paths, modules)
+        JavaSymbols(tmp_path, methods, paths)
+        materialize_code_flows(tmp_path, triggers, modules)
+        return len(parsed)
+
+    # Restore the module bound after the test, whatever the steps below set.
+    monkeypatch.setattr(parser, "_parse_cache_size", parser._parse_cache_size)
+    monkeypatch.setattr(parser, "java_parser", Counting)
+    monkeypatch.setattr(parser, "_DEFAULT_PARSE_CACHE_SIZE", 2)
+    parser.clear_caches()
+    # A bound below the inventory reparses files in every stage.
+    assert run_flow_stage() > len(sources)
+
+    parser.clear_caches()
+    parser.reserve_parse_cache(len(sources))
+    assert run_flow_stage() == len(sources)
+    parser.clear_caches()
