@@ -2531,10 +2531,14 @@ class OrderController {
     methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
 
     flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path)
+    closed = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path, closed_world=True)
 
     assert len(flows) == 1
     assert flows[0].steps[-1].name == "orders.stock"
     assert flows[0].confidence == "low"
+    # The source engine is the whole call graph: like CodeQL's closed world,
+    # the unique implementation of StockPort is exact.
+    assert [flow.confidence for flow in closed] == ["medium"]
 
 
 def test_ast_fallback_prefers_same_module_for_duplicate_qualified_types(tmp_path: Path) -> None:

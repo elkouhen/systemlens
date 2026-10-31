@@ -872,6 +872,7 @@ def _index_repo(
                         source_paths=list(current_hashes),
                         max_hops=config.codeql_max_hops,
                         codeql_edge_confidence=config.codeql_edge_confidence,
+                        closed_world=not engine.resolves_types,
                         progress=progress,
                         call_graph_sink=persist_call_graph,
                     )
@@ -1048,6 +1049,7 @@ def _index_repo(
                     source_paths=list(current_hashes),
                     max_hops=config.codeql_max_hops,
                     codeql_edge_confidence=config.codeql_edge_confidence,
+                    closed_world=not engine.resolves_types,
                     stats=codeql_stats, reachability=reachability,
                     progress=progress,
                     call_chain_progress=progress if show_call_chains else None,
@@ -1106,6 +1108,7 @@ def _index_repo(
                 source_paths=list(current_hashes),
                 max_hops=config.codeql_max_hops,
                 codeql_edge_confidence=config.codeql_edge_confidence,
+                closed_world=not engine.resolves_types,
                 stats=codeql_stats,
                 reachability=reachability,
                 progress=progress,

@@ -191,6 +191,32 @@ def test_build_graph_links_generated_client_to_the_same_openapi_contract() -> No
     ]
 
 
+def test_build_graph_links_a_typed_operation_to_a_rest_declaration_contract() -> None:
+    call = make_endpoint(
+        "call",
+        "GET /clients",
+        "commande/CommandeService.java",
+        module="commande-service",
+        framework="strategy1-openapi-operation",
+        snippet="clientApi.getClients()\n// systemlens-openapi-contract:model-client/openapi/client.yaml",
+    )
+    # A Strategy1 ``.rest`` declaration serves the contract its evidence names.
+    serve = make_endpoint(
+        "serve",
+        "GET /clients",
+        "client-service/src/main/resources/openapi/client.rest",
+        module="client-service",
+        framework="openapi",
+        snippet="GET /clients\n// systemlens-openapi-contract:model-client/openapi/client.yaml",
+    )
+
+    edges = build_graph({"commande-service": [call], "client-service": [serve]})
+
+    assert [(edge.from_service, edge.to_service) for edge in edges] == [
+        ("commande-service", "client-service")
+    ]
+
+
 def test_build_graph_requires_an_exact_service_target_hint() -> None:
     call = make_endpoint(
         "call", "GET /orders", "gateway/Client.java", snippet="http://order-service"

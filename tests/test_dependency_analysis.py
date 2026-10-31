@@ -440,6 +440,29 @@ def test_external_rest_api_properties_client_creates_an_annotated_microservice()
     assert next(node for node in result["nodes"] if node["id"] == "microservice:partner-catalog")["external"] is True
 
 
+def test_strategy1_rest_config_get_rest_names_an_external_microservice(tmp_path: Path) -> None:
+    source = tmp_path / "src/main/java/RestPartnerConfig.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class RestPartnerConfig {
+  // getRest().get("ignored-in-comment")
+  String url() { return properties.getRest().get("partner-catalog").getUrl(); }
+  String other() { return cache.get("not-a-service"); }
+}
+""",
+        encoding="utf-8",
+    )
+    files = ["src/main/java/RestPartnerConfig.java"]
+
+    endpoints = infer_framework_endpoints(tmp_path, files=files, configured_api_client_strategy1=True)
+
+    assert [(endpoint.framework, endpoint.start_line) for endpoint in endpoints] == [
+        ("configured-api-client-domain", 3)
+    ]
+    assert "systemlens-external-microservice:partner-catalog" in endpoints[0].snippet
+    assert not infer_framework_endpoints(tmp_path, files=files), "the rule is Strategy1-only"
+
+
 def test_multiple_configured_call_sites_collapse_to_single_relation() -> None:
     call_a = make_endpoint(
         "call",

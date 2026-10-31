@@ -18,7 +18,8 @@ calls when an `ApiClient` receiver invokes `invokeAPI` with a literal route and 
 `HttpMethod` enum. It retains the exact route, method, source invocation and
 uniquely resolved Maven input contract path. A client call may link to a served
 operation only through that exact contract path, with one unique target module and
-a compatible route. Route similarity alone never identifies a service.
+a compatible route. A `.rest` declaration serves the contract its evidence
+names. Route similarity alone never identifies a service.
 
 A `@Value` field declared in another Java file is usable only when its name has
 one unambiguous property key across the indexed repository; conflicting
@@ -31,7 +32,8 @@ the factory argument remains unresolved, the scanner may use a unique matching
 inferred evidence. Configuration constants alone do not create HTTP call
 endpoints. A matched `@Bean` is retained as `configured-api-client-factory`
 evidence so dependency analysis can establish the service-level relation without
-presenting the factory as a route call.
+presenting the factory as a route call. In a `Rest*Config*` class,
+`getRest().get("partner")` names the external microservice `partner`.
 
 When the domain or client type identifies a local `model-*` OpenAPI module, its
 contract path is retained as additional evidence. Beans returning `WebClient` or
@@ -223,7 +225,8 @@ not become a code-flow root.
 
 For Strategy1 producer conventions, CodeQL may complete a missing payload type
 from the second argument of `envoyerMessageKafka*`, including local data-flow
-within the enclosing method. The second argument remains authoritative when a
+within the enclosing method. Without CodeQL, a call to a unique helper of the
+enclosing class gives its declared return type. The second argument remains authoritative when a
 third argument is present. Simple `Message<T>`, `GenericMessage<T>` and
 `ProducerRecord<K,V>` wrappers are unwrapped. It never replaces an AST type
 and applies only a unique source-backed result; ambiguous results remain
@@ -234,7 +237,7 @@ Strategy1 resolves listener and sender topic keys against `kafka.yml` or
 separators. The supported declaration is the nested `topics.<key>.nom` leaf.
 It does not infer a match from a partial key or an undeclared topic.
 Only the `topics` attribute of `@KafkaListener` is inspected for topic
-references. Properties such as `topics.<key>.groupe` in `groupId` are
+references; a kebab-case key such as `commande-creee` matches `COMMANDE_CREEE`. Properties such as `topics.<key>.groupe` in `groupId` are
 consumer-group settings, not topic references, and are ignored.
 
 If the declared value starts with `${kafka.prefix-topic}.`, Strategy1 removes

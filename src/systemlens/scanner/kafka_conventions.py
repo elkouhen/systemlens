@@ -33,8 +33,10 @@ from systemlens.scanner._spring_properties import (
 from systemlens.domain.topic_expressions import spring_topic_reference
 
 _STRATEGY1_PRODUCER_RE = re.compile(r"\bgetTopics\s*\(\s*\)\s*\.\s*get([A-Z]\w*)\s*\(\s*\)")
+# Spring relaxed binding writes keys in kebab case (``commande-creee``);
+# the logical key is normalized like a ``kafka.yml`` key afterwards.
 _STRATEGY1_KAFKA_KEY_RE = re.compile(
-    r"\$\{\s*((?:[A-Za-z_]\w*\.)*(?:kafka\.)?topics\.[A-Za-z_]\w*\.nom)(?:\s*:[^}]*)?\s*\}"
+    r"\$\{\s*((?:[A-Za-z_][\w-]*\.)*(?:kafka\.)?topics\.[A-Za-z_][\w-]*\.nom)(?:\s*:[^}]*)?\s*\}"
 )
 _STRATEGY1_SEND_METHOD_PREFIX = "envoyerMessageKafka"
 def _validate_strategy1_topic(
@@ -333,7 +335,40 @@ def _strategy1_method_payload_type(source: bytes, invocation) -> str | None:
         )
     if payload.type == "object_creation_expression":
         return _message_payload_type(_object_creation_type(source, payload))
+    if payload.type == "method_invocation":
+        return _same_class_return_payload_type(source, payload)
     return None
+
+
+def _same_class_return_payload_type(source: bytes, call) -> str | None:
+    """Type a ``helper(...)`` payload by its declared return type.
+
+    Only an unqualified (or ``this.``) call to one method of the enclosing
+    class with that name and arity qualifies; overloads, inherited helpers and
+    other receivers stay unknown, so no engine is needed for this local case.
+    """
+    receiver, name, arguments = java_parser.invocation_parts(call, source)
+    if name is None or (receiver is not None and receiver.type != "this"):
+        return None
+    owner = java_parser.enclosing(call, "class_declaration", "enum_declaration", "record_declaration")
+    body = owner.child_by_field_name("body") if owner is not None else None
+    if body is None:
+        return None
+    candidates = []
+    for declaration in body.named_children:
+        if declaration.type != "method_declaration":
+            continue
+        parameters = declaration.child_by_field_name("parameters")
+        arity = len([child for child in parameters.named_children
+                     if child.type in {"formal_parameter", "spread_parameter"}]) if parameters is not None else 0
+        if java_parser.declaration_name(declaration, source) == name and arity == len(arguments):
+            candidates.append(declaration)
+    if len(candidates) != 1:
+        return None
+    return_type = candidates[0].child_by_field_name("type")
+    if return_type is None or return_type.type == "void_type":
+        return None
+    return _message_payload_type(java_parser.node_text(source, return_type))
 
 
 def infer_kafka_topic_strategy1_endpoints(

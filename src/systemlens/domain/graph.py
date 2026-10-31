@@ -360,10 +360,12 @@ def build_graph(
             serves_by_service.setdefault(service, []).append(endpoint)
     serves_by_contract: dict[str, list[tuple[str, MessageEndpoint]]] = {}
     for service, endpoint in all_endpoints:
-        if endpoint.system == "rest" and endpoint.role == "serve":
-            contract = endpoint.path if endpoint.framework == "openapi" else None
-            if contract is not None:
-                serves_by_contract.setdefault(contract, []).append((service, endpoint))
+        if endpoint.system == "rest" and endpoint.role == "serve" and endpoint.framework == "openapi":
+            # A Strategy1 ``.rest`` declaration serves the contract named by
+            # its evidence, not the declaration file itself.
+            declared = openapi_contract_evidence(endpoint)
+            for served_contract in {endpoint.path, *([declared] if declared else [])}:
+                serves_by_contract.setdefault(served_contract, []).append((service, endpoint))
     manifest_services = {
         service
         for service, endpoint in all_endpoints

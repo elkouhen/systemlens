@@ -545,7 +545,7 @@ class Store:
         ).fetchall()
         patterns = (
             re.compile(r"getTopics\s*\(\s*\)\s*\.\s*get([A-Z]\w*)\s*\("),
-            re.compile(r"kafka\.topics\.([A-Za-z_]\w*)\b"),
+            re.compile(r"kafka\.topics\.([A-Za-z_][\w-]*)"),
         )
         for row in rows:
             display = next(

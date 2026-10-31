@@ -116,6 +116,31 @@ record OrderCreated(String id) {}
     ]
 
 
+def test_strategy1_listener_resolves_a_kebab_case_spring_key(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  COMMANDE_CREEE:\n    nom: ${kafka.prefix-topic}.commande.creee\n    groupe: orchestrateur\n",
+        encoding="utf-8",
+    )
+    source = tmp_path / "src/main/java/Listener.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """import org.springframework.kafka.annotation.KafkaListener;
+class Listener {
+  @KafkaListener(topics = "${kafka.topics.commande-creee.nom}", groupId = "${kafka.topics.commande-creee.groupe}")
+  void consume(CommandeCreee commande) {}
+}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = apply_kafka_endpoints([], infer_kafka_endpoints(tmp_path))
+
+    # Spring relaxed binding writes the key in kebab case; the group is no topic.
+    assert [(endpoint.role, endpoint.topic, endpoint.topic_dynamic) for endpoint in endpoints] == [
+        ("consume", "commande.creee", False),
+    ]
+
+
 def test_strategy1_does_not_fabricate_topics_missing_from_kafka_yaml(tmp_path: Path) -> None:
     (tmp_path / "kafka.yml").write_text(
         "topics:\n  OrdersCreated:\n    nom: commerce.orders.created\n",
@@ -219,3 +244,62 @@ record OrderCreated(String id) {}
     assert [(endpoint.topic, endpoint.topic_dynamic) for endpoint in endpoints] == [
         ("commerce.orders.created", False)
     ]
+
+
+def test_strategy1_payload_takes_the_return_type_of_a_unique_local_helper(tmp_path: Path) -> None:
+    (tmp_path / "kafka.yml").write_text(
+        "topics:\n  ORDERS:\n    nom: orders\n  RETRIES:\n    nom: retries\n  ERRORS:\n    nom: errors\n",
+        encoding="utf-8",
+    )
+    source = tmp_path / "src/main/java/Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """class Publisher {
+  void publish(String id) {
+    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getOrders(), build(id));
+    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getRetries(), this.wrap(id));
+    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getErrors(), error(id));
+  }
+  private OrderCreated build(String id) { return new OrderCreated(id); }
+  private Message<RetryCreated> wrap(String id) { return null; }
+  private ErrorA error(String id) { return null; }
+  private ErrorB error(Integer id) { return null; }
+}
+""",
+        encoding="utf-8",
+    )
+
+    endpoints = infer_kafka_endpoints(tmp_path, ["src/main/java/Publisher.java"])
+
+    # Overloads of the same arity leave the payload type to the call graph.
+    assert sorted((endpoint.topic, endpoint.message_type) for endpoint in endpoints) == [
+        ("errors", None), ("orders", "OrderCreated"), ("retries", "RetryCreated"),
+    ]
+
+
+def test_each_index_pass_applies_the_configured_strategy(tmp_path: Path) -> None:
+    from systemlens.indexing.service import index_repo
+    from systemlens.infrastructure.config import Config
+    from systemlens.storage.sqlite import Store
+
+    (tmp_path / "kafka.yml").write_text("topics:\n  ORDERS:\n    nom: orders\n", encoding="utf-8")
+    source = tmp_path / "src/main/java/Publisher.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "class Publisher {\n"
+        "  void publish(OrderCreated event) {\n"
+        "    kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getOrders(), event);\n"
+        "  }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    def strategy1_topics(config: Config) -> list[str]:
+        with Store(tmp_path) as store:
+            index_repo(tmp_path, config, store)
+            return [e.topic for e in store.all_endpoints() if e.framework == "kafka-topic-strategy1"]
+
+    assert strategy1_topics(Config(strategy="strategy1", call_graph_engine="source")) == ["orders"]
+    assert strategy1_topics(Config(strategy="strategy1", call_graph_engine="source")) == ["orders"]
+    # config.yml is the durable choice: the persisted profile never overrides it.
+    assert strategy1_topics(Config(strategy="default", call_graph_engine="source")) == []

@@ -21,8 +21,9 @@ class Service {
   void multi() {}
   void multi(String s) {}
 }
-interface Port { void send(); }
-class Adapter implements Port { public void send() {} }
+interface Port { void send(); void close(); }
+class Adapter implements Port { public void send() {} public void close() {} }
+class Other implements Port { public void send() {} public void close() {} }
 class Base { void inherited() {} }
 class Patterns extends Base {
   private Service service;
@@ -87,7 +88,81 @@ def test_source_engine_resolves_common_spring_call_shapes(tmp_path: Path) -> Non
 def test_source_engine_keeps_doubt_where_syntax_cannot_decide(tmp_path: Path) -> None:
     calls = _calls(tmp_path)
 
-    # Dependencies may add implementations of a source interface.
-    assert calls["send"] == [(_line("public void send"), "possible")]
+    # Two source implementations of an interface stay possible.
+    assert sorted(calls["send"]) == [(_line("class Adapter"), "possible"), (_line("class Other"), "possible")]
     # A method reference to a name declared with two arities stays unresolved.
     assert "multi" not in calls
+
+
+def test_an_override_typed_through_an_external_wildcard_import_is_dispatched(tmp_path: Path) -> None:
+    files = {
+        "app/src/main/java/p/Port.java": (
+            "package p;\nimport org.springframework.http.HttpHeaders;\n"
+            "interface Port { String all(HttpHeaders headers); }\n"
+        ),
+        "app/src/main/java/p/Adapter.java": (
+            "package p;\nimport org.springframework.http.*;\n"
+            "class Adapter implements Port {\n"
+            "  public String all(HttpHeaders headers) { return check(headers); }\n"
+            "  String check(HttpHeaders headers) { return \"\"; }\n"
+            "}\n"
+        ),
+        "app/src/main/java/p/Controller.java": (
+            "package p;\nimport org.springframework.http.HttpHeaders;\n"
+            "class Controller {\n"
+            "  private Port port;\n"
+            "  String run(HttpHeaders headers) { return port.all(headers); }\n"
+            "}\n"
+        ),
+    }
+    for path, text in files.items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(text, encoding="utf-8")
+    module = DiscoveredModule(
+        name="app", path=tmp_path / "app", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    methods = materialize_integration_methods(tmp_path, [], list(files), [module])
+    symbols = JavaSymbols(tmp_path, methods, list(files))
+
+    edges = {(call.caller.rsplit(".", 2)[-2:][1], call.callee, call.dispatch_confidence)
+             for call in symbols.fallback_calls(set())}
+    closed = {(call.caller.rsplit(".", 2)[-2:][1], call.callee, call.dispatch_confidence)
+              for call in symbols.fallback_calls(set(), closed_world=True)}
+
+    # ``HttpHeaders`` stays unresolved in Adapter, yet the simple name
+    # matches the one contract the interface declares.
+    assert ("run", "p.Adapter.all", "possible") in edges
+    # As the whole call graph, a unique source implementation is exact.
+    assert ("run", "p.Adapter.all", "exact") in closed
+    # A concrete body with an unresolved parameter still implements itself.
+    assert ("all", "p.Adapter.check", "exact") in edges
+
+
+def test_a_runtime_implemented_repository_method_is_a_possible_target(tmp_path: Path) -> None:
+    path = "app/src/main/java/p/Orders.java"
+    (tmp_path / path).parent.mkdir(parents=True)
+    (tmp_path / path).write_text(
+        "package p;\n"
+        "import org.springframework.data.jpa.repository.JpaRepository;\n"
+        "interface OrderRepository extends JpaRepository<Order, String> { Order findByOrderId(String id); }\n"
+        "class Order {}\n"
+        "class OrderService {\n"
+        "  private OrderRepository repository;\n"
+        "  Order find(String id) { return repository.findByOrderId(id); }\n"
+        "  Order missing(String id) { return repository.findById(id); }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="app", path=tmp_path / "app", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    methods = materialize_integration_methods(tmp_path, [], [path], [module])
+    symbols = JavaSymbols(tmp_path, methods, [path])
+
+    calls = [(call.caller, call.callee, call.dispatch_confidence)
+             for call in symbols.fallback_calls(set(), closed_world=True)]
+
+    # Spring generates the body: the declaration is the only source target.
+    assert calls == [("p.OrderService.find", "p.OrderRepository.findByOrderId", "possible")]

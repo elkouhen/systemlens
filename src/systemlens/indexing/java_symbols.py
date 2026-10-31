@@ -19,7 +19,12 @@ from systemlens.callgraph.model import MethodCall
 
 _TYPES = {"class_declaration", "interface_declaration", "record_declaration", "enum_declaration"}
 _PRIMITIVES = {"byte", "short", "int", "long", "float", "double", "char", "boolean", "void"}
-_JAVA_LANG = {"String", "Object", "Boolean", "Byte", "Short", "Integer", "Long", "Float", "Double", "Character"}
+_JAVA_LANG = {
+    "String", "Object", "Boolean", "Byte", "Short", "Integer", "Long", "Float", "Double", "Character",
+    "Class", "Number", "CharSequence", "StringBuilder", "StringBuffer", "Enum", "Void", "Iterable",
+    "Comparable", "Runnable", "Thread", "Throwable", "Exception", "RuntimeException", "Error",
+    "IllegalArgumentException", "IllegalStateException", "Record", "Math", "System",
+}
 _LITERAL_TYPES = {
     "string_literal": "java.lang.String",
     "text_block": "java.lang.String",
@@ -44,6 +49,18 @@ def _argument_matches(parameter: str | None, argument: str | None) -> bool:
     return parameter == argument or _BOXED.get(argument) == parameter or _BOXED.get(parameter) == argument
 
 
+def _written_type(source: bytes, parameter: Node) -> str:
+    """The erased simple name of a parameter type, as written."""
+    parameter_type = parameter.child_by_field_name("type")
+    if parameter_type is None or parameter.type != "formal_parameter":
+        return ""
+    text = re.sub(r"<.*>", "", parser.node_text(source, parameter_type)).strip()
+    dimensions = parameter.child_by_field_name("dimensions")
+    if dimensions is not None:
+        text += "[]" * parser.node_text(source, dimensions).count("[")
+    return text.rsplit(".", 1)[-1]
+
+
 @dataclass
 class _Unit:
     source: bytes
@@ -60,6 +77,9 @@ class _Method:
     node: Node
     parameters: tuple[str | None, ...]
     concrete: bool
+    # Erased simple type names as written, to match an override whose
+    # parameter type comes from an external wildcard import.
+    written: tuple[str, ...] = ()
 
 
 class JavaSymbols:
@@ -153,6 +173,7 @@ class JavaSymbols:
                     continue
                 parameters = node.child_by_field_name("parameters")
                 parameter_types = []
+                written: list[str] = []
                 for parameter in parameters.named_children if parameters is not None else []:
                     if parameter.type not in {"formal_parameter", "spread_parameter"}:
                         continue
@@ -167,9 +188,10 @@ class JavaSymbols:
                     if resolved_type is not None and dimensions is not None:
                         resolved_type += "[]" * parser.node_text(source, dimensions).count("[")
                     parameter_types.append(resolved_type)
+                    written.append(_written_type(source, parameter))
                 info = _Method(
                     method, method.module, owner, node, tuple(parameter_types),
-                    node.child_by_field_name("body") is not None,
+                    node.child_by_field_name("body") is not None, tuple(written),
                 )
                 self.methods[method.id] = info
                 self.by_owner[(owner, name, len(parameter_types), method.module)].append(info)
@@ -177,7 +199,42 @@ class JavaSymbols:
                     for base_owner, base_module in self.ancestors(owner, info.module):
                         self.dispatch[(base_owner, base_module, name, info.parameters)].append(info)
 
+        self._complete_override_signatures()
         self._index_inherited_implementations()
+
+    def _complete_override_signatures(self) -> None:
+        """Give an override the signature of the one contract it can match.
+
+        A parameter type imported through an external wildcard (``import
+        org.springframework.http.*``) cannot be resolved from source, while
+        the interface may import it explicitly. Java overrides by erased
+        signature, so a concrete method adopts an ancestor's resolved
+        signature when exactly one ancestor declaration agrees on every
+        resolved type and on the written simple name of every unresolved one.
+        """
+        for info in list(self.methods.values()):
+            if not info.concrete or all(value is not None for value in info.parameters):
+                continue
+            name = info.method.qualified_method.rsplit(".", 1)[-1]
+            signatures = {
+                contract.parameters
+                for base_owner, base_module in self.ancestors(info.owner, info.module)
+                if (base_owner, base_module) != (info.owner, info.module)
+                for contract in self.by_owner.get((base_owner, name, len(info.parameters), base_module), [])
+                if all(value is not None for value in contract.parameters)
+                and all(
+                    actual == expected if actual is not None
+                    else expected is not None and expected.rsplit(".", 1)[-1] == written
+                    for actual, expected, written in zip(
+                        info.parameters, contract.parameters, info.written, strict=True,
+                    )
+                )
+            }
+            if len(signatures) != 1:
+                continue
+            info.parameters = next(iter(signatures))
+            for base_owner, base_module in self.ancestors(info.owner, info.module):
+                self.dispatch[(base_owner, base_module, name, info.parameters)].append(info)
 
     def _index_inherited_implementations(self) -> None:
         """Associate inherited public bodies with contracts on source subtypes."""
@@ -312,6 +369,10 @@ class JavaSymbols:
                 for expected, actual in zip(contract.parameters, candidate.parameters)
             )
         }
+        # A concrete body with an unresolved parameter type is never indexed
+        # for dispatch, yet it still implements itself.
+        if contract.concrete:
+            candidates.setdefault(contract.method.id, contract)
         return list(candidates.values())
 
     def bridge(self, method: IntegrationMethod) -> IntegrationMethod | None:
@@ -368,15 +429,21 @@ class JavaSymbols:
             ]
         signatures = {candidate.parameters for candidate in contracts}
         if len(signatures) > 1 and argument_types is not None:
-            # Same-arity overloads: keep the declaration every known argument
-            # type selects, with boxing. Unknown arguments never narrow.
-            contracts = [
-                candidate for candidate in contracts
-                if all(
-                    _argument_matches(parameter, argument)
-                    for parameter, argument in zip(candidate.parameters, argument_types, strict=True)
-                )
-            ]
+            # Same-arity overloads: an exact (or boxed) match wins, like the
+            # most specific overload in Java; otherwise a source argument may
+            # select a parameter declared by one of its ancestors. Unknown
+            # arguments never narrow.
+            for compatible in (_argument_matches, self._argument_assignable):
+                selected = [
+                    candidate for candidate in contracts
+                    if all(
+                        compatible(parameter, argument)
+                        for parameter, argument in zip(candidate.parameters, argument_types, strict=True)
+                    )
+                ]
+                if len({candidate.parameters for candidate in selected}) == 1:
+                    contracts = selected
+                    break
             signatures = {candidate.parameters for candidate in contracts}
         if len(signatures) != 1:
             return []
@@ -541,6 +608,14 @@ class JavaSymbols:
             return self.expression_type(info, receiver, invocation, depth + 1)
         if receiver.type == "field_access" and parser.node_text(source, receiver).startswith("this."):
             return self.variable_type(info, parser.node_text(source, receiver)[5:], invocation, field_only=True)
+        if receiver.type == "field_access":
+            # ``obj.field`` or ``Type.CONSTANT``: the declared field type.
+            target = receiver.child_by_field_name("object")
+            field = receiver.child_by_field_name("field")
+            owner = self.receiver_type(info, target, invocation, depth + 1) if target is not None else None
+            if owner is None or field is None or owner not in self.types:
+                return None
+            return self._field_type(owner, parser.node_text(source, field), info.module)
         if receiver.type != "method_invocation":
             return None
         parent_receiver, name, arguments = parser.invocation_parts(receiver, source)
@@ -567,16 +642,50 @@ class JavaSymbols:
             ) if type_node is not None else None)
         return next(iter(returns)) if len(returns) == 1 else None
 
+    def _argument_assignable(self, parameter: str | None, argument: str | None) -> bool:
+        if _argument_matches(parameter, argument):
+            return True
+        if parameter is None or argument is None or argument not in self.types:
+            return False
+        modules = {self.path_modules.get(path, "") for path, _node in self.types[argument]}
+        return any(
+            owner == parameter
+            for module in modules
+            for owner, _module in self.ancestors(argument, module)
+        )
+
+    def _field_type(self, owner: str, name: str, module: str) -> str | None:
+        """Declared type of a field on a source type or its ancestors."""
+        for candidate in [owner, *sorted(base for base, _module in self.ancestors(owner, module))]:
+            found: set[str | None] = set()
+            for path, declaration in self.types.get(candidate, []):
+                body = declaration.child_by_field_name("body")
+                source = self.units[path].source
+                for member in body.named_children if body is not None else []:
+                    if member.type not in {"field_declaration", "constant_declaration"}:
+                        continue
+                    type_node = member.child_by_field_name("type")
+                    for child in member.named_children:
+                        ident = child.child_by_field_name("name")
+                        if ident is not None and type_node is not None and parser.node_text(source, ident) == name:
+                            found.add(self.resolve(path, parser.node_text(source, type_node), candidate, allow_ambiguous=True))
+                if declaration.type == "enum_declaration" and body is not None:
+                    # Enum constants are fields of the enum type itself.
+                    for member in body.named_children:
+                        if member.type == "enum_constant":
+                            ident = member.child_by_field_name("name")
+                            if ident is not None and parser.node_text(source, ident) == name:
+                                found.add(candidate)
+            if found:
+                return next(iter(found)) if len(found) == 1 else None
+        return None
+
     def _receiver_module(self, receiver_type: str, caller: _Method) -> str:
         locations = self._type_candidates(receiver_type, caller.method.path)
         return self.path_modules.get(locations[0][0], caller.module) if len(locations) == 1 else caller.module
 
     def _declared_concretely(self, method: IntegrationMethod, receiver_type: str, caller: _Method) -> bool:
-        """A concrete body on the receiver type or one of its ancestors.
-
-        An implementation found on a subtype (interface dispatch) is not:
-        other subtypes, in sources or dependencies, may provide their own.
-        """
+        """A concrete body on the receiver type or one of its ancestors."""
         info = self.methods.get(method.id)
         if info is None or not info.concrete:
             return False
@@ -584,6 +693,32 @@ class JavaSymbols:
             return True
         module = self._receiver_module(receiver_type, caller)
         return any(owner == info.owner for owner, _module in self.ancestors(receiver_type, module))
+
+    def _unimplemented_contract(
+        self, receiver_type: str, name: str, arity: int, caller: _Method,
+    ) -> list[IntegrationMethod]:
+        """The one abstract source declaration that no source type implements.
+
+        A Spring Data query method (``findByOrderId``) is declared in the
+        sources and implemented by the runtime: the call reaches the
+        declaration, a possible target, as it does in CodeQL.
+        """
+        module = self._receiver_module(receiver_type, caller)
+        contracts = {
+            contract.method.id: contract
+            for owner, owner_module in self.ancestors(receiver_type, module)
+            for contract in self.by_owner.get((owner, name, arity, owner_module), [])
+        }
+        if len(contracts) != 1:
+            return []
+        contract = next(iter(contracts.values()))
+        if contract.concrete or self.implementations(contract):
+            return []
+        return [contract.method]
+
+    def _concrete(self, method: IntegrationMethod) -> bool:
+        info = self.methods.get(method.id)
+        return info is not None and info.concrete
 
     def _declared_arities(self, receiver_type: str, name: str, path: str, module: str) -> set[int]:
         """Arities of ``name`` declared on a receiver type and its ancestors."""
@@ -595,7 +730,15 @@ class JavaSymbols:
             if owner in owners and method_name == name
         }
 
-    def fallback_calls(self, resolved_sites: set[tuple[str, int, str]]) -> list[MethodCall]:
+    def fallback_calls(
+        self, resolved_sites: set[tuple[str, int, str]], *, closed_world: bool = False,
+    ) -> list[MethodCall]:
+        """Receiver-typed calls between indexed methods.
+
+        ``closed_world`` applies when this pass is the whole call graph (the
+        ``source`` engine): every implementation is then in the sources, so a
+        unique implementation of an interface is an exact target.
+        """
         calls: list[MethodCall] = []
         for info in self.methods.values():
             if not info.concrete:
@@ -648,15 +791,20 @@ class JavaSymbols:
                     targets = [target] if target is not None else self.possible_targets(
                         receiver_type, name, arguments_count, info.module, info.method.path,
                         argument_types=argument_types,
-                    )
+                    ) or self._unimplemented_contract(receiver_type, name, arguments_count, info)
                 if not targets:
                     continue
                 # A concrete method declared by the receiver's own type is an
                 # exact call. Interface dispatch to a unique source
-                # implementation stays possible: dependencies may add others.
+                # implementation is exact only in a closed world, like
+                # CodeQL's ``exactVirtualMethod``; otherwise dependencies may
+                # add implementations and the call stays possible.
                 dispatch = (
                     "exact"
-                    if len(targets) == 1 and self._declared_concretely(targets[0], receiver_type, info)
+                    if len(targets) == 1 and (
+                        self._declared_concretely(targets[0], receiver_type, info)
+                        or closed_world and self._concrete(targets[0])
+                    )
                     else "possible"
                 )
                 for target in targets:

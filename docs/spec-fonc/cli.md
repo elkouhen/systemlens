@@ -254,19 +254,25 @@ An explicit `--codeql-database` remains a caller-managed global-database
 override. Its calls and methods are queried once globally, then processed by
 source-owning project for the same module progress reporting.
 
-`--strategy strategy1` is opt-in. The selected strategy is persisted with
-the index and reused by incremental indexing and all derived views.
+`--strategy strategy1` is opt-in and applies to that run only. Without it,
+every indexing pass, incremental or full, applies `analysis.strategy` from
+`.systemlens/config.yml`; set `strategy: strategy1` there to keep Strategy1.
+The strategy of the last pass is persisted with the index, so derived views
+read the snapshot's profile, and a change of strategy forces a full refresh.
 `analysis.call_graph_engine` accepts `codeql` (default), `source`, or `none`.
 
 - `codeql` resolves calls from CodeQL's typed program model. It needs the
   CodeQL CLI. When the CLI is missing, indexing says so and uses `source`.
 - `source` resolves calls from tree-sitter syntax and declared types. It needs
   no external tool. It types fields, parameters, locals, `var` initializers,
-  chained calls by declared return type, static calls on a type name, method
-  references, and calls inside lambdas. Literal and typed arguments choose
-  between same-arity overloads. A call is `exact` when one concrete body sits
-  on the receiver's declared type or an ancestor; interface dispatch stays
-  `possible`. Library methods and unknown argument types stay unresolved.
+  chained calls by declared return type, field accesses and constants, static
+  calls on a type name, method references, and calls inside lambdas. Literal
+  and typed arguments choose between same-arity overloads. Overrides typed
+  through an external wildcard import still match their contract. A call is
+  `exact` when one concrete source body can receive it, including the unique
+  implementation of an interface; several implementations stay `possible`.
+  A Spring Data query method declared in the sources is a `possible` target.
+  Library methods and unknown argument types stay unresolved.
 - `none` builds no interprocedural path: only same-method flows remain.
 `analysis.codeql_edge_confidence` accepts `exact` or `possible`. The default
 `possible` keeps possible dispatch and inferred bridges as low-confidence flow

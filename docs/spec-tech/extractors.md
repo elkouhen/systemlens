@@ -26,8 +26,10 @@ Strategy1, Java files in `target/generated-sources/openapi/` are included in the
 source inventory for this extractor; other build outputs remain excluded.
 
 An OpenAPI client call may be matched to served operations from the same exact
-indexed contract path. This is an explicit contract relation, not route-based
-service discovery. The match is accepted only when one distinct target module
+indexed contract path. A Strategy1 `.rest` declaration serves the contract
+named by its `systemlens-openapi-contract:` evidence, so a typed adapter call
+on a shared `model-*` contract reaches the module that declares it. This is an
+explicit contract relation, not route-based service discovery. The match is accepted only when one distinct target module
 remains after HTTP method and route checks; otherwise the call remains
 unresolved. A `@Value` field used by a REST client may be resolved across Java
 files when its field name maps to one property key across the repository.
@@ -42,6 +44,10 @@ emitted as call endpoints. A matched bean is emitted as
 `configured-api-client-factory` evidence, and the scanner excludes beans
 returning `WebClient` or `ExchangeFilterFunction` from this pass. A matching
 local `model-*` OpenAPI contract path is added to the same evidence snippet.
+In a `Rest*Config*` class, `getRest().get("partner")` with a literal argument
+names the external microservice `partner`, retained as
+`systemlens-external-microservice:` evidence. Comments, other `get` chains and
+other types never create this dependency.
 
 For adapter calls, Strategy1 indexes `operationId` values from OpenAPI files
 under an `openapi` directory. A Java invocation is accepted only when its
@@ -159,11 +165,15 @@ topic resolver and remain dynamic unless they match an exact declared value.
 
 For listeners, the extractor inspects only the `topics` attribute. Only
 `${kafka.topics.<key>.nom}` placeholders in that attribute create consume
-endpoints. A `${kafka.topics.<key>.groupe}` placeholder in `groupId` identifies
+endpoints. The key may use Spring's kebab case (`commande-creee`); it is
+normalized like a `kafka.yml` key. A `${kafka.topics.<key>.groupe}` placeholder in `groupId` identifies
 the consumer group and is ignored by topic extraction.
 The second argument is always
 used to derive the payload type from its method parameter, local variable
 declaration or enclosing class field, including calls with three arguments.
+An unqualified or `this.` call to one method of the enclosing class with that
+name and arity gives its declared return type, unwrapping `Message<T>`; an
+overload of the same arity leaves the type to the call-graph engine.
 This positional rule applies identically to
 `envoyerMessageKafka`, `envoyerMessageKafkaRequest` and
 `envoyerMessageKafkaReply`.

@@ -23,6 +23,12 @@ analysis:
   disabled_extractors: []
 ```
 
+`analysis.strategy` (`default` or `strategy1`) is the strategy of every
+indexing pass that has no `--strategy` option, including incremental passes
+and `systemlens web` reindexing. The persisted index profile never overrides
+it: a Strategy1 index reindexed with `strategy: default` loses its Strategy1
+facts.
+
 This is a breaking rename from `cccr`, `archlens`, and `codeatlas`: SystemLens
 does not read an existing `.cccr/`, `.archlens/`, or `.codeatlas/` directory.
 Run `systemlens init` and

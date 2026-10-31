@@ -212,9 +212,11 @@ the same index.
 and export adapters consume that profile. A federation rejects source indexes
 whose profiles are incompatible.
 
-**Consequences:** MCP reindexing preserves the existing strategy, and a
+**Consequences:** Every reader of a snapshot uses its persisted profile, so a
 Strategy1 convention cannot appear in a default inventory or disappear from a
-Strategy1 one because of the delivery path.
+Strategy1 one because of the delivery path. Reindexing is different: each
+pass applies `--strategy`, or else `analysis.strategy` from `config.yml`,
+never the persisted profile. The configuration file is the durable choice.
 
 ## ADR-11: Separate module identity from its display alias
 
@@ -1226,12 +1228,20 @@ name. `codeql` lives in `engines/codeql.py` and is imported lazily. `source`
 is a first-class engine: it reports no call itself, and the shared
 tree-sitter symbol pass becomes the whole call graph. `none` builds no
 interprocedural path. An unavailable engine is announced, then replaced by
-`source`. Source calls are `exact` only when the receiver's own declared
-class owns one concrete matching method; interface dispatch stays
-`possible`. `analyze compare-engines` measures two engines on one index.
+`source`. As the whole call graph, the source pass runs in a closed world
+like CodeQL's `exactVirtualMethod`: a call is `exact` when one concrete
+source body can receive it, including the unique implementation of an
+interface. When it only fills CodeQL's gaps, interface dispatch to a subtype
+stays `possible`. `analyze compare-engines` measures two engines on one index.
 The source engine also types `var` initializers, static calls on a type name,
-method references with a single declared arity, and same-arity overloads from
-literal or typed arguments; an ancestor's concrete body is `exact`.
+method references with a single declared arity, field accesses, and
+same-arity overloads from literal or typed arguments, including arguments
+assignable to a source ancestor; an ancestor's concrete body is `exact`.
+An override whose parameter type comes from an external wildcard import
+matches the single ancestor contract with the same written simple names,
+following Java's erased-signature override rule. A call to an abstract
+source declaration that no source type implements, such as a Spring Data
+query method, reaches that declaration as a `possible` target.
 
 **Consequences:** Users can choose the engine per project or per run, and
 SystemLens works fully without CodeQL. Configurations with `codeql: false`

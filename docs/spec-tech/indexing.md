@@ -160,14 +160,26 @@ Indexing asks the configured engine (ADR-61) for calls through
 source symbol pass then follows receiver-typed calls between indexed Java
 methods: with the `source` engine it is the whole call graph, with `codeql`
 it fills the gaps. A receiver is typed from a field, parameter, local or
-`var` initializer, a declared return type, or a capitalized type name for a
-static call; `receiver::name` is a call when that name has one declared
-arity. Literals, `new`, casts, and typed variables give argument types,
-which narrow same-arity overloads with boxing. A call is `exact` when one
-concrete body sits on the receiver's declared type or one of its ancestors,
-and `possible` otherwise, such as interface dispatch to a subtype. The pass drops
-ambiguous overloads while retaining an ambiguous receiver type long enough
-to apply module-scoped interface dispatch.
+`var` initializer, a declared return type, a field access (`obj.field`,
+`Type.CONSTANT`, enum constants), or a capitalized type name for a static
+call; `receiver::name` is a call when that name has one declared arity.
+Literals, `new`, casts, and typed variables give argument types, which
+narrow same-arity overloads with boxing, then by assignability to a source
+ancestor. An override whose parameter type comes from an external wildcard
+import (`import org.springframework.http.*`) adopts the signature of the one
+ancestor contract that matches its resolved types and written simple names.
+A concrete method with an unresolved parameter still implements itself, so
+self-calls to it resolve. A call is `exact` when one concrete body sits on
+the receiver's declared type or one of its ancestors. With the `source`
+engine the pass is the whole call graph and runs in a closed world, like
+CodeQL's `exactVirtualMethod`: a unique source implementation of an
+interface is also `exact`. Gap-filling for `codeql` stays open-world, so
+there interface dispatch to a subtype is `possible`.
+Several implementations are always `possible`. A call with no source body
+reaches the one abstract declaration no source type implements, such as a
+Spring Data query method, as a `possible` target. The pass drops ambiguous
+overloads while retaining an ambiguous receiver type long enough to apply
+module-scoped interface dispatch.
 Each Spring `@Scheduled` method yields a transient scheduler trigger, used
 only while flows are built and never persisted as an endpoint. It makes the
 method an input of the call graph, so a scheduler that publishes through

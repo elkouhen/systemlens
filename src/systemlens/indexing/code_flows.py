@@ -29,7 +29,7 @@ from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import is_java_literal, trace_scalar_key_identity
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v37-source-engine-shapes"
+CODE_FLOW_SIGNATURE = "code-flow-v39-source-engine-closed-world"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
@@ -570,6 +570,7 @@ def _build_call_graph(
     progress: Callable[[str], None] | None,
     persisted_edges: Sequence[CallGraphEdge] | None = None,
     persisted_methods: Sequence[PersistedCallGraphMethod] = (),
+    closed_world: bool = False,
 ) -> CallGraph:
     """Resolve engine call rows into the internal graph consumed by reconstruction."""
     def prefer_caller_module(
@@ -850,7 +851,7 @@ def _build_call_graph(
                 add_edge(caller, candidate, synthetic, True)
 
     if symbols is not None:
-        for call in symbols.fallback_calls(resolved_sites):
+        for call in symbols.fallback_calls(resolved_sites, closed_world=closed_world):
             caller = locate_caller(call)
             resolved_target = locate(call.callee, call.callee_path, call.callee_line)
             if caller is not None and resolved_target is not None:
@@ -887,6 +888,7 @@ def materialize_call_graph_flows(
     persisted_edges: Sequence[CallGraphEdge] | None = None,
     persisted_methods: Sequence[PersistedCallGraphMethod] = (),
     modules: Sequence[DiscoveredModule] = (),
+    closed_world: bool = False,
 ) -> list[CodeFlow]:
     """Reconstruct endpoint flows from the internal method-call graph.
 
@@ -894,6 +896,8 @@ def materialize_call_graph_flows(
     then traverses its edges from indexed inputs to indexed outputs. Missing or
     imperfect virtual-dispatch edges may be completed by the transient source
     symbol index, but every synthetic edge remains possible/low-confidence.
+    ``closed_world`` marks the symbol pass as the whole call graph (an engine
+    that resolves no types): a unique source implementation is then exact.
     """
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
     confidence_rank = {"high": 0, "medium": 1, "low": 2}
@@ -1008,6 +1012,7 @@ def materialize_call_graph_flows(
         progress=progress,
         persisted_edges=persisted_edges,
         persisted_methods=persisted_methods,
+        closed_world=closed_world,
     )
     dispatch_symbols = call_graph.symbols
     if call_graph_sink is not None:
