@@ -222,6 +222,15 @@ class JavaSymbols:
 
         self._complete_override_signatures()
         self._index_inherited_implementations()
+        # ``dispatch`` is complete: index its signatures by name and arity so
+        # a generic contract reads only the candidates it can match.
+        self._dispatch_signatures: dict[
+            tuple[str, str, str, int], list[tuple[str | None, ...]]
+        ] = defaultdict(list)
+        for dispatch_owner, dispatch_module, dispatch_name, signature in self.dispatch:
+            self._dispatch_signatures[
+                (dispatch_owner, dispatch_module, dispatch_name, len(signature))
+            ].append(signature)
 
     def _complete_override_signatures(self) -> None:
         """Give an override the signature of the one contract it can match.
@@ -379,12 +388,10 @@ class JavaSymbols:
         # Gather compatible arities and let the caller reject ambiguity.
         candidates = {
             candidate.method.id: candidate
-            for (owner, module, candidate_name, parameters), values in self.dispatch.items()
-            if owner == contract.owner
-            and module == contract.module
-            and candidate_name == name
-            and len(parameters) == len(contract.parameters)
-            for candidate in values
+            for parameters in self._dispatch_signatures.get(
+                (contract.owner, contract.module, name, len(contract.parameters)), ()
+            )
+            for candidate in self.dispatch[(contract.owner, contract.module, name, parameters)]
             if all(
                 expected is None or actual == expected
                 for expected, actual in zip(contract.parameters, candidate.parameters)

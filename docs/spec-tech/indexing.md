@@ -242,6 +242,9 @@ abstract redeclarations. Public instance bodies are associated with the class's
 ancestor contracts, preserving separate compatible implementations.
 For `D` inherited declarations in one signature group, hiding checks cost
 `O(D²)`; the additional index stores compatible contract-to-method memberships.
+A contract with an unresolved parameter type reads only the dispatch signatures
+indexed under its owner, module, name and arity, so its lookup is linear in
+those candidates instead of in the whole dispatch index.
 
 For a method invocation used as a receiver, the fallback reads source-declared
 return types through the receiver hierarchy. It requires one parameter signature
