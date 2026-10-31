@@ -44,9 +44,10 @@ def _is_build_output_path(root: Path, path: Path) -> bool:
     modules and must never affect the persisted module graph.
     """
     parts = path.relative_to(root).parts
-    if "target" in parts:
-        return True
-    return any(part == "build" and "src" not in parts[:index] for index, part in enumerate(parts))
+    return any(
+        part in {"target", "build"} and "src" not in parts[:index]
+        for index, part in enumerate(parts)
+    )
 
 
 @dataclass(frozen=True)
@@ -370,7 +371,7 @@ def _module_files(module_dir: Path, module_roots: set[Path], pattern: str):
     for path in sorted(module_dir.rglob(pattern)):
         if not path.is_file():
             continue
-        if {"target", "build"}.intersection(path.relative_to(module_dir).parts):
+        if _is_build_output_path(module_dir, path):
             continue
         if any(
             parent in module_roots

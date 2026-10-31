@@ -338,7 +338,7 @@ def _prepare_source_only_root(
     of ``target`` remains an untrusted build artifact and is excluded unless
     source generation was explicitly requested for this index.
     """
-    excluded_directories = {".git", ".systemlens", "target", "out"}
+    excluded_directories = {".git", ".systemlens"}
     allowed = set(allowed_paths or ())
     copied = 0
     for source in repo_root.rglob("*.java"):
@@ -348,15 +348,22 @@ def _prepare_source_only_root(
         if allowed and relative.as_posix() not in allowed:
             continue
         parts = relative.parts
+        # Build directories are rooted at a module, never below ``src``: a
+        # Java package named ``target`` or ``out`` is application source.
+        build_directories = [
+            index for index, part in enumerate(parts)
+            if part in {"target", "out"} and "src" not in parts[:index]
+        ]
         generated_target = any(
             parts[index:index + 2] == ("target", "generated-sources")
-            for index in range(len(parts) - 1)
+            for index in build_directories
         )
         target_java_source = generated_target
-        if include_target_java_sources and "target" in parts and source.suffix == ".java":
+        if include_target_java_sources and any(parts[index] == "target" for index in build_directories):
             target_java_source = True
         if (
             any(part in excluded_directories for part in parts)
+            or build_directories
             or is_build_output(relative.as_posix())
         ) and not target_java_source:
             continue

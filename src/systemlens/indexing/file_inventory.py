@@ -72,14 +72,13 @@ def is_build_output(rel_path: str) -> bool:
     ports and makes an index depend on whether someone compiled beforehand.
     """
     parts = rel_path.split("/")
-    if "target" in parts:
-        return True
-    # A Gradle output directory is rooted at the module level. A package or
-    # resource named ``build`` remains valid when it is below a source root.
-    for index, part in enumerate(parts):
-        if part == "build" and "src" not in parts[:index]:
-            return True
-    return False
+    # Maven ``target`` and Gradle ``build`` output directories are rooted at
+    # the module level. A Java package or resource directory with one of
+    # these names remains source when it is below a ``src`` directory.
+    return any(
+        part in {"target", "build"} and "src" not in parts[:index]
+        for index, part in enumerate(parts)
+    )
 
 
 def is_generated_java_source_path(rel_path: str) -> bool:

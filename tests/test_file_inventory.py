@@ -97,3 +97,12 @@ def test_dependent_rescan_requires_global_refresh_for_root_configuration(tmp_pat
         tmp_path,
         modules,
     ) is None
+
+
+def test_a_source_package_named_target_is_not_build_output() -> None:
+    from systemlens.indexing.file_inventory import is_build_output
+
+    assert not is_build_output("app/src/main/java/com/acme/target/Foo.java")
+    assert is_build_output("app/target/classes/application.yml")
+    assert is_build_output("app/target/generated-sources/openapi/src/main/java/Api.java")
+    assert is_build_output("target/Foo.java")

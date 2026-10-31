@@ -259,7 +259,9 @@ for dependency discovery; unresolved external types are accepted as the
 documented accuracy trade-off for offline indexing.
 The projection receives the eligible relative-path inventory from the indexer,
 so excluded test sources and build outputs cannot enter the temporary CodeQL
-database or its persisted method projection.
+database or its persisted method projection. The projection treats `target`
+and `out` as build directories only outside a `src` directory, like the
+inventory, so a Java package with one of these names enters the database.
 
 With `--generate-sources`, the indexed repository runs only Maven
 `generate-sources` or Gradle `generateSources` before this projection is

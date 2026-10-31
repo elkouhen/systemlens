@@ -860,3 +860,5 @@ AsyncAPI documents are materialized from module source trees after build-module
 discovery. Build-output paths (`target/` and `build/`) are excluded at inventory,
 discovery, and scanner boundaries, so generated artifacts never enter the
 snapshot even when a scanner is invoked outside the normal index pipeline.
+A build directory is rooted at a module: a directory with one of these names
+below a `src` directory, such as a Java package `com/acme/target`, is source.

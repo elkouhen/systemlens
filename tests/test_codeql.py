@@ -400,3 +400,24 @@ def test_extract_codeql_calls_scopes_global_database_by_caller_prefix(
     codeql.extract_codeql_calls(database, executable="custom-codeql", caller_prefix="payments")
 
     assert 'path = enclosing.getFile().getRelativePath() and path.regexpMatch("^payments/")' in queries[0]
+
+
+def test_source_only_root_keeps_source_packages_named_target_or_out(tmp_path: Path) -> None:
+    kept = [
+        tmp_path / "app/src/main/java/com/acme/target/Foo.java",
+        tmp_path / "app/src/main/java/com/acme/out/Bar.java",
+    ]
+    dropped = [
+        tmp_path / "app/target/classes/Foo.java",
+        tmp_path / "app/out/production/Bar.java",
+    ]
+    for path in [*kept, *dropped]:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("class X {}", encoding="utf-8")
+    destination = tmp_path / "source"
+
+    assert codeql._prepare_source_only_root(tmp_path, destination) == 2
+    for path in kept:
+        assert (destination / path.relative_to(tmp_path)).exists()
+    for path in dropped:
+        assert not (destination / path.relative_to(tmp_path)).exists()
