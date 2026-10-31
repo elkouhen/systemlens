@@ -15,7 +15,7 @@ documents and summarizes the documentation hygiene expected in this repository.
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Package ownership, dependency direction, maintainer navigation | Before moving code across packages or changing an interface |
 | [`docs/UX-UI.md`](docs/UX-UI.md) | HTML presentation, graph controls, selection, and camera behavior | Before changing the generated interface |
 | [`docs/ADR.md`](docs/ADR.md) | Architecture decisions: context, choice, consequences | Before revisiting an existing technical choice |
-| [`BACKLOG.md`](BACKLOG.md) | Current graph readability tasks and index of archived backlogs | When planning or implementing graph or call-tree readability improvements |
+| [`BACKLOG.md`](BACKLOG.md) | Java indexing and call-graph correction tasks, review findings, and index of archived backlogs | When fixing or extending Java symbol resolution, flow materialization, or an engine adapter |
 | [`docs/plans/async-write-read-consistency.md`](docs/plans/async-write-read-consistency.md) | Remaining work on asynchronous write and synchronous read consistency | When changing consistency diagnostics |
 | [`docs/plans/data-operations-in-internal-flows.md`](docs/plans/data-operations-in-internal-flows.md) | Scoped data-operation plan, status, and acceptance criteria | When working on data operations in internal flows |
 | [`docs/plans/runtime-observations-in-export.md`](docs/plans/runtime-observations-in-export.md) | Elastic APM overlay in the HTML export | When showing runtime observations in an export |
