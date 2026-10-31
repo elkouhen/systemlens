@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from dataclasses import asdict, dataclass, replace
-from typing import Iterable, Mapping
+from typing import Iterable, Mapping, cast
 
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
 
@@ -363,16 +363,21 @@ def diagnose_flow_consistency_snapshot(
     causal_reachability: Mapping[str, set[str]] | None = None,
     causal_paths: Mapping[str, Mapping[str, tuple[str, ...]]] | None = None,
     endpoint_systems: Mapping[str, str] | None = None,
+    review_aids: bool = False,
 ) -> list[FlowConsistencyDiagnostic]:
     """Pair access evidence across flows reachable from a persisted trigger.
 
     With ``endpoint_systems``, source-indexed accesses without explicit order
     facts are paired by their call-graph branches instead of branch labels.
+    ``review_aids`` adds the gated same-method read-modify-write and dual-write
+    candidates built from source facts (see :func:`review_aid_candidates`).
     """
     diagnostics: list[FlowConsistencyDiagnostic] = []
     decided: set[tuple[str, str, int, str, int]] = set()
     if causal_paths and endpoint_systems:
         diagnostics, decided = _call_graph_stale_reads(flows, causal_paths, endpoint_systems)
+    if review_aids:
+        diagnostics.extend(review_aid_candidates(flows, causal_reachability, endpoint_systems))
     writes = [
         (flow, step) for flow in flows for step in flow.steps
         if step.kind == "data_write" and _is_async(step)
@@ -673,3 +678,227 @@ def diagnose_flow_consistency_snapshot(
     return sorted(unique.values(), key=lambda item: (
         item.flow_id, item.write_flow_id, item.write_order, item.read_flow_id, item.read_order,
     ))
+
+
+def _fork_method(left: CodeFlow, right: CodeFlow) -> str:
+    """Name the last method both routes share, or the entry method."""
+    left_calls = [step.name for step in left.steps if step.kind == "method_call"]
+    right_calls = [step.name for step in right.steps if step.kind == "method_call"]
+    shared = left.method
+    for one, other in zip(left_calls, right_calls):
+        if one != other:
+            break
+        shared = one
+    return shared
+
+
+# --- Review aids on source facts (gated, see plan section 6) ---------------
+
+_WRITE_GUARDS = frozenset({"optimistic_version", "atomic_update", "conditional_update"})
+REVIEW_AID_EVENT_TYPES = frozenset({"read_modify_write", "dual_write"})
+
+
+def _method_context(flow: CodeFlow) -> tuple[object, ...]:
+    """Steps of one flow before its effect: the trigger and the call route."""
+    trigger = flow.steps[0] if flow.steps else None
+    return (
+        flow.module,
+        trigger.endpoint_id or f"{trigger.kind}:{trigger.path}:{trigger.start_line}" if trigger else None,
+        tuple(
+            (step.name, step.path, step.start_line)
+            for step in flow.steps if step.kind == "method_call"
+        ),
+    )
+
+
+def _context_prefix(left: tuple[object, ...], right: tuple[object, ...]) -> bool:
+    """Whether one method context is the other, or nests inside it."""
+    if left[:2] != right[:2]:
+        return False
+    left_route = cast(tuple[object, ...], left[2])
+    right_route = cast(tuple[object, ...], right[2])
+    shorter, longer = sorted((left_route, right_route), key=len)
+    return longer[:len(shorter)] == shorter
+
+
+def _rmw_protection(read: CodeFlowStep, write: CodeFlowStep) -> str | None:
+    """Name the guard that protects a read-modify-write pair, if any."""
+    if write.guard in _WRITE_GUARDS:
+        return write.guard
+    if (read.guard == "pessimistic_lock" and read.transaction_id
+            and read.transaction_id == write.transaction_id):
+        return read.guard
+    return None
+
+
+def review_aid_candidates(
+    flows: list[CodeFlow],
+    causal_reachability: Mapping[str, set[str]] | None = None,
+    endpoint_systems: Mapping[str, str] | None = None,
+) -> list[FlowConsistencyDiagnostic]:
+    """Build the two gated review aids from persisted source facts.
+
+    A read-modify-write candidate needs a write whose ``value_dependencies``
+    name the persisted read operation (same method, see the extractor) on
+    the same resource; it says "protection not established" unless an
+    explicit guard applies. A dual-write candidate pairs a data write and a
+    Kafka publication reachable in one method context; an outbox write in
+    that context or an after-commit publication downgrades it to "recovery
+    mechanism present, not verified". Neither candidate asserts a defect.
+    """
+    roots_by_flow: dict[str, set[str]] = defaultdict(set)
+    for root, reachable in (causal_reachability or {}).items():
+        for flow_id in reachable:
+            roots_by_flow[flow_id].add(root)
+    live = [flow for flow in flows if flow.status != "cycle"]
+    contexts = {flow.id: _method_context(flow) for flow in live}
+    diagnostics: list[FlowConsistencyDiagnostic] = []
+
+    def roots(left: CodeFlow, right: CodeFlow) -> list[str]:
+        if left.id == right.id:
+            return sorted(roots_by_flow[left.id]) or [left.id]
+        common = roots_by_flow[left.id] & roots_by_flow[right.id]
+        return sorted(common) or sorted({left.id, right.id})[:1]
+
+    reads_by_operation: dict[str, list[tuple[CodeFlow, CodeFlowStep]]] = defaultdict(list)
+    for flow in live:
+        for step in flow.steps:
+            if step.kind == "data_read" and step.operation_id:
+                reads_by_operation[step.operation_id].append((flow, step))
+    for write_flow in live:
+        for write in write_flow.steps:
+            if write.kind != "data_write" or not write.value_dependencies:
+                continue
+            for dependency in write.value_dependencies:
+                for read_flow, read in reads_by_operation.get(dependency, ()):
+                    if not _context_prefix(contexts[write_flow.id], contexts[read_flow.id]):
+                        continue
+                    if (write.resource_identity and read.resource_identity
+                            and write.resource_identity != read.resource_identity):
+                        continue
+                    protection = _rmw_protection(read, write)
+                    limitations: list[str] = []
+                    if not write.resource_identity:
+                        limitations.append("identité canonique de la ressource non établie")
+                    if not (write.key_identity and write.key_identity == read.key_identity):
+                        limitations.append("enregistrement commun déduit de la dépendance de valeur, non prouvé")
+                    if not write.transaction_id:
+                        limitations.append("transaction non établie")
+                    if protection is None and read.guard == "pessimistic_lock":
+                        limitations.insert(
+                            0, "verrou pessimiste présent, portée transactionnelle non établie",
+                        )
+                    elif protection is None:
+                        limitations.insert(0, "protection non établie")
+                    for display_root in roots(write_flow, read_flow):
+                        base = _diagnose_pair(
+                            write_flow, write, read_flow, read, display_root,
+                            "lecture puis écriture dépendante dans la même méthode",
+                            None,
+                        )
+                        diagnostics.append(replace(
+                            base,
+                            id=f"{base.id}:read_modify_write",
+                            event_type="read_modify_write",
+                            classification=(
+                                "conflict_protection_identified" if protection
+                                else "potential_lost_update"
+                            ),
+                            severity="info" if protection else "P2",
+                            confidence="medium" if protection else "low",
+                            limitation="; ".join(limitations) or None,
+                            order_evidence="dépendance de valeur extraite du source",
+                            guard=protection,
+                            guard_scope=(
+                                write.guard_scope if protection == write.guard else read.guard_scope
+                            ) if protection else None,
+                            write_dependency_step=read.order,
+                            key=write.key if write.key == read.key else read.key,
+                            resource_identity=write.resource_identity or read.resource_identity,
+                            write_transaction_id=write.transaction_id,
+                            read_transaction_id=read.transaction_id,
+                        ))
+
+    publications: list[tuple[CodeFlow, CodeFlowStep]] = [
+        (flow, step) for flow in live for step in flow.steps
+        if step.kind == "message_publish" and (
+            endpoint_systems is None or not step.endpoint_id
+            or endpoint_systems.get(step.endpoint_id, "kafka") == "kafka"
+        )
+    ]
+    writes: list[tuple[CodeFlow, CodeFlowStep]] = [
+        (flow, step) for flow in live for step in flow.steps if step.kind == "data_write"
+    ]
+    outbox_contexts = [
+        contexts[flow.id] for flow, step in writes
+        if "outbox" in (step.resource or step.name or "").lower()
+    ]
+    seen_pairs: set[tuple[str, int, str, int]] = set()
+    for write_flow, write in writes:
+        if "outbox" in (write.resource or write.name or "").lower():
+            continue
+        for publish_flow, publish in publications:
+            if contexts[write_flow.id][:2] != contexts[publish_flow.id][:2]:
+                continue
+            pair = (write_flow.id, write.order, publish_flow.id, publish.order)
+            if pair in seen_pairs:
+                continue
+            seen_pairs.add(pair)
+            fork = _fork_method(write_flow, publish_flow)
+            recovery = (
+                "publication après commit (@TransactionalEventListener)"
+                if publish.phase == "after_commit" else
+                "écriture outbox sous le même déclencheur"
+                if any(contexts[write_flow.id][:2] == context[:2] for context in outbox_contexts)
+                else None
+            )
+            limitations = [
+                "mécanisme de reprise présent, non vérifié" if recovery
+                else "mécanisme de reprise non établi",
+            ]
+            if not write.transaction_id:
+                limitations.append("transaction de l'écriture non établie")
+            for display_root in roots(write_flow, publish_flow):
+                base = _diagnose_pair(
+                    write_flow, write, publish_flow, publish, display_root,
+                    f"écriture de donnée et publication Kafka atteignables depuis {fork}",
+                    None,
+                )
+                diagnostics.append(replace(
+                    base,
+                    id=f"{base.id}:dual_write",
+                    event_type="dual_write",
+                    classification=(
+                        "recovery_mechanism_present" if recovery else "potential_dual_write"
+                    ),
+                    severity="info" if recovery else "P2",
+                    confidence="low",
+                    limitation="; ".join(limitations),
+                    order_evidence=recovery,
+                    read_name=publish.name,
+                    read_action=None,
+                    read_phase=publish.phase,
+                    resource_identity=write.resource_identity,
+                    key=None,
+                    key_identity=None,
+                    guard=None,
+                    guard_scope=None,
+                    write_transaction_id=write.transaction_id,
+                ))
+    # Alternative routes to the same two source sites are one review item.
+    unique: dict[tuple[object, ...], FlowConsistencyDiagnostic] = {}
+    for diagnostic in sorted(diagnostics, key=lambda item: (
+        item.flow_id, item.write_flow_id, item.write_order, item.read_flow_id, item.read_order,
+    )):
+        write_flow = next(flow for flow in live if flow.id == diagnostic.write_flow_id)
+        read_flow = next(flow for flow in live if flow.id == diagnostic.read_flow_id)
+        write_site = next(step for step in write_flow.steps if step.order == diagnostic.write_order)
+        read_site = next(step for step in read_flow.steps if step.order == diagnostic.read_order)
+        key = (
+            diagnostic.flow_id, diagnostic.event_type, write_site.path, write_site.start_line,
+            read_site.path, read_site.start_line,
+        )
+        unique.setdefault(key, diagnostic)
+    return list(unique.values())
+
+

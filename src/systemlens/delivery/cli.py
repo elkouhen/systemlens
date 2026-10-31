@@ -2192,6 +2192,14 @@ def export_microservices_cmd(
         "--no-call-graph-annotations",
         help="Omettre les accès aux données et diagnostics des graphes d’appel HTML.",
     ),
+    review_aids: bool = typer.Option(
+        False,
+        "--review-aids",
+        help=(
+            "Ajouter les aides à la revue (lecture-modification-écriture, double "
+            "écriture) aux diagnostics HTML ; candidats non promus, jamais des défauts."
+        ),
+    ),
     root_path: Optional[Path] = typer.Option(
         None,
         "--root-path",
@@ -2214,6 +2222,7 @@ def export_microservices_cmd(
         graph = None
     call_graphs_only = call_graphs_only is True
     no_call_graph_annotations = no_call_graph_annotations is True
+    review_aids = review_aids is True
     outputs = [output for output in (html,) if isinstance(output, Path)]
     if len(outputs) + int(json_output) != 1:
         typer.echo("Choisissez un seul format parmi --html ou --json.", err=True)
@@ -2223,6 +2232,12 @@ def export_microservices_cmd(
         raise typer.Exit(code=2)
     if no_call_graph_annotations and html is None:
         typer.echo("`--no-call-graph-annotations` nécessite `--html FILE`.", err=True)
+        raise typer.Exit(code=2)
+    if review_aids and (html is None or no_call_graph_annotations):
+        typer.echo(
+            "`--review-aids` nécessite `--html FILE` et les annotations des graphes d’appel.",
+            err=True,
+        )
         raise typer.Exit(code=2)
     if graph is not None and workspace is not None:
         typer.echo("`--graph` ne peut pas être combiné avec `--workspace`.", err=True)
@@ -2265,6 +2280,7 @@ def export_microservices_cmd(
                     "flow_descriptions": getattr(graph_data, "flow_descriptions", {}),
                     "call_graphs_only": call_graphs_only,
                     "include_call_graph_annotations": not no_call_graph_annotations,
+                    "review_aids": review_aids,
                     "runtime_overlay": _export_runtime_overlay(Path.cwd(), graph_data),
                 },
             )),

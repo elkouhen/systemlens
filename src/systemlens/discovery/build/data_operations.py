@@ -36,6 +36,7 @@ from systemlens.domain.data_operations import (
     sort_data_operations,
 )
 from systemlens.domain.module_inventory import JpaEntity
+from systemlens.discovery.java.value_dependencies import trace_value_dependencies
 
 JPA_BASE_INTERFACES = frozenset({
     "Repository", "CrudRepository", "ListCrudRepository", "PagingAndSortingRepository",
@@ -751,6 +752,7 @@ def discover_data_operations(
                 module, path, package, imports, entities, source,
                 class_string_constants(declaration, source), by_simple,
             )
+            owners: dict[int, tuple[Node, list[DataOperation]]] = {}
             for invocation in java_parser.walk(declaration):
                 if invocation.type != "method_invocation":
                     continue
@@ -786,8 +788,43 @@ def discover_data_operations(
                     result = _with_scope(result, transaction_scope(
                         module, path, invocation, owner, declaration, source,
                     ))
-                    operations.append(_with_optimistic_version(result, entities))
+                    owners.setdefault(owner.id, (owner, []))[1].append(
+                        _with_optimistic_version(result, entities)
+                    )
+            for owner, owned in owners.values():
+                operations.extend(_with_value_dependencies(owner, owned, source))
     return tuple(sort_data_operations(operations))
+
+
+def _with_value_dependencies(
+    owner: Node, operations: list[DataOperation], source: bytes,
+) -> list[DataOperation]:
+    """Record same-method read-to-write dependencies and inherited keys."""
+    reads = {(item.line, item.operation): item.id for item in operations if item.reads}
+    writes = {(item.line, item.operation): item.id for item in operations if item.writes}
+    dependencies = trace_value_dependencies(source, owner, reads, writes)
+    if not dependencies:
+        return operations
+    by_id = {item.id: item for item in operations}
+    result: list[DataOperation] = []
+    for item in operations:
+        linked = dependencies.get(item.id)
+        if not linked:
+            result.append(item)
+            continue
+        read = by_id[linked[0]]
+        updated = replace(item, value_dependencies=linked)
+        if (
+            item.key_expression is None and read.key_expression is not None
+            and item.technology != "jdbc" and item.resource_identity == read.resource_identity
+        ):
+            # The written object is the read record: its key is inherited.
+            updated = replace(
+                updated, key_expression=read.key_expression, key_property=read.key_property,
+                key_identity=read.key_identity,
+            )
+        result.append(updated)
+    return result
 
 
 def stable_scope_id(module: str, path: str, qualified_method: str) -> str:

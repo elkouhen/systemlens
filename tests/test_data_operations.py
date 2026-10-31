@@ -622,3 +622,209 @@ def test_mongo_atomic_updates_are_recognised_from_the_invocation_only() -> None:
     ) == "atomic_update"
     assert mongo_atomic_guard("updateFirst", "template.updateFirst(query, update, Order.class)") is None
     assert mongo_atomic_guard("save", "repo.save(doc)") is None
+
+
+# --- Review aids: value dependencies, read-modify-write, dual write ---------
+
+from systemlens.application.flow_consistency import (  # noqa: E402
+    diagnose_flow_consistency_snapshot,
+    review_aid_candidates,
+)
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep  # noqa: E402
+
+
+def test_a_write_of_the_unmodified_read_result_records_a_value_dependency() -> None:
+    files = _parsed(_repository_sources(
+        "class Service {\n  OrderRepository repo;\n"
+        "  @Transactional void decrement(String id) {\n"
+        "    var o = repo.findById(id).orElseThrow();\n"
+        "    o.setQty(o.getQty() - 1);\n"
+        "    repo.save(o);\n"
+        "  }\n"
+        "  void direct(String id) { repo.save(repo.findById(id).get()); }\n"
+        "  void reassigned(String id) {\n"
+        "    Order o = repo.findById(id).get();\n    o = new Order();\n    repo.save(o);\n  }\n"
+        "  void unrelated(String id) { repo.findById(id); repo.save(new Order()); }\n"
+        "}"
+    ))
+
+    operations = discover_data_operations("shop", files, _entities("shop.Order"))
+
+    by_method: dict[str, list] = {}
+    for item in operations:
+        by_method.setdefault(item.owner_method, []).append(item)
+    read, write = by_method["decrement"]
+    assert write.value_dependencies == (read.id,)
+    assert (write.key_expression, write.key_property) == ("id", None)
+    assert write.transaction_id == read.transaction_id is not None
+    direct_read, direct_write = sorted(by_method["direct"], key=lambda item: item.operation)
+    assert direct_write.value_dependencies == (direct_read.id,)
+    assert all(not item.value_dependencies for item in by_method["reassigned"])
+    assert all(not item.value_dependencies for item in by_method["unrelated"])
+
+
+def _step(order: int, kind: str, **fields: object) -> CodeFlowStep:
+    base = dict(name="Order", path="Service.java", start_line=order, end_line=order)
+    base.update(fields)
+    return CodeFlowStep(order=order, kind=kind, **base)  # type: ignore[arg-type]
+
+
+def _flow(flow_id: str, *steps: CodeFlowStep) -> CodeFlow:
+    return CodeFlow(
+        id=flow_id, module="shop", method="shop.Service.run", path="Service.java",
+        start_line=1, end_line=9, status="potential", confidence="medium", reason="",
+        steps=steps,
+    )
+
+
+def _rmw_flow(flow_id: str, *, guard: str | None = None, read_guard: str | None = None,
+              transaction: str | None = "tx", dependency: str = "read-op") -> CodeFlow:
+    trigger = _step(1, "http_entry", name="POST /orders", endpoint_id="in")
+    read = _step(
+        2, "data_read", operation="findById", action="read", resource="jpa:shop:Order",
+        resource_identity="jpa:shop:Order", key="id", operation_id="read-op",
+        transaction_id=transaction, guard=read_guard,
+        guard_scope="operation" if read_guard else None,
+    )
+    write = _step(
+        3, "data_write", operation="save", action="create_or_update",
+        resource="jpa:shop:Order", resource_identity="jpa:shop:Order", key="id",
+        operation_id="write-op", transaction_id=transaction,
+        value_dependencies=(dependency,), guard=guard,
+        guard_scope="resource" if guard else None,
+    )
+    return _flow(flow_id, trigger, read, write)
+
+
+def test_read_modify_write_without_protection_is_a_review_aid_candidate() -> None:
+    [candidate] = review_aid_candidates([_rmw_flow("f")])
+
+    assert candidate.event_type == "read_modify_write"
+    assert candidate.classification == "potential_lost_update"
+    assert candidate.limitation is not None and candidate.limitation.startswith("protection non établie")
+    assert (candidate.write_step, candidate.read_step, candidate.write_dependency_step) == (3, 2, 2)
+    assert candidate.write_transaction_id == candidate.read_transaction_id == "tx"
+    assert candidate.severity == "P2" and candidate.confidence == "low"
+    # The default diagnostics never include the gated aid.
+    assert diagnose_flow_consistency_snapshot([_rmw_flow("f")]) == []
+    assert [item.event_type for item in diagnose_flow_consistency_snapshot(
+        [_rmw_flow("f")], review_aids=True,
+    )] == ["read_modify_write"]
+
+
+def test_read_modify_write_with_a_guard_is_a_protected_pair() -> None:
+    [versioned] = review_aid_candidates([_rmw_flow("f", guard="optimistic_version")])
+    [locked] = review_aid_candidates([_rmw_flow("f", read_guard="pessimistic_lock")])
+    [unlocked] = review_aid_candidates([
+        _rmw_flow("f", read_guard="pessimistic_lock", transaction=None),
+    ])
+
+    assert (versioned.classification, versioned.guard) == ("conflict_protection_identified", "optimistic_version")
+    assert (locked.classification, locked.guard) == ("conflict_protection_identified", "pessimistic_lock")
+    assert unlocked.classification == "potential_lost_update"
+    assert "transaction non établie" in (unlocked.limitation or "")
+
+
+def test_a_read_and_a_write_without_value_dependency_yield_no_candidate() -> None:
+    assert review_aid_candidates([_rmw_flow("f", dependency="other-op")]) == []
+
+
+def test_read_modify_write_pairs_sibling_flows_of_one_method_context() -> None:
+    trigger = _step(1, "http_entry", name="POST /orders", endpoint_id="in")
+    call = _step(2, "method_call", name="shop.Service.run", path="Controller.java")
+    read_flow = _flow("r", trigger, call, _step(
+        3, "data_read", operation="findById", action="read", resource_identity="jpa:shop:Order",
+        operation_id="read-op", transaction_id="tx",
+    ))
+    write_flow = _flow("w", trigger, call, _step(
+        3, "data_write", operation="save", action="create_or_update",
+        resource_identity="jpa:shop:Order", operation_id="write-op", transaction_id="tx",
+        value_dependencies=("read-op",),
+    ))
+    other_route = _flow("o", trigger, _step(2, "method_call", name="shop.Other.run"), _step(
+        3, "data_read", operation="findById", action="read", resource_identity="jpa:shop:Order",
+        operation_id="read-op",
+    ))
+
+    candidates = review_aid_candidates(
+        [read_flow, write_flow, other_route], {"root": {"r", "w", "o"}},
+    )
+
+    assert [(item.flow_id, item.write_flow_id, item.read_flow_id) for item in candidates] == [
+        ("root", "w", "r"),
+    ]
+
+
+def test_dual_write_candidate_and_outbox_or_after_commit_downgrades() -> None:
+    trigger = _step(1, "message_entry", name="orders.placed", endpoint_id="in")
+    write = _step(
+        2, "data_write", operation="save", action="create_or_update",
+        resource_identity="jpa:shop:Order", operation_id="write-op", transaction_id="tx",
+    )
+    publish = _step(3, "message_publish", name="orders.events", endpoint_id="out")
+    outbox = _step(
+        4, "data_write", name="OutboxEvent", operation="save", action="create_or_update",
+        resource="jpa:shop:shop.OutboxEvent", resource_identity="jpa:shop:shop.OutboxEvent",
+        operation_id="outbox-op",
+    )
+
+    [candidate] = review_aid_candidates([_flow("f", trigger, write, publish)], endpoint_systems={"out": "kafka"})
+    assert candidate.event_type == "dual_write"
+    assert candidate.classification == "potential_dual_write"
+    assert candidate.limitation == "mécanisme de reprise non établi"
+    assert (candidate.write_step, candidate.read_step, candidate.read_name) == (2, 3, "orders.events")
+
+    [downgraded] = review_aid_candidates([_flow("f", trigger, write, publish, outbox)])
+    assert downgraded.classification == "recovery_mechanism_present"
+    assert downgraded.limitation == "mécanisme de reprise présent, non vérifié"
+
+    [after_commit] = review_aid_candidates([
+        _flow("f", trigger, write, _step(3, "message_publish", name="orders.events", endpoint_id="out", phase="after_commit")),
+    ])
+    assert after_commit.classification == "recovery_mechanism_present"
+    assert "TransactionalEventListener" in (after_commit.order_evidence or "")
+
+    assert review_aid_candidates([_flow("f", trigger, outbox)]) == []
+    assert review_aid_candidates([_flow("f", trigger, write, publish)], endpoint_systems={"out": "rest"}) == []
+
+
+def test_materialized_flows_carry_value_dependencies_and_after_commit_phase(tmp_path: Path) -> None:
+    _write(tmp_path / "pom.xml", (
+        "<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId>"
+        "<artifactId>shop</artifactId><version>1.0</version></project>"
+    ))
+    java = tmp_path / "src" / "main" / "java" / "shop"
+    for path, text in _repository_sources(
+        "import org.springframework.web.bind.annotation.*;\n"
+        "import org.springframework.kafka.core.KafkaTemplate;\n"
+        "import org.springframework.transaction.event.TransactionalEventListener;\n"
+        "@RestController class Service {\n  OrderRepository repo; KafkaTemplate<String, String> kafka;\n"
+        "  @Transactional @PostMapping(\"/orders/{id}\") void reserve(@PathVariable String id) {\n"
+        "    var o = repo.findById(id).orElseThrow();\n    o.setQty(1);\n    repo.save(o);\n"
+        "    kafka.send(\"orders.events\", id);\n  }\n"
+        "  @TransactionalEventListener @KafkaListener(topics = \"orders.placed\") void relay(String id) {\n"
+        "    kafka.send(\"orders.events\", id);\n  }\n}"
+    ).items():
+        _write(java / Path(path).name, text)
+
+    with Store(tmp_path) as store:
+        index_repo(tmp_path, CONFIG, store, full=True)
+        endpoints = store.all_endpoints()
+        modules = store.all_modules()
+        operations = store.all_data_operations()
+    flows = materialize_code_flows(tmp_path, endpoints, modules, operations)
+
+    reserve = next(flow for flow in flows if flow.method.endswith("reserve"))
+    kinds = [step.kind for step in reserve.steps]
+    assert kinds == ["http_entry", "data_read", "data_write", "message_publish"]
+    assert reserve.steps[2].value_dependencies == (reserve.steps[1].operation_id,)
+    assert reserve.steps[3].phase is None
+    relay = next(flow for flow in flows if flow.method.endswith("relay"))
+    assert relay.steps[-1].kind == "message_publish" and relay.steps[-1].phase == "after_commit"
+    aids = review_aid_candidates(flows, endpoint_systems={
+        endpoint.id: endpoint.system for endpoint in endpoints
+    })
+    assert sorted((item.event_type, item.classification) for item in aids) == [
+        ("dual_write", "potential_dual_write"),
+        ("read_modify_write", "potential_lost_update"),
+    ]

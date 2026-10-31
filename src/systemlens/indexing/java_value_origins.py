@@ -7,6 +7,7 @@ from typing import Sequence
 from tree_sitter import Node
 
 from systemlens.discovery.java import parser
+from systemlens.discovery.java.value_dependencies import is_reassigned as _is_reassigned
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.data_operations import JAVA_LITERAL as _JAVA_LITERAL
 from systemlens.callgraph.model import MethodCall
@@ -116,19 +117,6 @@ def _expression_origin(
         source, method_node, parser.node_text(source, value),
         declaration.start_point.row + 1, visited | {expression},
     )
-
-
-def _is_reassigned(body: Node, source: bytes, name: str) -> bool:
-    for node in parser.walk(body):
-        if node.type == "assignment_expression":
-            left = node.child_by_field_name("left")
-            if left is not None and parser.node_text(source, left).strip() == name:
-                return True
-        elif node.type in {"update_expression", "unary_expression"}:
-            text = parser.node_text(source, node).strip()
-            if re.fullmatch(rf"(?:\+\+|--)?\s*{re.escape(name)}\s*(?:\+\+|--)?", text):
-                return True
-    return False
 
 
 def _call_argument(

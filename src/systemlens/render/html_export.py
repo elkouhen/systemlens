@@ -129,8 +129,14 @@ def render_graph_html(
     call_graphs_only: bool = False,
     include_call_graph_annotations: bool = True,
     runtime_overlay: Mapping[str, object] | None = None,
+    review_aids: bool = False,
 ) -> str:
-    """Render a graph view model as one self-contained HTML document."""
+    """Render a graph view model as one self-contained HTML document.
+
+    ``review_aids`` adds the gated read-modify-write and dual-write
+    candidates to the flow diagnostics; they stay off by default until the
+    precision record of the data-operations plan promotes them.
+    """
     flow_annotation_facts = [
         fact for fact in graph_facts or []
         if include_call_graph_annotations
@@ -437,9 +443,11 @@ def render_graph_html(
                 endpoint_id: endpoint.system
                 for endpoint_id, endpoint in call_graph_index.endpoint_by_id.items()
             },
+            review_aids=review_aids,
         )
         if include_call_graph_annotations else ()
     )
+    view_model["flow_review_aids"] = bool(review_aids and include_call_graph_annotations)
     for diagnostic in diagnostics_for_export:
         if diagnostic.flow_id not in call_flow_ids:
             continue

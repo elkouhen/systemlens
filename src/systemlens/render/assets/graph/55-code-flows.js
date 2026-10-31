@@ -14,7 +14,7 @@
     const flowDiagnostics = Array.isArray(graphData.flow_diagnostics) ? graphData.flow_diagnostics : [];
     const flowConsistencyRiskClassifications = new Set([
       "potential_risk", "potential_concurrent_write", "potential_lost_update",
-      "potential_dirty_read", "potential_read_write_anomaly",
+      "potential_dirty_read", "potential_read_write_anomaly", "potential_dual_write",
     ]);
     const flowConsistencyCountCache = new Map();
     let callTreePan = null;
@@ -73,6 +73,8 @@
         potential_dirty_read: "LECTURE NON VALIDÉE POSSIBLE",
         potential_read_write_anomaly: "ANOMALIE DE FRAÎCHEUR POSSIBLE",
         conflict_protection_identified: "PROTECTION DE CONFLIT IDENTIFIÉE",
+        read_modify_write: "LECTURE-MODIFICATION-ÉCRITURE · AIDE À LA REVUE",
+        dual_write: "DOUBLE ÉCRITURE POSSIBLE · AIDE À LA REVUE",
       })[diagnostic.event_type] || "ÉCRITURE ASYNC / LECTURE SYNC";
     }
 
@@ -869,6 +871,8 @@
             conflict_protection_identified: "Protection de conflit identifiée",
             guarantee_identified: "Garantie identifiée",
             insufficient_evidence: "Preuves insuffisantes",
+            potential_dual_write: "Double écriture possible (reprise non établie)",
+            recovery_mechanism_present: "Mécanisme de reprise présent, non vérifié",
           })[diagnostic.classification] || diagnostic.classification || "Diagnostic";
           lines.push(`Diagnostic · ${classification}`);
           if (diagnostic.resource_identity) lines.push(`Identité ressource · ${diagnostic.resource_identity}`);

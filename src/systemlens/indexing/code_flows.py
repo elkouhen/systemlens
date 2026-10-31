@@ -347,6 +347,52 @@ def _scheduled_trigger_step(
     return None
 
 
+def _after_commit_lines(repo_root: Path, path: str) -> list[tuple[int, int]]:
+    """Line ranges of methods annotated ``@TransactionalEventListener``."""
+    parsed = java_parser.parse_java(str(repo_root.resolve()), path)
+    if parsed is None:
+        return []
+    source, root = parsed
+    ranges: list[tuple[int, int]] = []
+    for node in java_parser.walk(root):
+        if node.type != "method_declaration":
+            continue
+        if any(
+            java_parser.annotation_name(annotation, source) == "TransactionalEventListener"
+            for annotation in java_parser.annotations_of(node)
+        ):
+            ranges.append((node.start_point.row + 1, node.end_point.row + 1))
+    return ranges
+
+
+def mark_after_commit_publications(
+    repo_root: Path | None, flows: list[CodeFlow],
+) -> list[CodeFlow]:
+    """Phase a publication ``after_commit`` when its method is a transactional listener.
+
+    The annotation is scope evidence for the dual-write review aid only; it
+    neither confirms a transaction nor an outbox. Without a repository root
+    (a rebuild without sources) steps are returned unchanged.
+    """
+    if repo_root is None:
+        return flows
+    cache: dict[str, list[tuple[int, int]]] = {}
+    result: list[CodeFlow] = []
+    for flow in flows:
+        steps = list(flow.steps)
+        changed = False
+        for index, step in enumerate(steps):
+            if step.kind != "message_publish" or step.phase is not None:
+                continue
+            if step.path not in cache:
+                cache[step.path] = _after_commit_lines(repo_root, step.path)
+            if any(start <= step.start_line <= end for start, end in cache[step.path]):
+                steps[index] = replace(step, phase="after_commit")
+                changed = True
+        result.append(replace(flow, steps=tuple(steps)) if changed else flow)
+    return result
+
+
 def materialize_code_flows(
     repo_root: Path,
     endpoints: list[MessageEndpoint],
@@ -545,7 +591,8 @@ def materialize_code_flows(
                     steps=tuple(steps),
                 ))
     return _ensure_unique_code_flow_ids(sorted(
-        flows, key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id)
+        mark_after_commit_publications(repo_root, flows),
+        key=lambda flow: (flow.module, flow.path, flow.start_line, flow.id),
     ))
 
 
@@ -1627,7 +1674,9 @@ def materialize_call_graph_flows(
         f"→ Graphe d'appel : jointure terminée · {explored} transition(s), "
         f"{len(reachability)} reachability(s), {len(current_flows())} flux dédupliqué(s)."
     )
-    return _ensure_unique_code_flow_ids(_deduplicate_code_flows(current_flows(), endpoints))
+    return _ensure_unique_code_flow_ids(_deduplicate_code_flows(
+        mark_after_commit_publications(repo_root, current_flows()), endpoints,
+    ))
 
 
 def reconcile_code_flows(
