@@ -96,6 +96,7 @@
         return;
       }
       graphMinimap.hidden = false;
+      placeGraphMinimap();
       const extent = {
         left: Math.min(...extentPoints.map(item => item.x)),
         right: Math.max(...extentPoints.map(item => item.x)),
@@ -188,6 +189,26 @@
         };
       };
     }
+    function placeGraphMinimap() {
+      // The legend shares the bottom-right corner and grows upward when open.
+      graphMinimap.style.right = "";
+      graphMinimap.style.bottom = "";
+      const legend = document.getElementById("graph-legend");
+      if (!legend || legend.hidden) return;
+      const legendBox = legend.getBoundingClientRect();
+      const mapBox = graphMinimap.getBoundingClientRect();
+      const overlaps = legendBox.width > 0 && mapBox.left < legendBox.right
+        && mapBox.right > legendBox.left && mapBox.top < legendBox.bottom
+        && mapBox.bottom > legendBox.top;
+      if (!overlaps) return;
+      const gap = 10;
+      if (legendBox.left - gap - mapBox.width >= gap) {
+        graphMinimap.style.right = `${window.innerWidth - legendBox.left + gap}px`;
+      } else {
+        graphMinimap.style.bottom = `${window.innerHeight - legendBox.top + gap}px`;
+      }
+    }
+    document.getElementById("graph-legend")?.addEventListener("toggle", scheduleGraphMinimapRender);
     function scheduleGraphMinimapRender() {
       if (graphMinimapRenderScheduled) return;
       graphMinimapRenderScheduled = true;
@@ -210,15 +231,12 @@
         renderGraphMinimap();
         return;
       }
-      const graphPoint = point;
-      const projected = renderer.graphToViewport(graphPoint);
+      // Camera coordinates are framed-graph units; converting through the
+      // viewport keeps the target centered at every zoom ratio.
+      const target = renderer.viewportToFramedGraph(renderer.graphToViewport(point));
+      if (!Number.isFinite(target.x) || !Number.isFinite(target.y)) return;
       const camera = renderer.getCamera();
-      const state = camera.getState();
-      camera.setState({
-        ...state,
-        x: state.x - (viewport.width / 2 - projected.x) / Math.max(1, viewport.width),
-        y: state.y + (viewport.height / 2 - projected.y) / Math.max(1, viewport.height),
-      });
+      camera.setState({ ...camera.getState(), x: target.x, y: target.y });
       renderer.refresh();
       requestGraphRender();
     }
