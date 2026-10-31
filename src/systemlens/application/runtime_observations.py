@@ -18,13 +18,14 @@ from systemlens.discovery.elastic_apm import (
     ElasticApmError,
     SearchFunction,
     cluster_origin,
+    collect_error_groups,
     collect_observations,
     http_search,
     parse_window,
 )
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
-from systemlens.domain.runtime import RuntimeObservation
+from systemlens.domain.runtime import RuntimeErrorGroup, RuntimeObservation
 from systemlens.infrastructure.config import config_path
 from systemlens.storage.sqlite import Store
 
@@ -53,8 +54,8 @@ def collect_runtime_observations(
     ca_cert: Path | None = None,
     search: SearchFunction | None = None,
     now: datetime | None = None,
-) -> list[RuntimeObservation]:
-    """Collect one Elastic APM window and replace the persisted observations."""
+) -> tuple[list[RuntimeObservation], list[RuntimeErrorGroup]]:
+    """Collect one Elastic APM window and replace persisted observations and errors."""
     if not config_path(repo_root).is_file():
         raise RuntimeError("Configuration absente. Lancez d'abord systemlens init.")
     try:
@@ -66,12 +67,14 @@ def collect_runtime_observations(
         observations = collect_observations(
             searcher, origin=origin, window=window, interval=interval, now=now,
         )
+        errors = collect_error_groups(searcher, origin=origin, window=window, now=now)
     except ElasticApmError as exc:
         raise RuntimeError(str(exc)) from exc
     with Store(repo_root) as store:
         with store.transaction():
             store.replace_runtime_observations(SOURCE, observations)
-    return observations
+            store.replace_runtime_error_groups(SOURCE, errors)
+    return observations, errors
 
 
 def parse_service_map(
@@ -139,11 +142,14 @@ def reconcile_observations(
     edges: list[GraphEdge],
     service_map: Mapping[str, str] | None = None,
     ignored_services: Collection[str] = (),
+    errors: Collection[RuntimeErrorGroup] = (),
 ) -> dict[str, object]:
     """Compare persisted observations with indexed integrations.
 
     Observations of ``ignored_services`` stay in the report as
     ``not_compared`` but never count as unresolved or as service evidence.
+    Error groups attach to the indexed entry point of their transaction when
+    its name identifies one; errors of ignored services are left out.
     """
     services = set(endpoints_by_service)
     explicit = dict(service_map or {})
@@ -246,6 +252,26 @@ def reconcile_observations(
                 else:
                     unverified.append({**item, "reason": reason})
 
+    error_rows: list[dict[str, object]] = []
+    for group in errors:
+        if group.service_name in ignored:
+            continue
+        _resolution, error_service, _candidates = resolve(group.service_name)
+        entry_ids = (
+            _entry_endpoint_ids(group.transaction_name, served[error_service], consumed[error_service])
+            if error_service and group.transaction_name else []
+        )
+        error_rows.append({
+            "service_name": group.service_name,
+            "service": error_service,
+            "exception_type": group.exception_type,
+            "culprit": group.culprit,
+            "transaction": group.transaction_name,
+            "occurrences": group.occurrences,
+            "last_seen": group.last_seen,
+            "endpoint_ids": entry_ids,
+        })
+
     summary = Counter(str(row["status"]) for row in rows)
     summary["static_only"] = len(static_only)
     summary["unverified"] = len(unverified)
@@ -267,6 +293,7 @@ def reconcile_observations(
         "observations": rows,
         "static_only": static_only,
         "unverified": unverified,
+        "errors": error_rows,
         "rest_call_covered": sorted(
             service for service, kinds in evidence.items() if "http_destination" in kinds
         ),
@@ -309,6 +336,19 @@ def _uncovered_reason(integration: str, kinds: set[str]) -> str | None:
             return "transactions de messaging sans topic : trafic non attribuable"
         return None if "named_message" in kinds else "aucune consommation Kafka observée"
     return None if "kafka_destination" in kinds else "aucune publication Kafka observée"
+
+
+def _entry_endpoint_ids(
+    transaction: str,
+    served: Mapping[str, list[MessageEndpoint]],
+    consumed: Mapping[str, list[MessageEndpoint]],
+) -> list[str]:
+    """Return the indexed entry points a transaction name designates."""
+    match = _REQUEST_NAME.match(" ".join(transaction.split()))
+    if match:
+        return _ids(served.get(_normalize_route(match.group(1), match.group(2)), []))
+    topic = _messaging_topic(transaction)
+    return _ids(consumed.get(topic, [])) if topic else []
 
 
 def _ids(endpoints: list[MessageEndpoint]) -> list[str]:
@@ -394,6 +434,11 @@ def runtime_overlay(
     for index, row in enumerate(rows):
         for endpoint_id in cast(list[str], row["endpoint_ids"]):
             endpoint_observations[endpoint_id].append(index)
+    errors = cast(list[dict[str, object]], result.get("errors", []))
+    endpoint_errors: dict[str, list[int]] = defaultdict(list)
+    for index, error in enumerate(errors):
+        for endpoint_id in cast(list[str], error["endpoint_ids"]):
+            endpoint_errors[endpoint_id].append(index)
     observed = {row["service"] for row in rows if row["service"]}
     return {
         "window": result["window"],
@@ -407,6 +452,8 @@ def runtime_overlay(
         }),
         "silent": static_only,
         "unverified": result["unverified"],
+        "errors": errors,
+        "endpoint_errors": dict(sorted(endpoint_errors.items())),
         "rest_call_covered": result["rest_call_covered"],
         "services": {
             service: "observed" if service in observed else "no_telemetry"
@@ -470,6 +517,23 @@ def render_runtime_report_text(result: Mapping[str, object]) -> str:
             lines.append(
                 f"  {item['service']} {item['integration']} {item['name']} — {item['reason']}"
             )
+    errors = result.get("errors", [])
+    assert isinstance(errors, list)
+    lines.append("")
+    if errors:
+        lines.append("Erreurs APM (groupes d'exceptions, messages non conservés) :")
+        for error in errors:
+            where = f" sur {error['transaction']}" if error["transaction"] else ""
+            culprit = f" — {error['culprit']}" if error["culprit"] else ""
+            lines.append(
+                f"  {error['service'] or error['service_name']} "
+                f"{error['exception_type'] or 'exception inconnue'} "
+                f"× {error['occurrences']}{where}{culprit}"
+            )
+    else:
+        lines.append(
+            "Aucune erreur APM sur la fenêtre (lecture de logs-apm.error-* requise pour les collecter)."
+        )
     unresolved = result["unresolved_services"]
     assert isinstance(unresolved, list)
     if unresolved:

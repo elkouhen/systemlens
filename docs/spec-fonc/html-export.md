@@ -54,14 +54,20 @@ When on, the architecture view annotates existing elements only:
   An indexed service without any observation shows "Sans télémétrie APM".
 - Card tooltips detail active, silent, unverifiable, and unexplained entries
   and the inbound volume. Service details add a "Trafic observé" group.
-- "Écarts runtime" opens an inspector listing silent and unverifiable
-  indexed integrations, `observed_only` and `external` traffic, unmapped APM
-  services, and services without telemetry. Its count covers all of them.
+- APM error groups add "N erreurs" to the service card and an "Erreurs
+  APM" list to its details, without any error message.
+- "Écarts runtime" opens an inspector listing error groups, silent and
+  unverifiable indexed integrations, `observed_only` and `external`
+  traffic, unmapped APM services, and services without telemetry. Its count
+  covers all of them.
 
 In a selected call tree, a "Trafic APM" button in the flow toolbar mirrors
 the legend toggle. Each card shows the observed executions of its entry
 route or consumer, or "APM · aucun trafic" for a silent indexed entry.
-Arcs thicken with volume, and their label gains an "APM · …" line. Their
+A card whose entry point has APM error groups adds "N erreurs" and turns
+red; its tooltip lists exception type, count, and code location. Arcs
+thicken with volume, and their label gains an "APM · …" line, red when
+either the caller or the callee side fails. Their
 tooltip lists the emitted count, per topic or service pair, and the received
 count, from all sources, separately.
 

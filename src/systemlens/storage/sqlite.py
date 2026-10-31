@@ -37,7 +37,7 @@ from systemlens.domain.module_inventory import (
     ModuleDependency,
     SourceEvidence,
 )
-from systemlens.domain.runtime import RuntimeObservation
+from systemlens.domain.runtime import RuntimeErrorGroup, RuntimeObservation
 from systemlens.infrastructure.paths import db_path
 from systemlens.storage.serialization import (
     CodeChunk,
@@ -446,6 +446,21 @@ class Store:
                 calls INTEGER NOT NULL,
                 failures INTEGER NOT NULL,
                 duration_sum_us REAL,
+                window_start TEXT NOT NULL,
+                window_end TEXT NOT NULL,
+                collected_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS runtime_error_groups (
+                id TEXT PRIMARY KEY,
+                source TEXT NOT NULL,
+                origin TEXT NOT NULL,
+                service_name TEXT NOT NULL,
+                grouping_key TEXT NOT NULL,
+                exception_type TEXT,
+                culprit TEXT,
+                transaction_name TEXT,
+                occurrences INTEGER NOT NULL,
+                last_seen TEXT,
                 window_start TEXT NOT NULL,
                 window_end TEXT NOT NULL,
                 collected_at TEXT NOT NULL
@@ -1099,6 +1114,35 @@ class Store:
         except sqlite3.OperationalError:
             return []
         return [RuntimeObservation(**dict(row)) for row in rows]
+
+    def replace_runtime_error_groups(
+        self, source: str, groups: list[RuntimeErrorGroup]
+    ) -> None:
+        """Replace every error group of one source with a new collection."""
+        self.conn.execute("DELETE FROM runtime_error_groups WHERE source = ?", (source,))
+        self.conn.executemany(
+            """INSERT INTO runtime_error_groups
+            (id, source, origin, service_name, grouping_key, exception_type, culprit,
+             transaction_name, occurrences, last_seen, window_start, window_end, collected_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                (item.id, item.source, item.origin, item.service_name, item.grouping_key,
+                 item.exception_type, item.culprit, item.transaction_name, item.occurrences,
+                 item.last_seen, item.window_start, item.window_end, item.collected_at)
+                for item in groups
+            ],
+        )
+
+    def all_runtime_error_groups(self) -> list[RuntimeErrorGroup]:
+        """Return persisted APM error groups; older indexes may lack the table."""
+        try:
+            rows = self.conn.execute(
+                "SELECT * FROM runtime_error_groups"
+                " ORDER BY source, service_name, occurrences DESC, grouping_key"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        return [RuntimeErrorGroup(**dict(row)) for row in rows]
 
     def all_graph_facts(self) -> list[GraphFact]:
         rows = self.conn.execute("SELECT * FROM graph_facts ORDER BY id").fetchall()

@@ -33,6 +33,24 @@ The transfer is proportional to the number of distinct service, target, and
 outcome combinations. At 50 services and 300 topics this is thousands of
 buckets, independent of traffic volume.
 
+### Error groups
+
+A third query aggregates `logs-apm.error-*` with composite sources
+`service.name` and `error.grouping_key`. Each bucket keeps its `doc_count`,
+the maximum `@timestamp`, and the most frequent `error.exception.type`,
+`error.culprit`, and `transaction.name` through `terms` of size 1. It reads
+no document and no message field: messages can carry business data or
+secrets. Paging, window, and the 100-page bound match the metric queries.
+
+A wildcard index without a match, or one the API key may not read, returns
+no bucket rather than an error. The key therefore needs `read` on
+`logs-apm.error-*` as well as `metrics-apm*`; without it, errors are
+silently absent. Errors that an application catches and maps to a response,
+as in the lab's `@ExceptionHandler`, produce no APM error document; they
+still appear as transaction failures.
+
+### Folding
+
 Buckets are folded into one observation per kind, service, target, and
 target type. `calls` sums every outcome; `failures` sums `failure`.
 Transaction names drop any query string. The cluster URL must not embed
@@ -46,8 +64,14 @@ Table `runtime_observations` stores one row per observation: `id`, `source`,
 `failures`, `duration_sum_us`, `window_start`, `window_end`, and
 `collected_at`. `origin` is the cluster scheme, host, and port only.
 
-A collection replaces every row of its source in one transaction. Indexing
-never reads or clears the table, so observations survive a reindex. The
+Table `runtime_error_groups` stores one row per service and grouping key:
+`id`, `source`, `origin`, `service_name`, `grouping_key`, `exception_type`,
+`culprit`, `transaction_name`, `occurrences`, `last_seen`, and the window
+fields. It holds no error message.
+
+A collection replaces every row of its source in both tables in one
+transaction. Indexing never reads or clears them, so observations survive a
+reindex. The
 table is created on the first write. A read-only open of an older index
 without the table returns no observations; `SCHEMA_VERSION` is unchanged.
 
@@ -112,6 +136,11 @@ of the REST edges between both services. A matched REST destination also
 names its `edge` services. Routes that normalize alike share one observation.
 Each `static_only` item lists its `endpoint_ids`. Other rows list none.
 
+Error groups of ignored services are dropped. Others keep their mapped
+service and, when their transaction name designates an indexed served route
+or consumed topic, that entry point's `endpoint_ids`. They change no status:
+errors are reported beside the reconciliation, under `errors`.
+
 ## 4. Export overlay
 
 `systemlens export microservices --html` reconciles persisted observations
@@ -131,6 +160,7 @@ export is not `--call-graphs-only`. Every other key stays identical.
 | `unverified`, `rest_call_covered` | Unverifiable items; services whose REST calls can be silent |
 | `services` | Indexed service to `observed` or `no_telemetry` |
 | `unresolved_services` | Unmapped or ambiguous APM service names |
+| `errors`, `endpoint_errors` | Error groups; endpoint ID to their indexes |
 
 The browser sums an arc's counts over the distinct observation indexes of its
 `endpoint_ids`, so a service-pair count shared by several call sites is
@@ -140,8 +170,10 @@ destination is silent. The block is linear in observations plus endpoints.
 In a selected call tree, a card reads the traffic of its input endpoint:
 the flow trigger for the root, the arc target otherwise. An arc reads its
 output endpoint as emitted traffic and its input endpoint as received
-traffic. It is styled by the received count, or by the emitted count when
-the input has none. The two counts are never summed.
+traffic. It is styled by the received count, or by the emitted count when the input
+has none or when only the emitted side is failing: APM counts a 4xx as a
+caller failure but a server success. The two counts are never summed. A card
+whose input endpoint has error groups turns red and lists them.
 
 ## 5. Invariants and limits
 

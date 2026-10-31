@@ -1,8 +1,9 @@
 """Optional Elastic APM metric collection through the Elasticsearch search API.
 
-Only pre-aggregated APM metric data streams are queried, through paginated
-composite aggregations computed by Elasticsearch. Trace documents are never
-downloaded, so the transfer depends on cardinality rather than traffic.
+Only pre-aggregated APM metric data streams and error-group aggregations are
+queried, through paginated composite aggregations computed by Elasticsearch.
+Trace and error documents are never downloaded, so the transfer depends on
+cardinality rather than traffic.
 """
 
 import json
@@ -16,11 +17,12 @@ from hashlib import sha256
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from systemlens.domain.runtime import RuntimeObservation
+from systemlens.domain.runtime import RuntimeErrorGroup, RuntimeObservation
 
 SearchFunction = Callable[[str, dict[str, object]], dict[str, object]]
 
 SOURCE = "elastic_apm"
+ERROR_INDEX = "logs-apm.error-*"
 INTERVALS = ("1m", "10m", "60m")
 # Coarsest rollup first: it scans the fewest metric documents.
 _AUTO_INTERVAL_ORDER = ("60m", "10m", "1m")
@@ -170,6 +172,69 @@ def _number(bucket: dict[str, object], name: str) -> float:
     return float(raw) if isinstance(raw, int | float) else 0.0
 
 
+def _window_bounds(window: timedelta, now: datetime | None) -> tuple[str, str]:
+    end_time = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).replace(microsecond=0)
+    start = (end_time - window).isoformat().replace("+00:00", "Z")
+    return start, end_time.isoformat().replace("+00:00", "Z")
+
+
+def _top_term(bucket: dict[str, object], name: str) -> str | None:
+    value = bucket.get(name)
+    buckets = value.get("buckets") if isinstance(value, dict) else None
+    if not isinstance(buckets, list) or not buckets or not isinstance(buckets[0], dict):
+        return None
+    key = buckets[0].get("key")
+    return key if isinstance(key, str) and key else None
+
+
+def collect_error_groups(
+    search: SearchFunction,
+    *,
+    origin: str,
+    window: timedelta,
+    now: datetime | None = None,
+) -> list[RuntimeErrorGroup]:
+    """Aggregate APM error groups per service, without reading any message.
+
+    Each group keeps its most frequent exception type, culprit and
+    transaction name. A wildcard index without a match, or one the API key
+    may not read, yields no group rather than an error.
+    """
+    start, end = _window_bounds(window, now)
+    groups: list[RuntimeErrorGroup] = []
+    for bucket in _composite_buckets(
+        search, ERROR_INDEX,
+        [_terms("service", "service.name"), _terms("grouping_key", "error.grouping_key")],
+        {
+            "last_seen": {"max": {"field": "@timestamp"}},
+            "exception_type": {"terms": {"field": "error.exception.type", "size": 1}},
+            "culprit": {"terms": {"field": "error.culprit", "size": 1}},
+            "transaction": {"terms": {"field": "transaction.name", "size": 1}},
+        },
+        start, end,
+    ):
+        key = bucket.get("key") or {}
+        assert isinstance(key, dict)
+        service, grouping_key = key.get("service"), key.get("grouping_key")
+        if not isinstance(service, str) or not isinstance(grouping_key, str):
+            continue
+        last = bucket.get("last_seen")
+        last_seen = last.get("value_as_string") if isinstance(last, dict) else None
+        count = bucket.get("doc_count")
+        transaction = _top_term(bucket, "transaction")
+        groups.append(RuntimeErrorGroup(
+            id=_observation_id("error", service, grouping_key, None),
+            source=SOURCE, origin=origin, service_name=service, grouping_key=grouping_key,
+            exception_type=_top_term(bucket, "exception_type"),
+            culprit=_top_term(bucket, "culprit"),
+            transaction_name=transaction.split("?", 1)[0] if transaction else None,
+            occurrences=int(count) if isinstance(count, int | float) else 0,
+            last_seen=last_seen if isinstance(last_seen, str) else None,
+            window_start=start, window_end=end, collected_at=end,
+        ))
+    return sorted(groups, key=lambda group: (group.service_name, -group.occurrences, group.grouping_key))
+
+
 def _observation_id(kind: str, service: str, target: str, target_type: str | None) -> str:
     key = "\x1f".join((SOURCE, kind, service, target, target_type or ""))
     return sha256(key.encode("utf-8")).hexdigest()[:24]
@@ -188,9 +253,7 @@ def collect_observations(
         raise ElasticApmError(
             f"Intervalle invalide {interval!r} : auto, {', '.join(INTERVALS)}."
         )
-    end_time = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).replace(microsecond=0)
-    start = (end_time - window).isoformat().replace("+00:00", "Z")
-    end = end_time.isoformat().replace("+00:00", "Z")
+    start, end = _window_bounds(window, now)
     if interval == "auto":
         interval = detect_interval(search, start, end)
     totals: dict[tuple[str, str, str, str | None], list[float]] = {}

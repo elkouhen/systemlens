@@ -81,7 +81,7 @@ from systemlens.indexing.code_flows import materialize_codeql_code_flows
 from systemlens.indexing.codeql import extract_codeql_calls, extract_codeql_methods
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.models import ExtractionDiagnostic
-from systemlens.domain.runtime import RuntimeObservation
+from systemlens.domain.runtime import RuntimeErrorGroup, RuntimeObservation
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.discovery.build.modules import (
     discover_modules,
@@ -1946,6 +1946,7 @@ class _MicroserviceGraphData:
     codeql_call_edges: list[CodeQLCallGraphEdge] | None = None
     flow_descriptions: dict[str, str] | None = None
     runtime_observations: list[RuntimeObservation] | None = None
+    runtime_errors: list[RuntimeErrorGroup] | None = None
 
 
 def _load_flow_descriptions(repo_root: Path) -> dict[str, str]:
@@ -1988,6 +1989,7 @@ def _load_microservice_graph(
         graph_facts = store.all_graph_facts()
         architecture_relations = store.all_architecture_relations()
         runtime_observations = store.all_runtime_observations()
+        runtime_errors = store.all_runtime_error_groups()
     return _MicroserviceGraphData(
         projection.services_by_name,
         projection.edges,
@@ -2010,6 +2012,7 @@ def _load_microservice_graph(
         inventory.codeql_call_edges,
         _load_flow_descriptions(repo_root),
         runtime_observations,
+        runtime_errors,
     )
 
 
@@ -2028,6 +2031,7 @@ def _export_runtime_overlay(
             graph_data.edges,
             parse_service_map([], configured_map),
             ignored_services,
+            getattr(graph_data, "runtime_errors", None) or (),
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -3161,6 +3165,7 @@ def _emit_runtime_report(repo_root: Path, service_map: list[str], json_output: b
     inventory = load_architecture_inventory(repo_root)
     with Store(repo_root, readonly=True) as store:
         observations = store.all_runtime_observations()
+        errors = store.all_runtime_error_groups()
     configured_map, ignored_services = _configured_runtime(repo_root)
     try:
         result = reconcile_observations(
@@ -3169,6 +3174,7 @@ def _emit_runtime_report(repo_root: Path, service_map: list[str], json_output: b
             graph_edges_from_relations(inventory.relations, inventory.endpoints_by_service),
             parse_service_map(service_map, configured_map),
             ignored_services,
+            errors,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -3198,14 +3204,18 @@ def observe_elastic_cmd(
     """Collecter les métriques APM agrégées puis les rapprocher de l'index."""
     repo_root = Path.cwd()
     try:
-        observations = collect_runtime_observations(
+        observations, errors = collect_runtime_observations(
             repo_root, url, since=since, interval=interval,
             api_key_env=api_key_env, ca_cert=ca_cert,
         )
     except RuntimeError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
-    typer.echo(f"{len(observations)} observation(s) agrégée(s) persistée(s).", err=True)
+    typer.echo(
+        f"{len(observations)} observation(s) agrégée(s) et "
+        f"{len(errors)} groupe(s) d'erreurs APM persisté(s).",
+        err=True,
+    )
     _emit_runtime_report(repo_root, service_map, json_output)
 
 

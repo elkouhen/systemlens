@@ -22,13 +22,14 @@ from systemlens.delivery.cli import app
 from systemlens.discovery.elastic_apm import (
     ElasticApmError,
     cluster_origin,
+    collect_error_groups,
     collect_observations,
     parse_window,
 )
 from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
-from systemlens.domain.runtime import RuntimeObservation
+from systemlens.domain.runtime import RuntimeErrorGroup, RuntimeObservation
 from systemlens.infrastructure.config import ConfigError, config_path, init_config, load_config
 from systemlens.render import render_graph_html
 from systemlens.storage.sqlite import Store
@@ -70,7 +71,7 @@ class FakeElasticsearch:
         if "aggs" not in body:
             interval = index.rsplit(".", 1)[1].removesuffix("-*")
             return {"hits": {"total": {"value": int(interval in self.intervals), "relation": "gte"}}}
-        prefix = index.split(".", 1)[1].split(".", 1)[0]
+        prefix = index.split(".", 1)[1].split(".", 1)[0].removesuffix("-*")
         composite = body["aggs"]["groups"]["composite"]  # type: ignore[index]
         page = int(composite.get("after", {}).get("page", 0))  # type: ignore[union-attr]
         pages = self.pages.get(prefix, [])
@@ -125,6 +126,66 @@ def test_collection_queries_only_aggregated_metrics_and_folds_outcomes() -> None
     ]
     assert observations[0].duration_sum_us == 42_000
     assert observations[0].window_end == "2026-10-31T12:00:00Z"
+
+
+def _error_bucket(service: str, key: str, exception: str | None, transaction: str | None,
+                  count: int, culprit: str | None = "OrderController in triggerOutOfStock") -> dict[str, object]:
+    def top(value: str | None) -> dict[str, object]:
+        return {"buckets": [{"key": value, "doc_count": count}] if value else []}
+
+    return {
+        "key": {"service": service, "grouping_key": key}, "doc_count": count,
+        "last_seen": {"value": 1, "value_as_string": "2026-10-31T11:58:00.000Z"},
+        "exception_type": top(exception), "culprit": top(culprit), "transaction": top(transaction),
+    }
+
+
+def test_error_groups_are_aggregated_without_reading_messages() -> None:
+    search = FakeElasticsearch({"error": [[
+        _error_bucket("orders", "g1", "OutOfStockException", "GET /api/error?x=1", 5),
+        _error_bucket("orders", "g2", None, None, 1, culprit=None),
+    ]]})
+
+    groups = collect_error_groups(search, origin="https://es:9200", window=timedelta(days=1), now=NOW)
+
+    [(index, body)] = search.requests
+    assert index == "logs-apm.error-*"
+    assert body["size"] == 0
+    assert "message" not in json.dumps(body)
+    assert [(g.grouping_key, g.exception_type, g.transaction_name, g.occurrences) for g in groups] == [
+        ("g1", "OutOfStockException", "GET /api/error", 5), ("g2", None, None, 1),
+    ]
+    assert groups[0].last_seen == "2026-10-31T11:58:00.000Z"
+    assert groups[0].culprit == "OrderController in triggerOutOfStock"
+    assert FakeElasticsearch({})("logs-apm.error-*", body) == {"aggregations": {"groups": {"buckets": []}}}
+
+
+def test_error_groups_attach_to_the_indexed_entry_point_of_their_transaction() -> None:
+    endpoints, edges = _lab_inventory()
+    error = RuntimeErrorGroup(
+        id="e1", source="elastic_apm", origin="https://es:9200", service_name="order-service",
+        grouping_key="g1", exception_type="OutOfStockException", culprit="OrderController",
+        transaction_name="POST /api/orders/", occurrences=5, last_seen=None,
+        window_start="2026-10-24T12:00:00Z", window_end="2026-10-31T12:00:00Z",
+        collected_at="2026-10-31T12:00:00Z",
+    )
+    ignored = RuntimeErrorGroup(**{**error.__dict__, "id": "e2", "service_name": "otel-edge"})
+
+    result = reconcile_observations(
+        _lab_observations(), endpoints, edges, ignored_services=["otel-edge"], errors=[error, ignored],
+    )
+    overlay = runtime_overlay(result, endpoints)
+
+    assert [(row["service"], row["endpoint_ids"]) for row in result["errors"]] == [
+        ("order-service", ["order-service:rest:serve:POST /api/orders"]),
+    ]
+    assert overlay is not None
+    assert overlay["endpoint_errors"] == {"order-service:rest:serve:POST /api/orders": [0]}
+    report = render_runtime_report_text(result)
+    assert "order-service OutOfStockException × 5 sur POST /api/orders/" in report
+    assert "Aucune erreur APM" in render_runtime_report_text(
+        reconcile_observations(_lab_observations(), endpoints, edges)
+    )
 
 
 def test_collection_stops_before_an_unbounded_download() -> None:
@@ -485,10 +546,13 @@ def test_observe_commands_persist_then_report_without_network(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     init_config(tmp_path)
-    search = FakeElasticsearch({"service_destination": [[
-        _destination("order-service", "kafka/supermarket.order.placed", "success", 5, "kafka"),
-    ]]})
-    observations = collect_runtime_observations(
+    search = FakeElasticsearch({
+        "service_destination": [[
+            _destination("order-service", "kafka/supermarket.order.placed", "success", 5, "kafka"),
+        ]],
+        "error": [[_error_bucket("order-service", "g1", "OutOfStockException", "GET /api/orders", 4)]],
+    })
+    observations, errors = collect_runtime_observations(
         tmp_path, "https://es.example:9200", search=search, now=NOW,
     )
     endpoints, edges = _lab_inventory()
@@ -505,8 +569,11 @@ def test_observe_commands_persist_then_report_without_network(
     assert len(observations) == 1
     assert report["window"]["origin"] == "https://es.example:9200"
     assert report["observations"][0]["status"] == "matched"
+    assert [error["occurrences"] for error in report["errors"]] == [4]
     with Store(tmp_path, readonly=True) as store:
         assert [item.calls for item in store.all_runtime_observations()] == [5]
+        assert [item.exception_type for item in store.all_runtime_error_groups()] == ["OutOfStockException"]
+    assert len(errors) == 1
 
 
 @pytest.mark.slow
@@ -637,7 +704,17 @@ def _call_tree_document() -> str:
         _observation("destination", "inventory", "postgresql", "postgresql", 12),
         _observation("transaction", "inventory", "inventory.audit process", "messaging", 5),
     ]
-    overlay = runtime_overlay(reconcile_observations(observations, endpoints, edges), endpoints)
+    errors = [RuntimeErrorGroup(
+        id="e1", source="elastic_apm", origin="https://es:9200", service_name="payments",
+        grouping_key="g1", exception_type="PaymentDeclinedException",
+        culprit="PaymentHandler in handle", transaction_name="orders.created process",
+        occurrences=3, last_seen="2026-10-31T11:58:00.000Z",
+        window_start="2026-10-24T12:00:00Z", window_end="2026-10-31T12:00:00Z",
+        collected_at="2026-10-31T12:00:00Z",
+    )]
+    overlay = runtime_overlay(
+        reconcile_observations(observations, endpoints, edges, errors=errors), endpoints,
+    )
     return render_graph_html(endpoints, edges, code_flows=[flow], runtime_overlay=overlay)
 
 
@@ -664,8 +741,9 @@ def test_runtime_overlay_annotates_the_selected_call_tree() -> None:
         assert page.locator("#flow-runtime-toggle").get_attribute("aria-pressed") == "true"
 
         badges = page.locator(".graph-call-tree-runtime-badge")
-        assert badges.all_inner_texts() == ["APM · 40 appels · 25 % d’échecs", "APM · aucun trafic"]
+        assert badges.all_inner_texts() == ["APM · 40 appels · 25 % d’échecs · 3 erreurs", "APM · aucun trafic"]
         assert "is-failing" in (badges.first.get_attribute("class") or "")
+        assert "PaymentDeclinedException × 3" in (badges.first.get_attribute("title") or "")
         edge = page.locator("#graph-call-tree .graph-call-tree-edge.is-kafka").first
         assert "is-runtime-observed" in (edge.get_attribute("class") or "")
         title = edge.get_attribute("title") or ""

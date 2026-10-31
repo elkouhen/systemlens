@@ -320,8 +320,10 @@ CodeQL chooses its own limit.
 ## Runtime observations
 
 `systemlens observe elastic` contacts the Elasticsearch cluster at `--url`.
-It reads only pre-aggregated APM metric data streams, never trace documents,
-so the transfer depends on service and destination cardinality, not traffic.
+It reads only pre-aggregated APM metric data streams and aggregates of APM
+error groups, never trace or error documents, so the transfer depends on
+cardinality, not traffic. The API key needs `read` on `metrics-apm*` and
+`logs-apm.error-*`; without the latter, no error is collected.
 Elastic APM 8.7 or later is required. `--since` accepts `h` and `d` suffixes.
 `--interval auto`, the default, picks the coarsest rollup that holds data;
 `1m`, `10m`, or `60m` forces one.
@@ -336,8 +338,9 @@ The report groups observations by status: `matched`, `observed_only`,
 `external`, `static_only`, `unverified`, and `not_compared`. `unverified`
 lists indexed integrations whose silence the telemetry cannot prove, such as
 routes of a service whose HTTP transactions carry no route. The report also
-lists APM services that are `unmapped` or `ambiguous`, and indexed services
-without any observation.
+lists APM services that are `unmapped` or `ambiguous`, indexed services
+without any observation, and APM error groups: exception type, occurrences,
+transaction, and code location. Error messages are never stored.
 Repeat `--service-map` to map an APM service name explicitly. Persistent
 mappings belong in `runtime.service_map` of the
 [configuration](configuration.md); the option overrides an entry with the

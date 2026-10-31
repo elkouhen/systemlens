@@ -1200,3 +1200,10 @@ selected call tree therefore labels each card with the count of its own
 entry point, and shows an arc's emitted and received counts separately,
 never added together. Service cards state entry-point coverage, not raw
 volume: in the lab, health probes made up most inbound transactions.
+
+**Error groups:** Collection also aggregates `logs-apm.error-*` per service
+and grouping key, keeping exception type, culprit, transaction name, count,
+and last occurrence. Messages are never read or persisted, because they can
+carry business data or secrets. Errors attach to the indexed entry point of
+their transaction and never change a reconciliation status. Errors caught by
+the application leave no error document and show only as failures.

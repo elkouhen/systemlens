@@ -51,6 +51,26 @@
       if ((endpointIds || []).length && endpointIds.every(id => silent.has(id))) return { state: "silent" };
       return null;
     }
+    function runtimeErrors(endpointIds) {
+      // APM error groups attached to indexed entry points, each counted once.
+      const indexes = new Set();
+      (endpointIds || []).forEach(id => (
+        runtimeData?.endpoint_errors?.[id] || []
+      ).forEach(index => indexes.add(index)));
+      return [...indexes].map(index => runtimeData.errors[index]).filter(Boolean);
+    }
+    function runtimeErrorCount(errors) {
+      return errors.reduce((total, error) => total + (Number(error.occurrences) || 0), 0);
+    }
+    function runtimeErrorLine(error) {
+      const where = error.transaction ? ` · ${error.transaction}` : "";
+      const culprit = error.culprit ? ` · ${error.culprit}` : "";
+      const seen = error.last_seen ? ` · dernière ${String(error.last_seen).slice(0, 16).replace("T", " ")}` : "";
+      return `${error.exception_type || "Exception inconnue"} × ${runtimeCountFormat.format(Number(error.occurrences) || 0)}${where}${culprit}${seen}`;
+    }
+    function runtimeErrorsLabel(count) {
+      return `${runtimeCountFormat.format(count)} erreur${count > 1 ? "s" : ""}`;
+    }
     function runtimeLinkTraffic(link) {
       const traffic = runtimeTraffic(link?.endpoint_ids);
       if (traffic || link?.kind !== "rest") return traffic;
@@ -140,9 +160,12 @@
       const [outputId, inputId] = edge?.endpoint_ids || [];
       const received = inputId ? runtimeTraffic([inputId]) : null;
       const emitted = outputId ? runtimeTraffic([outputId]) : null;
-      const primary = received?.state === "observed" ? received
-        : emitted?.state === "observed" ? emitted
-          : received || emitted;
+      // A failing side wins: APM records a 4xx as a caller failure but a
+      // server success, so the received count alone would hide it.
+      const primary = runtimeIsFailing(emitted) && !runtimeIsFailing(received) ? emitted
+        : received?.state === "observed" ? received
+          : emitted?.state === "observed" ? emitted
+            : received || emitted;
       return { received, emitted, primary };
     }
     function decorateRuntimeCallTreeEdge(line, edge) {
@@ -186,19 +209,28 @@
       if (received) {
         lines.push(`APM · reçu : ${runtimeTrafficLabel(received)}${received.state === "observed" ? " (toutes sources)" : ""}`);
       }
+      const inputId = (edge?.endpoint_ids || [])[1];
+      runtimeErrors(inputId ? [inputId] : []).forEach(error => lines.push(`APM · erreur : ${runtimeErrorLine(error)}`));
       return lines;
     }
     function decorateRuntimeCallTreeNode(card, inputEndpointId) {
       if (!runtimeOverlayEnabled() || !inputEndpointId) return;
       const traffic = runtimeTraffic([inputEndpointId]);
-      if (!traffic) return;
+      const errors = runtimeErrors([inputEndpointId]);
+      if (!traffic && !errors.length) return;
       const badge = document.createElement("span");
-      const failing = runtimeIsFailing(traffic);
-      badge.className = `graph-node-runtime-badge graph-call-tree-runtime-badge${traffic.state === "silent" ? " is-silent" : ""}${failing ? " is-failing" : ""}`;
-      badge.textContent = traffic.state === "silent" ? "APM · aucun trafic" : `APM · ${runtimeTrafficLabel(traffic)}`;
-      badge.title = traffic.state === "silent"
-        ? "Point d’entrée indexé sans trafic observé sur la fenêtre."
-        : "Exécutions observées de ce point d’entrée, toutes sources confondues (minimum échantillonné).";
+      const failing = runtimeIsFailing(traffic) || errors.length > 0;
+      const silent = traffic?.state === "silent";
+      badge.className = `graph-node-runtime-badge graph-call-tree-runtime-badge${silent ? " is-silent" : ""}${failing ? " is-failing" : ""}`;
+      const parts = [silent ? "APM · aucun trafic" : traffic ? `APM · ${runtimeTrafficLabel(traffic)}` : "APM"];
+      if (errors.length) parts.push(runtimeErrorsLabel(runtimeErrorCount(errors)));
+      badge.textContent = parts.join(" · ");
+      badge.title = [
+        silent
+          ? "Point d’entrée indexé sans trafic observé sur la fenêtre."
+          : "Exécutions observées de ce point d’entrée, toutes sources confondues (minimum échantillonné).",
+        ...errors.map(runtimeErrorLine),
+      ].join("\n");
       card.classList.add("has-runtime-badge");
       card.append(badge);
     }
@@ -211,6 +243,8 @@
       const calls = inbound.reduce((total, row) => total + (Number(row.calls) || 0), 0);
       const failures = inbound.reduce((total, row) => total + (Number(row.failures) || 0), 0);
       const gaps = rows.filter(row => row.status === "observed_only").length;
+      const errors = (runtimeData.errors || []).filter(error => error.service === name);
+      const errorCount = runtimeErrorCount(errors);
       // Coverage of indexed entry points answers the overlay's question
       // (is the indexed code exercised?); raw volume is dominated by probes.
       const active = new Set();
@@ -230,12 +264,14 @@
         silent ? `${silent} sans trafic sur la fenêtre` : "",
         unverified ? `${unverified} non vérifiable${unverified > 1 ? "s" : ""}` : "",
         gaps ? `${gaps} route${gaps > 1 ? "s" : ""} observée${gaps > 1 ? "s" : ""} hors index` : "",
+        errorCount ? `${runtimeErrorsLabel(errorCount)} APM (${errors.length} groupe${errors.length > 1 ? "s" : ""})` : "",
         volume,
       ].filter(Boolean);
       return {
-        status, calls, failures, gaps, silent, unverified, active: active.size, total,
-        failing: calls > 0 && failures / calls >= runtimeFailingRatio,
-        label, details,
+        status, calls, failures, gaps, silent, unverified, active: active.size, total, errors, errorCount,
+        failing: errorCount > 0 || (calls > 0 && failures / calls >= runtimeFailingRatio),
+        label: errorCount ? `${label} · ${runtimeErrorsLabel(errorCount)}` : label,
+        details,
       };
     }
     function decorateRuntimeCard(card, node) {
@@ -276,6 +312,7 @@
           ? "Aucune observation : télémétrie absente, pas preuve d’inactivité."
           : "Compteurs minimaux, dépendants de l’échantillonnage APM.",
       ], group);
+      appendList("Erreurs APM", summary.errors.map(runtimeErrorLine), group);
       appendList("Rapprochées avec l’index", rows.filter(row => row.status === "matched").map(runtimeRowLabel), group);
       appendList(
         "Sans trafic sur la fenêtre",
@@ -308,6 +345,11 @@
         runtimeWindowLabel(),
         "Compteurs minimaux, dépendants de l’échantillonnage APM. Aucune arête n’est ajoutée au graphe.",
       ], inspectorBody);
+      appendList(
+        "Erreurs APM (messages non conservés)",
+        (runtimeData.errors || []).map(error => `${error.service || error.service_name} · ${runtimeErrorLine(error)}`),
+        inspectorBody,
+      );
       appendList(
         "Indexées sans trafic sur la fenêtre",
         (runtimeData.silent || []).map(item => (
@@ -379,12 +421,14 @@
         `${summary.static_only || 0} sans trafic`,
         `${summary.unverified || 0} non vérifiable${summary.unverified > 1 ? "s" : ""}`,
         `${summary.observed_only || 0} hors index`,
+        ...(runtimeData.errors?.length ? [runtimeErrorsLabel(runtimeErrorCount(runtimeData.errors))] : []),
       ].join(" · ");
       const gapCount = (runtimeData.observations || [])
         .filter(row => ["observed_only", "external"].includes(row.status)).length
         + (runtimeData.unresolved_services || []).length
         + (runtimeData.silent || []).length
-        + (runtimeData.unverified || []).length;
+        + (runtimeData.unverified || []).length
+        + (runtimeData.errors || []).length;
       const gaps = document.createElement("button");
       gaps.type = "button";
       gaps.id = "graph-runtime-gaps";
