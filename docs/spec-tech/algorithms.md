@@ -148,9 +148,33 @@ without asserting that both happened. See
 
 The current detector compares asynchronous writes and synchronous reads across
 all persisted flows reachable from each selectable root. A pair inside one
-descendant flow is attributed to every root that reaches it. A shared root
-proves reachability only; a cross-flow async-write/read risk also requires
-matching causal IDs.
+descendant flow is attributed to every root that reaches it. For steps with
+explicit causal or order facts, a shared root proves reachability only; a
+cross-flow risk also requires matching causal IDs.
+
+Source-indexed steps without those facts are paired along call-graph branches
+(ADR-59). The export passes the system of each indexed endpoint. For each root,
+the detector takes a write and a read with one `resource_identity` and no
+distinct proven `key_identity`. It splits their endpoint paths at the longest
+common hop prefix; flows with that exact prefix form the fork handler.
+
+The write branch must cross at least one Kafka hop after the fork. The read
+branch must cross only REST hops, or none when the read is in the fork handler.
+In the fork handler, the detector locates where each branch leaves: the first
+output endpoint, or the read step itself. Sibling flows are compared at their
+first differing step after the shared trigger and internal calls.
+
+Those differing steps are direct sites of the same method. When they share a
+file and differ by line, the earlier line orders the branches. A publication
+first yields `potential_risk`; a read first yields no diagnostic; no comparable
+site yields `insufficient_evidence`. An unproven key keeps the risk at `low`
+confidence and `P2`; a matching key identity gives `medium` and `P1`.
+
+The line order is a program-order hint only. It does not exclude conditional or
+mutually exclusive branches, loops, or callbacks, and the limitation says so.
+Cost is bounded by write-read pairs per resource identity and root, times the
+candidate departure sites in the fork handler. Without endpoint systems, or for
+pairs already decided this way, the rules below apply unchanged.
 
 The detector applies canonical resource/key, explicit request order, and
 visibility evidence. Advanced checks group accesses only by matching canonical
@@ -199,10 +223,10 @@ scheduler concurrency.
 Source-indexed flows therefore abstain from the advanced detectors. Direct flow
 manifests can carry reviewed evidence for those fields.
 
-The indexer also does not infer request-before-read order from source line order.
-Source-indexed async-write/read pairs without explicit order evidence remain
-`insufficient_evidence`. The graph never treats missing facts as proof of safety
-or concurrency.
+The indexer does not persist request-before-read order. Outside the call-graph
+branch pairing above, source-indexed pairs without explicit order evidence
+remain `insufficient_evidence`. The graph never treats missing facts as proof of
+safety or concurrency.
 
 > **Why & What - compare event order**
 >
@@ -312,11 +336,12 @@ The current implementation does not build the full lifecycle DAG described
 above. A supplied `visibility_before_reads` relation can identify a guarantee
 for a specific read when resource, key, causal, completion, and version evidence
 also match. The relation is not inferred from source order or reachability.
-The async-write/sync-read detector classifies a pair as a possible risk only
-when `request_before_reads` explicitly links the write to the read. A shared
-root, matching causal ID, or source-line order alone does not establish that the
-request precedes the read. Without the relation, the detector reports
-insufficient evidence. Other explicit per-access concurrency and lifecycle
+For steps with explicit causal or order facts, the async-write/sync-read
+detector classifies a pair as a possible risk only when `request_before_reads`
+links the write to the read. A shared root or matching causal ID alone does not
+establish that order. Without the relation, it reports insufficient evidence.
+The call-graph branch pairing is the only source-order exception, and it never
+identifies a guarantee. Other explicit per-access concurrency and lifecycle
 evidence is used only for conservative candidate classifications. Cyclic flow
 records are excluded from advanced concurrency pairing because they lack
 bounded execution occurrences.

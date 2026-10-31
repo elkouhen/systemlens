@@ -133,7 +133,10 @@ occurrences, below 0.82 total scale, or when the tree exceeds the viewport by
 15 percent. It samples at most 700 nodes and always includes the selected
 occurrence. A click or drag moves the camera while leaving graph selection and
 snapshot data untouched. Architecture positions are projected from Sigma's
-camera; tree positions are derived from logical occurrence coordinates. The
+camera; tree positions are derived from logical occurrence coordinates.
+Architecture navigation converts the target through `graphToViewport` and
+`viewportToFramedGraph`, so the camera centers it at any zoom ratio. The
+placement measures the legend on each render and on legend toggle. The
 minimap extent stays fixed during camera movement, and only its viewport frame
 moves. This keeps pointer-to-graph mapping stable through a drag. Rendering is
 coalesced with `requestAnimationFrame` after pan, zoom, selection, and graph

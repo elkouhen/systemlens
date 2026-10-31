@@ -427,7 +427,13 @@ def render_graph_html(
     view_model["flow_data_access_flow_ids_by_root"] = access_flow_ids_by_root
     call_flow_ids = visible_flow_ids
     diagnostics_for_export = (
-        diagnose_flow_consistency_snapshot(export_flows, causal_reachability, causal_paths)
+        diagnose_flow_consistency_snapshot(
+            export_flows, causal_reachability, causal_paths,
+            {
+                endpoint_id: endpoint.system
+                for endpoint_id, endpoint in call_graph_index.endpoint_by_id.items()
+            },
+        )
         if include_call_graph_annotations else ()
     )
     for diagnostic in diagnostics_for_export:

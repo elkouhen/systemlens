@@ -1252,6 +1252,8 @@
             const source = nodePoints.get(link.source);
             const target = nodePoints.get(link.target);
             if (!source || !target) return;
+            // Nodes have no coordinates until the asynchronous layout runs.
+            if (![source.x, source.y, target.x, target.y].every(Number.isFinite)) return;
             const sourceBounds = architectureObstacleById.get(link.source);
             const targetBounds = architectureObstacleById.get(link.target);
             const start = pointAtCardBoundary(source, target, sourceBounds, 4);

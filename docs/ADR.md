@@ -14,7 +14,7 @@ functional or technical contract.
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
 | Indexed contracts and implementation boundaries | [ADR-25](#adr-25-separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26-organize-implementation-modules-by-architectural-ownership) |
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch) |
-| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows) |
+| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
@@ -1118,6 +1118,35 @@ edges still connect separate internal flows. Existing indexes rebuild flows
 through a code-flow signature change; SQLite schema and source facts remain
 compatible. An application module deliberately embedded as a library loses
 these internal paths. Module metadata must be present to classify the boundary.
+
+## ADR-59: Pair async writes and sync reads along call-graph branches
+
+**Status:** Accepted. Amends ADR-52.
+
+**Context:** ADR-52 labels writes and reads by their own flow trigger. With
+source-indexed flows, a cross-flow pair also needed causal IDs and an explicit
+`request_before_reads` relation that only manifests supply. On real indexes the
+detector therefore reported nothing, even for a handler that publishes a Kafka
+event and then reads the record its consumer writes.
+
+**Decision:** Within one selected call graph, the indexed path from the root is
+the causal evidence. Find the handler where the paths to the write and the read
+diverge. The write branch must cross a Kafka hop; the read branch must use only
+REST hops or none. Require one canonical resource identity, without distinct
+proven key identities.
+
+Compare the two branch departures in the fork handler. They are direct sites of
+the same method, so their source lines give a program-order hint. Report a
+possible risk when the publication precedes the read. Report nothing when the
+read precedes it, and insufficient evidence when no comparison is possible.
+
+**Consequences:** Source-only indexes can show stale-read candidates on the
+call graph that causes them. The order hint does not exclude conditional or
+mutually exclusive branches, loops, or callbacks, so the finding stays a
+potential risk with that limitation. An unproven record key lowers confidence
+and severity instead of hiding the pair. Steps with explicit causal or order
+facts keep the manifest rules. Exports without endpoint systems keep the
+previous behavior; the SQLite schema is unchanged.
 
 ## ADR-60: Compare static topology with aggregated Elastic APM metrics
 

@@ -218,6 +218,24 @@ def test_architecture_minimap_keeps_world_map_fixed_while_panning() -> None:
         })""")
         assert after["dots"] == before["dots"]
         assert after["viewport"] != before["viewport"]
+        page.mouse.click(bounds["x"] + 90 * bounds["width"] / 180,
+                         bounds["y"] + 55 * bounds["height"] / 110)
+        page.wait_for_timeout(200)
+        center = page.locator("#graph-minimap-viewport").evaluate("""rect => [
+          Number(rect.getAttribute('x')) + Number(rect.getAttribute('width')) / 2,
+          Number(rect.getAttribute('y')) + Number(rect.getAttribute('height')) / 2,
+        ]""")
+        assert center == [pytest.approx(90, abs=2), pytest.approx(55, abs=2)]
+        overlap_script = """() => {
+          const map = document.querySelector('#graph-minimap').getBoundingClientRect();
+          const legend = document.querySelector('#graph-legend').getBoundingClientRect();
+          return map.left < legend.right && map.right > legend.left
+            && map.top < legend.bottom && map.bottom > legend.top;
+        }"""
+        assert page.evaluate(overlap_script) is False
+        page.locator("#graph-legend summary").click()
+        page.wait_for_timeout(200)
+        assert page.evaluate(overlap_script) is False
         browser.close()
 
 

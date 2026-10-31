@@ -1021,6 +1021,50 @@ def test_call_graph_enriches_data_siblings_and_pairs_async_write_with_sync_read(
                for item in data["flow_diagnostics"])
 
 
+def test_export_reports_call_graph_read_after_kafka_publish_as_potential_risk() -> None:
+    root_in = replace(_rest_endpoint("serve", "POST /orders", "Orders.java"), id="root-in")
+    message_out = replace(_kafka_endpoint("produce", "OrderEvent", "Orders.java"), id="event-out")
+    message_in = replace(_kafka_endpoint("consume", "OrderEvent", "Inventory.java"), id="event-in")
+    trigger = CodeFlowStep(1, "http_entry", "POST /orders", "Orders.java", 1, 1, root_in.id)
+    flows = [
+        CodeFlow("publish", "orders", "Orders.place", "Orders.java", 1, 4,
+                 "potential", "medium", "test", (
+                     trigger,
+                     CodeFlowStep(2, "message_publish", "orders.created", "Orders.java", 2, 2,
+                                  message_out.id),
+                 )),
+        CodeFlow("read", "orders", "Orders.place", "Orders.java", 1, 4,
+                 "potential", "medium", "test", (
+                     trigger,
+                     CodeFlowStep(2, "data_read", "Order", "Orders.java", 3, 3, branch="sync",
+                                  resource="jpa:orders:Order", resource_identity="jpa:orders:Order",
+                                  key="id", action="read"),
+                 )),
+        CodeFlow("write", "inventory", "Inventory.consume", "Inventory.java", 1, 3,
+                 "potential", "medium", "test", (
+                     CodeFlowStep(1, "message_entry", "orders.created", "Inventory.java", 1, 1,
+                                  message_in.id),
+                     CodeFlowStep(2, "data_write", "Order", "Inventory.java", 2, 2, branch="async",
+                                  resource="jpa:orders:Order", resource_identity="jpa:orders:Order",
+                                  key="event.id()", action="update"),
+                 )),
+    ]
+
+    data = _html_graph_data(render_graph_html(
+        {"orders": [root_in, message_out], "inventory": [message_in]},
+        [GraphEdge("kafka", "orders", "inventory", message_out, message_in)],
+        code_flows=flows,
+    ))
+
+    diagnostic, = data["flow_diagnostics"]
+    assert (diagnostic["flow_id"], diagnostic["write_flow_id"], diagnostic["read_flow_id"]) == (
+        "publish", "write", "read",
+    )
+    assert diagnostic["classification"] == "potential_risk"
+    assert diagnostic["write_path_endpoint_ids"] == ["event-out", "event-in"]
+    assert "Orders.java:2 avant Orders.java:3" in diagnostic["order_evidence"]
+
+
 def test_export_keeps_consistency_pair_inside_descendant_data_flow() -> None:
     root_in = replace(_rest_endpoint("serve", "POST /orders", "Orders.java"), id="root-in")
     message_out = replace(_kafka_endpoint("produce", "OrderEvent", "Orders.java"), id="event-out")
