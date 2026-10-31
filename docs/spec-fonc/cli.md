@@ -261,8 +261,12 @@ the index and reused by incremental indexing and all derived views.
 - `codeql` resolves calls from CodeQL's typed program model. It needs the
   CodeQL CLI. When the CLI is missing, indexing says so and uses `source`.
 - `source` resolves calls from tree-sitter syntax and declared types. It needs
-  no external tool. A call is `exact` only when the receiver's own declared
-  class owns one concrete matching method; interface dispatch stays `possible`.
+  no external tool. It types fields, parameters, locals, `var` initializers,
+  chained calls by declared return type, static calls on a type name, method
+  references, and calls inside lambdas. Literal and typed arguments choose
+  between same-arity overloads. A call is `exact` when one concrete body sits
+  on the receiver's declared type or an ancestor; interface dispatch stays
+  `possible`. Library methods and unknown argument types stay unresolved.
 - `none` builds no interprocedural path: only same-method flows remain.
 `analysis.codeql_edge_confidence` accepts `exact` or `possible`. The default
 `possible` keeps possible dispatch and inferred bridges as low-confidence flow

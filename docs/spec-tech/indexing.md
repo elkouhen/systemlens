@@ -159,8 +159,13 @@ Indexing asks the configured engine (ADR-61) for calls through
 `callgraph.engine.CallGraphEngine`; it never imports an engine module. A
 source symbol pass then follows receiver-typed calls between indexed Java
 methods: with the `source` engine it is the whole call graph, with `codeql`
-it fills the gaps. A call is `exact` when the receiver's own declared class
-owns one concrete matching method, and `possible` otherwise. The pass drops
+it fills the gaps. A receiver is typed from a field, parameter, local or
+`var` initializer, a declared return type, or a capitalized type name for a
+static call; `receiver::name` is a call when that name has one declared
+arity. Literals, `new`, casts, and typed variables give argument types,
+which narrow same-arity overloads with boxing. A call is `exact` when one
+concrete body sits on the receiver's declared type or one of its ancestors,
+and `possible` otherwise, such as interface dispatch to a subtype. The pass drops
 ambiguous overloads while retaining an ambiguous receiver type long enough
 to apply module-scoped interface dispatch.
 Each Spring `@Scheduled` method yields a transient scheduler trigger, used

@@ -20,6 +20,28 @@ from systemlens.callgraph.model import MethodCall
 _TYPES = {"class_declaration", "interface_declaration", "record_declaration", "enum_declaration"}
 _PRIMITIVES = {"byte", "short", "int", "long", "float", "double", "char", "boolean", "void"}
 _JAVA_LANG = {"String", "Object", "Boolean", "Byte", "Short", "Integer", "Long", "Float", "Double", "Character"}
+_LITERAL_TYPES = {
+    "string_literal": "java.lang.String",
+    "text_block": "java.lang.String",
+    "decimal_integer_literal": "int",
+    "hex_integer_literal": "int",
+    "decimal_floating_point_literal": "double",
+    "character_literal": "char",
+    "true": "boolean",
+    "false": "boolean",
+}
+_BOXED = {
+    "int": "java.lang.Integer", "long": "java.lang.Long", "double": "java.lang.Double",
+    "float": "java.lang.Float", "boolean": "java.lang.Boolean", "char": "java.lang.Character",
+    "byte": "java.lang.Byte", "short": "java.lang.Short",
+}
+
+
+def _argument_matches(parameter: str | None, argument: str | None) -> bool:
+    """Whether a known argument type selects a declared parameter type."""
+    if parameter is None or argument is None:
+        return False
+    return parameter == argument or _BOXED.get(argument) == parameter or _BOXED.get(parameter) == argument
 
 
 @dataclass
@@ -301,8 +323,11 @@ class JavaSymbols:
 
     def target(
         self, receiver_type: str, name: str, arity: int, module: str, path: str,
+        argument_types: tuple[str | None, ...] | None = None,
     ) -> IntegrationMethod | None:
-        candidates = self.possible_targets(receiver_type, name, arity, module, path)
+        candidates = self.possible_targets(
+            receiver_type, name, arity, module, path, argument_types=argument_types,
+        )
         if len(candidates) == 1:
             self._targets[(receiver_type, name, arity, module)] = candidates[0]
             return candidates[0]
@@ -310,6 +335,7 @@ class JavaSymbols:
 
     def possible_targets(
         self, receiver_type: str, name: str, arity: int, module: str, path: str,
+        argument_types: tuple[str | None, ...] | None = None,
     ) -> list[IntegrationMethod]:
         """Return all source-backed targets compatible with a receiver call."""
         key = (receiver_type, name, arity, module)
@@ -341,6 +367,17 @@ class JavaSymbols:
                 for candidate in values
             ]
         signatures = {candidate.parameters for candidate in contracts}
+        if len(signatures) > 1 and argument_types is not None:
+            # Same-arity overloads: keep the declaration every known argument
+            # type selects, with boxing. Unknown arguments never narrow.
+            contracts = [
+                candidate for candidate in contracts
+                if all(
+                    _argument_matches(parameter, argument)
+                    for parameter, argument in zip(candidate.parameters, argument_types, strict=True)
+                )
+            ]
+            signatures = {candidate.parameters for candidate in contracts}
         if len(signatures) != 1:
             return []
         candidates = {candidate.method.id: candidate for contract in contracts
@@ -406,6 +443,27 @@ class JavaSymbols:
                 remaining = preferred
         return [candidate.method for candidate in remaining]
 
+    def expression_type(
+        self, info: _Method, node: Node | None, invocation: Node, depth: int = 0,
+    ) -> str | None:
+        """Return the static type of a simple expression, or None."""
+        if node is None or depth > 16:
+            return None
+        source = self.units[info.method.path].source
+        if node.type in _LITERAL_TYPES:
+            return _LITERAL_TYPES[node.type]
+        if node.type in {"object_creation_expression", "cast_expression"}:
+            type_node = node.child_by_field_name("type")
+            return self.resolve(
+                info.method.path, parser.node_text(source, type_node), info.owner,
+                allow_ambiguous=True,
+            ) if type_node is not None else None
+        if node.type == "parenthesized_expression" and node.named_children:
+            return self.expression_type(info, node.named_children[0], invocation, depth + 1)
+        if node.type in {"identifier", "this", "method_invocation", "field_access"}:
+            return self.receiver_type(info, node, invocation, depth + 1)
+        return None
+
     def variable_type(self, info: _Method, name: str, invocation: Node, *, field_only: bool = False) -> str | None:
         path = info.method.path
         source = self.units[path].source
@@ -428,6 +486,11 @@ class JavaSymbols:
                 for child in declaration.named_children:
                     ident = child.child_by_field_name("name")
                     if ident is not None and parser.node_text(source, ident) == name and type_node is not None:
+                        if parser.node_text(source, type_node).strip() == "var":
+                            # ``var`` takes the type of its initializer.
+                            return self.expression_type(
+                                info, child.child_by_field_name("value"), invocation,
+                            )
                         return self.resolve(
                             path, parser.node_text(source, type_node), info.owner,
                             allow_ambiguous=True,
@@ -466,7 +529,16 @@ class JavaSymbols:
         if receiver is None or receiver.type in {"this", "super"}:
             return info.owner
         if receiver.type == "identifier":
-            return self.variable_type(info, parser.node_text(source, receiver), invocation)
+            name = parser.node_text(source, receiver)
+            declared = self.variable_type(info, name, invocation)
+            if declared is not None or not name[:1].isupper():
+                return declared
+            # ``Type.method()``: a capitalized name that is no variable is a
+            # static call on that source type.
+            static_owner = self.resolve(info.method.path, name, info.owner)
+            return static_owner if static_owner in self.types else None
+        if receiver.type in {"object_creation_expression", "cast_expression", "parenthesized_expression"}:
+            return self.expression_type(info, receiver, invocation, depth + 1)
         if receiver.type == "field_access" and parser.node_text(source, receiver).startswith("this."):
             return self.variable_type(info, parser.node_text(source, receiver)[5:], invocation, field_only=True)
         if receiver.type != "method_invocation":
@@ -495,9 +567,33 @@ class JavaSymbols:
             ) if type_node is not None else None)
         return next(iter(returns)) if len(returns) == 1 else None
 
-    def _declared_concretely(self, method: IntegrationMethod, receiver_type: str) -> bool:
+    def _receiver_module(self, receiver_type: str, caller: _Method) -> str:
+        locations = self._type_candidates(receiver_type, caller.method.path)
+        return self.path_modules.get(locations[0][0], caller.module) if len(locations) == 1 else caller.module
+
+    def _declared_concretely(self, method: IntegrationMethod, receiver_type: str, caller: _Method) -> bool:
+        """A concrete body on the receiver type or one of its ancestors.
+
+        An implementation found on a subtype (interface dispatch) is not:
+        other subtypes, in sources or dependencies, may provide their own.
+        """
         info = self.methods.get(method.id)
-        return info is not None and info.concrete and info.owner == receiver_type
+        if info is None or not info.concrete:
+            return False
+        if info.owner == receiver_type:
+            return True
+        module = self._receiver_module(receiver_type, caller)
+        return any(owner == info.owner for owner, _module in self.ancestors(receiver_type, module))
+
+    def _declared_arities(self, receiver_type: str, name: str, path: str, module: str) -> set[int]:
+        """Arities of ``name`` declared on a receiver type and its ancestors."""
+        locations = self._type_candidates(receiver_type, path)
+        receiver_module = self.path_modules.get(locations[0][0], module) if len(locations) == 1 else module
+        owners = {receiver_type, *(owner for owner, _module in self.ancestors(receiver_type, receiver_module))}
+        return {
+            arity for owner, method_name, arity, _module in self.by_owner
+            if owner in owners and method_name == name
+        }
 
     def fallback_calls(self, resolved_sites: set[tuple[str, int, str]]) -> list[MethodCall]:
         calls: list[MethodCall] = []
@@ -506,26 +602,52 @@ class JavaSymbols:
                 continue
             source = self.units[info.method.path].source
             for invocation in parser.walk(info.node):
-                if invocation.type != "method_invocation" or parser.enclosing(invocation, "method_declaration") != info.node:
+                if (
+                    invocation.type not in {"method_invocation", "method_reference"}
+                    or parser.enclosing(invocation, "method_declaration") != info.node
+                ):
                     continue
                 line = invocation.start_point.row + 1
-                receiver, name, arguments = parser.invocation_parts(invocation, source)
-                receiver_type = self.receiver_type(info, receiver, invocation)
-                if receiver_type is None:
-                    continue
+                argument_types: tuple[str | None, ...] | None
+                if invocation.type == "method_reference":
+                    # ``receiver::method`` names a method without its arity:
+                    # resolve only when the receiver type declares one arity.
+                    parts = invocation.named_children
+                    if len(parts) < 2 or parts[-1].type != "identifier":
+                        continue
+                    receiver, name = parts[0], parser.node_text(source, parts[-1])
+                    receiver_type = self.receiver_type(info, receiver, invocation)
+                    if receiver_type is None:
+                        continue
+                    arities = self._declared_arities(receiver_type, name, info.method.path, info.module)
+                    if len(arities) != 1:
+                        continue
+                    arity, argument_types = next(iter(arities)), None
+                else:
+                    receiver, name, arguments = parser.invocation_parts(invocation, source)
+                    receiver_type = self.receiver_type(info, receiver, invocation)
+                    if receiver_type is None:
+                        continue
+                    arity = len(arguments)
+                    argument_types = tuple(
+                        self.expression_type(info, argument, invocation) for argument in arguments
+                    )
+                arguments_count = arity
                 target = self.target(
-                    receiver_type, name, len(arguments), info.module, info.method.path
+                    receiver_type, name, arguments_count, info.module, info.method.path,
+                    argument_types=argument_types,
                 )
                 if receiver is not None and receiver.type == "super":
                     direct_bases = self.bases.get((info.owner, info.module), set())
                     targets = [
                         candidate.method
                         for base_owner, base_module in direct_bases
-                        for candidate in self.by_owner.get((base_owner, name, len(arguments), base_module), [])
+                        for candidate in self.by_owner.get((base_owner, name, arguments_count, base_module), [])
                     ]
                 else:
                     targets = [target] if target is not None else self.possible_targets(
-                        receiver_type, name, len(arguments), info.module, info.method.path
+                        receiver_type, name, arguments_count, info.module, info.method.path,
+                        argument_types=argument_types,
                     )
                 if not targets:
                     continue
@@ -534,7 +656,7 @@ class JavaSymbols:
                 # implementation stays possible: dependencies may add others.
                 dispatch = (
                     "exact"
-                    if len(targets) == 1 and self._declared_concretely(targets[0], receiver_type)
+                    if len(targets) == 1 and self._declared_concretely(targets[0], receiver_type, info)
                     else "possible"
                 )
                 for target in targets:

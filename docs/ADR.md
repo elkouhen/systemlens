@@ -1229,6 +1229,9 @@ interprocedural path. An unavailable engine is announced, then replaced by
 `source`. Source calls are `exact` only when the receiver's own declared
 class owns one concrete matching method; interface dispatch stays
 `possible`. `analyze compare-engines` measures two engines on one index.
+The source engine also types `var` initializers, static calls on a type name,
+method references with a single declared arity, and same-arity overloads from
+literal or typed arguments; an ancestor's concrete body is `exact`.
 
 **Consequences:** Users can choose the engine per project or per run, and
 SystemLens works fully without CodeQL. Configurations with `codeql: false`
