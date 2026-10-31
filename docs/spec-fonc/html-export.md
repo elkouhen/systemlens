@@ -64,8 +64,10 @@ When on, the architecture view annotates existing elements only:
 In a selected call tree, a "Trafic APM" button in the flow toolbar mirrors
 the legend toggle. Each card shows the observed executions of its entry
 route or consumer, or "APM · aucun trafic" for a silent indexed entry.
-A card whose entry point has APM error groups adds "N erreurs" and turns
-red; its tooltip lists exception type, count, and code location. Arcs
+A scheduler root card shows its observed runs. A card with data-access
+annotations adds "APM · BDD postgresql 1,1 k", a whole-service total per
+database engine. A card whose entry point has APM error groups adds
+"N erreurs" and turns red; its tooltip lists exception type, count, and code location. Arcs
 thicken with volume, and their label gains an "APM · …" line, red when
 either the caller or the callee side fails. Their
 tooltip lists the emitted count, per topic or service pair, and the received

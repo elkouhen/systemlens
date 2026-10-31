@@ -213,6 +213,35 @@
       runtimeErrors(inputId ? [inputId] : []).forEach(error => lines.push(`APM · erreur : ${runtimeErrorLine(error)}`));
       return lines;
     }
+    function runtimeScheduledKey(step) {
+      // A scheduler trigger has no endpoint; its traffic is keyed by source.
+      return step?.kind === "cron_entry" ? `cron:${step.path}:${step.start_line}` : null;
+    }
+    const runtimeDataKinds = {
+      relational: new Set(["postgresql", "mysql", "oracle", "sqlserver", "db"]),
+      mongodb: new Set(["mongodb"]),
+    };
+    function decorateRuntimeCallTreeDataAccess(card, serviceName, resources) {
+      // APM measures database calls per service and engine, never per table:
+      // the line states a service total next to the card's data accesses.
+      if (!runtimeOverlayEnabled() || !resources.length) return;
+      const destinations = runtimeData?.data_destinations?.[serviceName] || [];
+      const kinds = new Set(resources.map(resource => (
+        String(resource).startsWith("jpa:") ? "relational" : "mongodb"
+      )));
+      const matching = destinations.filter(item => [...kinds].some(kind => (
+        runtimeDataKinds[kind].has(String(item.target).toLowerCase())
+      )));
+      if (!matching.length) return;
+      const line = document.createElement("span");
+      const failing = matching.some(item => runtimeIsFailing({ state: "observed", calls: item.calls, failures: item.failures }));
+      line.className = `graph-node-runtime-badge graph-call-tree-runtime-badge graph-call-tree-runtime-data${failing ? " is-failing" : ""}`;
+      line.textContent = `APM · BDD ${matching.map(item => (
+        `${item.target} ${runtimeCountFormat.format(Number(item.calls) || 0)}`
+      )).join(" · ")}`;
+      line.title = "Appels aux bases observés pour tout le service sur la fenêtre, toutes tables et collections confondues (minimum échantillonné).";
+      card.append(line);
+    }
     function decorateRuntimeCallTreeNode(card, inputEndpointId) {
       if (!runtimeOverlayEnabled() || !inputEndpointId) return;
       const traffic = runtimeTraffic([inputEndpointId]);

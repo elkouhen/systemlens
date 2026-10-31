@@ -8,7 +8,7 @@ without creating, confirming or removing any architecture fact.
 import os
 import re
 from collections import Counter, defaultdict
-from collections.abc import Callable, Collection, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import cast
@@ -23,6 +23,7 @@ from systemlens.discovery.elastic_apm import (
     http_search,
     parse_window,
 )
+from systemlens.domain.code_flows import CodeFlow
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.runtime import RuntimeErrorGroup, RuntimeObservation
@@ -37,6 +38,9 @@ _MESSAGING_NAMES = (
     re.compile(r"^Kafka record from (?P<topic>\S+)$"),
 )
 _EndpointIndex = dict[str, dict[str, list[MessageEndpoint]]]
+# OTel's Spring scheduling instrumentation names a run ``SimpleClass.method``.
+_SCHEDULED_NAME = re.compile(r"^[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*$")
+SCHEDULED_KEY_PREFIX = "cron:"
 _HTTP_TARGET_TYPES = {"http", "https", "grpc"}
 _DATA_TARGETS = {
     "cassandra", "db", "dynamodb", "elasticsearch", "memcached", "mongodb",
@@ -75,6 +79,26 @@ def collect_runtime_observations(
             store.replace_runtime_observations(SOURCE, observations)
             store.replace_runtime_error_groups(SOURCE, errors)
     return observations, errors
+
+
+def scheduled_entries(
+    flows: Iterable[CodeFlow], services: Collection[str],
+) -> dict[str, list[tuple[str, str, int]]]:
+    """Index flows triggered by ``@Scheduled`` methods per indexed service.
+
+    Each entry is ``(qualified method, path, line)``. Scheduler triggers have
+    no endpoint, so the export keys their traffic by ``cron:path:line``.
+    """
+    entries: dict[str, set[tuple[str, str, int]]] = defaultdict(set)
+    for flow in flows:
+        if flow.steps and flow.steps[0].kind == "cron_entry" and flow.module in services:
+            trigger = flow.steps[0]
+            entries[flow.module].add((flow.method, trigger.path, trigger.start_line))
+    return {service: sorted(items) for service, items in entries.items()}
+
+
+def scheduled_key(path: str, line: int) -> str:
+    return f"{SCHEDULED_KEY_PREFIX}{path}:{line}"
 
 
 def parse_service_map(
@@ -143,6 +167,7 @@ def reconcile_observations(
     service_map: Mapping[str, str] | None = None,
     ignored_services: Collection[str] = (),
     errors: Collection[RuntimeErrorGroup] = (),
+    scheduled: Mapping[str, Sequence[tuple[str, str, int]]] | None = None,
 ) -> dict[str, object]:
     """Compare persisted observations with indexed integrations.
 
@@ -150,6 +175,10 @@ def reconcile_observations(
     ``not_compared`` but never count as unresolved or as service evidence.
     Error groups attach to the indexed entry point of their transaction when
     its name identifies one; errors of ignored services are left out.
+    ``scheduled`` lists ``@Scheduled`` entries per service (see
+    :func:`scheduled_entries`); a transaction named ``Class.method`` matches
+    the entry of that simple class and method. Unmatched names of that shape
+    stay ``not_compared``: repository and helper spans share it.
     """
     services = set(endpoints_by_service)
     explicit = dict(service_map or {})
@@ -179,6 +208,12 @@ def reconcile_observations(
                 route = _static_route(endpoint)
                 if route:
                     served[service][route].append(endpoint)
+    scheduled_by_name: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+    for service, items in (scheduled or {}).items():
+        for qualified_method, path, line in items:
+            owner, _dot, method = qualified_method.rpartition(".")
+            simple = f"{owner.rpartition('.')[2]}.{method}"
+            scheduled_by_name[service][simple].append(scheduled_key(path, line))
     rest_edges: dict[tuple[str, str], list[str]] = defaultdict(list)
     for edge in edges:
         if edge.kind == "rest":
@@ -213,6 +248,12 @@ def reconcile_observations(
                 observation, mapped_service, resolve, produced, consumed, served,
                 rest_edges, seen,
             )
+            scheduled_ids = scheduled_by_name.get(mapped_service, {}).get(observation.target)
+            if (
+                status == "not_compared" and observation.kind == "transaction"
+                and scheduled_ids and _SCHEDULED_NAME.match(observation.target)
+            ):
+                status, hint, endpoint_ids = "matched", None, sorted(scheduled_ids)
             evidence[mapped_service].update(_coverage(observation))
             if status == "observed_only" and mapped_service in dynamic_outputs \
                     and observation.kind == "destination":
@@ -440,6 +481,16 @@ def runtime_overlay(
         for endpoint_id in cast(list[str], error["endpoint_ids"]):
             endpoint_errors[endpoint_id].append(index)
     observed = {row["service"] for row in rows if row["service"]}
+    data_destinations: dict[str, list[dict[str, object]]] = defaultdict(list)
+    for row in rows:
+        target = str(row["target"]).lower()
+        target_type = str(row["target_type"] or "").lower()
+        if row["kind"] == "destination" and row["service"] and (
+            target in _DATA_TARGETS or target_type in _DATA_TARGETS
+        ):
+            data_destinations[str(row["service"])].append({
+                "target": row["target"], "calls": row["calls"], "failures": row["failures"],
+            })
     return {
         "window": result["window"],
         "summary": result["summary"],
@@ -454,6 +505,7 @@ def runtime_overlay(
         "unverified": result["unverified"],
         "errors": errors,
         "endpoint_errors": dict(sorted(endpoint_errors.items())),
+        "data_destinations": dict(sorted(data_destinations.items())),
         "rest_call_covered": result["rest_call_covered"],
         "services": {
             service: "observed" if service in observed else "no_telemetry"

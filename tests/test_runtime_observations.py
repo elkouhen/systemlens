@@ -16,6 +16,7 @@ from systemlens.application.runtime_observations import (
     reconcile_observations,
     render_runtime_report_text,
     runtime_overlay,
+    scheduled_entries,
 )
 from systemlens.delivery import cli
 from systemlens.delivery.cli import app
@@ -185,6 +186,44 @@ def test_error_groups_attach_to_the_indexed_entry_point_of_their_transaction() -
     assert "order-service OutOfStockException × 5 sur POST /api/orders/" in report
     assert "Aucune erreur APM" in render_runtime_report_text(
         reconcile_observations(_lab_observations(), endpoints, edges)
+    )
+
+
+def test_scheduled_transactions_match_their_scheduled_entry_and_data_is_per_service() -> None:
+    endpoints, edges = _lab_inventory()
+    path = "order-service/src/main/java/io/example/ScheduledOrderPublisher.java"
+    flow = CodeFlow(
+        id="cron", module="order-service",
+        method="io.example.ScheduledOrderPublisher.publishOnlineOrder",
+        path=path, start_line=32, end_line=40, status="potential", confidence="low",
+        reason="scheduler", steps=(
+            CodeFlowStep(order=1, kind="cron_entry", name="@Scheduled", path=path,
+                         start_line=32, end_line=32),
+        ),
+    )
+    observations = [
+        *_lab_observations(),
+        _observation("transaction", "order-service", "ScheduledOrderPublisher.publishOnlineOrder", "unknown", 220),
+        _observation("transaction", "inventory-service", "SpringDataProductRepository.count", "unknown", 1),
+        _observation("destination", "inventory-service", "postgresql", "postgresql", 1517),
+    ]
+
+    result = reconcile_observations(
+        observations, endpoints, edges,
+        scheduled=scheduled_entries([flow], endpoints),
+    )
+    overlay = runtime_overlay(result, endpoints)
+
+    by_target = {row["target"]: row for row in result["observations"]}
+    scheduler = by_target["ScheduledOrderPublisher.publishOnlineOrder"]
+    assert scheduler["status"] == "matched"
+    assert scheduler["endpoint_ids"] == [f"cron:{path}:32"]
+    # Repository spans share the ``Class.method`` shape but name no scheduler.
+    assert by_target["SpringDataProductRepository.count"]["status"] == "not_compared"
+    assert overlay is not None
+    assert f"cron:{path}:32" in overlay["endpoint_observations"]
+    assert {"target": "postgresql", "calls": 1517, "failures": 0} in (
+        overlay["data_destinations"]["inventory-service"]
     )
 
 

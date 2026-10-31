@@ -52,6 +52,7 @@ from systemlens.application.runtime_observations import (
     collect_runtime_observations,
     parse_service_map,
     runtime_overlay,
+    scheduled_entries,
     reconcile_observations,
     render_runtime_report_text,
 )
@@ -2089,6 +2090,7 @@ def _export_runtime_overlay(
             parse_service_map([], configured_map),
             ignored_services,
             getattr(graph_data, "runtime_errors", None) or (),
+            scheduled_entries(getattr(graph_data, "code_flows", None) or [], graph_data.services_by_name),
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -3245,6 +3247,7 @@ def _emit_runtime_report(repo_root: Path, service_map: list[str], json_output: b
             parse_service_map(service_map, configured_map),
             ignored_services,
             errors,
+            scheduled_entries(getattr(inventory, "code_flows", []), inventory.endpoints_by_service),
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)

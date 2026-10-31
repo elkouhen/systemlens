@@ -1011,6 +1011,7 @@
           }
           node.append(badge);
         });
+        decorateRuntimeCallTreeDataAccess(node, occurrence.name, annotationGroups.map(group => group.resource));
         if (treeTrigger && occurrence.depth === 0 && occurrence.name === treeTriggerRootName) {
           const triggerKind = ({
             http_entry: ["HTTP", "is-http"],
@@ -1023,7 +1024,11 @@
           triggerBadge.title = "Événement déclencheur du graphe d’appel sélectionné";
           node.append(triggerBadge);
         }
-        decorateRuntimeCallTreeNode(node, inputForOccurrence(occurrence));
+        decorateRuntimeCallTreeNode(
+          node,
+          inputForOccurrence(occurrence)
+            || runtimeScheduledKey(occurrence.depth === 0 ? selectedFlow?.steps?.[0] : null),
+        );
         const ports = [
           occurrence.edge && treePort(occurrence.edge.endpoint_ids?.[1], "in"),
           ...occurrence.children.map(child => treePort(child.edge.endpoint_ids?.[0], "out")),

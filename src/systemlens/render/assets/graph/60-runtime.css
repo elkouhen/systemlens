@@ -42,3 +42,4 @@
     .flow-runtime-toggle.is-active { border-color: #0f766e; color: #134e4a; background: #ccfbf1; }
     :root[data-theme="dark"] .flow-runtime-toggle.is-active { border-color: #5eead4; color: #ccfbf1; background: #134e4a; }
     #flow-runtime-toggle { flex: 1 1 100%; order: 10; width: auto; max-width: none; white-space: nowrap; }
+.graph-call-tree-node > .graph-call-tree-runtime-data { white-space: normal; text-overflow: clip; line-height: 1.25; }

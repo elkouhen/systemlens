@@ -102,6 +102,7 @@ in `runtime.ignore_services` skips mapping: its observations are
 | Destination of a database or cache type | Out of scope | `not_compared` |
 | Transaction `request` named `METHOD /route` | Mapped service serves that method and route | `matched`, else `observed_only` |
 | Transaction `messaging` naming a topic | Mapped service consumes that topic | `matched`, else `observed_only` |
+| Transaction named `Class.method`, other type | A `@Scheduled` flow of the mapped service has that simple class and method | `matched`, else `not_compared` |
 | Any other transaction | Out of scope | `not_compared` |
 
 Routes compare after collapsing whitespace and replacing each `{name}` path
@@ -161,6 +162,7 @@ export is not `--call-graphs-only`. Every other key stays identical.
 | `services` | Indexed service to `observed` or `no_telemetry` |
 | `unresolved_services` | Unmapped or ambiguous APM service names |
 | `errors`, `endpoint_errors` | Error groups; endpoint ID to their indexes |
+| `data_destinations` | Per service, database destinations with calls and failures |
 
 The browser sums an arc's counts over the distinct observation indexes of its
 `endpoint_ids`, so a service-pair count shared by several call sites is
@@ -172,7 +174,15 @@ the flow trigger for the root, the arc target otherwise. An arc reads its
 output endpoint as emitted traffic and its input endpoint as received
 traffic. It is styled by the received count, or by the emitted count when the input
 has none or when only the emitted side is failing: APM counts a 4xx as a
-caller failure but a server success. The two counts are never summed. A card
+caller failure but a server success.
+
+A `@Scheduled` trigger has no endpoint, so a matched scheduler transaction
+lists the key `cron:<path>:<line>` of the trigger step; the root card of that
+flow reads it. Unmatched `Class.method` names stay `not_compared`, because
+repository and helper spans share that shape. A card with data-access
+annotations shows its service's database destinations whose engine matches
+them (relational for JPA, `mongodb` for collections): APM measures database
+calls per service and engine, never per table or collection. The two counts are never summed. A card
 whose input endpoint has error groups turns red and lists them.
 
 ## 5. Invariants and limits
