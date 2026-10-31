@@ -95,6 +95,62 @@
       const age = ageDays === null ? "" : ageDays === 0 ? " · collecte du jour" : ` · collecte il y a ${ageDays} j`;
       return `${day(collection.start)} → ${day(collection.end)}${age} · ${collection.origin}`;
     }
+    function runtimeSourceLabel() {
+      // The legend toggle names every source whose rows the export carries.
+      const labels = (runtimeData?.window?.collections || []).map(item => item.source_label);
+      return labels.length ? labels.join(" + ") : "Elastic APM";
+    }
+    function runtimeCompletenessLines() {
+      // One line per source: window, interval, overflow or truncation state,
+      // stated explicitly when none. Without a collection record (older
+      // index), the state is unknown rather than silently complete.
+      const collections = runtimeData?.window?.collections || [];
+      if (!collections.length) return ["Complétude inconnue : collecte antérieure à l’historique des collectes."];
+      return collections.map(item => {
+        const parts = [
+          `${item.source_label} · intervalle ${item.interval || "inconnu"}`,
+          item.step ? `pas ${item.step}` : "",
+          item.overflow_services?.length
+            ? `débordement d’agrégation pour ${item.overflow_services.join(", ")} (compteurs minimaux)`
+            : "",
+          item.truncated ? "pagination tronquée" : "",
+          !item.overflow_services?.length && !item.truncated ? "ni débordement ni troncature" : "",
+        ].filter(Boolean);
+        return parts.join(" · ");
+      });
+    }
+    function runtimeDurationLabel(micros) {
+      if (!Number.isFinite(micros)) return "n/d";
+      return micros >= 1000 ? `${(micros / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 0 })} ms` : `${Math.round(micros)} µs`;
+    }
+    function runtimeHotspotLabel(row) {
+      const by = runtimeData?.hotspots?.by || "p95";
+      const value = by === "failures" || by === "errors" ? `${by === "failures" ? "échecs" : "erreurs"} ${runtimeCountFormat.format(Number(row.value) || 0)}` : `${by} ${runtimeDurationLabel(Number(row.value))}`;
+      const incomplete = row.completeness === "incomplete" ? " · incomplet (débordement)" : "";
+      return `${row.service} · ${row.target} · ${value} · ${runtimeCountFormat.format(Number(row.calls) || 0)} appels${incomplete}`;
+    }
+    function runtimeHotspotEntries(rows) {
+      // A row selects the entry point's service card, and its served route
+      // when the index names one, exactly like a route consumer link does:
+      // the related arcs then highlight through the selection. No camera move.
+      return (rows || []).map(row => {
+        const nodeId = `microservice:${row.service}`;
+        const node = nodeDataById.get(nodeId);
+        const route = (node?.http_routes || []).find(item => (row.endpoint_ids || []).includes(item.endpoint_id));
+        return {
+          label: runtimeHotspotLabel(row),
+          title: node ? `Sélectionner ${row.service} et son point d’entrée ${row.target}` : "Service absent du graphe",
+          modelNodeId: node ? nodeId : undefined,
+          hotspotTarget: row.target,
+          action: () => {
+            if (!node) return;
+            selectNode(nodeId, false, false);
+            if (route) openHttpRouteInspector(node, route);
+            else openArchitectureNodeInspector(node, { reset: true });
+          },
+        };
+      });
+    }
     function runtimeShortLabel(traffic, kind) {
       if (traffic.state === "silent") return "aucun trafic";
       const unit = kind === "kafka" ? "msg" : `appel${traffic.calls > 1 ? "s" : ""}`;
@@ -337,10 +393,16 @@
       const rows = runtimeRowsForService(node.name);
       appendList("Fenêtre", [
         runtimeWindowLabel(),
+        ...runtimeCompletenessLines(),
         summary.status === "no_telemetry"
           ? "Aucune observation : télémétrie absente, pas preuve d’inactivité."
-          : "Compteurs minimaux, dépendants de l’échantillonnage APM.",
+          : "Compteurs minimaux, dépendants de l’échantillonnage ; percentiles approximatifs.",
       ], group);
+      appendList(
+        "Points chauds",
+        (runtimeData.hotspots?.rows || []).filter(row => row.service === node.name).map(runtimeHotspotLabel),
+        group,
+      );
       appendList("Erreurs APM", summary.errors.map(runtimeErrorLine), group);
       appendList("Rapprochées avec l’index", rows.filter(row => row.status === "matched").map(runtimeRowLabel), group);
       appendList(
@@ -366,13 +428,42 @@
       );
       discardEmptyDetailsGroup(group);
     }
+    function openRuntimeHotspotsInspector() {
+      if (!runtimeData) return;
+      const hotspots = runtimeData.hotspots || { rows: [], not_compared: [], unverified: [] };
+      openInspector("Points chauds observés");
+      inspectorBody.classList.add("runtime-hotspots-inspector");
+      appendList("Fenêtre", [
+        runtimeWindowLabel(),
+        ...runtimeCompletenessLines(),
+        "Classement par p95 quand le backend fournit des percentiles, sinon par échecs. Valeurs approximatives et minimales ; aucune arête n’est ajoutée au graphe.",
+      ], inspectorBody);
+      appendActionList("Points chauds", runtimeHotspotEntries(hotspots.rows), inspectorBody);
+      if (!(hotspots.rows || []).length) {
+        appendList("Points chauds", ["Aucun point d’entrée rapproché ne porte cette mesure."], inspectorBody);
+      }
+      if (hotspots.without_metric) {
+        appendList("Sans mesure", [`${hotspots.without_metric} point(s) d’entrée sans percentile, non classé(s).`], inspectorBody);
+      }
+      appendList(
+        "Non comparables (hors index ou non attribuables)",
+        (hotspots.not_compared || []).map(row => `${row.service} · ${row.target} · ${runtimeCountFormat.format(Number(row.calls) || 0)} appels`),
+        inspectorBody,
+      );
+      appendList(
+        "Indexés mais non vérifiables",
+        (hotspots.unverified || []).map(item => `${item.service} · ${item.name} · ${item.reason}`),
+        inspectorBody,
+      );
+    }
     function openRuntimeGapsInspector() {
       if (!runtimeData) return;
       openInspector("Écarts entre l’index et le trafic observé");
       const rows = runtimeData.observations || [];
       appendList("Fenêtre", [
         runtimeWindowLabel(),
-        "Compteurs minimaux, dépendants de l’échantillonnage APM. Aucune arête n’est ajoutée au graphe.",
+        ...runtimeCompletenessLines(),
+        "Compteurs minimaux, dépendants de l’échantillonnage. Aucune arête n’est ajoutée au graphe.",
       ], inspectorBody);
       appendList(
         "Erreurs APM (messages non conservés)",
@@ -429,10 +520,13 @@
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.id = "graph-runtime-toggle";
-      toggle.append(checkbox, document.createTextNode("Trafic observé (Elastic APM)"));
+      toggle.append(checkbox, document.createTextNode(`Trafic observé (${runtimeSourceLabel()})`));
       const windowLine = document.createElement("div");
       windowLine.className = "legend-row legend-runtime-window";
       windowLine.textContent = runtimeWindowLabel();
+      const completenessLine = document.createElement("div");
+      completenessLine.className = "legend-row legend-runtime-completeness";
+      completenessLine.textContent = runtimeCompletenessLines().join(" · ");
       const observed = document.createElement("div");
       observed.className = "legend-row";
       observed.innerHTML = '<span class="legend-line legend-runtime-observed"></span>Trafic observé, épaisseur selon le volume';
@@ -464,7 +558,18 @@
       gaps.className = "legend-runtime-gaps";
       gaps.textContent = `Écarts runtime · ${gapCount}`;
       gaps.addEventListener("click", openRuntimeGapsInspector);
-      section.append(toggle, windowLine, summaryLine, observed, failing, silent, gaps);
+      const hotspotCount = (runtimeData.hotspots?.rows || []).length;
+      const hotspots = document.createElement("button");
+      hotspots.type = "button";
+      hotspots.id = "graph-runtime-hotspots";
+      hotspots.className = "legend-runtime-gaps legend-runtime-hotspots";
+      hotspots.textContent = `Points chauds · ${hotspotCount}`;
+      hotspots.title = "Points d’entrée classés par latence p95 ou par échecs (valeurs approximatives et minimales).";
+      hotspots.addEventListener("click", openRuntimeHotspotsInspector);
+      const actions = document.createElement("div");
+      actions.className = "legend-row legend-runtime-actions";
+      actions.append(gaps, hotspots);
+      section.append(toggle, windowLine, completenessLine, summaryLine, observed, failing, silent, actions);
       legend.append(section);
       // The legend is hidden outside the graph tab, so the call-flow toolbar
       // carries a synchronized toggle for the selected call tree.
@@ -473,7 +578,7 @@
       flowToggle.id = "flow-runtime-toggle";
       flowToggle.className = "graph-action-label graph-secondary-action flow-runtime-toggle";
       flowToggle.textContent = "Trafic APM";
-      flowToggle.title = `Afficher le trafic observé par Elastic APM · ${runtimeWindowLabel()}`;
+      flowToggle.title = `Afficher le trafic observé (${runtimeSourceLabel()}) · ${runtimeWindowLabel()}`;
       flowToggle.setAttribute("aria-pressed", "false");
       document.querySelector("#flow-mode-context .graph-mode-context-actions")?.prepend(flowToggle);
       const setRuntimeEnabled = enabled => {

@@ -2672,3 +2672,105 @@ def test_contract_viewers_follow_the_interface_theme(tmp_path: Path) -> None:
         assert backgrounds["light"] in {"rgb(255, 255, 255)", "rgb(247, 250, 252)"}
         assert backgrounds["dark"] not in {"rgb(255, 255, 255)", "rgb(247, 250, 252)"}
         browser.close()
+
+
+def _hotspot_document() -> tuple[str, str]:
+    """An export whose runtime overlay ranks two served routes by p95."""
+    from systemlens.application.runtime_observations import reconcile_observations, runtime_overlay
+    from systemlens.domain.runtime import RuntimeCollection, RuntimeObservation
+
+    def rest(service: str, role: str, route: str) -> MessageEndpoint:
+        return MessageEndpoint(
+            id=f"{service}:rest:{role}:{route}", role=role, system="rest", topic=route,
+            topic_dynamic=False, source="code", framework="spring-mvc",
+            path=f"{service}/Controller.java", start_line=12, end_line=12, snippet="", module=service,
+        )
+
+    orders_serve = rest("orders", "serve", "POST /api/orders")
+    orders_call = rest("orders", "call", "POST /api/reservations")
+    inventory_serve = rest("inventory", "serve", "POST /api/reservations")
+    inventory_products = rest("inventory", "serve", "GET /api/products/{id}")
+    endpoints = {
+        "orders": [orders_serve, orders_call],
+        "inventory": [inventory_serve, inventory_products],
+    }
+    edges = [GraphEdge("rest", "orders", "inventory", orders_call, inventory_serve)]
+    collection = RuntimeCollection(
+        id="c1", source="elastic_apm", origin="https://es:9200",
+        window_start="2026-10-24T12:00:00Z", window_end="2026-10-31T12:00:00Z", interval="60m",
+        step=None, collected_at="2026-10-31T12:00:00Z", page_counts={}, truncated=False,
+        overflow_services=(), notes=(),
+    )
+
+    def transaction(service: str, target: str, calls: int, p95: float) -> RuntimeObservation:
+        return RuntimeObservation(
+            id=f"{service}:{target}", source="elastic_apm", origin="https://es:9200",
+            kind="transaction", service_name=service, target=target, target_type="request",
+            calls=calls, failures=0, duration_sum_us=None,
+            window_start=collection.window_start, window_end=collection.window_end,
+            collected_at=collection.collected_at, duration_p50_us=p95 / 4,
+            duration_p95_us=p95, duration_p99_us=p95 * 2, collection_id="c1",
+        )
+
+    observations = [
+        transaction("orders", "POST /api/orders", 40, 250_000.0),
+        transaction("inventory", "POST /api/reservations", 38, 900_000.0),
+        transaction("inventory", "GET /api/products/{id}", 12, 30_000.0),
+    ]
+    overlay = runtime_overlay(
+        reconcile_observations(observations, endpoints, edges, collections=[collection]), endpoints,
+    )
+    assert overlay is not None
+    assert [row["target"] for row in overlay["hotspots"]["rows"]][0] == "POST /api/reservations"
+    return render_graph_html(endpoints, edges, runtime_overlay=overlay), inventory_serve.id
+
+
+@pytest.mark.slow
+def test_runtime_hotspot_row_selects_its_endpoint_without_moving_the_camera() -> None:
+    document, expected_endpoint_id = _hotspot_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1400, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.wait_for_function("document.getElementById('graph').dataset.fitMode")
+        page.wait_for_function(
+            "() => document.querySelectorAll('#graph-port-paths .graph-architecture-path').length === 1"
+        )
+        page.wait_for_timeout(400)
+        page.locator("#graph-legend summary").first.click()
+        completeness = page.locator(".legend-runtime-completeness").inner_text()
+        assert "intervalle 60m" in completeness and "ni débordement ni troncature" in completeness
+        # Opening the legend reserves its footprint and refits once (ADR-63):
+        # sample the cards only after that refit has settled.
+        before = _node_centers(page)
+        for _ in range(10):
+            page.wait_for_timeout(300)
+            settled = _node_centers(page)
+            if settled == before:
+                break
+            before = settled
+
+        page.locator("#graph-runtime-hotspots").click()
+        page.locator("#inspector-modal").wait_for(state="visible")
+        rows = page.locator("#inspector-body .relation-link")
+        assert rows.count() == 3
+        first = rows.first.inner_text()
+        assert first.startswith("inventory · POST /api/reservations · p95 900 ms")
+        rows.first.click()
+
+        page.wait_for_function(
+            "() => document.querySelector('.graph-node-card-label.is-selected')?.dataset.nodeId === 'microservice:inventory'"
+        )
+        # The served route of the hotspot opens as the selected route inspector.
+        page.wait_for_function(
+            "() => document.getElementById('inspector-title')?.textContent === 'Route HTTP · POST /api/reservations'"
+        )
+        assert expected_endpoint_id.endswith("POST /api/reservations")
+        # The selection highlights the arc into the selected route; no edge is added.
+        assert page.locator("#graph-port-paths .graph-architecture-path").count() == 1
+        _assert_node_centers_unchanged(before, _node_centers(page))
+        browser.close()

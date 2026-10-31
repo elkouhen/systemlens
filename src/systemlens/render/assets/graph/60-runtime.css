@@ -10,6 +10,8 @@
     .legend-runtime { display: grid; gap: 5px; margin-top: 4px; padding-top: 7px; border-top: 1px solid #e2e8f0; }
     .legend-runtime-toggle { font-weight: 700; cursor: pointer; }
     .legend-runtime-window { color: #64748b; overflow-wrap: anywhere; }
+    .legend-runtime-completeness { color: #64748b; overflow-wrap: anywhere; }
+    .legend-runtime-actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .legend-line.legend-runtime-observed { height: 4px; background: #0f766e; }
     .legend-line.legend-runtime-silent { height: 0; border-top: 2px dashed #94a3b8; }
 .legend-line.legend-runtime-failing { height: 4px; background: #dc2626; }
@@ -30,6 +32,7 @@
     :root[data-theme="dark"] .graph-node-runtime-badge.is-no_telemetry { border-color: #64748b; color: #cbd5e1; background: #1e293b; }
     :root[data-theme="dark"] .legend-runtime { border-top-color: rgba(148, 163, 184, .24); }
     :root[data-theme="dark"] .legend-runtime-window { color: #91a4bd; }
+    :root[data-theme="dark"] .legend-runtime-completeness { color: #91a4bd; }
     :root[data-theme="dark"] .graph-architecture-path.is-runtime-observed.is-runtime-failing { stroke: #f87171; }
     .graph-call-tree-edge.is-runtime-observed { stroke-width: var(--runtime-stroke, 2.4px); opacity: .95; }
     .graph-call-tree-edge.is-runtime-observed.is-runtime-failing { stroke: #dc2626; }
