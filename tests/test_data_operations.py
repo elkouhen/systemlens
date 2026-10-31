@@ -177,3 +177,276 @@ def test_lab_copy_is_not_required_for_projection(tmp_path: Path) -> None:
     shutil.rmtree(tmp_path / "src")
     projected = data_operations_from_modules(tmp_path, modules)
     assert [item.operation for item in projected] == ["findById", "save"]
+
+
+# --- Typed extraction: repositories, derived queries, EntityManager, JDBC ---
+
+from systemlens.discovery.build.data_operations import discover_data_operations  # noqa: E402
+from systemlens.discovery.java import parser as java_parser  # noqa: E402
+from systemlens.domain.module_inventory import JpaEntity  # noqa: E402
+
+
+def _parsed(sources: dict[str, str]) -> list[tuple[str, bytes, object]]:
+    parser = java_parser.java_parser("tests")
+    files = []
+    for path, text in sources.items():
+        source = text.encode("utf-8")
+        files.append((path, source, parser.parse(source).root_node))
+    return files
+
+
+def _entities(*names: str) -> tuple[JpaEntity, ...]:
+    return tuple(JpaEntity(name, f"src/{name.rsplit('.', 1)[-1]}.java", 1) for name in names)
+
+
+_ORDER_ENTITY = (
+    "package shop;\nimport jakarta.persistence.Entity;\n@Entity public class Order { }\n"
+)
+
+
+def _facts(operations) -> list[tuple[object, ...]]:
+    return [
+        (item.owner_method, item.operation, item.action, item.resource, item.key_expression,
+         item.key_property, item.unresolved_reason)
+        for item in operations
+    ]
+
+
+def test_constructor_injected_crud_repository_matches_a_jpa_repository_field() -> None:
+    files = _parsed({
+        "src/Order.java": _ORDER_ENTITY,
+        "src/OrderRepository.java": (
+            "package shop;\nimport org.springframework.data.repository.CrudRepository;\n"
+            "import java.util.UUID;\n"
+            "public interface OrderRepository extends CrudRepository<Order, UUID> {}\n"
+        ),
+        "src/OtherRepository.java": (
+            "package shop;\nimport org.springframework.data.jpa.repository.JpaRepository;\n"
+            "public interface OtherRepository extends JpaRepository<Order, String> {}\n"
+        ),
+        "src/Service.java": (
+            "package shop;\nclass Service {\n"
+            "  private final OrderRepository orders;\n"
+            "  private OtherRepository other;\n"
+            "  Service(OrderRepository orders) { this.orders = orders; }\n"
+            "  void a(String id) { orders.findById(id); }\n"
+            "  void b(String id) { other.findById(id); }\n"
+            "  void c(OrderRepository injected, String id) { injected.deleteById(id); }\n"
+            "}\n"
+        ),
+    })
+
+    operations = discover_data_operations("shop", files, _entities("shop.Order"))
+
+    assert _facts(operations) == [
+        ("a", "findById", "read", "shop.Order", "id", None, None),
+        ("b", "findById", "read", "shop.Order", "id", None, None),
+        ("c", "deleteById", "delete", "shop.Order", "id", None, None),
+    ]
+    assert {item.resource_identity for item in operations} == {"jpa:shop:shop.Order"}
+    assert all(item.key_identity is None for item in operations)
+
+
+def test_repository_inheritance_through_a_module_interface_resolves_the_entity() -> None:
+    files = _parsed({
+        "src/BaseRepository.java": (
+            "package shop;\nimport org.springframework.data.repository.NoRepositoryBean;\n"
+            "import org.springframework.data.repository.ListCrudRepository;\n"
+            "import org.springframework.data.jpa.repository.JpaSpecificationExecutor;\n"
+            "@NoRepositoryBean public interface BaseRepository<T, K> extends "
+            "JpaSpecificationExecutor<T>, ListCrudRepository<T, K> {}\n"
+        ),
+        "src/OrderRepository.java": (
+            "package shop;\npublic interface OrderRepository extends BaseRepository<Order, Long> {}\n"
+        ),
+        "src/Service.java": (
+            "package shop;\nclass Service { OrderRepository repo; "
+            "void run() { repo.save(new Order()); } }\n"
+        ),
+    })
+
+    operations = discover_data_operations("shop", files, _entities("shop.Order"))
+
+    assert _facts(operations) == [("run", "save", "create_or_update", "shop.Order", None, None, None)]
+
+
+def test_ambiguous_entity_yields_an_unresolved_fact_not_a_guess() -> None:
+    files = _parsed({
+        "src/OrderRepository.java": (
+            "package shop;\nimport org.springframework.data.jpa.repository.JpaRepository;\n"
+            "public interface OrderRepository extends JpaRepository<Order, String> {}\n"
+        ),
+        "src/Service.java": (
+            "package shop;\nclass Service { OrderRepository repo; "
+            "void run() { repo.findAll(); } }\n"
+        ),
+    })
+
+    operations = discover_data_operations(
+        "shop", files, _entities("billing.Order", "sales.Order"),
+    )
+
+    [operation] = operations
+    assert operation.action == "read"
+    assert operation.resource is None and operation.resource_identity is None
+    assert operation.unresolved_reason == "entity Order is ambiguous: billing.Order, sales.Order"
+    assert operation.coverage == "partial"
+    assert operation.confidence == "low"
+
+
+def test_a_save_on_a_non_repository_field_or_shadowed_name_yields_nothing() -> None:
+    files = _parsed({
+        "src/OrderRepository.java": (
+            "package shop;\nimport org.springframework.data.jpa.repository.JpaRepository;\n"
+            "public interface OrderRepository extends JpaRepository<Order, String> {}\n"
+        ),
+        "src/Service.java": (
+            "package shop;\nclass Service {\n"
+            "  OrderRepository repo; Cache cache;\n"
+            "  void run() { cache.save(\"x\"); }\n"
+            "  void shadow(String repo) { repo.save(\"x\"); }\n"
+            "  void local() { Cache repo = new Cache(); repo.save(\"x\"); }\n"
+            "}\n"
+        ),
+    })
+
+    assert discover_data_operations("shop", files, _entities("shop.Order")) == ()
+
+
+def test_derived_queries_and_literal_query_annotations_classify() -> None:
+    files = _parsed({
+        "src/OrderRepository.java": (
+            "package shop;\nimport org.springframework.data.jpa.repository.JpaRepository;\n"
+            "import org.springframework.data.jpa.repository.Modifying;\n"
+            "import org.springframework.data.jpa.repository.Query;\n"
+            "import java.util.List;\n"
+            "public interface OrderRepository extends JpaRepository<Order, String> {\n"
+            "  List<Order> findByCustomerId(String customerId);\n"
+            "  void deleteByStatus(String status);\n"
+            "  @Modifying @Query(\"update Order o set o.status = :s where o.id = :id\") int close(String s, String id);\n"
+            "  @Query(\"update Order o set o.status = :s\") int closeAll(String s);\n"
+            "  @Query(\"select o from Order o where o.total > :min\") List<Order> big(long min);\n"
+            "  @Query(value = \"select * from orders\", nativeQuery = true) List<Order> raw();\n"
+            "  List<Order> customThing(String x);\n"
+            "  List<Order> findAll(Specification<Order> spec);\n"
+            "  @Query(Queries.SQL) List<Order> constant();\n"
+            "}\n"
+        ),
+        "src/Service.java": (
+            "package shop;\nclass Service { OrderRepository repo;\n"
+            "  void run(String id, String status) {\n"
+            "    repo.findByCustomerId(id);\n    repo.deleteByStatus(status);\n"
+            "    repo.close(\"done\", id);\n    repo.closeAll(\"done\");\n    repo.big(10L);\n"
+            "    repo.raw();\n    repo.customThing(id);\n    repo.findAll(spec);\n    repo.constant();\n"
+            "    repo.findByCustomerId(\"c-1\");\n"
+            "  }\n}\n"
+        ),
+    })
+
+    operations = discover_data_operations("shop", files, _entities("shop.Order"))
+
+    assert _facts(operations) == [
+        ("run", "findByCustomerId", "read", "shop.Order", "id", "customerId", None),
+        ("run", "deleteByStatus", "delete", "shop.Order", "status", "status", None),
+        ("run", "close", "update", "shop.Order", None, None, None),
+        ("run", "closeAll", "unknown", "shop.Order", None, None, "update query without @Modifying"),
+        ("run", "big", "read", "shop.Order", None, None, None),
+        ("run", "raw", "read", "orders", None, None, "native query: resource kept on the JDBC table"),
+        ("run", "customThing", "unknown", "shop.Order", None, None,
+         "method name outside the Spring Data derived-query grammar"),
+        ("run", "findAll", "unknown", "shop.Order", None, None,
+         "query built from a Specification argument"),
+        ("run", "constant", "unknown", "shop.Order", None, None, "@Query string is not a literal"),
+        ("run", "findByCustomerId", "read", "shop.Order", '"c-1"', "customerId", None),
+    ]
+    by_line = {item.line: item for item in operations}
+    assert by_line[13].key_identity == 'jpa:shop:shop.Order#customerId:literal:"c-1"'
+    assert by_line[4].key_identity is None
+    assert by_line[9].resource_identity == "jdbc:shop:orders"
+    assert [item.coverage for item in operations][:4] == ["supported", "supported", "supported", "partial"]
+
+
+def test_entity_manager_operations_classify_arguments_and_literal_queries() -> None:
+    files = _parsed({
+        "src/Dao.java": (
+            "package shop;\nimport jakarta.persistence.EntityManager;\n"
+            "class Dao {\n  private EntityManager entityManager;\n"
+            "  void run(String id, String sql, Order existing) {\n"
+            "    entityManager.find(Order.class, id);\n"
+            "    entityManager.persist(new Order());\n"
+            "    entityManager.merge(existing);\n"
+            "    entityManager.remove(existing);\n"
+            "    entityManager.getReference(Order.class, \"o-1\");\n"
+            "    entityManager.createQuery(sql);\n"
+            "    entityManager.createQuery(\"delete from Order o where o.closed = true\");\n"
+            "    entityManager.createNativeQuery(\"UPDATE orders SET x = 1 WHERE id = ?\");\n"
+            "    entityManager.createNamedQuery(\"Order.all\");\n"
+            "    entityManager.persist(build());\n"
+            "  }\n}\n"
+        ),
+    })
+
+    operations = discover_data_operations("shop", files, _entities("shop.Order"))
+
+    assert _facts(operations) == [
+        ("run", "find", "read", "shop.Order", "id", None, None),
+        ("run", "persist", "insert", "shop.Order", None, None, None),
+        ("run", "merge", "create_or_update", "shop.Order", None, None, None),
+        ("run", "remove", "delete", "shop.Order", None, None, None),
+        ("run", "getReference", "read", "shop.Order", '"o-1"', None, None),
+        ("run", "createQuery", "unknown", None, None, None,
+         "SQL string is not a literal or a same-class constant"),
+        ("run", "createQuery", "delete", "shop.Order", None, None, None),
+        ("run", "createNativeQuery", "update", "orders", None, None, None),
+        ("run", "createNamedQuery", "unknown", None, None, None, "named query not resolved"),
+        ("run", "persist", "insert", None, None, None,
+         "entity type of the argument not established"),
+    ]
+    assert operations[4].key_identity == 'jpa:shop:shop.Order:literal:"o-1"'
+    assert operations[7].resource_identity == "jdbc:shop:orders"
+
+
+def test_literal_jdbc_statements_classify_single_table_statements_only() -> None:
+    files = _parsed({
+        "src/Dao.java": (
+            "package shop;\nimport org.springframework.jdbc.core.JdbcTemplate;\n"
+            "class Dao {\n"
+            "  private static final String COUNT = \"SELECT count(*) FROM orders WHERE id = ?\";\n"
+            "  private final JdbcTemplate jdbc;\n"
+            "  Dao(JdbcTemplate jdbc) { this.jdbc = jdbc; }\n"
+            "  void run(String id) {\n"
+            "    jdbc.update(\"DELETE FROM orders WHERE id = ?\", id);\n"
+            "    jdbc.query(\"SELECT o.id FROM orders o JOIN lines l ON l.order_id = o.id\", mapper);\n"
+            "    jdbc.update(buildSql(), id);\n"
+            "    jdbc.queryForObject(COUNT, Long.class, id);\n"
+            "    jdbc.update(\"UPDATE orders SET qty = ? WHERE id = ? AND version = ?\", 1, id, 3);\n"
+            "    jdbc.update(\"INSERT INTO orders (id) VALUES (?)\", id);\n"
+            "    jdbc.update(\"DELETE FROM a; DELETE FROM b\");\n"
+            "    jdbc.execute(\"CALL rebuild()\");\n"
+            "    jdbc.update(\"DELETE FROM orders WHERE id = \" + id);\n"
+            "    jdbc.queryForList(\"\"\"\n        SELECT * FROM lines\n        WHERE sku = ?\"\"\", sku);\n"
+            "    jdbc.getDataSource();\n"
+            "  }\n}\n"
+        ),
+    })
+
+    operations = discover_data_operations("shop", files, ())
+
+    assert _facts(operations) == [
+        ("run", "update", "delete", "orders", "id", None, None),
+        ("run", "query", "read", None, None, None, "join or subquery: several tables involved"),
+        ("run", "update", "unknown", None, None, None, "SQL string is built or formatted at runtime"),
+        ("run", "queryForObject", "read", "orders", "id", None, None),
+        ("run", "update", "update", "orders", None, None, None),
+        ("run", "update", "insert", "orders", None, None, None),
+        ("run", "update", "unknown", None, None, None, "multiple SQL statements"),
+        ("run", "execute", "unknown", None, None, None, "stored procedure"),
+        ("run", "update", "unknown", None, None, None, "SQL string is concatenated"),
+        ("run", "queryForList", "read", "lines", "sku", "sku", None),
+    ]
+    assert operations[0].resource_identity == "jdbc:shop:orders"
+    assert operations[0].technology == "jdbc"
+    assert operations[4].guard == "conditional_update"
+    assert operations[4].guard_scope == "operation"
+    assert operations[0].guard is None
+    assert [item.coverage for item in operations][:3] == ["supported", "partial", "unsupported"]
