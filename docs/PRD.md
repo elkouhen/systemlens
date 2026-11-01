@@ -4,103 +4,36 @@ This document owns the product aspect: users, purpose, scope, outcomes, and
 success measures. It does not define command contracts, implementation details,
 or HTML interaction rules.
 
-## Product summary
+Status: current. Owner: the product owner. Last revised: 2026-11-01.
+Related: [product decisions](PDR.md), [backlog](../BACKLOG.md),
+[functional specification](SPEC-FONC.md), [glossary](glossary.md).
 
-SystemLens provides a local architecture inventory for Java and Spring
-codebases. The product preserves evidence and uncertainty instead of guessing
-dependencies.
+## 1. Problem
 
-| Audience | Primary outcome |
-|---|---|
-| Codebase analyst (primary) | Bounded, evidenced context before a change or review |
-| Developer | A navigable inventory of services and integrations |
-| Architect | A reviewable topology with visible uncertainty |
+Before changing or reviewing a Java and Spring system, a reader must know
+which microservices, routes, topics, and data resources a change touches.
+The [lab application][lab] shows three situations where that knowledge is
+costly to obtain.
 
-## Product purpose
+[lab]: https://github.com/elkouhen/systemlens-observability-lab/tree/main/apps/supermarket-demo
 
-SystemLens gives analysts, developers, and architects local architecture
-context before they change or review a Java or Spring system. It derives
-source facts from local ASTs without sending source code to a hosted service.
-When CodeQL is installed locally, SystemLens invokes it on the user's machine
-to build a temporary source-only method-call graph for bounded inter-method
-flows. The resulting method and edge projections are persisted in the local
-snapshot; they remain potential static flows and are not runtime dependencies.
-
-The product answers questions such as:
-
-- Which services expose or call an API?
-- Which topics are produced and consumed, and with which payload type?
-- What are the dependencies and likely impact paths between services?
-- Which Maven/Gradle projects, OpenAPI contracts, Data resources and
-  Spring properties belong to a service?
-
-When deterministic extraction leaves a bounded gap, an analyst may use the
-companion SystemLens skill to direct an agent through a focused, evidence-based
-review. Its reviewable, namespaced JSON fact manifest is the durable handoff
-for complementary facts. Importing that manifest never replaces source-derived
-evidence.
-
-## Users and primary workflows
-
-| User | Need | Surface |
+| Situation | Today's workaround | Cost |
 |---|---|---|
-| Codebase analyst (primary) | Establish proven dependencies, impact and unresolved facts before a change or review | CLI catalog commands and HTML export |
-| Developer | Inspect the evidence behind a service, API, topic, project or architecture module | CLI catalog commands and HTML export |
-| Architect | Review topology, uncertainty and static architecture risks across services | `analyze`, graph export |
+| `supermarket.order.placed` has two consumers: `inventory-service` reserves stock, and `restock-service` observes demand with an independent Kafka group. | Follow the lab README's five-step reading order: POM, Dockerfile, Kubernetes manifests, two `application.yml` files, then the code of three modules. | Manual reading across modules; a topic name resolved from configuration or a convention is easy to miss. |
+| `order-service` calls `POST /api/reservations` on `inventory-service` over REST. | Search the code for the path text. | A URL built at run time escapes a text search, and nothing marks the search as incomplete. |
+| An agent reads the source and reports inter-module dependencies that indexing did not resolve. | Re-read every file the agent cites. | Without relative evidence and a confidence level, a reviewer cannot tell a proven fact from a guess. |
 
-The primary workflow is `systemlens init`, `systemlens doctor`, and
-`systemlens index`. The analyst then uses the catalog or graph for the
-question at hand. The optional companion skill can produce a reviewable JSON
-fact manifest when deterministic extraction leaves a bounded gap. The analyst
-can import that manifest into its own namespace before exporting or querying
-the merged model.
+Static evidence alone cannot prove that a relation runs. The lab README
+states that an indexing or enrichment result is not, by itself, proof of
+execution; runtime metrics are a separate, opt-in source.
 
-The `coverage`, `indexing-issues`, and `audit` commands provide optional
-diagnostics for inventory completeness, extraction issues, and static topology
-risk. Reindex after an edit. Indexing is incremental, while `--full` refreshes
-every eligible source file. The complete command contracts belong to
-the [functional specification](SPEC-FONC.md).
+## 2. Vision and product principles
 
-## Scope boundaries
+SystemLens gives a bounded, evidenced, and locally built architecture
+inventory of a Java and Spring codebase before a change or a review, and it
+keeps every uncertainty visible instead of guessing a dependency.
 
-### Delivered
-
-- Tree-sitter Java AST extraction for Spring MVC/WebFlux, Feign,
-  RestTemplate/WebClient, Spring Cloud Gateway and Spring Data REST endpoints.
-- Topic producers and consumers, dynamic-topic evidence and explicit Java
-  payload types.
-- Maven/Gradle project discovery, OpenAPI and Data inventory.
-- Local SQLite persistence, architecture relations, graph/audit views and
-  workspace federation.
-- Markdown/JSON Kafka manifests and the opt-in Strategy1 conventions.
-- Optional Kubernetes Deployment and StatefulSet resource dimensions from the
-  active local `kubectl` context, matched conservatively to indexed projects.
-- Persisted potential code flows from an API or topic entry point to external
-  effects located in the same Java method.
-- Opt-in comparison of the static topology with aggregated runtime
-  metrics from Elastic APM or from OpenTelemetry metrics through Prometheus:
-  runtime integrations missing from the index and indexed integrations without
-  observed traffic, without downloading traces.
-- Latency percentiles per entry point, a ranked hotspot list with its
-  indexed evidence and completeness, and a comparison with the previous
-  collection of the same source and interval.
-
-### Planned
-
-- Conservative presentation of observed API, Topic, Data, and S3 activity
-  beside the static architecture, without inventing a source mapping.
-- Explicit Kubernetes capacity context for runtime hotspots where a verified
-  workload-to-service match exists. A future matcher must prefer an exact name,
-  then accept a unique token-bounded service-name inclusion in a Deployment or
-  StatefulSet name; ambiguous matches remain unresolved.
-
-### Not delivered
-
-- Security or quality scans, severity filtering or automated remediation.
-- Guaranteed resolution of dynamic values; unresolved values remain explicitly
-  marked as dynamic rather than guessed.
-
-## Product requirements
+### Product principles
 
 1. Source facts must be derived from local AST parsing and deterministic local
    configuration only. Optional Kubernetes enrichment is opt-in, retains its
@@ -119,25 +52,96 @@ the [functional specification](SPEC-FONC.md).
    Java/Spring integration. The optional companion skill may enrich the graph
    through reviewable agent analysis.
 
-## Success measures
+## 3. Personas and scenarios
 
-- On each supported reference repository, a user can answer the primary
-  change or review questions (service dependencies, APIs, topic flow and
-  impact) after one local index, with a bounded result and its evidence.
-- Every emitted source integration is traceable to a concrete source location
-  or an explicitly named manifest entry; optional Kubernetes facts identify the
-  matched workload kind, namespace, and name.
-- Coverage output distinguishes resolved relations from unresolved or dynamic
-  facts, so an analyst can decline to assume a missing dependency.
-- On the lab export, an analyst sees the runtime hotspots ranked with
-  their indexed evidence and the completeness of the collection, without
-  any static fact being described as observed.
-- Incremental indexing touches only changed files unless an extractor signature,
-  selected convention, or an analysis dependency (Spring configuration or build
-  descriptor) changes.
-- For a selected runtime window, a developer can identify the highest-ranked
-  latency and error hotspots, determine the completeness of the observation,
-  and navigate only to explicitly linked static evidence.
+| Persona | Context | Goal | Frustration |
+|---|---|---|---|
+| Codebase analyst (primary) | Prepares a change or a review on a Java and Spring codebase. | Proven dependencies, impact, and unresolved facts for one question. | An answer that mixes evidence and guesses. |
+| Developer | Changes one microservice and its integrations. | The evidence behind a microservice, route, topic, or project. | Jumping between modules and configuration files to find a source line. |
+| Architect | Reviews the topology across microservices or a workspace. | A shareable topology whose uncertainty is visible. | A diagram that looks complete but hides dynamic or unresolved relations. |
+
+The codebase analyst is a role, not only a person. A person may fill it
+directly through the CLI and the HTML export. A person may also direct an
+agent through the [companion skill][skill]; the agent then hands its
+findings over as a reviewable JSON fact manifest.
+
+[skill]: https://github.com/elkouhen/systemlens-skill
+
+Codebase analyst:
+
+- Before changing the payload of `supermarket.order.placed`, list every
+  producer and consumer, with the source line of each.
+- When a flow the analyst expects is missing, list the unresolved facts,
+  then let an agent complete the gap in a separate manifest namespace.
+
+Developer:
+
+- Before changing `POST /api/reservations`, see every indexed caller and
+  the potential code flows that reach it, with their evidence.
+- After an edit, reindex and see only the changed facts refreshed.
+
+Architect:
+
+- Review the topology of the three lab microservices and see which
+  relations remain dynamic or unresolved.
+- Compare the static topology with an Elastic APM collection: runtime
+  integrations missing from the index, and indexed ones without traffic.
+
+## 4. Requirements
+
+Each requirement names its persona, an observable acceptance, and a status
+from the [delivery practices](process/delivery-practices.md). The
+[functional specification](SPEC-FONC.md) owns the supported technologies,
+commands, and options.
+
+### Must
+
+| ID | Persona | Requirement | Acceptance | Status |
+|---|---|---|---|---|
+| M1 | All | Index a Java and Spring codebase locally. | `systemlens init`, `doctor`, and `index` complete with the Python package alone (PDR-5); no source code leaves the machine. | delivered |
+| M2 | Analyst, developer | See API, topic, and data relations with their evidence. | Every emitted integration navigates to a file and line range or to a named manifest entry. | delivered |
+| M3 | Developer | Keep the index fresh after an edit. | A reindex updates or removes the facts of changed or deleted files and touches only those files, unless an extractor signature, a selected convention, or an analysis dependency changes. | delivered |
+| M4 | Analyst, developer | See the potential code flows from an API or topic entry point to its external effects. | `flows list` and `flows show` give ordered steps with evidence, labelled as potential static flows, never as runtime execution. | delivered |
+| M5 | Analyst, architect | Audit coverage and unresolved facts. | `analyze coverage`, `analyze indexing-issues`, and `analyze audit` separate resolved relations from unresolved or dynamic facts. | delivered |
+
+### Should
+
+| ID | Persona | Requirement | Acceptance | Status |
+|---|---|---|---|---|
+| S1 | Analyst (agent) | Import an agent fact manifest. | `import-facts --namespace NAME` stores the facts in their own namespace; they never replace source-derived evidence. | delivered |
+| S2 | Architect | Federate a workspace of independently indexed microservices. | `analyze audit --workspace DIR` reports risks across the workspace. | delivered |
+| S3 | Architect, developer | Compare the static topology with runtime observations. | `observe report` lists runtime integrations missing from the index and indexed ones without traffic; no static fact is described as observed. | delivered for Elastic APM counts; field validation of percentiles, the Prometheus source, and completeness facts is `blocked` ([backlog section 7](../BACKLOG.md#7-items-carried-over-from-earlier-backlogs)) |
+| S4 | Developer | Rank runtime hotspots for a selected window. | The export ranks latency and error hotspots with the completeness of the collection and links only to explicitly matched static evidence. | `blocked`: field validation and the live-model regeneration wait on the lab ([backlog section 7](../BACKLOG.md#7-items-carried-over-from-earlier-backlogs)) |
+| S5 | Architect | See Kubernetes resource dimensions of indexed projects. | `index --kubernetes` reads the active local `kubectl` context and keeps workload kind, namespace, and name on each matched fact. | delivered |
+| S6 | Analyst | Review data-consistency candidates. | `export microservices --review-aids` reports read-modify-write and dual-write candidates with the precision measured in section 6. | `blocked: no second Spring application in the workspace` |
+
+### Later
+
+| ID | Persona | Requirement | Acceptance | Status |
+|---|---|---|---|---|
+| L1 | Architect | See observed API, topic, data, and S3 activity beside the static architecture ([backlog item](../BACKLOG.md#7-items-carried-over-from-earlier-backlogs)). | The export shows the observed activity next to the static elements; an activity without a verified source mapping stays unmapped. | proposed |
+| L2 | Architect, developer | See the Kubernetes capacity behind a runtime hotspot ([backlog item](../BACKLOG.md#7-items-carried-over-from-earlier-backlogs)). | A hotspot shows Deployment or StatefulSet resources only for a verified workload-to-microservice match; an ambiguous match stays unresolved. | proposed |
+
+## 5. Out of scope
+
+| Excluded | Reason |
+|---|---|
+| Security or quality scans, severity filtering, automated remediation | Static evidence can locate a candidate but cannot establish a defect or an incident ([feasibility assessment](microservices-bad-practices.md)). |
+| Guaranteed resolution of dynamic values | A guessed value would invent a dependency; unresolved values stay marked as dynamic (principle 5). |
+| Downloading runtime traces | At 50 microservices and hundreds of topics, raw traces are too large; aggregated metrics answer the comparison (ADR-60). |
+| Sending source code to a hosted service | Facts come from local analysis only (principles 1 and 4). |
+| CDN dependencies, ARIA semantics, and keyboard navigation of the export | Deferred until the user reprioritizes them ([PDR-4](PDR.md#pdr-4-accessibility-and-cdn-concerns-are-deferred)). |
+
+## 6. Outcome metrics
+
+The outcome metrics below measure what a persona gains. None has been
+measured yet, so each target is set after the first measurement.
+
+| Metric | How it is measured | Baseline | Target |
+|---|---|---|---|
+| Scenarios answered after one index | Section 3 scenarios run on a fresh copy of the lab; a scenario counts when the answer is bounded and every relation has evidence | Not yet measured | Set after first measurement |
+| Integrations traceable to evidence | `export microservices --json` on the lab index; share of relations with a source location or a named manifest entry | Not yet measured | Set after first measurement |
+| Agent facts kept after review | Facts of one skill-produced manifest that the analyst keeps unchanged, over facts proposed | Not yet measured | Set after first measurement |
 
 ### Measured proxies
 
@@ -152,8 +156,29 @@ proxy without a baseline is measured before its first target is set.
 | Share of persisted flow steps with a `proven` evidence level | `flows list --json` on the lab index, steps grouped by evidence level | Not yet measured | Set after the first measurement |
 | Time to the first inspector opening for a new user of the live model | Observed on `docs/models/simple-supermarket.html` without documentation, one tester, one session | Not yet measured | Set after backlog task U2 |
 
-For observable command contracts, see the
-[functional specification](./SPEC-FONC.md). For implementation details, see
-the [technical specification](./SPEC-TECH.md). Historical decisions,
-including the retired external-analyzer design, remain in
-[ADR.md](./ADR.md).
+Backlog task U2 belongs to the delivered Explorer UX stream; its record is
+in Git history at commit `556c0f7`.
+
+## 7. Assumptions, risks, and open questions
+
+- **Assumption: the agent is a first-class user.** The analyst role
+  includes an agent driven by the companion skill. Open question: should
+  analyst requirements also name a machine-readable acceptance, such as
+  `--json` output, for each scenario?
+- **Risk: CodeQL licensing.** Interprocedural flows are richer with CodeQL,
+  but its licence may not cover proprietary code. A first index therefore
+  uses the tree-sitter engine and its closed-world dispatch rules
+  ([PDR-5](PDR.md#pdr-5-a-first-index-needs-no-external-tool)).
+- **Risk: lab representativeness.** Three microservices are the only
+  reference application. The review-aid precision was measured on it alone,
+  and S6 waits for a second Spring application.
+- **Risk: runtime validation.** The lab Elastic cluster and Prometheus
+  server are unreachable from the delivery machine, which keeps S3 and S4
+  partly `blocked`.
+- **Open question: four-mode navigation drift.** PDR-7 notes that the
+  export's navigation drifts from the UX contract and calls it a backlog
+  concern. No backlog item tracks it yet.
+
+Implementation details live in the [technical specification](SPEC-TECH.md).
+Historical decisions, including the retired external-analyzer design, remain
+in [ADR.md](ADR.md).

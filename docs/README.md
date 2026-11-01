@@ -38,7 +38,7 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 | File | Read when |
 |---|---|
 | [docs/README.md](README.md) | Finding the owner of a documentation topic. |
-| [docs/PRD.md](PRD.md) | Checking users, product scope, or success measures. |
+| [docs/PRD.md](PRD.md) | Checking the problem, personas, prioritised requirements, scope, or outcome metrics. |
 | [docs/SPEC-FONC.md](SPEC-FONC.md) | Finding a public behavior contract. |
 | [docs/SPEC-TECH.md](SPEC-TECH.md) | Finding an implementation or data contract. |
 | [docs/ADR.md](ADR.md) | Checking why an architectural decision was accepted. |

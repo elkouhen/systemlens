@@ -182,7 +182,9 @@ Each lot closes with `uv run mypy`, `uv run pytest`, and
 
 ## 7. Items carried over from earlier backlogs
 
-Their context lives in Git history before `fdac92e`. Statuses follow
+Their context lives in Git history before `fdac92e`. The last two rows
+moved here from the "Planned" scope of `docs/PRD.md` on 2026-11-01; the PRD
+keeps them as later requirements. Statuses follow
 `docs/process/delivery-practices.md`.
 
 | Item | Status |
@@ -192,6 +194,8 @@ Their context lives in Git history before `fdac92e`. Statuses follow
 | Regenerate `docs/models/simple-supermarket.html` with the hotspot group and the badge facts. | `blocked: needs a lab reindex plus a runtime collection`; V1 regenerates the static part only |
 | Make the lab reachable from a scheduled CI job so the three items above can leave `blocked`. | `open`; depends on the lab repository's compose setup |
 | Regenerate the live model in the `pages.yml` pipeline, as `supermarket.html` already is. | `open`; would make V2 redundant once delivered |
+| Show observed API, topic, data, and S3 activity beside the static architecture, conservatively and without inventing a source mapping. | `proposed` |
+| Give runtime hotspots an explicit Kubernetes capacity context where a verified workload-to-microservice match exists. The matcher prefers an exact name, then accepts a unique token-bounded microservice-name inclusion in a Deployment or StatefulSet name; an ambiguous match stays unresolved. | `proposed` |
 
 ## 8. Archived backlogs
 
