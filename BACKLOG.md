@@ -3,8 +3,9 @@
 Status: proposed on 2026-11-01 from the UX review of the generated HTML
 export; awaiting the product owner's validation of the lots before any
 task starts (see `docs/process/delivery-practices.md`). Owner: SystemLens
-implementer. Reviewers: product owner and UX maintainer. Review baseline: commit `fdac92e`, live model
-`docs/models/simple-supermarket.html`, viewport 1440 by 900, Obsidian theme.
+implementer. Reviewers: product owner and UX maintainer. Review baseline:
+commit `fdac92e`, live model `docs/models/simple-supermarket.html`,
+viewport 1440 by 900, Obsidian theme.
 
 This backlog carries one work stream, **Stream U**, which reworks how the
 Explorer exposes its commands, its inspection path, and its empty states.
