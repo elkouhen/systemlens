@@ -921,17 +921,20 @@
       }
       header.append(kicker, title, meta);
       details.append(header);
-      if (!isMicroservice) {
+      // A resource has no software layer (PDR-8): its Architecture group
+      // holds its module and its technology, and leaves the inspector when
+      // it has neither (PDR-9).
+      const resourceArchitectureGroup = isMicroservice ? null : createDetailsGroup("Architecture");
+      if (resourceArchitectureGroup) {
         const nodeClusterPath = clusterPathForNode(id);
         const clusterPath = isRootClusterPath(nodeClusterPath) ? null : nodeClusterPath;
-        const architectureGroup = createDetailsGroup("Architecture");
-        // A topic or a collection has no software layer (PDR-8): only its module.
         appendActionList("Module", clusterPath ? [{
           label: clusterPath,
           title: `Naviguer vers le module ${clusterPath}`,
           action: () => selectCluster(clusterDescriptorForPath(clusterPath)),
-        }] : [], architectureGroup);
-        discardEmptyDetailsGroup(architectureGroup);
+        }] : [], resourceArchitectureGroup);
+        const technology = nodeTechnology(node);
+        if (technology) appendList("Technologie", [technology], resourceArchitectureGroup);
       }
       if (node.kind === "microservice") {
         if (node.vscode_uri) {
@@ -1158,15 +1161,6 @@
         appendFindings(node.findings || [], qualityGroup);
         discardEmptyDetailsGroup(qualityGroup);
         appendRuntimeDetails(node);
-        const groupOrder = ["Relations", "Trafic observé", "Architecture", "Ports d’intégration", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Diagnostics"];
-        [...details.querySelectorAll(":scope > .details-group")]
-          .sort((left, right) => {
-            const leftRank = groupOrder.indexOf(left.querySelector("summary")?.textContent);
-            const rightRank = groupOrder.indexOf(right.querySelector("summary")?.textContent);
-            return (leftRank === -1 ? groupOrder.length : leftRank)
-              - (rightRank === -1 ? groupOrder.length : rightRank);
-          })
-          .forEach(group => details.append(group));
       }
       if (node.kind === "kafka_topic") {
         const relationsGroup = createDetailsGroup("Relations");
@@ -1194,12 +1188,14 @@
           .filter(candidate => candidate.kind === "microservice")
           .flatMap(candidate => (candidate.kafka_endpoints || []).map(endpoint => ({ service: candidate.name, ...endpoint })))
           .filter(endpoint => endpoint.topic === node.name);
+        discardEmptyDetailsGroup(relationsGroup);
+        const sourcesGroup = createDetailsGroup("Sources", false);
         appendActionList("Sources producteurs et consommateurs", endpointSources.map(endpoint => ({
           label: `${endpoint.service} · ${endpoint.role === "produce" ? "publication" : "consommation"} · ${endpoint.location}`,
           title: `Ouvrir ${endpoint.location} dans VS Code`,
           action: () => { if (endpoint.vscode_uri) window.location.href = endpoint.vscode_uri; },
-        })), relationsGroup);
-        discardEmptyDetailsGroup(relationsGroup);
+        })), sourcesGroup);
+        removeEmptyDetailsGroup(sourcesGroup);
       }
       if (node.kind === "mongodb_collection") {
         const relationsGroup = createDetailsGroup("Relations");
@@ -1219,10 +1215,20 @@
           ], relationsGroup);
         }
         discardEmptyDetailsGroup(relationsGroup);
+        const sourcesGroup = createDetailsGroup("Sources", false);
+        appendActionList("Fichiers de preuve", persistenceClasses
+          .filter(item => item.source)
+          .map(item => {
+            const location = `${item.source}${item.line ? `:${item.line}` : ""}`;
+            return {
+              label: `${item.service || item.module || "microservice"} · ${location}`,
+              title: `Ouvrir ${location} dans VS Code`,
+              action: () => { if (item.vscode_uri) window.location.href = item.vscode_uri; },
+            };
+          }), sourcesGroup);
+        removeEmptyDetailsGroup(sourcesGroup);
       }
       if (["data_schema", "message_channel"].includes(node.kind)) {
-        const factsGroup = createDetailsGroup("Ressource enrichie");
-        if (node.technology) appendList("Technologie", [node.technology], factsGroup);
         const architectureMetadataKeys = new Set([
           "architecture_layer", "cluster", "cluster_path", "fact_namespaces", "layer",
           "namespace", "namespaces", "project_namespace", "project_namespace_path", "runtime_namespaces",
@@ -1230,22 +1236,23 @@
         const metadata = Object.entries(node.metadata || {})
           .filter(([key]) => !architectureMetadataKeys.has(key) && !(key === "technology" && node.technology))
           .map(([key, value]) => `${key} : ${Array.isArray(value) ? value.join(", ") : String(value)}`);
-        appendList("Métadonnées", metadata.length ? metadata : ["Aucune métadonnée"], factsGroup);
+        // Metadata describe the resource itself: they join its module and
+        // technology in the Architecture group (PDR-9).
+        appendList("Métadonnées", metadata.length ? metadata : ["Aucune métadonnée"], resourceArchitectureGroup);
+        const relationsGroup = createDetailsGroup("Relations");
         appendRelationList("Relations", edges.filter(link => link.source === id || link.target === id), id,
           link => `${link.label} · ${nodeDataById.get(link.source === id ? link.target : link.source)?.name || "ressource"}`,
-          factsGroup);
-        discardEmptyDetailsGroup(factsGroup);
+          relationsGroup);
+        discardEmptyDetailsGroup(relationsGroup);
       }
       if (node.kind === "jpa_entity") {
-        const resourceGroup = createDetailsGroup("Ressource JPA");
-        appendList("Entité", [node.display_name || node.name], resourceGroup);
-        appendList("Technologie", [node.technology || "JPA"], resourceGroup);
+        const relationsGroup = createDetailsGroup("Relations");
         appendRelationList(
           "Microservices utilisant cette entité",
           edges.filter(link => link.target === id || link.source === id),
           id,
           link => nodeDataById.get(link.source === id ? link.target : link.source)?.name || "microservice",
-          resourceGroup,
+          relationsGroup,
         );
         appendActionList("Classe de persistance", [{
           label: node.display_name || node.name,
@@ -1253,10 +1260,20 @@
           inspectorKind: "jpa",
           inspectorId: id,
           action: () => openJpaEntityInspector(id),
-        }], resourceGroup);
-        discardEmptyDetailsGroup(resourceGroup);
-        return;
+        }], relationsGroup);
+        discardEmptyDetailsGroup(relationsGroup);
+        if (node.source_path) {
+          const location = `${node.source_path}${node.source_line ? `:${node.source_line}` : ""}`;
+          const sourcesGroup = createDetailsGroup("Sources", false);
+          appendActionList("Fichiers de preuve", [{
+            label: location,
+            title: `Ouvrir ${location} dans VS Code`,
+            action: () => { if (node.vscode_uri) window.location.href = node.vscode_uri; },
+          }], sourcesGroup);
+        }
       }
+      if (resourceArchitectureGroup) removeEmptyDetailsGroup(resourceArchitectureGroup);
+      sortDetailsGroups();
     }
     function renderClusterDetails(cluster) {
       const resolvedCluster = clusterDescriptorForPath(cluster.path || cluster.name);

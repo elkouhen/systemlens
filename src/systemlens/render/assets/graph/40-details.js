@@ -393,6 +393,27 @@
       group.hidden = true;
       group.dataset.empty = "true";
     }
+    // A group a node kind cannot always fill is not defined for that node
+    // when it stays empty: it leaves the tree instead of listing a zero
+    // count (PDR-9).
+    function removeEmptyDetailsGroup(group) {
+      if (!group.querySelector(".details-section")) group.remove();
+    }
+    // Every node kind shares one group order (PDR-9); a group outside the
+    // list keeps its creation order after the listed ones.
+    const detailsGroupOrder = [
+      "Relations", "Trafic observé", "Architecture", "Ports d’intégration", "Flux associés",
+      "Flux internes", "Kubernetes", "Sources", "Diagnostics",
+    ];
+    function sortDetailsGroups() {
+      const rank = group => {
+        const index = detailsGroupOrder.indexOf(group.querySelector(":scope > summary")?.textContent);
+        return index === -1 ? detailsGroupOrder.length : index;
+      };
+      [...details.querySelectorAll(":scope > .details-group")]
+        .sort((left, right) => rank(left) - rank(right))
+        .forEach(group => details.append(group));
+    }
     // Relation counts of the last node rendered in the details widget; the
     // node inspector turns them into its summary strip.
     let lastNodeRelationSummary = null;
@@ -740,12 +761,20 @@
     // The inspector restructures its clone of the details widget: a summary
     // strip, one row of secondary actions, and counted disclosure groups.
     function structureNodeInspector(widget, node) {
-      const header = widget.querySelector(".details-header");
+      let header = widget.querySelector(".details-header");
       const summary = lastNodeRelationSummary?.nodeId === node.id ? lastNodeRelationSummary : null;
       if (summary) {
         header?.querySelectorAll(".is-evidence-count").forEach(badge => badge.remove());
         const meta = header?.querySelector(".details-meta");
         if (meta && !meta.children.length) meta.remove();
+      }
+      // The kicker and title live in the inspector title bar: a header left
+      // without a badge would only draw an empty frame (PDR-9).
+      if (header && !header.children.length) {
+        header.remove();
+        header = null;
+      }
+      if (summary) {
         const strip = document.createElement("div");
         strip.className = "inspector-kpis";
         strip.setAttribute("aria-label", "Synthèse des relations");
@@ -763,7 +792,8 @@
           ),
           inspectorSummaryTile("Sans niveau de preuve", summary.unqualified),
         );
-        (header || widget).after(strip);
+        if (header) header.after(strip);
+        else widget.prepend(strip);
       }
       const actions = document.createElement("div");
       actions.className = "inspector-actions";
@@ -800,7 +830,9 @@
         actions.append(sourceLink);
       }
       if (actions.children.length) {
-        (widget.querySelector(".inspector-kpis") || header || widget.firstChild)?.after(actions);
+        const anchor = widget.querySelector(".inspector-kpis") || header;
+        if (anchor) anchor.after(actions);
+        else widget.prepend(actions);
       }
       let openedGroups = 0;
       widget.querySelectorAll(":scope > .details-group").forEach(group => {

@@ -18,6 +18,7 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-6](#pdr-6-the-minimap-stays-once-the-user-navigates) | The minimap stays once the user navigates | Yes, product owner |
 | [PDR-7](#pdr-7-one-french-word-per-concept-in-the-export-and-the-cli) | One French word per concept in the export and the CLI | Yes, product owner; the glossary owns the list |
 | [PDR-8](#pdr-8-a-resource-has-no-software-layer) | A resource has no software layer | Yes, product owner |
+| [PDR-9](#pdr-9-one-inspector-skeleton-for-every-node-kind) | One inspector skeleton for every node kind | Yes, product owner; refines ADR-68 |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -181,3 +182,38 @@ remains available in its details". The JSON `architecture_layer` field on
 resource nodes is unchanged: it records the owner layer used to order owner
 candidates. The software-layer model keeps its `Application` pseudo-layer
 for modules that start an application.
+
+## PDR-9: One inspector skeleton for every node kind
+
+**Status:** Accepted on 2026-11-01 by the product owner, after a review
+of the inspector of each node kind on the supermarket lab export.
+
+**Decision:** The inspector of every node kind has the same header and
+lists its groups in one order: `Relations`, `Trafic observé`,
+`Architecture`, `Ports d’intégration`, `Flux associés`, `Flux internes`,
+`Kubernetes`, `Sources`, `Diagnostics`. A header without a badge is not
+drawn.
+
+A group is defined for a node kind only when it can carry content for
+that kind; an undefined group is not listed. The ADR-68 rule still applies
+to the groups a kind defines: an empty `Flux associés` of a microservice
+stays listed with a zero count.
+
+For a resource (topic, collection, JPA entity, enriched resource),
+`Relations` holds its links to microservices, DTOs, and persistence
+classes. `Architecture` holds its module and its technology, plus the
+metadata of an enriched resource. `Sources` holds its evidence files.
+A resource lists only the groups it has content for.
+
+**Why:** an architect comparing a topic, a collection, and a JPA entity
+found three layouts. Each resource opened on an `Architecture` group at
+zero, the entity used its own `Ressource JPA` group, a topic listed its
+source files among its relations, and an entity without badges kept an
+empty badge frame.
+
+**Consequences:** `Trafic observé` and `Diagnostics` stay microservice
+groups. `Ressource JPA` and `Ressource enrichie` leave the inspector; the
+entity name moves out of the body since the title names it. The
+`docs/UX-UI.md` empty-group sentence is refined accordingly. The JSON
+contract is unchanged: sources read the existing location fields of
+endpoints, persistence classes, and entities.

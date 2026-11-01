@@ -318,6 +318,15 @@ de code (N)` when the node has associated flows, and the VS Code action.
 Each group of the node inspector is a disclosure group whose summary shows
 its item count. The first three non-empty groups open; a group the widget
 defines but leaves empty stays listed with a zero count and cannot open.
+A group is defined for a node kind only when it can carry content for that
+kind; an undefined group is not listed (PDR-9).
+
+Every node kind shares one group order: `Relations`, `Trafic observé`,
+`Architecture`, `Ports d’intégration`, `Flux associés`, `Flux internes`,
+`Kubernetes`, `Sources`, `Diagnostics`. A resource lists only the groups
+it has content for: `Relations` for its links, `Architecture` for its
+module and technology (and an enriched resource's metadata), `Sources`
+for its evidence files. A header without a badge is not drawn.
 `Routes exposées` lists a method and path once; when a controller and an
 OpenAPI file both declare it, the row lists each source with its location.
 The persisted endpoints are unchanged.

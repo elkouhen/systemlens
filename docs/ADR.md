@@ -1430,6 +1430,7 @@ acyclic import test now also guards the package facade.
 ## ADR-68: Dock the node inspector beside the graph
 
 **Status:** Accepted on 2026-11-01 with backlog task U3. Amends PDR-2.
+Refined by PDR-9 for groups a node kind does not define.
 
 **Context:** The inspector opened every view as a centered modal over a
 blurred graph. Inspecting a node therefore hid the node, its neighbours and

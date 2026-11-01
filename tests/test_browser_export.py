@@ -1460,10 +1460,12 @@ def test_narrow_viewport_collapses_the_panel_into_a_drawer_and_wording_is_french
         assert {match.group(1), match.group(2)} <= services
 
         page.set_viewport_size({"width": 1200, "height": 900})
+        # The open drawer is already uncollapsed: wait for the media-query
+        # change to close the drawer rather than racing it.
         page.wait_for_function(
             "() => !document.querySelector('.toolbar').classList.contains('is-collapsed')"
+            " && !document.body.classList.contains('toolbar-drawer-open')"
         )
-        assert not page.evaluate("() => document.body.classList.contains('toolbar-drawer-open')")
         page.set_viewport_size({"width": 860, "height": 900})
         page.wait_for_function(
             "() => document.querySelector('.toolbar').classList.contains('is-collapsed')"
@@ -1547,6 +1549,96 @@ def test_resource_inspector_shows_no_software_layer() -> None:
 
         _title, sections = inspect("microservice:inventory-service")
         assert sections.get("Couche") == ["Application"], sections
+        browser.close()
+
+
+@pytest.mark.slow
+def test_every_node_kind_opens_the_same_inspector_skeleton() -> None:
+    """PDR-9: one header and one group order for every node kind.
+
+    A resource lists only the groups it has content for, in the order
+    Relations, Architecture, Sources; a zero count stays reserved to the
+    groups a microservice defines (ADR-68), and no empty badge frame remains.
+    """
+    document = _current_simple_dataset_document()
+    entity_id = (
+        "jpa_entity:inventory-service:"
+        "io.systemlens.supermarket.inventory.adapter.out.persistence.jpa.ProductEntity"
+    )
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        page = browser.new_page(viewport={"width": 1400, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        _wait_for_settled_layout(page)
+
+        def inspect(node_id: str) -> dict[str, object]:
+            page.locator(f'.graph-node-card-label[data-node-id="{node_id}"]').dispatch_event(
+                "click", {"shiftKey": True, "bubbles": True}
+            )
+            page.locator("#inspector-modal").wait_for(state="visible")
+            page.wait_for_function(
+                "id => document.querySelector('.graph-node-card-label.is-inspected')"
+                "?.dataset.nodeId === id",
+                arg=node_id,
+            )
+            state = page.evaluate(
+                """() => {
+                    const body = document.querySelector('#inspector-body');
+                    const groups = [...body.querySelectorAll('.details-group')]
+                        .filter(group => !group.hidden)
+                        .map(group => ({
+                            title: group.querySelector('.details-group-title')?.textContent,
+                            count: Number(group.querySelector('.details-group-count')?.textContent),
+                            sections: [...group.querySelectorAll('.details-section > h2')]
+                                .map(heading => heading.textContent.trim()),
+                        }));
+                    const frames = [...body.querySelectorAll('.details-header, .details-meta')]
+                        .filter(element => !element.textContent.trim()).length;
+                    return { groups, frames, title: document.querySelector('#inspector-title').innerText };
+                }"""
+            )
+            page.locator("#inspector-close").click()
+            page.locator("#inspector-modal").wait_for(state="hidden")
+            return state
+
+        microservice = inspect("microservice:inventory-service")
+        microservice_groups = [group["title"] for group in microservice["groups"]]
+        assert microservice_groups[:2] == ["Relations", "Architecture"], microservice_groups
+        assert microservice["frames"] == 0
+
+        expectations = {
+            "kafka_topic:supermarket.order.placed": {
+                "Relations": {"Microservices producteurs", "Microservices consommateurs"},
+                "Architecture": {"Technologie"},
+                "Sources": {"Sources producteurs et consommateurs"},
+            },
+            "mongodb_collection:inventory-service:order_fulfillments": {
+                "Relations": {"Microservices utilisant cette donnée", "Classes de persistance"},
+                "Architecture": {"Technologie"},
+                "Sources": {"Fichiers de preuve"},
+            },
+            entity_id: {
+                "Relations": {"Microservices utilisant cette entité", "Classe de persistance"},
+                "Architecture": {"Technologie"},
+                "Sources": {"Fichiers de preuve"},
+            },
+        }
+        for node_id, expected in expectations.items():
+            state = inspect(node_id)
+            groups = state["groups"]
+            titles = [group["title"] for group in groups]
+            assert titles == ["Relations", "Architecture", "Sources"], (node_id, titles)
+            assert all(group["count"] > 0 for group in groups), (node_id, groups)
+            assert state["frames"] == 0, node_id
+            for group in groups:
+                assert expected[group["title"]] <= set(group["sections"]), (node_id, group)
+            relations = next(group for group in groups if group["title"] == "Relations")
+            assert "Sources producteurs et consommateurs" not in relations["sections"]
+            assert "Ressource JPA" not in titles and "Ressource enrichie" not in titles
         browser.close()
 
 

@@ -97,6 +97,12 @@
     const graphCallTreeOverlay = document.getElementById("graph-call-tree");
     const flowTooltipOverlay = document.getElementById("graph-flow-tooltips");
     const graphFlowStatus = document.getElementById("graph-flow-status");
+    // One technology name per resource kind: the kicker, the catalogue and
+    // the inspector Architecture group read the same value.
+    const nodeTechnology = node => node.technology
+      || (node.kind === "kafka_topic" || node.kind === "message_channel" ? "Kafka" : null)
+      || (node.kind === "mongodb_collection" ? "MongoDB" : null)
+      || (node.kind === "jpa_entity" ? "JPA" : null);
     const nodeKindLabel = node => {
       const genericLabel = node.kind === "kafka_topic"
         ? "Topic"
@@ -110,10 +116,7 @@
       if (!["kafka_topic", "mongodb_collection", "data_schema", "message_channel", "jpa_entity"].includes(node.kind)) {
         return genericLabel;
       }
-      const technology = node.technology
-        || (node.kind === "kafka_topic" || node.kind === "message_channel" ? "Kafka" : null)
-        || (node.kind === "mongodb_collection" ? "MongoDB" : null)
-        || (node.kind === "jpa_entity" ? "JPA" : null);
+      const technology = nodeTechnology(node);
       return technology ? `${genericLabel} · ${technology}` : genericLabel;
     };
     const nodeKindSuggestion = node => (
