@@ -68,9 +68,34 @@
         }
       }
     }
+    // The call-tree context floats over the tree on desktop (U5); its access
+    // key docks at the bottom left of the canvas.
+    const flowAccessKeyDock = document.getElementById("flow-access-key-dock");
+    const flowAccessKey = document.getElementById("flow-mode-context-key");
+    const flowModeCopy = document.getElementById("flow-mode-context-copy");
+    const FLOW_KEY_STORAGE = "systemlens.flowAccessKeyOpen";
+    try {
+      if (flowAccessKeyDock && window.localStorage.getItem(FLOW_KEY_STORAGE) === "false") flowAccessKeyDock.open = false;
+    } catch (_error) { /* browser storage is optional */ }
+    flowAccessKeyDock?.addEventListener("toggle", () => {
+      try { window.localStorage.setItem(FLOW_KEY_STORAGE, String(flowAccessKeyDock.open)); } catch (_error) { /* optional */ }
+    });
+    function placeFlowContext() {
+      if (!toolbar || !graphPanel || !flowModeContext) return;
+      const floating = !compactGraphToolbar.matches;
+      flowModeContext.classList.toggle("is-floating", floating);
+      if (floating) {
+        if (flowModeContext.parentElement === toolbar) toolbar.after(flowModeContext);
+        if (flowAccessKey && flowAccessKeyDock && flowAccessKey.parentElement !== flowAccessKeyDock) flowAccessKeyDock.append(flowAccessKey);
+      } else {
+        toolbar.insertBefore(flowModeContext, graphPanel);
+        if (flowAccessKey && flowModeCopy && flowAccessKey.parentElement !== flowModeCopy) flowModeCopy.append(flowAccessKey);
+      }
+    }
     if (toolbar && graphPanel) {
       if (flowModeContext) toolbar.insertBefore(flowModeContext, graphPanel);
       placeGraphToolbar();
+      placeFlowContext();
     }
     const graphFilterSummary = document.getElementById("graph-filter-summary");
     const graphFilterControls = [
@@ -97,8 +122,8 @@
     }
     function updateIndexStatusMeta() {
       if (!indexStatusMeta) return;
-      const relations = Number(graphCanvas.dataset.relationCount || graphData.links.length || 0);
-      const parts = [`${relations} relation${relations > 1 ? "s" : ""}`];
+      const relations = (graphData.links || []).length;
+      const parts = [`${relations} relation${relations > 1 ? "s" : ""} indexée${relations > 1 ? "s" : ""}`];
       const date = graphData.indexed_at ? formatIndexedAt(graphData.indexed_at) : null;
       if (date) parts.push(`indexé le ${date}`);
       indexStatusMeta.textContent = parts.join(" · ");
@@ -423,9 +448,11 @@
       root.style.setProperty("--workspace-right", `${legendSpace.right}px`);
       // Reserve the band under the floating graph toolbar so fits and cards
       // never sit below it.
-      const floatingToolbarBounds = graphModeContext?.classList.contains("is-floating") && !graphModeContext.hidden
-        ? graphModeContext.getBoundingClientRect()
-        : null;
+      const floatingContext = [graphModeContext, flowModeContext].find(element => (
+        element?.classList.contains("is-floating") && !element.hidden
+        && getComputedStyle(element).display !== "none"
+      ));
+      const floatingToolbarBounds = floatingContext ? floatingContext.getBoundingClientRect() : null;
       const reservedTop = floatingToolbarBounds && floatingToolbarBounds.height
         ? Math.round(floatingToolbarBounds.bottom + 8)
         : 0;
@@ -438,7 +465,12 @@
       const hintBand = hintBounds && hintBounds.height
         ? Math.round(window.innerHeight - hintBounds.top + 8)
         : 0;
-      root.style.setProperty("--workspace-bottom", `${Math.max(legendSpace.bottom, hintBand)}px`);
+      const keyDock = document.getElementById("flow-access-key-dock");
+      const keyBounds = keyDock && !keyDock.hidden ? keyDock.getBoundingClientRect() : null;
+      const keyBand = keyBounds && keyBounds.height
+        ? Math.round(window.innerHeight - keyBounds.top + 8)
+        : 0;
+      root.style.setProperty("--workspace-bottom", `${Math.max(legendSpace.bottom, hintBand, keyBand)}px`);
       // Sigma rejects a zero-size container: only redraw while a graph
       // surface is on screen (the Flux list and the catalogue hide it).
       const graphOnScreen = graphCanvas.getBoundingClientRect().width > 0
@@ -463,17 +495,22 @@
       const next = reservedBands();
       if (next !== lastReservedBands) {
         lastReservedBands = next;
-        if (!codeFlowSelection.flowId && graphCanvas.getBoundingClientRect().width > 0) {
+        if (codeFlowSelection.flowId && !graphCallTreeOverlay.hidden) {
+          requestAnimationFrame(() => fitCallTree());
+        } else if (!codeFlowSelection.flowId && graphCanvas.getBoundingClientRect().width > 0) {
           fitCameraToVisibleGraph(activeRenderer());
         }
       }
     }
-    if (graphModeContext && "ResizeObserver" in window) {
-      new ResizeObserver(() => refreshToolbarReservation()).observe(graphModeContext);
+    if ("ResizeObserver" in window) {
+      const chromeObserver = new ResizeObserver(() => refreshToolbarReservation());
+      [graphModeContext, flowModeContext, flowAccessKeyDock].forEach(element => element && chromeObserver.observe(element));
     }
     document.addEventListener("systemlens:view-changed", () => requestAnimationFrame(refreshToolbarReservation));
+    document.addEventListener("systemlens:call-tree-chrome-changed", () => requestAnimationFrame(refreshToolbarReservation));
     compactGraphToolbar.addEventListener?.("change", () => {
       placeGraphToolbar();
+      placeFlowContext();
       refreshToolbarReservation();
     });
     function runExploreSearch() {

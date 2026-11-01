@@ -501,3 +501,36 @@
     .graph-filters-title { margin: 6px 0 6px; color: var(--ui-accent-text); font-size: var(--type-caption); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     #architecture-toolbar > .mode-context .graph-fit-action,
     #architecture-toolbar > .mode-context #graph-legend-toggle { display: none; }
+    /* Floating call-tree context (U5). */
+    #flow-mode-context.is-floating {
+      top: 16px;
+      left: calc(var(--workspace-left, 0px) + 16px);
+      right: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      width: max-content;
+      max-width: calc(100vw - var(--workspace-left, 0px) - var(--workspace-right, 0px) - 32px);
+      max-height: none;
+      padding: 8px 10px;
+      overflow: visible;
+      border-left-width: 1px;
+      pointer-events: auto;
+    }
+    #flow-mode-context.is-floating.is-idle { display: none; }
+    #flow-mode-context.is-floating .graph-mode-context-copy,
+    #flow-mode-context.is-floating.is-collapsed .graph-mode-context-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 0; }
+    #flow-mode-context.is-floating #flow-mode-context-title,
+    #flow-mode-context.is-floating #flow-mode-context-help,
+    #flow-mode-context.is-floating #flow-context-toggle { display: none; }
+    #flow-mode-context.is-floating .graph-mode-context-actions { flex-wrap: wrap; gap: 6px; pointer-events: auto; }
+    #flow-mode-context.is-floating .graph-mode-context-actions button { min-height: 30px; padding: 0 10px; font-size: var(--type-control); font-weight: 750; white-space: nowrap; pointer-events: auto; }
+    #flow-mode-context.is-floating .zoom-controls button { width: 30px; min-width: 30px; padding: 0; }
+    #flow-mode-context.is-floating .graph-mode-context-actions button:disabled { display: none; }
+    #flow-mode-context.is-floating .call-tree-depth-control.is-disabled { display: none; }
+    .flow-access-key-dock { position: fixed; z-index: 7; left: calc(var(--workspace-left, 0px) + 16px); bottom: 16px; max-width: min(560px, calc(100vw - var(--workspace-left, 0px) - 260px)); padding: 8px 12px; border: 1px solid var(--ui-border); border-radius: 12px; color: var(--ui-text); background: var(--ui-panel); box-shadow: 0 6px 18px rgba(15, 23, 42, .16); font-size: var(--type-caption); }
+    .flow-access-key-dock[hidden] { display: none; }
+    .flow-access-key-dock > summary { cursor: pointer; color: var(--ui-accent-text); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .flow-access-key-dock .flow-access-key { display: grid; grid-template-columns: repeat(2, auto minmax(0, 1fr)); gap: 3px 10px; margin: 8px 0 0; }
+    #graph-mode-context.is-floating[hidden], #flow-mode-context.is-floating[hidden] { display: none; }

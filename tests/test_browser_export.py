@@ -121,11 +121,13 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
             has_text="inventory-service"
         )
         assert inventory_nodes.count() == 2
+        for _ in range(20):
+            page.locator("#flow-zoom-in").click()
+        # A depth change refits the tree (U5), which can switch it to the quiet
+        # overview scale; the parameters read once the zoom is close again.
         assert inventory_nodes.first.locator(
             ".graph-call-tree-method-parameters"
         ).inner_text() == "(OrderPlaced)"
-        for _ in range(20):
-            page.locator("#flow-zoom-in").click()
         call_tree_zoom = page.locator(".graph-call-tree-canvas").evaluate(
             "canvas => Number(canvas.style.transform.match(/scale\\(([^)]+)\\)/)[1]) "
             "/ Number(canvas.dataset.baseScale)"
@@ -144,7 +146,9 @@ def test_nested_supermarket_flows_remain_in_selected_call_tree() -> None:
         ).all_inner_texts() == ["R (C/U) ProductEntity ?"]
         diagnostic_badges = page.locator("#graph-call-tree .graph-call-tree-diagnostic-badge")
         assert diagnostic_badges.count() > 0
-        diagnostic_badges.first.click(force=True)
+        # At 64x the badge can lie outside the viewport; the isolation is what
+        # this checks, so dispatch the click on the badge itself.
+        diagnostic_badges.first.dispatch_event("click")
         assert page.locator(
             "#graph-call-tree .graph-call-tree-node.is-diagnostic-async, "
             "#graph-call-tree .graph-call-tree-node.is-diagnostic-sync, "
@@ -2685,6 +2689,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
 
 @pytest.mark.slow
 def test_call_tree_context_widget_keys_badges_and_keeps_the_catalogue_still() -> None:
+    """U5: the context floats over the tree, the key docks below it."""
     document = _current_simple_dataset_document()
     with sync_playwright() as playwright:
         try:
@@ -2695,8 +2700,9 @@ def test_call_tree_context_widget_keys_badges_and_keeps_the_catalogue_still() ->
         page.set_default_timeout(5_000)
         page.set_content(document, wait_until="load")
         page.locator("#flows-tab").click()
+        context = page.locator("#flow-mode-context")
         expand_all = page.locator("#flow-mode-expand-all")
-        assert expand_all.is_visible() and expand_all.is_disabled()
+        assert context.is_hidden()
         entry = page.locator("#code-flows .code-flow-item").filter(has_text="GET /api/error")
         before = entry.bounding_box()
         entry.click()
@@ -2705,28 +2711,36 @@ def test_call_tree_context_widget_keys_badges_and_keeps_the_catalogue_still() ->
         after = entry.bounding_box()
         assert before is not None and after is not None
         assert after["y"] == pytest.approx(before["y"], abs=1)
-        assert expand_all.is_enabled()
-        toggle = page.locator("#flow-context-toggle")
+        assert "is-floating" in (context.get_attribute("class") or "")
+        assert expand_all.is_visible() and expand_all.is_enabled()
+        assert page.locator("#flow-context-toggle").is_hidden()
+        assert page.locator("#flow-tree-center-selection").is_hidden()
         diagnostics = page.locator("#flow-mode-context-diagnostics")
-        key = page.locator("#flow-mode-context-key")
-        assert toggle.inner_text() == "Développer"
-        assert diagnostics.is_hidden() and key.is_hidden()
-        toggle.click()
-        assert toggle.inner_text() == "Réduire"
-        assert toggle.get_attribute("aria-expanded") == "true"
         assert diagnostics.is_visible()
         assert diagnostics.inner_text().startswith("Cohérence :")
         assert page.locator("#flow-mode-context-stats").inner_text().startswith("Arbre :")
+        key = page.locator("#flow-access-key-dock #flow-mode-context-key")
         assert key.is_visible()
         assert key.locator("dt").all_inner_texts() == ["C", "R", "U", "D", "(C/U)", "?"]
-        page.locator("#flow-call-tree-depth-increase").click()
+        for _ in range(3):
+            page.locator("#flow-call-tree-depth-increase").click()
+        page.wait_for_timeout(300)
+        _assert_every_tree_occurrence_is_inside_the_workspace(page)
+        chrome = page.evaluate("""() => ['flow-mode-context', 'flow-access-key-dock']
+            .map(id => document.getElementById(id).getBoundingClientRect())""")
+        covered = page.evaluate("""(boxes) => [...document.querySelectorAll('#graph-call-tree .graph-call-tree-node')]
+            .filter(node => { const r = node.getBoundingClientRect();
+                return boxes.some(b => r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top); })
+            .length""", chrome)
+        assert covered == 0
         badge_sizes = page.locator(
             "#graph-call-tree .graph-call-tree-access-badge, #graph-call-tree .graph-call-tree-diagnostic-badge"
         ).evaluate_all("items => items.map(item => parseFloat(getComputedStyle(item).fontSize))")
         assert badge_sizes and min(badge_sizes) >= 10
         page.locator("#graph-tab").click()
+        assert page.locator("#flow-access-key-dock").is_hidden()
         page.locator("#flows-tab").click()
-        assert toggle.inner_text() == "Développer"
+        assert context.is_hidden()
         browser.close()
 
 

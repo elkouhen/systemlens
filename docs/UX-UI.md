@@ -41,10 +41,13 @@ catalogue containing all indexed resource types, including Diagnostics; type
 categories and filters refine that list without introducing a second top-level
 navigation surface. Each workspace and local view MUST have one clear active state.
 
-The legend is collapsed by default. The call-tree context widget is also
-collapsed by default: `Développer` opens it, `Réduire` closes it, and changing
-view collapses it again. Secondary widgets use the same surface, spacing,
-status, and interactive-row treatment as the main details panel.
+The legend is collapsed by default. On desktop, the call-tree context widget
+floats over the top left of the tree while a flow is open; it always shows
+its trigger, tree counts, and consistency counts, so it has no expand
+control. At 720 pixels and below it returns to the panel, collapsed by
+default: `Développer` opens it, `Réduire` closes it, and changing view
+collapses it again. Secondary widgets use the same surface, spacing, status,
+and interactive-row treatment as the main details panel.
 
 When the Flux or Quality view is active, resource navigation MAY be hidden to
 preserve the analysis context. It MUST return when the user selects another
@@ -57,7 +60,7 @@ scroll region so the graph remains visible while users inspect details.
 
 A status line sits under the branded header in every view. It starts with
 the index status, `Index : complet` or `Index : N faits à vérifier`, which
-opens the diagnostics catalogue. It continues with the visible relation
+opens the diagnostics catalogue. It continues with the indexed relation
 count and `indexé le <date>` when the export carries the index time; the
 date is omitted, never guessed, for an export of an older index.
 
@@ -142,7 +145,7 @@ error states explain what is unavailable and what the user can do next.
 | Details widget | Show the selected graph element's immediate context and available analysis actions. | Identity, summary, relations, evidence, and actions for focus, modules, code flows, or source navigation. | It is contextual and may be hidden when an introspection window opens. It does not compete with the modal identity header. |
 | Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, description, ownership, relations, evidence, breadcrumb from the second level, and back or close action. | Opens as a dedicated window. Related resources remain selectable and update the same inspection history. Each fact appears in one section only. |
 | Flow catalogue widget | Select a persisted code flow or flow group for call-graph analysis. | A one-line kicker and the title with its count, compact flow rows, description, trigger, protocol, status, and summary statistics. | Selecting a row replaces the selected flow graph without moving the list. Full details are shown in the selected-flow view, not in every row. |
-| Call-tree context widget | Explain and control the selected hierarchical call graph. | Flow identity, trigger event, visible tree node and arc counts, consistency diagnostic counts, the key of the access annotations, depth, expand-all, and tree-specific status. | Collapsed by default and opened with `Développer`. It controls the tree without repeating its nodes or arcs. Tree counts describe the visible projection and update when depth or expansion changes. Diagnostic counts cover the selected flow and distinguish possible risks, insufficient evidence, identified guarantees, and possible interactions. |
+| Call-tree context widget | Explain and control the selected hierarchical call graph. | Flow identity, trigger event, visible tree node and arc counts, consistency diagnostic counts, the key of the access annotations, depth, expand-all, and tree-specific status. | Floats over the tree on desktop and shows its summary at all times; collapsed in the panel at compact widths and opened with `Développer`. It controls the tree without repeating its nodes or arcs. Tree counts describe the visible projection and update when depth or expansion changes. Diagnostic counts cover the selected flow and distinguish possible risks, insufficient evidence, identified guarantees, and possible interactions. |
 | Tooltip widget | Provide concise evidence for a hovered node, arc, row, or control. | Subject identity, relevant relation facts, and available status or type. | Appears on hover or focus and does not become a second navigation surface. It MUST NOT infer missing facts. |
 | Legend widget | Explain stable graph colours, shapes, strokes, and badges. | Collapsible groups for node types, relations, connectivity, and evidence level, with one single-line entry per visual semantic. | Collapsed by default. When open, it reserves its footprint so no fitted card lies under it. It explains the graph and does not replace node or arc tooltips. |
 | Analysis status widget | Report a transient selected port or arc and its related evidence. | Selected endpoint or arc, protocol, related resources, and a clear action. | Highlights the current analysis state without changing the graph data, camera, or persisted selection. |
@@ -388,7 +391,9 @@ selected flow. It MUST show counts for possible risks, insufficient evidence,
 identified guarantees, and possible interactions, or state that no diagnostic
 was detected. Counts MUST exclude diagnostics belonging to other flows.
 
-The expanded widget also decodes the access annotations of the cards: `C`,
+A key docked at the bottom left of the tree, open by default and remembered
+per viewer, decodes the access annotations of the cards (inside the
+expanded widget at compact widths): `C`,
 `R`, `U`, and `D` for create, read, update, and delete, `(C/U)` for an
 undecided create or update, and `?` for an association with the handler whose
 internal route is not established. A handler-only badge also has a dashed
@@ -422,8 +427,13 @@ Nodes at the depth boundary expose the number of hidden calls. `+N appels`
 expands one more level for that branch without changing the viewport. Expanded
 nodes expose `− replier`; collapsed nodes expose `+N appels`. `Déplier tout le
 graphe` expands every branch to the maximum depth and refits the tree like
-`Tout voir`, because the tree extent changes. The selected occurrence stays
-selected.
+`Tout voir`, because the tree extent changes. Changing the depth with `−` or
+`+` refits the tree the same way. The selected occurrence stays selected.
+
+The floating widget shows only the actions available now: `Sélection`
+appears once an occurrence is selected, and a disabled action is hidden
+rather than greyed. The tree area reserves the band under the widget and
+the band above the docked key, so a fit never places a card under them.
 
 The tree workspace supports drag-to-pan and bounded zoom from 0.5x to 64x.
 The initial fit keeps a minimum canvas scale of 0.66 so deep trees do not shrink
@@ -497,9 +507,9 @@ no side-by-side comparison is offered.
 
 The catalogue header is a one-line kicker, `Parcours potentiels, pas une trace
 runtime`, and the title with its count. Without an active filter, the filter
-summary is muted text rather than a control. The tree controls keep their
-place and stay disabled until a flow is selected, so opening a flow does not
-move the list under the pointer.
+summary is muted text rather than a control. The tree controls live in the
+floating widget over the tree, so opening a flow does not move the list
+under the pointer.
 
 While the catalogue is open and no flow is selected, the graph area shows an
 empty state instead of a blank canvas. Its card repeats the kicker, is titled

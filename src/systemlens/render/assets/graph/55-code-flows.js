@@ -1504,9 +1504,11 @@
       const currentDepth = Number(graphState.callTreeDepth) || 1;
       const nextDepth = Math.max(1, Math.min(8, currentDepth + delta));
       if (nextDepth === currentDepth) return false;
-      const camera = captureCallTreeCamera();
       graphState.callTreeDepth = nextDepth;
-      renderCallTreeOverlay(camera);
+      // The tree extent changes with its depth: refit like `Déplier tout le
+      // graphe` so every visible occurrence stays on screen (U5).
+      renderCallTreeOverlay(captureCallTreeCamera());
+      fitCallTree();
       syncCallTreeDepthControl();
       return true;
     }
@@ -2031,6 +2033,14 @@
       const visible = flowsOpen && !codeFlowSelection.flowId;
       if (visible) renderFlowEmptyState();
       flowEmptyState.hidden = !visible;
+      // U5: the floating call-tree context and its docked access key exist
+      // only while a flow is open in the Flux de code view.
+      const flowContext = document.getElementById("flow-mode-context");
+      const treeOpen = flowsOpen && Boolean(codeFlowSelection.flowId);
+      flowContext?.classList.toggle("is-idle", !treeOpen);
+      const keyDock = document.getElementById("flow-access-key-dock");
+      if (keyDock) keyDock.hidden = !(treeOpen && flowContext?.classList.contains("is-floating"));
+      document.dispatchEvent(new Event("systemlens:call-tree-chrome-changed"));
     }
     flowsPanel.addEventListener("systemlens:flows-open", syncFlowEmptyState);
     document.addEventListener("systemlens:view-changed", syncFlowEmptyState);
