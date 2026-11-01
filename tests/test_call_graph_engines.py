@@ -51,21 +51,31 @@ def test_registry_loads_engines_by_name() -> None:
         load_engine("javaparser")
 
 
-def test_configuration_accepts_the_source_engine(tmp_path: Path) -> None:
+def test_configuration_defaults_to_the_source_engine(tmp_path: Path) -> None:
     init_config(tmp_path)
     config_file = tmp_path / ".systemlens" / "config.yml"
     text = config_file.read_text(encoding="utf-8")
-    config_file.write_text(text.replace("call_graph_engine: codeql", "call_graph_engine: source"), encoding="utf-8")
+    assert "call_graph_engine: source" in text
+    assert "codeql: false" in text
+    assert load_config(tmp_path).call_graph_engine == "source"
+    assert Config().call_graph_engine == "source"
+
+    # A configuration without any engine setting uses the source engine.
+    config_file.write_text("analysis: {}\n", encoding="utf-8")
     assert load_config(tmp_path).call_graph_engine == "source"
 
+    config_file.write_text(text.replace("call_graph_engine: source", "call_graph_engine: codeql"), encoding="utf-8")
+    assert load_config(tmp_path).call_graph_engine == "codeql"
+
+    # An explicit ``codeql: true`` without an engine keeps selecting CodeQL,
+    # as configurations written before the source default did.
     config_file.write_text(
-        text.replace("codeql: true", "codeql: false").replace("  call_graph_engine: codeql\n", ""),
+        text.replace("codeql: false", "codeql: true").replace("  call_graph_engine: source\n", ""),
         encoding="utf-8",
     )
-    # ``codeql: false`` historically kept the source symbol pass.
-    assert load_config(tmp_path).call_graph_engine == "source"
+    assert load_config(tmp_path).call_graph_engine == "codeql"
 
-    config_file.write_text(text.replace("call_graph_engine: codeql", "call_graph_engine: javaparser"), encoding="utf-8")
+    config_file.write_text(text.replace("call_graph_engine: source", "call_graph_engine: javaparser"), encoding="utf-8")
     with pytest.raises(ConfigError, match="call_graph_engine"):
         load_config(tmp_path)
 
@@ -111,7 +121,7 @@ def test_an_unavailable_engine_falls_back_to_the_source_engine(
     messages: list[str] = []
 
     with Store(repo) as store:
-        index_repo(repo, Config(), store, full=True, progress=messages.append)
+        index_repo(repo, Config(call_graph_engine="codeql"), store, full=True, progress=messages.append)
         flows = store.all_code_flows()
         edges = store.all_call_edges()
 

@@ -259,7 +259,7 @@ every indexing pass, incremental or full, applies `analysis.strategy` from
 `.systemlens/config.yml`; set `strategy: strategy1` there to keep Strategy1.
 The strategy of the last pass is persisted with the index, so derived views
 read the snapshot's profile, and a change of strategy forces a full refresh.
-`analysis.call_graph_engine` accepts `codeql` (default), `source`, or `none`.
+`analysis.call_graph_engine` accepts `source` (default), `codeql`, or `none`.
 
 - `codeql` resolves calls from CodeQL's typed program model. It needs the
   CodeQL CLI. When the CLI is missing, indexing says so and uses `source`.

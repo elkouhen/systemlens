@@ -17,7 +17,7 @@ functional or technical contract.
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor) |
-| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method) |
+| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -1366,3 +1366,25 @@ hotspot; a row selects through the existing route path. The lab's Elastic
 cluster and a Prometheus server were not reachable during delivery, so
 both collectors are validated against fakes until a lab run is recorded.
 
+## ADR-66: Make the source engine the default
+
+**Status:** Accepted. Amends ADR-61.
+
+**Context:** ADR-61 made the call-graph engine pluggable but kept `codeql`
+as the default of `systemlens init` and of a configuration without an
+engine. CodeQL needs its CLI, a query pack and a licence that may not cover
+proprietary code; a first index therefore depended on an external tool, and
+the fallback to `source` happened silently at run time.
+
+**Decision:** The tree-sitter `source` engine is the default engine. `Config`
+defaults to `call_graph_engine: source` and `codeql: false`; `systemlens
+init` writes those values. CodeQL is opt-in through
+`analysis.call_graph_engine: codeql` or `--call-graph-engine codeql`. A
+configuration written before this decision with an explicit `codeql: true`
+and no engine key keeps selecting CodeQL.
+
+**Consequences:** A first index runs without any external tool and with the
+closed-world dispatch rules of ADR-61. Existing configurations are unchanged:
+`init` wrote both keys explicitly. The companion skill and the laboratory
+check still pass `--call-graph-engine codeql` explicitly where CodeQL is
+installed. Persisted `codeql_*` names and settings are unchanged.

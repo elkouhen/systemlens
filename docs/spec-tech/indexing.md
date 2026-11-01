@@ -122,11 +122,13 @@ compatible migrations happen when a writable store opens, before an index
 transaction. Read-only stores open SQLite in `mode=ro` and never migrate or
 commit. Concurrent readers see the latest committed snapshot.
 
-AST endpoint analysis uses no subprocess. For interprocedural flows, the local
-CodeQL executable is used by default once for the repository to create a
-temporary source-only Java projection (Java files only, without Maven/Gradle
-descriptors or build outputs, except Java files below `target/generated-sources`),
-create a database from that projection, query it, and decode the result as CSV.
+AST endpoint analysis uses no subprocess. For interprocedural flows, the
+source engine is the default and needs no subprocess either. With the
+`codeql` engine, the local CodeQL executable is used once for the repository
+to create a temporary source-only Java projection (Java files only, without
+Maven/Gradle descriptors or build outputs, except Java files below
+`target/generated-sources`), create a database from that projection, query
+it, and decode the result as CSV.
 
 The temporary database remains global so cross-module references have the same
 resolution context. CodeQL calls and methods are queried once globally, then

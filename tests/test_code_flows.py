@@ -1134,7 +1134,7 @@ def test_module_codeql_refresh_explains_missing_global_graph(
     assert RUNNER.invoke(app, ["init"]).exit_code == 0
 
     result = RUNNER.invoke(
-        app, ["index", "--module", "orders", "--refresh-codeql-view"]
+        app, ["index", "--module", "orders", "--refresh-codeql-view", "--call-graph-engine", "codeql"]
     )
 
     assert result.exit_code == 2, result.output
@@ -1489,7 +1489,7 @@ def test_index_uses_automatic_codeql_database_when_available(
     with Store(repo) as store:
         index_repo(
             repo,
-            Config(),
+            Config(call_graph_engine="codeql"),
             store,
             progress=progress_messages.append,
             call_graph_progress=observe_checkpoint,
@@ -1613,7 +1613,7 @@ def test_codeql_timeout_commits_partial_snapshot_and_runs_post_processing(
     progress: list[str] = []
 
     with Store(repo) as store:
-        report = index_repo(repo, Config(), store, progress=progress.append)
+        report = index_repo(repo, Config(call_graph_engine="codeql"), store, progress=progress.append)
         assert report.codeql_timed_out is True
         assert store.all_endpoints()
         assert store.all_architecture_relations()
@@ -1646,7 +1646,7 @@ def test_real_codeql_database_creation_timeout_is_soft_boundary(
     progress: list[str] = []
 
     with Store(repo) as store:
-        report = index_repo(repo, Config(), store, progress=progress.append)
+        report = index_repo(repo, Config(call_graph_engine="codeql"), store, progress=progress.append)
         assert report.codeql_timed_out is True
         assert store.all_architecture_relations()
         assert store.all_code_flows()

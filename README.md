@@ -3,9 +3,10 @@
 SystemLens indexes Java/Spring source code to show microservices, APIs, Kafka
 Topics, data resources, build dependencies, and potential call flows. It stores
 source evidence in a local SQLite index and exposes the result through CLI
-queries and interactive HTML graphs. AST extraction indexes the architecture;
-CodeQL is the default engine for interprocedural Java call graphs when
-installed. Both analyses run locally, so source code stays on your machine.
+queries and interactive HTML graphs. AST extraction indexes the architecture
+and builds interprocedural Java call graphs with the built-in tree-sitter
+engine; CodeQL is an opt-in engine. Both analyses run locally, so source code
+stays on your machine.
 
 ## Choose a path
 
@@ -37,10 +38,10 @@ systemlens export microservices --html architecture.html
 
 Open `architecture.html` to inspect the architecture and call graphs. The
 export also groups indexed contracts and diagnostics. `systemlens index` uses
-CodeQL for method-call evidence when it is installed, and otherwise the
-built-in tree-sitter source engine. Choose one explicitly with
-`--call-graph-engine codeql|source|none`, and measure the difference on your
-code with `systemlens analyze compare-engines`.
+the built-in tree-sitter source engine for method-call evidence. Opt in to
+CodeQL with `--call-graph-engine codeql` or `analysis.call_graph_engine` when
+its CLI is installed, and measure the difference on your code with
+`systemlens analyze compare-engines`.
 
 Choose an interface for the question you need to answer:
 

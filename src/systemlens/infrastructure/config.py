@@ -26,8 +26,10 @@ class Config:
     exclude: list[str] = field(default_factory=lambda: list(DEFAULT_EXCLUDE))
     min_severity: str = DEFAULT_MIN_SEVERITY
     strategy: str = "default"
-    codeql_enabled: bool = True
-    call_graph_engine: str = "codeql"
+    # CodeQL is an opt-in engine: it needs its CLI and a licence that may not
+    # cover the analyzed code. The tree-sitter source engine is the default.
+    codeql_enabled: bool = False
+    call_graph_engine: str = "source"
     codeql_timeout_seconds: int = 600
     # CodeQL interprets zero as one thread per available core.
     codeql_threads: int = 0
@@ -70,11 +72,12 @@ def load_config(repo_root: Path) -> Config:
     strategy = analysis.get(strategy_key, "default")
     if strategy not in VALID_TOPIC_STRATEGIES:
         raise ConfigError(f"analysis.{strategy_key} invalide : {strategy!r}.")
-    codeql_enabled = analysis.get("codeql", True)
+    codeql_enabled = analysis.get("codeql", False)
     if not isinstance(codeql_enabled, bool):
         raise ConfigError("analysis.codeql doit être un booléen.")
     call_graph_engine = analysis.get(
-        # ``codeql: false`` historically kept the source symbol pass.
+        # An explicit ``codeql: true`` without an engine keeps selecting
+        # CodeQL; otherwise the source engine is the default.
         "call_graph_engine", "codeql" if codeql_enabled else "source"
     )
     if call_graph_engine not in VALID_CALL_GRAPH_ENGINES:
@@ -159,7 +162,7 @@ def init_config(repo_root: Path) -> Path:
         "min_severity": DEFAULT_MIN_SEVERITY,
         "root_path": ".",
         "analysis": {
-            "strategy": "default", "codeql": True, "call_graph_engine": "codeql",
+            "strategy": "default", "codeql": False, "call_graph_engine": "source",
             "codeql_timeout_seconds": 600,
             "codeql_threads": 0, "codeql_ram_mb": None,
             "codeql_verbosity": None,

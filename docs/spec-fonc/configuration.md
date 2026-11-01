@@ -12,8 +12,8 @@ min_severity: INFO
 root_path: .
 analysis:
   strategy: default
-  codeql: true
-  call_graph_engine: codeql
+  codeql: false
+  call_graph_engine: source
   codeql_timeout_seconds: 600
   codeql_threads: 0
   codeql_ram_mb: null
@@ -44,9 +44,10 @@ indexed. The
 but does not alter AST endpoint extraction.
 
 `analysis` is the versionable source of truth for the topic convention,
-method-call engine, and disabled extractors. `call_graph_engine` is `codeql`,
-`source`, or `none`; with `codeql: false` and no explicit engine, it is
-`source`. `codeql_timeout_seconds`, `codeql_max_hops`, and
+method-call engine, and disabled extractors. `call_graph_engine` is `source`
+(the default), `codeql`, or `none`; with an explicit `codeql: true` and no
+engine, it is `codeql`, as in configurations written before the source
+default. `codeql_timeout_seconds`, `codeql_max_hops`, and
 `codeql_edge_confidence` apply to every engine; their names are kept for
 compatibility with existing configurations. Under Strategy1, listener and
 sender topic keys match declared keys in `kafka.yml` or `kafka.yaml` after
