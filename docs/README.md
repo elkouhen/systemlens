@@ -42,6 +42,9 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 | [docs/SPEC-FONC.md](SPEC-FONC.md) | Finding a public behavior contract. |
 | [docs/SPEC-TECH.md](SPEC-TECH.md) | Finding an implementation or data contract. |
 | [docs/ADR.md](ADR.md) | Checking why an architectural decision was accepted. |
+| [docs/PDR.md](PDR.md) | Checking why a product rule exists and whether it is open to revision. |
+| [docs/process/delivery-practices.md](process/delivery-practices.md) | Running an agent session, choosing a task status, or closing a defect. |
+| [docs/process/request-brief.md](process/request-brief.md) | Framing a non-trivial request before changing files. |
 | [docs/ARCHITECTURE.md](ARCHITECTURE.md) | Finding package ownership, dependencies, or call paths. |
 | [docs/UX-UI.md](UX-UI.md) | Changing visible HTML presentation or interaction. |
 | [docs/glossary.md](glossary.md) | Choosing canonical names for architecture concepts. |

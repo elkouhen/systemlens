@@ -15,6 +15,8 @@ documents and summarizes the documentation hygiene expected in this repository.
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Package ownership, dependency direction, maintainer navigation | Before moving code across packages or changing an interface |
 | [`docs/UX-UI.md`](docs/UX-UI.md) | HTML presentation, graph controls, selection, and camera behavior | Before changing the generated interface |
 | [`docs/ADR.md`](docs/ADR.md) | Architecture decisions: context, choice, consequences | Before revisiting an existing technical choice |
+| [`docs/PDR.md`](docs/PDR.md) | Product decisions: visible rules, vocabulary, defaults, deferred concerns, and whether each is open to revision | Before changing a rule a user sees |
+| [`docs/process/delivery-practices.md`](docs/process/delivery-practices.md) | Session hygiene, status vocabulary, defect rule, review checklist, request brief | At the start of a session and before declaring work done |
 | [`BACKLOG.md`](BACKLOG.md) | Open Explorer UX stream (floating toolbar, docked inspector, empty states, catalogue density), the items carried over from the delivered data-operations and runtime-observations backlog, plus the index of archived backlogs | When changing the generated HTML interface, picking up a carried-over item, or finding archived plans |
 | [`docs/plans/async-write-read-consistency.md`](docs/plans/async-write-read-consistency.md) | Remaining work on asynchronous write and synchronous read consistency | When changing consistency diagnostics |
 | [`docs/plans/data-operations-in-internal-flows.md`](docs/plans/data-operations-in-internal-flows.md) | Scoped data-operation plan, status, and acceptance criteria | When working on data operations in internal flows |
@@ -154,50 +156,24 @@ the POC source, then copy that generated file to
 documentation site's checked-in live model and must stay synchronized with the
 `architecture-ia.html` POC export.
 
-## AI operating practices
+## Delivery practices
 
-To keep long agent sessions reliable and reviewable:
+[`docs/process/delivery-practices.md`](docs/process/delivery-practices.md)
+holds the session hygiene rules, the cross-functional review checklist, the
+status vocabulary of backlog items, and the defect rule. The rules that
+gate work are:
 
-1. Compact the conversation when context becomes large or before starting a
-   new substantial phase of work. Preserve the current objective, decisions,
-   changed files, unresolved risks, and validation results in the handoff.
-2. Before compaction, leave a short checkpoint in the working notes or
-   conversation so work can resume without rereading the repository from
-   scratch.
-3. Re-check the latest user request after compaction; treat it as authoritative
-   and do not repeat completed work unless validation requires it.
-4. Prefer small, reversible edits, inspect the diff, and run proportionate
-   focused tests before reporting progress or completion.
-5. Never claim browser, network, or external-system validation when the
-   prerequisite was unavailable; state the unverified risk explicitly.
-6. When a session is becoming long or crosses several work phases, remind the
-   user of the useful options: compact the conversation, record a checkpoint,
-   split unrelated work into a new thread, and preserve the validation status.
-7. Use Archify only to analyze or visualize Python projects. Do not use it to
-   replace SystemLens' native exports or infer architecture facts that
-   SystemLens has not indexed.
-8. Before taking a material action, state what you will do. After taking it,
-   state what you did, which files or systems changed, and which validation ran.
-
-## Cross-functional review
-
-Before delivering a non-trivial change, examine it from the relevant points of
-view and state any material trade-off or unverified risk:
-
-1. **Product:** does it serve a concrete user task and preserve the intended
-   scope and terminology?
-2. **UX and accessibility:** is the primary path discoverable, progressively
-   disclosed, usable at constrained viewport sizes, and operable by keyboard?
-3. **Development and QA:** are public contracts preserved, edge cases covered,
-   and behavior verified beyond string-level output when interaction is
-   involved?
-4. **Architecture and data quality:** are static facts, confidence levels,
-   ambiguity handling, and compatibility with existing indexes explicit?
-5. **Operations and security:** are offline/network dependencies, performance,
-   local-path disclosure, and deployment consequences understood?
-
-Apply only the perspectives relevant to the change. Do not use this checklist
-as a substitute for proportionate implementation and tests.
+1. A non-trivial request starts with a
+   [request brief](docs/process/request-brief.md) the user validates.
+2. A backlog or plan an agent writes stays `proposed` until the user
+   validates it; no task starts before that.
+3. A change to a UX rule, a functional contract, or an ADR starts with the
+   decision record (`docs/ADR.md` or `docs/PDR.md`), validated first.
+4. `delivered` requires the validation the acceptance names; otherwise the
+   item is `blocked: <reason>`.
+5. Every fixed defect leaves a regression test in the same commit.
+6. `tests/test_spec_conformance.py` keeps the CLI specification and the UX
+   contract aligned with the code; a gap is listed there with its task.
 
 ## Deferred HTML accessibility and delivery concerns
 

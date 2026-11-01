@@ -139,6 +139,19 @@ the [functional specification](SPEC-FONC.md).
   latency and error hotspots, determine the completeness of the observation,
   and navigate only to explicitly linked static evidence.
 
+### Measured proxies
+
+The measures above are outcomes. Three proxies make them measurable on
+the laboratory application and the live model; each row names how the
+value is obtained so a regression is a number, not an impression. A
+proxy without a baseline is measured before its first target is set.
+
+| Proxy | How it is measured | Baseline | Target |
+|---|---|---|---|
+| Precision and abstention of the review aids | `export microservices --review-aids` on a fresh copy of the lab, candidates checked by hand (plan section 6) | 1/1 precise, 1/1 abstention on one application (2026-10-31) | Same on a second Spring application before promotion |
+| Share of persisted flow steps with a `proven` evidence level | `flows list --json` on the lab index, steps grouped by evidence level | Not yet measured | Set after the first measurement |
+| Time to the first inspector opening for a new user of the live model | Observed on `docs/models/simple-supermarket.html` without documentation, one tester, one session | Not yet measured | Set after backlog task U2 |
+
 For observable command contracts, see the
 [functional specification](./SPEC-FONC.md). For implementation details, see
 the [technical specification](./SPEC-TECH.md). Historical decisions,

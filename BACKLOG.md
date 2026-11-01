@@ -1,8 +1,9 @@
 # Backlog: Explorer UX improvements
 
-Status: open, created on 2026-11-01 from the UX review of the generated
-HTML export. Owner: SystemLens implementer. Reviewers: product owner and
-UX maintainer. Review baseline: commit `fdac92e`, live model
+Status: proposed on 2026-11-01 from the UX review of the generated HTML
+export; awaiting the product owner's validation of the lots before any
+task starts (see `docs/process/delivery-practices.md`). Owner: SystemLens
+implementer. Reviewers: product owner and UX maintainer. Review baseline: commit `fdac92e`, live model
 `docs/models/simple-supermarket.html`, viewport 1440 by 900, Obsidian theme.
 
 This backlog carries one work stream, **Stream U**, which reworks how the
@@ -272,15 +273,14 @@ any deviation from the work package.
 
 ## 8. Items carried over from the previous backlog
 
-These items were left open on 2026-10-31 and stay open; see the delivery
-record in Git history before `fdac92e` for their context.
+These items were left open on 2026-10-31; see the delivery record in Git
+history before `fdac92e` for their context. Their status follows the
+vocabulary of `docs/process/delivery-practices.md`.
 
-- The read-modify-write and dual-write review aids stay behind
-  `export microservices --review-aids`; promoting them needs a precision
-  measurement on a second Spring application.
-- Runtime percentiles, the Prometheus source, and completeness facts were
-  validated with fakes only; the lab Elastic cluster and a Prometheus
-  server were unreachable.
-- `docs/models/simple-supermarket.html` predates the hotspot group and the
-  badge facts; it needs a lab reindex plus a runtime collection, which the
-  validation of section 5 covers.
+| Item | Status |
+|---|---|
+| Promote the read-modify-write and dual-write review aids out of `export microservices --review-aids`. | `blocked: no second Spring application in the workspace for the precision measurement` |
+| Field validation of runtime percentiles, the Prometheus source, and completeness facts (R1, R4, R5). | `blocked: lab Elastic cluster and Prometheus server unreachable from the delivery machine` |
+| Regenerate `docs/models/simple-supermarket.html` with the hotspot group and the badge facts. | `blocked: needs a lab reindex plus a runtime collection` |
+| Make the lab reachable from a scheduled CI job so the three items above can leave `blocked`. | `open`; depends on the lab repository's compose setup |
+| Regenerate the live model in the `pages.yml` pipeline, as `supermarket.html` already is. | `open`; depends on the previous item |
