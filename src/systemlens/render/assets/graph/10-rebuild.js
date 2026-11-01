@@ -1,4 +1,18 @@
 // Ordered source module: 10-rebuild.js
+    // Converts a pointer movement into a camera state that keeps the graph
+    // point under the pointer fixed. Sigma's framed-graph conversion accounts
+    // for the zoom ratio and the non-square viewport; dividing pixels by the
+    // container width and height did neither, so content lagged the pointer.
+    function pannedCameraState(targetRenderer, startState, start, current) {
+      const viewport = targetRenderer.getContainer().getBoundingClientRect();
+      const toFramed = point => targetRenderer.viewportToFramedGraph(
+        { x: point.x - viewport.left, y: point.y - viewport.top },
+        { cameraState: startState },
+      );
+      const from = toFramed(start);
+      const to = toFramed(current);
+      return { ...startState, x: startState.x + from.x - to.x, y: startState.y + from.y - to.y };
+    }
     let callGraphArcNavigator = { links: [], views: [], activeIndex: null };
     let selectedCallGraphArcVisualTimer = null;
     let overlayRenderGeneration = 0;
@@ -635,7 +649,10 @@
         doubleClickZoomingRatio: 1,
         // The shared wheel handler below keeps canvas and HTML-card zoom
         // behavior identical. Native Sigma wheel zoom would only receive
-        // events whose target is the canvas.
+        // events whose target is the canvas. Sigma 2.4 ignores this Sigma 3
+        // setting and zooms by a fixed 1.7 on every canvas wheel; the shared
+        // handler therefore listens in the capture phase and stops the event
+        // before Sigma's captor sees it.
         enableCameraZooming: false,
         // Panning is handled by the shared camera controller below. Disable
         // Sigma's native inertia so releasing the pointer cannot continue the
@@ -1165,16 +1182,12 @@
               event.clientY - forwardedPointer.startY,
             ) > 3) forwardedPointer.moved = true;
             if (!forwardedPointer.moved) return;
-            const camera = renderer.getCamera();
-            const state = forwardedPointer.cameraState;
-            const viewport = document.getElementById("graph").getBoundingClientRect();
-            const width = Math.max(viewport.width, 1);
-            const height = Math.max(viewport.height, 1);
-            camera.setState({
-              ...state,
-              x: state.x - (event.clientX - forwardedPointer.startX) / width,
-              y: state.y + (event.clientY - forwardedPointer.startY) / height,
-            });
+            renderer.getCamera().setState(pannedCameraState(
+              renderer,
+              forwardedPointer.cameraState,
+              { x: forwardedPointer.startX, y: forwardedPointer.startY },
+              { x: event.clientX, y: event.clientY },
+            ));
           };
           label.addEventListener("pointerdown", event => {
             if (event.button !== 0 || forwardedPointer || event.target.closest?.(".graph-node-port-reference")) return;
@@ -2177,6 +2190,7 @@
       const handleGraphWheel = event => {
         if (event.target.closest?.(".toolbar, #details")) return;
         event.preventDefault();
+        event.stopPropagation();
         const camera = renderer.getCamera();
         const state = camera.getState();
         const viewport = graphCanvas.getBoundingClientRect();
@@ -2184,35 +2198,25 @@
           x: event.clientX - viewport.left,
           y: event.clientY - viewport.top,
         };
-        const graphPoint = renderer.viewportToGraph(cursor);
         const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
-        const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * .0006);
+        // About 1.2 times per mouse notch (deltaY 100), whatever the target.
+        const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * .0018);
         const maximumRatio = 100;
+        // A larger Sigma ratio is a zoom-out. Bound manual wheel changes so
+        // one trackpad burst cannot jump across the safe camera state.
         const ratio = Math.max(.01, Math.min(maximumRatio, state.ratio * factor));
-        camera.setState({
-          ...state,
-          // A larger Sigma ratio is a zoom-out. Bound manual wheel changes
-          // so one trackpad burst cannot jump across the safe camera state.
-          ratio,
-        });
-        const projected = renderer.graphToViewport(graphPoint);
-        const dx = cursor.x - projected.x;
-        const dy = cursor.y - projected.y;
-        const nextState = camera.getState();
-        const width = Math.max(viewport.width, 1);
-        const height = Math.max(viewport.height, 1);
-        camera.setState({
-          ...nextState,
-          // Keep the graph point under the cursor fixed while changing scale.
-          x: nextState.x - dx / width,
-          y: nextState.y + dy / height,
-        });
+        // Zoom around the cursor with Sigma's own conversion, computed from
+        // the current camera state. Re-projecting a graph point after
+        // setState read a matrix Sigma only refreshes on render, so the
+        // correction was zero and the zoom pivoted on the graph centre.
+        camera.setState(renderer.getViewportZoomedState(cursor, ratio));
       };
-      graphCanvas.addEventListener("wheel", handleGraphWheel, { passive: false });
-      nodeLabelOverlay.addEventListener("wheel", handleGraphWheel, { passive: false });
+      // Relation arcs live in their own SVG layer above the canvas: a wheel
+      // over an arc must zoom like a wheel over the empty stage.
+      const wheelSurfaces = [graphCanvas, nodeLabelOverlay, portPathOverlay].filter(Boolean);
+      wheelSurfaces.forEach(surface => surface.addEventListener("wheel", handleGraphWheel, { passive: false, capture: true }));
       graphState.graphWheelCleanup = () => {
-        graphCanvas.removeEventListener("wheel", handleGraphWheel);
-        nodeLabelOverlay.removeEventListener("wheel", handleGraphWheel);
+        wheelSurfaces.forEach(surface => surface.removeEventListener("wheel", handleGraphWheel, { capture: true }));
       };
       let graphPan = null;
       const finishGraphPan = event => {
@@ -2225,15 +2229,12 @@
       };
       const moveGraphPan = event => {
         if (!graphPan || event.pointerId !== graphPan.pointerId) return;
-        const state = graphPan.cameraState;
-        const viewport = graphCanvas.getBoundingClientRect();
-        const width = Math.max(viewport.width, 1);
-        const height = Math.max(viewport.height, 1);
-        renderer.getCamera().setState({
-          ...state,
-          x: state.x - (event.clientX - graphPan.startX) / width,
-          y: state.y + (event.clientY - graphPan.startY) / height,
-        });
+        renderer.getCamera().setState(pannedCameraState(
+          renderer,
+          graphPan.cameraState,
+          { x: graphPan.startX, y: graphPan.startY },
+          { x: event.clientX, y: event.clientY },
+        ));
       };
       const startGraphPan = event => {
         if (event.button !== 0 || event.target.closest(".graph-node-card-label")) return;
@@ -2251,7 +2252,23 @@
         window.addEventListener("pointercancel", finishGraphPan, true);
       };
       graphCanvas.addEventListener("pointerdown", startGraphPan, true);
+      // The bands reserved for floating widgets lie outside the canvas but
+      // still show graph content: a gesture on the bare page background
+      // there pans or zooms the graph like a gesture on the stage.
+      const isGraphBackgroundGesture = event => (
+        (event.target === document.documentElement || event.target === document.body)
+        && !document.body.classList.contains("catalogue-active")
+        && !graphCanvas.hidden
+        && !graphCanvas.classList.contains("is-call-tree-hidden")
+        && graphCanvas.getBoundingClientRect().width > 0
+      );
+      const forwardBackgroundWheel = event => { if (isGraphBackgroundGesture(event)) handleGraphWheel(event); };
+      const forwardBackgroundPointer = event => { if (isGraphBackgroundGesture(event)) startGraphPan(event); };
+      document.addEventListener("wheel", forwardBackgroundWheel, { passive: false });
+      document.addEventListener("pointerdown", forwardBackgroundPointer, true);
       graphState.graphPanCleanup = () => {
+        document.removeEventListener("wheel", forwardBackgroundWheel);
+        document.removeEventListener("pointerdown", forwardBackgroundPointer, true);
         graphCanvas.removeEventListener("pointerdown", startGraphPan, true);
         try { graphCanvas.releasePointerCapture?.(graphPan?.pointerId); } catch (_error) { /* canvas was rebuilt during the gesture */ }
         window.removeEventListener("pointermove", moveGraphPan, true);

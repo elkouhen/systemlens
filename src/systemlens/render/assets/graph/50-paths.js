@@ -503,12 +503,13 @@
         const deltaX = targetCenter.x - projectedCenter.x;
         const deltaY = targetCenter.y - projectedCenter.y;
         if (Math.abs(deltaX) <= .5 && Math.abs(deltaY) <= .5) break;
-        const ratioState = camera.getState();
-        camera.setState({
-          ...ratioState,
-          x: ratioState.x - deltaX * ratioState.ratio / Math.max(viewport.width, 1),
-          y: ratioState.y + deltaY * ratioState.ratio / Math.max(viewport.height, 1),
-        });
+        const container = renderer.getContainer().getBoundingClientRect();
+        camera.setState(pannedCameraState(
+          renderer,
+          camera.getState(),
+          { x: projectedCenter.x + container.left, y: projectedCenter.y + container.top },
+          { x: targetCenter.x + container.left, y: targetCenter.y + container.top },
+        ));
         renderer.refresh();
       }
       graphCanvas.dataset.flowFocusRatio = String(ratio);

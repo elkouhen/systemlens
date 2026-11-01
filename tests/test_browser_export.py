@@ -1163,6 +1163,138 @@ def test_plain_click_selects_a_node_and_the_hint_names_the_gestures() -> None:
         browser.close()
 
 
+def _card_centers(page) -> dict:
+    return page.evaluate(
+        "() => Object.fromEntries([...document.querySelectorAll('.graph-node-card-label')]"
+        ".map(card => { const box = card.getBoundingClientRect();"
+        " return [card.dataset.nodeId, [box.left + box.width / 2, box.top + box.height / 2]]; }))"
+    )
+
+
+def _fit_uniform_zoom(before: dict, after: dict) -> tuple[float, tuple[float, float] | None, float]:
+    """Least-squares scale and fixed point of the card motion, with residual."""
+    keys = list(before)
+    mean = [sum(before[key][axis] for key in keys) / len(keys) for axis in (0, 1)]
+    moved = [sum(after[key][axis] for key in keys) / len(keys) for axis in (0, 1)]
+    numerator = sum(
+        (before[key][axis] - mean[axis]) * (after[key][axis] - moved[axis])
+        for key in keys for axis in (0, 1)
+    )
+    denominator = sum((before[key][axis] - mean[axis]) ** 2 for key in keys for axis in (0, 1))
+    scale = numerator / denominator
+    shift = [moved[axis] - scale * mean[axis] for axis in (0, 1)]
+    residual = max(
+        abs(after[key][axis] - (scale * before[key][axis] + shift[axis]))
+        for key in keys for axis in (0, 1)
+    )
+    fixed = None if abs(1 - scale) < 1e-6 else (shift[0] / (1 - scale), shift[1] / (1 - scale))
+    return scale, fixed, residual
+
+
+@pytest.mark.slow
+def test_graph_viewport_pan_and_zoom_follow_the_pointer() -> None:
+    """Drags track the pointer 1:1 and the wheel zooms one step around it.
+
+    Regression: pans divided pixels by the container size (content lagged the
+    pointer), the zoom pivot was the graph centre, Sigma 2.4 added its own
+    1.7x zoom over the empty stage, and wheels over arcs or the bands reserved
+    for floating widgets did nothing.
+    """
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 0"
+        )
+        _wait_for_settled_layout(page)
+
+        def drag(start: tuple[float, float], delta: tuple[float, float]) -> None:
+            before = _card_centers(page)
+            page.mouse.move(*start)
+            page.mouse.down()
+            page.mouse.move(start[0] + delta[0], start[1] + delta[1], steps=8)
+            page.mouse.up()
+            page.wait_for_timeout(150)
+            after = _card_centers(page)
+            for key, center in before.items():
+                assert after[key][0] - center[0] == pytest.approx(delta[0], abs=0.6)
+                assert after[key][1] - center[1] == pytest.approx(delta[1], abs=0.6)
+
+        def wheel(point: tuple[float, float], delta_y: int = -100) -> float:
+            before = _card_centers(page)
+            page.mouse.move(*point)
+            page.mouse.wheel(0, delta_y)
+            page.wait_for_timeout(150)
+            scale, fixed, residual = _fit_uniform_zoom(before, _card_centers(page))
+            assert residual < 1 and fixed is not None
+            assert fixed[0] == pytest.approx(point[0], abs=1)
+            assert fixed[1] == pytest.approx(point[1], abs=1)
+            return scale
+
+        def point_on(selector: str) -> tuple[float, float]:
+            found = page.evaluate(
+                """(selector) => {
+                    for (const element of document.querySelectorAll(selector)) {
+                        const box = element.getBoundingClientRect();
+                        for (let f = .3; f < .8; f += .1) {
+                            const x = box.left + box.width * f, y = box.top + box.height * f;
+                            const hit = document.elementFromPoint(x, y);
+                            if (hit && (hit === element || element.contains(hit))) return [x, y];
+                        }
+                    }
+                    return null;
+                }""",
+                selector,
+            )
+            assert found, selector
+            return found[0], found[1]
+
+        stage = _graph_background_point(page, end_dx=120, end_dy=70)
+        drag((stage["x"], stage["y"]), (120, 70))
+        card = point_on(".graph-node-card-label")
+        drag(card, (-80, -40))
+
+        steps = [wheel((stage["x"], stage["y"]))]
+        steps.append(wheel(point_on(".graph-node-card-label")))
+        steps.append(wheel(point_on(".graph-dependency-hit-area")))
+        assert steps == pytest.approx([steps[0]] * 3, rel=0.002)
+        assert 1.1 < steps[0] < 1.3
+        assert wheel((stage["x"], stage["y"]), 100) == pytest.approx(1 / steps[0], rel=0.002)
+
+        page.locator("#graph-fit-readable").click()
+        page.wait_for_timeout(300)
+        bands = page.evaluate(
+            """() => {
+                const graph = document.getElementById('graph').getBoundingClientRect();
+                const found = [];
+                for (const y of [graph.top - 20, graph.bottom + 25]) {
+                    for (let x = graph.left + 40; x < graph.right; x += 20) {
+                        const hit = document.elementFromPoint(x, y);
+                        if (hit === document.documentElement || hit === document.body) { found.push([x, y]); break; }
+                    }
+                }
+                return found;
+            }"""
+        )
+        assert len(bands) == 2
+        for x, y in bands:
+            assert wheel((x, y)) == pytest.approx(steps[0], rel=0.002)
+            drag((x, y), (50, 10))
+
+        for _ in range(3):
+            page.locator("#graph-zoom-in").click()
+        page.wait_for_timeout(200)
+        stage = _graph_background_point(page, end_dx=-90, end_dy=60)
+        drag((stage["x"], stage["y"]), (-90, 60))
+        browser.close()
+
+
 @pytest.mark.slow
 def test_narrow_viewport_collapses_the_panel_into_a_drawer_and_wording_is_french() -> None:
     """U8: drawer at 900 px or less, Couche, Sombre/Clair, placeholder, diagnostics."""

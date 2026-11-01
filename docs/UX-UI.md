@@ -395,6 +395,14 @@ a card MUST NOT introduce a second native zoom behavior. Camera updates and
 overlay updates are coalesced so canvas, cards, and labels move as one
 visual surface.
 
+A drag on the empty stage, on a card, or on the bare background of the bands
+reserved for floating widgets moves the content exactly with the pointer, at
+any zoom and any workspace aspect ratio. One wheel notch zooms by the same
+step, about 1.2 times, whether the pointer is over the canvas, a card, a
+relation arc, or a reserved band. The zoom keeps the graph point under the
+pointer fixed. Controls, the legend, and the minimap keep their own wheel
+behavior.
+
 For graphs of at most 12 nodes, readable fitting MUST retain a complete
 overview rather than making the graph appear empty.
 
