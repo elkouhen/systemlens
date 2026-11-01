@@ -597,14 +597,14 @@ def _index_repo(
             progress,
             f"  • {module_name} : {in_by_module[module_name]} IN, "
             f"{out_by_module[module_name]} OUT, "
-            f"{internal_integrations_by_module[module_name]} flux d'appel, "
+            f"{internal_integrations_by_module[module_name]} flux de code, "
             f"{internal_data_paths_by_module[module_name]} annotations de données",
         )
     _report_progress(
         progress,
         "→ Indexation : statistiques globales : "
         f"{len(input_ports)} IN, {len(output_ports)} OUT, "
-        f"{sum(internal_integrations_by_module.values())} flux d'appel, "
+        f"{sum(internal_integrations_by_module.values())} flux de code, "
         f"{sum(internal_data_paths_by_module.values())} annotations de données, "
         f"{len(module_names)} modules",
     )

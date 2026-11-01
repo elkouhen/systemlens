@@ -62,7 +62,7 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 | [docs/spec-fonc/html-export.md](spec-fonc/html-export.md) | Changing HTML export content or view behavior. |
 | [docs/spec-fonc/incrementality.md](spec-fonc/incrementality.md) | Changing refresh and freshness behavior. |
 | [docs/spec-fonc/modules.md](spec-fonc/modules.md) | Changing module membership or navigation. |
-| [docs/spec-fonc/port-rendering.md](spec-fonc/port-rendering.md) | Changing port evidence or selected-flow arcs. |
+| [docs/spec-fonc/port-rendering.md](spec-fonc/port-rendering.md) | Changing port evidence or selected-flow edges. |
 
 ### Technical sections
 

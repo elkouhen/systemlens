@@ -385,7 +385,7 @@
       ["noverlap", document.getElementById("layout-noverlap")],
     ]);
     const layoutLabels = new Map([
-      ["forceatlas2", "regroupement des liens"],
+      ["forceatlas2", "regroupement des relations"],
       ["noverlap", "éviter les chevauchements"],
       ["forceatlas2-noverlap", "vue par graphe"],
     ]);

@@ -278,13 +278,13 @@ export is not `--call-graphs-only`. Every other key stays identical.
 | `errors`, `endpoint_errors` | Error groups; endpoint ID to their indexes |
 | `data_destinations` | Per service, database destinations with calls and failures |
 
-The browser sums an arc's counts over the distinct observation indexes of its
+The browser sums an edge's counts over the distinct observation indexes of its
 `endpoint_ids`, so a service-pair count shared by several call sites is
-counted once. A REST arc whose caller is observed but has no matching
+counted once. A REST edge whose caller is observed but has no matching
 destination is silent. The block is linear in observations plus endpoints.
 
 In a selected call tree, a card reads the traffic of its input endpoint:
-the flow trigger for the root, the arc target otherwise. An arc reads its
+the flow trigger for the root, the edge target otherwise. An edge reads its
 output endpoint as emitted traffic and its input endpoint as received
 traffic. It is styled by the received count, or by the emitted count when the input
 has none or when only the emitted side is failing: APM counts a 4xx as a
@@ -302,8 +302,8 @@ whose input endpoint has error groups turns red and lists them.
 The legend's runtime section shows one completeness line per source and a
 "Points chauds" button. Its inspector lists the ranked rows; selecting one
 selects the service card and opens the route inspector of the matched
-served route, through the existing selection path, so the arcs into that
-route highlight. The ranking draws no arc and moves no camera.
+served route, through the existing selection path, so the edges into that
+route highlight. The ranking draws no edge and moves no camera.
 
 ## 6. Invariants and limits
 

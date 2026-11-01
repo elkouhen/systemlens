@@ -1261,7 +1261,7 @@ def materialize_call_graph_flows(
         f"→ Graphe d'appel : {len(components)} composante(s) connexe(s) dans le "
         "graphe d'appels interne."
     )
-    report("→ Graphe d'appel : reconstruction des parcours input → output...")
+    report("→ Graphe d'appel : reconstruction des flux input → output...")
 
     # Contract-only HTTP inputs (for example generated OpenAPI interfaces)
     # have no source endpoint path for the AST materializer. If the same

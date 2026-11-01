@@ -69,16 +69,16 @@ causal transition index. Each occurrence labels its Java method from the input
 port's indexed method mapping, falling back to the associated `CodeFlow.method`.
 
 The card shows the short method name and keeps the qualified name in its title.
-Visible arc labels are capped at 36 characters, including diagnostic labels.
+Visible edge labels are capped at 36 characters, including diagnostic labels.
 Tooltips retain the indexed edge details. Hover and focus apply a transient
 root-to-occurrence path highlight by comparing local occurrence path keys; this
 does not alter the selected flow or snapshot.
 
 Tree coordinates are assigned by depth and measured card height. The browser
-builds each card at its intrinsic height, then measures it before placing arcs.
+builds each card at its intrinsic height, then measures it before placing edges.
 Each subtree reserves the greater of its own card height and the combined height
 of its visible children with gaps. Child subtrees stack vertically; the parent
-and child group share a center. Arc endpoints use each card's actual center.
+and child group share a center. Edge endpoints use each card's actual center.
 
 The complete logical canvas is scaled to the graph workspace. Repeated services
 retain independent cards, and a cycle endpoint remains terminal. Expansion is
@@ -106,22 +106,22 @@ supports wheel and button zoom from 0.5x to 64x without changing persisted
 graph coordinates. Tree DOM construction is keyed by the selected flow,
 depth, expanded or collapsed branch paths, and overlay viewport; camera
 refreshes reuse the existing tree when that signature is unchanged. This
-avoids rebuilding every node, arc, port, and tooltip during ordinary canvas
+avoids rebuilding every node, edge, port, and tooltip during ordinary canvas
 refreshes.
 
 The initial call-tree scale has a 0.66 lower bound so a large tree keeps its
 cards legible; explicit `Tout voir` fitting may go below that bound to include
 the full visible tree. Below a total scale of 0.82, secondary method parameters
 and status badges are hidden with `visibility`, preserving card geometry and
-arc attachment. Selecting an occurrence re-renders around its prior screen
+edge attachment. Selecting an occurrence re-renders around its prior screen
 position when it remains visible. Separate controls fit the tree or center the
 selected occurrence.
 
-Call-tree arc labels are measured after the SVG enters the document. Candidate
+Call-tree edge labels are measured after the SVG enters the document. Candidate
 positions are tested against card rectangles and already accepted labels in
 160-pixel spatial buckets. Placement order is deterministic: focused-path
 labels, diagnostic labels, shorter labels, then lexical order. A colliding
-label is hidden while its arc and tooltip remain available. Measurement falls
+label is hidden while its edge and tooltip remain available. Measurement falls
 back to a character-width estimate when `getBBox` is unavailable. This keeps
 label placement near O((e + c) * b), where `e` is the edge count, `c` the
 candidate count and `b` the local bucket occupancy, rather than comparing all
@@ -210,7 +210,7 @@ The Sigma canvas and HTML card overlays are recomputed from one camera state
 per frame.
 Sigma 4 draws each node as a filled square primitive under its HTML card and
 each relation as a straight path with an arrow head. Sizes use the screen
-reference, so markers and arcs keep their pixel size at every zoom. The
+reference, so markers and edges keep their pixel size at every zoom. The
 export requires WebGL 2.
 
 Wheel zoom is handled once for both the Sigma canvas and the HTML overlays.

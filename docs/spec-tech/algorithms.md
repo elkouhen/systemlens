@@ -97,8 +97,8 @@ relation, it continues with flows triggered by that exact input endpoint in
 the next service. Repeating this traversal retains fan out, convergence, and
 cycles in the complete directed graph.
 
-The selector then omits a root graph when its services and directed arcs are
-contained in a strictly larger root graph. Arc identity includes the source
+The selector then omits a root graph when its services and directed edges are
+contained in a strictly larger root graph. Edge identity includes the source
 and target services, protocol, label, and endpoint IDs. Equal graphs retain
 their separate flow entries. This filter changes which roots are selectable;
 it does not delete the persisted internal flows.
@@ -320,7 +320,7 @@ another service reads. A common root flow or a shared topic alone does not
 establish that two operations refer to the same business record. A transaction
 annotation alone does not identify isolation behavior or provide a conflict guard.
 
-A call-graph arc proves a possible call relationship, not event order or thread
+A call-graph edge proves a possible call relationship, not event order or thread
 overlap. Build order edges only from execution and framework evidence. The order
 graph for one expanded occurrence must be acyclic. If contradictory evidence
 creates a cycle, mark the affected pair `inconsistent_order_evidence` and abstain.

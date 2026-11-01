@@ -329,7 +329,7 @@ def reconcile_observations(
     unknown = sorted(set(explicit.values()) - services)
     if unknown:
         raise ValueError(
-            f"La correspondance de services vise des services non indexés : {', '.join(unknown)}."
+            f"La correspondance de services vise des microservices non indexés : {', '.join(unknown)}."
         )
     resolve = _service_resolver(services, explicit)
 
@@ -593,7 +593,7 @@ def _classify(
         if callers:
             edge = {"source": service, "target": target_service}
             return "matched", None, sorted(set(callers)), edge
-        return "observed_only", f"aucune arête REST indexée vers {target_service}", [], None
+        return "observed_only", f"aucune relation REST indexée vers {target_service}", [], None
     if target_type == "request":
         match = _REQUEST_NAME.match(" ".join(target.split()))
         if match is None:

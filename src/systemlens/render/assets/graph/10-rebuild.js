@@ -552,7 +552,7 @@
           const outputs = (node.ports || []).filter(port => port.direction === "out");
           addTooltipLine(tooltip, `${inputs.length} entrée${inputs.length === 1 ? "" : "s"} · ${outputs.length} sortie${outputs.length === 1 ? "" : "s"}`);
           const topics = [...new Set((node.ports || []).filter(port => /kafka|topic|message/i.test(port.type || "")).map(port => port.name))];
-          if (topics.length) addTooltipLine(tooltip, `Messages : ${topics.slice(0, 4).join(", ")}${topics.length > 4 ? "…" : ""}`, "graph-entity-tooltip-detail");
+          if (topics.length) addTooltipLine(tooltip, `Topics : ${topics.slice(0, 4).join(", ")}${topics.length > 4 ? "…" : ""}`, "graph-entity-tooltip-detail");
           if (node.technology || node.build_system) addTooltipLine(tooltip, [
             node.technology ? `Technologie : ${node.technology}` : "",
             node.build_system ? `Build : ${node.build_system}` : "",
@@ -571,7 +571,7 @@
           const services = new Set(graphData.links
             .filter(link => link.kind === "mongodb" && link.target === node.id)
             .map(link => link.source)).size;
-          addTooltipLine(tooltip, `${services} service${services > 1 ? "s" : ""} utilisateur${services > 1 ? "s" : ""}`);
+          addTooltipLine(tooltip, `${services} microservice${services > 1 ? "s" : ""} utilisateur${services > 1 ? "s" : ""}`);
           const classes = (node.persistence_classes || []).map(item => item.name).filter(Boolean);
           if (classes.length) addTooltipLine(tooltip, `Accès : ${classes.slice(0, 3).join(", ")}${classes.length > 3 ? "…" : ""}`, "graph-entity-tooltip-detail");
         }
@@ -857,7 +857,7 @@
               ? `${triggerKind} · ${trigger.name || "Événement inconnu"}`
               : "";
             flowTrigger.title = trigger
-              ? "Événement déclencheur du graphe d’appel sélectionné"
+              ? "Événement déclencheur de l’arbre d’appel sélectionné"
               : "";
           }
           if (flowPath) {
@@ -907,7 +907,7 @@
               item.append(node);
               if (ancestors.has(nodeName)) {
                 item.classList.add("is-cycle");
-                node.title = "Cycle détecté dans le graphe d’appel";
+                node.title = "Cycle détecté dans l’arbre d’appel";
                 return item;
               }
               const children = childrenBySource.get(nodeName) || [];
@@ -935,12 +935,12 @@
               treeRoots.forEach(root => tree.append(renderTreeNode(root)));
               flowPath.append(tree);
             } else {
-              flowPath.textContent = "Parcours de code sélectionné";
+              flowPath.textContent = "Flux de code sélectionné";
             }
           }
           flowHelp.textContent = graphState.analysisPortEndpointId
-            ? "Arc associé sélectionné · cliquez sur un autre arc ou port pour changer"
-            : "Cliquez sur un port ou un arc pour afficher sa relation";
+            ? "Relation associée sélectionnée · cliquez sur une autre relation ou un autre port pour changer"
+            : "Cliquez sur un port ou une relation pour afficher son détail";
         }
         const toggleAnalysisEndpoint = (endpointId, event) => {
           if (!endpointId) return;
@@ -1067,7 +1067,7 @@
             const rootBadge = document.createElement("span");
             rootBadge.className = "graph-node-root-badge";
             rootBadge.textContent = "Racine";
-            rootBadge.title = "Racine du graphe d’appel sélectionné";
+            rootBadge.title = "Racine de l’arbre d’appel sélectionné";
             label.append(rootBadge);
           }
           if (trigger?.name) {
@@ -1077,7 +1077,7 @@
             const triggerLabel = isCronTrigger ? "Cron" : isHttpTrigger ? "HTTP" : "Kafka";
             triggerBadge.className = `graph-node-trigger-badge ${isCronTrigger ? "is-cron" : isHttpTrigger ? "is-http" : "is-kafka"}`;
             triggerBadge.textContent = `${triggerLabel} · ${trigger.name}`;
-            triggerBadge.title = "Déclencheur du graphe d’appel sélectionné";
+            triggerBadge.title = "Déclencheur de l’arbre d’appel sélectionné";
             label.append(triggerBadge);
           }
           label.addEventListener("pointerenter", event => {
@@ -1617,7 +1617,7 @@
             title.textContent = [sourceName, targetName].filter(Boolean).join(" → ") || "Relation";
             const relation = document.createElement("span");
             relation.className = "graph-arc-tooltip-relation";
-            const order = link.order ? `Arc #${link.order} · ` : "";
+            const order = link.order ? `Relation #${link.order} · ` : "";
             const protocol = link.kind === "kafka" ? "Kafka" : link.kind === "rest" ? "HTTP" : link.kind;
             const relationText = [protocol, link.label].filter(Boolean).join(" · ");
             relation.textContent = `${order}${relationText || "Relation"}`;
@@ -1655,7 +1655,7 @@
           const target = nodeDataById.get(link.target)?.name;
           const ports = `${shortPortLabel(sourcePort, "out")} → ${shortPortLabel(targetPort, "in")}`;
           const relation = link.label || (link.kind === "kafka" ? "Kafka" : link.kind || "Relation");
-          const arc = link.order ? `Arc #${link.order} · ` : "";
+          const arc = link.order ? `Relation #${link.order} · ` : "";
           return `${arc}${[source, target].filter(Boolean).join(" → ") || "Relation"} · ${relation} · ${ports}`;
         };
         const addArcHitArea = path => {

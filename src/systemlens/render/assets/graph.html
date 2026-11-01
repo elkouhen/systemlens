@@ -37,7 +37,7 @@ __ASYNCAPI_WEB_COMPONENT__
     <div class="toolbar-tab-groups" aria-label="Navigation du mode sélectionné">
       <section id="architecture-tabs-group" class="toolbar-tab-group" aria-labelledby="architecture-tabs-title">
         <span id="architecture-tabs-title" class="toolbar-tab-group-title">Vues d’architecture</span>
-        <div class="toolbar-tabs" role="tablist" aria-label="Vues d'architecture">
+        <div class="toolbar-tabs" role="tablist" aria-label="Vues d’architecture">
           <button id="graph-tab" class="toolbar-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="graph-panel" title="Configurer et afficher le graphe">Graphe</button>
           <button id="flows-tab" class="toolbar-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-panel">Flux de code</button>
           <button id="microservices-tab" class="toolbar-tab legacy-resource-tab" type="button" role="tab" aria-selected="false" aria-controls="microservices-panel">Catalogue</button>
@@ -69,10 +69,10 @@ __ASYNCAPI_WEB_COMPONENT__
     <p id="progress-notice" class="progress-notice" hidden></p>
     <div id="graph-panel" class="toolbar-panel" role="tabpanel" aria-labelledby="graph-tab">
       <div id="quick-search" class="quick-search">
-        <label class="explore-search-label" for="search">Rechercher une ressource ou un itinéraire</label>
-        <input id="search" type="search" list="node-suggestions" placeholder="service-a ou service-a -> service-b" autocomplete="off" aria-describedby="search-help search-status" aria-label="Rechercher une ressource ou un itinéraire">
+        <label class="explore-search-label" for="search">Rechercher une ressource ou un chemin</label>
+        <input id="search" type="search" list="node-suggestions" placeholder="service-a ou service-a -> service-b" autocomplete="off" aria-describedby="search-help search-status" aria-label="Rechercher une ressource ou un chemin">
         <datalist id="node-suggestions"></datalist>
-        <p id="search-help" class="explore-search-help">Choisissez une suggestion ou saisissez le nom exact d’un nœud. Utilisez <code>-&gt;</code> entre les étapes, puis appuyez sur Entrée pour afficher l’itinéraire le plus court.</p>
+        <p id="search-help" class="explore-search-help">Choisissez une suggestion ou saisissez le nom exact d’un nœud. Utilisez <code>-&gt;</code> entre les étapes, puis appuyez sur Entrée pour afficher le chemin le plus court.</p>
         <p id="search-status" class="explore-search-status" role="status"></p>
       </div>
       <section id="graph-context" class="graph-context" aria-label="Contexte du graphe">
@@ -103,17 +103,17 @@ __ASYNCAPI_WEB_COMPONENT__
         <summary><span>Visibilité</span><span id="graph-filter-summary" class="graph-filter-summary">Tous affichés</span></summary>
         <div class="display-filter-groups">
           <fieldset class="relation-filters">
-            <legend>Types d’arêtes</legend>
-            <label class="relation-filter" title="Afficher les appels d’API"><input id="relation-http" type="checkbox" checked aria-label="Afficher les arêtes d’API">APIs</label>
-            <label class="relation-filter" title="Afficher les publications, consommations et échanges request/reply"><input id="relation-kafka" type="checkbox" checked aria-label="Afficher les arêtes de messages">Messages</label>
-            <label class="relation-filter" title="Afficher les lectures et écritures de données"><input id="relation-mongodb" type="checkbox" checked aria-label="Afficher les arêtes d’accès aux données">Données</label>
-            <label class="relation-filter" title="Afficher les autres types de relations"><input id="relation-other" type="checkbox" checked aria-label="Afficher les autres types d’arêtes">Autres</label>
+            <legend>Types de relations</legend>
+            <label class="relation-filter" title="Afficher les appels d’API"><input id="relation-http" type="checkbox" checked aria-label="Afficher les relations d’API">Appels d’API</label>
+            <label class="relation-filter" title="Afficher les publications, consommations et échanges request/reply"><input id="relation-kafka" type="checkbox" checked aria-label="Afficher les relations de messages">Messages</label>
+            <label class="relation-filter" title="Afficher les lectures et écritures de données"><input id="relation-mongodb" type="checkbox" checked aria-label="Afficher les relations d’accès aux données">Accès aux données</label>
+            <label class="relation-filter" title="Afficher les autres types de relations"><input id="relation-other" type="checkbox" checked aria-label="Afficher les autres types de relations">Autres</label>
           </fieldset>
           <fieldset class="relation-filters">
             <legend>Types de nœuds</legend>
             <label class="relation-filter" title="Afficher les microservices indexés"><input id="node-microservice" type="checkbox" checked aria-label="Afficher les microservices">Microservices</label>
             <label class="relation-filter" title="Afficher les microservices externes"><input id="node-external-microservice" type="checkbox" checked aria-label="Afficher les microservices externes">Externes</label>
-            <label class="relation-filter" title="Afficher les messages"><input id="node-kafka-topic" type="checkbox" checked aria-label="Afficher les messages">Messages</label>
+            <label class="relation-filter" title="Afficher les topics"><input id="node-kafka-topic" type="checkbox" checked aria-label="Afficher les topics">Topics</label>
             <label class="relation-filter" title="Afficher les données"><input id="node-mongodb-collection" type="checkbox" checked aria-label="Afficher les données">Données</label>
             <label class="relation-filter" title="Afficher les autres types de ressources"><input id="node-other" type="checkbox" checked aria-label="Afficher les autres types de nœuds">Autres</label>
           </fieldset>
@@ -139,7 +139,7 @@ __ASYNCAPI_WEB_COMPONENT__
       <fieldset class="layout-controls">
         <legend>Placement des nœuds</legend>
         <div class="layout-options layout-strategy-options" role="group" aria-label="Choix du placement des nœuds">
-          <button id="layout-forceatlas2" class="layout-option" type="button" aria-pressed="false" title="Regrouper les nœuds liés">Regrouper les liens</button>
+          <button id="layout-forceatlas2" class="layout-option" type="button" aria-pressed="false" title="Regrouper les nœuds liés">Regrouper les relations</button>
           <button id="layout-noverlap" class="layout-option" type="button" aria-pressed="false" title="Écarter les nœuds qui se chevauchent">Éviter les chevauchements</button>
         </div>
       </fieldset>
@@ -154,7 +154,7 @@ __ASYNCAPI_WEB_COMPONENT__
         <p class="references-description">Filtrez les ressources par type ou microservice, puis ouvrez leur contexte dans le graphe.</p>
       </div>
       <div class="resource-catalogue-layout">
-        <aside class="resource-catalogue-sidebar"><h3>Types de ressources</h3><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher une ressource ou un service" autocomplete="off" aria-label="Rechercher une ressource ou un service"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="http_route">Routes HTTP</option><option value="openapi_contract">Contrats OpenAPI</option><option value="asyncapi_contract">Contrats AsyncAPI</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="dto">DTOs</option><option value="diagnostic">Diagnostics</option><option value="other">Autres ressources</option></select><select id="resource-service-filter" class="reference-filter-input" aria-label="Filtrer par microservice"><option value="all">Tous les microservices</option></select></div><div id="resource-catalogue-categories" class="resource-catalogue-categories"></div><p class="resource-catalogue-sidebar-help">Sélectionnez un type ou recherchez un nom pour réduire l’inventaire.</p></aside>
+        <aside class="resource-catalogue-sidebar"><h3>Types de ressources</h3><div class="resource-catalogue-filters"><input id="microservices-filter" class="reference-filter-input" type="search" placeholder="Rechercher un microservice ou une ressource" autocomplete="off" aria-label="Rechercher un microservice ou une ressource"><select id="resource-kind-filter" class="reference-filter-input" aria-label="Filtrer par type de ressource"><option value="all">Tous les types</option><option value="microservice">Microservices</option><option value="http_route">Routes HTTP</option><option value="openapi_contract">Contrats OpenAPI</option><option value="asyncapi_contract">Contrats AsyncAPI</option><option value="kafka_topic">Topics</option><option value="mongodb_collection">Collections</option><option value="jpa_entity">Entités JPA</option><option value="dto">DTOs</option><option value="diagnostic">Diagnostics</option><option value="other">Autres ressources</option></select><select id="resource-service-filter" class="reference-filter-input" aria-label="Filtrer par microservice"><option value="all">Tous les microservices</option></select></div><div id="resource-catalogue-categories" class="resource-catalogue-categories"></div><p class="resource-catalogue-sidebar-help">Sélectionnez un type ou recherchez un nom pour réduire l’inventaire.</p></aside>
         <section class="references-section resource-catalogue-results"><p id="resource-catalogue-summary" class="resource-catalogue-summary" role="status"></p><div class="resource-catalogue-table-head" aria-hidden="true"><span>Ressource</span><span>Contexte</span><span>Action</span></div><ul id="microservices-list" class="references-list"></ul><p id="microservices-empty" class="references-empty">Aucune ressource ne correspond à ces filtres.</p></section>
         <aside id="resource-catalogue-preview" class="resource-catalogue-preview"><button id="resource-catalogue-back" class="resource-catalogue-back" type="button" hidden>← Retour</button><p class="resource-catalogue-preview-kicker">Aperçu de la ressource</p><h3 id="resource-catalogue-preview-title">Aucune ressource sélectionnée</h3><p id="resource-catalogue-preview-copy">Sélectionnez une ligne dans le catalogue pour afficher son contexte, ses attributs, ses relations et sa source.</p><section id="resource-catalogue-attributes" class="resource-catalogue-attributes" hidden></section><section id="resource-catalogue-related" class="resource-catalogue-related"></section></aside>
       </div>
@@ -170,10 +170,10 @@ __ASYNCAPI_WEB_COMPONENT__
     </div>
     <div id="flows-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="flows-tab" hidden>
       <div class="references-header">
-        <p class="references-kicker" title="Parcours ordonnés issus du code source. Ils décrivent un comportement potentiel, pas une trace runtime.">Parcours potentiels, pas une trace runtime</p>
+        <p class="references-kicker" title="Flux ordonnés issus du code source. Ils décrivent un comportement potentiel, pas une trace d’exécution.">Flux potentiels, pas une trace d’exécution</p>
         <div class="code-flow-title-row"><h2 id="code-flows-title" class="references-title">Flux de code</h2></div>
       </div>
-    <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Rechercher un service, une donnée, un topic ou « incohérence »" autocomplete="off" aria-label="Rechercher un service, une donnée, un topic ou un flux avec incohérence possible"></div><p id="code-flow-filter-summary" class="code-flow-filter-summary"></p><p id="code-flows-summary" class="code-flows-summary"></p><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux d’appel indexé.</p></section>
+    <section class="references-section"><div class="code-flow-filter-controls"><input id="code-flow-filter" class="reference-filter-input" type="search" placeholder="Rechercher un microservice, une donnée, un topic ou « incohérence »" autocomplete="off" aria-label="Rechercher un microservice, une donnée, un topic ou un flux avec incohérence possible"></div><p id="code-flow-filter-summary" class="code-flow-filter-summary"></p><p id="code-flows-summary" class="code-flows-summary"></p><ul id="code-flows" class="references-list"></ul><p id="code-flows-empty" class="references-empty">Aucun flux de code indexé.</p></section>
     </div>
     <div id="contracts-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="contracts-tab" hidden>
       <div class="references-header">
@@ -181,11 +181,11 @@ __ASYNCAPI_WEB_COMPONENT__
         <h2 id="openapi-references-title" class="references-title">Contrats OpenAPI</h2>
         <p class="references-description">Consultez les contrats HTTP indexés.</p>
       </div>
-      <section class="references-section"><input id="openapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les contrats par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats OpenAPI"><ul id="openapi-references" class="references-list"></ul><p id="openapi-references-empty" class="references-empty">Aucun contrat OpenAPI détecté.</p></section>
+      <section class="references-section"><input id="openapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer les contrats par chemin ou microservice" autocomplete="off" aria-label="Filtrer les contrats OpenAPI"><ul id="openapi-references" class="references-list"></ul><p id="openapi-references-empty" class="references-empty">Aucun contrat OpenAPI détecté.</p></section>
     </div>
     <div id="asyncapi-contract-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="asyncapi-tab" hidden>
       <div class="references-header"><p class="references-kicker">Contrats de messages</p><h2 id="asyncapi-panel-title" class="references-title">Contrats AsyncAPI</h2><p class="references-description">Consultez les contrats de messages indexés.</p></div>
-      <section class="references-section"><input id="asyncapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par chemin ou service" autocomplete="off" aria-label="Filtrer les contrats AsyncAPI"><ul id="asyncapi-panel-references" class="references-list"></ul><p id="asyncapi-panel-empty" class="references-empty">Aucun contrat AsyncAPI détecté.</p></section>
+      <section class="references-section"><input id="asyncapi-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par chemin ou microservice" autocomplete="off" aria-label="Filtrer les contrats AsyncAPI"><ul id="asyncapi-panel-references" class="references-list"></ul><p id="asyncapi-panel-empty" class="references-empty">Aucun contrat AsyncAPI détecté.</p></section>
     </div>
     <div id="dto-contract-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="dto-contract-tab" hidden>
       <div class="references-header"><p class="references-kicker">Modèles de données</p><h2 id="dto-contract-references-title" class="references-title">DTOs</h2><p class="references-description">Consultez les DTOs indexés dans les contrats de messages.</p></div>
@@ -193,7 +193,7 @@ __ASYNCAPI_WEB_COMPONENT__
     </div>
     <div id="jpa-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="jpa-tab" hidden>
       <div class="references-header"><p class="references-kicker">Persistance relationnelle</p><h2 id="jpa-references-title" class="references-title">Entités JPA</h2><p class="references-description">Consultez les entités JPA indexées.</p></div>
-      <section class="references-section"><input id="jpa-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou service" autocomplete="off" aria-label="Filtrer les entités JPA"><ul id="jpa-references" class="references-list"></ul><p id="jpa-references-empty" class="references-empty">Aucune entité JPA détectée.</p></section>
+      <section class="references-section"><input id="jpa-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou microservice" autocomplete="off" aria-label="Filtrer les entités JPA"><ul id="jpa-references" class="references-list"></ul><p id="jpa-references-empty" class="references-empty">Aucune entité JPA détectée.</p></section>
     </div>
     <div id="routes-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="routes-tab" hidden>
       <div class="references-header">
@@ -204,7 +204,7 @@ __ASYNCAPI_WEB_COMPONENT__
       <section class="references-section"><input id="routes-filter" class="reference-filter-input" type="search" placeholder="Filtrer par route ou microservice" autocomplete="off" aria-label="Filtrer les routes HTTP"><ul id="routes-list" class="references-list"></ul><p id="routes-empty" class="references-empty">Aucune route HTTP détectée.</p></section>
     </div>
     <div id="kafka-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="kafka-tab" hidden>
-      <div class="references-header"><p class="references-kicker">Canaux de messages</p><h2 id="topics-title" class="references-title">Topics</h2><p class="references-description">Consultez les topics Kafka indexés et leurs services producteurs et consommateurs.</p></div>
+      <div class="references-header"><p class="references-kicker">Canaux de messages</p><h2 id="topics-title" class="references-title">Topics</h2><p class="references-description">Consultez les topics Kafka indexés et leurs microservices producteurs et consommateurs.</p></div>
       <section class="references-section"><input id="topics-filter" class="reference-filter-input" type="search" placeholder="Filtrer les topics par nom" autocomplete="off" aria-label="Filtrer les topics Kafka"><ul id="topics-list" class="references-list"></ul><p id="topics-empty" class="references-empty">Aucun topic ne correspond à ce filtre.</p></section>
     </div>
     <div id="collections-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="collections-tab" hidden>
@@ -214,10 +214,10 @@ __ASYNCAPI_WEB_COMPONENT__
     <div id="persistence-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="persistence-tab" hidden>
       <div class="references-header">
         <p class="references-kicker">Schémas de données persistées</p>
-        <h2 id="mongo-class-references-title" class="references-title">Classes Mongo</h2>
-        <p class="references-description">Consultez les classes Mongo indexées.</p>
+        <h2 id="mongo-class-references-title" class="references-title">Classes de persistance</h2>
+        <p class="references-description">Consultez les classes de persistance MongoDB indexées.</p>
       </div>
-      <section class="references-section"><input id="mongo-class-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou donnée" autocomplete="off" aria-label="Filtrer les classes de données persistées"><ul id="mongo-class-references" class="references-list"></ul><p id="mongo-class-references-empty" class="references-empty">Aucune classe de données persistées détectée.</p></section>
+      <section class="references-section"><input id="mongo-class-reference-filter" class="reference-filter-input" type="search" placeholder="Filtrer par classe, package ou donnée" autocomplete="off" aria-label="Filtrer les classes de persistance"><ul id="mongo-class-references" class="references-list"></ul><p id="mongo-class-references-empty" class="references-empty">Aucune classe de persistance détectée.</p></section>
     </div>
     <div id="details" class="is-empty"><div class="details-empty">Sélectionnez un nœud pour isoler ses relations et afficher ses API.</div></div>
   </div>
@@ -257,7 +257,7 @@ __ASYNCAPI_WEB_COMPONENT__
         <dt>U</dt><dd>mise à jour</dd>
         <dt>D</dt><dd>suppression</dd>
         <dt>(C/U)</dt><dd>création ou mise à jour, sans trancher</dd>
-        <dt>?</dt><dd>associée au handler, parcours interne non établi</dd>
+        <dt>?</dt><dd>associée au handler, chemin interne non établi</dd>
       </dl>
     </div>
     <div class="graph-mode-context-actions">
@@ -268,7 +268,7 @@ __ASYNCAPI_WEB_COMPONENT__
         <button id="flow-zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer dans l’arbre d’appel" title="Augmenter l’échelle de l’arbre d’appel" hidden>+</button>
         <button id="flow-zoom-out" class="graph-action-label graph-secondary-action" type="button" aria-label="Dézoomer dans l’arbre d’appel" title="Réduire l’échelle de l’arbre d’appel" hidden>−</button>
       </div>
-      <button id="flow-mode-expand-all" class="graph-action-label graph-secondary-action" type="button" title="Déplier tous les niveaux du graphe d’appel" hidden>Déplier tout le graphe</button>
+      <button id="flow-mode-expand-all" class="graph-action-label graph-secondary-action" type="button" title="Déplier tous les niveaux de l’arbre d’appel" hidden>Déplier tout l’arbre</button>
       <button id="flow-diagnostic-full-view" class="graph-action-label graph-secondary-action" type="button" title="Afficher à nouveau le flux complet" hidden>Vue complète</button>
       <div id="flow-call-tree-depth-control" class="call-tree-depth-control" role="group" aria-label="Nombre de niveaux de l’arbre d’appel" hidden>
         <span class="call-tree-depth-label">Déplier jusqu’au niveau</span>
@@ -318,7 +318,7 @@ __ASYNCAPI_WEB_COMPONENT__
   <div id="graph-call-tree" aria-label="Arbre hiérarchique des appels" hidden></div>
   <section id="graph-flow-empty-state" class="graph-flow-empty-state" aria-label="Aucun arbre d’appel sélectionné" hidden>
     <div class="graph-flow-empty-card">
-      <p class="graph-flow-empty-kicker">Parcours potentiels, pas une trace runtime</p>
+      <p class="graph-flow-empty-kicker">Flux potentiels, pas une trace d’exécution</p>
       <h2 class="graph-flow-empty-title">Aucun arbre d’appel sélectionné</h2>
       <p class="graph-flow-empty-copy">Choisissez un point d’entrée : SystemLens déplie les appels HTTP et Kafka qu’il peut atteindre, avec le niveau de preuve de chaque étape.</p>
       <ul id="graph-flow-empty-shortcuts" class="graph-flow-empty-shortcuts"></ul>

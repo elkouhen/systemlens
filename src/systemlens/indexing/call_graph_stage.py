@@ -797,7 +797,7 @@ def run_call_graph_stage(
     )
     _report_progress(
         progress,
-        f"→ Indexation : {len(flows) - data_path_count} flux d'appel "
+        f"→ Indexation : {len(flows) - data_path_count} flux de code "
         f"et {data_path_count} annotation(s) d'accès aux données collectée(s).",
     )
     timer.end("flows", "matérialisation des flux de code")

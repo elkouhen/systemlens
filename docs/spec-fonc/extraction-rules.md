@@ -347,9 +347,9 @@ evidence; methods scheduled by a fixed delay/rate without a cron expression
 remain outside this trigger classification.
 
 The architecture graph remains conservative when message payload typing is
-missing or contradictory: a producer/consumer service arc requires the same
+missing or contradictory: a producer/consumer service edge requires the same
 concrete topic, while two known and different Java message types prevent the
-arc. Missing type evidence does not prevent the arc and is shown as a partial
+edge. Missing type evidence does not prevent the edge and is shown as a partial
 or unknown type status with medium confidence. The export keeps unmatched
 concrete endpoints and dynamic topic expressions as partial, explicitly
 unresolved topic evidence; dynamic topics never imply a producer/consumer

@@ -993,7 +993,7 @@ def test_modules_graph_reads_indexed_build_dependencies_and_exports_html(
     assert orders_node["httpApisExposed"] == ["GET /orders"]
     assert orders_node["kafkaTopicsPublished"] == ["orders.created"]
     assert orders_node["kafkaTopicsConsumed"] == ["payments.completed"]
-    assert 'appendList("APIs exposees", node.httpApisExposed)' in document
+    assert 'appendList("APIs exposées", node.httpApisExposed)' in document
 
     hierarchy = tmp_path / "architecture-modules.html"
     module_export = runner.invoke(app, ["export", "modules", "--html", str(hierarchy)])

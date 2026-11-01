@@ -106,7 +106,7 @@
             ? "Entité JPA"
           : node.kind === "message_channel"
             ? "Message"
-            : node.external ? "Service externe" : "Microservice";
+            : node.external ? "Microservice externe" : "Microservice";
       if (!["kafka_topic", "mongodb_collection", "data_schema", "message_channel", "jpa_entity"].includes(node.kind)) {
         return genericLabel;
       }

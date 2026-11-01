@@ -87,7 +87,7 @@ def manifest_rel_paths(repo_root: Path, paths: list[Path]) -> list[str]:
             raise typer.BadParameter(f"Manifeste introuvable : {raw_path}")
         if path.suffix.lower() not in {".md", ".json"}:
             raise typer.BadParameter(
-                "Le manifeste doit être un fichier Markdown (.md) ou un flux de Topics JSON (.json) : "
+                "Le manifeste doit être un fichier Markdown (.md) ou un flux de topics JSON (.json) : "
                 f"{raw_path}"
             )
         if rel_path not in seen:

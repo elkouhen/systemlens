@@ -96,14 +96,14 @@ def _indexing_issues(
                 add(
                     "warning",
                     "Topic Kafka dynamique",
-                    f"{service} : le topic {endpoint.topic!r} ne peut pas etre resolu statiquement.",
+                    f"{service} : le topic {endpoint.topic!r} ne peut pas être résolu statiquement.",
                     endpoint,
                 )
             if endpoint.system == "kafka" and not endpoint.message_type:
                 add(
                     "info",
                     "Type Kafka inconnu",
-                    f"{service} : le type Java du message sur {endpoint.topic!r} n'a pas ete deduit.",
+                    f"{service} : le type Java du message sur {endpoint.topic!r} n'a pas été déduit.",
                     endpoint,
                 )
             if endpoint.system == "rest" and endpoint.role == "call" and endpoint.id not in matched_http_call_ids:

@@ -26,7 +26,7 @@
       ["jpa_entity", "Entité JPA"],
       ["dto", "DTO"],
       ["diagnostic", "Diagnostic"],
-      ["mongo_persistence_class", "Classe persistée MongoDB"],
+      ["mongo_persistence_class", "Classe de persistance MongoDB"],
     ]);
     const resourceCatalogueCount = (count, word) => `${count} ${word}${count > 1 ? "s" : ""}`;
     const resourceCatalogueContext = (...parts) => parts.filter(Boolean).join(" · ");
@@ -312,12 +312,12 @@
       if (entry.kind === "microservice") {
         resourceCatalogueEntries.forEach(candidate => {
           if (!candidate.node && resourceCatalogueOwner(candidate) === entry.node.name) {
-            add(candidate, "Ressource du service", 2);
+            add(candidate, "Ressource du microservice", 2);
           }
         });
       } else if (ownerName) {
         const owner = resourceCatalogueEntries.find(candidate => candidate.node?.kind === "microservice" && candidate.node.name === ownerName);
-        add(owner, "Service propriétaire", 2);
+        add(owner, "Microservice propriétaire", 2);
       }
       if (["kafka_topic", "message_channel"].includes(entry.kind)) {
         resourceCatalogueEntries.forEach(candidate => {

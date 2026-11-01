@@ -168,8 +168,8 @@ mongodb_app = typer.Typer(
 )
 flows_app = typer.Typer(
     help=(
-        "Explore potential flows materialized from source code.\n\n"
-        "Examples: `systemlens flows`, `systemlens flows show <id>`."
+        "Explorer les flux potentiels matérialisés depuis le code source.\n\n"
+        "Exemples : `systemlens flows`, `systemlens flows show <id>`."
     )
 )
 microservices_app = typer.Typer(
@@ -365,7 +365,7 @@ def topics_cmd(
         "--max-depth",
         min=1,
         max=12,
-        help="Nombre maximal de services suivis par trace.",
+        help="Nombre maximal de microservices suivis par trace.",
         hidden=True,
     ),
     limit: int = typer.Option(
@@ -454,7 +454,7 @@ def analyze_cmd(
     workspace: Optional[Path] = typer.Option(
         None,
         "--workspace",
-        help="Workspace de services indexés séparément, pour `audit`.",
+        help="Répertoire de microservices indexés séparément, pour `audit`.",
     ),
     json_output: bool = typer.Option(False, "--json"),
     max_depth: int = typer.Option(
@@ -916,26 +916,26 @@ def _load_flow_inventory(root: Path | None):
 def flows_root(
     ctx: typer.Context,
     root: Path | None = typer.Option(
-        None, "--root", help="Indexed repository to explore."
+        None, "--root", help="Répertoire indexé à explorer."
     ),
     json_output: bool = typer.Option(False, "--json"),
     publishes_to_topic: bool = typer.Option(
         False,
         "--publishes-to-topic",
-        help="Only show flows that publish to at least one Kafka topic.",
+        help="Afficher uniquement les flux qui publient sur au moins un topic Kafka.",
     ),
     module: str | None = typer.Option(
         None,
         "--module",
-        help="Only list flows whose indexed evidence stays inside this Maven/Gradle module.",
+        help="Lister uniquement les flux dont les preuves indexées restent dans ce module Maven/Gradle.",
     ),
     explain: bool = typer.Option(
         False,
         "--explain",
-        help="Explains how each selected flow was constructed from persisted source evidence.",
+        help="Expliquer comment chaque flux sélectionné a été construit à partir des preuves persistées.",
     ),
 ) -> None:
-    """List potential code flows without a subcommand."""
+    """Lister les flux de code potentiels sans sous-commande."""
     if ctx.invoked_subcommand is None:
         inventory = _load_flow_inventory(root)
         if explain and module is not None:
@@ -968,20 +968,20 @@ def flows_list(
     publishes_to_topic: bool = typer.Option(
         False,
         "--publishes-to-topic",
-        help="Only show flows that publish to at least one Kafka topic.",
+        help="Afficher uniquement les flux qui publient sur au moins un topic Kafka.",
     ),
     module: str | None = typer.Option(
         None,
         "--module",
-        help="Only list flows whose indexed evidence stays inside this Maven/Gradle module.",
+        help="Lister uniquement les flux dont les preuves indexées restent dans ce module Maven/Gradle.",
     ),
     explain: bool = typer.Option(
         False,
         "--explain",
-        help="Explains how each selected flow was constructed from persisted source evidence.",
+        help="Expliquer comment chaque flux sélectionné a été construit à partir des preuves persistées.",
     ),
 ) -> None:
-    """List indexed potential code flows without re-indexing the repository."""
+    """Lister les flux de code potentiels indexés sans réindexer le dépôt."""
     inventory = _load_flow_inventory(root)
     if explain and module is not None:
         debug = internal_flow_debug(
@@ -1013,7 +1013,7 @@ def flows_calculate(
     module: str | None = typer.Option(
         None,
         "--module",
-        help="Recalcule uniquement les flux dont la méthode d'entrée appartient à ce module.",
+        help="Recalculer uniquement les flux dont la méthode d'entrée appartient à ce module.",
     ),
 ) -> None:
     """Recalculer les flux à partir du snapshot indexé courant, globalement ou par module."""
@@ -1045,7 +1045,7 @@ def flows_calculate(
     typer.echo(
         json.dumps(result)
         if _option_json(json_output)
-        else (f"{flow_count - data_path_count} flux d'appel recalculé(s), "
+        else (f"{flow_count - data_path_count} flux de code recalculé(s), "
               f"{data_path_count} annotation(s) d'accès aux données collectée(s).")
     )
 
@@ -1056,11 +1056,11 @@ def flows_show(
     root: Path | None = typer.Option(None, "--root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Show the steps and evidence for one potential code flow."""
+    """Afficher les étapes et les preuves d'un flux de code potentiel."""
     inventory = _load_flow_inventory(root)
     item = show_code_flow(inventory.code_flows, flow, inventory.endpoints)
     if item is None:
-        typer.echo(f"Flow not found or ambiguous: {flow}", err=True)
+        typer.echo(f"Flux introuvable ou ambigu : {flow}", err=True)
         raise typer.Exit(code=2)
     typer.echo(
         json.dumps(item)
@@ -1076,10 +1076,10 @@ def flows_stats(
     by_module: bool = typer.Option(
         False,
         "--by-module",
-        help="Compte les flux IN -> OUT séparément pour chaque module.",
+        help="Compter les flux IN -> OUT séparément pour chaque module.",
     ),
 ) -> None:
-    """List HTTP and Kafka connections between indexed modules."""
+    """Lister les connexions HTTP et Kafka entre les modules indexés."""
     inventory = _load_flow_inventory(root)
     if by_module:
         stats_by_module = internal_flow_stats_by_module(
@@ -1106,7 +1106,7 @@ def flows_stats(
 @analyze_app.command("audit")
 def analyze_audit(
     workspace: Path | None = typer.Option(
-        None, "--workspace", help="Workspace de services indexés séparément."
+        None, "--workspace", help="Répertoire de microservices indexés séparément."
     ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
@@ -1383,7 +1383,7 @@ def analyze_microservices_path(
 
 @app.command()
 def version() -> None:
-    """Affiche la version du package.
+    """Afficher la version du package.
 
     Exemple : `systemlens version`.
     """
@@ -1395,7 +1395,7 @@ def web_cmd(
     host: str = typer.Option("127.0.0.1", "--host", help="Adresse d'écoute locale."),
     port: int = typer.Option(8765, "--port", min=1, max=65535, help="Port HTTP."),
 ) -> None:
-    """Démarre l'espace web local Architecture.
+    """Démarrer l'espace web local Architecture.
 
     La vue Architecture lit le snapshot indexé à chaque ouverture.
     """
@@ -1416,7 +1416,7 @@ def web_cmd(
 
 @app.command(name="doctor")
 def doctor_cmd(json_output: bool = typer.Option(False, "--json")) -> None:
-    """Vérifie les prérequis d'un audit d'architecture, sans modifier le projet.
+    """Vérifier les prérequis d'un audit d'architecture, sans modifier le projet.
 
     Exemples : `systemlens doctor`, `systemlens doctor --json`.
     """
@@ -1437,7 +1437,7 @@ def doctor_cmd(json_output: bool = typer.Option(False, "--json")) -> None:
 
 @app.command()
 def init() -> None:
-    """Initialise la configuration .systemlens/config.yml du projet.
+    """Initialiser la configuration .systemlens/config.yml du projet.
 
     L'analyse des sources Java/Spring est entièrement locale et fondée sur AST.
     """
@@ -1460,14 +1460,14 @@ def init() -> None:
 @app.command(name="index")
 def index_cmd(
     manifest_args: Optional[list[Path]] = typer.Argument(  # noqa: UP007
-        None, help="Manifeste(s) de Topics Markdown ou JSON à indexer explicitement."
+        None, help="Manifeste(s) de topics Markdown ou JSON à indexer explicitement."
     ),
-    full: bool = typer.Option(False, "--full", help="Force un scan complet."),
+    full: bool = typer.Option(False, "--full", help="Forcer un scan complet."),
     module: str | None = typer.Option(
         None,
         "--module",
         help=(
-            "Focalise la sortie finale sur un module Maven/Gradle, indiqué par son nom ou son chemin. "
+            "Focaliser la sortie finale sur un module Maven/Gradle, indiqué par son nom ou son chemin. "
             "L'indexation reste globale."
         ),
     ),
@@ -1475,7 +1475,7 @@ def index_cmd(
         False,
         "--refresh-codeql-view",
         help=(
-            "Force la création ou l'actualisation de la vue des méthodes CodeQL "
+            "Forcer la création ou l'actualisation de la vue des méthodes CodeQL "
             "pour le module sélectionné. Requiert --module."
         ),
     ),
@@ -1483,7 +1483,7 @@ def index_cmd(
         False,
         "--internal-flows-only",
         help=(
-            "Analyse rapidement le snapshot existant et n'affiche que les flux "
+            "Analyser rapidement le snapshot existant et n'afficher que les flux "
             "IN → OUT du module sélectionné. Requiert --module."
         ),
     ),
@@ -1491,17 +1491,17 @@ def index_cmd(
         False,
         "--show-call-chains",
         help=(
-            "Affiche les chaînes d'appels des flux internes construits. "
+            "Afficher les chaînes d'appels des flux internes construits. "
             "Requiert --module."
         ),
     ),
     resume_codeql_join: bool = typer.Option(
         False,
         "--resume-codeql-join",
-        help="Reprend une jointure CodeQL interrompue depuis son dernier checkpoint.",
+        help="Reprendre une jointure CodeQL interrompue depuis son dernier checkpoint.",
     ),
     manifests: Optional[list[Path]] = typer.Option(  # noqa: UP007
-        None, "--manifest", help="Manifeste de Topics Markdown ou JSON (répétable)."
+        None, "--manifest", help="Manifeste de topics Markdown ou JSON (répétable)."
     ),
     topic_strategy: Optional[Literal["default", "strategy1"]] = typer.Option(
         None,
@@ -1511,7 +1511,7 @@ def index_cmd(
     kubernetes: bool = typer.Option(
         False,
         "--kubernetes",
-        help="Découvre les ressources des Deployments et StatefulSets via kubectl.",
+        help="Découvrir les ressources des Deployments et StatefulSets via kubectl.",
     ),
     kubernetes_namespace: Optional[str] = typer.Option(
         None,
@@ -1534,17 +1534,17 @@ def index_cmd(
     codeql_progress: bool = typer.Option(
         False,
         "--codeql-progress",
-        help="Affiche en direct les messages de progression détaillés de CodeQL.",
+        help="Afficher en direct les messages de progression détaillés de CodeQL.",
     ),
     generate_sources: bool = typer.Option(
         False,
         "--generate-sources",
-        help="Génère les sources dans le dépôt indexé, sans lancer la compilation ni les tests.",
+        help="Générer les sources dans le dépôt indexé, sans lancer la compilation ni les tests.",
     ),
     no_codeql: bool = typer.Option(
         False,
         "--no-codeql",
-        help="Désactive CodeQL pour cette indexation ; équivaut à `--call-graph-engine source`.",
+        help="Désactiver CodeQL pour cette indexation ; équivaut à `--call-graph-engine source`.",
     ),
     call_graph_engine: Optional[Literal["codeql", "source", "none"]] = typer.Option(
         None,
@@ -1568,7 +1568,7 @@ def index_cmd(
         ),
     ),
 ) -> None:
-    """Indexe le code avec les extracteurs AST (incrémental par défaut).
+    """Indexer le code avec les extracteurs AST (incrémental par défaut).
 
     Exemples : `systemlens index`, `systemlens index --full`,
     `systemlens index --strategy strategy1`, `systemlens index --no-codeql`,
@@ -2100,7 +2100,7 @@ def export_microservices_cmd(
     workspace: Optional[Path] = typer.Option(
         None,
         "--workspace",
-        help="Répertoire contenant plusieurs services indexés séparément.",
+        help="Répertoire de microservices indexés séparément.",
     ),
     html: Optional[Path] = typer.Option(
         None, "--html", help="Fichier HTML Sigma.js à produire."
@@ -2108,12 +2108,12 @@ def export_microservices_cmd(
     call_graphs_only: bool = typer.Option(
         False,
         "--call-graphs-only",
-        help="Limiter l’export HTML aux graphes d’appel.",
+        help="Limiter l’export HTML aux arbres d’appel.",
     ),
     no_call_graph_annotations: bool = typer.Option(
         False,
         "--no-call-graph-annotations",
-        help="Omettre les accès aux données et diagnostics des graphes d’appel HTML.",
+        help="Omettre les accès aux données et diagnostics des arbres d’appel HTML.",
     ),
     review_aids: bool = typer.Option(
         False,
@@ -2158,7 +2158,7 @@ def export_microservices_cmd(
         raise typer.Exit(code=2)
     if review_aids and (html is None or no_call_graph_annotations):
         typer.echo(
-            "`--review-aids` nécessite `--html FILE` et les annotations des graphes d’appel.",
+            "`--review-aids` nécessite `--html FILE` et les annotations des arbres d’appel.",
             err=True,
         )
         raise typer.Exit(code=2)
@@ -2226,7 +2226,7 @@ def export_microservices_cmd(
     rendered_edge_count = len(graph_data.edges) + len(fact_edges)
     typer.echo(
         f"Export microservices écrit dans {output} "
-        f"({rendered_service_count} services, {rendered_edge_count} arêtes)."
+        f"({rendered_service_count} microservices, {rendered_edge_count} relations)."
     )
     if graph_data.result["note"]:
         typer.echo(str(graph_data.result["note"]))
@@ -2717,7 +2717,7 @@ def _render_microservice_implementation(
 
 
 def _render_microservice_topics(service: str, root: Path, json_output: bool) -> None:
-    """Liste les topics publiés et consommés par un microservice."""
+    """Lister les topics publiés et consommés par un microservice."""
     summary = show_architecture_object(
         _microservice_catalog(root), "microservice", service
     )
@@ -2737,7 +2737,7 @@ def _render_microservice_topics(service: str, root: Path, json_output: bool) -> 
 
 
 def _render_microservice_apis(service: str, root: Path, json_output: bool) -> None:
-    """Liste les APIs exposées et appelées par un microservice."""
+    """Lister les APIs exposées et appelées par un microservice."""
     summary = show_architecture_object(
         _microservice_catalog(root), "microservice", service
     )
@@ -2755,7 +2755,7 @@ def _render_microservice_apis(service: str, root: Path, json_output: bool) -> No
 
 
 def _render_microservice_mongodb(service: str, root: Path, json_output: bool) -> None:
-    """Liste les données utilisées par un microservice."""
+    """Lister les données utilisées par un microservice."""
     summary = show_architecture_object(
         _microservice_catalog(root), "microservice", service
     )
@@ -2775,7 +2775,7 @@ def _render_microservice_mongodb(service: str, root: Path, json_output: bool) ->
 def _render_microservice_properties(
     service: str, root: Path, json_output: bool
 ) -> None:
-    """Affiche l'exemple YAML de propriétés Spring d'un microservice."""
+    """Afficher l'exemple YAML de propriétés Spring d'un microservice."""
     selected, _ = _selected_microservice(service, root)
     from systemlens.discovery.configuration import service_configuration_example
 
@@ -2785,13 +2785,13 @@ def _render_microservice_properties(
 
 
 def _render_microservice_openapi(service: str, root: Path, json_output: bool) -> None:
-    """Affiche les contrats OpenAPI/Swagger locaux d'un microservice."""
+    """Afficher les contrats OpenAPI/Swagger locaux d'un microservice."""
     selected, _ = _selected_microservice(service, root)
     _render_openapi_contracts(selected.name, selected.path, json_output)
 
 
 def _render_openapi_contracts(name: str, root: Path, json_output: bool) -> None:
-    """Rend les contrats OpenAPI/Swagger d'un projet ou microservice."""
+    """Rendre les contrats OpenAPI/Swagger d'un projet ou microservice."""
     contracts = []
     module = next((item for item in discover_modules(root) if item.path == root), None)
     contract_paths = module.openapi_files if module is not None else ()
@@ -2827,11 +2827,11 @@ def modules_cmd(
     html: Optional[Path] = typer.Option(
         None,
         "--html",
-        help="Exporte le graphe de dépendances de projets en HTML Sigma.js.",
+        help="Exporter le graphe de dépendances de projets en HTML Sigma.js.",
         hidden=True,
     ),
 ) -> None:
-    """Liste les projets indexés ou détaille l'un d'eux.
+    """Lister les projets indexés ou détailler l'un d'eux.
 
     `systemlens projects` liste. `systemlens projects <projet>` détaille. Les sous-commandes
     `integrations`, `properties` et `openapi` prennent un projet dans le

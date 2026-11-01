@@ -69,7 +69,7 @@ def dependency_federation_warning(
         return None
     return (
         "Dépendances inter-microservices partielles : seules les informations "
-        "des services déjà indexés sont prises en compte "
+        "des microservices déjà indexés sont prises en compte "
         f"(manquants : {', '.join(missing)})."
     )
 

@@ -61,7 +61,7 @@ class GraphResult(TypedDict):
 
 
 _NO_CROSS_MODULE_DATA_NOTE = (
-    "La topologie inter-services nécessite soit un répertoire multi-services "
+    "La topologie entre microservices nécessite soit un répertoire de microservices "
     "fédéré (--workspace/workspace_root, BACKLOG-11 A2), soit des endpoints "
     "attribués à un projet Maven par une indexation multi-projets (BACKLOG-13) — "
     "seuls les appels REST détectés dans un handler Kafka de ce projet sont "
@@ -179,18 +179,18 @@ def render_graph_text(result: GraphResult) -> str:
     nodes = result["nodes"]
     edges = result["edges"]
     if services:
-        lines.append(f"Services ({len(services)}) : {', '.join(services)}")
+        lines.append(f"Microservices ({len(services)}) : {', '.join(services)}")
     else:
-        lines.append("Aucun service inter-projet disponible pour construire le graphe.")
+        lines.append("Aucun microservice inter-projet disponible pour construire le graphe.")
 
     kafka_topics = [node["name"] for node in nodes if node["kind"] == "kafka_topic"]
     if kafka_topics:
         lines.append(f"Topics ({len(kafka_topics)}) : {', '.join(kafka_topics)}")
     else:
-        lines.append("Aucun Topic inter-service détecté.")
+        lines.append("Aucun topic entre microservices détecté.")
 
     if edges:
-        lines.append(f"Arêtes du graphe ({len(edges)}) :")
+        lines.append(f"Relations du graphe ({len(edges)}) :")
         for edge in edges:
             from_site = (
                 f" ({edge['from_site']['path']}:{edge['from_site']['start_line']})"
@@ -207,11 +207,11 @@ def render_graph_text(result: GraphResult) -> str:
                 f"{edge['to_node']}{to_site}"
             )
     else:
-        lines.append("Aucune arête inter-service détectée.")
+        lines.append("Aucune relation entre microservices détectée.")
 
     calls = result["outbound_calls_in_consumers"]
     if calls:
-        lines.append(f"Appels REST dans un handler de Topic ({len(calls)}) :")
+        lines.append(f"Appels REST dans un handler de topic ({len(calls)}) :")
         for hit in calls:
             call, consumer = hit["call"], hit["consumer"]
             lines.append(
@@ -220,7 +220,7 @@ def render_graph_text(result: GraphResult) -> str:
                 f"{consumer['path']}:{consumer['start_line']}-{consumer['end_line']})"
             )
     else:
-        lines.append("Aucun appel REST détecté dans un handler de Topic.")
+        lines.append("Aucun appel REST détecté dans un handler de topic.")
 
     if result["note"]:
         lines.append(result["note"])

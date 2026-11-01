@@ -23,7 +23,7 @@
         ? `Index : ${indexingIssues.length} fait${indexingIssues.length > 1 ? "s" : ""} à vérifier`
         : "Index : complet";
       inventoryStatus.title = indexingIssues.length
-        ? "Ouvrir les problèmes d'indexation"
+        ? "Ouvrir les problèmes d’indexation"
         : "Aucun fait non résolu dans cet inventaire";
       indexingIssuesTitle.textContent = `Problèmes d’indexation (${indexingIssues.length})`;
       indexingIssuesList.replaceChildren();
@@ -293,7 +293,7 @@
         "Inspecter",
         () => openMongoPersistenceInspector(item.navigation?.inspect),
       )));
-      mongoClassReferencesTitle.textContent = `Classes Mongo (${visibleMongoClasses.length}/${mongoClasses.length})`;
+      mongoClassReferencesTitle.textContent = `Classes de persistance (${visibleMongoClasses.length}/${mongoClasses.length})`;
     }
     function renderMicroservices() {
       microservicesList.replaceChildren();
@@ -484,7 +484,7 @@
         listAction.type = "button";
         listAction.className = "reference-action";
         listAction.textContent = "Flux";
-        listAction.title = "Ouvrir ce flux dans l’onglet Flux";
+        listAction.title = "Ouvrir ce flux dans l’onglet Flux de code";
         const openInList = () => flowsPanel.dispatchEvent(new CustomEvent(
           "systemlens:code-flow-open-in-list",
           { detail: { flowId: flow.id } },
@@ -495,7 +495,7 @@
         graphAction.type = "button";
         graphAction.className = "reference-action";
         graphAction.textContent = "Arbre d’appel";
-        graphAction.title = "Afficher ce flux dans le graphe d’appel";
+        graphAction.title = "Afficher ce flux dans l’arbre d’appel";
         const openInGraph = () => flowsPanel.dispatchEvent(new CustomEvent(
           "systemlens:code-flow-open-in-graph",
           { detail: { flowId: flow.id } },
@@ -948,7 +948,7 @@
       if (!contract.spec || !window.SwaggerUIBundle) {
         const message = document.createElement("p");
         message.className = "dto-summary";
-        message.textContent = "La spécification locale ou Swagger UI n'est pas disponible dans cet export.";
+        message.textContent = "La spécification locale ou Swagger UI n’est pas disponible dans cet export.";
         inspectorBody.append(message);
         return;
       }
@@ -977,7 +977,7 @@
       if (!contract.spec || !customElements.get("asyncapi-component")) {
         const message = document.createElement("p");
         message.className = "dto-summary";
-        message.textContent = "Le composant AsyncAPI officiel n'est pas disponible dans cet export.";
+        message.textContent = "Le composant AsyncAPI officiel n’est pas disponible dans cet export.";
         inspectorBody.append(message);
         const rawSpec = document.createElement("pre");
         rawSpec.textContent = JSON.stringify(contract.spec || {}, null, 2);
@@ -1108,7 +1108,7 @@
     function dtoInspectorKindLabel(dto) {
       const roles = (dto.roles || []).map(role => role.toLowerCase());
       if (roles.some(role => role.includes("rest"))) return "DTO REST";
-      if (roles.some(role => role.includes("jpa"))) return "DTO d'entité JPA";
+      if (roles.some(role => role.includes("jpa"))) return "DTO d’entité JPA";
       if (dto.root === false) return "DTO projet";
       return "DTO de message";
     }

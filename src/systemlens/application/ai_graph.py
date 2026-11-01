@@ -584,7 +584,7 @@ def load_ai_graph(path: Path) -> tuple[dict[str, list[MessageEndpoint]], list[Gr
         if node["kind"] == "collection":
             owner = node.get("owner")
             if not isinstance(owner, str) or owner not in services:
-                raise AiGraphError(f"la collection {node['id']} doit avoir un owner service valide.")
+                raise AiGraphError(f"la collection {node['id']} doit avoir un microservice propriétaire valide.")
             collections.setdefault(owner, []).append(str(node["name"]))
 
     edges: list[GraphEdge] = []

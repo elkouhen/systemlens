@@ -255,14 +255,14 @@ identifier. A `CallGraphDescription` describes service-level propagation for
 one selected flow or flow group. It does not replace the persisted method call
 facts or the individual `CodeFlow` records.
 
-The exporter removes a root graph when its service set and exact directed arc
-set are proper subsets of another root graph. Arc identity includes source and
+The exporter removes a root graph when its service set and exact directed edge
+set are proper subsets of another root graph. Edge identity includes source and
 target services, relation kind, label, and endpoint IDs. Equal graphs keep
 their separate selectable flows. Identical root-specific shapes share one
 stored graph by digest. The trigger catalogue is shared by all roots, so the
 digest omits it. Building
 each root's graph costs work proportional to its reachable flows. Containment
-lookup uses an inverted arc index, or a service index for graphs without arcs.
+lookup uses an inverted edge index, or a service index for graphs without edges.
 
 ```json
 {
@@ -318,7 +318,7 @@ lookup uses an inverted arc index, or a service index for graphs without arcs.
 `nodes` is the unique set of participating microservices. `node_order` is the
 deterministic display order. `traversal_levels` groups services by directed
 reachability; its first level is the graph root set. `call_tree` is the compact
-tree projection used for service-level layout and may omit an arc when the full
+tree projection used for service-level layout and may omit an edge when the full
 graph contains a fan-out, fan-in or cycle. `call_trees_by_flow` stores one causal
 transition index for each exported flow root, so equivalent service graphs do not
 make different events share a root.
@@ -333,7 +333,7 @@ publisher to callee or consumer, and `order` is the one-based display order with
 that graph.
 
 `endpoint_ids` preserves the concrete input and output endpoint evidence used to
-render ports and arc labels.
+render ports and edge labels.
 
 `triggers` maps each participating service to the flow entries that can start
 the propagation. A trigger kind is one of `http_entry`, `message_entry` or
@@ -541,24 +541,24 @@ Known message types must match when both endpoints provide one. Missing type
 evidence does not prevent the topology relation, while conflicting known types
 prevent it.
 
-The exported flow-graph projection builds directed candidate arcs from the
+The exported flow-graph projection builds directed candidate edges from the
 flow-associated OUT ports, identifies trigger flows with no incoming flow
-arc as roots, and traverses those flows in breadth-first order. A trigger is only
+edge as roots, and traverses those flows in breadth-first order. A trigger is only
 an `http_entry`, `message_entry`, or `cron_entry` first step; a publication or
 HTTP call is an internal output. For each visited module, the traversal follows
-only its flow-associated OUT ports and valid output-to-input topology arcs,
+only its flow-associated OUT ports and valid output-to-input topology edges,
 then visits the flow whose trigger is the target IN port.
 
 Expanded OUT ports and endpoint pairs prevent duplicate work and terminate
 cycles without suppressing a module reached again through another branch.
-Fan-in, fan-out, and reachable modules without a matching arc remain visible.
+Fan-in, fan-out, and reachable modules without a matching edge remain visible.
 If the candidate graph is cyclic and has no zero-indegree module, all flow
-modules are used as deterministic roots while preserving arc direction.
-The snapshot retains the traversal levels and call tree used to assign arc
+modules are used as deterministic roots while preserving edge direction.
+The snapshot retains the traversal levels and call tree used to assign edge
 orders before copying those orders onto the final call graph.
 
 The graph records external trigger events under their owning microservices.
-The browser receives these canonical service arcs with their endpoint identities
+The browser receives these canonical service edges with their endpoint identities
 and does not reconstruct a second set from display labels.
 The `flows list` query derives a read-only `root` boolean from the same
 OUT-to-IN topology: a flow is a root when no persisted flow reaches its input
@@ -709,7 +709,7 @@ the publication in the same entry source file, the pair is insufficient
 evidence for a stale read after that write. This source-order guard does not
 prove runtime execution order across branches.
 The HTML export projects data sites onto every reachable call root using
-persisted endpoint arcs and flows sharing the exact trigger endpoint. This
+persisted endpoint edges and flows sharing the exact trigger endpoint. This
 projection does not merge sibling paths into one execution sequence. Its work
 is bounded by the number of exported flow roots times reachable flow edges
 and access steps; it does not reopen Java source files.
@@ -748,7 +748,7 @@ reconciliation replaces them and marks the snapshot complete.
 
 The join emits periodic progress logs while traversing input methods and
 call-graph transitions. After each join batch, the current provisional
-`code_flows` snapshot is committed, allowing exports to retain the arcs found
+`code_flows` snapshot is committed, allowing exports to retain the edges found
 before an interruption. These snapshots remain partial until final
 reconciliation.
 

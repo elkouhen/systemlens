@@ -50,13 +50,13 @@ def assess_architecture(
                 if not any(key[0] == "kafka" and key[1] == service and key[3] == endpoint.topic for key in edge_keys):
                     risks.append(ArchitectureRisk(
                         "orphan-kafka-producer", "WARNING", "Producer Kafka sans consumer détecté",
-                        f"{service} publie `{endpoint.topic}` ({endpoint.path}:{endpoint.start_line}) sans consumer inter-service indexé.", (service,),
+                        f"{service} publie `{endpoint.topic}` ({endpoint.path}:{endpoint.start_line}) sans consommateur indexé dans un autre microservice.", (service,),
                     ))
             if endpoint.system == "kafka" and endpoint.role == "consume" and not endpoint.topic_dynamic:
                 if not any(key[0] == "kafka" and key[2] == service and key[3] == endpoint.topic for key in edge_keys):
                     risks.append(ArchitectureRisk(
                         "orphan-kafka-consumer", "WARNING", "Consumer Kafka sans producer détecté",
-                        f"{service} consomme `{endpoint.topic}` ({endpoint.path}:{endpoint.start_line}) sans producer inter-service indexé.", (service,),
+                        f"{service} consomme `{endpoint.topic}` ({endpoint.path}:{endpoint.start_line}) sans producteur indexé dans un autre microservice.", (service,),
                     ))
     risks.extend(_kafka_message_contract_risks(endpoints_by_service))
     # A two-way synchronous dependency is a concrete coupling signal.

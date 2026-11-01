@@ -1001,14 +1001,14 @@ def indexing_issues(
             endpoint_issue(
                 "dynamic_kafka_topic",
                 "warning",
-                f"{service} : le topic {endpoint.topic!r} ne peut pas etre resolu statiquement.",
+                f"{service} : le topic {endpoint.topic!r} ne peut pas être résolu statiquement.",
                 endpoint,
             )
         if endpoint.system == "kafka" and not endpoint.message_type:
             endpoint_issue(
                 "unknown_kafka_message_type",
                 "info",
-                f"{service} : le type Java du message sur {endpoint.topic!r} n'a pas ete deduit.",
+                f"{service} : le type Java du message sur {endpoint.topic!r} n'a pas été déduit.",
                 endpoint,
             )
         if endpoint.system == "rest" and endpoint.role == "call" and endpoint.id not in matched_http_call_ids:
@@ -1017,7 +1017,7 @@ def indexing_issues(
                 endpoint_issue(
                     "ambiguous_http_target",
                     "warning",
-                    f"{service} : la cible explicite {resolution.hint!r} correspond a plusieurs microservices.",
+                    f"{service} : la cible explicite {resolution.hint!r} correspond à plusieurs microservices.",
                     endpoint,
                 )
                 continue

@@ -107,7 +107,7 @@ UX_LABELS = {
     "Sélection",
     "Développer",
     "Réduire",
-    "Déplier tout le graphe",
+    "Déplier tout l’arbre",
     "Déplier jusqu’au niveau",
     "appels",
     "replier",
@@ -121,6 +121,10 @@ UX_LABELS = {
     "Filtres et affichage",
     "Tout le graphe",
     "Vue lisible",
+    "Flux potentiels, pas une trace d’exécution",
+    "Types de relations",
+    "Appels d’API",
+    "Accès aux données",
 }
 
 # Contract labels the implementation does not render yet, each owned by a

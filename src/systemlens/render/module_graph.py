@@ -188,7 +188,7 @@ def _workspace_kafka_message_types(
 
 def render_workspace_text(result: WorkspaceResult) -> str:
     if not result["services"]:
-        return "Aucun service workspace découvert (ni projet Maven runtime, ni microservice Gradle Spring Boot)."
+        return "Aucun microservice découvert dans le répertoire (ni projet Maven runtime, ni microservice Gradle Spring Boot)."
     lines = []
     for info in result["services"]:
         status = "indexé" if info["indexed"] else "non indexé"
@@ -209,8 +209,8 @@ def render_workspace_text(result: WorkspaceResult) -> str:
             lines.append(f"  OpenAPI: {', '.join(info['openapi_files'])}")
         if info["kafka_message_types_published"] or info["kafka_message_types_consumed"]:
             lines.append(
-                f"  Types de Topics publiés: {info['kafka_message_types_published'] or '-'} | "
-                f"Types de Topics consommés: {info['kafka_message_types_consumed'] or '-'}"
+                f"  Types de topics publiés: {info['kafka_message_types_published'] or '-'} | "
+                f"Types de topics consommés: {info['kafka_message_types_consumed'] or '-'}"
             )
     for warning in result["warnings"]:
         lines.append(f"⚠ {warning}")
@@ -460,7 +460,7 @@ def render_module_detail_text(module: ModuleDetail) -> str:
         f"démarre l'application={module['starts_application']}\n"
         f"Data={', '.join(module['mongo_collections']) or 'aucune'}\n"
         f"opérations Data={module['mongo_method_count']}\n"
-        f"opérations Topics={module['kafka_method_count']}\n"
+        f"opérations topics={module['kafka_method_count']}\n"
         f"points bloquants={module['blocking_point_count']}\n"
         f"OpenAPI={', '.join(module['openapi_files']) or 'aucun'}\n"
         f"Contrôleurs REST ({len(module['rest_controllers'])})={', '.join(module['rest_controllers']) or 'aucun'}\n"

@@ -26,13 +26,13 @@
   <div class="toolbar">
     <strong>Projets</strong>
     <input id="search" type="search" placeholder="Rechercher un projet" autocomplete="off" aria-label="Rechercher un projet">
-    <button id="zoom-out" type="button" aria-label="Dezoomer" title="Dezoomer">-</button>
+    <button id="zoom-out" type="button" aria-label="Dézoomer" title="Dézoomer">-</button>
     <button id="zoom-in" type="button" aria-label="Zoomer" title="Zoomer">+</button>
-    <button id="fit-view" type="button" aria-label="Ajuster a l'ecran" title="Ajuster a l'ecran">o</button>
-    <button id="reset" type="button" aria-label="Reinitialiser la selection" title="Reinitialiser">x</button>
+    <button id="fit-view" type="button" aria-label="Ajuster à l’écran" title="Ajuster à l’écran">o</button>
+    <button id="reset" type="button" aria-label="Réinitialiser la sélection" title="Réinitialiser">x</button>
   </div>
-  <div id="details">Selectionnez un projet pour explorer ses dependances directes.</div>
-  <div id="graph" aria-label="Graphe des dependances de projets"></div>
+  <div id="details">Sélectionnez un projet pour explorer ses dépendances directes.</div>
+  <div id="graph" aria-label="Graphe des dépendances de projets"></div>
   <script id="module-graph-data" type="application/json">__MODULE_GRAPH_DATA__</script>
   <script>
     const graphData = JSON.parse(document.getElementById("module-graph-data").textContent);
@@ -79,18 +79,18 @@
       const node = nodeById.get(id);
       details.replaceChildren();
       const title = document.createElement("strong"); title.textContent = node.name;
-      details.append(title, document.createTextNode(`${node.kind} - ${relatedEdges.size} dependance${relatedEdges.size > 1 ? "s" : ""}`));
-      appendList("APIs exposees", node.httpApisExposed);
-      appendList("Topics publies", node.kafkaTopicsPublished);
-      appendList("Topics consommes", node.kafkaTopicsConsumed);
-      appendList("Depend de", dependencies);
-      appendList("Utilise par", dependents);
+      details.append(title, document.createTextNode(`${node.kind} - ${relatedEdges.size} dépendance${relatedEdges.size > 1 ? "s" : ""}`));
+      appendList("APIs exposées", node.httpApisExposed);
+      appendList("Topics publiés", node.kafkaTopicsPublished);
+      appendList("Topics consommés", node.kafkaTopicsConsumed);
+      appendList("Dépend de", dependencies);
+      appendList("Utilisé par", dependents);
       const position = renderer.getNodeDisplayData(id);
       if (position) renderer.getCamera().animate({ x: position.x, y: position.y, ratio: .55 }, { duration: 260 });
     }
     function reset() {
       selectedId = null; relatedNodes = null; relatedEdges = null; renderer.refresh();
-      details.textContent = "Selectionnez un projet pour explorer ses dependances directes.";
+      details.textContent = "Sélectionnez un projet pour explorer ses dépendances directes.";
       search.value = "";
     }
     renderer.on("clickNode", ({ node }) => selectModule(node));

@@ -92,11 +92,16 @@ returns to the panel under the search block.
 
 The floating graph toolbar ends with a row of type chips: one chip per
 node-type filter with nodes in the export (microservices, external
-services, topics, collections, other resources). A chip counts the nodes of
-its type that are not hidden individually, and its pressed state mirrors
+microservices, topics, collections, other resources). A chip counts the nodes
+of its type that are not hidden individually, and its pressed state mirrors
 the matching `Types de nœuds` filter; clicking it toggles that filter. The
 strip is hidden with the graph, in the selected call tree, and below 721
 pixels.
+
+The `Types de nœuds` filters read `Microservices`, `Externes`, `Topics`,
+`Données`, and `Autres`. The `Types de relations` filters read
+`Appels d’API`, `Messages`, `Accès aux données`, and `Autres`, so the topic
+node type and the message relation type never share a label.
 
 The resource catalogue MUST present one searchable list across indexed
 microservices and architecture resources. Its search control MUST remain above
@@ -173,10 +178,10 @@ error states explain what is unavailable and what the user can do next.
 | Details widget | Show the selected graph element's immediate context and available analysis actions. | Identity, summary, relations, evidence, and actions for focus, modules, code flows, or source navigation. | It is contextual and may be hidden when an introspection window opens. It does not compete with the inspector identity header. |
 | Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, breadcrumb from the second level, back and close actions; for a node, a four-tile relation summary, one row of secondary actions, and counted disclosure groups. | From 901 pixels, node, route, and HTTP call views dock to the right edge beside the graph; other views, and every view at 900 pixels or less, open as a centered modal. Related resources remain selectable and update the same inspection history. Each fact appears in one section only. |
 | Flow catalogue widget | Select a persisted code flow or flow group for call-graph analysis. | A one-line kicker and the title with its count, compact flow rows, description, trigger, protocol, status, and summary statistics. | Selecting a row replaces the selected flow graph without moving the list. Full details are shown in the selected-flow view, not in every row. |
-| Call-tree context widget | Explain and control the selected hierarchical call graph. | Flow identity, trigger event, visible tree node and arc counts, consistency diagnostic counts, the key of the access annotations, depth, expand-all, and tree-specific status. | Floats over the tree on desktop and shows its summary at all times; collapsed in the panel at compact widths and opened with `Développer`. It controls the tree without repeating its nodes or arcs. Tree counts describe the visible projection and update when depth or expansion changes. Diagnostic counts cover the selected flow and distinguish possible risks, insufficient evidence, identified guarantees, and possible interactions. |
-| Tooltip widget | Provide concise evidence for a hovered node, arc, row, or control. | Subject identity, relevant relation facts, and available status or type. | Appears on hover or focus and does not become a second navigation surface. It MUST NOT infer missing facts. |
-| Legend widget | Explain stable graph colours, shapes, strokes, and badges. | Collapsible groups for node types, relations, connectivity, and evidence level, with one single-line entry per visual semantic. | Collapsed by default. When open, it reserves its footprint so no fitted card lies under it. It explains the graph and does not replace node or arc tooltips. |
-| Analysis status widget | Report a transient selected port or arc and its related evidence. | Selected endpoint or arc, protocol, related resources, and a clear action. | Highlights the current analysis state without changing the graph data, camera, or persisted selection. |
+| Call-tree context widget | Explain and control the selected hierarchical call graph. | Flow identity, trigger event, visible tree node and edge counts, consistency diagnostic counts, the key of the access annotations, depth, expand-all, and tree-specific status. | Floats over the tree on desktop and shows its summary at all times; collapsed in the panel at compact widths and opened with `Développer`. It controls the tree without repeating its nodes or edges. Tree counts describe the visible projection and update when depth or expansion changes. Diagnostic counts cover the selected flow and distinguish possible risks, insufficient evidence, identified guarantees, and possible interactions. |
+| Tooltip widget | Provide concise evidence for a hovered node, edge, row, or control. | Subject identity, relevant relation facts, and available status or type. | Appears on hover or focus and does not become a second navigation surface. It MUST NOT infer missing facts. |
+| Legend widget | Explain stable graph colours, shapes, strokes, and badges. | Collapsible groups for node types, relations, connectivity, and evidence level, with one single-line entry per visual semantic. | Collapsed by default. When open, it reserves its footprint so no fitted card lies under it. It explains the graph and does not replace node or edge tooltips. |
+| Analysis status widget | Report a transient selected port or edge and its related evidence. | Selected endpoint or edge, protocol, related resources, and a clear action. | Highlights the current analysis state without changing the graph data, camera, or persisted selection. |
 
 ### Shared states and visual rules
 
@@ -203,9 +208,9 @@ Widget text uses the `--type-*` tokens, from `--type-caption` at 10 pixels to
 card kickers, badges, and tooltips. Glyph-only controls MAY use larger sizes.
 
 An interactive resource has one selection contract wherever it appears. In the
-Architecture view, resource nodes and Topic relation arcs are selectable;
-HTTP and Mongo relation arcs remain tooltip-only. In the selected call tree,
-visible nodes and supported HTTP or Kafka arcs expose their analysis or
+Architecture view, resource nodes and Topic relation edges are selectable;
+HTTP and Mongo relation edges remain tooltip-only. In the selected call tree,
+visible nodes and supported HTTP or Kafka edges expose their analysis or
 inspection action. A tooltip MUST never suggest that an element is selectable
 when the current widget does not support that action.
 
@@ -238,10 +243,10 @@ separate area so “no indexed dependency” is not confused with “missing”.
 
 The same graph vocabulary MUST be used in architecture and selected-flow views:
 cards, relation strokes, port labels, badges, selection halos, and protocol
-colours retain their meaning. Architecture topology arcs and selected-flow
-arcs use a fixed two-pixel screen stroke. Architecture arcs display an arrowhead
-just before the target node so their direction remains visible when cards
-overlap the underlying graph layer.
+colours retain their meaning. Architecture topology edges and selected-flow
+edges use a fixed two-pixel screen stroke. Architecture edges display an
+arrowhead just before the target node so their direction remains visible when
+cards overlap the underlying graph layer.
 
 Light and dark themes MUST preserve contrast, hierarchy, protocol meaning, and
 selection state. Theme changes MUST NOT alter indexed data, graph structure, or
@@ -401,7 +406,7 @@ A drag on the empty stage, on a card, or on the bare background of the bands
 reserved for floating widgets moves the content exactly with the pointer, at
 any zoom and any workspace aspect ratio. One wheel notch zooms by the same
 step, about 1.2 times, whether the pointer is over the canvas, a card, a
-relation arc, or a reserved band. The zoom keeps the graph point under the
+relation edge, or a reserved band. The zoom keeps the graph point under the
 pointer fixed. Controls, the legend, and the minimap keep their own wheel
 behavior.
 
@@ -424,7 +429,7 @@ while labels and actions resolve to the persisted microservice.
 
 Each occurrence card MUST expand to contain all of its data-operation and
 diagnostic annotations. Cards with fewer annotations keep their own smaller
-height. Visible branches MUST remain separated, with relation arcs attached to
+height. Visible branches MUST remain separated, with relation edges attached to
 the rendered card centers.
 
 The `+N appels` count belongs to the occurrence, not to the microservice name.
@@ -446,7 +451,7 @@ Each occurrence MUST show only the IN and OUT ports referenced by the selected
 flow. Ports appear as unlabelled markers on the left or right edge of the card;
 their position conveys direction. Hovering a port shows direction, endpoint
 details, and source information without its port number.
-Each call arc MUST begin at the rightmost point of its source OUT port and end
+Each call edge MUST begin at the rightmost point of its source OUT port and end
 at the leftmost point of its target IN port.
 
 The call-tree context widget MUST summarize consistency diagnostics for the
@@ -488,8 +493,8 @@ a service name with a different input port is not by itself a cycle.
 
 Nodes at the depth boundary expose the number of hidden calls. `+N appels`
 expands one more level for that branch without changing the viewport. Expanded
-nodes expose `− replier`; collapsed nodes expose `+N appels`. `Déplier tout le
-graphe` expands every branch to the maximum depth and refits the tree like
+nodes expose `− replier`; collapsed nodes expose `+N appels`. `Déplier tout
+l’arbre` expands every branch to the maximum depth and refits the tree like
 `Tout voir`, because the tree extent changes. Changing the depth with `−` or
 `+` refits the tree the same way. The selected occurrence stays selected.
 
@@ -516,18 +521,18 @@ flow opens (PDR-6). It shows occurrence positions and the current viewport. Clic
 moves the tree camera while preserving the selected occurrence. It samples at
 most 700 occurrences.
 
-Arc labels in the tree MUST use a compact form that retains the order when
+Edge labels in the tree MUST use a compact form that retains the order when
 available, the relation label, and the protocol. Long relation labels may be
 truncated on the canvas. Label placement MUST avoid cards and other visible
 labels; when no clear position exists, the renderer hides that label while the
-arc and its tooltip remain available. The selected occurrence path receives
-label-placement priority. The arc tooltip MUST retain the full indexed details.
+edge and its tooltip remain available. The selected occurrence path receives
+label-placement priority. The edge tooltip MUST retain the full indexed details.
 
 Node tooltips MUST show the occurrence level, cycle state, microservice, and
 Java method when available. They MUST omit IN and OUT port inventories. Port
 tooltips MUST show direction, endpoint details, source, and associated Java
 method without displaying the port number.
-Arc tooltips MUST show order, source, target, protocol, indexed relation label,
+Edge tooltips MUST show order, source, target, protocol, indexed relation label,
 and message type when available. Tooltip content is evidence already present
 in the snapshot; it MUST NOT infer a missing fact.
 
@@ -536,7 +541,7 @@ service or method sequence. Flow descriptions state the trigger and observed
 effect. Catalogue entries stay compact, with descriptions limited to two lines
 and statistics kept inline; complete evidence remains in the opened flow view.
 
-## Ports, arcs, and tooltips
+## Ports, edges, and tooltips
 
 Inputs and outputs receive deterministic graph-wide identifiers: `I1`, `I2`,
 and `O1`, `O2`. Inputs are distributed independently from outputs on opposite
@@ -547,19 +552,19 @@ Before a flow is selected, the architecture graph shows high-level cards and
 persisted topology edges only. It MUST NOT display CodeQL ports, port-to-port
 relations, or internal links by default.
 
-In a selected flow, a port or arc can enter a transient analysis state. The
-selected arc, label, and endpoint ports are highlighted. Clicking the same
+In a selected flow, a port or edge can enter a transient analysis state. The
+selected edge, label, and endpoint ports are highlighted. Clicking the same
 target or pressing Escape clears the state; selecting another target moves it.
 This MUST NOT change the selected flow, camera, or persisted facts.
 
-Arc hit areas MUST be wider than their visible strokes. Selected arc layers are
-raised above service cards so the route remains visible. Consecutive arcs that
+Edge hit areas MUST be wider than their visible strokes. Selected edge layers are
+raised above service cards so the route remains visible. Consecutive edges that
 leave the same service may highlight together while navigation still addresses
-each persisted arc individually.
+each persisted edge individually.
 
 Port tooltips show identifier, direction, protocol endpoint, known Java type,
 source-relative evidence path and line, associated method, and resolved REST
-target when available. Arc tooltips show all mapped local outputs and both
+target when available. Edge tooltips show all mapped local outputs and both
 service endpoints. Tooltips MUST remain limited to the hovered evidence and
 MUST NOT add architecture facts.
 
@@ -569,9 +574,9 @@ The Flux de code catalogue provides one entry for every available persisted
 flow. Selecting an entry replaces the current tree; flows are not merged and
 no side-by-side comparison is offered.
 
-The catalogue header is a one-line kicker, `Parcours potentiels, pas une trace
-runtime`, and the title with its count. Without an active filter, the filter
-summary is muted text rather than a control. The tree controls live in the
+The catalogue header is a one-line kicker, `Flux potentiels, pas une trace
+d’exécution`, and the title with its count. Without an active filter, the
+filter summary is muted text rather than a control. The tree controls live in the
 floating widget over the tree, so opening a flow does not move the list
 under the pointer.
 
@@ -589,7 +594,7 @@ cleared.
 
 The catalogue may filter by confidence, protocol, Kafka message type, and cycle
 status. A compact summary reports the visible count. Hovering or focusing an
-entry exposes its complete description, trigger, service route, arc and step
+entry exposes its complete description, trigger, service route, edge and step
 counts, effects, protocol, confidence, and topology status.
 
 Searching for `incohérence` or `incoherence` filters the catalogue to flows
@@ -612,18 +617,18 @@ does not zoom beyond the readable view, and reapplies after viewport resize.
 
 Aggregated APM traffic is an overlay on the architecture graph, on at load
 and offered in the legend only when the export holds observations. It MUST
-read without hover: counts are written on arcs, and cards state entry-point
+read without hover: counts are written on edges, and cards state entry-point
 coverage rather than raw volume, which health probes dominate. Toggling it
 MUST NOT move cards, the camera, or the selection, and turning it off MUST
 restore the static rendering exactly.
 
-Runtime annotations decorate existing arcs, cards, tooltips, and details.
+Runtime annotations decorate existing edges, cards, tooltips, and details.
 They MUST NOT draw a relation that the index lacks; unexplained traffic is
-listed in the runtime gaps inspector. A silent arc stays distinguishable from
+listed in the runtime gaps inspector. A silent edge stays distinguishable from
 REST dashes. A missing service telemetry badge is neutral, not a warning.
 Tooltip runtime lines are the one exception to evidence-only tooltips: they
 state counts as sampled lower bounds. In a selected call tree, cards show
-the count of their own entry point. Arc tooltips keep emitted and received
+the count of their own entry point. Edge tooltips keep emitted and received
 counts apart, because neither measures one call site. The flow toolbar
 mirrors the legend toggle, which is hidden outside the graph tab.
 

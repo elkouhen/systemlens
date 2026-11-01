@@ -58,10 +58,10 @@ def kafka_message_type_status(
     if produced and consumed:
         if produced == consumed:
             return "consistent", None
-        return "mismatch", "Types Java producteur/consommateur différents ; lien conservé sur le topic."
+        return "mismatch", "Types Java producteur/consommateur différents ; relation conservée sur le topic."
     if produced or consumed:
-        return "partial", "Type Java connu d'un seul côté ; lien conservé sur le topic."
-    return "unknown", "Type Java du message non déterminé ; lien conservé sur le topic."
+        return "partial", "Type Java connu d'un seul côté ; relation conservée sur le topic."
+    return "unknown", "Type Java du message non déterminé ; relation conservée sur le topic."
 
 
 def _rest_resources_served(endpoints: list[MessageEndpoint]) -> list[str]:

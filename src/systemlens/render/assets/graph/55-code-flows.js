@@ -31,7 +31,7 @@
       if (stats) {
         stats.hidden = !active;
         stats.textContent = active
-          ? `Arbre : ${nodeCount} nœud${nodeCount === 1 ? "" : "s"} · ${edgeCount} arc${edgeCount === 1 ? "" : "s"}`
+          ? `Arbre : ${nodeCount} nœud${nodeCount === 1 ? "" : "s"} · ${edgeCount} relation${edgeCount === 1 ? "" : "s"}`
           : "";
       }
       if (diagnostics) {
@@ -56,8 +56,8 @@
         http_call: "Appel HTTP",
         method_call: "Appel de méthode",
         message_publish: "Publication message",
-        data_read: "Lecture de Data",
-        data_write: "Écriture de Data",
+        data_read: "Lecture de donnée",
+        data_write: "Écriture de donnée",
       })[kind] || String(kind || "Étape").replaceAll("_", " ");
     }
 
@@ -69,13 +69,13 @@
       return ({
         potential_concurrent_read_write: "LECTURE / ÉCRITURE · INTERACTION POSSIBLE",
         potential_concurrent_write: "ÉCRITURES CONCURRENTES POSSIBLES",
-        potential_lost_update: "LOST UPDATE POSSIBLE",
+        potential_lost_update: "PERTE DE MISE À JOUR POSSIBLE",
         potential_dirty_read: "LECTURE NON VALIDÉE POSSIBLE",
         potential_read_write_anomaly: "ANOMALIE DE FRAÎCHEUR POSSIBLE",
         conflict_protection_identified: "PROTECTION DE CONFLIT IDENTIFIÉE",
         read_modify_write: "LECTURE-MODIFICATION-ÉCRITURE · AIDE À LA REVUE",
         dual_write: "DOUBLE ÉCRITURE POSSIBLE · AIDE À LA REVUE",
-      })[diagnostic.event_type] || "ÉCRITURE ASYNC / LECTURE SYNC";
+      })[diagnostic.event_type] || "ÉCRITURE ASYNCHRONE / LECTURE SYNCHRONE";
     }
 
     function codeFlowPriority(flow) {
@@ -115,7 +115,7 @@
     function codeFlowStats(flow) {
       const steps = flow.steps || [];
       return [
-        ["Services", servicesForCodeFlow(flow).length],
+        ["Microservices", servicesForCodeFlow(flow).length],
         ["Appels", callGraphArcCount(flow)],
         ["Étapes", steps.length],
         ["Effets", steps.filter(step => ["message_publish", "http_call", "data_read", "data_write"].includes(step.kind)).length],
@@ -870,7 +870,7 @@
           const classification = ({
             potential_risk: "Risque possible",
             potential_concurrent_write: "Écritures concurrentes possibles",
-            potential_lost_update: "Lost update possible",
+            potential_lost_update: "Perte de mise à jour possible",
             potential_dirty_read: "Lecture non validée possible",
             potential_read_write_anomaly: "Anomalie de fraîcheur possible",
             potential_interaction: "Interaction possible",
@@ -886,7 +886,7 @@
           if (diagnostic.key) lines.push(`Clé · ${diagnostic.key}`);
           if (diagnostic.key_identity) lines.push(`Identité clé · ${diagnostic.key_identity}`);
           else if (diagnostic.key) lines.push("Identité clé · non établie");
-          if (diagnostic.causal_evidence) lines.push(`Lien causal · ${diagnostic.causal_evidence}`);
+          if (diagnostic.causal_evidence) lines.push(`Relation causale · ${diagnostic.causal_evidence}`);
           if (diagnostic.order_evidence && diagnostic.order_evidence !== diagnostic.causal_evidence) {
             lines.push(`Ordre · ${diagnostic.order_evidence}`);
           }
@@ -922,7 +922,7 @@
         if (messageTypes.length) lines.push(`Type de message : ${messageTypes.join(" · ")}`);
         lines.push(...runtimeCallTreeEdgeLines(edge));
         return {
-          title: `Arc${edge.order ? ` #${edge.order}` : ""}`,
+          title: `Relation${edge.order ? ` #${edge.order}` : ""}`,
           lines,
         };
       };
@@ -1016,7 +1016,7 @@
           badge.title = `${badge.title ? `${badge.title} · ` : ""}${factLines.join(" · ")}`;
           if (group.handlerOnly) {
             badge.classList.add("is-handler-only");
-            badge.title = `${badge.title ? `${badge.title} · ` : ""}Association possible au handler ; parcours interne non établi`;
+            badge.title = `${badge.title ? `${badge.title} · ` : ""}Association possible au handler ; chemin interne non établi`;
           }
           if (group.flowIds.size) {
             badge.dataset.accessFlowIds = [...group.flowIds].sort().join(",");
@@ -1045,7 +1045,7 @@
           const triggerBadge = document.createElement("span");
           triggerBadge.className = `graph-node-trigger-badge ${triggerKind[1]}`;
           triggerBadge.textContent = `${triggerKind[0]} · ${treeTrigger.name || "Événement inconnu"}`;
-          triggerBadge.title = "Événement déclencheur du graphe d’appel sélectionné";
+          triggerBadge.title = "Événement déclencheur de l’arbre d’appel sélectionné";
           node.append(triggerBadge);
         }
         decorateRuntimeCallTreeNode(
@@ -1809,8 +1809,8 @@
         ? "Cycle détecté"
         : flow.reconciliation === "partial" ? "Réconciliation partielle" : "Topologie réconciliée";
       [
-        `Parcours : ${services.join(" → ") || flow.module || "inconnu"}`,
-        `${stats[0][1]} services · ${stats[1][1]} arcs · ${stats[2][1]} étapes · ${stats[3][1]} effets`,
+        `Microservices : ${services.join(" → ") || flow.module || "inconnu"}`,
+        `${stats[0][1]} microservices · ${stats[1][1]} appels · ${stats[2][1]} étapes · ${stats[3][1]} effets`,
         `Protocole : ${protocol} · Confiance : ${flow.confidence || "inconnue"}`,
         status,
       ].forEach(text => {
@@ -1959,8 +1959,8 @@
       codeFlowsEmpty.hidden = visible.length > 0;
       codeFlowsEmpty.textContent = inconsistencySearch
         ? "Aucun flux avec incohérence possible ne correspond à cette recherche."
-        : "Aucun flux d’appel indexé.";
-      codeFlowsSummary.textContent = `${visible.length} flux d’appel affiché${visible.length > 1 ? "s" : ""} sur ${codeFlows.length}.`;
+        : "Aucun flux de code indexé.";
+      codeFlowsSummary.textContent = `${visible.length} flux de code affiché${visible.length > 1 ? "s" : ""} sur ${codeFlows.length}.`;
       updateCodeFlowFilterSummary();
       codeFlowsTitle.textContent = `Flux de code (${visible.length})`;
     }
@@ -2012,7 +2012,7 @@
         const counts = flowConsistencyCounts(flow);
         const toVerify = counts.risks + counts.uncertain;
         const stepCount = (flow.steps || []).length;
-        meta.append(`${services.length || 1} service${services.length > 1 ? "s" : ""} · ${stepCount} étape${stepCount > 1 ? "s" : ""}`);
+        meta.append(`${services.length || 1} microservice${services.length > 1 ? "s" : ""} · ${stepCount} étape${stepCount > 1 ? "s" : ""}`);
         if (toVerify) {
           const warning = document.createElement("b");
           warning.textContent = ` · ${toVerify} à vérifier`;

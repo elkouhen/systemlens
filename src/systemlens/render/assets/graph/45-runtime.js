@@ -436,7 +436,7 @@
       appendList("Fenêtre", [
         runtimeWindowLabel(),
         ...runtimeCompletenessLines(),
-        "Classement par p95 quand le backend fournit des percentiles, sinon par échecs. Valeurs approximatives et minimales ; aucune arête n’est ajoutée au graphe.",
+        "Classement par p95 quand le backend fournit des percentiles, sinon par échecs. Valeurs approximatives et minimales ; aucune relation n’est ajoutée au graphe.",
       ], inspectorBody);
       appendActionList("Points chauds", runtimeHotspotEntries(hotspots.rows), inspectorBody);
       if (!(hotspots.rows || []).length) {
@@ -463,7 +463,7 @@
       appendList("Fenêtre", [
         runtimeWindowLabel(),
         ...runtimeCompletenessLines(),
-        "Compteurs minimaux, dépendants de l’échantillonnage. Aucune arête n’est ajoutée au graphe.",
+        "Compteurs minimaux, dépendants de l’échantillonnage. Aucune relation n’est ajoutée au graphe.",
       ], inspectorBody);
       appendList(
         "Erreurs APM (messages non conservés)",

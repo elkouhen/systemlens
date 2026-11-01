@@ -131,7 +131,7 @@
     const typeCountCategories = [
       { key: "microservices", control: nodeMicroservice, color: "#ef4444", singular: "microservice", plural: "microservices",
         matches: node => node.kind === "microservice" && !node.external, hidden: node => hiddenMicroservices.has(node.name) },
-      { key: "external", control: nodeExternalMicroservice, color: "#94a3b8", singular: "service externe", plural: "services externes",
+      { key: "external", control: nodeExternalMicroservice, color: "#94a3b8", singular: "microservice externe", plural: "microservices externes",
         matches: node => node.kind === "microservice" && node.external, hidden: node => hiddenMicroservices.has(node.name) },
       { key: "messages", control: nodeKafkaTopic, color: "#f59e0b", singular: "topic", plural: "topics",
         matches: node => ["kafka_topic", "message_channel"].includes(node.kind), hidden: node => hiddenTopics.has(node.name) },

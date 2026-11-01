@@ -335,7 +335,7 @@ def internal_flow_debug(
             {
                 "flow_id": flow.id,
                 "method": flow.method,
-                "reason": "Le parcours ne commence pas par un port IN et ne se termine pas par un port OUT.",
+                "reason": "Le flux ne commence pas par un port IN et ne se termine pas par un port OUT.",
                 "construction": " -> ".join(step.kind for step in flow.steps),
             }
             for flow in sorted(excluded, key=lambda item: (item.path, item.start_line, item.id))
@@ -745,14 +745,14 @@ def render_internal_flow_debug_text(debug: dict[str, object]) -> str:
                 )
     attempted_paths = debug.get("attempted_paths")
     if isinstance(attempted_paths, list) and attempted_paths:
-        lines.append(f"  Parcours tentés ({len(attempted_paths)}) :")
+        lines.append(f"  Chemins tentés ({len(attempted_paths)}) :")
         for index, attempt in enumerate(attempted_paths, start=1):
             if not isinstance(attempt, dict):
                 continue
             lines.append(f"    {index}. Chaîne : {attempt['chain']}")
             lines.append(f"       Arrêt : {attempt['stop_reason']}")
     elif not flows:
-        lines.append("  Parcours tentés : aucun nœud d’appel exploitable dans le snapshot")
+        lines.append("  Chemins tentés : aucun nœud d’appel exploitable dans le snapshot")
     excluded = debug["excluded_flows"]
     assert isinstance(excluded, list)
     if excluded:
@@ -804,9 +804,9 @@ def internal_flow_stats(edges: list[GraphEdge]) -> dict[str, int]:
 
 def render_internal_flow_stats_text(stats: dict[str, int]) -> str:
     return (
-        f"HTTP internal connections: {stats['http_internal_connections']}\n"
-        f"Kafka internal connections: {stats['kafka_internal_connections']}\n"
-        f"Total internal connections: {stats['internal_connections']}"
+        f"Connexions internes HTTP : {stats['http_internal_connections']}\n"
+        f"Connexions internes Kafka : {stats['kafka_internal_connections']}\n"
+        f"Total des connexions internes : {stats['internal_connections']}"
     )
 
 
@@ -975,14 +975,14 @@ def show_code_flow(
 
 def render_code_flows_text(items: list[dict[str, object]]) -> str:
     if not items:
-        return "No potential code flows indexed."
+        return "Aucun flux de code potentiel indexé."
     lines: list[str] = []
     for item in items:
         trigger = item["trigger"]
         assert isinstance(trigger, dict)
         line = (
             f"{item['id']}  {item['module']}  "
-            f"{trigger['kind']} {trigger['name']} -> {item['effects']} effect(s)"
+            f"{trigger['kind']} {trigger['name']} -> {item['effects']} effet(s)"
         )
         output_topics = item["output_topics"]
         input_topic = item["input_topic"]
@@ -1004,11 +1004,11 @@ def render_code_flow_text(item: dict[str, object]) -> str:
     steps = item["steps"]
     assert isinstance(steps, tuple | list)
     lines = [
-        f"Potential code flow {item['id']}  "
+        f"Flux de code potentiel {item['id']}  "
         f"root={str(item.get('root', False)).lower()}",
-        f"Method: {item['method']}",
-        f"Confidence: {item['confidence']} — {item['reason']}",
-        f"Topology reconciliation: {item['reconciliation']}",
+        f"Méthode : {item['method']}",
+        f"Confiance : {item['confidence']} — {item['reason']}",
+        f"Réconciliation topologique : {item['reconciliation']}",
     ]
     for step in steps:
         assert isinstance(step, dict)
@@ -1018,7 +1018,7 @@ def render_code_flow_text(item: dict[str, object]) -> str:
         )
     tree = item.get("tree")
     if isinstance(tree, dict):
-        lines.append("Call tree:")
+        lines.append("Arbre d'appel :")
         _render_flow_tree_text(tree, lines)
     return "\n".join(lines)
 

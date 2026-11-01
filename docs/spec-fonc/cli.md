@@ -53,7 +53,7 @@ Each listed flow identifies its owning and target modules, input and output
 flows, and known Java types. The JSON result keeps `input_topic` and
 `output_topics` for compatibility. Unknown types are `null`, and the `root`
 field is true when no persisted flow reaches the input through an OUT-to-IN
-topology arc. Endpoint evidence is marked `complete` or `partial` relative to
+topology edge. Endpoint evidence is marked `complete` or `partial` relative to
 the persisted topology snapshot.
 
 `--publishes-to-topic` keeps flows with a Kafka publication. `--module NAME`
@@ -63,6 +63,11 @@ text output names the receiving method, indexed CodeQL transitions, the
 external invocation when its source evidence is available, and the OUT port.
 JSON output also includes `found`, indexed ports, ordered call steps, and
 excluded flows.
+
+Like the rest of the CLI, the `flows` help and text output are in French.
+`flows show` prints `Flux de code potentiel ID`, then `Méthode`, `Confiance`,
+`Réconciliation topologique`, the ordered steps, and `Arbre d'appel`. JSON
+keys and the `key=value` evidence tokens of a step keep their spelling.
 
 To populate or refresh the persisted CodeQL method view one module at a time,
 run `systemlens index --module NAME --refresh-codeql-view`. The option requires
@@ -246,7 +251,7 @@ remains plain text.
 
 The index commits a provisional flow snapshot after each join batch, so an
 HTML progress export or a later export from the index retains the call-graph
-arcs found before an interruption.
+edges found before an interruption.
 The final reconciliation replaces this partial snapshot and marks it complete.
 SystemLens maps module-relative evidence paths back to the repository root,
 aggregates all calls, and only then joins them to the global method inventory.

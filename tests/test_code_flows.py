@@ -488,7 +488,7 @@ def test_internal_flow_debug_lists_attempted_paths_when_no_flow_is_found() -> No
         "output_method_count": 1,
         "edge_count": 1,
     }
-    assert "Parcours tentés (1)" in rendered
+    assert "Chemins tentés (1)" in rendered
     assert "Graphe testé : 1 méthode(s) IN, 1 méthode(s) OUT, 1 arête(s) CodeQL" in rendered
     assert "aucune arête CodeQL sortante" in rendered
 
@@ -1387,7 +1387,7 @@ def test_flow_show_renders_downstream_tree() -> None:
     assert item["root"] is True
     assert item["tree"]["children"][0]["id"] == "child-flow"
     text = render_code_flow_text(item)
-    assert "Call tree:" in text
+    assert "Arbre d'appel :" in text
     assert "└── child-flow" in text
 
 

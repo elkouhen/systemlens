@@ -121,7 +121,7 @@ def _causal(flow: CodeFlow, write: CodeFlowStep, read: CodeFlowStep) -> tuple[bo
     )), None)
     if trigger is not None and not write.causal_id and not read.causal_id:
         return True, "déclencheur commun du flux"
-    return False, "lien causal non prouvé"
+    return False, "relation causale non prouvée"
 
 
 def _has_explicit_order_facts(step: CodeFlowStep) -> bool:
@@ -245,7 +245,7 @@ def _call_graph_stale_reads(
                     key_proven = bool(write.key_identity and write.key_identity == read.key_identity)
                     diagnostic = _diagnose_pair(
                         write_flow, write, read_flow, read, root,
-                        "même graphe d'appel : publication Kafka puis traitement synchrone",
+                        "même arbre d'appel : publication Kafka puis traitement synchrone",
                         None, write_path, read_path, request_precedes_read=True,
                     )
                     if write_first:
@@ -447,7 +447,7 @@ def diagnose_flow_consistency_snapshot(
                     path = (causal_paths or {}).get(display_root, {}).get(write_flow.id, ())
                     diagnostics.append(_diagnose_pair(
                         write_flow, write, read_flow, read, display_root, evidence,
-                        scenario_limitation or (None if causal else "lien causal non prouvé"),
+                        scenario_limitation or (None if causal else "relation causale non prouvée"),
                         path, path,
                         visibility_precedes_read=(
                             _event_id(read_flow, read) in write.visibility_before_reads
@@ -653,7 +653,7 @@ def diagnose_flow_consistency_snapshot(
                         left_flow, left_write, right_flow, right_write, display_root,
                         "concurrence explicitement documentée; ordre total absent",
                         None if protected else (
-                            "champs disjoints; aucun lost update déduit" if fields_disjoint else
+                            "champs disjoints; aucune perte de mise à jour déduite" if fields_disjoint else
                             "intervalles de transaction et garanties du stockage non établis"
                         ),
                         (causal_paths or {}).get(display_root, {}).get(left_flow.id, ()),

@@ -2801,7 +2801,7 @@ def test_graph_view_has_no_layer_or_module_rendering() -> None:
         page.locator("#layout-status").filter(has_text="Disposition active : éviter les chevauchements.").wait_for()
         assert page.locator("#layout-noverlap").get_attribute("aria-pressed") == "true"
         page.locator("#layout-forceatlas2").click()
-        page.locator("#layout-status").filter(has_text="Disposition active : regroupement des liens.").wait_for()
+        page.locator("#layout-status").filter(has_text="Disposition active : regroupement des relations.").wait_for()
         assert page.locator("#layout-noverlap").get_attribute("aria-pressed") == "false"
         assert page.locator("#layout-forceatlas2").get_attribute("aria-pressed") == "true"
         browser.close()
@@ -3079,7 +3079,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         assert page.locator(
             "#inspector-body .details-group:not(.is-empty) .details-group-title"
         ).all_text_contents() == [
-            "Relations", "Architecture", "Ports d'intégration", "Sources"
+            "Relations", "Architecture", "Ports d’intégration", "Sources"
         ]
         assert page.locator(".inspector-kpi").first.inner_text().split() == ["3", "Relations"]
         details_meta = page.locator("#inspector-body .inspector-details-summary").inner_text()

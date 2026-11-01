@@ -64,13 +64,13 @@ its event handlers are registered. It skips the architecture layout when this
 focused view opens. If no selectable flow exists, the flow list remains empty.
 
 The HTML flow picker first removes flows reached from another indexed root.
-It then removes root graphs whose services and exact endpoint-backed arcs are
+It then removes root graphs whose services and exact endpoint-backed edges are
 proper subsets of another root graph. The persisted flows are unchanged;
 omitted roots remain in `supporting_code_flows`. Equal graphs retain their
 separate flow entries; identical root-specific shapes share a stored graph.
 
-The containment lookup uses the rarest indexed arc, or a service for graphs
-without arcs, to limit pairwise comparisons. A larger graph can share topology
+The containment lookup uses the rarest indexed edge, or a service for graphs
+without edges, to limit pairwise comparisons. A larger graph can share topology
 with an omitted root without
 sharing its causal trigger; diagnostics remain tied to selected roots.
 
@@ -148,40 +148,40 @@ endpoint and service sets derived from the flow evidence; selected nodes retain
 flow-specific highlighting. The browser keeps an explicit transient rendering mode
 for the architecture projection, an empty Flux de code tab, and the selected
 call-graph projection. The selected flow ID alone MUST NOT determine which
-projection is rebuilt. The flow graph builds directed candidate arcs from
-persisted flow OUT ports, starts at trigger flows with no incoming flow arc, and
+projection is rebuilt. The flow graph builds directed candidate edges from
+persisted flow OUT ports, starts at trigger flows with no incoming flow edge, and
 follows those flows breadth-first.
 
-It adds reachable microservice output-to-input arcs and continues with the flow
+It adds reachable microservice output-to-input edges and continues with the flow
 triggered by each target IN port, with expanded OUT-port and endpoint-pair guards
 for cycles and duplicates. Fan-in and fan-out remain visible, as do reachable
-modules without a matching arc. The graph records only HTTP, message, and cron
+modules without a matching edge. The graph records only HTTP, message, and cron
 trigger events under their owning microservices. Topic names remain in the
 selected ports and tooltips but topic nodes are omitted. If the candidate graph is
 cyclic and has no zero-indegree module, all flow modules are used as deterministic
-roots while preserving arc direction.
+roots while preserving edge direction.
 
 The snapshot also exposes the breadth-first traversal levels and call tree that
-assign arc numbers before they are copied to the rendered call graph.
+assign edge numbers before they are copied to the rendered call graph.
 Service-to-service interaction-graph edges use the complete projected edge set
 during microservice placement. The SVG overlay then draws exactly one straight
-segment between the actual output and input port anchors. `OUT` arcs leave through
-the right edge of their port anchor and `IN` arcs arrive at the left edge of their
+segment between the actual output and input port anchors. `OUT` edges leave through
+the right side of their port anchor and `IN` edges arrive at the left side of their
 port anchor. The focused flow graph does not add obstacle-routing bends or curves;
 card separation is handled by the placement pass.
 
-Arc labels use the same protocol-specific color as their associated paths,
+Edge labels use the same protocol-specific color as their associated paths,
 including the theme-specific dark-mode colors, and are subdued until hover or
-analysis selection. In the focused flow graph view, endpoint arcs are represented
+analysis selection. In the focused flow graph view, endpoint edges are represented
 by the projected service edge and are not drawn a second time in the port overlay.
 
 While a code flow is selected, port anchors are interactive analysis controls:
-clicking an input or output endpoint, or directly on an arc, records a transient
-endpoint focus and highlights every associated service arc, local port relation,
-and arc label; clicking the same port or arc clears the focus, while selecting
-another port or arc moves it. When navigation selects an arc, consecutive arcs
+clicking an input or output endpoint, or directly on an edge, records a transient
+endpoint focus and highlights every associated service edge, local port relation,
+and edge label; clicking the same port or edge clears the focus, while selecting
+another port or edge moves it. When navigation selects an edge, consecutive edges
 with the same source service share the selected visibility, emphasis, and
-foreground ordering. The navigation cursor remains anchored to one arc so `N` and
+foreground ordering. The navigation cursor remains anchored to one edge so `N` and
 `P` continue to move through individual projected edges.
 
 The call tree uses parameter types stored with integration methods and projected
@@ -209,7 +209,7 @@ does not provide one.
 
 The export also includes `all_flows_call_graph`, built by
 scanning every persisted flow before adding module nodes, valid output-to-input
-service arcs, and trigger events.
+service edges, and trigger events.
 
 ## Indexes and reconciliation
 
@@ -223,10 +223,10 @@ its selected flow. The browser builds local occurrences from those transitions,
 stopping at cycles, depth limits, and targets without an indexed consumer flow.
 
 It does not rebuild the call tree from service-level topology when causal evidence
-is absent, so unrelated arcs cannot become branches of the selected flow. The port
+is absent, so unrelated edges cannot become branches of the selected flow. The port
 gesture is isolated from the card drag and node-selection handlers, so analysis
 never changes the graph view or camera and does not persist data. Every visible
-SVG arc has a transparent, wider hit-area path layered above it; the hit area
+SVG edge has a transparent, wider hit-area path layered above it; the hit area
 receives selection and tooltip events without changing the visual stroke width or
 routing geometry. The Architecture overlay draws non-Kafka hit areas first and
 Kafka hit areas last.

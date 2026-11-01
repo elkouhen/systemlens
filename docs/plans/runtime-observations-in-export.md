@@ -24,7 +24,7 @@ Three gaps block a faithful overlay:
 
 - Reconciliation rows name a service and a target but not the matched
   static endpoint IDs or REST edge. The export cannot attach counts to a
-  port, an arc, or a card without guessing again.
+  port, an edge, or a card without guessing again.
 - The `--service-map` entries are CLI arguments. They are not persisted, so
   an export cannot reproduce the mapping that the report used.
 - The view model has no runtime block, and the UI has no overlay state.
@@ -130,8 +130,8 @@ Files: graph assets under `src/systemlens/render/assets/graph/`.
 
 When the toggle is on:
 
-- Arcs with traffic show call counts and a failure ratio.
-- In a selected call tree, cards show their entry-point count. Arcs list
+- Edges with traffic show call counts and a failure ratio.
+- In a selected call tree, cards show their entry-point count. Edges list
   emitted and received counts apart, since REST counts measure a pair.
 - Silent integrations (`static_only`) are dimmed with a "no traffic in the
   window" marker. Services without telemetry get a separate neutral marker.
@@ -148,7 +148,7 @@ toolbar mirrors the toggle, since the legend is hidden outside the graph.
 Acceptance:
 
 - A slow browser test toggles the overlay on the lab-like export, checks
-  one counted arc, one silent port, and one gap entry, then checks that
+  one counted edge, one silent port, and one gap entry, then checks that
   camera and selection are unchanged.
 - The display stays readable in both themes and at a narrow viewport.
 

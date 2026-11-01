@@ -20,7 +20,7 @@ resolved target endpoint, the export draws a directed port-to-port path from the
 source `O<n>` to the target `I<n>`. For Kafka, the static architecture graph
 represents the interaction only through the topic resource:
 `microservice → topic → microservice`. It does not add a direct
-microservice-to-microservice arc. Kafka topics remain visible as indexed resources;
+microservice-to-microservice edge. Kafka topics remain visible as indexed resources;
 these paths are readable projections
 of the same evidence, not replacements for the topic relation. Several ports on
 one side are distributed deterministically to avoid overlap.
@@ -41,7 +41,7 @@ reveals the direction and endpoint details without the port number.
 Hovering a port displays its identifier, direction, protocol endpoint, statically
 inferred Java parameter/message type when known, source-relative evidence path
 and line, associated Java method and, for a resolved REST call, its resolved
-target; an external caller is never presented as an input's output. Arc tooltips carry
+target; an external caller is never presented as an input's output. Edge tooltips carry
 every mapped local output (`O<n>`) and the source/target services; their `Port IN`
 and `Port OUT` headings identify the direction, so the topic or route is shown
 only once. Port tooltips remain limited to the endpoint itself. The tooltip does
@@ -49,23 +49,23 @@ not add or infer any architecture fact.
 
 ## Port focus and flow evidence
 
-In a selected flow view, clicking a port or an arc enters transient analysis mode.
-The selected arc, its label, and its endpoint ports are highlighted; clicking the
-same port or arc clears the focus, and clicking another port or arc moves it.
-Pressing Escape also clears the selected arc and its tooltip. This interaction
+In a selected flow view, clicking a port or an edge enters transient analysis mode.
+The selected edge, its label, and its endpoint ports are highlighted; clicking the
+same port or edge clears the focus, and clicking another port or edge moves it.
+Pressing Escape also clears the selected edge and its tooltip. This interaction
 does not change the view, selected flow, camera, or persisted facts. The selected
 call graph displays only its referenced IN and OUT ports by default. The analysis
 context keeps the ports referenced by the selected flow visible on the services in
 the selected graph.
 
 Returning to a different flow restores the referenced-port default; this view is
-derived from persisted facts and does not change them. The visible arc remains
-visually thin, but its interactive hit area is wider so that selecting an arc
-remains usable in a dense graph. When an arc is selected, its SVG layer is raised
+derived from persisted facts and does not change them. The visible edge remains
+visually thin, but its interactive hit area is wider so that selecting an edge
+remains usable in a dense graph. When an edge is selected, its SVG layer is raised
 above the service cards so the complete route remains visible across node
-boundaries. Consecutive arcs that leave the same service are selected and
+boundaries. Consecutive edges that leave the same service are selected and
 highlighted together, while navigation still advances through their individual
-arcs. Clearing the selection restores the ordinary layer order.
+edges. Clearing the selection restores the ordinary layer order.
 
 Its primary card title is the input trigger, while the Java method remains visible
 as source evidence. Flow selection reconciles every integration step only through
@@ -128,7 +128,7 @@ The HTML export opens on the Explorer tab with the global architecture graph.
 Before a flow selection it shows only the high-level node cards and persisted
 topology edges: it does not show CodeQL input/output ports, port-to-port
 relations, or internal links. Hovering a microservice, topic, collection, or
-topology arc shows a concise contextual tooltip; the Flux tab presents a compact
+topology edge shows a concise contextual tooltip; the Flux tab presents a compact
 list of persisted potential flows whose endpoint evidence spans at least two
 microservices, grouped by trigger type; it does not show method, confidence, or
 status details before selection.
@@ -140,7 +140,7 @@ excluded from the default list. Each flow card also displays the ordered
 microservice names from its persisted call graph when available, or resolves them
 from indexed endpoint identities as a fallback. The flow list is ordered by
 descending number of distinct microservices traversed, then by descending number
-of call-graph arcs, then by flow length.
+of call-graph edges, then by flow length.
 
 Selecting a node highlights the node and its visible dependencies. The
 dependency-depth control limits this highlight to one through five graph relations
@@ -171,7 +171,7 @@ The focused view uses graph levels and vertical offsets for sibling branches, so
 branched interaction graph is presented as a tree/DAG rather than as a misleading
 single lane. The exported flow graph always has one visible root. When the indexed
 evidence has several incoming producers, the entry service remains the root; when
-it contains a cycle, the return arc is omitted from this visual projection so the
+it contains a cycle, the return edge is omitted from this visual projection so the
 graph remains navigable as an arborescence. The persisted flow and its cycle
 status are not altered. The selected nodes retain a visible halo.
 
@@ -231,16 +231,16 @@ call-graph mode without changing the selected Flux de code tab. A layout or
 selection change in one mode MUST NOT reuse the node, edge, port, or call-graph
 selection state of the other mode.
 
-Architecture topology arcs and selected call-graph arcs use the same fixed
+Architecture topology edges and selected call-graph edges use the same fixed
 2-pixel screen thickness; graph zoom compensation MUST NOT make one view's
-arcs appear thinner or thicker than the other's.
+edges appear thinner or thicker than the other's.
 When a selected flow occupies less space than the available focus area, its
 specific framing may zoom in (a camera ratio below the overview ratio) so the
 flow remains readable; the ratio is bounded and the cards remain inside the
 visible margins.
 
 The selected interaction graph places microservices with all projected
-service-to-service edges and fixed card repulsion. Each service-to-service arc
+service-to-service edges and fixed card repulsion. Each service-to-service edge
 is then rendered as one straight SVG segment from the actual `OUT` port to the
 actual `IN` port. The focused view does not add obstacle-routing bends or curves;
 the placement algorithm is responsible for keeping cards readable. A stale
@@ -248,21 +248,21 @@ overlay generation MUST NOT reinsert a path, label, or hit area after a newer
 graph render has started.
 
 Endpoint-to-endpoint dependencies are projected into the selected
-service-to-service arc. The selected flow's canonical NetworkX arcs are the
+service-to-service edge. The selected flow's canonical NetworkX edges are the
 sole source for the focused overlay, so topology links and port links cannot
 create a second copy of the same dependency.
-Each selected arc displays its port mapping in the form `Ox → Iy`, using the
+Each selected edge displays its port mapping in the form `Ox → Iy`, using the
 actual indexed output and input labels.
 
-The arc label uses the same protocol-specific color as its associated arc in
+The edge label uses the same protocol-specific color as its associated edge in
 both light and dark themes.
 In a selected flow graph, clicking an input or output port enters a transient
-analysis mode: the associated topology or local flow arc and its label are
+analysis mode: the associated topology or local flow edge and its label are
 highlighted. Clicking the same port clears the analysis highlight; selecting a
 different flow resets it. Port analysis does not change the selected flow,
 camera position, or persisted architecture facts.
 
-Interaction-graph arcs use the same stroke thickness as ordinary topology paths; their
+Interaction-graph edges use the same stroke thickness as ordinary topology paths; their
 selection remains identifiable through the selected-flow styling and colour.
 Clearing or replacing the selection restores the ordinary filtered graph.
 The focused graph displays a persistent context banner naming the selected
@@ -272,9 +272,9 @@ the indexed port (`I`/`O`), topic or resource, protocol, and message type;
 non-integration method calls are deliberately omitted from this summary;
 the complete indexed step is available from its tooltip. This avoids a long
 repetition of generic method-step names while preserving the full flow. The
-banner also explains that ports and arcs are analysis controls. When an arc is
+banner also explains that ports and edges are analysis controls. When an edge is
 focused, the banner offers an explicit action to clear the analysis focus.
-Arc labels are intentionally subdued until their arc is hovered or selected;
+Edge labels are intentionally subdued until their edge is hovered or selected;
 this keeps the route geometry readable without removing the port mapping.
 
 ## Navigation and visual design

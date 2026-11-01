@@ -56,9 +56,9 @@ is exported.
 
 When on, the architecture view annotates existing elements only:
 
-- Arcs with traffic thicken with volume and carry their count ("3 appels",
+- Edges with traffic thicken with volume and carry their count ("3 appels",
   "105 msg"); a failure ratio of 5 percent or more turns them red. Silent
-  indexed arcs turn grey and dashed and read "aucun trafic"; an arc whose
+  indexed edges turn grey and dashed and read "aucun trafic"; an edge whose
   silence the telemetry cannot prove keeps its static style.
 - Service cards show entry-point coverage, such as "APM · 2/3 entrées
   actives", amber when an entry is silent or traffic is unexplained.
@@ -75,7 +75,7 @@ When on, the architecture view annotates existing elements only:
   p95 latency when the backend provides percentiles, otherwise by
   failures, with calls and an "incomplet" mark for an overflowed service.
   Selecting a row selects the service card and opens the route inspector
-  of its served route, so the arcs into it highlight through the existing
+  of its served route, so the edges into it highlight through the existing
   selection; entry points that are not comparable or not verifiable are
   listed apart. Service details repeat the service's own hotspots.
 
@@ -85,13 +85,13 @@ route or consumer, or "APM · aucun trafic" for a silent indexed entry.
 A scheduler root card shows its observed runs. A card with data-access
 annotations adds "APM · BDD postgresql 1,1 k", a whole-service total per
 database engine. A card whose entry point has APM error groups adds
-"N erreurs" and turns red; its tooltip lists exception type, count, and code location. Arcs
+"N erreurs" and turns red; its tooltip lists exception type, count, and code location. Edges
 thicken with volume, and their label gains an "APM · …" line, red when
 either the caller or the callee side fails. Their
 tooltip lists the emitted count, per topic or service pair, and the received
 count, from all sources, separately.
 
-The overlay draws no new arc and never changes layout, camera, filters, or
+The overlay draws no new edge and never changes layout, camera, filters, or
 selection. Counts are sampled lower bounds; REST counts measure a service
 pair, not a call site.
 
@@ -238,14 +238,14 @@ complete directed edges with display orders and endpoint identifiers, and
 service triggers. The flow picker starts with paths that have no upstream
 indexed call flow, plus one stable entry for each uncovered cycle or
 disconnected component. It then omits a root graph when every service and
-exact directed call arc appears in a larger root graph. Calls with different
+exact directed call edge appears in a larger root graph. Calls with different
 endpoint IDs remain distinct even when their displayed labels match.
 
 Equal graphs retain their separate flow entries. Downstream flows
 remain in the supporting flow data for selected roots that reach them.
 
 The first traversal level is the root set. Selecting a call graph keeps its
-arc order and trigger metadata visible.
+edge order and trigger metadata visible.
 
 Each microservice occurrence in a selected call graph shows one badge per
 entity associated with its internal flow and input. The badge combines the
@@ -272,7 +272,7 @@ CRUD letter.
 
 Call-tree cards grow to contain every data-operation and diagnostic badge. Their
 height depends on the annotations on that occurrence, so a card with many badges
-does not enlarge unrelated cards. Branch spacing and arc attachment follow the
+does not enlarge unrelated cards. Branch spacing and edge attachment follow the
 rendered card heights.
 
 ## Selected flow navigation
@@ -304,7 +304,7 @@ signature. This display choice does not change indexed method facts.
 
 The tree mode uses a fixed left-to-right orientation and an incremental depth
 control from 1 to 8 levels. The default is depth 1, showing only the root
-occurrence. The `−` and `+` controls change one level at a time. Arc labels
+occurrence. The `−` and `+` controls change one level at a time. Edge labels
 retain the order, relation label, and protocol when available. The renderer
 measures label bounds and hides labels that cannot be placed without covering a
 card or another visible label. Tooltips retain the full indexed details.
@@ -331,8 +331,8 @@ is the only call-graph rendering mode.
 The upper graph toolbar shows `Centrer`, zoom, fit, selection reset, layout, and
 node-rendering actions in the architecture view. In the call-graph view it keeps
 centering, zoom, `Tout voir`, `Sélection`, and the tree controls including
-`Déplier tout le graphe`; it does not repeat the call hierarchy. These controls
-stay in place, disabled, until a flow is selected. `Déplier tout le graphe`
+`Déplier tout l’arbre`; it does not repeat the call hierarchy. These controls
+stay in place, disabled, until a flow is selected. `Déplier tout l’arbre`
 refits the expanded tree. The context widget is collapsed by default;
 `Développer` shows the flow identity, trigger, tree counts, consistency summary,
 and the key of the access annotations, and `Réduire` hides them. Changing view
@@ -344,7 +344,7 @@ window. Hovering a service occurrence displays its level and cycle state.
 The service occurrence tooltip displays its level, cycle state, and Java method
 when available. Call-tree ports use unlabelled markers: inputs sit on the left
 edge and outputs on the right. Hovering a port displays its direction, source,
-and associated Java method without showing the port number. Hovering an arc
+and associated Java method without showing the port number. Hovering an edge
 displays its order, source, target, protocol, indexed relation label and message
 type when available.
 
@@ -365,12 +365,12 @@ signals, or explicitly states that no signal was found; this is a navigation
 aid, not a completeness claim beyond the persisted diagnostics.
 
 Hovering or focusing a flow entry opens a tooltip with its complete description,
-trigger, service route, arc and step counts, effects, protocol, confidence and
+trigger, service route, edge and step counts, effects, protocol, confidence and
 topology status. The tooltip is dismissed when the pointer or keyboard focus
 leaves the entry.
 
-In the selected flow graph, each arc has a transparent hover target. Hovering
-an arc or its order label highlights that arc and its label without changing
+In the selected flow graph, each edge has a transparent hover target. Hovering
+an edge or its order label highlights that edge and its label without changing
 the persisted graph data.
 
 ## Explorer workspace and ports

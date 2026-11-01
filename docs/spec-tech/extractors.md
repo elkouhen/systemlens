@@ -98,10 +98,10 @@ plugin or dependency, source generation fails instead of accessing a registry.
 KafkaTemplate/ProducerRecord usage and Spring Cloud Stream StreamBridge calls.
 It preserves dynamic topic expressions and derives a payload type only from an
 explicit listener parameter or client generic signature. A concrete shared
-topic creates a producer/consumer service arc even when one or both Java
-message types are unknown. The arc has medium confidence when type evidence is
+topic creates a producer/consumer service edge even when one or both Java
+message types are unknown. The edge has medium confidence when type evidence is
 missing. Two known and different types remain incompatible and do not create an
-arc. An unmatched endpoint is exported as partial evidence. A dynamic topic
+edge. An unmatched endpoint is exported as partial evidence. A dynamic topic
 whose display label matches one concrete topic reuses that topic's graph node;
 
 otherwise identical dynamic labels share one unresolved node.

@@ -16,6 +16,7 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-4](#pdr-4-accessibility-and-cdn-concerns-are-deferred) | Accessibility and CDN concerns are deferred | Yes, by the user only |
 | [PDR-5](#pdr-5-a-first-index-needs-no-external-tool) | A first index needs no external tool | Yes, product owner; see ADR-66 |
 | [PDR-6](#pdr-6-the-minimap-stays-once-the-user-navigates) | The minimap stays once the user navigates | Yes, product owner |
+| [PDR-7](#pdr-7-one-french-word-per-concept-in-the-export-and-the-cli) | One French word per concept in the export and the CLI | Yes, product owner; the glossary owns the list |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -112,3 +113,47 @@ the moment the user wanted it to find their way back.
 **Consequences:** a programmatic camera move, such as centring a selected
 flow, does not count as navigation. A window resize that refits the graph
 hides the minimap again until V6 of the backlog keeps the camera instead.
+
+## PDR-7: One French word per concept in the export and the CLI
+
+**Status:** Accepted on 2026-11-01 by the product owner after a vocabulary
+review of the export, the CLI help, and the glossary.
+
+**Decision:** Every concept has one French label in the generated
+interface and in the CLI, fixed by the `French label` column of
+`docs/glossary.md`. The rules the review settled:
+
+1. Technical loan words stay untranslated: `topic`, `DTO`, `snapshot`,
+   `handler`, `namespace`, `checkpoint`, `pipeline`, `backend`, and
+   product or protocol names. Everything else is French; `Lost update`
+   reads `Perte de mise à jour`.
+2. `microservice` names an indexed service everywhere. `service` survives
+   only for the APM services of the runtime overlay, which are not
+   necessarily indexed microservices.
+3. `relation` names any link between two elements in the export. The CLI
+   keeps `arête d'appel` for CodeQL call edges only. `arc` and `lien`
+   leave the labels, and the English contracts say `edge`, as the
+   glossary requires.
+4. The node-type chip for topics reads `Topics`, not `Messages`. The
+   relation types read `Appels d'API`, `Messages`, `Accès aux données`,
+   and `Autres`.
+5. `flux de code` names a catalogue entry, `arbre d'appel` its rendered
+   view, and `chemin` the path searched between two nodes. `itinéraire`,
+   `parcours`, and `graphe d'appel` leave the labels; the catalogue kicker
+   reads `Flux potentiels, pas une trace d'exécution`.
+6. `donnée` names a persisted data resource (collection, entity); flow
+   steps read `Lecture de donnée` and `Écriture de donnée`; the Java
+   classes bound to a resource are `classes de persistance`.
+7. CLI help describes commands and options in the infinitive, writes
+   `topic` in lower case, and the export uses the typographic apostrophe.
+
+**Why:** the review found four words for a relation, two for a path, both
+`service` and `microservice`, an English `flows` command group, and a node
+chip and a relation type sharing the label `Messages`. A reader cannot
+tell whether two labels name one concept or two.
+
+**Consequences:** command, option, and JSON key names are a public
+contract and keep their spelling. A renamed contractual label is updated
+in `docs/UX-UI.md`, `tests/test_spec_conformance.py`, and the export in
+the same change. The four-mode navigation drift from the UX contract is a
+separate backlog concern, not a vocabulary one.

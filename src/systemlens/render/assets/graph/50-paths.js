@@ -97,7 +97,7 @@
         const resource = restResourceLabel(link, target);
         return resource
           ? `API · ${source.name} appelle ${target.name} (${resource})`
-          : `API · ${source.name} appelle ${target.name} (contrat non indexe)`;
+          : `API · ${source.name} appelle ${target.name} (contrat non indexé)`;
       }
       if (link.kind === "mongodb") return `Données · ${source.name} stocke dans ${target.name}`;
       if (source.kind === "microservice") {
@@ -221,7 +221,7 @@
     function parsePathQuery(query = search.value) {
       const names = query.split("->").map(name => name.trim());
       if (names.length < 2) return { error: "Saisissez au moins deux nœuds séparés par ->." };
-      if (names.some(name => !name)) return { error: "Chaque étape de l’itinéraire doit avoir un nom : retirez le -> en trop ou renseignez le nœud manquant." };
+      if (names.some(name => !name)) return { error: "Chaque étape du chemin doit avoir un nom : retirez le -> en trop ou renseignez le nœud manquant." };
       const stops = [];
       for (const [index, name] of names.entries()) {
         const endpoint = index === 0 || index === names.length - 1;
@@ -233,13 +233,13 @@
         stops.push(resolved.id);
       }
       if (stops.some(id => !["microservice", "kafka_topic"].includes(nodeDataById.get(id).kind))) {
-        return { error: "Un itinéraire de topics ne peut contenir que des microservices et des topics." };
+        return { error: "Un chemin de topics ne peut contenir que des microservices et des topics." };
       }
       if (nodeDataById.get(stops[0]).kind !== "microservice" || nodeDataById.get(stops.at(-1)).kind !== "microservice") {
-        return { error: "Un itinéraire de topics doit commencer et se terminer par un microservice." };
+        return { error: "Un chemin de topics doit commencer et se terminer par un microservice." };
       }
       if (new Set(stops).size !== stops.length) {
-        return { error: "Un itinéraire ne peut pas répéter le même nœud." };
+        return { error: "Un chemin ne peut pas répéter le même nœud." };
       }
       return { stops };
     }
@@ -401,7 +401,7 @@
       const overview = document.createElement("section");
       overview.className = "details-section";
       const overviewTitle = document.createElement("h2");
-      overviewTitle.textContent = "Parcours";
+      overviewTitle.textContent = "Chemin";
       const overviewList = document.createElement("ol");
       overviewList.className = "path-overview";
       path.nodes.forEach((id, index) => {
@@ -547,7 +547,7 @@
       graphCanvas.removeAttribute("data-selected-call-graph-arc");
       graphFlowStatus.hidden = context.topologyReconciled !== false;
       if (!graphFlowStatus.hidden) {
-        graphFlowStatus.textContent = "Relations topologiques incomplètes : les étapes sont surlignées sans arête vérifiée.";
+        graphFlowStatus.textContent = "Relations topologiques incomplètes : les étapes sont surlignées sans relation vérifiée.";
       }
       setPathMicroserviceOrder(path, context.codeFlow || (context.codeFlows || [])[0], context.codeFlows || []);
       if (codeFlowSelection.flowId) rebuildGraph();
@@ -620,7 +620,7 @@
       const stops = parsed.stops;
       const path = shortestPathThrough(stops);
       if (path === null) {
-        const message = "Aucun itinéraire de topics orienté ne passe par les nœuds demandés dans cet ordre.";
+        const message = "Aucun chemin de topics orienté ne passe par les nœuds demandés dans cet ordre.";
         if (preserveGraphOnError) { searchStatus.textContent = message; return false; }
         graphState.selectedId = null; graphState.relatedNodes = null; graphState.relatedEdges = null; graphState.relatedLocalPortLinks = new Set(); graphState.pathMicroserviceOrder = new Map();
         renderer.refresh();
@@ -675,7 +675,7 @@
           });
         } else {
           const unknown = document.createElement("span");
-          unknown.textContent = "DTO non indexe";
+          unknown.textContent = "DTO non indexé";
           meta.append(unknown);
         }
         item.append(meta);
@@ -741,7 +741,7 @@
       appendList("DTO REST", (providerNode.rest_dtos || []).map(dto => (
         `${dto.name} · ${dto.roles.join(", ")} · ${dto.location}`
       )), inspectorBody);
-      appendList("Preuves d'appel", consumers.length
+      appendList("Preuves d’appel", consumers.length
         ? consumers.map(item => `${item.service} · ${item.location}`)
         : ["Aucun microservice appelant identifié."], inspectorBody);
       appendActionList("Code source", route.vscode_uri ? [{
@@ -795,7 +795,7 @@
           action: () => openRelatedNode(targetNode),
         }], inspectorBody);
       } else {
-        appendList("Cible déclarée", [call?.service || "Aucun service cible rapproché"], inspectorBody);
+        appendList("Cible déclarée", [call?.service || "Aucun microservice cible rapproché"], inspectorBody);
       }
       appendList("Preuve source", [route.location], inspectorBody);
     }
@@ -818,7 +818,7 @@
         action: () => selectNode(`microservice:${item.service}`),
       })), relationsGroup);
       if (consumers.length) {
-        appendList("Preuves d'appel", consumers.map(item => `${item.service} · ${item.location}`), relationsGroup);
+        appendList("Preuves d’appel", consumers.map(item => `${item.service} · ${item.location}`), relationsGroup);
       } else {
         appendList("Microservices consommateurs", ["Aucun consommateur HTTP rapproché"], relationsGroup);
       }
@@ -878,7 +878,7 @@
       if (node.kind === "mongodb_collection") {
         const dataBadge = document.createElement("span");
         dataBadge.className = "detail-badge";
-        dataBadge.textContent = `${dataServiceCount} service${dataServiceCount > 1 ? "s" : ""} · ${dataClassCount} classe${dataClassCount > 1 ? "s" : ""}`;
+        dataBadge.textContent = `${dataServiceCount} microservice${dataServiceCount > 1 ? "s" : ""} · ${dataClassCount} classe${dataClassCount > 1 ? "s" : ""}`;
         meta.append(dataBadge);
       }
       const confidenceLabels = { proved: "prouvée", inferred: "inférée", conventional: "conventionnelle" };
@@ -916,7 +916,7 @@
         const connectivityLabels = { low: "basse", medium: "médiane", high: "élevée" };
         scoreBadge.textContent = `Connectivité relative : ${connectivityLabels[complexity.level]} (${complexity.score})`;
         const breakdown = complexity.breakdown || {};
-        scoreBadge.title = `APIs : ${breakdown.http || 0} · Messages : ${breakdown.kafka || 0} · Données : ${breakdown.mongodb || 0} · Rang relatif ${complexity.rank}/${complexity.population} · Tiers : ${complexity.tier_start}-${complexity.tier_end}`;
+        scoreBadge.title = `Appels d’API : ${breakdown.http || 0} · Messages : ${breakdown.kafka || 0} · Accès aux données : ${breakdown.mongodb || 0} · Rang relatif ${complexity.rank}/${complexity.population} · Tiers : ${complexity.tier_start}-${complexity.tier_end}`;
         meta.append(scoreBadge);
       }
       header.append(kicker, title, meta);
@@ -971,7 +971,7 @@
         || (flow.steps || []).some(step => associatedEndpointIds.has(step.endpoint_id))
       ));
       if (ports.length) {
-        const portsGroup = createDetailsGroup("Ports d'intégration", false);
+        const portsGroup = createDetailsGroup("Ports d’intégration", false);
         const portDescription = port => `${port.label} · ${port.type} · ${port.name}`;
         appendList(
           "Entrées",
@@ -1029,7 +1029,7 @@
             .filter(resource => !contractsForPublishedRestResource(node, resource).length)
             .map(resource => ({
               label: `API · ${resource}`,
-              title: "Mettre en evidence les consommateurs de cette API",
+              title: "Mettre en évidence les consommateurs de cette API",
               action: () => focusPublishedRestResource(id, resource),
             })),
         ];
@@ -1058,7 +1058,7 @@
           const targetRoute = targetNode?.http_routes?.find(target => (
             target.role === "serve" && target.route === route.route
           ));
-          return { call: call || { service: "Service inconnu", route: route.route, location: route.location }, targetNode, targetRoute };
+          return { call: call || { service: "Microservice inconnu", route: route.route, location: route.location }, targetNode, targetRoute };
         });
         // One section lists every outgoing HTTP call: indexed calls without a
         // matching route entry are added as unmatched calls.
@@ -1081,7 +1081,7 @@
             }
             : {
               label: `${call.service} · ${call.route}`,
-              title: "Ouvrir le détail de l'appel HTTP non rapproché",
+              title: "Ouvrir le détail de l’appel HTTP non rapproché",
               inspectorKind: "http-call",
               inspectorService: node.name,
               inspectorRoute: call.route,
@@ -1158,7 +1158,7 @@
         appendFindings(node.findings || [], qualityGroup);
         discardEmptyDetailsGroup(qualityGroup);
         appendRuntimeDetails(node);
-        const groupOrder = ["Relations", "Trafic observé", "Architecture", "Ports d'intégration", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Diagnostics"];
+        const groupOrder = ["Relations", "Trafic observé", "Architecture", "Ports d’intégration", "Flux associés", "Flux internes", "Kubernetes", "Sources", "Diagnostics"];
         [...details.querySelectorAll(":scope > .details-group")]
           .sort((left, right) => {
             const leftRank = groupOrder.indexOf(left.querySelector("summary")?.textContent);
@@ -1170,9 +1170,9 @@
       }
       if (node.kind === "kafka_topic") {
         const relationsGroup = createDetailsGroup("Relations");
-        appendRelationList("Services producteurs", edges.filter(link => link.kind === "kafka" && link.target === id), id,
+        appendRelationList("Microservices producteurs", edges.filter(link => link.kind === "kafka" && link.target === id), id,
           link => nodeDataById.get(link.source).name, relationsGroup);
-        appendRelationList("Services consommateurs", edges.filter(link => link.kind === "kafka" && link.source === id), id,
+        appendRelationList("Microservices consommateurs", edges.filter(link => link.kind === "kafka" && link.source === id), id,
           link => nodeDataById.get(link.target).name, relationsGroup);
         const dtos = (graphData.kafka_dtos || [])
           .filter(dto => (dto.topics || []).includes(node.name))
@@ -1204,9 +1204,9 @@
       if (node.kind === "mongodb_collection") {
         const relationsGroup = createDetailsGroup("Relations");
         const persistenceClasses = node.persistence_classes || [];
-        appendRelationList("Services utilisant cette donnée", edges.filter(link => link.kind === "mongodb" && link.target === id), id,
+        appendRelationList("Microservices utilisant cette donnée", edges.filter(link => link.kind === "mongodb" && link.target === id), id,
           link => nodeDataById.get(link.source).name, relationsGroup);
-        appendActionList("Classes Java de persistance", persistenceClasses.map(item => ({
+        appendActionList("Classes de persistance", persistenceClasses.map(item => ({
           label: item.qualified_name,
           title: "Afficher les champs et la source de cette classe",
           inspectorKind: "mongo",
@@ -1214,8 +1214,8 @@
           action: () => openMongoPersistenceInspector(item.id),
         })), relationsGroup);
         if (!persistenceClasses.length) {
-          appendList("Classes Java de persistance", [
-            "Aucune classe Java associée dans l’index. Relancez systemlens index après la mise à jour.",
+          appendList("Classes de persistance", [
+            "Aucune classe de persistance associée dans l’index. Relancez systemlens index après la mise à jour.",
           ], relationsGroup);
         }
         discardEmptyDetailsGroup(relationsGroup);
@@ -1241,13 +1241,13 @@
         appendList("Entité", [node.display_name || node.name], resourceGroup);
         appendList("Technologie", [node.technology || "JPA"], resourceGroup);
         appendRelationList(
-          "Services utilisant cette entité",
+          "Microservices utilisant cette entité",
           edges.filter(link => link.target === id || link.source === id),
           id,
-          link => nodeDataById.get(link.source === id ? link.target : link.source)?.name || "service",
+          link => nodeDataById.get(link.source === id ? link.target : link.source)?.name || "microservice",
           resourceGroup,
         );
-        appendActionList("Classe Java", [{
+        appendActionList("Classe de persistance", [{
           label: node.display_name || node.name,
           title: "Afficher les attributs et la source de cette classe",
           inspectorKind: "jpa",
