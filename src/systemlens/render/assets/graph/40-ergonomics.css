@@ -233,7 +233,6 @@
     }
     .inspector-body.swagger-ui .openapi-viewer > .swagger-ui { padding: 18px 20px 24px; }
     .asyncapi-shell { overflow: hidden; }
-    .dto-inspector,
     .architecture-node-inspector {
       width: 100%;
       box-sizing: border-box;
@@ -243,7 +242,6 @@
       background: var(--ui-panel);
       box-shadow: 0 8px 24px rgba(36, 50, 83, .06);
     }
-    .dto-inspector { padding: 16px; }
     .route-inspector-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; width: 100%; box-sizing: border-box; margin: 0 auto; padding: 14px 16px; border: 1px solid var(--ui-border); border-radius: var(--widget-radius); background: linear-gradient(145deg, var(--ui-widget), var(--ui-control)); }
     .route-inspector-method { padding: 4px 8px; border-radius: 8px; color: var(--ui-on-accent); background: var(--ui-selected); font-size: var(--type-control); font-weight: 850; letter-spacing: .06em; }
     .route-inspector-path { min-width: 0; color: var(--ui-text); font-size: 14px; font-weight: 750; overflow-wrap: anywhere; }
@@ -385,7 +383,6 @@
     .inspector-close { border-radius: 10px; }
     .asyncapi-summary { padding: 24px; }
     .asyncapi-summary-title { font-size: 22px; letter-spacing: -.025em; }
-    .dto-inspector { gap: 18px; }
     .dto-section { padding: 16px; border-radius: 14px; }
     .dto-field { padding: 9px 11px; border-radius: 9px; }
 

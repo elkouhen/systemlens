@@ -698,11 +698,15 @@
     // A relation inspector (served route, HTTP call) shares the node
     // inspector skeleton: a header strip, one action row with `Centrer dans
     // le graphe` on the provider, then counted `Relations` and `Sources`
-    // groups (PDR-10).
-    function openRelationInspector({ method, path, status, centerNode, sourceUri, sourceLocation }) {
+    // groups (PDR-10). DTO and persistence-class inspectors reuse it with a
+    // leading `Champs` group.
+    function openRelationInspector({
+      method, path, status, centerNode, sourceUri, sourceLocation,
+      groups = ["Relations", "Sources"], className = "",
+    }) {
       inspectorBody.classList.add("route-inspector");
       const widget = document.createElement("div");
-      widget.className = "architecture-node-inspector relation-inspector";
+      widget.className = `architecture-node-inspector relation-inspector ${className}`.trim();
       const summary = document.createElement("section");
       summary.className = "route-inspector-summary";
       const methodBadge = document.createElement("span");
@@ -726,10 +730,9 @@
       }
       widget.append(summary);
       if (actions.children.length) widget.append(actions);
-      const relations = createDetailsGroup("Relations", true, widget);
-      const sources = createDetailsGroup("Sources", true, widget);
+      const created = Object.fromEntries(groups.map(title => [title, createDetailsGroup(title, true, widget)]));
       inspectorBody.append(widget);
-      return { widget, relations, sources };
+      return { widget, relations: created.Relations, sources: created.Sources, groups: created };
     }
     function finishRelationInspector(widget) {
       widget.querySelectorAll(":scope > .details-group").forEach(removeEmptyDetailsGroup);

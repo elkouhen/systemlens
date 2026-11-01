@@ -135,13 +135,13 @@ On a device without hover the action stays visible.
 `Inspecter` opens one surface per kind of fact (PDR-10). A graph node
 (microservice, topic, collection, JPA entity, enriched resource) opens the
 docked node inspector; a served or called route opens the docked relation
-inspector; a contract, a DTO, or a Mongo persistence class opens the
-centered document modal. A JPA entity row opens the node inspector, like a
-collection; its field modal stays one click away through `Classe de
-persistance`.
+inspector; a DTO or a Mongo persistence class opens the docked resource
+inspector; only an OpenAPI or AsyncAPI contract opens the centered modal.
+A JPA entity row opens the node inspector, like a collection; its field
+view stays one click away through `Classe de persistance`.
 
 The catalogue list stays visible under a docked inspector, with its row
-selected, and is restored unchanged when a modal closes. While that
+selected, and is restored unchanged when a contract modal closes. While that
 inspector or modal is open, the preview is hidden and the list takes its
 width. Closing it by `×`, `Escape`, or a backdrop click brings back the same
 preview with its back history. An inspector opened from the graph leaves
@@ -200,7 +200,7 @@ error states explain what is unavailable and what the user can do next.
 | Graph context widget | Expose the controls and summary needed to interpret the current graph. | Search or filters, layout and display actions, counts, and the active selection summary. | May be collapsed. Actions change the projection or transient state without duplicating the graph hierarchy. |
 | Resource catalogue widget | Browse indexed topics, Mongo collections, routes, contracts, or persistence resources. | Search or filters, compact rows with a kind tag, a Contexte column in `owner · detail` order, attributes when indexed, and one total count in the title. | Selecting a resource updates the docked preview and its related-resource links. `Inspecter` opens the shared inspector and hides the preview until it closes; a row without inspector says `Aperçu seul`. Resource details MUST NOT expand inline in the result list. |
 | Details widget | Show the selected graph element's immediate context and available analysis actions. | Identity, summary, relations, evidence, and actions for focus, modules, code flows, or source navigation. | It is contextual and may be hidden when an introspection window opens. It does not compete with the inspector identity header. |
-| Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, breadcrumb from the second level, back and close actions; for a node, a four-tile relation summary, one row of secondary actions, and counted disclosure groups. | From 901 pixels, node, route, and HTTP call views dock to the right edge beside the graph; other views, and every view at 900 pixels or less, open as a centered modal. Related resources remain selectable and update the same inspection history. Each fact appears in one section only. |
+| Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, breadcrumb from the second level, back and close actions; for a node, a four-tile relation summary, one row of secondary actions, and counted disclosure groups. | From 901 pixels, node, route, HTTP call, DTO, and persistence-class views dock to the right edge beside the graph; contract views, and every view at 900 pixels or less, open as a centered modal. Related resources remain selectable and update the same inspection history. Each fact appears in one section only. |
 | Flow catalogue widget | Select a persisted code flow or flow group for call-graph analysis. | A one-line kicker and the title with its count, compact flow rows, description, trigger, protocol, status, and summary statistics. | Selecting a row replaces the selected flow graph without moving the list. Full details are shown in the selected-flow view, not in every row. |
 | Call-tree context widget | Explain and control the selected hierarchical call graph. | Flow identity, trigger event, visible tree node and edge counts, consistency diagnostic counts, the key of the access annotations, depth, expand-all, and tree-specific status. | Floats over the tree on desktop and shows its summary at all times; collapsed in the panel at compact widths and opened with `Développer`. It controls the tree without repeating its nodes or edges. Tree counts describe the visible projection and update when depth or expansion changes. Diagnostic counts cover the selected flow and distinguish possible risks, insufficient evidence, identified guarantees, and possible interactions. |
 | Tooltip widget | Provide concise evidence for a hovered node, edge, row, or control. | Subject identity, relevant relation facts, and available status or type. | Appears on hover or focus and does not become a second navigation surface. It MUST NOT infer missing facts. |
@@ -318,14 +318,16 @@ a breadcrumb path. The header back action
 returns to the previous element; nested DTO and persistence-class views use
 the same action and MUST NOT add a second in-body return control.
 
-From 901 pixels of width, the inspector of a node, an HTTP route, or an HTTP
-call docks to the right edge as a full-height panel (ADR-68). The graph stays
-interactive, its right workspace band reserves the panel width, the legend
-moves beside the panel, and the interaction hint hides. If the inspected card
-sits under the panel when it opens, the camera centers on it. The inspected
-node carries a halo while the panel shows it. Contract, schema, DTO, entity,
-and runtime views stay a centered modal over a blurred graph; at 900 pixels
-or less every view uses the modal. `Escape`, the close action, and a click on
+From 901 pixels of width, the inspector of a node, an HTTP route, an HTTP
+call, a DTO, or a persistence class docks to the right edge as a full-height
+panel (ADR-68, PDR-10). The graph stays interactive, its right workspace
+band reserves the panel width, the legend moves beside the panel, and the
+interaction hint hides. If the inspected card sits under the panel when it
+opens, the camera centers on it. The inspected node carries a halo while the
+panel shows it.
+
+Contract views stay a centered modal over a blurred graph; at 900 pixels or
+less every view uses the modal. `Escape`, the close action, and a click on
 the empty canvas close the inspector.
 
 A node inspector opens with a strip of four tiles: `Relations`, `Prouvées`,
@@ -359,11 +361,28 @@ target is unresolved) and the VS Code action, then the counted groups
 target) and `Sources` (code source, call evidence). No section stays
 outside a group.
 
-A document view (OpenAPI or AsyncAPI contract, DTO fields, JPA entity or
-persistence-class fields) stays a centered modal with one header: the title
-bar, then one row holding the VS Code action when the fact has a source,
-then the document body. A DTO's role and source path form the first line
-of the body. Swagger UI and the AsyncAPI viewer keep their own styling.
+A DTO, a Mongo persistence class, or a JPA entity's field view opens the
+docked resource inspector, which shares the same skeleton (PDR-10). Its
+header strip shows the kind (a DTO's role, such as `DTO de message` or
+`DTO REST`), the owner when known, and the field count. One row follows
+with `Centrer dans le graphe` and `Ouvrir dans VS Code` when a source exists.
+
+The centering target is the related graph node: a DTO's first resolved
+topic, else its producer; a Mongo class's collection, else its
+microservice; a JPA entity itself. The counted groups are `Champs`
+(declared fields and types), `Relations` (a DTO's messages, producers, and
+consumers; a Mongo class's data, microservice, persistence project, and
+nested or containing classes), and `Sources` (source path and line, or a
+notice when the class was not found in the indexed sources).
+
+A field type that references an indexed DTO or Mongo class stays a button
+and opens that class in the same docked panel; the header back action
+returns to the containing class.
+
+A contract view (OpenAPI or AsyncAPI) stays a centered modal with one
+header: the title bar, then one row holding the VS Code action when the
+contract has a source, then the embedded viewer. Swagger UI and the
+AsyncAPI viewer keep their own styling.
 
 The inspector MUST show an explicit empty state when an indexed DTO, JPA, or
 Mongo class has no fields. Source navigation is a distinct secondary action.

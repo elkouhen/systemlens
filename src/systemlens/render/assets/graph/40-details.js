@@ -874,12 +874,13 @@
       if (options.push && architectureInspectorNode && architectureInspectorNode.id !== node.id) {
         architectureInspectorHistory.push(architectureInspectorNode);
       }
-      inspectorBackAction = options.backAction || null;
       architectureInspectorNode = node;
       openInspector(resourceInspectorTitle(nodeResourceKind(node), nodeDisplayName(node)), {
         preserveArchitectureNavigation: true,
         docked: true,
       });
+      // `openInspector` clears the back action; the caller's one applies.
+      inspectorBackAction = options.backAction || null;
       renderArchitectureInspectorNavigation();
       const widget = details.cloneNode(true);
       widget.removeAttribute("id");
@@ -978,9 +979,8 @@
       }
       goBackArchitectureInspector();
     }
-    // A document view (contract, DTO or persistence-class fields) opens with
-    // one action row holding the VS Code action when the fact has a source,
-    // then the document body (PDR-10).
+    // A contract view opens with one action row holding the VS Code action
+    // when the contract has a source, then the viewer (PDR-10).
     function appendInspectorDocumentActions(sourceUri, label, container = inspectorBody) {
       const actions = document.createElement("div");
       actions.className = "inspector-actions inspector-document-actions";
@@ -1085,23 +1085,6 @@
       shell.append(component);
       inspectorBody.append(shell);
     }
-    function appendDtoInspectorSection(title, entries, itemClass = "dto-tag") {
-      if (!entries.length) return;
-      const section = document.createElement("section");
-      section.className = "dto-section";
-      const heading = document.createElement("h2");
-      heading.textContent = title;
-      const list = document.createElement("ul");
-      list.className = "dto-tags";
-      entries.forEach(entry => {
-        const item = document.createElement("li");
-        item.className = itemClass;
-        item.textContent = entry;
-        list.append(item);
-      });
-      section.append(heading, list);
-      inspectorBody.append(section);
-    }
     function findArchitectureNode(kinds, name, owner) {
       return graphData.nodes.find(node => (
         kinds.includes(node.kind)
@@ -1111,6 +1094,9 @@
     }
     function openArchitectureReference(node, backAction) {
       if (!node) return;
+      // The back action restores the class stack it was built with.
+      dtoNavigation.splice(0);
+      mongoNavigation.splice(0);
       selectNode(node.id, false, false);
       openArchitectureNodeInspector(node, { reset: true, backAction });
     }
@@ -1122,10 +1108,10 @@
         action: () => openArchitectureReference(node, backAction),
       } : null;
     }
-    function appendInspectorNodeOrValue(title, node, label, titleText, backAction) {
+    function appendInspectorNodeOrValue(title, node, label, titleText, backAction, container) {
       const entry = architectureReferenceEntry(node, label, titleText, backAction);
-      if (entry) appendActionList(title, [entry], inspectorBody);
-      else appendDtoInspectorSection(title, [label]);
+      if (entry) appendActionList(title, [entry], container);
+      else appendList(title, [label], container);
     }
     function appendFieldTypeControls(row, fieldType, references, targetLabel, openReference) {
       const typeControls = document.createElement("div");
@@ -1164,60 +1150,121 @@
       if (dto.root === false) return "DTO projet";
       return "DTO de message";
     }
+    // A DTO or persistence class docks with the relation inspector skeleton:
+    // a header strip (kind, owner, field count), one action row, then the
+    // counted `Champs`, `Relations` and `Sources` groups (PDR-10). A back
+    // action set by the caller survives a re-render of the same panel.
+    function openFieldResourceInspector({ title, kind, owner, fieldCount, centerNode, sourceUri, sourceLocation }) {
+      const backAction = inspectorBackAction;
+      openInspector(title, { docked: true });
+      inspectorBackAction = backAction;
+      renderArchitectureInspectorNavigation();
+      const count = document.createElement("span");
+      count.className = "route-client-count";
+      count.textContent = fieldCount
+        ? `${fieldCount} champ${fieldCount > 1 ? "s" : ""}`
+        : "aucun champ";
+      const { widget, groups } = openRelationInspector({
+        method: kind,
+        path: owner || "Propriétaire non identifié",
+        status: count,
+        centerNode,
+        sourceUri,
+        sourceLocation,
+        groups: ["Champs", "Relations", "Sources"],
+        className: "field-resource-inspector",
+      });
+      return { widget, fields: groups.Champs, relations: groups.Relations, sources: groups.Sources };
+    }
+    // A defined group left empty stays listed at zero (PDR-9).
+    function finishFieldResourceInspector(widget) {
+      widget.querySelectorAll(":scope > .details-group").forEach(discardEmptyDetailsGroup);
+      structureInspectorGroups(widget);
+      // In the resource catalogue the list stays under the docked panel.
+      if (document.body.classList.contains("catalogue-active")) hideInlineDetailsAfterModal();
+    }
+    function appendInspectorFieldList(container, heading, fields, emptyText, renderType) {
+      const section = document.createElement("section");
+      section.className = "details-section";
+      const title = document.createElement("h2");
+      title.textContent = heading;
+      section.append(title);
+      if (fields.length) {
+        const list = document.createElement("ul");
+        list.className = "dto-fields";
+        fields.forEach(field => {
+          const row = document.createElement("li");
+          row.className = "dto-field";
+          renderType(row, field);
+          const name = document.createElement("span");
+          name.className = "dto-field-name";
+          name.textContent = field.name;
+          row.append(name);
+          list.append(row);
+        });
+        section.append(list);
+      } else {
+        const empty = document.createElement("p");
+        empty.className = "dto-empty-state";
+        empty.textContent = emptyText;
+        section.append(empty);
+      }
+      container.append(section);
+    }
+    function appendInspectorNotice(container, text) {
+      const section = document.createElement("section");
+      section.className = "details-section";
+      const notice = document.createElement("p");
+      notice.className = "dto-empty-state";
+      notice.textContent = text;
+      section.append(notice);
+      container.append(section);
+    }
     function openDtoInspector(dtoName) {
       dtoNavigation.splice(0);
+      inspectorBackAction = null;
       renderDtoInspector(dtoName);
     }
     function openMongoPersistenceInspector(classId) {
       mongoNavigation.splice(0);
+      inspectorBackAction = null;
       renderMongoPersistenceInspector(classId);
     }
     function openJpaEntityInspector(entityId) {
       const entity = nodeDataById.get(entityId);
       if (!entity || entity.kind !== "jpa_entity") return;
-      openInspector(resourceInspectorTitle("jpa_entity", entity.display_name || entity.name));
-      inspectorBody.classList.add("dto-inspector");
-      appendInspectorDocumentActions(entity.vscode_uri, "Ouvrir la classe dans VS Code");
-      const summary = document.createElement("p");
-      summary.className = "dto-summary";
-      summary.textContent = `${entity.name} · ${entity.source_path}:${entity.source_line}`;
-      inspectorBody.append(summary);
-      const ownerNode = findArchitectureNode(["microservice"], entity.owner);
+      inspectorBackAction = null;
+      const fields = entity.fields || [];
+      const location = entity.source_path
+        ? `${entity.source_path}${entity.source_line ? `:${entity.source_line}` : ""}`
+        : "";
+      const { widget, fields: fieldGroup, relations, sources } = openFieldResourceInspector({
+        title: resourceInspectorTitle("jpa_entity", entity.display_name || entity.name),
+        kind: "Entité JPA",
+        owner: entity.owner,
+        fieldCount: fields.length,
+        centerNode: entity,
+        sourceUri: entity.vscode_uri,
+        sourceLocation: location,
+      });
+      appendInspectorFieldList(fieldGroup, "Champs déclarés", fields, "Aucun attribut indexé.", (row, field) => {
+        const type = document.createElement("span");
+        type.className = "dto-field-type";
+        type.textContent = field.type;
+        row.append(type);
+      });
       appendInspectorNodeOrValue(
         "Microservice",
-        ownerNode,
+        findArchitectureNode(["microservice"], entity.owner),
         entity.owner || "Microservice non identifié",
         `Afficher le microservice ${entity.owner || "propriétaire"}`,
         () => openJpaEntityInspector(entity.id),
+        relations,
       );
-      const fields = entity.fields || [];
-      const section = document.createElement("section");
-      section.className = "dto-section";
-      const heading = document.createElement("h2");
-      heading.textContent = "Attributs déclarés";
-      const list = document.createElement("ul");
-      list.className = "dto-fields";
-      if (fields.length) {
-        fields.forEach(field => {
-          const row = document.createElement("li");
-          row.className = "dto-field";
-          const type = document.createElement("span");
-          type.className = "dto-field-type";
-          type.textContent = field.type;
-          const name = document.createElement("span");
-          name.className = "dto-field-name";
-          name.textContent = field.name;
-          row.append(type, name);
-          list.append(row);
-        });
-      } else {
-        const empty = document.createElement("li");
-        empty.className = "dto-field";
-        empty.textContent = "Aucun attribut indexé.";
-        list.append(empty);
-      }
-      section.append(heading, list);
-      inspectorBody.append(section);
+      appendList("Classe", [entity.name], sources);
+      if (location) appendList("Code source", [location], sources);
+      else appendInspectorNotice(sources, "Classe Java non retrouvée dans les sources indexées.");
+      finishFieldResourceInspector(widget);
     }
     function openNestedMongoPersistenceInspector(classId, parentClassId) {
       mongoNavigation.push(parentClassId);
@@ -1228,34 +1275,52 @@
       if (parentClassId) renderMongoPersistenceInspector(parentClassId);
     }
     function renderMongoPersistenceInspector(classId) {
-      const item = (graphData.mongo_persistence_classes || []).find(candidate => candidate.id === classId);
+      const classes = graphData.mongo_persistence_classes || [];
+      const item = classes.find(candidate => candidate.id === classId);
       if (!item) return;
-      openInspector(resourceInspectorTitle("mongo_persistence_class", item.name));
-      inspectorBody.classList.add("dto-inspector");
-      appendInspectorDocumentActions(item.vscode_uri, "Ouvrir la classe dans VS Code");
-      const summary = document.createElement("p");
-      summary.className = "dto-summary";
-      summary.textContent = `${item.qualified_name} · ${item.source}:${item.line}`;
-      inspectorBody.append(summary);
-      const collectionNode = findArchitectureNode(
-        ["mongodb_collection"],
-        item.collection,
-        item.service,
-      );
+      const collectionNode = findArchitectureNode(["mongodb_collection"], item.collection, item.service);
       const serviceNode = findArchitectureNode(["microservice"], item.service);
+      const fields = item.fields || [];
+      const location = item.source ? `${item.source}${item.line ? `:${item.line}` : ""}` : "";
+      const { widget, fields: fieldGroup, relations, sources } = openFieldResourceInspector({
+        title: resourceInspectorTitle("mongo_persistence_class", item.name),
+        kind: "Classe MongoDB",
+        owner: item.service,
+        fieldCount: fields.length,
+        centerNode: collectionNode || serviceNode,
+        sourceUri: item.vscode_uri,
+        sourceLocation: location,
+      });
+      const className = reference => classes.find(candidate => candidate.id === reference)?.name || reference;
+      appendInspectorFieldList(fieldGroup, "Champs déclarés", fields, "Aucun champ indexé.", (row, field) => {
+        appendFieldTypeControls(
+          row,
+          field.type,
+          (field.references || []).filter(reference => classes.some(candidate => candidate.id === reference)),
+          className,
+          reference => openNestedMongoPersistenceInspector(reference, item.id),
+        );
+      });
+      const stack = [...mongoNavigation];
+      const returnToClass = () => {
+        mongoNavigation.splice(0, mongoNavigation.length, ...stack);
+        renderMongoPersistenceInspector(item.id);
+      };
       appendInspectorNodeOrValue(
         "Donnée",
         collectionNode,
         item.collection || "Collection non identifiée",
         `Afficher la donnée ${item.collection || "associée"}`,
-        () => renderMongoPersistenceInspector(item.id),
+        returnToClass,
+        relations,
       );
       appendInspectorNodeOrValue(
         "Microservice",
         serviceNode,
         item.service || "Microservice non identifié",
         `Afficher le microservice ${item.service || "associé"}`,
-        () => renderMongoPersistenceInspector(item.id),
+        returnToClass,
+        relations,
       );
       if (item.module) {
         appendActionList("Projet de persistance", [{
@@ -1265,43 +1330,26 @@
             closeInspector();
             selectCluster(clusterDescriptorForPath(item.module));
           },
-        }], inspectorBody);
+        }], relations);
       }
-      const fields = item.fields || [];
-      {
-        const section = document.createElement("section");
-        section.className = "dto-section";
-        const heading = document.createElement("h2");
-        heading.textContent = "Champs déclarés";
-        const list = document.createElement("ul");
-        list.className = "dto-fields";
-        fields.forEach(field => {
-          const row = document.createElement("li");
-          row.className = "dto-field";
-          const references = field.references || [];
-          const name = document.createElement("span");
-          name.className = "dto-field-name";
-          name.textContent = field.name;
-          appendFieldTypeControls(
-            row,
-            field.type,
-            references,
-            reference => (graphData.mongo_persistence_classes || [])
-              .find(candidate => candidate.id === reference)?.name || reference,
-            reference => openNestedMongoPersistenceInspector(reference, item.id),
-          );
-          row.append(name);
-          list.append(row);
-        });
-        if (!fields.length) {
-          const empty = document.createElement("li");
-          empty.className = "dto-field dto-empty-state";
-          empty.textContent = "Aucun champ indexé.";
-          list.append(empty);
-        }
-        section.append(heading, list);
-        inspectorBody.append(section);
-      }
+      const classEntry = candidate => ({
+        label: candidate.qualified_name || candidate.name,
+        title: `Afficher la classe ${candidate.name}`,
+        action: () => openNestedMongoPersistenceInspector(candidate.id, item.id),
+      });
+      const nestedIds = [...new Set(fields.flatMap(field => field.references || []))];
+      appendActionList("Classes imbriquées", nestedIds
+        .map(reference => classes.find(candidate => candidate.id === reference))
+        .filter(Boolean)
+        .map(classEntry), relations);
+      appendActionList("Classes contenantes", classes
+        .filter(candidate => candidate.id !== item.id && (candidate.fields || [])
+          .some(field => (field.references || []).includes(item.id)))
+        .map(classEntry), relations);
+      appendList("Classe", [item.qualified_name || item.name], sources);
+      if (location) appendList("Code source", [location], sources);
+      else appendInspectorNotice(sources, "Classe Java non retrouvée dans les sources indexées.");
+      finishFieldResourceInspector(widget);
     }
     function openNestedDtoInspector(dtoName, parentDtoName) {
       dtoNavigation.push(parentDtoName);
@@ -1314,92 +1362,59 @@
     function renderDtoInspector(dtoName) {
       const dto = dtoDefinition(dtoName);
       if (!dto) return;
-      openInspector(resourceInspectorTitle("dto", dto.name));
-      inspectorBody.classList.add("dto-inspector");
-      appendInspectorDocumentActions(dto.vscode_uri, "Ouvrir la classe dans VS Code");
-      const summary = document.createElement("p");
-      summary.className = "dto-summary";
-      // The DTO role leaves the title for the notice line (PDR-10).
-      summary.textContent = `${dtoInspectorKindLabel(dto)} · ${dto.source
-        ? `Classe source : ${dto.source}`
-        : "Classe Java non retrouvée dans les sources indexées ; les relations de messages restent disponibles."}`;
-      inspectorBody.append(summary);
+      const topicNodes = (dto.topics || [])
+        .map(topic => findArchitectureNode(["kafka_topic", "message_channel"], topic));
+      const producerNodes = (dto.producers || [])
+        .map(service => findArchitectureNode(["microservice"], service));
+      const consumerNodes = (dto.consumers || [])
+        .map(service => findArchitectureNode(["microservice"], service));
       const fields = dto.fields || [];
-      {
-        const section = document.createElement("section");
-        section.className = "dto-section";
-        const heading = document.createElement("h2");
-        heading.textContent = "Champs déclarés";
-        const list = document.createElement("ul");
-        list.className = "dto-fields";
-        fields.forEach(field => {
-          const item = document.createElement("li");
-          item.className = "dto-field";
-          const references = field.dto_references || [];
-          const name = document.createElement("span");
-          name.className = "dto-field-name";
-          name.textContent = field.name;
-          appendFieldTypeControls(
-            item,
-            field.type,
-            references,
-            reference => {
-              const referencedDto = dtoDefinition(reference);
-              return referencedDto ? dtoLabel(referencedDto) : reference;
-            },
-            reference => openNestedDtoInspector(reference, dto.id),
-          );
-          item.append(name);
-          list.append(item);
-        });
-        if (!fields.length) {
-          const empty = document.createElement("li");
-          empty.className = "dto-field dto-empty-state";
-          empty.textContent = "Aucun champ indexé.";
-          list.append(empty);
-        }
-        section.append(heading, list);
-        inspectorBody.append(section);
+      const location = dto.source ? `${dto.source}${dto.line ? `:${dto.line}` : ""}` : "";
+      const { widget, fields: fieldGroup, relations, sources } = openFieldResourceInspector({
+        title: resourceInspectorTitle("dto", dto.name),
+        // The DTO role leaves the title for the header strip (PDR-10).
+        kind: dtoInspectorKindLabel(dto),
+        owner: dto.owner || dto.module || (dto.producers || [])[0],
+        fieldCount: fields.length,
+        centerNode: topicNodes.find(Boolean) || producerNodes.find(Boolean),
+        sourceUri: dto.vscode_uri,
+        sourceLocation: location,
+      });
+      appendInspectorFieldList(fieldGroup, "Champs déclarés", fields, "Aucun champ indexé.", (row, field) => {
+        appendFieldTypeControls(
+          row,
+          field.type,
+          // Only an indexed DTO is a navigable type, as in the preview.
+          (field.dto_references || []).filter(reference => dtoDefinition(reference)),
+          reference => {
+            const referencedDto = dtoDefinition(reference);
+            return referencedDto ? dtoLabel(referencedDto) : reference;
+          },
+          reference => openNestedDtoInspector(reference, dto.id),
+        );
+      });
+      appendList("Valeurs enum", dto.enum_values || [], fieldGroup);
+      const stack = [...dtoNavigation];
+      const returnToDto = () => {
+        dtoNavigation.splice(0, dtoNavigation.length, ...stack);
+        renderDtoInspector(dto.id);
+      };
+      const appendResolved = (title, unresolvedTitle, names, nodes, verb) => {
+        appendActionList(title, names
+          .map((name, index) => architectureReferenceEntry(nodes[index], name, `Afficher ${verb} ${name}`, returnToDto))
+          .filter(Boolean), relations);
+        appendList(unresolvedTitle, names.filter((_, index) => !nodes[index]), relations);
+      };
+      appendResolved("Messages", "Messages non résolus", dto.topics || [], topicNodes, "le topic");
+      appendResolved("Producteurs", "Producteurs non résolus", dto.producers || [], producerNodes, "le producteur");
+      appendResolved("Consommateurs", "Consommateurs non résolus", dto.consumers || [], consumerNodes, "le consommateur");
+      if (dto.qualified_name) appendList("Classe", [dto.qualified_name], sources);
+      if (location) appendList("Code source", [location], sources);
+      else {
+        appendInspectorNotice(
+          sources,
+          "Classe Java non retrouvée dans les sources indexées ; les relations de messages restent disponibles.",
+        );
       }
-      const returnToDto = () => renderDtoInspector(dto.id);
-      const messageEntries = (dto.topics || [])
-        .map(topic => architectureReferenceEntry(
-          findArchitectureNode(["kafka_topic", "message_channel"], topic),
-          topic,
-          `Afficher le topic ${topic}`,
-          returnToDto,
-        ))
-        .filter(Boolean);
-      if (messageEntries.length) appendActionList("Messages", messageEntries, inspectorBody);
-      const unresolvedMessages = (dto.topics || []).filter(topic => (
-        !findArchitectureNode(["kafka_topic", "message_channel"], topic)
-      ));
-      appendDtoInspectorSection("Messages non résolus", unresolvedMessages);
-      appendDtoInspectorSection("Valeurs enum", dto.enum_values || []);
-      const producerEntries = (dto.producers || [])
-        .map(service => architectureReferenceEntry(
-          findArchitectureNode(["microservice"], service),
-          service,
-          `Afficher le producteur ${service}`,
-          returnToDto,
-        ))
-        .filter(Boolean);
-      if (producerEntries.length) appendActionList("Producteurs", producerEntries, inspectorBody);
-      const unresolvedProducers = (dto.producers || []).filter(service => (
-        !findArchitectureNode(["microservice"], service)
-      ));
-      appendDtoInspectorSection("Producteurs non résolus", unresolvedProducers);
-      const consumerEntries = (dto.consumers || [])
-        .map(service => architectureReferenceEntry(
-          findArchitectureNode(["microservice"], service),
-          service,
-          `Afficher le consommateur ${service}`,
-          returnToDto,
-        ))
-        .filter(Boolean);
-      if (consumerEntries.length) appendActionList("Consommateurs", consumerEntries, inspectorBody);
-      const unresolvedConsumers = (dto.consumers || []).filter(service => (
-        !findArchitectureNode(["microservice"], service)
-      ));
-      appendDtoInspectorSection("Consommateurs non résolus", unresolvedConsumers);
+      finishFieldResourceInspector(widget);
     }

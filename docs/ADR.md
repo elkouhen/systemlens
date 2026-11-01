@@ -1430,7 +1430,9 @@ acyclic import test now also guards the package facade.
 ## ADR-68: Dock the node inspector beside the graph
 
 **Status:** Accepted on 2026-11-01 with backlog task U3. Amends PDR-2.
-Refined by PDR-9 for groups a node kind does not define.
+Refined by PDR-9 for groups a node kind does not define. Amended on
+2026-11-01 by PDR-10: DTO and persistence-class (Mongo class, JPA entity
+field) views dock like a node; only contract views keep the modal.
 
 **Context:** The inspector opened every view as a centered modal over a
 blurred graph. Inspecting a node therefore hid the node, its neighbours and
@@ -1445,6 +1447,10 @@ graph stays interactive and its right workspace band reserves the panel
 width, so cards never sit under it. Contract, schema, DTO, entity and
 runtime views keep the centered modal: they need the full width. At 900
 pixels or less every view uses the modal.
+
+Amendment (2026-11-01, PDR-10): DTO, Mongo persistence-class, and JPA
+entity field views also dock, with the node inspector skeleton. They list
+relations more than wide content. Contract viewers keep the modal.
 
 The node view, docked or modal, shows a four-tile strip (relations, proven,
 inferred, without evidence level) computed from the same counts as the

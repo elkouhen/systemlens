@@ -200,3 +200,9 @@ facts, the generated DTO sources, and the flow descriptions, and the
 browser suite reads the model's data. BACKLOG task V1 also asks the
 product owner to settle the lab's uncommitted `architecture-ia.html`
 first.
+
+Follow-up (2026-11-01): the product owner amended PDR-10 after this plan
+was delivered. DTO, Mongo persistence-class, and JPA entity field views now
+dock with the resource skeleton (`Champs`, `Relations`, `Sources`); only
+contracts keep the modal. See the commit `Dock DTO and persistence-class
+inspectors beside the catalogue (PDR-10)`.

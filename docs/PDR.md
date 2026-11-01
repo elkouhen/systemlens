@@ -226,16 +226,20 @@ endpoints, persistence classes, and entities.
 export (plan
 [resource-inspector-uniformisation](plans/resource-inspector-uniformisation.md)).
 Amended on 2026-11-01 by the product owner: the catalogue preview hides
-while an inspector opened from the catalogue is open.
+while an inspector opened from the catalogue is open. Amended again on
+2026-11-01 by the product owner: a DTO and a persistence class (Mongo
+class, JPA entity field view) open a docked resource inspector; only
+contracts keep the centered modal.
 
-**Decision:** `Inspecter` opens one of three surfaces, chosen by the kind
+**Decision:** `Inspecter` opens one of four surfaces, chosen by the kind
 of fact and not by the code path that produced the row:
 
 | Fact | Surface | Skeleton |
 |---|---|---|
 | A node of the architecture graph (microservice, topic, collection, JPA entity, enriched resource) | docked node inspector | PDR-9 skeleton |
 | A relation end (served route, HTTP call) | docked relation inspector | header strip (method, path, client count), one row of actions including `Centrer dans le graphe` on the provider, groups `Relations` (provider, clients, DTO REST) and `Sources` (evidence, code source) |
-| A document (OpenAPI or AsyncAPI contract, DTO fields, persistence-class fields) | centered modal | title `<row kind label> · <name>`, one row with the VS Code action when a source exists, then the document body |
+| A DTO or a persistence class (Mongo class, JPA entity field view) | docked resource inspector | header strip (kind or DTO role, owner, field count), one row of actions with `Ouvrir dans VS Code` when a source exists and `Centrer dans le graphe` on the related node (a DTO's topic, else its producer; a Mongo class's collection, else its microservice; a JPA entity itself), groups `Champs`, `Relations`, and `Sources` |
+| A contract (OpenAPI or AsyncAPI) | centered modal | title `<row kind label> · <name>`, one row with the VS Code action when a source exists, then the embedded viewer |
 
 The catalogue stays visible under a docked inspector and is restored
 unchanged when a modal closes. While the inspector or modal opened by
@@ -250,9 +254,14 @@ MongoDB`). A `Route appelée` opens the call inspector of the caller, never
 the route inspector with the caller as provider.
 
 A JPA entity row opens the node inspector, like a collection: both are
-graph nodes, and the entity's field modal stays one click away through
-`Classe de persistance`. The Mongo persistence-class row is not a node and
-keeps the field modal.
+graph nodes, and the entity's field view stays one click away through
+`Classe de persistance`. The Mongo persistence-class row is not a node; it
+opens the docked resource inspector.
+
+A DTO or persistence-class inspector keeps its field navigation in the
+docked panel: a field type that references another DTO or Mongo class
+opens it in place, and the header back action returns to the containing
+one. A view without fields says so (`Aucun champ indexé.`).
 
 **Why:** the `Inspecter` button was uniform, but what it opened was not. A
 route replaced the catalogue with its owner's details, a called route named
@@ -260,10 +269,16 @@ the caller as its provider with `0 client`, titles used two or three words
 for one kind, and the three modal views placed the VS Code action in three
 different ways, or omitted it.
 
+The second amendment follows a review of the DTO view. A DTO or a
+persistence class is mostly relations (topics, producers, consumers,
+collection, microservice), not a wide document; the modal hid the
+catalogue and the graph that those relations point to. Only the contract
+viewers need the full width.
+
 **Consequences:** `docs/glossary.md` lists the kind labels that titles and
 catalogue tags share. A node title no longer repeats the technology
 (`Collection · order_fulfillments`, not `Donnée · MongoDB ·
 order_fulfillments`); the Architecture group still names it. The DTO role
-(`DTO de message`, `DTO REST`) moves from the title to the notice line.
+(`DTO de message`, `DTO REST`) moves from the title to the header strip.
 Swagger UI and the AsyncAPI viewer are not restyled; only the chrome around
 them changes. The JSON contract and persisted facts are unchanged.

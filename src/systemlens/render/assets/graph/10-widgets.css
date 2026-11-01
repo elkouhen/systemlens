@@ -388,7 +388,6 @@
     .asyncapi-summary-meta { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
     .asyncapi-summary-badge { padding: 4px 8px; border: 1px solid var(--ui-accent-border); border-radius: 999px; color: var(--ui-accent-text); background: var(--ui-control); font-size: var(--type-control); font-weight: 700; white-space: nowrap; }
     .asyncapi-shell > asyncapi-component { display: block; min-height: 100%; }
-    .dto-inspector { display: grid; gap: 16px; }
     .dto-summary { margin: 0; color: var(--ui-muted); font-size: var(--type-section); }
     .dto-section { padding: 14px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-widget); }
     .dto-section h2 { margin: 0 0 9px; color: var(--ui-text); font-size: var(--type-control); letter-spacing: .08em; text-transform: uppercase; }
@@ -397,6 +396,8 @@
     .dto-field-types { display: grid; gap: 4px; min-width: 0; }
     .dto-field-type { color: var(--ui-accent-text); overflow-wrap: anywhere; }
     button.dto-field-type { border: 0; padding: 0; background: transparent; color: var(--ui-accent-text); text-align: left; text-decoration: underline; cursor: pointer; font: inherit; }
+    .dto-empty-state { margin: 0; color: var(--ui-muted); font-size: var(--type-body); }
+    .details-section > .dto-fields { gap: 6px; }
     .dto-field-name { color: var(--ui-text); font-weight: 700; overflow-wrap: anywhere; }
     .dto-tag { display: inline-flex; width: fit-content; padding: 4px 7px; border-radius: 999px; color: var(--ui-accent-text); background: var(--ui-accent-soft); font-size: var(--type-body); }
     .graph-flow-empty-state { position: fixed; left: var(--workspace-left, 0px); right: var(--workspace-right, 0px); top: var(--workspace-top, 0px); bottom: var(--workspace-bottom, 0px); z-index: 6; display: grid; place-items: center; padding: 24px; box-sizing: border-box; pointer-events: none; }

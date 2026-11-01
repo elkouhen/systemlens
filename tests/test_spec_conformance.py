@@ -195,13 +195,19 @@ def test_every_inspector_title_starts_with_a_glossary_kind_label() -> None:
 
     A title built by `resourceInspectorTitle(kind, name)` reads its prefix from the
     shared map, which the previous test aligns with the glossary; a literal
-    kind must be a key of that map.
+    kind must be a key of that map. `openFieldResourceInspector` forwards
+    its `title` option, so each of its callers is checked instead.
     """
     labels = _glossary_kind_labels()
     calls = []
     for path in sorted((GRAPH_ASSETS / "graph").glob("*.js")):
         text = path.read_text(encoding="utf-8")
         for match in re.finditer(r"(?<!function )\bopenInspector\((.*)", text):
+            if match.group(1).startswith("title, { docked: true });"):
+                assert "function openFieldResourceInspector(" in text[:match.start()]
+                continue
+            calls.append((path.name, match.group(1)))
+        for match in re.finditer(r"(?<!function )\bopenFieldResourceInspector\(\{\s*title: (.*)", text):
             calls.append((path.name, match.group(1)))
     assert calls
     offenders = []

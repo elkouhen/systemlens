@@ -996,8 +996,8 @@ def test_resource_catalogue_rows_grow_with_docked_preview_context() -> None:
         browser.close()
 
 
-@pytest.mark.slow
-def test_resource_catalogue_drills_into_indexed_dto_fields() -> None:
+def _nested_dto_document() -> str:
+    """Give `OrderPlaced` fields that reference nested project DTOs."""
     document = _current_simple_dataset_document()
     graph_match = re.search(r'<script id="graph-data"[^>]*>([\s\S]*?)</script>', document)
     assert graph_match is not None
@@ -1030,7 +1030,12 @@ def test_resource_catalogue_drills_into_indexed_dto_fields() -> None:
             "qualified_name": identifier, "owner": "supermarket-contracts",
             "attributes": fields,
         })
-    document = document.replace(graph_match.group(1), json.dumps(graph_data))
+    return document.replace(graph_match.group(1), json.dumps(graph_data))
+
+
+@pytest.mark.slow
+def test_resource_catalogue_drills_into_indexed_dto_fields() -> None:
+    document = _nested_dto_document()
     with sync_playwright() as playwright:
         try:
             browser = _launch_visual_browser(playwright)
@@ -1795,7 +1800,7 @@ def test_catalogue_called_route_opens_the_call_inspector_of_its_caller() -> None
 @pytest.mark.slow
 def test_catalogue_inspector_titles_reuse_the_row_kind_label() -> None:
     """D4, D5 (PDR-10): the inspector title starts with the row's kind tag;
-    a JPA entity row opens the node inspector, a Mongo class the modal."""
+    only contracts open the centered modal."""
     cases = [
         ("Microservice", "inventory-service", None, True),
         ("Route exposée", "/api/health", "inventory-service", True),
@@ -1805,8 +1810,8 @@ def test_catalogue_inspector_titles_reuse_the_row_kind_label() -> None:
         ("Topic", "supermarket.order.placed", None, True),
         ("Collection", "order_fulfillments", None, True),
         ("Entité JPA", "ProductEntity", None, True),
-        ("DTO", "OrderPlaced", None, False),
-        ("Classe de persistance MongoDB", "OrderFulfillmentDocument", None, False),
+        ("DTO", "OrderPlaced", None, True),
+        ("Classe de persistance MongoDB", "OrderFulfillmentDocument", None, True),
     ]
     with sync_playwright() as playwright:
         try:
@@ -1843,8 +1848,9 @@ def test_catalogue_inspector_hides_the_preview_until_it_closes() -> None:
     cases = [
         ("Microservice", "inventory-service", None, "close"),
         ("Route exposée", "/api/health", "inventory-service", "escape"),
-        ("Contrat OpenAPI", "openapi.yaml", "inventory-service", "close"),
-        ("DTO", "OrderPlaced", None, "backdrop"),
+        ("Contrat OpenAPI", "openapi.yaml", "inventory-service", "backdrop"),
+        ("DTO", "OrderPlaced", None, "close"),
+        ("Classe de persistance MongoDB", "OrderFulfillmentDocument", None, "escape"),
     ]
     with sync_playwright() as playwright:
         try:
@@ -1880,6 +1886,168 @@ def test_catalogue_inspector_hides_the_preview_until_it_closes() -> None:
             assert (back.inner_text() if back.is_visible() else None) == back_label, tag
             assert "is-selected" in (row.get_attribute("class") or ""), tag
             assert abs(results.bounding_box()["width"] - narrow) < 2, tag
+        browser.close()
+
+
+_FIELD_INSPECTOR_STATE = """() => {
+    const body = document.querySelector('#inspector-body');
+    const widget = body.querySelector(':scope > .field-resource-inspector');
+    if (!widget) return null;
+    return {
+        loose: [...body.querySelectorAll('.details-section')]
+            .filter(section => !section.closest('.details-group')).length,
+        children: [...widget.children].map(child => child.className),
+        strip: [...widget.querySelector('.route-inspector-summary').children]
+            .map(child => child.textContent),
+        actions: [...widget.querySelectorAll(':scope > .inspector-actions > .inspector-action')]
+            .map(action => action.textContent),
+        groups: [...widget.querySelectorAll(':scope > .details-group')].map(group => ({
+            title: group.querySelector('.details-group-title')?.textContent,
+            count: Number(group.querySelector('.details-group-count')?.textContent),
+            open: group.open,
+            sections: Object.fromEntries([...group.querySelectorAll('.details-section')]
+                .map(section => [section.querySelector('h2')?.textContent || '',
+                                 section.querySelectorAll('li').length])),
+        })),
+    };
+}"""
+
+
+@pytest.mark.slow
+def test_catalogue_dto_and_persistence_class_inspectors_dock_beside_the_list() -> None:
+    """PDR-10 amendment: a DTO or a Mongo class inspected from the catalogue
+    docks with the resource skeleton: a header strip, `Centrer dans le
+    graphe` and the VS Code action, then counted Champs, Relations, and
+    Sources groups; the list stays visible with its row selected."""
+    cases = [
+        ("DTO", "OrderPlaced", ["DTO de message", "supermarket-contracts", "4 champs"],
+         {"Champs déclarés": 4},
+         {"Messages": 1, "Producteurs": 1, "Consommateurs": 2}),
+        ("Classe de persistance MongoDB", "OrderFulfillmentDocument",
+         ["Classe MongoDB", "inventory-service", "8 champs"],
+         {"Champs déclarés": 8},
+         {"Donnée": 1, "Microservice": 1, "Projet de persistance": 1}),
+    ]
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_catalogue_page(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        for tag, name, strip, fields, relations in cases:
+            row = _catalogue_row(page, tag, name)
+            _inspect_catalogue_row(page, row)
+            assert "is-docked" in (page.locator("#inspector-modal").get_attribute("class") or ""), tag
+            assert page.locator("#microservices-list").is_visible(), tag
+            assert page.locator("#resource-catalogue-preview").is_hidden(), tag
+            assert page.locator("#details").is_hidden(), tag
+            assert "is-selected" in (row.get_attribute("class") or ""), tag
+            assert page.locator("#inspector-title").inner_text() == f"{tag} · {name}"
+            state = page.evaluate(_FIELD_INSPECTOR_STATE)
+            assert state, tag
+            assert state["loose"] == 0, state
+            assert state["children"][:2] == ["route-inspector-summary", "inspector-actions"], state
+            assert state["strip"] == strip, state
+            assert state["actions"] == ["Centrer dans le graphe", "Ouvrir dans VS Code"], state
+            assert [group["title"] for group in state["groups"]] == ["Champs", "Relations", "Sources"]
+            field_group, relation_group, source_group = state["groups"]
+            assert field_group["sections"] == fields, state
+            assert field_group["count"] == sum(fields.values()), state
+            assert relation_group["sections"] == relations, state
+            assert relation_group["count"] == sum(relations.values()), state
+            assert set(source_group["sections"]) == {"Classe", "Code source"}, state
+            assert source_group["count"] == 2, state
+            assert all(group["open"] for group in state["groups"]), state
+            body = page.locator("#inspector-body")
+            assert body.locator(".dto-summary, .inspector-document-actions").count() == 0, tag
+            assert body.locator("a[href^='vscode://']").count() == 1, tag
+            page.locator("#inspector-close").click()
+            page.locator("#inspector-modal").wait_for(state="hidden")
+            assert page.locator("#resource-catalogue-preview").is_visible(), tag
+        browser.close()
+
+
+@pytest.mark.slow
+def test_docked_dto_inspector_navigates_nested_dtos_and_back() -> None:
+    """PDR-10 amendment: a DTO field type opens the referenced DTO in the
+    docked panel, and the header back action walks the stack back; a
+    relation opened from a DTO returns to it."""
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        page = browser.new_page(viewport={"width": 1400, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(_nested_dto_document(), wait_until="load")
+        page.locator("#contracts-mode-tab").click()
+        _inspect_catalogue_row(page, _catalogue_row(page, "DTO", "OrderPlaced"))
+        modal = page.locator("#inspector-modal")
+        title = page.locator("#inspector-title")
+        back = page.locator("#inspector-back")
+        body = page.locator("#inspector-body")
+
+        def docked_field_view(expected: str) -> dict:
+            assert title.inner_text() == expected
+            assert "is-docked" in (modal.get_attribute("class") or "")
+            assert page.locator("#microservices-list").is_visible()
+            state = page.evaluate(_FIELD_INSPECTOR_STATE)
+            assert state and [group["title"] for group in state["groups"]] == [
+                "Champs", "Relations", "Sources",
+            ], state
+            return state
+
+        root = docked_field_view("DTO · OrderPlaced")
+        assert root["groups"][0]["count"] == 6, root
+        assert back.is_hidden()
+        assert body.locator(".dto-field").filter(has_text="missing").locator("button").count() == 0
+        body.get_by_role("button", name="OrderDetails", exact=True).click()
+        nested = docked_field_view("DTO · OrderDetails")
+        assert nested["strip"][0] == "DTO projet", nested
+        assert nested["groups"][1]["count"] == 0, nested
+        assert back.is_visible()
+        body.get_by_role("button", name="Address", exact=True).click()
+        docked_field_view("DTO · Address")
+        assert "street" in body.inner_text()
+        back.click()
+        docked_field_view("DTO · OrderDetails")
+        back.click()
+        docked_field_view("DTO · OrderPlaced")
+        assert back.is_hidden()
+        body.get_by_role("button", name="supermarket.order.placed", exact=True).click()
+        assert title.inner_text() == "Topic · supermarket.order.placed"
+        back.click()
+        docked_field_view("DTO · OrderPlaced")
+        assert back.is_hidden()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_jpa_entity_field_view_docks_with_the_resource_skeleton() -> None:
+    """PDR-10 amendment: `Classe de persistance` in a JPA entity inspector
+    opens the docked field view, and back returns to the entity node."""
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_catalogue_page(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        _inspect_catalogue_row(page, _catalogue_row(page, "Entité JPA", "ProductEntity"))
+        body = page.locator("#inspector-body")
+        assert body.locator(".field-resource-inspector").count() == 0
+        body.locator(".details-section").filter(
+            has=page.locator("h2", has_text=re.compile("^Classe de persistance$"))
+        ).locator("button").first.click()
+        assert "is-docked" in (page.locator("#inspector-modal").get_attribute("class") or "")
+        state = page.evaluate(_FIELD_INSPECTOR_STATE)
+        assert state, "the JPA field view must use the resource skeleton"
+        assert state["strip"] == ["Entité JPA", "inventory-service", "3 champs"], state
+        assert state["actions"] == ["Centrer dans le graphe", "Ouvrir dans VS Code"], state
+        assert [group["title"] for group in state["groups"]] == ["Champs", "Relations", "Sources"]
+        assert state["groups"][0]["sections"] == {"Champs déclarés": 3}, state
+        assert state["groups"][1]["sections"] == {"Microservice": 1}, state
+        assert page.locator("#microservices-list").is_visible()
+        page.locator("#inspector-back").click()
+        assert body.locator(".field-resource-inspector").count() == 0
+        assert page.locator("#inspector-title").inner_text() == "Entité JPA · ProductEntity"
         browser.close()
 
 
@@ -1965,14 +2133,12 @@ def test_route_and_call_inspectors_share_the_node_inspector_skeleton() -> None:
 
 
 @pytest.mark.slow
-def test_document_modals_share_one_header_with_the_vscode_action() -> None:
-    """D7 (PDR-10): contract, DTO and persistence-class modals open with one
-    action row holding the VS Code action, before the document body."""
+def test_contract_modals_share_one_header_with_the_vscode_action() -> None:
+    """D7 (PDR-10): contract modals open with one action row holding the
+    VS Code action, before the viewer."""
     cases = [
         ("Contrat OpenAPI", "openapi.yaml", "inventory-service", "Ouvrir le fichier dans VS Code"),
         ("Contrat AsyncAPI", "asyncapi.yaml", "inventory-service", "Ouvrir le fichier dans VS Code"),
-        ("DTO", "OrderPlaced", None, "Ouvrir la classe dans VS Code"),
-        ("Classe de persistance MongoDB", "OrderFulfillmentDocument", None, "Ouvrir la classe dans VS Code"),
     ]
     with sync_playwright() as playwright:
         try:
@@ -1998,9 +2164,6 @@ def test_document_modals_share_one_header_with_the_vscode_action() -> None:
             title_box = page.locator(".inspector-header").bounding_box()
             action_box = actions.first.bounding_box()
             assert title_box and action_box and action_box["y"] >= title_box["y"] + title_box["height"], tag
-            if tag == "DTO":
-                notice = page.locator("#inspector-body > .dto-summary").first.inner_text()
-                assert notice.startswith("DTO de message · Classe source : "), notice
             page.locator("#inspector-close").click()
             page.locator("#inspector-modal").wait_for(state="hidden")
         browser.close()
@@ -3602,7 +3765,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
             "button", name="com.example.Order", exact=True
         ).click()
         assert page.locator("#inspector-title").inner_text() == "Classe de persistance MongoDB · Order"
-        assert "collection orders" not in page.locator("#inspector-body .dto-summary").first.inner_text()
+        assert "collection orders" not in page.locator("#inspector-body .route-inspector-summary").inner_text()
         assert page.locator(
             '#inspector-body button[title="Afficher la donnée orders"]'
         ).is_visible()
