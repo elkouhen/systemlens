@@ -906,7 +906,9 @@ def test_resource_catalogue_updates_docked_preview() -> None:
         page.locator("#resource-catalogue-back").click()
         page.locator("#microservices-list .resource-catalogue-row.is-selected .resource-catalogue-inspect").click()
         assert page.locator("#inspector-modal").is_visible()
-        assert page.locator("#inspector-body").get_by_text("Relations", exact=True).is_visible()
+        assert page.locator("#inspector-body .details-group-title").filter(
+            has_text=re.compile(r"^Relations$")
+        ).is_visible()
         page.locator("#inspector-close").click()
         assert page.locator("#inspector-modal").is_hidden()
         assert page.locator("#details").is_hidden()
@@ -1158,6 +1160,101 @@ def test_plain_click_selects_a_node_and_the_hint_names_the_gestures() -> None:
         _wait_for_call_tree(page)
         assert hint.is_hidden()
         context.close()
+        browser.close()
+
+
+@pytest.mark.slow
+def test_node_inspector_docks_beside_the_graph_and_merges_routes() -> None:
+    """U3: the node inspector docks from 901 px and falls back to a modal."""
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1400, "height": 900})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 0"
+        )
+        _wait_for_settled_layout(page)
+        card = page.locator(".graph-node-card-label").filter(has_text="inventory-service")
+        card.click(force=True, modifiers=["Shift"])
+        modal = page.locator("#inspector-modal")
+        modal.wait_for(state="visible")
+        page.wait_for_function("() => document.body.classList.contains('has-docked-inspector')")
+        dialog = page.locator(".inspector-dialog").bounding_box()
+        assert dialog and abs(dialog["x"] + dialog["width"] - 1400) <= 1
+        assert dialog["height"] >= 899 and dialog["width"] <= 560
+        reserved = page.evaluate(
+            "() => parseFloat(document.documentElement.style.getPropertyValue('--workspace-right'))"
+        )
+        assert reserved >= dialog["width"]
+        graph_box = page.locator("#graph").bounding_box()
+        assert graph_box and graph_box["x"] + graph_box["width"] <= dialog["x"] + 1
+        assert page.locator("#graph-interaction-hint").is_hidden()
+        halo = page.locator(".graph-node-card-label.is-inspected")
+        assert halo.count() == 1 and "inventory-service" in halo.inner_text()
+        halo_box = halo.bounding_box()
+        assert halo_box and halo_box["x"] + halo_box["width"] <= dialog["x"]
+
+        tiles = [text.split() for text in page.locator(".inspector-kpi").all_inner_texts()]
+        assert [tile[1] for tile in tiles] == ["Relations", "Prouvées", "Inférées", "Sans"]
+        assert sum(int(tile[0]) for tile in tiles[1:]) == int(tiles[0][0])
+        actions = page.locator(".inspector-actions > *").all_inner_texts()
+        assert actions[0] == "Centrer dans le graphe"
+        assert any("VS Code" in action for action in actions)
+        groups = page.locator("#inspector-body .details-group")
+        opened = [
+            groups.nth(index).evaluate("group => group.open")
+            for index in range(groups.count())
+            if "is-empty" not in (groups.nth(index).get_attribute("class") or "")
+        ]
+        assert opened[:3] == [True, True, True] and not any(opened[3:])
+        empty = page.locator("#inspector-body .details-group.is-empty").first
+        assert empty.is_visible()
+        assert empty.locator(".details-group-count").inner_text() == "0"
+        empty.locator("summary").click()
+        assert not empty.evaluate("group => group.open")
+
+        routes = page.locator("#inspector-body .details-section").filter(
+            has=page.locator("h2", has_text="Routes exposées")
+        )
+        assert routes.locator(".relation-link").all_inner_texts().count(
+            "GET /api/products/{productId}"
+        ) == 1
+        merged = routes.locator(".relation-item").filter(has_text="GET /api/products/{productId}")
+        assert merged.locator(".relation-evidence-source").all_inner_texts() == [
+            "Java · InventoryController.java:28",
+            "OpenAPI · openapi.yaml:58",
+        ]
+
+        page.keyboard.press("Escape")
+        modal.wait_for(state="hidden")
+        assert page.locator(".graph-node-card-label.is-inspected").count() == 0
+        page.wait_for_function(
+            "() => !document.body.classList.contains('has-docked-inspector')"
+        )
+        context.close()
+
+        context = browser.new_context(viewport={"width": 820, "height": 900})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 0"
+        )
+        _wait_for_settled_layout(page)
+        page.locator(".graph-node-card-label").filter(has_text="inventory-service").click(
+            force=True, modifiers=["Shift"]
+        )
+        page.locator("#inspector-modal").wait_for(state="visible")
+        assert not page.evaluate("() => document.body.classList.contains('has-docked-inspector')")
+        dialog = page.locator(".inspector-dialog").bounding_box()
+        assert dialog and dialog["x"] > 0 and dialog["x"] + dialog["width"] < 820
+        assert page.locator(".inspector-kpi").count() == 4
         browser.close()
 
 
@@ -2620,11 +2717,13 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         module_action = page.locator("#inspector-body").get_by_role("link", name="Ouvrir le projet Maven dans VS Code")
         assert module_action.is_visible()
         assert module_action.get_attribute("href") == f"vscode://file/{module.path}"
-        assert page.locator("#inspector-body .details-group > summary").all_text_contents() == [
+        assert page.locator(
+            "#inspector-body .details-group:not(.is-empty) .details-group-title"
+        ).all_text_contents() == [
             "Relations", "Architecture", "Ports d'intégration", "Sources"
         ]
-        details_meta = page.locator("#inspector-body .details-meta").inner_text()
-        assert "Relations : 3" in details_meta
+        assert page.locator(".inspector-kpi").first.inner_text().split() == ["3", "Relations"]
+        details_meta = page.locator("#inspector-body .inspector-details-summary").inner_text()
         assert "Layer :" not in details_meta
         assert "Chemin des clusters :" not in details_meta
         architecture = page.locator("#inspector-body .details-group").filter(has_text="Architecture")
@@ -2808,16 +2907,12 @@ def test_graph_panel_inspector_and_catalogue_read_without_repetition() -> None:
         assert "APIs consommées" not in headings
         assert page.locator("#inspector-breadcrumb > *").count() == 0
         assert modal.get_by_role("button", name=".", exact=True).count() == 0
-        badges = modal.locator(".details-meta .detail-badge").all_inner_texts()
-        total = next(
-            int(text.split(":")[1]) for text in badges
-            if text.startswith("Affichées") or text.startswith("Relations :")
-        )
-        qualified = [
-            int(text.split()[0]) for text in badges
-            if re.match(r"^\d+ (prouvée|inférée|conventionnelle|sans niveau de preuve)", text)
+        assert modal.locator(".details-meta .is-evidence-count").count() == 0
+        tiles = [
+            int(text.split()[0]) for text in modal.locator(".inspector-kpi").all_inner_texts()
         ]
-        assert not qualified or sum(qualified) == total
+        assert len(tiles) == 4
+        assert sum(tiles[1:]) == tiles[0]
         page.locator("#inspector-close").click()
         page.locator("#contracts-mode-tab").click()
         categories = page.locator("#resource-catalogue-categories button")
@@ -2982,5 +3077,11 @@ def test_runtime_hotspot_row_selects_its_endpoint_without_moving_the_camera() ->
         assert expected_endpoint_id.endswith("POST /api/reservations")
         # The selection highlights the arc into the selected route; no edge is added.
         assert page.locator("#graph-port-paths .graph-architecture-path").count() == 1
+        # The route inspector docks and narrows the graph (ADR-68); closing it
+        # restores the workspace, where an untouched camera shows the same cards.
+        assert page.evaluate("() => document.body.classList.contains('has-docked-inspector')")
+        page.keyboard.press("Escape")
+        page.wait_for_function("() => !document.body.classList.contains('has-docked-inspector')")
+        page.wait_for_timeout(200)
         _assert_node_centers_unchanged(before, _node_centers(page))
         browser.close()

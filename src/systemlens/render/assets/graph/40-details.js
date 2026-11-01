@@ -386,9 +386,16 @@
       details.append(group);
       return group;
     }
+    // An empty group stays in the tree, hidden: the inline widget never
+    // shows it, while the inspector lists it as a disabled group (ADR-68).
     function discardEmptyDetailsGroup(group) {
-      if (!group.querySelector(".details-section")) group.remove();
+      if (group.querySelector(".details-section")) return;
+      group.hidden = true;
+      group.dataset.empty = "true";
     }
+    // Relation counts of the last node rendered in the details widget; the
+    // node inspector turns them into its summary strip.
+    let lastNodeRelationSummary = null;
     function appendList(title, values, container = details) {
       if (!values.length) return;
       const section = document.createElement("section");
@@ -517,7 +524,7 @@
       const heading = document.createElement("h2");
       heading.textContent = title;
       const list = document.createElement("ul");
-      entries.forEach(({ label, title: actionTitle, action, modelNodeId, inspectorKind, inspectorId, inspectorService, inspectorPath, inspectorRoute }) => {
+      entries.forEach(({ label, title: actionTitle, action, modelNodeId, inspectorKind, inspectorId, inspectorService, inspectorPath, inspectorRoute, evidence }) => {
         const item = document.createElement("li");
         item.className = "relation-item";
         const button = document.createElement("button");
@@ -543,6 +550,21 @@
         button.addEventListener("click", action);
         registerDetailsAction(button, action);
         item.append(button);
+        if (evidence?.length) {
+          const sources = document.createElement("ul");
+          sources.className = "relation-evidence";
+          evidence.forEach(source => {
+            const entry = document.createElement("li");
+            const link = document.createElement(source.href ? "a" : "span");
+            if (source.href) link.href = source.href;
+            link.className = "relation-evidence-source";
+            link.textContent = source.label;
+            link.title = source.title || source.label;
+            entry.append(link);
+            sources.append(entry);
+          });
+          item.append(sources);
+        }
         list.append(item);
       });
       section.append(heading, list);
@@ -644,8 +666,34 @@
         inspectorBreadcrumb.append(item);
       });
     }
+    // From 901 px, node and HTTP views dock to the right edge and keep the
+    // graph visible; wide documents and narrow viewports use the modal.
+    const dockedInspectorQuery = window.matchMedia("(min-width: 901px)");
+    function syncInspectorDock() {
+      const docked = !inspectorModal.hidden
+        && inspectorModal.classList.contains("is-docked")
+        && dockedInspectorQuery.matches;
+      document.body.classList.toggle("has-docked-inspector", docked);
+      const width = docked ? Math.round(inspectorModal.getBoundingClientRect().width) : 0;
+      const root = document.documentElement;
+      if (root.style.getPropertyValue("--inspector-dock-width") === `${width}px`) return;
+      root.style.setProperty("--inspector-dock-width", `${width}px`);
+      window.dispatchEvent(new CustomEvent("systemlens:inspector-layout-changed"));
+    }
+    dockedInspectorQuery.addEventListener?.("change", syncInspectorDock);
+    // The inspected node keeps a halo in the graph while the inspector shows it.
+    function syncInspectedHalo() {
+      const inspectedId = !inspectorModal.hidden && architectureInspectorNode
+        ? architectureInspectorNode.id
+        : null;
+      graphState.inspectedId = inspectedId;
+      document.querySelectorAll(".graph-node-card-label").forEach(element => {
+        element.classList.toggle("is-inspected", element.dataset.nodeId === inspectedId);
+      });
+    }
     function closeInspector() {
       inspectorModal.hidden = true;
+      inspectorModal.classList.remove("is-docked");
       hideInlineDetailsAfterModal();
       inspectorBody.replaceChildren();
       inspectorBody.className = "inspector-body";
@@ -656,6 +704,8 @@
       architectureInspectorNode = null;
       inspectorBack.hidden = true;
       inspectorBreadcrumb.replaceChildren();
+      syncInspectedHalo();
+      syncInspectorDock();
     }
     function openInspector(title, options = {}) {
       if (options.preserveArchitectureNavigation !== true) {
@@ -666,8 +716,116 @@
       inspectorTitle.textContent = title;
       inspectorBody.replaceChildren();
       inspectorBody.className = "inspector-body";
+      inspectorModal.classList.toggle("is-docked", options.docked === true);
       inspectorModal.hidden = false;
       renderArchitectureInspectorNavigation();
+      syncInspectedHalo();
+      syncInspectorDock();
+    }
+    function inspectorSummaryTile(label, value, detail = "") {
+      const tile = document.createElement("div");
+      tile.className = "inspector-kpi";
+      const number = document.createElement("strong");
+      number.textContent = String(value);
+      const caption = document.createElement("span");
+      caption.textContent = label;
+      tile.append(number, caption);
+      if (detail) {
+        const note = document.createElement("small");
+        note.textContent = detail;
+        tile.append(note);
+      }
+      return tile;
+    }
+    // The inspector restructures its clone of the details widget: a summary
+    // strip, one row of secondary actions, and counted disclosure groups.
+    function structureNodeInspector(widget, node) {
+      const header = widget.querySelector(".details-header");
+      const summary = lastNodeRelationSummary?.nodeId === node.id ? lastNodeRelationSummary : null;
+      if (summary) {
+        header?.querySelectorAll(".is-evidence-count").forEach(badge => badge.remove());
+        const meta = header?.querySelector(".details-meta");
+        if (meta && !meta.children.length) meta.remove();
+        const strip = document.createElement("div");
+        strip.className = "inspector-kpis";
+        strip.setAttribute("aria-label", "Synthèse des relations");
+        strip.append(
+          inspectorSummaryTile(
+            "Relations",
+            summary.total,
+            summary.total === summary.indexed ? "" : `sur ${summary.indexed} indexées`,
+          ),
+          inspectorSummaryTile("Prouvées", summary.proved),
+          inspectorSummaryTile(
+            "Inférées",
+            summary.inferred + summary.conventional,
+            summary.conventional ? `dont ${summary.conventional} conventionnelles` : "",
+          ),
+          inspectorSummaryTile("Sans niveau de preuve", summary.unqualified),
+        );
+        (header || widget).after(strip);
+      }
+      const actions = document.createElement("div");
+      actions.className = "inspector-actions";
+      if (network.hasNode(node.id)) {
+        const center = document.createElement("button");
+        center.type = "button";
+        center.className = "inspector-action";
+        center.textContent = "Centrer dans le graphe";
+        center.title = `Centrer la vue sur ${nodeDisplayName(node)}`;
+        center.disabled = !isVisibleNodeId(node.id);
+        center.addEventListener("click", () => centerCameraOnPath({ nodes: [node.id] }));
+        actions.append(center);
+      }
+      const flowsGroup = [...widget.querySelectorAll(":scope > .details-group")]
+        .find(group => group.querySelector(":scope > summary")?.textContent === "Flux associés");
+      const flowCount = flowsGroup && flowsGroup.dataset.empty !== "true"
+        ? flowsGroup.querySelectorAll(".details-section > ul > li").length
+        : 0;
+      if (flowCount) {
+        const flows = document.createElement("button");
+        flows.type = "button";
+        flows.className = "inspector-action";
+        flows.textContent = `Flux de code (${flowCount})`;
+        flows.title = "Afficher les flux de code associés";
+        flows.addEventListener("click", () => {
+          flowsGroup.open = true;
+          flowsGroup.scrollIntoView({ block: "start", behavior: "smooth" });
+        });
+        actions.append(flows);
+      }
+      const sourceLink = widget.querySelector(":scope > .module-open-action");
+      if (sourceLink) {
+        sourceLink.classList.add("inspector-action");
+        actions.append(sourceLink);
+      }
+      if (actions.children.length) {
+        (widget.querySelector(".inspector-kpis") || header || widget.firstChild)?.after(actions);
+      }
+      let openedGroups = 0;
+      widget.querySelectorAll(":scope > .details-group").forEach(group => {
+        const groupSummary = group.querySelector(":scope > summary");
+        if (!groupSummary) return;
+        const title = document.createElement("span");
+        title.className = "details-group-title";
+        title.textContent = groupSummary.textContent;
+        const empty = group.dataset.empty === "true";
+        const count = document.createElement("span");
+        count.className = "details-group-count";
+        count.textContent = String(empty ? 0 : group.querySelectorAll(".details-section > ul > li, .details-section > ol > li").length);
+        groupSummary.replaceChildren(title, count);
+        group.hidden = false;
+        if (empty) {
+          group.open = false;
+          group.classList.add("is-empty");
+          groupSummary.setAttribute("aria-disabled", "true");
+          groupSummary.title = "Aucun élément indexé";
+          groupSummary.addEventListener("click", event => event.preventDefault());
+          return;
+        }
+        group.open = openedGroups < 3;
+        openedGroups += 1;
+      });
     }
     function openArchitectureNodeInspector(node, options = {}) {
       if (options.reset) architectureInspectorHistory.splice(0);
@@ -678,6 +836,7 @@
       architectureInspectorNode = node;
       openInspector(`${nodeKindLabel(node)} · ${nodeDisplayName(node)}`, {
         preserveArchitectureNavigation: true,
+        docked: true,
       });
       renderArchitectureInspectorNavigation();
       const widget = details.cloneNode(true);
@@ -688,6 +847,7 @@
       clonedHeader?.querySelector(".details-kicker")?.remove();
       clonedHeader?.querySelector(".details-title")?.remove();
       clonedHeader?.classList.add("inspector-details-summary");
+      structureNodeInspector(widget, node);
       widget.addEventListener("click", event => {
         const button = event.target.closest("[data-model-node-id]");
         if (button) {
@@ -743,6 +903,13 @@
         }
       });
       inspectorBody.append(widget);
+      // Keep the inspected card beside the docked panel, never under it.
+      requestAnimationFrame(() => {
+        if (!inspectorModal.classList.contains("is-docked") || !dockedInspectorQuery.matches) return;
+        const card = document.querySelector(".graph-node-card-label.is-inspected");
+        const dock = inspectorModal.getBoundingClientRect();
+        if (card && card.getBoundingClientRect().right > dock.left) centerCameraOnPath({ nodes: [node.id] });
+      });
     }
     function goBackArchitectureInspector() {
       const previous = architectureInspectorHistory.pop();

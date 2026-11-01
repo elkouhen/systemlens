@@ -168,6 +168,7 @@
     let initialNodePositions = new Map();
     const graphState = {
       selectedId: null,
+      inspectedId: null,
       dependencyDepth: 1,
       dependencyFocusOnly: false,
       selectedClusterKey: null,

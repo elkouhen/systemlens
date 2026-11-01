@@ -11,7 +11,7 @@ written down when the choice was made says so, rather than inventing one.
 | ID | Decision | Open to revision |
 |---|---|---|
 | [PDR-1](#pdr-1-inspection-requires-shift--click) | Inspection requires Shift + click; a plain click selects | Yes, product owner |
-| [PDR-2](#pdr-2-the-inspector-is-a-modal) | The inspector is a modal | Yes, product owner; backlog U3 proposes a docked panel |
+| [PDR-2](#pdr-2-the-node-inspector-docks-beside-the-graph) | The node inspector docks beside the graph; wide views stay modal | Yes, product owner; see ADR-68 |
 | [PDR-3](#pdr-3-the-export-speaks-french) | The export speaks French | No for the vocabulary; yes for individual labels |
 | [PDR-4](#pdr-4-accessibility-and-cdn-concerns-are-deferred) | Accessibility and CDN concerns are deferred | Yes, by the user only |
 | [PDR-5](#pdr-5-a-first-index-needs-no-external-tool) | A first index needs no external tool | Yes, product owner; see ADR-66 |
@@ -37,16 +37,20 @@ keeps the graph the primary workspace.
 click gives feedback instead of silence. Selection is a view state: it
 changes no persisted fact.
 
-## PDR-2: The inspector is a modal
+## PDR-2: The node inspector docks beside the graph
 
-**Status:** Accepted before 2026-11-01; rationale not recorded.
+**Status:** Accepted before 2026-11-01 as a modal, rationale not recorded;
+amended on 2026-11-01 when the product owner validated backlog task U3
+(ADR-68).
 
-**Decision:** The introspection widget renders as a centered modal over a
-blurred graph, with a header that owns identity, breadcrumb, back, and close.
+**Decision:** From 901 pixels of width, the inspector of a node, an HTTP
+route or an HTTP call docks to the right edge and leaves the graph visible.
+Contract, schema, DTO, entity and runtime views stay a centered modal over a
+blurred graph, and every view is modal at 900 pixels or less. The header
+owns identity, breadcrumb, back, and close in both layouts.
 
-**Consequences:** the graph context is hidden while inspecting. Backlog
-task U3 proposes a docked right panel with a modal fallback under 900 px;
-that change amends this record once the product owner accepts it.
+**Consequences:** the user reads a node and its neighbours side by side,
+and the inspected node keeps a halo. Wide documents keep the room they need.
 
 ## PDR-3: The export speaks French
 

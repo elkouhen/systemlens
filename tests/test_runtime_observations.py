@@ -759,7 +759,7 @@ def test_runtime_overlay_annotates_the_graph_without_moving_it() -> None:
             "() => document.querySelectorAll('#graph-port-paths .graph-architecture-path').length >= 4"
         )
         page.wait_for_function(
-            "() => document.getElementById('layout-status')?.textContent.endsWith('actif.')"
+            "() => document.getElementById('layout-status')?.textContent.startsWith('Disposition active')"
         )
         page.wait_for_timeout(400)
         card_boxes = """() => [...document.querySelectorAll('.graph-node-card-label')]
@@ -769,8 +769,16 @@ def test_runtime_overlay_annotates_the_graph_without_moving_it() -> None:
         page.wait_for_function(
             "() => document.querySelectorAll('.graph-architecture-path.is-runtime-observed').length > 0"
         )
+        # Opening the legend reserves its footprint and refits once (ADR-63):
+        # sample the cards only after that refit has settled.
+        page.locator("#graph-legend summary").first.click()
         before = page.evaluate(card_boxes)
-        page.locator("#graph-legend summary").click()
+        for _ in range(10):
+            page.wait_for_timeout(300)
+            settled = page.evaluate(card_boxes)
+            if settled == before:
+                break
+            before = settled
         assert page.locator("#graph-runtime-toggle").is_checked()
         page.locator("#graph-runtime-toggle").uncheck()
         page.wait_for_function("() => !document.querySelector('.graph-node-runtime-badge')")

@@ -16,7 +16,7 @@ functional or technical contract.
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch) |
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
-| HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor) |
+| HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor), [ADR-68](#adr-68-dock-the-node-inspector-beside-the-graph) |
 | Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
@@ -1425,3 +1425,39 @@ scripts keep working. Tests patch the submodule that owns a behavior
 `indexing.call_graph_stage`, `delivery.call_graph`) instead of one flat
 module. The core-never-imports-CodeQL check of ADR-61 still holds, and the
 acyclic import test now also guards the package facade.
+
+## ADR-68: Dock the node inspector beside the graph
+
+**Status:** Accepted on 2026-11-01 with backlog task U3. Amends PDR-2.
+
+**Context:** The inspector opened every view as a centered modal over a
+blurred graph. Inspecting a node therefore hid the node, its neighbours and
+the relations the inspector was describing. Its header stacked one badge per
+evidence level, and every relation section stayed expanded. A route served
+by a Java controller and declared in an OpenAPI file appeared twice, once per
+persisted endpoint.
+
+**Decision:** From 901 pixels of width, the inspector of a node, an HTTP
+route or an HTTP call docks to the right edge as a full-height panel. The
+graph stays interactive and its right workspace band reserves the panel
+width, so cards never sit under it. Contract, schema, DTO, entity and
+runtime views keep the centered modal: they need the full width. At 900
+pixels or less every view uses the modal.
+
+The node view, docked or modal, shows a four-tile strip (relations, proven,
+inferred, without evidence level) computed from the same counts as the
+details badges, then one row of secondary actions. Relation groups become
+disclosure groups with an item count; the first three open, and a group
+that the widget defines but leaves empty stays listed and disabled. The
+inspected node carries a halo in the graph while the panel shows it.
+
+`Routes exposées` groups served routes by method and path in the export
+only. The merged row lists each evidence source (Java, OpenAPI) with its
+location. Persisted endpoints and their identifiers are unchanged.
+
+**Consequences:** Inspecting no longer hides the graph, and the panel can
+follow Shift-clicks on other nodes without closing. The inline details
+widget keeps its badges; only the inspector clone is restructured, so the
+inline contract is unchanged. A plain click still opens nothing (PDR-1).
+Tests select the modal fallback by viewport width, not by inspector kind.
+

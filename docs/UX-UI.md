@@ -142,8 +142,8 @@ error states explain what is unavailable and what the user can do next.
 | Graph workspace widget | Provide the primary visual reading surface for architecture or one selected call tree. | Graph canvas, rendered nodes, relations, camera controls, and view-specific controls. | Pan, zoom, fit, and selection affect the current projection only. The graph remains visible while supporting widgets change. |
 | Graph context widget | Expose the controls and summary needed to interpret the current graph. | Search or filters, layout and display actions, counts, and the active selection summary. | May be collapsed. Actions change the projection or transient state without duplicating the graph hierarchy. |
 | Resource catalogue widget | Browse indexed topics, Mongo collections, routes, contracts, or persistence resources. | Search or filters, compact rows, a Contexte column in `kind · owner · detail` order, attributes when indexed, and one total count in the title. | Selecting a resource updates the docked preview and its related-resource links. `Inspecter` opens the shared inspector; a row without inspector says `Aperçu seul`. Resource details MUST NOT expand inline in the result list. |
-| Details widget | Show the selected graph element's immediate context and available analysis actions. | Identity, summary, relations, evidence, and actions for focus, modules, code flows, or source navigation. | It is contextual and may be hidden when an introspection window opens. It does not compete with the modal identity header. |
-| Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, description, ownership, relations, evidence, breadcrumb from the second level, and back or close action. | Opens as a dedicated window. Related resources remain selectable and update the same inspection history. Each fact appears in one section only. |
+| Details widget | Show the selected graph element's immediate context and available analysis actions. | Identity, summary, relations, evidence, and actions for focus, modules, code flows, or source navigation. | It is contextual and may be hidden when an introspection window opens. It does not compete with the inspector identity header. |
+| Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, breadcrumb from the second level, back and close actions; for a node, a four-tile relation summary, one row of secondary actions, and counted disclosure groups. | From 901 pixels, node, route, and HTTP call views dock to the right edge beside the graph; other views, and every view at 900 pixels or less, open as a centered modal. Related resources remain selectable and update the same inspection history. Each fact appears in one section only. |
 | Flow catalogue widget | Select a persisted code flow or flow group for call-graph analysis. | A one-line kicker and the title with its count, compact flow rows, description, trigger, protocol, status, and summary statistics. | Selecting a row replaces the selected flow graph without moving the list. Full details are shown in the selected-flow view, not in every row. |
 | Call-tree context widget | Explain and control the selected hierarchical call graph. | Flow identity, trigger event, visible tree node and arc counts, consistency diagnostic counts, the key of the access annotations, depth, expand-all, and tree-specific status. | Floats over the tree on desktop and shows its summary at all times; collapsed in the panel at compact widths and opened with `Développer`. It controls the tree without repeating its nodes or arcs. Tree counts describe the visible projection and update when depth or expansion changes. Diagnostic counts cover the selected flow and distinguish possible risks, insufficient evidence, identified guarantees, and possible interactions. |
 | Tooltip widget | Provide concise evidence for a hovered node, arc, row, or control. | Subject identity, relevant relation facts, and available status or type. | Appears on hover or focus and does not become a second navigation surface. It MUST NOT infer missing facts. |
@@ -254,16 +254,40 @@ sub-widget inside the left navigation widget.
 The graph area shows a permanent interaction hint docked at its bottom left:
 `clic` selects, `⇧ clic` inspects, the wheel zooms, dragging pans. The hint
 is hidden with the Architecture graph, in the selected call tree, below 721
-pixels of width, and at 700 pixels of height or less. It never overlaps the
-minimap or the legend. Relations in the introspection window remain interactive
-and open the target while preserving a breadcrumb path. The header back action
+pixels of width, at 700 pixels of height or less, and while the inspector
+is docked. It never overlaps the minimap or the legend. Relations in the
+introspection window remain interactive and open the target while preserving
+a breadcrumb path. The header back action
 returns to the previous element; nested DTO and persistence-class views use
 the same action and MUST NOT add a second in-body return control.
+
+From 901 pixels of width, the inspector of a node, an HTTP route, or an HTTP
+call docks to the right edge as a full-height panel (ADR-68). The graph stays
+interactive, its right workspace band reserves the panel width, the legend
+moves beside the panel, and the interaction hint hides. If the inspected card
+sits under the panel when it opens, the camera centers on it. The inspected
+node carries a halo while the panel shows it. Contract, schema, DTO, entity,
+and runtime views stay a centered modal over a blurred graph; at 900 pixels
+or less every view uses the modal. `Escape`, the close action, and a click on
+the empty canvas close the inspector.
+
+A node inspector opens with a strip of four tiles: `Relations`, `Prouvées`,
+`Inférées` (conventional relations included and named), and `Sans niveau de
+preuve`. The tiles sum to the relation total and replace the evidence badges
+of the details header. One row follows with `Centrer dans le graphe`, `Flux
+de code (N)` when the node has associated flows, and the VS Code action.
+
+Each group of the node inspector is a disclosure group whose summary shows
+its item count. The first three non-empty groups open; a group the widget
+defines but leaves empty stays listed with a zero count and cannot open.
+`Routes exposées` lists a method and path once; when a controller and an
+OpenAPI file both declare it, the row lists each source with its location.
+The persisted endpoints are unchanged.
 
 The inspector MUST show an explicit empty state when an indexed DTO, JPA, or
 Mongo class has no fields. Source navigation is a distinct secondary action.
 Actions for modules, source evidence, code flows, and resource focus remain
-available after details are displayed in a modal.
+available after details are displayed in the inspector.
 
 Selecting a module title highlights that module and lists its currently visible
 direct members in sorted order. Selecting one listed member returns to ordinary

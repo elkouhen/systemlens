@@ -445,7 +445,10 @@
         : Math.min((toolbarBounds?.width || 0) + (toolbarBounds?.left || 0) + 24, window.innerWidth * .48);
       root.style.setProperty("--workspace-left", `${Math.round(reservedLeft)}px`);
       const legendSpace = legendReservation(reservedLeft);
-      root.style.setProperty("--workspace-right", `${legendSpace.right}px`);
+      // A docked inspector owns the right edge: cards and fits stay beside it.
+      const inspectorDock = Number.parseFloat(root.style.getPropertyValue("--inspector-dock-width")) || 0;
+      const reservedRight = Math.max(legendSpace.right, inspectorDock ? inspectorDock + 12 : 0);
+      root.style.setProperty("--workspace-right", `${reservedRight}px`);
       // Reserve the band under the floating graph toolbar so fits and cards
       // never sit below it.
       const floatingContext = [graphModeContext, flowModeContext].find(element => (
@@ -487,6 +490,7 @@
       }
     }
     updateWorkspaceViewport(false);
+    window.addEventListener("systemlens:inspector-layout-changed", () => updateWorkspaceViewport(false));
     const reservedBands = () => ["--workspace-top", "--workspace-bottom"]
       .map(name => document.documentElement.style.getPropertyValue(name)).join("|");
     let lastReservedBands = reservedBands();

@@ -23,6 +23,32 @@
       empty.textContent = message;
       details.append(empty);
     }
+    // A route declared by a controller and by an OpenAPI file is persisted
+    // as two endpoints; the export lists it once with both evidence sources.
+    function routeEvidenceKind(location) {
+      const file = String(location || "").split("/").pop().replace(/:\d+$/, "");
+      if (/\.(ya?ml|json)$/i.test(file)) return "OpenAPI";
+      if (/\.java$/i.test(file)) return "Java";
+      if (/\.kt$/i.test(file)) return "Kotlin";
+      return "Source";
+    }
+    function mergeServedRoutes(routes) {
+      const groups = new Map();
+      routes.filter(route => route.role === "serve").forEach(route => {
+        if (!groups.has(route.route)) groups.set(route.route, []);
+        groups.get(route.route).push(route);
+      });
+      const codeFirst = (left, right) => (
+        (routeEvidenceKind(left.location) === "OpenAPI") - (routeEvidenceKind(right.location) === "OpenAPI")
+        || String(left.location || "").localeCompare(String(right.location || ""))
+      );
+      return [...groups.values()]
+        .map(sources => {
+          const ordered = [...sources].sort(codeFirst);
+          return { route: ordered[0], sources: ordered };
+        })
+        .sort((left, right) => httpRouteComparator(left.route, right.route));
+    }
     function hideInlineDetailsAfterModal() {
       details.classList.add("is-empty");
       document.querySelector(".toolbar")?.classList.remove("has-details");
@@ -674,7 +700,7 @@
       inspectorBackAction = null;
       const parts = httpRouteParts(route);
       const consumers = httpRouteConsumers(providerNode, route);
-      openInspector(`Route HTTP · ${parts.method} ${parts.path}`);
+      openInspector(`Route HTTP · ${parts.method} ${parts.path}`, { docked: true });
       inspectorBody.classList.add("route-inspector");
       const summary = document.createElement("section");
       summary.className = "route-inspector-summary";
@@ -728,7 +754,7 @@
       if (!callerNode || !route) return;
       inspectorBackAction = null;
       const parts = httpRouteParts(route);
-      openInspector(`Appel HTTP · ${parts.method} ${parts.path}`);
+      openInspector(`Appel HTTP · ${parts.method} ${parts.path}`, { docked: true });
       inspectorBody.classList.add("route-inspector");
       const summary = document.createElement("section");
       summary.className = "route-inspector-summary";
@@ -831,14 +857,14 @@
       const meta = document.createElement("div");
       meta.className = "details-meta";
       const relationBadge = document.createElement("span");
-      relationBadge.className = "detail-badge";
+      relationBadge.className = "detail-badge is-evidence-count";
       relationBadge.textContent = edges.length === indexedEdges.length
         ? `Relations : ${indexedEdges.length}`
         : `Relations indexées : ${indexedEdges.length}`;
       meta.append(relationBadge);
       if (edges.length !== indexedEdges.length) {
         const visibleBadge = document.createElement("span");
-        visibleBadge.className = "detail-badge";
+        visibleBadge.className = "detail-badge is-evidence-count";
         visibleBadge.textContent = `Affichées : ${edges.length}`;
         meta.append(visibleBadge);
       }
@@ -859,16 +885,26 @@
         const count = edges.filter(link => link.confidence === confidence).length;
         if (!count) return;
         const badge = document.createElement("span");
-        badge.className = "detail-badge";
+        badge.className = "detail-badge is-evidence-count";
         badge.textContent = `${count} ${confidenceLabels[confidence]}`;
         badge.title = `Relation ${confidenceLabels[confidence]} : ${[...new Set(edges.filter(link => link.confidence === confidence).map(link => link.provenance))].join(", ")}`;
         meta.append(badge);
       });
       const qualifiedCount = edges.filter(link => confidenceLabels[link.confidence]).length;
+      const countConfidence = confidence => edges.filter(link => link.confidence === confidence).length;
+      lastNodeRelationSummary = {
+        nodeId: id,
+        total: edges.length,
+        indexed: indexedEdges.length,
+        proved: countConfidence("proved"),
+        inferred: countConfidence("inferred"),
+        conventional: countConfidence("conventional"),
+        unqualified: edges.length - qualifiedCount,
+      };
       if (qualifiedCount && qualifiedCount < edges.length) {
         const remainder = edges.length - qualifiedCount;
         const badge = document.createElement("span");
-        badge.className = "detail-badge";
+        badge.className = "detail-badge is-evidence-count";
         badge.textContent = `${remainder} sans niveau de preuve`;
         badge.title = "Relations pour lesquelles l’index ne porte pas de niveau de preuve";
         meta.append(badge);
@@ -997,16 +1033,19 @@
             })),
         ];
         const relationsGroup = createDetailsGroup("Relations");
-        appendActionList("Routes exposées", httpRoutes
-          .filter(route => route.role === "serve")
-          .sort(httpRouteComparator)
-          .map(route => ({
+        appendActionList("Routes exposées", mergeServedRoutes(httpRoutes)
+          .map(({ route, sources }) => ({
             label: route.route,
             title: `Afficher les consommateurs de ${route.route}`,
             inspectorKind: "route",
             inspectorService: node.name,
             inspectorRoute: route.route,
             action: () => openHttpRouteInspector(node, route),
+            evidence: sources.length > 1 ? sources.map(source => ({
+              label: `${routeEvidenceKind(source.location)} · ${String(source.location || "").split("/").pop()}`,
+              title: source.location,
+              href: source.vscode_uri,
+            })) : [],
           })), relationsGroup);
         const calledRoutes = httpRoutes.filter(route => route.role === "call").map(route => {
           const call = httpCalls.find(item => (
