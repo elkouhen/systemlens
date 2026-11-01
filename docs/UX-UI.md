@@ -94,9 +94,23 @@ kind and relationship counts when available. Selecting a row opens its docked
 preview; `Inspecter` opens the shared inspector for deeper details.
 
 The catalogue title carries the visible and total counts once. Each category
-shows its own count; an empty category stays listed but is disabled. The
-Contexte column always reads `kind · owner · detail`. Every row offers
-`Inspecter`, or the muted label `Aperçu seul` when no dedicated inspector exists.
+shows its own count; an empty category stays listed but is disabled. Rows are
+ordered by kind (category order), then owner, then name.
+
+Each row opens with a kind tag coloured like the graph type chips; a route
+also shows its HTTP verb as a badge before the path. The Contexte column
+reads `owner · detail` without repeating the kind; a node row details its
+relation count, a served route its distinct HTTP clients. A zero count reads
+as a muted `aucun client` or `aucune relation`, never `0 client`.
+
+Every row offers `Inspecter`, or the muted label `Aperçu seul` when no
+dedicated inspector exists. `Inspecter` appears on row hover, on keyboard
+focus, and on the selected row; a click on the row itself opens the preview.
+On a device without hover the action stays visible.
+
+The catalogue page is a column bounded to 1180 pixels and centered. The
+mode tabs keep their panel width, and the collapse control stays next to the
+brand in the panel header.
 
 For a DTO, JPA entity, or Mongo persistence class, the preview shows indexed
 attribute names and types. A Mongo collection shows fields grouped by its
@@ -141,7 +155,7 @@ error states explain what is unavailable and what the user can do next.
 | Navigation widget | Switch between graph, flow, resource, contract, and diagnostics views. | View groups, active view, and collapse control. | Changes the workspace view and clears incompatible transient details. It does not contain resource facts. |
 | Graph workspace widget | Provide the primary visual reading surface for architecture or one selected call tree. | Graph canvas, rendered nodes, relations, camera controls, and view-specific controls. | Pan, zoom, fit, and selection affect the current projection only. The graph remains visible while supporting widgets change. |
 | Graph context widget | Expose the controls and summary needed to interpret the current graph. | Search or filters, layout and display actions, counts, and the active selection summary. | May be collapsed. Actions change the projection or transient state without duplicating the graph hierarchy. |
-| Resource catalogue widget | Browse indexed topics, Mongo collections, routes, contracts, or persistence resources. | Search or filters, compact rows, a Contexte column in `kind · owner · detail` order, attributes when indexed, and one total count in the title. | Selecting a resource updates the docked preview and its related-resource links. `Inspecter` opens the shared inspector; a row without inspector says `Aperçu seul`. Resource details MUST NOT expand inline in the result list. |
+| Resource catalogue widget | Browse indexed topics, Mongo collections, routes, contracts, or persistence resources. | Search or filters, compact rows with a kind tag, a Contexte column in `owner · detail` order, attributes when indexed, and one total count in the title. | Selecting a resource updates the docked preview and its related-resource links. `Inspecter` opens the shared inspector; a row without inspector says `Aperçu seul`. Resource details MUST NOT expand inline in the result list. |
 | Details widget | Show the selected graph element's immediate context and available analysis actions. | Identity, summary, relations, evidence, and actions for focus, modules, code flows, or source navigation. | It is contextual and may be hidden when an introspection window opens. It does not compete with the inspector identity header. |
 | Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, breadcrumb from the second level, back and close actions; for a node, a four-tile relation summary, one row of secondary actions, and counted disclosure groups. | From 901 pixels, node, route, and HTTP call views dock to the right edge beside the graph; other views, and every view at 900 pixels or less, open as a centered modal. Related resources remain selectable and update the same inspection history. Each fact appears in one section only. |
 | Flow catalogue widget | Select a persisted code flow or flow group for call-graph analysis. | A one-line kicker and the title with its count, compact flow rows, description, trigger, protocol, status, and summary statistics. | Selecting a row replaces the selected flow graph without moving the list. Full details are shown in the selected-flow view, not in every row. |

@@ -44,14 +44,41 @@
     function resourceCatalogueEntryLabel(entry) {
       return entry.method ? `${entry.method} ${entry.name}` : entry.name;
     }
+    // Served routes do not carry their callers; the owning service lists
+    // them in `http_callers`, one entry per calling site.
+    function resourceCatalogueRouteClientCount(node, route) {
+      if (route.consumers?.length || route.callers?.length) return route.consumers?.length || route.callers?.length;
+      const routeText = route.route || "";
+      return new Set((node.http_callers || [])
+        .filter(caller => caller.route === routeText)
+        .map(caller => caller.service || caller.location)).size;
+    }
     function buildResourceCatalogueEntries() {
       const entries = [];
+      const relationCounts = new Map();
+      (graphData.links || []).forEach(link => {
+        [link.source, link.target].forEach(endpoint => {
+          const nodeId = typeof endpoint === "object" ? endpoint?.id : endpoint;
+          if (nodeId) relationCounts.set(nodeId, (relationCounts.get(nodeId) || 0) + 1);
+        });
+      });
       graphData.nodes.forEach(node => {
+        const service = node.kind === "microservice" ? node.name : node.owner || node.service || "";
+        const kindLabel = node.kind === "microservice" && node.external
+          ? resourceCatalogueSingularLabels.get("external_microservice")
+          : resourceCatalogueSingularLabels.get(node.kind) || "Ressource";
         const base = {
           id: node.id,
           kind: node.kind,
           name: nodeDisplayName(node),
-          service: node.kind === "microservice" ? node.name : node.owner || node.service || "",
+          service,
+          tagKind: node.kind === "microservice" && node.external ? "external_microservice" : node.kind,
+          // Row-only context; the preview keeps its entry and exit counts.
+          rowMeta: resourceCatalogueContext(
+            kindLabel,
+            service && service !== nodeDisplayName(node) ? service : "",
+            resourceCatalogueCount(relationCounts.get(node.id) || 0, "relation"),
+          ),
           node,
           inspect: () => architectureNodeReference(node, "Voir"),
         };
@@ -88,7 +115,7 @@
               ? resourceCatalogueContext("Route appelée", node.name)
               : resourceCatalogueContext(
                 "Route exposée", node.name,
-                resourceCatalogueCount(route.consumers?.length || route.callers?.length || 0, "client"),
+                resourceCatalogueCount(resourceCatalogueRouteClientCount(node, route), "client"),
               ),
             route,
             ownerNode: node,
@@ -182,7 +209,35 @@
           previous.source = entry.source || previous.source;
         }
       });
-      return [...merged.values()].sort((left, right) => left.name.localeCompare(right.name));
+      // Default order: kind (category order), then owner, then name.
+      const kindOrder = [...resourceCatalogueKindLabels.keys()].filter(kind => kind !== "all");
+      const kindRank = entry => {
+        const rank = kindOrder.indexOf(entry.kind);
+        return rank === -1 ? kindOrder.indexOf("other") : rank;
+      };
+      return [...merged.values()].sort((left, right) => (
+        kindRank(left) - kindRank(right)
+        || resourceCatalogueOwner(left).localeCompare(resourceCatalogueOwner(right))
+        || left.name.localeCompare(right.name)
+        || String(left.method || "").localeCompare(String(right.method || ""))
+      ));
+    }
+    // A zero count reads as a muted `aucun client` rather than `0 client`.
+    const resourceCatalogueFeminineWords = new Set(["ressource", "relation"]);
+    function renderResourceCatalogueContext(element, parts) {
+      element.replaceChildren();
+      parts.forEach((part, index) => {
+        if (index) element.append(" · ");
+        const zero = String(part).match(/^0 (\S+)$/);
+        if (!zero) {
+          element.append(part);
+          return;
+        }
+        const muted = document.createElement("span");
+        muted.className = "resource-catalogue-zero";
+        muted.textContent = `${resourceCatalogueFeminineWords.has(zero[1]) ? "aucune" : "aucun"} ${zero[1]}`;
+        element.append(muted);
+      });
     }
     function resourceCatalogueEntryMatches(entry, kind, query, service) {
       const kindMatch = kind === "all" || (kind === "kafka_topic"
@@ -479,7 +534,7 @@
       microservicesEmpty.hidden = visible.length > 0;
       visible.forEach(entry => {
         const selectResource = () => selectResourceCatalogueEntry(entry);
-        const item = referenceItem(resourceCatalogueEntryLabel(entry), entry.meta || resourceCatalogueContext(
+        const item = referenceItem(resourceCatalogueEntryLabel(entry), entry.meta || entry.rowMeta || resourceCatalogueContext(
           resourceCatalogueSingularLabels.get(entry.kind) || "Ressource",
           entry.service && entry.service !== entry.name ? entry.service : "",
         ), "", selectResource);
@@ -488,6 +543,23 @@
         item.classList.toggle("is-selected", resourceCatalogueSelection?.catalogueKey === entry.catalogueKey);
         const text = item.firstElementChild;
         const meta = text?.querySelector(".reference-meta");
+        // The kind moves to a coloured tag; the Contexte column keeps the
+        // owner and the relation summary.
+        const [kindLabel, ...contextParts] = String(meta?.textContent || "").split(" · ");
+        const tag = document.createElement("span");
+        tag.className = "resource-kind-tag";
+        tag.dataset.kind = entry.tagKind || entry.kind;
+        tag.textContent = kindLabel || resourceCatalogueSingularLabels.get(entry.kind) || "Ressource";
+        const title = text?.querySelector(".reference-title");
+        if (title && entry.method) {
+          const verb = document.createElement("span");
+          verb.className = "resource-http-verb";
+          verb.dataset.method = entry.method;
+          verb.textContent = entry.method;
+          title.replaceChildren(verb, " ", entry.name);
+        }
+        title?.before(tag);
+        if (meta) renderResourceCatalogueContext(meta, contextParts);
         if (text && meta) item.insertBefore(meta, item.lastElementChild);
         const action = item.querySelector(".reference-action");
         const actionGroup = document.createElement("div");

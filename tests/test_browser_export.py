@@ -1164,6 +1164,69 @@ def test_plain_click_selects_a_node_and_the_hint_names_the_gestures() -> None:
 
 
 @pytest.mark.slow
+def test_catalogue_rows_carry_kind_tags_and_reveal_inspect_on_hover() -> None:
+    """U6: kind tags, verb badges, muted zero counts, hover-only action."""
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        page = browser.new_page(viewport={"width": 1600, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator("#contracts-mode-tab").click()
+        panel = page.locator("#microservices-panel").bounding_box()
+        assert panel and panel["width"] <= 1180 and abs(panel["x"] * 2 + panel["width"] - 1600) <= 2
+        tabs = page.locator(".toolbar-mode-tabs .toolbar-mode-tab:visible")
+        assert all(box and box["width"] <= 180 for box in [tab.bounding_box() for tab in tabs.all()])
+
+        rows = page.locator("#microservices-list .resource-catalogue-row")
+        tags = rows.locator(".resource-kind-tag").all_inner_texts()
+        assert tags[:3] == ["Microservice"] * 3
+        kinds = rows.locator(".resource-kind-tag").evaluate_all(
+            "tags => tags.map(tag => tag.dataset.kind)"
+        )
+        order = ["microservice", "http_route", "openapi_contract", "asyncapi_contract",
+                 "kafka_topic", "mongodb_collection", "jpa_entity", "dto", "diagnostic"]
+        ranks = [order.index(kind) if kind in order else len(order) for kind in kinds]
+        assert ranks == sorted(ranks)
+        assert "Topic" in tags and "Collection" in tags and "Route exposée" in tags
+        colors = {
+            kind: color for kind, color in rows.locator(".resource-kind-tag").evaluate_all(
+                "tags => tags.map(tag => [tag.dataset.kind, getComputedStyle(tag).getPropertyValue('--kind-color').trim()])"
+            )
+        }
+        assert colors["microservice"] == "#ef4444" and colors["kafka_topic"] == "#f59e0b"
+        assert colors["mongodb_collection"] == "#3b82f6"
+
+        reservations = rows.filter(has=page.locator(".resource-kind-tag", has_text="Route exposée")).filter(
+            has_text="/api/reservations"
+        )
+        assert reservations.locator(".resource-http-verb").inner_text() == "POST"
+        assert reservations.locator(".reference-meta").inner_text() == "inventory-service · 1 client"
+        health = rows.filter(has_text="/api/health").filter(has_text="inventory-service")
+        assert health.locator(".resource-catalogue-zero").inner_text() == "aucun client"
+        assert "0 client" not in rows.locator(".reference-meta").all_inner_texts()
+
+        first, second = rows.nth(0), rows.nth(1)
+        opacity = "element => getComputedStyle(element).opacity"
+        page.mouse.move(5, 5)
+        assert first.locator(".resource-catalogue-inspect").evaluate(opacity) == "0"
+        first.hover()
+        page.wait_for_function(
+            "() => getComputedStyle(document.querySelector('#microservices-list .resource-catalogue-row .resource-catalogue-inspect')).opacity === '1'"
+        )
+        assert second.locator(".resource-catalogue-inspect").evaluate(opacity) == "0"
+        second.locator(".reference-title").click()
+        page.mouse.move(5, 5)
+        page.wait_for_timeout(200)
+        assert second.locator(".resource-catalogue-inspect").evaluate(opacity) == "1"
+        assert page.locator("#inspector-modal").is_hidden()
+        browser.close()
+
+
+@pytest.mark.slow
 def test_node_inspector_docks_beside_the_graph_and_merges_routes() -> None:
     """U3: the node inspector docks from 901 px and falls back to a modal."""
     document = _current_simple_dataset_document()
@@ -2924,10 +2987,10 @@ def test_graph_panel_inspector_and_catalogue_read_without_repetition() -> None:
                 assert button.is_disabled()
         assert page.locator("#resource-catalogue-summary").is_hidden()
         rows = page.locator("#microservices-list .resource-catalogue-row")
-        contexts = rows.locator(".reference-meta").all_inner_texts()
-        assert contexts and not any(text.startswith("order-service ·") for text in contexts)
         for index in range(rows.count()):
             row = rows.nth(index)
+            tag = row.locator(".resource-kind-tag").inner_text()
+            assert tag and not row.locator(".reference-meta").inner_text().startswith(tag)
             assert row.locator(".resource-catalogue-inspect, .resource-catalogue-no-inspector").count() == 1
         browser.close()
 

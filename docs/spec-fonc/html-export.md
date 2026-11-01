@@ -180,9 +180,12 @@ project root module is not listed.
 
 The catalogue title shows the visible and total counts, for example
 `Catalogue des ressources (24/24)`. Categories show their own counts, and an
-empty category is disabled. The Contexte column reads `kind · owner · detail`,
-for example `Route exposée · order-service · 2 clients`. A row without a
-dedicated inspector shows `Aperçu seul` instead of `Inspecter`.
+empty category is disabled. Rows are ordered by kind, owner, then name. Each
+row starts with a kind tag such as `Route exposée`, and a route shows its
+verb as a badge. The Contexte column reads `owner · detail`, for example
+`inventory-service · 1 client`; a zero count reads `aucun client`. A row
+without a dedicated inspector shows `Aperçu seul` instead of `Inspecter`,
+which appears on hover and on the selected row.
 
 Selecting a catalogue row shows its type, owner, source, and indexed related
 resources in the right-hand preview. Each related-resource link selects that
