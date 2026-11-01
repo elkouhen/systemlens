@@ -715,6 +715,8 @@
     function closeInspector() {
       inspectorModal.hidden = true;
       inspectorModal.classList.remove("is-docked");
+      // A catalogue preview hidden by `Inspecter` comes back unchanged.
+      resourceCataloguePreview?.classList.remove("is-suspended");
       hideInlineDetailsAfterModal();
       inspectorBody.replaceChildren();
       inspectorBody.className = "inspector-body";

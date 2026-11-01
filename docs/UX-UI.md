@@ -141,9 +141,15 @@ collection; its field modal stays one click away through `Classe de
 persistance`.
 
 The catalogue list stays visible under a docked inspector, with its row
-selected, and is restored unchanged when a modal closes. A `Route appelée`
-opens the call inspector of its caller: it names the caller, the call's
-target, and the target's served route, never the caller as provider.
+selected, and is restored unchanged when a modal closes. While that
+inspector or modal is open, the preview is hidden and the list takes its
+width. Closing it by `×`, `Escape`, or a backdrop click brings back the same
+preview with its back history. An inspector opened from the graph leaves
+the preview as it is.
+
+A `Route appelée` opens the call inspector of its caller: it names the
+caller, the call's target, and the target's served route, never the caller
+as provider.
 
 The catalogue page is a column bounded to 1180 pixels and centered. The
 mode tabs keep their panel width, and the collapse control stays next to the
@@ -192,7 +198,7 @@ error states explain what is unavailable and what the user can do next.
 | Navigation widget | Switch between graph, flow, resource, contract, and diagnostics views. | View groups, active view, and collapse control. | Changes the workspace view and clears incompatible transient details. It does not contain resource facts. |
 | Graph workspace widget | Provide the primary visual reading surface for architecture or one selected call tree. | Graph canvas, rendered nodes, relations, camera controls, and view-specific controls. | Pan, zoom, fit, and selection affect the current projection only. The graph remains visible while supporting widgets change. |
 | Graph context widget | Expose the controls and summary needed to interpret the current graph. | Search or filters, layout and display actions, counts, and the active selection summary. | May be collapsed. Actions change the projection or transient state without duplicating the graph hierarchy. |
-| Resource catalogue widget | Browse indexed topics, Mongo collections, routes, contracts, or persistence resources. | Search or filters, compact rows with a kind tag, a Contexte column in `owner · detail` order, attributes when indexed, and one total count in the title. | Selecting a resource updates the docked preview and its related-resource links. `Inspecter` opens the shared inspector; a row without inspector says `Aperçu seul`. Resource details MUST NOT expand inline in the result list. |
+| Resource catalogue widget | Browse indexed topics, Mongo collections, routes, contracts, or persistence resources. | Search or filters, compact rows with a kind tag, a Contexte column in `owner · detail` order, attributes when indexed, and one total count in the title. | Selecting a resource updates the docked preview and its related-resource links. `Inspecter` opens the shared inspector and hides the preview until it closes; a row without inspector says `Aperçu seul`. Resource details MUST NOT expand inline in the result list. |
 | Details widget | Show the selected graph element's immediate context and available analysis actions. | Identity, summary, relations, evidence, and actions for focus, modules, code flows, or source navigation. | It is contextual and may be hidden when an introspection window opens. It does not compete with the inspector identity header. |
 | Introspection widget | Inspect one microservice, topic, route, collection, DTO, entity, or other indexed resource. | Identity header, breadcrumb from the second level, back and close actions; for a node, a four-tile relation summary, one row of secondary actions, and counted disclosure groups. | From 901 pixels, node, route, and HTTP call views dock to the right edge beside the graph; other views, and every view at 900 pixels or less, open as a centered modal. Related resources remain selectable and update the same inspection history. Each fact appears in one section only. |
 | Flow catalogue widget | Select a persisted code flow or flow group for call-graph analysis. | A one-line kicker and the title with its count, compact flow rows, description, trigger, protocol, status, and summary statistics. | Selecting a row replaces the selected flow graph without moving the list. Full details are shown in the selected-flow view, not in every row. |

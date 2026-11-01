@@ -256,9 +256,9 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview {
   max-height: calc(100vh - 180px);
   overflow-y: auto;
 }
-body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) .resource-catalogue-preview { display: none; }
-body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) { grid-template-columns: 220px minmax(0, 1fr); }
-body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) .resource-catalogue-results { grid-column: 2; }
+body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection:not(.is-suspended))) .resource-catalogue-preview { display: none; }
+body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection:not(.is-suspended))) { grid-template-columns: 220px minmax(0, 1fr); }
+body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection:not(.is-suspended))) .resource-catalogue-results { grid-column: 2; }
 body.catalogue-active #microservices-panel .resource-catalogue-sidebar h3,
 body.catalogue-active #microservices-panel .resource-catalogue-preview h3 {
   margin: 0 0 14px;
@@ -536,22 +536,22 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
 }
 @media (min-width: 1101px) {
   body.catalogue-active #microservices-panel .resource-catalogue-layout { grid-template-columns: 190px minmax(0, 1fr) 500px; }
-  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection) .resource-catalogue-table-head,
-  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection) .resource-catalogue-row { grid-template-columns: minmax(0, 1fr) 90px; }
-  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection) .resource-catalogue-table-head span:nth-child(2) { display: none; }
-  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection) .resource-catalogue-row > div:first-child { grid-column: 1; grid-row: 1; }
-  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection) .resource-catalogue-row .reference-meta { grid-column: 1; grid-row: 2; }
-  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection) .resource-catalogue-actions { grid-column: 2; grid-row: 1 / 3; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection:not(.is-suspended)) .resource-catalogue-table-head,
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection:not(.is-suspended)) .resource-catalogue-row { grid-template-columns: minmax(0, 1fr) 90px; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection:not(.is-suspended)) .resource-catalogue-table-head span:nth-child(2) { display: none; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection:not(.is-suspended)) .resource-catalogue-row > div:first-child { grid-column: 1; grid-row: 1; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection:not(.is-suspended)) .resource-catalogue-row .reference-meta { grid-column: 1; grid-row: 2; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:has(.resource-catalogue-preview.has-selection:not(.is-suspended)) .resource-catalogue-actions { grid-column: 2; grid-row: 1 / 3; }
 }
 @media (max-width: 1100px) {
   body.catalogue-active #microservices-panel .resource-catalogue-layout,
-  body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) { grid-template-columns: 190px minmax(0, 1fr); }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection:not(.is-suspended))) { grid-template-columns: 190px minmax(0, 1fr); }
   body.catalogue-active #microservices-panel .resource-catalogue-preview { grid-column: 1 / -1; min-height: 140px; }
 }
 @media (max-width: 700px) {
   body.catalogue-active .toolbar { padding: 12px; }
   body.catalogue-active #microservices-panel .resource-catalogue-layout,
-  body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection)) { grid-template-columns: 1fr; }
+  body.catalogue-active #microservices-panel .resource-catalogue-layout:not(:has(.resource-catalogue-preview.has-selection:not(.is-suspended))) { grid-template-columns: 1fr; }
   body.catalogue-active #microservices-panel .resource-catalogue-sidebar,
   body.catalogue-active #microservices-panel .resource-catalogue-results,
   body.catalogue-active #microservices-panel .resource-catalogue-preview { grid-column: 1; }

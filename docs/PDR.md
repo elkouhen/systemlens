@@ -225,6 +225,8 @@ endpoints, persistence classes, and entities.
 `Inspecter` on one catalogue row of each kind on the supermarket lab
 export (plan
 [resource-inspector-uniformisation](plans/resource-inspector-uniformisation.md)).
+Amended on 2026-11-01 by the product owner: the catalogue preview hides
+while an inspector opened from the catalogue is open.
 
 **Decision:** `Inspecter` opens one of three surfaces, chosen by the kind
 of fact and not by the code path that produced the row:
@@ -236,11 +238,16 @@ of fact and not by the code path that produced the row:
 | A document (OpenAPI or AsyncAPI contract, DTO fields, persistence-class fields) | centered modal | title `<row kind label> · <name>`, one row with the VS Code action when a source exists, then the document body |
 
 The catalogue stays visible under a docked inspector and is restored
-unchanged when a modal closes. The inspector title reuses the catalogue's
-kind label (`Route exposée`, `Route appelée`, `Collection`, `Entité JPA`,
-`DTO`, `Classe de persistance MongoDB`). A `Route appelée` opens the call
-inspector of the caller, never the route inspector with the caller as
-provider.
+unchanged when a modal closes. While the inspector or modal opened by
+`Inspecter` is open, the catalogue preview is hidden, the result list takes
+its width, and the row stays selected. Any close (`×`, `Escape`, backdrop)
+brings back the same preview and its back history. An inspector opened from
+the graph leaves the preview alone.
+
+The inspector title reuses the catalogue's kind label (`Route exposée`,
+`Route appelée`, `Collection`, `Entité JPA`, `DTO`, `Classe de persistance
+MongoDB`). A `Route appelée` opens the call inspector of the caller, never
+the route inspector with the caller as provider.
 
 A JPA entity row opens the node inspector, like a collection: both are
 graph nodes, and the entity's field modal stays one click away through

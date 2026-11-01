@@ -591,6 +591,9 @@
               openArchitectureNodeInspector(inspectTarget, { reset: true });
               hideInlineDetailsAfterModal();
             }
+            // The inspector takes over the preview's role: the preview hides
+            // and the list widens until the inspector closes (PDR-10).
+            if (!inspectorModal.hidden) resourceCataloguePreview?.classList.add("is-suspended");
           });
           actionGroup.append(inspect);
         } else {

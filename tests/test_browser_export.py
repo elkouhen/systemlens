@@ -1837,6 +1837,79 @@ def test_catalogue_inspector_titles_reuse_the_row_kind_label() -> None:
 
 
 @pytest.mark.slow
+def test_catalogue_inspector_hides_the_preview_until_it_closes() -> None:
+    """PDR-10: `Inspecter` hides the catalogue preview and widens the list;
+    every close path brings back the same preview and navigation history."""
+    cases = [
+        ("Microservice", "inventory-service", None, "close"),
+        ("Route exposée", "/api/health", "inventory-service", "escape"),
+        ("Contrat OpenAPI", "openapi.yaml", "inventory-service", "close"),
+        ("DTO", "OrderPlaced", None, "backdrop"),
+    ]
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_catalogue_page(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        preview = page.locator("#resource-catalogue-preview")
+        results = page.locator("#microservices-panel .resource-catalogue-results")
+        back = page.locator("#resource-catalogue-back")
+        for tag, name, owner, close in cases:
+            # A first plain selection gives the preview a history entry.
+            page.locator("#microservices-list .resource-catalogue-row").first.click()
+            row = _catalogue_row(page, tag, name, owner)
+            row.click()
+            assert preview.is_visible(), tag
+            title = page.locator("#resource-catalogue-preview-title").inner_text()
+            back_label = back.inner_text() if back.is_visible() else None
+            narrow = results.bounding_box()["width"]
+            _inspect_catalogue_row(page, row)
+            assert preview.is_hidden(), tag
+            assert page.locator("#microservices-list").is_visible(), tag
+            assert "is-selected" in (row.get_attribute("class") or ""), tag
+            assert results.bounding_box()["width"] > narrow + 200, tag
+            if close == "escape":
+                page.keyboard.press("Escape")
+            elif close == "backdrop":
+                page.locator("#inspector-modal").click(position={"x": 5, "y": 5})
+            else:
+                page.locator("#inspector-close").click()
+            page.locator("#inspector-modal").wait_for(state="hidden")
+            assert preview.is_visible(), tag
+            assert page.locator("#resource-catalogue-preview-title").inner_text() == title, tag
+            assert (back.inner_text() if back.is_visible() else None) == back_label, tag
+            assert "is-selected" in (row.get_attribute("class") or ""), tag
+            assert abs(results.bounding_box()["width"] - narrow) < 2, tag
+        browser.close()
+
+
+@pytest.mark.slow
+def test_graph_inspector_leaves_the_catalogue_preview_alone() -> None:
+    """PDR-10: an inspector opened outside the catalogue keeps the preview."""
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_catalogue_page(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        _catalogue_row(page, "Microservice", "inventory-service").click()
+        preview = page.locator("#resource-catalogue-preview")
+        assert preview.is_visible()
+        title = page.locator("#resource-catalogue-preview-title").inner_text()
+        page.locator("#architecture-mode-tab").click()
+        page.locator(".graph-node-card-label").filter(has_text="order-service").first.click(
+            force=True, modifiers=["Shift"]
+        )
+        page.locator("#inspector-modal").wait_for(state="visible")
+        page.locator("#contracts-mode-tab").click()
+        assert preview.is_visible()
+        page.locator("#inspector-close").click()
+        page.locator("#inspector-modal").wait_for(state="hidden")
+        assert preview.is_visible()
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == title
+        browser.close()
+
+
+@pytest.mark.slow
 def test_route_and_call_inspectors_share_the_node_inspector_skeleton() -> None:
     """D6 (PDR-10): a relation inspector has a header strip, an action row
     with `Centrer dans le graphe`, and counted Relations and Sources groups;
