@@ -54,6 +54,7 @@ def test_consistency_search_includes_advanced_risks_without_stale_read_risk() ->
         page.locator("#code-flow-filter").fill("incohérence")
         assert page.locator("#code-flows .code-flow-item").count() == 1
         page.locator("#code-flows .code-flow-item").click()
+        _wait_for_call_tree(page)
         assert "Incohérence possible · 2" in page.locator(
             "#code-flows .code-flow-consistency"
         ).inner_text()
@@ -589,6 +590,7 @@ def test_resource_graph_labels_break_at_name_boundaries() -> None:
             '.graph-node-card-label.is-topic .graph-node-card-name[title="supermarket.order.placed"]'
         )
         topic.wait_for(state="visible")
+        _wait_for_settled_layout(page)
         assert topic.locator("wbr").count() == 2
         assert topic.evaluate("element => element.parentElement.offsetWidth") == 110
         entity = page.locator(
@@ -740,6 +742,7 @@ def test_access_badge_marks_divergent_method_route_as_uncertain() -> None:
         page.set_content(document, wait_until="load")
         page.locator("#flows-tab").click()
         page.locator("#code-flows .code-flow-item").first.click()
+        _wait_for_call_tree(page)
         assert set(page.locator(".graph-call-tree-access-badge").all_inner_texts()) == {
             "R SameRoute", "R OtherRoute ?",
         }
@@ -1093,6 +1096,7 @@ def test_graph_node_opens_called_route_in_inspection_modal() -> None:
         page.wait_for_function(
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 0"
         )
+        _wait_for_settled_layout(page)
         page.locator(".graph-node-card-label").filter(has_text="order-service").click(force=True, modifiers=["Shift"])
         called_route = page.locator(
             "#inspector-body [data-inspector-kind='route'][data-inspector-route='POST /api/reservations']"
@@ -1120,6 +1124,7 @@ def test_plain_click_selects_a_node_and_the_hint_names_the_gestures() -> None:
         page.wait_for_function(
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 0"
         )
+        _wait_for_settled_layout(page)
         hint = page.locator("#graph-interaction-hint")
         assert hint.is_visible()
         assert "inspecter" in hint.inner_text() and "sélectionner" in hint.inner_text()
@@ -1146,6 +1151,7 @@ def test_plain_click_selects_a_node_and_the_hint_names_the_gestures() -> None:
         page.locator("#flows-tab").click()
         page.locator(".code-flow-item").first.click()
         page.locator("#graph-call-tree").wait_for(state="visible")
+        _wait_for_call_tree(page)
         assert hint.is_hidden()
         context.close()
         browser.close()
@@ -1200,6 +1206,7 @@ def test_architecture_arc_opens_node_inspection_modal() -> None:
         page.wait_for_function(
             "() => document.querySelector('#graph')?.dataset.visibleNodeCount > 0"
         )
+        _wait_for_settled_layout(page)
         page.wait_for_function(
             "() => { const areas = [...document.querySelectorAll('#graph-port-paths .graph-architecture-path.is-kafka + .graph-dependency-hit-area')];"
             " return areas.length > 0 && areas.every(path => !path.getAttribute('d')?.includes('NaN')); }"
@@ -1626,6 +1633,18 @@ def _assert_every_tree_occurrence_is_inside_the_workspace(page) -> None:
     assert outside == 0
 
 
+def _wait_for_settled_layout(page) -> None:
+    """Interact with cards only once the layout pass stopped moving them."""
+    page.wait_for_function(
+        "() => !String(document.getElementById('layout-status')?.textContent || '').startsWith('Calcul')"
+    )
+
+
+def _wait_for_call_tree(page) -> None:
+    """The call tree renders on the frame after a flow opens."""
+    page.wait_for_function("() => document.querySelectorAll('#graph-call-tree .graph-call-tree-node').length > 0")
+
+
 def _chrome_executable(playwright: Playwright) -> str | None:
     """Prefer an explicit browser, then the Chromium revision Playwright pins."""
     configured = os.environ.get("SYSTEMLENS_CHROME_BIN")
@@ -2013,8 +2032,18 @@ def _assert_zoom_is_monotonic_and_settles_without_a_release_jump(page) -> None:
     zoom_point = _graph_background_point(page)
     page.mouse.move(zoom_point["x"], zoom_point["y"])
     page.mouse.wheel(0, -450)
-    page.wait_for_timeout(80)
+    # Wait until the zoom has visibly changed the scale rather than a fixed
+    # 80 ms, which a loaded machine can exceed; the release-jump checks below
+    # still compare the in-gesture frame with the settled frames.
+    def spacing(rects: list) -> float:
+        return ((rects[1][0] - rects[0][0]) ** 2 + (rects[1][1] - rects[0][1]) ** 2) ** .5 if len(rects) > 1 else 0
+
     during = _surface_rects(page)
+    for _ in range(40):
+        if not before_distance or spacing(during) > before_distance * 1.01:
+            break
+        page.wait_for_timeout(20)
+        during = _surface_rects(page)
     page.wait_for_timeout(700)
     after = _surface_rects(page)
     page.wait_for_timeout(300)
@@ -2187,6 +2216,7 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         assert toolbar_before_selection is not None
         assert page.locator(".code-flow-item.is-selected").count() == 1
         page.locator("#graph-call-tree").wait_for(state="visible")
+        _wait_for_call_tree(page)
         call_nodes = page.locator("#graph-call-tree .graph-call-tree-node")
         assert call_nodes.count() == 2
         source_box = call_nodes.nth(0).bounding_box()
@@ -2222,6 +2252,7 @@ def test_graph_view_has_no_layer_or_module_rendering() -> None:
         page.wait_for_function(
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
         )
+        _wait_for_settled_layout(page)
         assert page.locator(".view-controls, #layout-forceatlas2-noverlap").count() == 0
         assert page.locator("#graph-layers, #graph-groups, #layout-elk, #layout-cluster").count() == 0
         assert page.locator(".graph-layer-band, .graph-namespace-group, .graph-project-group").count() == 0
@@ -2249,6 +2280,7 @@ def test_resource_details_navigate_module_hierarchy_without_changing_layout() ->
         page.wait_for_function(
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
         )
+        _wait_for_settled_layout(page)
         node_id = page.evaluate(
             """() => JSON.parse(document.querySelector('#graph-data').textContent).nodes
                 .find(node => node.cluster_path === 'platform-edge/sub-1').id"""
@@ -2280,6 +2312,7 @@ def test_complex_dataset_graph_geometry() -> None:
         page.wait_for_function(
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
         )
+        _wait_for_settled_layout(page)
         graph = page.locator("#graph")
         assert graph.get_attribute("data-visible-node-count") == "180"
         assert graph.get_attribute("data-relation-count") == "300"
@@ -2587,6 +2620,7 @@ def test_call_tree_context_widget_keys_badges_and_keeps_the_catalogue_still() ->
         before = entry.bounding_box()
         entry.click()
         page.locator("#graph-call-tree").wait_for(state="visible")
+        _wait_for_call_tree(page)
         after = entry.bounding_box()
         assert before is not None and after is not None
         assert after["y"] == pytest.approx(before["y"], abs=1)
