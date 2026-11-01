@@ -29,7 +29,7 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 |---|---|
 | [README.md](../README.md) | Installing SystemLens or finding the first CLI workflow. |
 | [AGENTS.md](../AGENTS.md) | Applying repository rules, documentation ownership, or validation gates. |
-| [BACKLOG.md](../BACKLOG.md) | Working on the Explorer UX stream, picking up a carried-over runtime or review-aid item, or finding archived plans. |
+| [BACKLOG.md](../BACKLOG.md) | Working on graph viewport navigation, picking up a carried-over runtime or review-aid item, or finding archived plans. |
 | [BACKLOG.consistency-diagnostics.md](../BACKLOG.consistency-diagnostics.md) | Consulting the archived diagnostic rendering tasks and their linked plans. |
 | [BACKLOG.previous.md](../BACKLOG.previous.md) | Consulting the historical root backlog preserved from Git; use its linked plans for current status. |
 
