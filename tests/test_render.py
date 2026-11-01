@@ -1250,7 +1250,7 @@ def test_microservice_graph_exposes_jpa_entities_as_owned_nodes() -> None:
         {"orders": []}, [], modules_by_service={"orders": module},
     )
     assert "openJpaEntityInspector" in rendered
-    assert "Entité JPA · ${entity.display_name || entity.name}" in rendered
+    assert "resourceInspectorTitle(\"jpa_entity\", entity.display_name || entity.name)" in rendered
     assert 'appendActionList("Entités JPA déclarées"' in rendered
     assert 'appendActionList("Classe de persistance"' in rendered
     assert any(

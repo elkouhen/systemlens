@@ -14,20 +14,8 @@
       ["diagnostic", "Diagnostics"],
       ["other", "Autres"],
     ]);
-    // The Contexte column always reads `kind · owner · detail`.
-    const resourceCatalogueSingularLabels = new Map([
-      ["microservice", "Microservice"],
-      ["external_microservice", "Microservice externe"],
-      ["http_route", "Route HTTP"],
-      ["openapi_contract", "Contrat OpenAPI"],
-      ["asyncapi_contract", "Contrat AsyncAPI"],
-      ["kafka_topic", "Topic"],
-      ["mongodb_collection", "Collection"],
-      ["jpa_entity", "Entité JPA"],
-      ["dto", "DTO"],
-      ["diagnostic", "Diagnostic"],
-      ["mongo_persistence_class", "Classe de persistance MongoDB"],
-    ]);
+    // The Contexte column always reads `kind · owner · detail`; the kind
+    // labels are shared with the inspector titles (`resourceKindLabels`).
     const resourceCatalogueCount = (count, word) => `${count} ${word}${count > 1 ? "s" : ""}`;
     const resourceCatalogueContext = (...parts) => parts.filter(Boolean).join(" · ");
     let resourceCatalogueEntries = [];
@@ -40,6 +28,10 @@
     const resourceCatalogueRelated = document.getElementById("resource-catalogue-related");
     function resourceCatalogueOwner(entry) {
       return entry.service || entry.owner || "";
+    }
+    // A row, its preview and its inspector title share one kind label.
+    function resourceCatalogueKindLabel(entry) {
+      return resourceKindLabel(entry.labelKind || entry.descriptionKind || (entry.node ? nodeResourceKind(entry.node) : entry.kind));
     }
     function resourceCatalogueEntryLabel(entry) {
       return entry.method ? `${entry.method} ${entry.name}` : entry.name;
@@ -64,15 +56,13 @@
       });
       graphData.nodes.forEach(node => {
         const service = node.kind === "microservice" ? node.name : node.owner || node.service || "";
-        const kindLabel = node.kind === "microservice" && node.external
-          ? resourceCatalogueSingularLabels.get("external_microservice")
-          : resourceCatalogueSingularLabels.get(node.kind) || "Ressource";
+        const kindLabel = resourceKindLabel(nodeResourceKind(node));
         const base = {
           id: node.id,
           kind: node.kind,
           name: nodeDisplayName(node),
           service,
-          tagKind: node.kind === "microservice" && node.external ? "external_microservice" : node.kind,
+          tagKind: nodeResourceKind(node),
           // Row-only context; the preview keeps its entry and exit counts.
           rowMeta: resourceCatalogueContext(
             kindLabel,
@@ -94,7 +84,8 @@
             service: node.name,
             method: match[1],
             source: node.openapi_files?.[0],
-            meta: resourceCatalogueContext("Route exposée", node.name),
+            meta: resourceCatalogueContext(resourceKindLabel("served_route"), node.name),
+            labelKind: "served_route",
             route: { route: match[0] },
             ownerNode: node,
           });
@@ -111,10 +102,11 @@
             service: node.name,
             method,
             source: route.location || route.path,
+            labelKind: route.role === "call" ? "called_route" : "served_route",
             meta: route.role === "call"
-              ? resourceCatalogueContext("Route appelée", node.name)
+              ? resourceCatalogueContext(resourceKindLabel("called_route"), node.name)
               : resourceCatalogueContext(
-                "Route exposée", node.name,
+                resourceKindLabel("served_route"), node.name,
                 resourceCatalogueCount(resourceCatalogueRouteClientCount(node, route), "client"),
               ),
             route,
@@ -127,7 +119,7 @@
           name: contract.path,
           service: node.name,
           source: contract.path,
-          meta: resourceCatalogueContext("Contrat OpenAPI", node.name, resourceCatalogueCount(contract.resources?.length || 0, "ressource")),
+          meta: resourceCatalogueContext(resourceKindLabel("openapi_contract"), node.name, resourceCatalogueCount(contract.resources?.length || 0, "ressource")),
           contract,
           ownerNode: node,
         }));
@@ -137,7 +129,7 @@
           name: contract.path,
           service: node.name,
           source: contract.path,
-          meta: resourceCatalogueContext("Contrat AsyncAPI", node.name),
+          meta: resourceCatalogueContext(resourceKindLabel("asyncapi_contract"), node.name),
           contract,
           ownerNode: node,
         }));
@@ -151,7 +143,7 @@
           service: item.owner || item.service || "",
           source: item.source?.path,
           meta: resourceCatalogueContext(
-            resourceCatalogueSingularLabels.get(item.kind) || "Ressource",
+            resourceKindLabel(item.kind),
             item.owner || item.service,
             resourceCatalogueCount(item.attributes?.length || 0, "champ"),
           ),
@@ -168,7 +160,7 @@
         name: dto.name || dtoLabel(dto),
         service: dto.service || dto.owner || "",
         meta: resourceCatalogueContext(
-          "DTO", dto.service || dto.owner,
+          resourceKindLabel("dto"), dto.service || dto.owner,
           resourceCatalogueCount(dto.fields?.length || 0, "champ"),
           resourceCatalogueCount(dto.topics?.length || 0, "topic"),
         ),
@@ -180,7 +172,7 @@
         id: `diagnostic:${issue.id || index}`,
         kind: "diagnostic",
         name: issue.message || issue.category || "Fait à vérifier",
-        meta: resourceCatalogueContext("Diagnostic", issue.severity === "warning" ? "À corriger" : "À vérifier", issue.category || "Indexation"),
+        meta: resourceCatalogueContext(resourceKindLabel("diagnostic"), issue.severity === "warning" ? "À corriger" : "À vérifier", issue.category || "Indexation"),
         source: issue.location || issue.path,
         description: issue.message || issue.category || "Problème d’indexation",
       }));
@@ -201,11 +193,13 @@
         previous.dtoName ||= entry.dtoName;
         previous.description ||= entry.description;
         previous.descriptionKind ||= entry.descriptionKind;
+        previous.labelKind ||= entry.labelKind;
         previous.attributes ||= entry.attributes;
         previous.fields ||= entry.fields;
         previous.topics ||= entry.topics;
         if (entry.kind === "http_route" && entry.route) {
           previous.route = entry.route;
+          previous.labelKind = entry.labelKind || previous.labelKind;
           previous.source = entry.source || previous.source;
         }
       });
@@ -475,7 +469,7 @@
       const outgoing = entry.node ? graphData.links.filter(link => link.source === entry.node.id).length : 0;
       title.textContent = resourceCatalogueEntryLabel(entry);
       copy.replaceChildren();
-      const kind = document.createElement("span"); kind.className = "resource-catalogue-preview-kind"; kind.textContent = resourceCatalogueSingularLabels.get(entry.descriptionKind || entry.kind) || nodeKindLabel(entry.node || { kind: entry.kind });
+      const kind = document.createElement("span"); kind.className = "resource-catalogue-preview-kind"; kind.textContent = resourceCatalogueKindLabel(entry);
       const stats = document.createElement("span"); stats.className = "resource-catalogue-preview-stats"; stats.textContent = entry.meta || `${incoming} entrée(s) · ${outgoing} sortie(s)`;
       copy.append(kind, stats);
       resourceCataloguePreview.querySelectorAll(".resource-catalogue-preview-owner, .resource-catalogue-preview-source").forEach(item => item.remove());
@@ -499,7 +493,7 @@
         name.className = "resource-catalogue-related-name";
         name.textContent = resourceCatalogueEntryLabel(target);
         const meta = document.createElement("small");
-        meta.textContent = `${resourceCatalogueSingularLabels.get(target.descriptionKind || target.kind) || nodeKindLabel(target.node || { kind: target.kind })} · ${relation}`;
+        meta.textContent = `${resourceCatalogueKindLabel(target)} · ${relation}`;
         button.append(name, meta);
         button.addEventListener("click", () => selectResourceCatalogueEntry(target));
         item.append(button);
@@ -537,7 +531,7 @@
       visible.forEach(entry => {
         const selectResource = () => selectResourceCatalogueEntry(entry);
         const item = referenceItem(resourceCatalogueEntryLabel(entry), entry.meta || entry.rowMeta || resourceCatalogueContext(
-          resourceCatalogueSingularLabels.get(entry.kind) || "Ressource",
+          resourceCatalogueKindLabel(entry),
           entry.service && entry.service !== entry.name ? entry.service : "",
         ), "", selectResource);
         item.classList.add("architecture-resource-reference", "resource-catalogue-row");
@@ -551,7 +545,7 @@
         const tag = document.createElement("span");
         tag.className = "resource-kind-tag";
         tag.dataset.kind = entry.tagKind || entry.kind;
-        tag.textContent = kindLabel || resourceCatalogueSingularLabels.get(entry.kind) || "Ressource";
+        tag.textContent = kindLabel || resourceCatalogueKindLabel(entry);
         const title = text?.querySelector(".reference-title");
         if (title && entry.method) {
           const verb = document.createElement("span");

@@ -113,12 +113,39 @@
           : node.kind === "message_channel"
             ? "Message"
             : node.external ? "Microservice externe" : "Microservice";
-      if (!["kafka_topic", "mongodb_collection", "data_schema", "message_channel", "jpa_entity"].includes(node.kind)) {
+      // `Entité JPA` already names its technology.
+      if (!["kafka_topic", "mongodb_collection", "data_schema", "message_channel"].includes(node.kind)) {
         return genericLabel;
       }
       const technology = nodeTechnology(node);
       return technology ? `${genericLabel} · ${technology}` : genericLabel;
     };
+    // One label per resource kind: the catalogue tag, the catalogue preview
+    // and the inspector title read the same word (PDR-10). docs/glossary.md
+    // lists the same pairs.
+    const resourceKindLabels = new Map([
+      ["microservice", "Microservice"],
+      ["external_microservice", "Microservice externe"],
+      ["http_route", "Route HTTP"],
+      ["served_route", "Route exposée"],
+      ["called_route", "Route appelée"],
+      ["openapi_contract", "Contrat OpenAPI"],
+      ["asyncapi_contract", "Contrat AsyncAPI"],
+      ["kafka_topic", "Topic"],
+      ["message_channel", "Message"],
+      ["mongodb_collection", "Collection"],
+      ["data_schema", "Donnée"],
+      ["jpa_entity", "Entité JPA"],
+      ["dto", "DTO"],
+      ["mongo_persistence_class", "Classe de persistance MongoDB"],
+      ["diagnostic", "Diagnostic"],
+    ]);
+    const resourceKindLabel = kind => resourceKindLabels.get(kind) || "Ressource";
+    const nodeResourceKind = node => (
+      node.kind === "microservice" && node.external ? "external_microservice" : node.kind
+    );
+    // Every resource view is titled `<kind label> · <name>`.
+    const resourceInspectorTitle = (kind, name) => `${resourceKindLabel(kind)} · ${name}`;
     const nodeKindSuggestion = node => (
       nodeKindLabel(node)
     );

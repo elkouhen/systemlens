@@ -866,7 +866,7 @@
       }
       inspectorBackAction = options.backAction || null;
       architectureInspectorNode = node;
-      openInspector(`${nodeKindLabel(node)} · ${nodeDisplayName(node)}`, {
+      openInspector(resourceInspectorTitle(nodeResourceKind(node), nodeDisplayName(node)), {
         preserveArchitectureNavigation: true,
         docked: true,
       });
@@ -986,7 +986,7 @@
       return actions;
     }
     function openOpenApiContract(contract) {
-      openInspector(`OpenAPI · ${contract.path}`);
+      openInspector(resourceInspectorTitle("openapi_contract", contract.path));
       appendInspectorDocumentActions(contract.vscode_uri, "Ouvrir le fichier dans VS Code");
       if (!contract.spec || !window.SwaggerUIBundle) {
         const message = document.createElement("p");
@@ -1010,7 +1010,7 @@
       });
     }
     async function openAsyncApiContract(contract) {
-      openInspector(`AsyncAPI · ${contract.path}`);
+      openInspector(resourceInspectorTitle("asyncapi_contract", contract.path));
       const loading = document.createElement("p");
       loading.className = "dto-summary";
       loading.textContent = "Chargement du contrat AsyncAPI…";
@@ -1171,7 +1171,7 @@
     function openJpaEntityInspector(entityId) {
       const entity = nodeDataById.get(entityId);
       if (!entity || entity.kind !== "jpa_entity") return;
-      openInspector(`Entité JPA · ${entity.display_name || entity.name}`);
+      openInspector(resourceInspectorTitle("jpa_entity", entity.display_name || entity.name));
       inspectorBody.classList.add("dto-inspector");
       const summary = document.createElement("p");
       summary.className = "dto-summary";
@@ -1232,7 +1232,7 @@
     function renderMongoPersistenceInspector(classId) {
       const item = (graphData.mongo_persistence_classes || []).find(candidate => candidate.id === classId);
       if (!item) return;
-      openInspector(`Données persistées · ${item.name}`);
+      openInspector(resourceInspectorTitle("mongo_persistence_class", item.name));
       inspectorBody.classList.add("dto-inspector");
       const summary = document.createElement("p");
       summary.className = "dto-summary";
@@ -1252,7 +1252,7 @@
       );
       const serviceNode = findArchitectureNode(["microservice"], item.service);
       appendInspectorNodeOrValue(
-        "Data",
+        "Donnée",
         collectionNode,
         item.collection || "Collection non identifiée",
         `Afficher la donnée ${item.collection || "associée"}`,
@@ -1322,13 +1322,14 @@
     function renderDtoInspector(dtoName) {
       const dto = dtoDefinition(dtoName);
       if (!dto) return;
-      openInspector(`${dtoInspectorKindLabel(dto)} · ${dto.name}`);
+      openInspector(resourceInspectorTitle("dto", dto.name));
       inspectorBody.classList.add("dto-inspector");
       const summary = document.createElement("p");
       summary.className = "dto-summary";
-      summary.textContent = dto.source
+      // The DTO role leaves the title for the notice line (PDR-10).
+      summary.textContent = `${dtoInspectorKindLabel(dto)} · ${dto.source
         ? `Classe source : ${dto.source}`
-        : "Classe Java non retrouvée dans les sources indexées ; les relations de messages restent disponibles.";
+        : "Classe Java non retrouvée dans les sources indexées ; les relations de messages restent disponibles."}`;
       inspectorBody.append(summary);
       if (dto.vscode_uri) {
         const sourceLink = document.createElement("a");

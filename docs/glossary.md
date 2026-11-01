@@ -89,6 +89,41 @@ CLI use for each concept, as decided in
 7. CLI help uses the infinitive and a lower-case `topic`, and the export uses
    the typographic apostrophe.
 
+## Resource kind labels
+
+One label names each resource kind in the export: the catalogue tag, the
+catalogue preview, and the inspector title `<label> · <name>` read the same
+word, as decided in
+[PDR-10](PDR.md#pdr-10-inspecter-opens-one-surface-per-kind-of-fact).
+The `resourceKindLabels` map of the graph assets holds the same pairs, and
+`tests/test_spec_conformance.py` keeps both aligned.
+
+| Kind key | French label |
+|---|---|
+| `microservice` | `Microservice` |
+| `external_microservice` | `Microservice externe` |
+| `http_route` | `Route HTTP` |
+| `served_route` | `Route exposée` |
+| `called_route` | `Route appelée` |
+| `openapi_contract` | `Contrat OpenAPI` |
+| `asyncapi_contract` | `Contrat AsyncAPI` |
+| `kafka_topic` | `Topic` |
+| `message_channel` | `Message` |
+| `mongodb_collection` | `Collection` |
+| `data_schema` | `Donnée` |
+| `jpa_entity` | `Entité JPA` |
+| `dto` | `DTO` |
+| `mongo_persistence_class` | `Classe de persistance MongoDB` |
+| `diagnostic` | `Diagnostic` |
+| any other kind | `Ressource` |
+
+`Route HTTP` names the catalogue category; a route row reads `Route
+exposée` or `Route appelée`. `Collection` is the kind of a MongoDB data
+resource; `Donnée` stays the generic word of rule 6 above and of the
+`Données` node-type filter. A message channel keeps the `Message` label of
+its graph card (`docs/spec-fonc/port-rendering.md`); the `canal de
+messages` label of the table above is not yet used in the export.
+
 ## Naming conventions
 
 - Use lowercase for generic terms: `microservice`, `topic`, `node`, `edge`,

@@ -19,6 +19,7 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-7](#pdr-7-one-french-word-per-concept-in-the-export-and-the-cli) | One French word per concept in the export and the CLI | Yes, product owner; the glossary owns the list |
 | [PDR-8](#pdr-8-a-resource-has-no-software-layer) | A resource has no software layer | Yes, product owner |
 | [PDR-9](#pdr-9-one-inspector-skeleton-for-every-node-kind) | One inspector skeleton for every node kind | Yes, product owner; refines ADR-68 |
+| [PDR-10](#pdr-10-inspecter-opens-one-surface-per-kind-of-fact) | `Inspecter` opens one surface per kind of fact | Yes, product owner; refines ADR-68 and PDR-9 |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -217,3 +218,45 @@ entity name moves out of the body since the title names it. The
 `docs/UX-UI.md` empty-group sentence is refined accordingly. The JSON
 contract is unchanged: sources read the existing location fields of
 endpoints, persistence classes, and entities.
+
+## PDR-10: `Inspecter` opens one surface per kind of fact
+
+**Status:** Accepted on 2026-11-01 by the product owner, after a review of
+`Inspecter` on one catalogue row of each kind on the supermarket lab
+export (plan
+[resource-inspector-uniformisation](plans/resource-inspector-uniformisation.md)).
+
+**Decision:** `Inspecter` opens one of three surfaces, chosen by the kind
+of fact and not by the code path that produced the row:
+
+| Fact | Surface | Skeleton |
+|---|---|---|
+| A node of the architecture graph (microservice, topic, collection, JPA entity, enriched resource) | docked node inspector | PDR-9 skeleton |
+| A relation end (served route, HTTP call) | docked relation inspector | header strip (method, path, client count), one row of actions including `Centrer dans le graphe` on the provider, groups `Relations` (provider, clients, DTO REST) and `Sources` (evidence, code source) |
+| A document (OpenAPI or AsyncAPI contract, DTO fields, persistence-class fields) | centered modal | title `<row kind label> · <name>`, one row with the VS Code action when a source exists, then the document body |
+
+The catalogue stays visible under a docked inspector and is restored
+unchanged when a modal closes. The inspector title reuses the catalogue's
+kind label (`Route exposée`, `Route appelée`, `Collection`, `Entité JPA`,
+`DTO`, `Classe de persistance MongoDB`). A `Route appelée` opens the call
+inspector of the caller, never the route inspector with the caller as
+provider.
+
+A JPA entity row opens the node inspector, like a collection: both are
+graph nodes, and the entity's field modal stays one click away through
+`Classe de persistance`. The Mongo persistence-class row is not a node and
+keeps the field modal.
+
+**Why:** the `Inspecter` button was uniform, but what it opened was not. A
+route replaced the catalogue with its owner's details, a called route named
+the caller as its provider with `0 client`, titles used two or three words
+for one kind, and the three modal views placed the VS Code action in three
+different ways, or omitted it.
+
+**Consequences:** `docs/glossary.md` lists the kind labels that titles and
+catalogue tags share. A node title no longer repeats the technology
+(`Collection · order_fulfillments`, not `Donnée · MongoDB ·
+order_fulfillments`); the Architecture group still names it. The DTO role
+(`DTO de message`, `DTO REST`) moves from the title to the notice line.
+Swagger UI and the AsyncAPI viewer are not restyled; only the chrome around
+them changes. The JSON contract and persisted facts are unchanged.

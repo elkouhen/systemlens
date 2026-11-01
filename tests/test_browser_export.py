@@ -1136,7 +1136,7 @@ def test_microservice_called_route_opens_target_route_inspector() -> None:
         )
         assert called_routes.count() >= 1
         called_routes.first.click()
-        assert page.locator("#inspector-title").inner_text().startswith("Route HTTP · POST /api/reservations")
+        assert page.locator("#inspector-title").inner_text().startswith("Route exposée · POST /api/reservations")
         page.locator("#inspector-back").click()
         assert page.locator("#inspector-title").inner_text().startswith("Microservice · order-service")
         context.close()
@@ -1165,7 +1165,7 @@ def test_graph_node_opens_called_route_in_inspection_modal() -> None:
         )
         assert called_route.count() >= 1
         called_route.first.click()
-        assert page.locator("#inspector-title").inner_text().startswith("Route HTTP · POST /api/reservations")
+        assert page.locator("#inspector-title").inner_text().startswith("Route exposée · POST /api/reservations")
         context.close()
         browser.close()
 
@@ -1540,7 +1540,7 @@ def test_resource_inspector_shows_no_software_layer() -> None:
 
         for node_id, kind in (
             ("kafka_topic:supermarket.order.placed", "Topic"),
-            ("mongodb_collection:inventory-service:order_fulfillments", "Donnée"),
+            ("mongodb_collection:inventory-service:order_fulfillments", "Collection"),
         ):
             title, sections = inspect(node_id)
             assert title.startswith(kind), title
@@ -1771,7 +1771,7 @@ def test_catalogue_called_route_opens_the_call_inspector_of_its_caller() -> None
         _inspect_catalogue_row(page, row)
         body = page.locator("#inspector-body")
         text = body.inner_text()
-        assert "POST /api/reservations" in page.locator("#inspector-title").inner_text()
+        assert page.locator("#inspector-title").inner_text() == "Route appelée · POST /api/reservations"
         assert "0 client" not in text
         assert "Microservice exposant" not in text
         assert "Aucun microservice appelant identifié" not in text
@@ -1789,6 +1789,50 @@ def test_catalogue_called_route_opens_the_call_inspector_of_its_caller() -> None
         assert "1 client" in page.locator("#inspector-body .route-client-count").inner_text()
         page.locator("#inspector-back").click()
         assert section("Microservice appelant") == ["order-service"]
+        browser.close()
+
+
+@pytest.mark.slow
+def test_catalogue_inspector_titles_reuse_the_row_kind_label() -> None:
+    """D4, D5 (PDR-10): the inspector title starts with the row's kind tag;
+    a JPA entity row opens the node inspector, a Mongo class the modal."""
+    cases = [
+        ("Microservice", "inventory-service", None, True),
+        ("Route exposée", "/api/health", "inventory-service", True),
+        ("Route appelée", "/api/reservations", "order-service", True),
+        ("Contrat OpenAPI", "openapi.yaml", "inventory-service", False),
+        ("Contrat AsyncAPI", "asyncapi.yaml", "inventory-service", False),
+        ("Topic", "supermarket.order.placed", None, True),
+        ("Collection", "order_fulfillments", None, True),
+        ("Entité JPA", "ProductEntity", None, True),
+        ("DTO", "OrderPlaced", None, False),
+        ("Classe de persistance MongoDB", "OrderFulfillmentDocument", None, False),
+    ]
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_catalogue_page(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        for tag, name, owner, docked in cases:
+            row = _catalogue_row(page, tag, name, owner)
+            assert row.locator(".resource-kind-tag").inner_text() == tag
+            _inspect_catalogue_row(page, row)
+            title = page.locator("#inspector-title").inner_text()
+            assert title.startswith(f"{tag} · "), (tag, title)
+            assert name in title, (tag, title)
+            modal_class = page.locator("#inspector-modal").get_attribute("class") or ""
+            assert ("is-docked" in modal_class) == docked, (tag, modal_class)
+            if tag == "Entité JPA":
+                assert title == "Entité JPA · ProductEntity"
+                assert page.locator("#inspector-body .architecture-node-inspector").count() == 1
+            if tag == "Classe de persistance MongoDB":
+                headings = page.locator("#inspector-body h2").evaluate_all(
+                    "items => items.map(item => item.textContent.trim())"
+                )
+                assert "Donnée" in headings and "Data" not in headings, headings
+            page.locator("#inspector-close").click()
+            page.locator("#inspector-modal").wait_for(state="hidden")
+            assert page.locator("#microservices-list").is_visible(), tag
         browser.close()
 
 
@@ -2120,7 +2164,7 @@ def test_call_tree_nodes_and_kafka_arcs_open_node_inspection_modal() -> None:
         page.locator("#inspector-close").click()
         http_label = page.locator(".graph-call-tree-edge-label.is-clickable").filter(has_text="HTTP").first
         http_label.click(modifiers=["Shift"])
-        assert page.locator("#inspector-title").inner_text().startswith("Route HTTP ·")
+        assert page.locator("#inspector-title").inner_text().startswith("Route exposée ·")
         page.locator("#inspector-close").click()
         page.locator("#flow-call-tree-depth-increase").wait_for(state="visible")
         page.locator("#flow-call-tree-depth-increase").click()
@@ -3383,21 +3427,21 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _capture_render_snapshot(page, "constrained-after-mongo-filter")
         mongo_class.get_by_role("button", name="Inspecter").click()
         _capture_render_snapshot(page, "constrained-after-inspect-order")
-        assert page.locator("#inspector-title").inner_text() == "Donnée · MongoDB · orders"
+        assert page.locator("#inspector-title").inner_text() == "Collection · orders"
         page.locator("#inspector-body").get_by_role(
             "button", name="com.example.Order", exact=True
         ).click()
-        assert page.locator("#inspector-title").inner_text() == "Données persistées · Order"
+        assert page.locator("#inspector-title").inner_text() == "Classe de persistance MongoDB · Order"
         assert "collection orders" not in page.locator("#inspector-body .dto-summary").first.inner_text()
         assert page.locator(
             '#inspector-body button[title="Afficher la donnée orders"]'
         ).is_visible()
         page.get_by_role("button", name="Address", exact=True).click()
         _capture_render_snapshot(page, "constrained-after-inspect-address")
-        assert page.locator("#inspector-title").inner_text() == "Données persistées · Address"
+        assert page.locator("#inspector-title").inner_text() == "Classe de persistance MongoDB · Address"
         page.locator("#inspector-back").click()
         _capture_render_snapshot(page, "constrained-after-inspector-back")
-        assert page.locator("#inspector-title").inner_text() == "Données persistées · Order"
+        assert page.locator("#inspector-title").inner_text() == "Classe de persistance MongoDB · Order"
         page.locator("#inspector-close").click()
         _capture_render_snapshot(page, "constrained-after-inspector-close")
 
@@ -3784,7 +3828,7 @@ def test_runtime_hotspot_row_selects_its_endpoint_without_moving_the_camera() ->
         )
         # The served route of the hotspot opens as the selected route inspector.
         page.wait_for_function(
-            "() => document.getElementById('inspector-title')?.textContent === 'Route HTTP · POST /api/reservations'"
+            "() => document.getElementById('inspector-title')?.textContent === 'Route exposée · POST /api/reservations'"
         )
         assert expected_endpoint_id.endswith("POST /api/reservations")
         # The selection highlights the arc into the selected route; no edge is added.

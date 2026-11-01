@@ -154,3 +154,65 @@ def test_ux_contract_labels_are_rendered_or_owned_by_a_backlog_task() -> None:
     assert not delivered, f"these labels are rendered now; remove them from KNOWN_UX_GAPS: {delivered}"
     stale = sorted(label for label in KNOWN_UX_GAPS if f"`{label}`" not in contract)
     assert not stale, f"KNOWN_UX_GAPS names labels the contract no longer mentions: {stale}"
+
+
+GLOSSARY = ROOT / "docs" / "glossary.md"
+CORE_ASSET = GRAPH_ASSETS / "graph" / "00-core.js"
+# Views that are not a resource keep a plain title without a kind label.
+NON_RESOURCE_INSPECTOR_TITLES = {
+    "Points chauds observés",
+    "Écarts entre l’index et le trafic observé",
+}
+
+
+def _glossary_kind_labels() -> dict[str, str]:
+    """Pairs of the `Resource kind labels` table of the glossary."""
+    text = GLOSSARY.read_text(encoding="utf-8")
+    section = text.split("## Resource kind labels", 1)[1].split("\n## ", 1)[0]
+    rows = re.findall(r"^\| `([a-z_]+)` \| `([^`]+)` \|$", section, re.M)
+    fallback = re.search(r"^\| any other kind \| `([^`]+)` \|$", section, re.M)
+    assert rows and fallback, "docs/glossary.md must list the resource kind labels"
+    return {**dict(rows), "*": fallback.group(1)}
+
+
+def _asset_kind_labels() -> dict[str, str]:
+    core = CORE_ASSET.read_text(encoding="utf-8")
+    block = re.search(r"const resourceKindLabels = new Map\(\[(.*?)\]\);", core, re.S)
+    assert block, "00-core.js must define resourceKindLabels"
+    pairs = dict(re.findall(r'\["([a-z_]+)", "([^"]+)"\]', block.group(1)))
+    fallback = re.search(r'resourceKindLabels\.get\(kind\) \|\| "([^"]+)"', core)
+    assert fallback, "resourceKindLabel must name its fallback label"
+    return {**pairs, "*": fallback.group(1)}
+
+
+def test_resource_kind_labels_match_the_glossary() -> None:
+    """PDR-10: the catalogue tags and inspector titles use glossary labels."""
+    assert _asset_kind_labels() == _glossary_kind_labels()
+
+
+def test_every_inspector_title_starts_with_a_glossary_kind_label() -> None:
+    """PDR-10 (D4): each resource view is titled `<kind label> · <name>`.
+
+    A title built by `resourceInspectorTitle(kind, name)` reads its prefix from the
+    shared map, which the previous test aligns with the glossary; a literal
+    kind must be a key of that map.
+    """
+    labels = _glossary_kind_labels()
+    calls = []
+    for path in sorted((GRAPH_ASSETS / "graph").glob("*.js")):
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"(?<!function )\bopenInspector\((.*)", text):
+            calls.append((path.name, match.group(1)))
+    assert calls
+    offenders = []
+    for name, arguments in calls:
+        literal = re.match(r'"([^"]+)"\)', arguments)
+        if literal and literal.group(1) in NON_RESOURCE_INSPECTOR_TITLES:
+            continue
+        built = re.match(r'resourceInspectorTitle\((?:"([a-z_]+)"|nodeResourceKind\(node\)), ', arguments)
+        if not built or (built.group(1) and built.group(1) not in labels):
+            offenders.append(f"{name}: openInspector({arguments.strip()}")
+    assert not offenders, (
+        "inspector titles must be built with resourceInspectorTitle() and a glossary kind: "
+        f"{offenders}"
+    )

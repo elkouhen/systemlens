@@ -132,6 +132,19 @@ dedicated inspector exists. `Inspecter` appears on row hover, on keyboard
 focus, and on the selected row; a click on the row itself opens the preview.
 On a device without hover the action stays visible.
 
+`Inspecter` opens one surface per kind of fact (PDR-10). A graph node
+(microservice, topic, collection, JPA entity, enriched resource) opens the
+docked node inspector; a served or called route opens the docked relation
+inspector; a contract, a DTO, or a Mongo persistence class opens the
+centered document modal. A JPA entity row opens the node inspector, like a
+collection; its field modal stays one click away through `Classe de
+persistance`.
+
+The catalogue list stays visible under a docked inspector, with its row
+selected, and is restored unchanged when a modal closes. A `Route appelée`
+opens the call inspector of its caller: it names the caller, the call's
+target, and the target's served route, never the caller as provider.
+
 The catalogue page is a column bounded to 1180 pixels and centered. The
 mode tabs keep their panel width, and the collapse control stays next to the
 brand in the panel header.
@@ -343,8 +356,13 @@ path is shown once in the Architecture section rather than repeated in badges
 and raw metadata. The project root module carries no navigable identity and
 is not listed.
 
-The introspection title names the current element; its breadcrumb appears only
-after the user has navigated to a related element. A microservice lists every
+The introspection title names the current element as `<kind label> ·
+<name>`. The kind label is the catalogue's tag for that kind, listed in
+`docs/glossary.md`: `Route exposée`, `Route appelée`, `Collection`,
+`Entité JPA`, `DTO`, `Classe de persistance MongoDB`, `Contrat OpenAPI`.
+A node title does not repeat the technology, which its Architecture group
+names (PDR-10). Its breadcrumb appears only after the user has navigated
+to a related element. A microservice lists every
 outgoing HTTP call once, under `Routes appelées`; a call without a matching
 route remains selectable as an unmatched call. The relation badges sum to the
 displayed relation count; relations without an indexed evidence level are

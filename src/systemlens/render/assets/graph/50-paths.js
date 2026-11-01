@@ -701,7 +701,7 @@
       inspectorBackAction = null;
       const parts = httpRouteParts(route);
       const consumers = httpRouteConsumers(providerNode, route);
-      openInspector(`Route HTTP · ${parts.method} ${parts.path}`, { docked: true });
+      openInspector(resourceInspectorTitle("served_route", `${parts.method} ${parts.path}`), { docked: true });
       inspectorBody.classList.add("route-inspector");
       const summary = document.createElement("section");
       summary.className = "route-inspector-summary";
@@ -758,7 +758,7 @@
       if (!callerNode || !route) return;
       inspectorBackAction = null;
       const parts = httpRouteParts(route);
-      openInspector(`Appel HTTP · ${parts.method} ${parts.path}`, { docked: true });
+      openInspector(resourceInspectorTitle("called_route", `${parts.method} ${parts.path}`), { docked: true });
       inspectorBody.classList.add("route-inspector");
       const summary = document.createElement("section");
       summary.className = "route-inspector-summary";
