@@ -186,9 +186,11 @@ def _is_excluded_maven_module(name: str, module_dir: Path, root: Path) -> bool:
     identities = (name.casefold(), module_dir.name.casefold())
     # The workspace root is also a valid Maven aggregator. Its directory name
     # may be an implementation detail such as ``pytest-123`` and must not
-    # make the root POM disappear from discovery.
+    # make the root POM disappear from discovery. ``test`` must be a whole
+    # name token: ``orders-test-support`` is excluded, ``attestation-service``
+    # and ``contest-service`` remain production modules.
     module_name_is_test = module_dir.resolve() != root.resolve() and any(
-        "test" in identity for identity in identities
+        {"test", "tests"} & set(re.split(r"[-_.]", identity)) for identity in identities
     )
     return _is_excluded_module(name, module_dir, root) or module_name_is_test
 
@@ -226,14 +228,25 @@ def _trace(stage: str, **fields: object) -> None:
     print(f"SYSTEMLENS_TRACE ts={time.monotonic():.6f} stage={stage} {details}".rstrip(), file=sys.stderr, flush=True)
 
 
-def _starts_application(module_dir: Path) -> SourceEvidence | None:
+def _starts_application(
+    module_dir: Path, module_roots: frozenset[Path] | set[Path] = frozenset(),
+) -> SourceEvidence | None:
     """Return whether this build module owns a Spring Boot entry point.
 
     The decision belongs to module parsing, independently of Maven/Gradle. It
     uses Java method boundaries from Tree-sitter and only recognises a
-    ``main`` method that invokes ``SpringApplication.run``.
+    ``main`` method that invokes ``SpringApplication.run``. Sources below a
+    nested build module (``module_roots``) belong to that module: an
+    aggregator never inherits its children's entry point.
     """
-    source_roots = sorted(module_dir.glob("**/src/main/java"))
+    source_roots = sorted(
+        source_root for source_root in module_dir.glob("**/src/main/java")
+        if not any(
+            module_dir in nested.parents
+            and (nested == source_root or nested in source_root.parents)
+            for nested in module_roots
+        )
+    )
     if not source_roots:
         return None
     _trace("module.entrypoint.parser.begin", module=module_dir)
@@ -1273,12 +1286,20 @@ def discover_modules(
     root = root.resolve()
     modules: list[DiscoveredModule] = []
     seen_paths: set[Path] = set()
-    for pom_path in sorted(root.rglob("pom.xml")):
-        if ".git" in pom_path.relative_to(root).parts or _is_build_output_path(root, pom_path):
-            continue
+    pom_paths = [
+        pom_path for pom_path in sorted(root.rglob("pom.xml"))
+        if ".git" not in pom_path.relative_to(root).parts
+        and not _is_build_output_path(root, pom_path)
+        and _is_module_within_depth(root, pom_path.parent.resolve())
+    ]
+    gradle_modules = discover_gradle_modules(root)
+    # Every build root is known before entry points are read, so a parent
+    # never inherits the Spring Boot ``main`` of a nested module.
+    all_module_roots = {pom_path.parent.resolve() for pom_path in pom_paths} | {
+        module_dir.resolve() for _name, module_dir, _version in gradle_modules
+    }
+    for pom_path in pom_paths:
         module_dir = pom_path.parent.resolve()
-        if not _is_module_within_depth(root, module_dir):
-            continue
         _trace("module.maven.begin", pom=pom_path)
         artifact_id, _, packaging = parse_pom(pom_path)
         _trace("module.maven.parsed", pom=pom_path, artifact=artifact_id, packaging=packaging)
@@ -1287,7 +1308,7 @@ def discover_modules(
             _trace("module.maven.skipped", pom=pom_path, artifact=module_name)
             continue
         if use_tree_sitter:
-            entrypoint = _starts_application(module_dir)
+            entrypoint = _starts_application(module_dir, all_module_roots)
         else:
             _trace("module.maven.entrypoint.disabled", pom=pom_path)
             entrypoint = None
@@ -1311,7 +1332,7 @@ def discover_modules(
             )
         )
         seen_paths.add(module_dir)
-    for name, module_dir, version in discover_gradle_modules(root):
+    for name, module_dir, version in gradle_modules:
         module_dir = module_dir.resolve()
         if module_dir in seen_paths:
             continue
@@ -1322,7 +1343,7 @@ def discover_modules(
             (module_dir / filename).is_file() for filename in ("build.gradle", "build.gradle.kts")
         )
         if use_tree_sitter:
-            entrypoint = _starts_application(module_dir)
+            entrypoint = _starts_application(module_dir, all_module_roots)
         else:
             _trace("module.gradle.entrypoint.disabled", module=module_dir)
             entrypoint = None

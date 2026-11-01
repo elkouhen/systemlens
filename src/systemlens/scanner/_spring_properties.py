@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+import fnmatch
 import re
 
 import yaml
@@ -74,6 +75,9 @@ def _parse_dotted_properties_file(text: str) -> dict[str, str]:
         result[key.strip()] = value.strip()
     return result
 def _candidate_spring_roots(repo_root: Path, source_path: str | None) -> list[Path]:
+    # The source path is resolved below; the root must be too, or a relative
+    # or symlinked root never matches the resolved ancestors.
+    repo_root = repo_root.resolve()
     if source_path is None:
         return [repo_root]
     source_abs = (repo_root / source_path).resolve()
@@ -175,23 +179,73 @@ def _load_flat_spring_properties(path_str: str) -> dict[str, str]:
         for key, value in _flatten_properties(data or {}).items():
             flat.setdefault(key, value)
     return flat
+_NESTED_PLACEHOLDER_RE = re.compile(r"\$\{([^${}]+)\}")
+_MAX_PLACEHOLDER_DEPTH = 5
+
+
+def _is_profile_property_file(path_str: str) -> bool:
+    name = Path(path_str).name
+    return any(fnmatch.fnmatch(name, pattern) for pattern in _SPRING_PROFILE_PATTERNS)
+
+
+def _lookup_spring_property(
+    repo_root: Path, key: str, source_path: str | None
+) -> str | None:
+    """Return the declared value of ``key`` or ``None`` when it is not unique.
+
+    Files are visited from the owning module outwards. A base file answers
+    at once. Profile files (``application-<profile>``) answer only when every
+    profile that declares the key agrees: indexing has no active profile, so
+    conflicting declarations remain unresolved.
+    """
+    profile_values: list[str] = []
+    for path_str in _discover_spring_property_files(str(repo_root), source_path):
+        flat = _load_flat_spring_properties(path_str)
+        value = flat.get(key)
+        if value is None and key.casefold().startswith("kafka."):
+            value = flat.get(key[6:])
+        if value is None:
+            continue
+        if _is_profile_property_file(path_str):
+            if value not in profile_values:
+                profile_values.append(value)
+            continue
+        if not profile_values:
+            return value
+        break
+    return profile_values[0] if len(profile_values) == 1 else None
+
+
 def resolve_spring_property(
-    repo_root: Path, property_key: str, source_path: str | None = None
+    repo_root: Path, property_key: str, source_path: str | None = None,
+    *, _depth: int = 0,
 ) -> str | None:
     """Cherche `property_key` (ex. `app.kafka.topics.orders`, ou
     `prop:default` — syntaxe de valeur par défaut Spring) dans les fichiers
     de configuration Spring Boot conventionnels du repo. La recherche est
     best-effort mais orientée microservice : on essaie d'abord les configs du
     module contenant `source_path`, puis celles du repo parent ; les fichiers
-    sont parsés une seule fois par process via cache."""
+    sont parsés une seule fois par process via cache.
+
+    A value containing ``${...}`` placeholders is expanded recursively, with
+    a bounded depth. A placeholder that cannot be resolved stays in the
+    returned text: callers treat a value still containing ``${`` as a
+    configuration key, not as a static value.
+    """
     key, _, default = property_key.partition(":")
-    for path_str in _discover_spring_property_files(str(repo_root), source_path):
-        flat = _load_flat_spring_properties(path_str)
-        if key in flat:
-            return flat[key]
-        if key.casefold().startswith("kafka.") and key[6:] in flat:
-            return flat[key[6:]]
-    return default or None
+    value = _lookup_spring_property(repo_root, key.strip(), source_path)
+    if value is None:
+        value = default or None
+    if value is None or "${" not in value or _depth >= _MAX_PLACEHOLDER_DEPTH:
+        return value
+
+    def substitute(match: re.Match[str]) -> str:
+        resolved = resolve_spring_property(
+            repo_root, match.group(1), source_path, _depth=_depth + 1,
+        )
+        return match.group(0) if resolved is None or "${" in resolved else resolved
+
+    return _NESTED_PLACEHOLDER_RE.sub(substitute, value)
 
 
 def resolve_strategy1_kafka_topic(

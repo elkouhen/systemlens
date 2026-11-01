@@ -24,7 +24,7 @@ from systemlens.scanner._spring_properties import (
     _resolve_value_annotated_variable,
     resolve_spring_property,
 )
-from systemlens.scanner.java_strings import local_string
+from systemlens.scanner.java_strings import local_string, locally_declared_names
 from systemlens.domain.topic_expressions import spring_topic_reference
 
 _BARE_TOPIC_VAR_RE = re.compile(
@@ -94,29 +94,47 @@ def _kafka_topic_from_value(value_node, source: bytes, repo_root: Path, rel_path
         literal = java_parser.string_value(value_node, source)
         if literal is None:
             return "<dynamic>", True
-        reference = spring_topic_reference(literal)
-        if reference is not None:
-            resolved = resolve_spring_property(repo_root, reference.property_key, rel_path)
-            if resolved is not None:
-                return resolved, False
-            return reference.display_name, True
-        return literal, False
+        return _topic_from_literal(literal, repo_root, rel_path)
     if node_type == "identifier":
         identifier = java_parser.node_text(source, value_node)
+        if identifier in locally_declared_names(value_node, source):
+            # A parameter or local shadows every field of that name: only
+            # the lexical resolver may read it; a name lookup never does.
+            resolved_local = local_string(source, value_node)
+            if resolved_local is not None:
+                return _topic_from_literal(resolved_local, repo_root, rel_path)
+            return "<dynamic>", True
         resolved = _resolve_value_annotated_variable(
             repo_root, rel_path, identifier
         )
         if resolved is not None:
-            return resolved, False
+            return (resolved, True) if "${" in resolved else (resolved, False)
         if identifier.isupper():
             resolved_local = local_string(source, value_node)
             if resolved_local is not None:
-                return resolved_local, False
+                return _topic_from_literal(resolved_local, repo_root, rel_path)
         return "<dynamic>", True
-    for descendant in java_parser.walk(value_node):
-        if descendant.type == "string_literal":
-            return _kafka_topic_from_value(descendant, source, repo_root, rel_path)
+    # A method call, lambda or any other expression computes its topic at
+    # runtime: a literal somewhere inside it is not the topic.
     return "<dynamic>", True
+
+
+def _topic_from_literal(literal: str, repo_root: Path, rel_path: str) -> tuple[str, bool]:
+    """Resolve a literal topic: a placeholder is a configuration key.
+
+    A placeholder embedded in a longer literal, a nested placeholder or a
+    SpEL expression is not a topic name; it stays dynamic with its text as
+    evidence. A resolved value still holding ``${`` is likewise dynamic.
+    """
+    reference = spring_topic_reference(literal)
+    if reference is not None:
+        resolved = resolve_spring_property(repo_root, reference.property_key, rel_path)
+        if resolved is not None and "${" not in resolved:
+            return resolved, False
+        return (resolved if resolved is not None else reference.display_name), True
+    if "${" in literal or literal.lstrip().startswith("#{"):
+        return literal, True
+    return literal, False
 def _kafka_topics_from_value(value_node, source: bytes, repo_root: Path, rel_path: str) -> list[tuple[str, bool]]:
     """Resolve one or more topic expressions without silently dropping arrays.
 
@@ -138,10 +156,33 @@ def _kafka_topics_from_value(value_node, source: bytes, repo_root: Path, rel_pat
         topics = [
             _kafka_topic_from_value(child, source, repo_root, rel_path)
             for child in value_node.children
-            if child.type not in {"{", "}", ","}
+            if child.type not in {"{", "}", ",", "line_comment", "block_comment"}
         ]
         return list(dict.fromkeys(topics))
+    if value_node is not None and value_node.type == "method_invocation":
+        receiver, name, arguments = java_parser.invocation_parts(value_node, source)
+        receiver_name = java_parser.node_text(source, receiver).rsplit(".", 1)[-1] if receiver else ""
+        if (receiver_name, name) in _COLLECTION_FACTORIES and arguments:
+            # ``List.of("a", "b")`` subscribes to every listed topic.
+            topics = [
+                topic
+                for argument in arguments
+                for topic in _kafka_topics_from_value(argument, source, repo_root, rel_path)
+            ]
+            return list(dict.fromkeys(topics))
+        if (receiver_name, name) == ("Pattern", "compile") and arguments:
+            # A pattern subscription is evidence, never an exact topic.
+            return [
+                (topic, True)
+                for topic, _dynamic in _kafka_topics_from_value(arguments[0], source, repo_root, rel_path)
+            ]
     return [_kafka_topic_from_value(value_node, source, repo_root, rel_path)]
+
+
+_COLLECTION_FACTORIES = frozenset({
+    ("List", "of"), ("Set", "of"), ("Arrays", "asList"),
+    ("Collections", "singletonList"), ("Collections", "singleton"),
+})
 def _kafka_listener_topics(listener_ann, source: bytes, repo_root: Path, rel_path: str) -> list[tuple[str, bool]]:
     """Extract all concrete topic dependencies of a Spring Kafka listener.
 
@@ -205,9 +246,14 @@ def _listener_payload_type(source: bytes, method_node) -> str | None:
     params = method_node.child_by_field_name("parameters")
     if params is None:
         return None
-    for param in params.children:
-        if param.type != "formal_parameter":
-            continue
+    formal = [param for param in params.children if param.type == "formal_parameter"]
+    annotated = [
+        param for param in formal
+        if any(java_parser.annotation_name(ann, source) == "Payload"
+               for ann in java_parser.annotations_of(param))
+    ]
+    # An explicit ``@Payload`` parameter is the payload wherever it sits.
+    for param in annotated or formal:
         if any(
             java_parser.annotation_name(ann, source) in {"Header", "Headers"}
             for ann in java_parser.annotations_of(param)
@@ -300,19 +346,20 @@ def _producer_send_payload_type(source: bytes, invocation) -> str | None:
     method = java_parser.enclosing(invocation, "method_declaration")
     if method is None:
         return None
-    for arg in reversed(java_parser.argument_nodes(invocation)[1:]):
-        if arg.type == "identifier":
-            variable_name = java_parser.node_text(source, arg)
-            payload = _method_param_payload_type(source, method, variable_name)
-            if payload is not None:
-                return payload
-            payload = _declared_identifier_payload_type(source, invocation, variable_name)
-            if payload is not None:
-                return payload
-        elif arg.type == "object_creation_expression":
-            payload = _message_payload_type(_object_creation_type(source, arg))
-            if payload is not None:
-                return payload
+    # Only the last argument is the value; a preceding key or partition is
+    # never reported when the value itself cannot be typed.
+    arguments = java_parser.argument_nodes(invocation)[1:]
+    if not arguments:
+        return None
+    arg = arguments[-1]
+    if arg.type == "identifier":
+        variable_name = java_parser.node_text(source, arg)
+        payload = _method_param_payload_type(source, method, variable_name)
+        if payload is not None:
+            return payload
+        return _declared_identifier_payload_type(source, invocation, variable_name)
+    if arg.type == "object_creation_expression":
+        return _message_payload_type(_object_creation_type(source, arg))
     return None
 def _kafka_endpoint(
     repo_root: Path, rel_path: str, source: bytes, node, role: str, framework: str,
@@ -376,7 +423,7 @@ def _method_return_payload_type(source: bytes, method_node) -> str | None:
     if method_node is None:
         return None
     type_node = method_node.child_by_field_name("type")
-    if type_node is None:
+    if type_node is None or type_node.type == "void_type":
         return None
     return _message_payload_type(java_parser.node_text(source, type_node))
 def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> list[MessageEndpoint]:
@@ -415,33 +462,42 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
             )
             endpoints[endpoint.id] = endpoint
 
-        for method_node in java_parser.walk(root):
-            if method_node.type != "method_declaration":
+        for declaration in java_parser.walk(root):
+            if declaration.type == "method_declaration":
+                payload_type = _listener_payload_type(source, declaration)
+                end_node = declaration
+            elif declaration.type == "class_declaration":
+                # A class-level listener dispatches to its ``@KafkaHandler``
+                # methods; the payload is known when there is one handler.
+                handlers = [
+                    member for member in java_parser.walk(declaration)
+                    if member.type == "method_declaration"
+                    and java_parser.enclosing(member, "class_declaration") is declaration
+                    and any(java_parser.annotation_name(ann, source) == "KafkaHandler"
+                            for ann in java_parser.annotations_of(member))
+                ]
+                payload_type = _listener_payload_type(source, handlers[0]) if len(handlers) == 1 else None
+                end_node = None
+            else:
                 continue
-            listener_ann = next(
-                (
-                    ann
-                    for ann in java_parser.annotations_of(method_node)
-                    if java_parser.annotation_name(ann, source) == "KafkaListener"
-                ),
-                None,
-            )
-            if listener_ann is None:
-                continue
-            for topic, dynamic in _kafka_listener_topics(listener_ann, source, repo_root, rel_path):
-                endpoint = _kafka_endpoint(
-                    repo_root,
-                    rel_path,
-                    source,
-                    listener_ann,
-                    "consume",
-                    "spring-kafka",
-                    topic,
-                    dynamic,
-                    _listener_payload_type(source, method_node),
-                    end_node=method_node,
-                )
-                endpoints[endpoint.id] = endpoint
+            # ``@KafkaListener`` is repeatable: every annotation is a listener.
+            for listener_ann in java_parser.annotations_of(declaration):
+                if java_parser.annotation_name(listener_ann, source) != "KafkaListener":
+                    continue
+                for topic, dynamic in _kafka_listener_topics(listener_ann, source, repo_root, rel_path):
+                    endpoint = _kafka_endpoint(
+                        repo_root,
+                        rel_path,
+                        source,
+                        listener_ann,
+                        "consume",
+                        "spring-kafka",
+                        topic,
+                        dynamic,
+                        payload_type,
+                        end_node=end_node,
+                    )
+                    endpoints[endpoint.id] = endpoint
 
         for node in java_parser.walk(root):
             if node.type == "method_invocation":
@@ -505,7 +561,8 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
                         first_arg, source, repo_root, rel_path
                     ):
                         add(node, "produce", "kafka-clients", topic, dynamic,
-                            _message_payload_type(_object_creation_type(source, node)))
+                            _message_payload_type(_object_creation_type(source, node))
+                            or _producer_send_payload_type(source, node))
     return list(endpoints.values())
 def _extract_kafka_topic(
     snippet: str, repo_root: Path, source_path: str | None = None

@@ -23,7 +23,13 @@ names. Route similarity alone never identifies a service.
 
 A `@Value` field declared in another Java file is usable only when its name has
 one unambiguous property key across the indexed repository; conflicting
-declarations stay unresolved.
+declarations stay unresolved. A name declared by the enclosing method, lambda
+or constructor as a parameter, local, loop variable, resource or catch
+parameter is never resolved by name against a field or another file: it is
+dynamic unless the lexical resolver proves its value. A property value that
+still contains a `${...}` placeholder after bounded expansion, a placeholder
+embedded in a longer literal that cannot be resolved, or a key declared with
+different values in profile files without a base declaration is dynamic.
 
 Strategy1 configured API clients may resolve a domain from a `HubRestApi` enum
 constant, including statically imported constants and redundant parentheses. If
@@ -177,7 +183,18 @@ profile-specific values do not override the base document without an explicit
 active-profile selection.
 
 A mutable or otherwise unresolved URL remains a dynamic, unresolved port rather
-than a guessed service link.
+than a guessed service link. A RestTemplate `exchange` call whose HTTP method
+is computed, and a fluent `method(HttpMethod.X)` call on WebClient or
+RestClient, keep the route; the verb is the enum constant or `ANY`. A mapping
+annotation whose array value holds one literal uses that literal; several
+candidate routes remain dynamic. A text block literal is its trimmed content.
+Spring HTTP interfaces read `url`, `path` and `value`; method-level exchange
+annotations without a type-level `@HttpExchange` declare routes with an empty
+prefix. A Spring Data REST repository without `@RepositoryRestResource` is
+served at the pluralized, uncapitalized entity name (`OrderItem` at
+`/orderItems`). A Spring Cloud Gateway Java route is recognised with or
+without a route identifier; without a `method(...)` predicate it serves and
+proxies every verb as `ANY`, like a YAML route.
 
 Indexing materializes AST method facts that associate each Java method with its
 HTTP/message entry endpoints and HTTP/message output endpoints. It then
@@ -245,7 +262,8 @@ compatible implementation, candidates from other modules remain possible.
 
 The static base type remains a possible target when a subtype override is also
 visible. An inherited template call is restricted to the concrete entry subtype
-when that subtype is known. `super.method()` resolves to the direct parent
+when that subtype is known; an entry declared by the base class itself keeps
+every override. `super.method()` resolves to the direct parent
 declaration. These rules prevent sibling implementations from entering one
 source flow while preserving uncertainty for a base-typed field.
 
@@ -289,7 +307,9 @@ unknown.
 Strategy1 resolves listener and sender topic keys against `kafka.yml` or
 `kafka.yaml` after normalizing case, CamelCase boundaries, digits, and
 separators. The supported declaration is the nested `topics.<key>.nom` leaf.
-It does not infer a match from a partial key or an undeclared topic.
+It does not infer a match from a partial key or an undeclared topic; a
+literal send topic is validated by its full normalized key or its declared
+value, never by its last segment.
 Only the `topics` attribute of `@KafkaListener` is inspected for topic
 references; a kebab-case key such as `commande-creee` matches `COMMANDE_CREEE`. Properties such as `topics.<key>.groupe` in `groupId` are
 consumer-group settings, not topic references, and are ignored.
@@ -306,7 +326,17 @@ Kafka topic expressions also resolve source-local conventionally named uppercase
 `static final` string constants and concatenations whose operands are all
 statically resolvable.
 When one operand remains unresolved, the complete expression stays dynamic;
-SystemLens does not keep its first literal as a concrete topic.
+SystemLens does not keep its first literal as a concrete topic. A method call
+or lambda computing the topic is dynamic, except `List.of`, `Set.of`,
+`Arrays.asList`, `Collections.singletonList` and `Collections.singleton`,
+which yield one fact per listed topic, and `Pattern.compile`, which keeps
+its literal as a dynamic pattern. A literal with an embedded or nested
+placeholder, or a SpEL expression that is not a plain property reference, is
+dynamic with its text as evidence. Comments inside an argument list or an
+array are not arguments. `@KafkaListener` is repeatable, and a class-level
+listener with `@KafkaHandler` methods is a consumer whose payload type is
+known only with one handler. A `@Payload` parameter is the listener payload
+wherever it sits.
 
 An uppercase `Flux` enum constant is resolved only when its normalized name
 has a matching catalog entry. Other variable topic expressions stay dynamic.

@@ -14,9 +14,10 @@ def _endpoint(
     *,
     message_type: str | None = None,
     snippet: str = "",
+    line: int = 12,
 ) -> MessageEndpoint:
     return MessageEndpoint(
-        id=compute_endpoint_id(role, topic, "OrderIntegration.java", 12),
+        id=compute_endpoint_id(role, topic, "OrderIntegration.java", line),
         role=role,
         system=system,
         topic=topic,
@@ -24,8 +25,8 @@ def _endpoint(
         source="code",
         framework="spring",
         path="src/main/java/OrderIntegration.java",
-        start_line=12,
-        end_line=12,
+        start_line=line,
+        end_line=line,
         snippet=snippet,
         module="orders",
         qualified_name="com.example.OrderIntegration",
@@ -165,6 +166,51 @@ def test_relations_materialize_kafka_topology_when_consumer_type_is_unknown() ->
     assert topology[0].source_name == "orders"
     assert topology[0].target_name == "inventory"
     assert topology[0].confidence == "medium"
+
+
+def test_catalog_topology_attaches_the_served_route_matched_at_index_time() -> None:
+    """Export edges carry the served site the index reconciled against."""
+    call = _endpoint("call", "rest", "GET /payments/{id}", snippet="http://payments")
+    served = replace(
+        _endpoint("serve", "rest", "GET /payments/{paymentId}"),
+        module="payments",
+        qualified_name="com.example.PaymentController",
+    )
+    other = replace(
+        _endpoint("serve", "rest", "GET /refunds/{paymentId}", line=20),
+        module="payments",
+        qualified_name="com.example.RefundController",
+    )
+
+    relations = build_architecture_relations([], [call, served, other], [])
+    catalog = build_catalog([], [call, served, other], relations)
+
+    assert [(edge.from_endpoint.id, edge.to_endpoint.id if edge.to_endpoint else None)
+            for edge in catalog.edges] == [(call.id, served.id)]
+
+
+def test_catalog_topology_selects_the_type_compatible_consumer() -> None:
+    producer = replace(
+        _endpoint("produce", "kafka", "orders.created", message_type="OrderCreated"),
+        module="orders",
+    )
+    incompatible = replace(
+        _endpoint("consume", "kafka", "orders.created", message_type="OrderShipped"),
+        module="inventory",
+        qualified_name="com.example.ShippedConsumer",
+    )
+    compatible = replace(
+        _endpoint("consume", "kafka", "orders.created", message_type="OrderCreated", line=20),
+        module="inventory",
+        qualified_name="com.example.CreatedConsumer",
+    )
+    endpoints = [producer, incompatible, compatible]
+
+    relations = build_architecture_relations([], endpoints, [])
+    catalog = build_catalog([], endpoints, relations)
+
+    assert [(edge.from_endpoint.id, edge.to_endpoint.id if edge.to_endpoint else None)
+            for edge in catalog.edges] == [(producer.id, compatible.id)]
 
 
 def test_catalog_topology_uses_persisted_relations_not_a_new_endpoint_match() -> None:

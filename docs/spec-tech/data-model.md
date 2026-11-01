@@ -32,7 +32,12 @@ architecture snapshot, including conservative resolved inter-service REST and
 Kafka topology relations. `ArchitectureSnapshot` derives its topology edges
 from those persisted relations; adapters may use indexed endpoints only to add
 route, topic, and source presentation details and do not re-resolve targets or
-rescan source.
+rescan source. Inside the asserted target service, the served site attached to
+an edge is selected with the same route and payload rules as the index-time
+resolver: an HTTP call matches a route by method and template-compatible
+segments, and a publication matches consumers of its topic whose known message
+type agrees. A call matching several routes yields one edge per route; a call
+matching none keeps a service-level edge without a served site.
 
 When two distinct evidences share the same base relation identifier, indexing
 retains both by assigning the later relation a deterministic content-derived
@@ -117,7 +122,9 @@ module-scoped entity identity. The extractor records raw arguments for
 supported `*ById` operations. It derives key identity for exact Java literals.
 For CodeQL-derived flows, it also traces unmodified scalar parameters through
 resolved Java calls. Parameter identities include the indexed entry method and
-parameter position. The trace follows final scalar local aliases and stops at
+parameter position, counted over declared parameters only (comments in a
+parameter or argument list do not shift it). The trace follows final scalar
+local aliases and stops at
 mutable aliases, field accesses, mutable objects, and serialized payload values.
 
 The `export facts` command serializes a `graph_facts` namespace as the
@@ -713,12 +720,16 @@ Each persisted `CodeFlow` also carries a `reconciliation` status. `complete`
 means every endpoint step exists in the same snapshot and every cross-service
 effect has a matching persisted topology edge; `partial` means
 the code evidence remains valid but at least one endpoint or topology edge is
-missing, unresolved, dynamic, or ambiguous. Same-service input-to-output
-evidence can be complete without an inter-service edge. The status is derived
-during indexing from endpoint identifiers and never from route-label matching.
+missing, unresolved, dynamic, or ambiguous. An effect whose next flow step is
+an input of the same service is a same-service continuation and is complete
+without an inter-service edge. Every other effect requires an edge, including
+an effect located in the flow's own module. The status is derived during
+indexing from endpoint identifiers and never from route-label matching.
 
-If multiple topology edges match the same flow step, reconciliation remains
-`partial` because the evidence is ambiguous. When several static call routes
+An HTTP call matched by several distinct topology edges, or any effect matched
+by duplicated edges, remains `partial` because the evidence is ambiguous. A
+Kafka publication matched by one edge per distinct consumer is a fan-out and
+remains `complete`. When several static call routes
 collapse to one canonical flow, `alternative_count` records the number of
 distinct evidence-bearing routes represented by that flow for diagnostics and
 UI disclosure.

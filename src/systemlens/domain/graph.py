@@ -609,20 +609,43 @@ def graph_edges_from_relations(
         for endpoint in service_endpoints
     ]
     source_index: dict[tuple[str, str | None, int | None, str], list[MessageEndpoint]] = {}
-    target_index: dict[tuple[str, str, str, str], list[MessageEndpoint]] = {}
+    consumers_index: dict[tuple[str, str], list[MessageEndpoint]] = {}
+    serves_index: dict[str, list[MessageEndpoint]] = {}
     for endpoint in endpoints:
         if endpoint.module is None:
             continue
         source_index.setdefault(
             (endpoint.module, endpoint.path, endpoint.start_line, endpoint.role), []
         ).append(endpoint)
-        if endpoint.system in {"rest", "kafka"} and endpoint.role in {"serve", "consume"}:
-            target_index.setdefault(
-                (endpoint.module, endpoint.system, endpoint.role, endpoint.topic), []
-            ).append(endpoint)
+        if endpoint.system == "kafka" and endpoint.role == "consume":
+            consumers_index.setdefault((endpoint.module, endpoint.topic), []).append(endpoint)
+        elif endpoint.system == "rest" and endpoint.role == "serve":
+            serves_index.setdefault(endpoint.module, []).append(endpoint)
+
+    def target_endpoints(
+        kind: str, target_service: str, source_endpoint: MessageEndpoint,
+    ) -> list[MessageEndpoint]:
+        """Served sites of the asserted target that the source site reaches.
+
+        The relation already names the target service. Inside it, the same
+        route and payload rules as :func:`build_graph` select the served
+        site, so an export sees the site the index reconciled against.
+        """
+        if kind == "kafka":
+            consumers = consumers_index.get((target_service, source_endpoint.topic), [])
+            return [
+                consumer for consumer in consumers
+                if source_endpoint.message_type is None
+                or consumer.message_type is None
+                or consumer.message_type == source_endpoint.message_type
+            ]
+        return [
+            serve for serve in serves_index.get(target_service, [])
+            if paths_match(source_endpoint.topic, serve.topic)
+        ]
 
     edges: list[GraphEdge] = []
-    seen: set[tuple[str, str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str | None]] = set()
     for relation in sorted(relations, key=lambda item: (item.id, item.source_name, item.target_name)):
         if (
             relation.source_kind != "microservice"
@@ -641,28 +664,26 @@ def graph_edges_from_relations(
             # relation and the next index will restore an atomic snapshot.
             continue
         for source_endpoint in candidates:
-            target_endpoint = next(iter(target_index.get(
-                (
-                    relation.target_name,
-                    kind,
-                    "serve" if kind == "rest" else "consume",
-                    source_endpoint.topic,
-                ),
-                (),
-            )), None)
-            key = (kind, relation.source_name, relation.target_name, source_endpoint.id)
-            if key in seen:
-                continue
-            seen.add(key)
-            edges.append(
-                GraphEdge(
-                    kind,
-                    relation.source_name,
-                    relation.target_name,
-                    source_endpoint,
-                    target_endpoint,
+            targets: list[MessageEndpoint | None] = list(
+                target_endpoints(kind, relation.target_name, source_endpoint)
+            ) or [None]
+            for target_endpoint in targets:
+                key = (
+                    kind, relation.source_name, relation.target_name, source_endpoint.id,
+                    target_endpoint.id if target_endpoint is not None else None,
                 )
-            )
+                if key in seen:
+                    continue
+                seen.add(key)
+                edges.append(
+                    GraphEdge(
+                        kind,
+                        relation.source_name,
+                        relation.target_name,
+                        source_endpoint,
+                        target_endpoint,
+                    )
+                )
     return edges
 
 

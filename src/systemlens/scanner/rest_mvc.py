@@ -32,7 +32,7 @@ from systemlens.scanner._spring_properties import (
     _resolve_value_annotated_variable,
     resolve_spring_property,
 )
-from systemlens.scanner.java_strings import local_string
+from systemlens.scanner.java_strings import local_string, locally_declared_names
 from systemlens.scanner.rest_client_config import (
     _bean_api_domain,
     _domain_from_api_type_name,
@@ -44,6 +44,7 @@ from systemlens.scanner.rest_client_config import (
 from systemlens.scanner.rest_paths import join_paths, normalize_path, with_query_params
 
 _PROPERTY_PLACEHOLDER_RE = re.compile(r"^\$\{([^}]+)\}$")
+_EMBEDDED_PLACEHOLDER_RE = re.compile(r"\$\{([^${}]+)\}")
 
 # BACKLOG-10 K2 (reliquat) : `@KafkaListener(topics = someVar)` ou
 # `kafkaTemplate.send(someVar, ...)` où `someVar` n'est pas un littéral mais
@@ -167,31 +168,65 @@ def _local_static_string_initializer(path_str: str, variable_name: str) -> str |
     if reassigned or len(initializers) != 1:
         return None
     return initializers[0]
+def _literal_text(part: str) -> str:
+    """Content of a quoted Java string part, including a text block."""
+    if len(part) >= 6 and part.startswith('"""') and part.endswith('"""'):
+        return part[3:-3].strip()
+    return part[1:-1]
+
+
 def _resolve_rest_expression(
-    expr: str, repo_root: Path, source_path: str, *, preserve_dynamic_segments: bool = False
+    expr: str, repo_root: Path, source_path: str, *, preserve_dynamic_segments: bool = False,
+    shadowed: frozenset[str] = frozenset(),
 ) -> tuple[str, bool]:
     """Resolve literals and local ``@Value`` fields without discarding a host.
 
     The caller may need the explicit host as service-identity evidence even
     though the endpoint topic itself intentionally stores only the route.
+    ``shadowed`` names are declared by the enclosing method (parameters and
+    locals); they are never resolved by name against fields or other files.
     """
     resolved_parts: list[str] = []
     dynamic = False
     for part in _split_java_concat(expr.strip()):
         if len(part) >= 2 and part[0] == part[-1] == '"':
-            literal = part[1:-1]
+            literal = _literal_text(part)
             placeholder = _PROPERTY_PLACEHOLDER_RE.match(literal)
             if placeholder is not None:
                 resolved = resolve_spring_property(repo_root, placeholder.group(1), source_path)
-                if resolved is None:
+                if resolved is None or "${" in resolved:
                     dynamic = True
                     continue
                 resolved_parts.append(resolved)
                 continue
+            if "${" in literal:
+                # A placeholder embedded in a longer literal: resolve each
+                # key; an unresolved one keeps the literal dynamic.
+                unresolved = False
+
+                def substitute(match: re.Match[str]) -> str:
+                    nonlocal unresolved
+                    value = resolve_spring_property(repo_root, match.group(1), source_path)
+                    if value is None or "${" in value:
+                        unresolved = True
+                        return "{dynamic}" if preserve_dynamic_segments else ""
+                    return value
+
+                literal = _EMBEDDED_PLACEHOLDER_RE.sub(substitute, literal)
+                if unresolved or "${" in literal:
+                    dynamic = True
             resolved_parts.append(literal)
             continue
         if re.fullmatch(r"[A-Za-z_]\w*", part):
+            if part in shadowed:
+                dynamic = True
+                if preserve_dynamic_segments and resolved_parts:
+                    resolved_parts.append(f"{{{part}}}")
+                continue
             resolved = _resolve_value_annotated_variable(repo_root, source_path, part)
+            if resolved is not None and "${" in resolved:
+                # The property value is itself configuration-dependent.
+                resolved = None
             if resolved is None:
                 initializer = _local_static_string_initializer(
                     str(repo_root / source_path), part
@@ -215,18 +250,22 @@ def _resolve_rest_expression(
 
 
 def _resolve_rest_path_expression(
-    expr: str, repo_root: Path, source_path: str, *, preserve_dynamic_segments: bool = False
+    expr: str, repo_root: Path, source_path: str, *, preserve_dynamic_segments: bool = False,
+    shadowed: frozenset[str] = frozenset(),
 ) -> tuple[str, bool]:
     raw, dynamic = _resolve_rest_expression(
-        expr, repo_root, source_path, preserve_dynamic_segments=preserve_dynamic_segments
+        expr, repo_root, source_path, preserve_dynamic_segments=preserve_dynamic_segments,
+        shadowed=shadowed,
     )
     if raw == "<dynamic>":
         return raw, True
     return normalize_path(raw), dynamic
 
 
-def _resolved_http_host(expr: str, repo_root: Path, source_path: str) -> str | None:
-    raw, _dynamic = _resolve_rest_expression(expr, repo_root, source_path)
+def _resolved_http_host(
+    expr: str, repo_root: Path, source_path: str, shadowed: frozenset[str] = frozenset(),
+) -> str | None:
+    raw, _dynamic = _resolve_rest_expression(expr, repo_root, source_path, shadowed=shadowed)
     match = re.match(r"https?://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", raw, re.IGNORECASE)
     return match.group(1).lower() if match is not None else None
 
@@ -238,7 +277,9 @@ def _resolve_rest_ast_expression(
 
     The AST resolver handles a literal, a uniquely initialized local and a
     private deterministic helper with literal arguments. Anything it cannot
-    prove remains subject to the existing conservative expression resolver.
+    prove remains subject to the existing conservative expression resolver,
+    which never resolves a parameter or local of the enclosing method by
+    name: the AST resolver already rejected it.
     """
     resolved = local_string(source, expression)
     if resolved is not None:
@@ -246,6 +287,7 @@ def _resolve_rest_ast_expression(
     return _resolve_rest_path_expression(
         java_parser.node_text(source, expression), repo_root, source_path,
         preserve_dynamic_segments=True,
+        shadowed=locally_declared_names(expression, source),
     )
 
 
@@ -254,7 +296,10 @@ def _resolved_http_host_ast(expression, source: bytes, repo_root: Path, source_p
     if resolved is not None:
         match = re.match(r"https?://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", resolved, re.IGNORECASE)
         return match.group(1).lower() if match is not None else None
-    return _resolved_http_host(java_parser.node_text(source, expression), repo_root, source_path)
+    return _resolved_http_host(
+        java_parser.node_text(source, expression), repo_root, source_path,
+        shadowed=locally_declared_names(expression, source),
+    )
 
 
 def _infer_http_interface_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
@@ -271,13 +316,16 @@ def _infer_http_interface_endpoints(repo_root: Path, rel_path: str) -> list[Mess
     for owner in java_parser.type_declarations(root):
         exchange = next((a for a in java_parser.annotations_of(owner)
                          if java_parser.annotation_name(a, source) == "HttpExchange"), None)
-        if exchange is None:
-            continue
         registration = next((a for a in java_parser.annotations_of(owner)
                              if java_parser.annotation_name(a, source) == "ClientRegistrationId"), None)
         target_node = java_parser.annotation_argument(registration, source) if registration else None
         target = java_parser.string_value(target_node, source) if target_node is not None else None
-        prefix, prefix_dynamic = _ast_mapping_value(exchange, source, repo_root, rel_path)
+        # A type-level ``@HttpExchange`` is optional: method-level exchange
+        # annotations alone declare a contract with an empty prefix.
+        prefix, prefix_dynamic = (
+            _ast_mapping_value(exchange, source, repo_root, rel_path, keys=("url", "path", "value"))
+            if exchange is not None else ("", False)
+        )
         for method in java_parser.walk(owner):
             if method.type != "method_declaration":
                 continue
@@ -285,7 +333,9 @@ def _infer_http_interface_endpoints(repo_root: Path, rel_path: str) -> list[Mess
                                if java_parser.annotation_name(a, source) in methods), None)
             if annotation is None:
                 continue
-            suffix, suffix_dynamic = _ast_mapping_value(annotation, source, repo_root, rel_path)
+            suffix, suffix_dynamic = _ast_mapping_value(
+                annotation, source, repo_root, rel_path, keys=("url", "path", "value"),
+            )
             dynamic = prefix_dynamic or suffix_dynamic
             route = join_paths(normalize_path(prefix), normalize_path(suffix))
             if dynamic and (prefix_dynamic or suffix_dynamic):
@@ -446,21 +496,32 @@ def _infer_generic_request_mapping_endpoints(repo_root: Path, rel_path: str) -> 
                 )
     return endpoints
 def _ast_mapping_value(
-    annotation, source: bytes, repo_root: Path | None = None, rel_path: str | None = None
+    annotation, source: bytes, repo_root: Path | None = None, rel_path: str | None = None,
+    keys: tuple[str, ...] = ("path", "value"),
 ) -> tuple[str, bool]:
     """Return a mapping annotation's explicit path, if it has one.
 
     An annotation with only non-path attributes has the meaningful empty path
     (it inherits its class route); an expression that cannot be resolved is
-    dynamic.
+    dynamic. An array with one literal is that literal; several candidate
+    routes stay dynamic rather than choosing one.
     """
-    value = (
-        java_parser.annotation_argument(annotation, source, key="path")
-        or java_parser.annotation_argument(annotation, source, key="value")
-        or java_parser.annotation_argument(annotation, source)
-    )
+    value = next(
+        (
+            argument for key in keys
+            if (argument := java_parser.annotation_argument(annotation, source, key=key)) is not None
+        ),
+        None,
+    ) or java_parser.annotation_argument(annotation, source)
     if value is None:
         return "", False
+    if value.type == "element_value_array_initializer":
+        elements = [
+            child for child in value.children
+            if child.type not in {"{", "}", ",", "line_comment", "block_comment"}
+        ]
+        if len(elements) == 1:
+            value = elements[0]
     if value.type != "string_literal":
         return "", True
     if repo_root is not None and rel_path is not None:
@@ -640,7 +701,9 @@ def _infer_spring_data_rest_endpoints(repo_root: Path, rel_path: str) -> list[Me
         else:
             if not _module_has_spring_data_rest(str(repo_root), rel_path):
                 continue
-            base_path = "/" + _pluralize(entity.lower())
+            # Spring Data REST uncapitalizes the entity name: ``OrderItem``
+            # is served at ``/orderItems``.
+            base_path = "/" + _pluralize(entity[:1].lower() + entity[1:])
             snippet = java_parser.node_text(source, declaration)
             decl_line = declaration.start_point.row + 1
 
@@ -1147,7 +1210,8 @@ def _infer_resttemplate_exchange_endpoints(
                 continue
             http_method = java_parser.node_text(source, args[1]).rsplit(".", 1)[-1]
             if http_method not in {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}:
-                continue
+                # The verb is computed at runtime; the route is still evidence.
+                http_method = "ANY"
         else:
             http_method = direct_methods[method_name]
         route, dynamic = _resolve_rest_ast_expression(args[0], source, repo_root, rel_path)
@@ -1417,26 +1481,34 @@ def _infer_restclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageE
     return endpoints
 
 
-def _restclient_verb_invocation(node, source: bytes):
-    """Find a Spring ``RestClient`` request verb in a fluent receiver chain."""
+_FLUENT_HTTP_VERBS = {"get", "post", "put", "delete", "patch", "head", "options"}
+
+
+def _fluent_verb_invocation(node, source: bytes):
+    """Nearest request verb in a fluent receiver chain, with its AST node.
+
+    ``client.get()`` names the verb directly; ``client.method(HttpMethod.POST)``
+    names it through the enum constant, and a computed method is ``ANY``.
+    """
     if node.type != "method_invocation":
         return None
-    receiver, name, _args = java_parser.invocation_parts(node, source)
-    verbs = {"get", "post", "put", "delete", "patch", "head", "options"}
-    if name in verbs:
+    receiver, name, args = java_parser.invocation_parts(node, source)
+    if name in _FLUENT_HTTP_VERBS:
         return name.upper(), node
-    return _restclient_verb_invocation(receiver, source) if receiver is not None else None
+    if name == "method" and len(args) == 1:
+        verb = java_parser.node_text(source, args[0]).rsplit(".", 1)[-1]
+        return (verb if verb.lower() in _FLUENT_HTTP_VERBS else "ANY"), node
+    return _fluent_verb_invocation(receiver, source) if receiver is not None else None
+
+
+def _restclient_verb_invocation(node, source: bytes):
+    """Find a Spring ``RestClient`` request verb in a fluent receiver chain."""
+    return _fluent_verb_invocation(node, source)
 
 
 def _webclient_verb_invocation(node, source: bytes):
-    """Nearest request verb in a fluent receiver chain, with its AST node."""
-    if node.type != "method_invocation":
-        return None
-    receiver, name, _args = java_parser.invocation_parts(node, source)
-    verbs = {"get", "post", "put", "delete", "patch", "head", "options"}
-    if name in verbs:
-        return name.upper(), node
-    return _webclient_verb_invocation(receiver, source) if receiver is not None else None
+    """Find a Spring ``WebClient`` request verb in a fluent receiver chain."""
+    return _fluent_verb_invocation(node, source)
 def _infer_configured_api_client_endpoints(
     repo_root: Path, rel_path: str
 ) -> list[MessageEndpoint]:
@@ -1571,12 +1643,14 @@ def _infer_spring_cloud_gateway_routes(repo_root: Path, rel_path: str) -> list[M
         if invocation.type != "method_invocation":
             continue
         _receiver, name, args = java_parser.invocation_parts(invocation, source)
-        if name != "route" or not args or args[0].type != "lambda_expression":
+        # ``route(r -> ...)`` and ``route("id", r -> ...)`` both declare a route.
+        route_lambda = next((arg for arg in args if arg.type == "lambda_expression"), None)
+        if name != "route" or route_lambda is None:
             continue
         path_value: str | None = None
         http_method: str | None = None
         has_uri = False
-        for call in java_parser.walk(args[0]):
+        for call in java_parser.walk(route_lambda):
             if call.type != "method_invocation":
                 continue
             _call_receiver, call_name, call_args = java_parser.invocation_parts(call, source)
@@ -1590,8 +1664,11 @@ def _infer_spring_cloud_gateway_routes(repo_root: Path, rel_path: str) -> list[M
                     http_method = candidate
             elif call_name == "uri":
                 has_uri = True
-        if path_value is None or http_method is None or not has_uri:
+        if path_value is None or not has_uri:
             continue
+        # Like a YAML route without a method predicate, a Java route
+        # without ``.method(...)`` proxies every verb.
+        http_method = http_method or "ANY"
         route = normalize_path(path_value)
         for role in ("serve", "call"):
             inferred.append(

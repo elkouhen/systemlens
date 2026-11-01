@@ -98,9 +98,11 @@ predicate resolvedTarget(MethodCall call, Method target, string confidence) {
   not exists(Method exact | exactTarget(call, exact)) and
   target = call.getMethod() and target.fromSource() and confidence = "possible"
   or
+  // An interface method that is itself the exact target (a static or an
+  // unoverridden default method) is already reported as exact.
   target = call.getMethod() and
   target.getDeclaringType() instanceof Interface and
-  target.fromSource() and confidence = "possible"
+  target.fromSource() and not exactTarget(call, target) and confidence = "possible"
 }
 
 predicate callerInScope(Callable enclosing) {
@@ -138,7 +140,8 @@ def _methods_query(source_prefix: str = "") -> str:
     if not normalized_prefix:
         scope = ""
     else:
-        pattern = _ql_string(f"^{re.escape(normalized_prefix)}/")
+        # CodeQL's ``regexpMatch`` matches the whole string.
+        pattern = _ql_string(f"^{re.escape(normalized_prefix)}/.*")
         scope = (
             " and exists(string path | "
             "path = method.getFile().getRelativePath() and "
@@ -210,7 +213,8 @@ def _calls_query(caller_prefix: str) -> str:
     if not normalized_prefix:
         scope = "exists(Callable candidate | candidate = enclosing)"
     else:
-        pattern = _ql_string(f"^{re.escape(normalized_prefix)}/")
+        # CodeQL's ``regexpMatch`` matches the whole string.
+        pattern = _ql_string(f"^{re.escape(normalized_prefix)}/.*")
         scope = (
             "exists(string path | "
             "path = enclosing.getFile().getRelativePath() and "
@@ -231,9 +235,12 @@ def _anchor_predicate(
         method for method in methods
         if bool(method.input_endpoint_ids if input_anchor else method.output_endpoint_ids)
     ]
+    # The indexed method starts at its first annotation line while CodeQL
+    # locates the declaration itself: anchor on the indexed line range.
     clauses = [
         "(method.getFile().getRelativePath() = "
-        f"{_ql_string(method.path)} and method.getLocation().getStartLine() = {method.start_line})"
+        f"{_ql_string(method.path)} and method.getLocation().getStartLine() >= {method.start_line}"
+        f" and method.getLocation().getStartLine() <= {max(method.start_line, method.end_line)})"
         for method in selected
     ]
     body = "\n    or\n    ".join(clauses) or "false"
@@ -614,7 +621,9 @@ def _parse_codeql_calls(rows: Iterable[Mapping[str, str]], path_prefix: str) -> 
                 caller_line=int(row["caller_line"]), callee=row["callee"],
                 callee_path=repository_path(row["callee_path"]), callee_line=int(row["callee_line"]),
                 call_line=int(row["call_line"]),
-                dispatch_confidence=row.get("dispatch_confidence", "exact"),
+                # A result without the confidence column cannot claim exact
+                # dispatch.
+                dispatch_confidence=row.get("dispatch_confidence", "possible"),
             ))
         except (KeyError, TypeError, ValueError) as exc:
             raise CodeQLError("CodeQL returned an unexpected call-graph CSV schema.") from exc

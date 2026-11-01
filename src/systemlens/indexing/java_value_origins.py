@@ -51,9 +51,13 @@ def _parameter_index(source: bytes, method_node: Node, expression: str) -> int |
     if parameters is None or body is None:
         return None
     candidates: list[tuple[int, Node, Node]] = []
-    for index, parameter in enumerate(parameters.named_children):
-        if parameter.type not in {"formal_parameter", "spread_parameter"}:
-            continue
+    # Comments and a receiver parameter are named children too: the
+    # positional index must count declared parameters only.
+    declared = [
+        parameter for parameter in parameters.named_children
+        if parameter.type in {"formal_parameter", "spread_parameter"}
+    ]
+    for index, parameter in enumerate(declared):
         name = parameter.child_by_field_name("name")
         parameter_type = parameter.child_by_field_name("type")
         if name is not None and parameter_type is not None and (

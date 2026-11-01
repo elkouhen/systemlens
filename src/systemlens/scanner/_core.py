@@ -121,7 +121,7 @@ def _message_payload_type(declared_type: str | None) -> str | None:
         return None
     normalized = re.sub(r"@\w+(?:\([^)]*\))?\s*", "", declared_type)
     normalized = re.sub(r"\b(?:final|volatile)\b\s*", "", normalized).strip()
-    if not normalized or normalized in {"var", "?"}:
+    if not normalized or normalized in {"var", "?", "void"}:
         return None
     for container in ("ConsumerRecord", "Message", "KafkaTemplate", "KafkaConsumer", "ProducerRecord", "KStream", "KTable"):
         match = re.fullmatch(rf"(?:[\w.]+\.)?{container}\s*<(.*)>", normalized)

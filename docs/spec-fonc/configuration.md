@@ -36,8 +36,10 @@ Run `systemlens init` and
 
 `include` and `exclude` control source inventory. Maven/Gradle test source
 sets (`src/test`, `src/componentTest`, and names ending in `Test`) are always
-excluded. Maven modules whose artifact identifier or directory name contains
-`test` or `archetype` are also excluded from the production index. The
+excluded. Maven modules whose artifact identifier or directory name has a
+`test` or `tests` name token (`orders-test-support`) or contains `archetype`
+are also excluded from the production index; `attestation-service` stays
+indexed. The
 `min_severity` setting remains accepted for database compatibility
 but does not alter AST endpoint extraction.
 

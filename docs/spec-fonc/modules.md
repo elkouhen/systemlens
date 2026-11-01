@@ -5,7 +5,9 @@ Parent: [Functional specification](../SPEC-FONC.md).
 Microservice projection filters unresolved property placeholders and explicitly
 identified test artifacts. It does not filter a service merely because its name
 contains the substring `test`; names such as `attestation-service` and
-`contest-service` remain valid service identities.
+`contest-service` remain valid service identities. A build module owns a
+Spring Boot entry point only through its own sources: an aggregator or parent
+never inherits the `main` method of a nested module.
 
 The shared presentation and interaction rules are defined in
 [UX/UI rules](../UX-UI.md). This page owns module membership, resource

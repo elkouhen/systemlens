@@ -287,6 +287,10 @@ def annotation_name(ann: Node, source: bytes) -> str:
     return raw.rsplit(".", 1)[-1]
 
 
+# Punctuation and comments inside an argument list are not arguments.
+_ARGUMENT_PUNCTUATION = frozenset({"(", ")", ",", "line_comment", "block_comment"})
+
+
 def annotation_argument_list(ann: Node) -> Node | None:
     """The `annotation_argument_list` child, or ``None`` for a marker annotation."""
     return child_by_type(ann, "annotation_argument_list")
@@ -297,7 +301,7 @@ def annotation_argument_nodes(ann: Node) -> list[Node]:
     args = annotation_argument_list(ann)
     if args is None:
         return []
-    return [c for c in args.children if c.type not in {"(", ")", ","}]
+    return [c for c in args.children if c.type not in _ARGUMENT_PUNCTUATION]
 
 
 def annotation_argument(ann: Node, source: bytes, key: str | None = None) -> Node | None:
@@ -315,7 +319,7 @@ def annotation_argument(ann: Node, source: bytes, key: str | None = None) -> Nod
             key_node = child.child_by_field_name("key")
             if key is not None and key_node is not None and node_text(source, key_node) == key:
                 return child.child_by_field_name("value")
-        elif child.type not in {"(", ")", ","}:
+        elif child.type not in _ARGUMENT_PUNCTUATION:
             if positional is None:
                 positional = child
     return None if key is not None else positional
@@ -327,7 +331,13 @@ def string_value(node: Node | None, source: bytes) -> str | None:
         return None
     fragment = child_by_type(node, "string_fragment")
     if fragment is None:
-        return ""
+        # A text block holds one or more multiline fragments; a route in a
+        # text block is its trimmed content.
+        fragments = [
+            node_text(source, child) for child in node.children
+            if child.type == "multiline_string_fragment"
+        ]
+        return _ESCAPE_RE.sub(r"\1", "".join(fragments)).strip() if fragments else ""
     return _ESCAPE_RE.sub(r"\1", node_text(source, fragment))
 
 
@@ -353,7 +363,7 @@ def argument_nodes(invocation: Node) -> list[Node]:
     args = child_by_type(invocation, "argument_list")
     if args is None:
         return []
-    return [c for c in args.children if c.type not in {"(", ")", ","}]
+    return [c for c in args.children if c.type not in _ARGUMENT_PUNCTUATION]
 
 
 def invocation_parts(invocation: Node, source: bytes) -> tuple[Node | None, str, list[Node]]:

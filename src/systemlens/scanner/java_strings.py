@@ -7,6 +7,50 @@ from tree_sitter import Node
 from systemlens.discovery.java import parser as java
 
 
+_DECLARATOR_TYPES = {
+    "formal_parameter", "spread_parameter", "catch_formal_parameter",
+    "variable_declarator", "enhanced_for_statement", "resource",
+}
+
+
+def locally_declared_names(expression: Node, source: bytes) -> frozenset[str]:
+    """Names that the enclosing method, constructor or lambdas declare.
+
+    Parameters, locals, loop variables, resources and catch parameters of the
+    enclosing executable member shadow any field or constant of the same name.
+    A name-only lookup outside that member must not resolve them. The set is
+    deliberately broad (declarations after the expression count too): it is
+    used to abstain, never to resolve.
+    """
+    names: set[str] = set()
+    scope = java.enclosing(expression, "method_declaration", "constructor_declaration")
+    containers: list[Node] = [scope] if scope is not None else []
+    current = expression.parent
+    while current is not None and current is not scope:
+        if current.type == "lambda_expression":
+            containers.append(current)
+        current = current.parent
+    for container in containers:
+        for node in java.walk(container):
+            if node.type in _DECLARATOR_TYPES:
+                name = node.child_by_field_name("name")
+                if name is not None:
+                    names.add(java.node_text(source, name))
+            elif node.type == "lambda_expression":
+                parameters = node.child_by_field_name("parameters")
+                if parameters is None:
+                    continue
+                if parameters.type == "identifier":
+                    names.add(java.node_text(source, parameters))
+                else:
+                    names.update(
+                        java.node_text(source, parameter)
+                        for parameter in parameters.named_children
+                        if parameter.type == "identifier"
+                    )
+    return frozenset(names)
+
+
 def local_string(source: bytes, expression: Node, *, depth: int = 0,
                  parameters: dict[str, str] | None = None) -> str | None:
     """Resolve literals, lexical locals and private/static single-return helpers.

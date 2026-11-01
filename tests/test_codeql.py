@@ -26,7 +26,7 @@ def test_methods_query_can_be_scoped_to_a_module_source_prefix() -> None:
     query = codeql._methods_query("orders-service")
 
     assert "method.fromSource()" in query
-    assert 'path.regexpMatch("^orders\\\\-service/")' in query
+    assert 'path.regexpMatch("^orders\\\\-service/.*")' in query
 
 
 def test_reachability_query_walks_from_outputs_to_input_methods() -> None:
@@ -399,7 +399,7 @@ def test_extract_codeql_calls_scopes_global_database_by_caller_prefix(
 
     codeql.extract_codeql_calls(database, executable="custom-codeql", caller_prefix="payments")
 
-    assert 'path = enclosing.getFile().getRelativePath() and path.regexpMatch("^payments/")' in queries[0]
+    assert 'path = enclosing.getFile().getRelativePath() and path.regexpMatch("^payments/.*")' in queries[0]
 
 
 def test_source_only_root_keeps_source_packages_named_target_or_out(tmp_path: Path) -> None:

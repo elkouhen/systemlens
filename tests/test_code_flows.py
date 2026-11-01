@@ -844,6 +844,77 @@ def test_reconcile_code_flows_marks_missing_topology_as_partial() -> None:
     assert reconcile_code_flows([flow], [entry, output], [])[0].reconciliation == "partial"
 
 
+def test_reconcile_code_flows_checks_effects_located_in_the_flow_module() -> None:
+    """An output site lives in the flow's own module; its edge is still required."""
+    entry = _endpoint("entry", "serve", "rest", "POST /orders", "orders/Orders.java", 1)
+    output = _endpoint("output", "call", "rest", "POST /payments", "orders/Orders.java", 2)
+    served = replace(
+        _endpoint("served", "serve", "rest", "POST /payments", "payments/Payments.java", 1),
+        module="payments",
+    )
+    flow = CodeFlow(
+        id="flow", module="orders", method="Orders.place", path="orders/Orders.java",
+        start_line=1, end_line=2, status="potential", confidence="medium", reason="test",
+        steps=(
+            CodeFlowStep(1, "http_entry", entry.topic, entry.path, 1, 1, entry.id),
+            CodeFlowStep(2, "http_call", output.topic, output.path, 2, 2, output.id),
+        ),
+    )
+    edge = GraphEdge("rest", "orders", "payments", output, served)
+
+    assert reconcile_code_flows([flow], [entry, output, served], [edge])[0].reconciliation == "complete"
+    assert reconcile_code_flows([flow], [entry, output, served], [])[0].reconciliation == "partial"
+
+
+def test_reconcile_code_flows_keeps_kafka_fan_out_complete() -> None:
+    entry = _endpoint("entry", "serve", "rest", "POST /orders", "orders/Orders.java", 1)
+    output = _endpoint("output", "produce", "kafka", "orders.created", "orders/Orders.java", 2)
+    first = replace(
+        _endpoint("first", "consume", "kafka", "orders.created", "inventory/In.java", 1),
+        module="inventory",
+    )
+    second = replace(
+        _endpoint("second", "consume", "kafka", "orders.created", "billing/In.java", 1),
+        module="billing",
+    )
+    flow = CodeFlow(
+        id="flow", module="orders", method="Orders.place", path="orders/Orders.java",
+        start_line=1, end_line=2, status="potential", confidence="medium", reason="test",
+        steps=(
+            CodeFlowStep(1, "http_entry", entry.topic, entry.path, 1, 1, entry.id),
+            CodeFlowStep(2, "message_publish", output.topic, output.path, 2, 2, output.id),
+        ),
+    )
+    fan_out = [
+        GraphEdge("kafka", "orders", "inventory", output, first),
+        GraphEdge("kafka", "orders", "billing", output, second),
+    ]
+    endpoints = [entry, output, first, second]
+
+    assert reconcile_code_flows([flow], endpoints, fan_out)[0].reconciliation == "complete"
+    # A duplicated edge to one consumer remains ambiguous evidence.
+    assert reconcile_code_flows(
+        [flow], endpoints, [fan_out[0], fan_out[0]]
+    )[0].reconciliation == "partial"
+
+
+def test_reconcile_code_flows_accepts_a_same_service_continuation() -> None:
+    entry = _endpoint("entry", "serve", "rest", "POST /orders", "orders/Orders.java", 1)
+    output = _endpoint("output", "produce", "kafka", "orders.created", "orders/Orders.java", 2)
+    local = _endpoint("local", "consume", "kafka", "orders.created", "orders/Listener.java", 1)
+    flow = CodeFlow(
+        id="flow", module="orders", method="Orders.place", path="orders/Orders.java",
+        start_line=1, end_line=2, status="potential", confidence="medium", reason="test",
+        steps=(
+            CodeFlowStep(1, "http_entry", entry.topic, entry.path, 1, 1, entry.id),
+            CodeFlowStep(2, "message_publish", output.topic, output.path, 2, 2, output.id),
+            CodeFlowStep(3, "message_entry", local.topic, local.path, 1, 1, local.id),
+        ),
+    )
+
+    assert reconcile_code_flows([flow], [entry, output, local], [])[0].reconciliation == "complete"
+
+
 def test_reconcile_code_flows_requires_the_matching_topology_endpoints() -> None:
     entry = _endpoint("entry", "serve", "rest", "POST /orders", "orders/Orders.java", 1)
     output = replace(
@@ -945,7 +1016,9 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
             "effects": 1,
             "status": "potential",
             "confidence": "medium",
-            "reconciliation": "complete",
+            # The call has no resolved target service: the topology edge
+            # is missing, so the flow stays partial.
+            "reconciliation": "partial",
             "alternative_count": 1,
         }
     ]
@@ -1183,14 +1256,25 @@ def test_flows_calculate_drops_persisted_flows_with_removed_endpoints(tmp_path: 
         steps=(CodeFlowStep(1, "message_entry", "topic-group", "Consumer.java", 1, 1, "removed-endpoint"),),
     )
 
+    scheduled_data_flow = replace(
+        current_flow,
+        id="scheduled-data-flow",
+        method="Job.run",
+        path="Job.java",
+        steps=(
+            CodeFlowStep(1, "cron_entry", "@Scheduled", "Job.java", 1, 1),
+            CodeFlowStep(2, "data_write", "orders", "Job.java", 2, 2, operation="save"),
+        ),
+    )
+
     with Store(tmp_path) as store:
         store.replace_endpoints_for_files([current_endpoint.path], [current_endpoint])
-        store.replace_code_flows([current_flow, stale_flow])
+        store.replace_code_flows([current_flow, stale_flow, scheduled_data_flow])
 
-        assert calculate_persisted_flows(store) == 1
+        assert calculate_persisted_flows(store) == 2
         persisted = store.all_code_flows()
 
-    assert [flow.id for flow in persisted] == ["current-flow"]
+    assert sorted(flow.id for flow in persisted) == ["current-flow", "scheduled-data-flow"]
     assert all(step.name != "topic-group" for flow in persisted for step in flow.steps)
 
 

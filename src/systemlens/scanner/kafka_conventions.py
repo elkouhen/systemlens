@@ -17,9 +17,9 @@ from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.scanner._core import _build_endpoint
 from systemlens.scanner.kafka_ast import (
+    _producer_send_payload_type,
     _kafka_endpoint,
     _kafka_topic_from_value,
-    _listener_payload_type,
     _message_payload_type,
     _object_creation_type,
     _declared_identifier_payload_type,
@@ -71,6 +71,12 @@ def _strategy1_topic_from_value(
             resolved, dynamic = _validate_strategy1_topic(logical_key, catalog, logical_key)
             return resolved, dynamic, resolved if not dynamic and catalog is not None else logical_key
     topic, dynamic = _kafka_topic_from_value(value_node, source, repo_root, rel_path)
+    if dynamic and "${" in topic:
+        # A declared value may keep the ``${kafka.prefix-topic}.`` environment
+        # prefix; without any other placeholder it is a static topic.
+        without_prefix = remove_strategy1_kafka_prefix(topic)
+        if "${" not in without_prefix:
+            topic, dynamic = without_prefix, False
     if dynamic and value_node is not None and value_node.type == "string_literal":
         literal = java_parser.string_value(value_node, source)
         reference = spring_topic_reference(literal or "")
@@ -430,15 +436,22 @@ def infer_kafka_topic_strategy1_endpoints(
                 for method in strategy_send_methods
             ):
                 continue
-            line_no = source.count("\n", 0, match.start()) + 1
-            method = next(
+            # The regex works on text; tree-sitter positions are bytes.
+            send_invocation = next(
                 (
                     node
                     for node in java_parser.walk(root)
-                    if node.type == "method_declaration"
-                    and node.start_byte <= match.start() < node.end_byte
+                    if node.type == "method_invocation"
+                    and node.start_byte <= match_offset < node.end_byte
+                    and java_parser.invocation_parts(node, source_bytes)[1] in {"send", "sendDefault"}
                 ),
                 None,
+            )
+            # Anchor the fact on the send statement so a multi-line call
+            # has one site for the generic and the Strategy1 extractors.
+            line_no = (
+                send_invocation.start_point.row + 1 if send_invocation is not None
+                else source.count("\n", 0, match.start()) + 1
             )
             logical_key = match.group(1)
             topic, topic_dynamic = _validate_strategy1_topic(logical_key, kafka_catalog, logical_key)
@@ -455,7 +468,12 @@ def infer_kafka_topic_strategy1_endpoints(
             )
             endpoint = replace(
                 endpoint,
-                message_type=_listener_payload_type(source_bytes, method),
+                # The payload is the value argument of the enclosing send; a
+                # method parameter is not evidence of the message type.
+                message_type=(
+                    _producer_send_payload_type(source_bytes, send_invocation)
+                    if send_invocation is not None else None
+                ),
                 topic_dynamic=topic_dynamic,
                 topic_display=topic if topic_dynamic else logical_key,
             )
@@ -529,8 +547,9 @@ def apply_kafka_topic_strategy1(
         if catalog is None or endpoint.system != "kafka" or endpoint.role != "produce":
             validated_endpoints.append(endpoint)
             continue
-        logical_key = endpoint.topic.rsplit(".", 1)[-1]
-        topic, dynamic = _validate_strategy1_topic(endpoint.topic, catalog, logical_key)
+        # A literal topic is validated by its full key or declared value
+        # only; its last segment is not a logical key.
+        topic, dynamic = _validate_strategy1_topic(endpoint.topic, catalog)
         validated_endpoints.append(
             replace(
                 endpoint,

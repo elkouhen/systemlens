@@ -141,9 +141,10 @@ together.
 CodeQL's temporary query pack exports only source-located resolved calls.
 When a call has a source-backed interface declaration and CodeQL also exposes
 a concrete virtual target, the query keeps the declared interface call as an
-additional possible witness. This preserves the contract edge for module-aware
-dispatch enrichment; duplicate graph rows are deduplicated by their target and
-confidence.
+additional possible witness; an interface method that is itself the exact
+target is reported once, as exact. This preserves the contract edge for
+module-aware dispatch enrichment; duplicate graph rows are deduplicated by
+their target and confidence.
 
 `--codeql-database` reuses one global database supplied by the caller. Once the
 source-backed call graph is constructed, its
@@ -222,7 +223,9 @@ overrides remain possible. A single override does not prove the runtime type.
 When a flow starts in a concrete subtype and then enters an inherited body,
 dispatch is restricted to that subtype and its ancestors so sibling overrides
 cannot cross into the flow. Owners are compared by qualified name, so the rule
-also holds when the inherited body is declared in a helper module.
+also holds when the inherited body is declared in a helper module. When the
+entry method is declared by the inherited body's own class, the runtime
+receiver is unknown and every override stays possible.
 A rebuild from persisted edges has no source symbols. It approximates the rule
 per call site: when a site outside the entry's class fans out to several
 overrides of one method name and one is declared by the entry's class, only
@@ -295,9 +298,12 @@ connect endpoint facts by name alone.
 
 CodeQL also runs an output-anchored transitive reachability query whose source and target
 predicates are restricted to the already indexed input/output methods by
-relative path and start line. Exact input-to-output reachability is persisted
-with medium confidence; CodeQL-reported possible dispatch is persisted with
-low confidence. With `codeql_edge_confidence = "exact"`, only `medium`
+relative path and indexed line range: the indexed method starts at its first
+annotation while CodeQL locates the declaration line. Module-scoped method
+and call queries match the whole relative path against the module prefix,
+as CodeQL's `regexpMatch` requires. Exact input-to-output reachability is
+persisted with medium confidence; CodeQL-reported possible dispatch is
+persisted with low confidence. With `codeql_edge_confidence = "exact"`, only `medium`
 relations are kept, because they are the routes made of exact edges.
 
 Module ownership uses repository-path ancestry rather than comparing every

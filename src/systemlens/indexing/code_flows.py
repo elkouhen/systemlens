@@ -1339,6 +1339,9 @@ def materialize_call_graph_flows(
             # Ancestor keys carry the module of the declaring type, which can
             # be a helper module: compare owners by qualified name so the
             # rule also holds when the template body lives in another module.
+            # The rule needs a known runtime subtype: when the entry itself is
+            # declared by the inherited body's class, any subtype can be the
+            # receiver and every override stays possible.
             target_ancestors = {
                 owner for owner, _module in dispatch_symbols.ancestors(target_owner, target.module)
             }
@@ -1347,6 +1350,7 @@ def materialize_call_graph_flows(
             }
             if (
                 current_owner != target_owner
+                and current_owner != entry_owner
                 and current_owner in target_ancestors
                 and current_owner in entry_ancestors
             ):
@@ -1719,24 +1723,38 @@ def reconcile_code_flows(
                     if previous_id is not None:
                         previous_endpoint = endpoint_by_id[previous_id]
                 if endpoint.role in {"call", "produce"}:
-                    if endpoint.module == flow.module:
-                        continue
-                    matching_outgoing = outgoing.get(endpoint.id, [])
                     next_endpoint = None
                     if index + 1 < len(endpoint_steps):
                         next_id = endpoint_steps[index + 1].endpoint_id
                         if next_id is not None:
                             next_endpoint = endpoint_by_id[next_id]
+                    if next_endpoint is not None and next_endpoint.module == flow.module:
+                        # The effect continues in the same service: no
+                        # inter-service edge is expected for it.
+                        continue
+                    matching_outgoing = outgoing.get(endpoint.id, [])
                     if next_endpoint is not None:
                         matching_outgoing = [
                             edge for edge in matching_outgoing
                             if edge.to_endpoint is not None
                             and edge.to_endpoint.id == next_endpoint.id
                         ]
-                    if len(matching_outgoing) != 1:
+                    # A publication reaching several consumers is a fan-out,
+                    # not an ambiguity; an HTTP call must match one route.
+                    distinct_targets = {
+                        (edge.to_service, edge.to_endpoint.id if edge.to_endpoint else None)
+                        for edge in matching_outgoing
+                    }
+                    ambiguous = len(distinct_targets) != len(matching_outgoing) or (
+                        endpoint.system != "kafka" and len(distinct_targets) > 1
+                    )
+                    if not matching_outgoing or ambiguous:
                         status = "partial"
                         break
                 if endpoint.role in {"serve", "consume"} and step is not endpoint_steps[0]:
+                    if endpoint.module == flow.module:
+                        # Reached from the same service: see above.
+                        continue
                     matching_incoming = incoming.get(endpoint.id, [])
                     if previous_endpoint is not None:
                         matching_incoming = [

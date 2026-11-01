@@ -52,6 +52,8 @@ from systemlens.scanner.rest_client_config import (
 from systemlens.scanner.rest_mvc import (
     _class_base_path,
     _file_uses_restclient,
+    _local_static_string_initializer,
+    _module_has_spring_data_rest,
     _file_uses_resttemplate,
     _openapi_generator_contract_for_source,
     _strategy1_openapi_operations,
@@ -114,6 +116,8 @@ def clear_analysis_caches() -> None:
     _hub_rest_api_domains.cache_clear()
     _file_uses_resttemplate.cache_clear()
     _file_uses_restclient.cache_clear()
+    _local_static_string_initializer.cache_clear()
+    _module_has_spring_data_rest.cache_clear()
     java_parser.clear_caches()
     maven_module.clear_caches()
     gradle_module.clear_caches()

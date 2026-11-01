@@ -87,17 +87,21 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
         if methods
         else []
     )
+    # A scheduled method whose only indexed effect is a data access has no
+    # endpoint step: its transient trigger anchors it, so it stays eligible.
     retained_persisted_flows = [
         flow
         for flow in persisted_flows
         if flow.module != module
         and all(
-            step.endpoint_id is not None
-            and step.endpoint_id in current_endpoint_ids
+            step.endpoint_id in current_endpoint_ids
             for step in flow.steps
             if step.endpoint_id is not None
         )
-        and any(step.endpoint_id is not None for step in flow.steps)
+        and (
+            any(step.endpoint_id is not None for step in flow.steps)
+            or (bool(flow.steps) and flow.steps[0].kind == "cron_entry")
+        )
     ]
     flows = _ensure_unique_code_flow_ids(_deduplicate_code_flows(
         [*retained_persisted_flows, *reconstructed_flows], endpoints,

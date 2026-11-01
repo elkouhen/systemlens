@@ -1139,6 +1139,32 @@ def test_inherited_final_generic_method_has_source_backed_fallback(tmp_path: Pat
                flow.steps[-1].path == "app/Listener.java" for flow in flows)
 
 
+def test_entry_declared_by_the_base_class_keeps_every_override(tmp_path: Path):
+    """The receiver of an inherited entry is unknown: no override is excluded."""
+    sources = {
+        "app/Base.java": """package app; public abstract class Base {
+  public void entry() { send(); }
+  public abstract void send();
+}""",
+        "app/First.java": """package app; public class First extends Base {
+  public void send() { output(); }
+  void output() {}
+}""",
+        "app/Second.java": """package app; public class Second extends Base {
+  public void send() { otherOutput(); }
+  void otherOutput() {}
+}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    flows = materialize_call_graph_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
+    )
+    assert {(flow.method, flow.steps[-1].path) for flow in flows} == {
+        ("app.Base.entry", "app/First.java"),
+        ("app.Base.entry", "app/Second.java"),
+    }
+
+
 def test_inherited_template_dispatch_stays_on_entry_subtype_across_modules(tmp_path: Path):
     sources = {
         "core/Base.java": """package core; public abstract class Base {
