@@ -55,10 +55,23 @@ it hides navigation content while retaining its header controls and leaves the
 graph workspace unchanged. On constrained viewports, the panel uses one bounded
 scroll region so the graph remains visible while users inspect details.
 
+A status line sits under the branded header in every view. It starts with
+the index status, `Index : complet` or `Index : N faits à vérifier`, which
+opens the diagnostics catalogue. It continues with the visible relation
+count and `indexé le <date>` when the export carries the index time; the
+date is omitted, never guessed, for an export of an older index.
+
 In the Graphe view, the search block comes first. Camera and node-rendering
-controls follow, then the index status and the filters. The index status reads
-`Index : complet` or `Index : N faits à vérifier`. The layout status is a full
-sentence such as `Disposition active : vue par graphe.`
+controls follow, then the filters. The layout status is a full sentence such
+as `Disposition active : vue par graphe.`
+
+The architecture graph shows a strip of type chips at its top right: one
+chip per node-type filter with nodes in the export (microservices, external
+services, topics, collections, other resources). A chip counts the nodes of
+its type that are not hidden individually, and its pressed state mirrors
+the matching `Types de nœuds` filter; clicking it toggles that filter. The
+strip is hidden with the graph, in the selected call tree, and below 721
+pixels.
 
 The resource catalogue MUST present one searchable list across indexed
 microservices and architecture resources. Its search control MUST remain above

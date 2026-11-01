@@ -1924,6 +1924,7 @@ class _MicroserviceGraphData:
     runtime_observations: list[RuntimeObservation] | None = None
     runtime_errors: list[RuntimeErrorGroup] | None = None
     runtime_collections: list[RuntimeCollection] | None = None
+    indexed_at: str | None = None
 
 
 def _load_flow_descriptions(repo_root: Path) -> dict[str, str]:
@@ -1968,6 +1969,7 @@ def _load_microservice_graph(
         runtime_observations = store.all_runtime_observations()
         runtime_errors = store.all_runtime_error_groups()
         runtime_collections = store.latest_runtime_collections()
+        indexed_at = store.latest_indexed_at()
     return _MicroserviceGraphData(
         projection.services_by_name,
         projection.edges,
@@ -1992,6 +1994,7 @@ def _load_microservice_graph(
         runtime_observations,
         runtime_errors,
         runtime_collections,
+        indexed_at,
     )
 
 
@@ -2202,6 +2205,7 @@ def export_microservices_cmd(
                     "include_call_graph_annotations": not no_call_graph_annotations,
                     "review_aids": review_aids,
                     "runtime_overlay": _export_runtime_overlay(Path.cwd(), graph_data),
+                    "indexed_at": getattr(graph_data, "indexed_at", None),
                 },
             )),
             encoding="utf-8",

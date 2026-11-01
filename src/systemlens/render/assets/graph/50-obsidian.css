@@ -199,6 +199,9 @@
 /* The catalogue is a workspace view, not a graph overlay. */
 .legacy-resource-tab { display: none !important; }
 body:not(.catalogue-active) #graph-context .dependency-actions { display: none !important; }
+/* The index status moved to the header status line (U7); without its
+   dependency actions the section would render as an empty frame. */
+body:not(.catalogue-active) #graph-context { display: none !important; }
 body:not(.catalogue-active) #architecture-tabs-group .toolbar-tabs { display: flex; flex-wrap: wrap; justify-content: flex-start; }
 body:not(.catalogue-active) #architecture-tabs-group .toolbar-tab { flex: 0 0 auto; min-width: max-content; }
 

@@ -24,6 +24,10 @@ __ASYNCAPI_WEB_COMPONENT__
       <button id="toolbar-collapse" class="graph-action-label toolbar-collapse" type="button" aria-expanded="true" aria-controls="architecture-toolbar" aria-label="Réduire le panneau" title="Réduire le panneau">‹</button>
       <button id="theme-toggle" class="graph-action-label theme-toggle" type="button" aria-label="Passer au thème clair" title="Passer au thème clair">☼</button>
     </div>
+    <div id="index-status-line" class="index-status-line">
+      <button id="inventory-status" class="inventory-status" type="button" hidden></button>
+      <span id="index-status-meta" class="index-status-meta"></span>
+    </div>
     <div class="toolbar-mode-tabs" role="tablist" aria-label="Modes de navigation">
       <button id="architecture-mode-tab" class="toolbar-mode-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="architecture-tabs-group">Architecture</button>
       <button id="flows-mode-tab" class="toolbar-mode-tab legacy-resource-tab" type="button" role="tab" aria-selected="false" aria-controls="flows-tabs-group">Flux</button>
@@ -92,7 +96,6 @@ __ASYNCAPI_WEB_COMPONENT__
               <span id="dependency-analysis-help" class="dependency-analysis-help">Sélectionnez un nœud pour activer cette analyse.</span>
             </fieldset>
         </div>
-        <button id="inventory-status" class="inventory-status" type="button" hidden></button>
       </section>
       <details id="display-controls" class="display-controls">
         <summary><span>Visibilité</span><span id="graph-filter-summary" class="graph-filter-summary">Tous affichés</span></summary>
@@ -325,6 +328,7 @@ __ASYNCAPI_WEB_COMPONENT__
   </div>
   <div id="graph-flow-tooltips" aria-hidden="true"></div>
   <p id="graph-flow-status" hidden></p>
+  <div id="graph-type-counts" class="graph-type-counts" aria-label="Ressources visibles par type"></div>
   <p id="graph-interaction-hint" class="graph-interaction-hint" aria-hidden="true"><span><kbd>clic</kbd> sélectionner</span><span><kbd>⇧ clic</kbd> inspecter</span><span><kbd>molette</kbd> zoomer</span><span><kbd>glisser</kbd> déplacer</span></p>
   <div id="inspector-modal" class="inspector-modal" role="dialog" aria-modal="true" aria-labelledby="inspector-title" hidden>
     <div class="inspector-dialog">

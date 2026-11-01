@@ -188,6 +188,12 @@ The call tree uses parameter types stored with integration methods and projected
 onto input ports. Flow-only occurrences can use the matching persisted method
 declaration. Missing signatures remain absent; export does not parse Java source.
 
+The view model carries an optional `indexed_at` string: the latest
+`files.indexed_at` of the index, in SQLite UTC format (`YYYY-MM-DD HH:MM:SS`).
+`Store.latest_indexed_at` reads it once while the export loads the snapshot.
+An export rendered without it, such as one built from an older index or a
+manifest, omits the key, and the interface omits the date.
+
 For a Strategy1 Kafka input, the graph view model adds `call_tree_signature` to
 the port when one same-class `consume` declaration has indexed parameter types.
 If the class has overloaded `consume` declarations, one persisted call edge may

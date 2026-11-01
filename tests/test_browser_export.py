@@ -1192,6 +1192,44 @@ def test_flow_catalogue_without_selection_shows_shortcuts_on_the_canvas() -> Non
 
 
 @pytest.mark.slow
+def test_index_status_line_and_type_chips_follow_the_filters() -> None:
+    """U7: the status line names the index date; chips toggle type filters."""
+    source = _current_simple_dataset_document()
+    document = source.replace('"nodes":', '"indexed_at":"2026-11-01 10:17:30","nodes":', 1)
+    assert document != source
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        page = browser.new_page(viewport={"width": 1400, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 0"
+        )
+        _wait_for_settled_layout(page)
+        meta = page.locator("#index-status-meta").inner_text()
+        assert "indexé le 1 novembre 2026" in meta and "relation" in meta
+        assert page.locator("#inventory-status").inner_text().startswith("Index :")
+        chip = page.locator(".graph-type-chip[data-type-key='microservices']")
+        assert chip.inner_text() == "3 microservices"
+        page.locator("#microservice-visibility-controls > summary").click()
+        page.locator("#microservice-visibility-filter").fill("order-service")
+        page.locator("#microservice-visibility-list input[aria-label='Afficher order-service']").uncheck()
+        page.wait_for_function(
+            "() => document.querySelector(\".graph-type-chip[data-type-key='microservices']\")?.textContent === '2 microservices'"
+        )
+        chip.click()
+        assert not page.locator("#node-microservice").is_checked()
+        page.wait_for_function(
+            "() => document.querySelector(\".graph-type-chip[data-type-key='microservices']\")?.getAttribute('aria-pressed') === 'false'"
+        )
+        assert page.locator(".graph-node-card-label").filter(has_text="inventory-service").count() == 0
+        browser.close()
+
+
+@pytest.mark.slow
 def test_architecture_arc_opens_node_inspection_modal() -> None:
     document = _current_simple_dataset_document()
     with sync_playwright() as playwright:
@@ -2511,7 +2549,8 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _capture_render_snapshot(page, "constrained-after-inspector-close")
 
         page.get_by_role("tab", name="Architecture").click()
-        assert page.locator("#graph-context").is_visible()
+        assert page.locator("#graph-panel").is_visible()
+        assert page.locator("#inventory-status").is_visible()
         _capture_render_snapshot(page, "constrained-after-explorer-tab")
         search = page.locator("#search")
         search.fill("orders")

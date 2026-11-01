@@ -419,3 +419,14 @@
     .graph-flow-shortcut-meta { color: var(--ui-muted); font-size: var(--type-caption); white-space: nowrap; }
     .graph-flow-shortcut-meta b { color: #b45309; }
     .graph-flow-empty-foot { margin: 12px 0 0; color: var(--ui-muted); font-size: var(--type-caption); }
+    .index-status-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 8px; min-width: 0; }
+    .index-status-meta { min-width: 0; color: var(--ui-muted); font-size: var(--type-caption); overflow-wrap: anywhere; }
+    .toolbar.is-collapsed .index-status-line { display: none; }
+    .graph-type-counts { position: fixed; z-index: 7; top: calc(var(--workspace-top, 0px) + 16px); right: calc(var(--workspace-right, 0px) + 16px); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: min(560px, calc(100vw - var(--workspace-left, 0px) - 48px)); }
+    .graph-type-counts[hidden] { display: none; }
+    .graph-type-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--ui-border); border-radius: 999px; color: var(--ui-text); background: var(--ui-panel); box-shadow: 0 4px 12px rgba(15, 23, 42, .12); font: inherit; font-size: var(--type-caption); font-weight: 700; cursor: pointer; }
+    .graph-type-chip::before { content: ""; width: 8px; height: 8px; border: 2px solid var(--chip-color, currentColor); border-radius: 3px; }
+    .graph-type-chip[aria-pressed="false"] { color: var(--ui-muted); text-decoration: line-through; opacity: .7; }
+    .graph-type-chip:hover, .graph-type-chip:focus-visible { border-color: var(--ui-accent-border); }
+    #graph[hidden] ~ .graph-type-counts, #graph.is-call-tree-hidden ~ .graph-type-counts { display: none; }
+    @media (max-width: 720px) { .graph-type-counts { display: none; } }

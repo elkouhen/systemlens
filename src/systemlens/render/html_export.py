@@ -130,6 +130,7 @@ def render_graph_html(
     include_call_graph_annotations: bool = True,
     runtime_overlay: Mapping[str, object] | None = None,
     review_aids: bool = False,
+    indexed_at: str | None = None,
 ) -> str:
     """Render a graph view model as one self-contained HTML document.
 
@@ -604,6 +605,10 @@ def render_graph_html(
             view_model[key] = []
         view_model["codeql_call_graph"] = {"nodes": [], "edges": []}
         view_model["call_graphs_only"] = True
+    if indexed_at:
+        # UTC time of the latest file indexation (SQLite `files.indexed_at`);
+        # optional so exports of older indexes stay valid without it.
+        view_model["indexed_at"] = indexed_at
     if runtime_overlay and not call_graphs_only:
         # Aggregated APM observations (ADR-60) stay a separate overlay; they
         # never alter the static nodes, links, or ports above.

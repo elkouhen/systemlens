@@ -66,6 +66,61 @@
       if (hiddenResources) parts.push(`${hiddenResources} ressource${hiddenResources > 1 ? "s" : ""}`);
       graphFilterSummary.textContent = parts.length ? `${parts.join(" · ")} masquée${hiddenCategories + hiddenResources > 1 ? "s" : ""}` : "Tous affichés";
     }
+    // Index status line and per-type counts (docs/UX-UI.md, "Workspace shell").
+    const indexStatusMeta = document.getElementById("index-status-meta");
+    const graphTypeCounts = document.getElementById("graph-type-counts");
+    function formatIndexedAt(value) {
+      const parsed = new Date(`${String(value).replace(" ", "T")}Z`);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return parsed.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+    }
+    function updateIndexStatusMeta() {
+      if (!indexStatusMeta) return;
+      const relations = Number(graphCanvas.dataset.relationCount || graphData.links.length || 0);
+      const parts = [`${relations} relation${relations > 1 ? "s" : ""}`];
+      const date = graphData.indexed_at ? formatIndexedAt(graphData.indexed_at) : null;
+      if (date) parts.push(`indexé le ${date}`);
+      indexStatusMeta.textContent = parts.join(" · ");
+    }
+    const typeCountCategories = [
+      { key: "microservices", control: nodeMicroservice, color: "#ef4444", singular: "microservice", plural: "microservices",
+        matches: node => node.kind === "microservice" && !node.external, hidden: node => hiddenMicroservices.has(node.name) },
+      { key: "external", control: nodeExternalMicroservice, color: "#94a3b8", singular: "service externe", plural: "services externes",
+        matches: node => node.kind === "microservice" && node.external, hidden: node => hiddenMicroservices.has(node.name) },
+      { key: "messages", control: nodeKafkaTopic, color: "#f59e0b", singular: "topic", plural: "topics",
+        matches: node => ["kafka_topic", "message_channel"].includes(node.kind), hidden: node => hiddenTopics.has(node.name) },
+      { key: "data", control: nodeMongodbCollection, color: "#3b82f6", singular: "collection", plural: "collections",
+        matches: node => ["mongodb_collection", "data_schema"].includes(node.kind), hidden: () => false },
+      { key: "other", control: nodeOther, color: "#8b5cf6", singular: "autre ressource", plural: "autres ressources",
+        matches: node => !["microservice", "kafka_topic", "message_channel", "mongodb_collection", "data_schema"].includes(node.kind), hidden: () => false },
+    ];
+    function renderGraphTypeCounts() {
+      if (!graphTypeCounts) return;
+      const chips = typeCountCategories.map(category => {
+        const count = graphData.nodes.filter(node => category.matches(node) && !category.hidden(node)).length;
+        if (!count) return null;
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "graph-type-chip";
+        chip.dataset.typeKey = category.key;
+        chip.style.setProperty("--chip-color", category.color);
+        chip.setAttribute("aria-pressed", String(category.control.checked));
+        chip.textContent = `${count} ${count > 1 ? category.plural : category.singular}`;
+        chip.title = category.control.checked ? "Masquer ce type du graphe" : "Réafficher ce type dans le graphe";
+        chip.addEventListener("click", () => category.control.click());
+        return chip;
+      }).filter(Boolean);
+      graphTypeCounts.replaceChildren(...chips);
+      graphTypeCounts.hidden = chips.length === 0;
+    }
+    function refreshGraphSummaries() {
+      updateIndexStatusMeta();
+      renderGraphTypeCounts();
+    }
+    graphFilterControls.forEach(control => control.addEventListener("change", refreshGraphSummaries));
+    window.addEventListener("systemlens:filters-changed", refreshGraphSummaries);
+    window.addEventListener("systemlens:graph-rebuilt", refreshGraphSummaries);
+    refreshGraphSummaries();
     graphFilterControls.forEach(control => control.addEventListener("change", updateGraphFilterSummary));
     window.addEventListener("systemlens:filters-changed", updateGraphFilterSummary);
     updateGraphFilterSummary();

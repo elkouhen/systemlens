@@ -2259,6 +2259,7 @@
         window.removeEventListener("pointercancel", finishGraphPan, true);
       };
       graphCanvas.dataset.relationCount = String(visibleLinks.length);
+      window.dispatchEvent(new Event("systemlens:graph-rebuilt"));
       graphCanvas.dataset.visibleNodeCount = String(layoutNodes.length);
       graphCanvas.dataset.visibleNodeKinds = [...new Set(layoutNodes.map(node => node.kind))].sort().join(",");
       graphCanvas.dataset.invalidCoordinates = String(

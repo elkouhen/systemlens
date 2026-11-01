@@ -115,3 +115,15 @@ def test_storage_rejects_conflicting_contract_rows_before_replacing_snapshot(tmp
                 {"module": "orders", "path": "api.yaml", "spec": {"openapi": "3.1.0"}},
             ])
         assert store.all_openapi_contracts()[0]["spec"]["openapi"] == "3.0.0"
+
+
+def test_latest_indexed_at_is_absent_for_an_empty_index(tmp_path: Path) -> None:
+    with Store(tmp_path) as store:
+        assert store.latest_indexed_at() is None
+
+
+def test_latest_indexed_at_reports_the_most_recent_file(tmp_path: Path) -> None:
+    with Store(tmp_path) as store:
+        store.set_file_hash("src/A.java", "a")
+        value = store.latest_indexed_at()
+    assert value is not None and len(value) == len("2026-11-01 10:17:30")

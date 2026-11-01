@@ -2422,3 +2422,13 @@ def test_mongodb_resource_owner_uses_lowest_writing_service_layer() -> None:
     collection_nodes = [node for node in graph_data["nodes"] if node["kind"] == "mongodb_collection"]
     assert collection_nodes
     assert {node["owner_service"] for node in collection_nodes} == {"orders-repository"}
+
+
+def test_export_carries_the_index_time_only_when_known() -> None:
+    entry = _rest_endpoint("serve", "GET /orders", "Orders.java")
+    with_time = _html_graph_data(render_graph_html(
+        {"orders": [entry]}, [], indexed_at="2026-11-01 10:17:30",
+    ))
+    assert with_time["indexed_at"] == "2026-11-01 10:17:30"
+    older = _html_graph_data(render_graph_html({"orders": [entry]}, []))
+    assert "indexed_at" not in older

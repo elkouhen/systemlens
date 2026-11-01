@@ -1323,6 +1323,11 @@ class Store:
             return []
         return [_row_to_runtime_collection(row) for row in rows]
 
+    def latest_indexed_at(self) -> str | None:
+        """UTC time of the most recent file indexation, as stored by SQLite."""
+        row = self.conn.execute("SELECT MAX(indexed_at) AS value FROM files").fetchone()
+        return row["value"] if row and row["value"] else None
+
     def latest_runtime_collections(self) -> list[RuntimeCollection]:
         """Return the newest collection of each source."""
         latest: dict[str, RuntimeCollection] = {}

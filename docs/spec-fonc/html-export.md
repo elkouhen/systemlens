@@ -376,9 +376,11 @@ constrained viewports without changing graph data, selection state, or the
 meaning of the existing controls. No widget text is smaller than 10 pixels.
 
 The Graphe panel starts with the search field, followed by camera and
-rendering controls. The index status reads `Index : complet` or
-`Index : N faits à vérifier`, and the layout status reads
-`Disposition active : <disposition>.` A microservice tooltip labels its build
+rendering controls. A status line under the header reads `Index : complet`
+or `Index : N faits à vérifier`, then the relation count and the index
+date when the export carries it. The layout status reads
+`Disposition active : <disposition>.` Type chips at the top right of the
+graph count the nodes per type filter and toggle that filter. A microservice tooltip labels its build
 tool, for example `Build : maven`.
 
 The legend groups node types, relations, connectivity, and evidence level.
