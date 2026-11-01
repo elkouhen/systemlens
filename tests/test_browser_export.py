@@ -1696,6 +1696,54 @@ def test_flow_catalogue_without_selection_shows_shortcuts_on_the_canvas() -> Non
 
 
 @pytest.mark.slow
+def test_architecture_view_tabs_share_their_row_without_truncation() -> None:
+    """The visible view tabs fill their row equally and keep full labels."""
+    document = _code_flow_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1440, "height": 900})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator(".graph-node-card-label").first.wait_for()
+        page.locator("#graph-tab").wait_for(state="visible")
+        layout = page.evaluate(
+            """() => {
+                const list = document.querySelector(
+                    '#architecture-tabs-group .toolbar-tabs'
+                );
+                const style = getComputedStyle(list);
+                const tabs = [...list.querySelectorAll('.toolbar-tab')]
+                    .filter((tab) => tab.offsetWidth > 0);
+                return {
+                    content: list.getBoundingClientRect().width
+                        - parseFloat(style.paddingLeft)
+                        - parseFloat(style.paddingRight),
+                    gap: parseFloat(style.columnGap) || 0,
+                    tabs: tabs.map((tab) => ({
+                        label: tab.textContent.trim(),
+                        width: tab.getBoundingClientRect().width,
+                        scrollWidth: tab.scrollWidth,
+                        clientWidth: tab.clientWidth,
+                    })),
+                };
+            }"""
+        )
+        tabs = layout["tabs"]
+        assert [tab["label"] for tab in tabs] == ["Graphe", "Flux de code"]
+        used = sum(tab["width"] for tab in tabs) + layout["gap"] * (len(tabs) - 1)
+        assert abs(used - layout["content"]) <= 3, layout
+        for tab in tabs:
+            assert tab["scrollWidth"] <= tab["clientWidth"], tab
+        assert abs(tabs[0]["width"] - tabs[1]["width"]) <= 1, layout
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
 def test_index_status_line_and_type_chips_follow_the_filters() -> None:
     """U7: the status line names the index date; chips toggle type filters."""
     source = _current_simple_dataset_document()

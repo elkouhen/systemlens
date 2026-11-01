@@ -40,6 +40,8 @@ Ressources. Architecture exposes Graphe and Flux de code. Ressources opens one
 catalogue containing all indexed resource types, including Diagnostics; type
 categories and filters refine that list without introducing a second top-level
 navigation surface. Each workspace and local view MUST have one clear active state.
+The visible view tabs of a group MUST share their row equally and never
+truncate their label.
 
 The legend is collapsed by default. On desktop, the call-tree context widget
 floats over the top left of the tree while a flow is open; it always shows
