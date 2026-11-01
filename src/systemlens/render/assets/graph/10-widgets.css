@@ -400,3 +400,22 @@
     button.dto-field-type { border: 0; padding: 0; background: transparent; color: var(--ui-accent-text); text-align: left; text-decoration: underline; cursor: pointer; font: inherit; }
     .dto-field-name { color: var(--ui-text); font-weight: 700; overflow-wrap: anywhere; }
     .dto-tag { display: inline-flex; width: fit-content; padding: 4px 7px; border-radius: 999px; color: var(--ui-accent-text); background: var(--ui-accent-soft); font-size: var(--type-body); }
+    .graph-flow-empty-state { position: fixed; left: var(--workspace-left, 0px); right: var(--workspace-right, 0px); top: var(--workspace-top, 0px); bottom: var(--workspace-bottom, 0px); z-index: 6; display: grid; place-items: center; padding: 24px; box-sizing: border-box; pointer-events: none; }
+    .graph-flow-empty-state[hidden] { display: none; }
+    .graph-flow-empty-card { width: min(560px, 100%); max-height: 100%; overflow: auto; box-sizing: border-box; padding: 24px 28px; border: 1px solid var(--ui-border); border-radius: 14px; color: var(--ui-text); background: var(--ui-panel); box-shadow: 0 14px 40px rgba(15, 23, 42, .22); pointer-events: auto; }
+    .graph-flow-empty-kicker { margin: 0 0 8px; color: var(--ui-accent-text); font-size: var(--type-caption); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .graph-flow-empty-title { margin: 0 0 6px; color: var(--ui-title); font-size: var(--type-entity-title); line-height: 1.2; }
+    .graph-flow-empty-copy { margin: 0 0 14px; color: var(--ui-muted); font-size: var(--type-section); line-height: 1.5; }
+    .graph-flow-empty-shortcuts { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    .graph-flow-shortcut { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-control); cursor: pointer; text-align: left; font: inherit; color: inherit; }
+    .graph-flow-shortcut:hover, .graph-flow-shortcut:focus-visible { border-color: var(--ui-accent-border); }
+    .graph-flow-shortcut-kind { padding: 4px 6px; border-radius: 5px; color: #ffffff; background: #475569; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
+    .graph-flow-shortcut-kind.is-http { background: #0e7c8c; }
+    .graph-flow-shortcut-kind.is-kafka { background: #b45309; }
+    .graph-flow-shortcut-kind.is-cron { background: #6d28d9; }
+    .graph-flow-shortcut-main { min-width: 0; }
+    .graph-flow-shortcut-name { display: block; color: var(--ui-title); font-size: var(--type-control); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .graph-flow-shortcut-chain { display: block; color: var(--ui-muted); font-size: var(--type-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .graph-flow-shortcut-meta { color: var(--ui-muted); font-size: var(--type-caption); white-space: nowrap; }
+    .graph-flow-shortcut-meta b { color: #b45309; }
+    .graph-flow-empty-foot { margin: 12px 0 0; color: var(--ui-muted); font-size: var(--type-caption); }

@@ -1680,6 +1680,7 @@
         topologyReconciled: pathResults.every(result => result.reconciled),
       });
       syncCodeFlowSelection();
+      syncFlowEmptyState();
       if (flowsTab?.getAttribute("aria-selected") === "true") {
         requestAnimationFrame(() => document.getElementById("architecture-toolbar")?.scrollTo({ top: 0, behavior: "instant" }));
       }
@@ -1956,6 +1957,83 @@
       updateCodeFlowFilterSummary();
       codeFlowsTitle.textContent = `Flux de code (${visible.length})`;
     }
+
+    const flowEmptyState = document.getElementById("graph-flow-empty-state");
+    const flowEmptyShortcuts = document.getElementById("graph-flow-empty-shortcuts");
+    const flowEmptyFoot = document.getElementById("graph-flow-empty-foot");
+    const FLOW_EMPTY_SHORTCUT_LIMIT = 8;
+
+    function flowShortcutKind(trigger) {
+      if (trigger?.kind === "http_entry") {
+        const verb = String(trigger.name || "").split(" ")[0];
+        return /^[A-Z]+$/.test(verb) ? { label: verb, className: "is-http", name: String(trigger.name).slice(verb.length).trim() } : { label: "HTTP", className: "is-http", name: trigger.name };
+      }
+      if (trigger?.kind === "cron_entry") return { label: "Cron", className: "is-cron", name: trigger.name };
+      if (trigger?.kind === "message_entry") return { label: "Kafka", className: "is-kafka", name: trigger.name };
+      return { label: codeFlowStepLabel(trigger?.kind), className: "", name: trigger?.name || "Déclencheur inconnu" };
+    }
+
+    // The empty state of the Flux de code view: the catalogue's flows as
+    // shortcuts on the canvas while no flow is selected (docs/UX-UI.md,
+    // "Call-flow catalogue and focused state").
+    function renderFlowEmptyState() {
+      if (!flowEmptyState || !flowEmptyShortcuts) return;
+      const ordered = [...codeFlows].sort(sortCodeFlows).filter(flow => pathForCodeFlow(flow) || nodePathForCodeFlow(flow));
+      const shown = ordered.slice(0, FLOW_EMPTY_SHORTCUT_LIMIT);
+      flowEmptyShortcuts.replaceChildren(...shown.map(flow => {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "graph-flow-shortcut";
+        button.dataset.flowId = flow.id;
+        const kind = flowShortcutKind(flow.steps?.[0]);
+        const badge = document.createElement("span");
+        badge.className = `graph-flow-shortcut-kind ${kind.className}`.trim();
+        badge.textContent = kind.label;
+        const main = document.createElement("span");
+        main.className = "graph-flow-shortcut-main";
+        const name = document.createElement("span");
+        name.className = "graph-flow-shortcut-name";
+        name.textContent = kind.name;
+        const chain = document.createElement("span");
+        chain.className = "graph-flow-shortcut-chain";
+        const services = servicesForCodeFlow(flow);
+        chain.textContent = services.length ? services.join(" → ") : flow.module;
+        main.append(name, chain);
+        const meta = document.createElement("span");
+        meta.className = "graph-flow-shortcut-meta";
+        const counts = flowConsistencyCounts(flow);
+        const toVerify = counts.risks + counts.uncertain;
+        const stepCount = (flow.steps || []).length;
+        meta.append(`${services.length || 1} service${services.length > 1 ? "s" : ""} · ${stepCount} étape${stepCount > 1 ? "s" : ""}`);
+        if (toVerify) {
+          const warning = document.createElement("b");
+          warning.textContent = ` · ${toVerify} à vérifier`;
+          meta.append(warning);
+        }
+        button.append(badge, main, meta);
+        button.addEventListener("click", () => showCodeFlow(flow));
+        item.append(button);
+        return item;
+      }));
+      const remaining = ordered.length - shown.length;
+      if (flowEmptyFoot) {
+        flowEmptyFoot.hidden = remaining <= 0;
+        flowEmptyFoot.textContent = remaining > 0
+          ? `${remaining} autre${remaining > 1 ? "s" : ""} flux dans la liste de gauche.`
+          : "";
+      }
+    }
+
+    function syncFlowEmptyState() {
+      if (!flowEmptyState) return;
+      const flowsOpen = flowsTab?.getAttribute("aria-selected") === "true";
+      const visible = flowsOpen && !codeFlowSelection.flowId;
+      if (visible) renderFlowEmptyState();
+      flowEmptyState.hidden = !visible;
+    }
+    flowsPanel.addEventListener("systemlens:flows-open", syncFlowEmptyState);
+    document.addEventListener("systemlens:view-changed", syncFlowEmptyState);
 
     flowsPanel.addEventListener("systemlens:code-flow-open-in-graph", event => {
       const flow = codeFlows.find(item => item.id === event.detail?.flowId);

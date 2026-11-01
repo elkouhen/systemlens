@@ -307,6 +307,15 @@ __ASYNCAPI_WEB_COMPONENT__
   <svg id="graph-port-paths" aria-hidden="true"></svg>
   <div id="graph-node-labels" aria-hidden="true"></div>
   <div id="graph-call-tree" aria-label="Arbre hiérarchique des appels" hidden></div>
+  <section id="graph-flow-empty-state" class="graph-flow-empty-state" aria-label="Aucun arbre d’appel sélectionné" hidden>
+    <div class="graph-flow-empty-card">
+      <p class="graph-flow-empty-kicker">Parcours potentiels, pas une trace runtime</p>
+      <h2 class="graph-flow-empty-title">Aucun arbre d’appel sélectionné</h2>
+      <p class="graph-flow-empty-copy">Choisissez un point d’entrée : SystemLens déplie les appels HTTP et Kafka qu’il peut atteindre, avec le niveau de preuve de chaque étape.</p>
+      <ul id="graph-flow-empty-shortcuts" class="graph-flow-empty-shortcuts"></ul>
+      <p id="graph-flow-empty-foot" class="graph-flow-empty-foot" hidden></p>
+    </div>
+  </section>
   <div id="graph-minimap" class="graph-minimap" hidden>
     <svg id="graph-minimap-svg" viewBox="0 0 180 110" role="presentation">
       <rect class="graph-minimap-frame" x="0.5" y="0.5" width="179" height="109" rx="7"></rect>

@@ -476,6 +476,18 @@ summary is muted text rather than a control. The tree controls keep their
 place and stay disabled until a flow is selected, so opening a flow does not
 move the list under the pointer.
 
+While the catalogue is open and no flow is selected, the graph area shows an
+empty state instead of a blank canvas. Its card repeats the kicker, is titled
+`Aucun arbre d’appel sélectionné`, explains that selecting an entry point
+unfolds the reachable HTTP and Kafka calls with their evidence level, and
+lists the catalogue's flows as shortcuts in catalogue order: trigger kind or
+HTTP verb, trigger name, service chain, step count, and the number of
+diagnostics to verify (risks and insufficient evidence). At most eight
+shortcuts are listed; a footer names how many more the catalogue holds.
+Choosing a shortcut selects the same flow as the catalogue entry. The empty
+state disappears as soon as a flow is open and returns when the selection is
+cleared.
+
 The catalogue may filter by confidence, protocol, Kafka message type, and cycle
 status. A compact summary reports the visible count. Hovering or focusing an
 entry exposes its complete description, trigger, service route, arc and step

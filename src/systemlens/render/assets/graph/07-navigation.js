@@ -105,4 +105,5 @@
       flowsPanel.hidden = !showingFlows;
       graphLegend.hidden = !showingGraph;
       if (showingFlows && !showingFlowGraph) flowsPanel.dispatchEvent(new Event("systemlens:flows-open"));
+      document.dispatchEvent(new CustomEvent("systemlens:view-changed", { detail: { tab, showingFlows, showingFlowGraph } }));
     }

@@ -147,9 +147,11 @@ remains visible and is reported as such; the architecture graph does not add a
 separate visual node for every route.
 
 The visible navigation has two primary workspaces: Architecture and Ressources.
-Architecture contains the graph and the code-flow catalogue. Ressources opens
-one searchable catalogue for indexed resources, routes, contracts, DTOs,
-persistence classes, and diagnostics. Its type and service filters change only
+Architecture contains the graph and the code-flow catalogue. Opening the
+catalogue without a selected flow shows an empty state in the graph area
+that lists the flows as shortcuts; choosing one selects that flow. Ressources
+opens one searchable catalogue for indexed resources, routes, contracts,
+DTOs, persistence classes, and diagnostics. Its type and service filters change only
 the catalogue projection. The [UX/UI rules](../UX-UI.md) own the navigation
 and selection contract.
 

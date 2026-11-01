@@ -112,6 +112,7 @@ UX_LABELS = {
     "Racine",
     "Incohérence possible",
     "Points chauds",
+    "Aucun arbre d’appel sélectionné",
     "Tout le graphe",
     "Vue lisible",
 }

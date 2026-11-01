@@ -266,7 +266,7 @@ any deviation from the work package.
 | U1 | Open. |
 | U2 | Delivered on 2026-11-01 (commit "Make inspection discoverable with a hint and plain-click selection"). A plain click selects the node (details widget, emphasized relations, dimmed unrelated cards) and a second click or a stage click clears it; `Shift + click` still opens the inspector; a permanent hint names the four gestures and hides with the graph, in the call tree, and below 721 px. PDR-1 amended. Verified by `test_plain_click_selects_a_node_and_the_hint_names_the_gestures`; browser suite 41 passed with Chrome; default suite, ruff, mypy clean. Deviation: none. |
 | U3 | Open. |
-| U4 | Open. |
+| U4 | `in progress` (2026-11-01). Empty state, shortcuts, contract and spec text, and `test_flow_catalogue_without_selection_shows_shortcuts_on_the_canvas` are committed; that test and the default suite pass. Not delivered: in the full browser suite, five tests fail with Chrome 156.0.8078.79 (access badge, plain click, code-flow widget, complex geometry, context widget). The same failures reproduce on the U2 commit without the U4 changes, and removing the U4 script does not remove the delayed call-tree render, so the cause is outside U4 and not yet identified. Next step: find why the tree renders after the click returns (tests read it synchronously) and why a plain click no longer selects in the U2 test. |
 | U5 | Open. |
 | U6 | Open. |
 | U7 | Open. |

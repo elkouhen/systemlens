@@ -1152,6 +1152,40 @@ def test_plain_click_selects_a_node_and_the_hint_names_the_gestures() -> None:
 
 
 @pytest.mark.slow
+def test_flow_catalogue_without_selection_shows_shortcuts_on_the_canvas() -> None:
+    """U4: the Flux de code view explains itself before any selection."""
+    document = _code_flow_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1400, "height": 900})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator(".graph-node-card-label").first.wait_for()
+        empty_state = page.locator("#graph-flow-empty-state")
+        assert empty_state.is_hidden()
+        page.locator("#flows-tab").click()
+        empty_state.wait_for(state="visible")
+        assert "Aucun arbre d’appel sélectionné" in empty_state.inner_text()
+        shortcuts = page.locator("#graph-flow-empty-shortcuts .graph-flow-shortcut")
+        flow_count = page.locator(".code-flow-item").count()
+        assert shortcuts.count() == min(flow_count, 8)
+        first_title = page.locator(".code-flow-item .code-flow-title").first.inner_text()
+        assert first_title.split(" · ", 1)[1] in shortcuts.first.inner_text()
+        shortcuts.first.click()
+        page.locator("#graph-call-tree").wait_for(state="visible")
+        assert empty_state.is_hidden()
+        assert page.locator(".code-flow-item.is-selected").count() == 1
+        page.locator("#graph-tab").click()
+        assert empty_state.is_hidden()
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
 def test_architecture_arc_opens_node_inspection_modal() -> None:
     document = _current_simple_dataset_document()
     with sync_playwright() as playwright:
