@@ -86,6 +86,7 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 | [docs/plans/data-operations-in-internal-flows.md](plans/data-operations-in-internal-flows.md) | Working on the scoped data-operation plan and its acceptance criteria. |
 | [docs/plans/async-write-read-consistency.md](plans/async-write-read-consistency.md) | Working on stale-read detection, visibility ordering, or key matching. |
 | [docs/plans/runtime-observations-in-export.md](plans/runtime-observations-in-export.md) | Elastic APM overlay in the HTML export: decisions, scope, and validation. |
+| [docs/plans/resource-inspector-uniformisation.md](plans/resource-inspector-uniformisation.md) | Proposed plan for one `Inspecter` behaviour across catalogue resource kinds. |
 | [docs/prompts/full-index-codeql-flow-descriptions.md](prompts/full-index-codeql-flow-descriptions.md) | Asking an agent to index with CodeQL and describe every flow. |
 | [docs/archive/layered-view.md](archive/layered-view.md) | Investigating historical layer and module rendering rules. |
 | [examples/README.md](../examples/README.md) | Importing or regenerating synthetic diagnostic examples. |

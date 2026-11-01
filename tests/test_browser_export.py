@@ -1705,6 +1705,114 @@ def test_catalogue_rows_carry_kind_tags_and_reveal_inspect_on_hover() -> None:
         browser.close()
 
 
+def _open_catalogue_page(playwright: Playwright):
+    """Open the simple export on the resource catalogue at 1400 x 900."""
+    browser = _launch_visual_browser(playwright)
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    page.set_default_timeout(5_000)
+    page.set_content(_current_simple_dataset_document(), wait_until="load")
+    page.locator("#contracts-mode-tab").click()
+    return browser, page
+
+
+def _catalogue_row(page, tag: str, name: str, owner: str | None = None):
+    rows = page.locator("#microservices-list .resource-catalogue-row").filter(
+        has=page.locator(".resource-kind-tag", has_text=re.compile(f"^{re.escape(tag)}$"))
+    ).filter(has=page.locator(".reference-title", has_text=name))
+    if owner:
+        rows = rows.filter(has=page.locator(".reference-meta", has_text=owner))
+    assert rows.count() == 1, (tag, name, owner, rows.count())
+    return rows.first
+
+
+def _inspect_catalogue_row(page, row) -> None:
+    row.hover()
+    row.locator(".resource-catalogue-inspect").click()
+    page.locator("#inspector-modal").wait_for(state="visible")
+
+
+@pytest.mark.slow
+def test_catalogue_route_inspector_keeps_the_catalogue_visible() -> None:
+    """D1 (PDR-10): a route inspected from the catalogue docks beside the
+    list; the owner's inline details never replace it."""
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_catalogue_page(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        rows = page.locator("#microservices-list .resource-catalogue-row")
+        before = rows.evaluate_all("rows => rows.map(row => row.dataset.catalogueKey)")
+        row = _catalogue_row(page, "Route exposée", "/api/health", "inventory-service")
+        _inspect_catalogue_row(page, row)
+        assert "is-docked" in (page.locator("#inspector-modal").get_attribute("class") or "")
+        assert page.locator("#microservices-list").is_visible()
+        assert page.locator("#details").is_hidden()
+        assert "is-selected" in (row.get_attribute("class") or "")
+        page.locator("#inspector-close").click()
+        page.locator("#inspector-modal").wait_for(state="hidden")
+        assert page.locator("#microservices-list").is_visible()
+        assert page.locator("#details").is_hidden()
+        assert rows.evaluate_all("rows => rows.map(row => row.dataset.catalogueKey)") == before
+        assert "is-selected" in (row.get_attribute("class") or "")
+        assert page.locator("#resource-catalogue-preview-title").inner_text() == "GET /api/health"
+        browser.close()
+
+
+@pytest.mark.slow
+def test_catalogue_called_route_opens_the_call_inspector_of_its_caller() -> None:
+    """D2 (PDR-10): a called route names its caller and the call's target,
+    never the caller as provider with a false `0 client`."""
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_catalogue_page(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        row = _catalogue_row(page, "Route appelée", "/api/reservations", "order-service")
+        _inspect_catalogue_row(page, row)
+        body = page.locator("#inspector-body")
+        text = body.inner_text()
+        assert "POST /api/reservations" in page.locator("#inspector-title").inner_text()
+        assert "0 client" not in text
+        assert "Microservice exposant" not in text
+        assert "Aucun microservice appelant identifié" not in text
+        assert "Cible non rapprochée" not in text
+
+        def section(title: str) -> list[str]:
+            return body.locator(".details-section").filter(
+                has=page.locator("h2", has_text=re.compile(f"^{re.escape(title)}$"))
+            ).locator("li").all_inner_texts()
+
+        assert section("Microservice appelant") == ["order-service"]
+        assert section("Microservice cible") == ["inventory-service"]
+        assert page.locator("#microservices-list").is_visible()
+        body.get_by_role("button", name="inventory-service · POST /api/reservations").click()
+        assert "1 client" in page.locator("#inspector-body .route-client-count").inner_text()
+        page.locator("#inspector-back").click()
+        assert section("Microservice appelant") == ["order-service"]
+        browser.close()
+
+
+@pytest.mark.slow
+def test_openapi_modal_keeps_its_vscode_action_above_swagger_ui() -> None:
+    """D7 (PDR-10): Swagger UI no longer erases the VS Code action."""
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_catalogue_page(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        row = _catalogue_row(page, "Contrat OpenAPI", "openapi.yaml", "inventory-service")
+        _inspect_catalogue_row(page, row)
+        if page.evaluate("() => Boolean(window.SwaggerUIBundle)"):
+            page.locator("#inspector-body .swagger-ui .info").first.wait_for(state="attached")
+        first = page.locator("#inspector-body > :first-child")
+        assert "inspector-document-actions" in (first.get_attribute("class") or "")
+        action = first.locator("a.inspector-source-link")
+        assert action.inner_text() == "Ouvrir le fichier dans VS Code"
+        assert (action.get_attribute("href") or "").startswith("vscode://file/")
+        assert action.is_visible()
+        browser.close()
+
+
 @pytest.mark.slow
 def test_node_inspector_docks_beside_the_graph_and_merges_routes() -> None:
     """U3: the node inspector docks from 901 px and falls back to a modal."""

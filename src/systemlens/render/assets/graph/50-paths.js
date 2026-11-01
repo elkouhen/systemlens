@@ -750,6 +750,9 @@
         action: () => { window.location.href = route.vscode_uri; },
       }] : [], inspectorBody);
       selectNode(providerNode.id, false, false);
+      // In the resource catalogue the list stays under the docked inspector;
+      // the provider's inline details never replace it (PDR-10).
+      if (document.body.classList.contains("catalogue-active")) hideInlineDetailsAfterModal();
     }
     function openHttpCallInspector(callerNode, route, call) {
       if (!callerNode || !route) return;
@@ -765,22 +768,23 @@
       const path = document.createElement("code");
       path.className = "route-inspector-path";
       path.textContent = parts.path;
-      const status = document.createElement("span");
-      status.className = "route-client-count";
-      status.textContent = "Cible non rapprochée";
-      summary.append(method, path, status);
-      inspectorBody.append(summary);
-      const openRelatedNode = node => {
-        if (!node) return;
-        selectNode(node.id, false, false);
-        openArchitectureNodeInspector(node, {
-          reset: true,
-          backAction: () => openHttpCallInspector(callerNode, route, call),
-        });
-      };
       const targetNode = call?.service
         ? graphData.nodes.find(node => node.kind === "microservice" && node.name === call.service)
         : null;
+      const servedRoute = targetNode?.http_routes?.find(item => (
+        item.role !== "call" && item.route === route.route
+      ));
+      const status = document.createElement("span");
+      status.className = "route-client-count";
+      status.textContent = targetNode ? `Cible : ${targetNode.name}` : "Cible non rapprochée";
+      summary.append(method, path, status);
+      inspectorBody.append(summary);
+      const reopen = () => openHttpCallInspector(callerNode, route, call);
+      const openRelatedNode = node => {
+        if (!node) return;
+        selectNode(node.id, false, false);
+        openArchitectureNodeInspector(node, { reset: true, backAction: reopen });
+      };
       appendActionList("Microservice appelant", [{
         label: callerNode.name,
         title: `Afficher le microservice ${callerNode.name}`,
@@ -796,6 +800,17 @@
         }], inspectorBody);
       } else {
         appendList("Cible déclarée", [call?.service || "Aucun microservice cible rapproché"], inspectorBody);
+      }
+      if (servedRoute) {
+        appendActionList("Route exposée par la cible", [{
+          label: `${targetNode.name} · ${servedRoute.route}`,
+          title: `Afficher la route ${servedRoute.route} de ${targetNode.name}`,
+          action: () => {
+            openHttpRouteInspector(targetNode, servedRoute);
+            inspectorBackAction = reopen;
+            renderArchitectureInspectorNavigation();
+          },
+        }], inspectorBody);
       }
       appendList("Preuve source", [route.location], inspectorBody);
     }

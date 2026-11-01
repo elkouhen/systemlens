@@ -585,6 +585,11 @@
               openOpenApiContract(entry.contract);
             } else if (entry.kind === "asyncapi_contract") {
               openAsyncApiContract(entry.contract);
+            } else if (entry.kind === "http_route" && entry.route?.role === "call") {
+              // A called route opens the caller's call inspector; its provider
+              // is the call's target, never the caller (PDR-10).
+              const call = (inspectTarget.http_calls || []).find(item => item.route === entry.route.route);
+              openHttpCallInspector(inspectTarget, entry.route, call);
             } else if (entry.kind === "http_route") {
               openHttpRouteInspector(inspectTarget, entry.route);
             } else {

@@ -968,15 +968,26 @@
       }
       goBackArchitectureInspector();
     }
+    // A document view (contract, DTO or persistence-class fields) opens with
+    // one action row holding the VS Code action when the fact has a source,
+    // then the document body (PDR-10).
+    function appendInspectorDocumentActions(sourceUri, label, container = inspectorBody) {
+      const actions = document.createElement("div");
+      actions.className = "inspector-actions inspector-document-actions";
+      if (sourceUri) {
+        const link = document.createElement("a");
+        link.href = sourceUri;
+        link.textContent = label;
+        link.title = label;
+        link.className = "inspector-action inspector-source-link";
+        actions.append(link);
+      }
+      if (actions.children.length) container.append(actions);
+      return actions;
+    }
     function openOpenApiContract(contract) {
       openInspector(`OpenAPI · ${contract.path}`);
-      if (contract.vscode_uri) {
-        const link = document.createElement("a");
-        link.href = contract.vscode_uri;
-        link.textContent = "Ouvrir le fichier dans VS Code";
-        link.className = "inspector-source-link";
-        inspectorBody.append(link);
-      }
+      appendInspectorDocumentActions(contract.vscode_uri, "Ouvrir le fichier dans VS Code");
       if (!contract.spec || !window.SwaggerUIBundle) {
         const message = document.createElement("p");
         message.className = "dto-summary";
@@ -985,9 +996,14 @@
         return;
       }
       inspectorBody.classList.add("swagger-ui");
+      // Swagger UI replaces the content of its node: it renders into its own
+      // container so the action row above it survives.
+      const viewer = document.createElement("div");
+      viewer.className = "openapi-viewer";
+      inspectorBody.append(viewer);
       window.SwaggerUIBundle({
         spec: contract.spec,
-        domNode: inspectorBody,
+        domNode: viewer,
         deepLinking: false,
         docExpansion: "list",
         supportedSubmitMethods: [],
