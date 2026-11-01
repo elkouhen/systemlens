@@ -60,9 +60,10 @@ and the inspected node keeps a halo. Wide documents keep the room they need.
 its widgets are in French; the project documentation is in English
 (`AGENTS.md`, documentation rule 1).
 
-**Consequences:** a single English label (`Layer` in the inspector) is a
-defect, not a choice; backlog task U8 renames it. Palette names such as
-`Obsidian` are documentation names, not interface labels.
+**Consequences:** an English label is a defect, not a choice; backlog
+task U8 renamed the inspector's `Layer` heading to `Couche`. Palette names
+such as `Obsidian` are documentation names, not interface labels: the theme
+control reads `Sombre` and `Clair`.
 
 ## PDR-4: Accessibility and CDN concerns are deferred
 

@@ -265,7 +265,9 @@
         // an empty category stays listed but cannot be chosen.
         if (kind !== "all") {
           const count = document.createElement("small");
-          count.textContent = counts.get(kind) || 0;
+          count.textContent = kind === "diagnostic" && !counts.get(kind)
+            ? "aucun diagnostic"
+            : counts.get(kind) || 0;
           button.append(count);
           button.disabled = !counts.get(kind);
         }

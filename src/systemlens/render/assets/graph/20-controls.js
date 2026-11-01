@@ -258,6 +258,27 @@
     graphMinimap?.addEventListener("pointerup", finishGraphMinimap);
     graphMinimap?.addEventListener("pointercancel", finishGraphMinimap);
     const search = document.getElementById("search");
+    // The search example names two indexed services, linked when possible;
+    // an export with fewer than two services keeps a neutral example.
+    (function setSearchPlaceholder() {
+      const services = graphData.nodes
+        .filter(node => node.kind === "microservice" && !node.external)
+        .map(node => node.id);
+      const names = new Map(graphData.nodes.map(node => [node.id, node.name]));
+      if (services.length < 2) {
+        search.placeholder = "service-a ou service-a -> service-b";
+        return;
+      }
+      const serviceIds = new Set(services);
+      const linked = graphData.links.find(link => (
+        serviceIds.has(link.source) && serviceIds.has(link.target) && link.source !== link.target
+      ));
+      const [first, second] = linked
+        ? [linked.source, linked.target]
+        : services.map(id => names.get(id)).sort((a, b) => a.localeCompare(b)).slice(0, 2)
+          .map(name => services.find(id => names.get(id) === name));
+      search.placeholder = `${names.get(first)} ou ${names.get(first)} -> ${names.get(second)}`;
+    })();
     const resetButton = document.getElementById("reset");
     const searchStatus = document.getElementById("search-status");
     const graphTab = document.getElementById("graph-tab");

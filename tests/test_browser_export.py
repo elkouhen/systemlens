@@ -1164,6 +1164,84 @@ def test_plain_click_selects_a_node_and_the_hint_names_the_gestures() -> None:
 
 
 @pytest.mark.slow
+def test_narrow_viewport_collapses_the_panel_into_a_drawer_and_wording_is_french() -> None:
+    """U8: drawer at 900 px or less, Couche, Sombre/Clair, placeholder, diagnostics."""
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        page = browser.new_page(viewport={"width": 820, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        _wait_for_settled_layout(page)
+        toolbar = page.locator(".toolbar")
+        assert "is-collapsed" in (toolbar.get_attribute("class") or "")
+        assert page.locator("#toolbar-collapse").get_attribute("aria-expanded") == "false"
+        header = toolbar.bounding_box()
+        floating = page.locator("#graph-mode-context").bounding_box()
+        assert header and floating and floating["x"] >= header["x"] + header["width"]
+
+        page.locator("#toolbar-collapse").click()
+        assert page.evaluate("() => document.body.classList.contains('toolbar-drawer-open')")
+        assert page.evaluate(
+            "() => document.documentElement.style.getPropertyValue('--workspace-left')"
+        ) == "0px"
+        graph = page.locator("#graph").bounding_box()
+        assert graph and graph["x"] == 0 and graph["width"] >= 819
+        assert page.locator("#search").is_visible()
+        placeholder = page.locator("#search").get_attribute("placeholder") or ""
+        match = re.match(r"^(\S+) ou \1 -> (\S+)$", placeholder)
+        assert match and match.group(1) != match.group(2)
+        services = {"inventory-service", "order-service", "restock-service"}
+        assert {match.group(1), match.group(2)} <= services
+
+        page.set_viewport_size({"width": 1200, "height": 900})
+        page.wait_for_function(
+            "() => !document.querySelector('.toolbar').classList.contains('is-collapsed')"
+        )
+        assert not page.evaluate("() => document.body.classList.contains('toolbar-drawer-open')")
+        page.set_viewport_size({"width": 860, "height": 900})
+        page.wait_for_function(
+            "() => document.querySelector('.toolbar').classList.contains('is-collapsed')"
+        )
+        page.set_viewport_size({"width": 1400, "height": 900})
+        page.wait_for_function(
+            "() => !document.querySelector('.toolbar').classList.contains('is-collapsed')"
+        )
+
+        theme = page.locator("#theme-toggle")
+        assert theme.inner_text() == "☼ Clair"
+        theme.click()
+        assert theme.inner_text() == "☾ Sombre"
+        assert "Obsidian" not in (theme.get_attribute("title") or "")
+        theme.click()
+
+        _wait_for_settled_layout(page)
+        page.locator(".graph-node-card-label").filter(has_text="supermarket.order.placed").click(
+            force=True, modifiers=["Shift"]
+        )
+        page.locator("#inspector-modal").wait_for(state="visible")
+        architecture = page.locator("#inspector-body h2").all_inner_texts()
+        assert any(text.strip().lower() == "couche" for text in architecture)
+        assert not any(text.strip().lower() == "layer" for text in architecture)
+        page.locator("#inspector-close").click()
+
+        page.locator("#contracts-mode-tab").click()
+        diagnostics = page.locator("#resource-catalogue-categories button[data-kind='diagnostic']")
+        assert diagnostics.locator("small").inner_text() == "aucun diagnostic"
+        assert diagnostics.is_disabled()
+
+        single = render_graph_html({"orders": []}, [])
+        page.set_content(single, wait_until="load")
+        assert page.locator("#search").get_attribute("placeholder") == (
+            "service-a ou service-a -> service-b"
+        )
+        browser.close()
+
+
+@pytest.mark.slow
 def test_catalogue_rows_carry_kind_tags_and_reveal_inspect_on_hover() -> None:
     """U6: kind tags, verb badges, muted zero counts, hover-only action."""
     document = _current_simple_dataset_document()
@@ -1900,6 +1978,15 @@ def _chrome_executable(playwright: Playwright) -> str | None:
     return next((str(candidate) for candidate in candidates if candidate and candidate.is_file()), None)
 
 
+def _open_panel_drawer(page) -> None:
+    """At 900 px or less the panel starts collapsed (U8); open its drawer."""
+    if "is-collapsed" in (page.locator(".toolbar").get_attribute("class") or ""):
+        page.locator("#toolbar-collapse").click()
+        page.wait_for_function(
+            "() => !document.querySelector('.toolbar').classList.contains('is-collapsed')"
+        )
+
+
 def _launch_visual_browser(playwright: Playwright):
     """Launch only the Chromium test browser used by the export contract."""
     executable = _chrome_executable(playwright)
@@ -2368,6 +2455,7 @@ def test_code_flow_widget_is_readable_in_both_themes() -> None:
         page = context.new_page()
         page.set_default_timeout(10_000)
         page.set_content(_code_flow_document(), wait_until="load")
+        _open_panel_drawer(page)
         assert page.locator("#graph-tab").get_attribute("aria-selected") == "true"
         assert page.locator(".graph-node-card-label").count() == 6
         assert page.locator(".graph-node-port-reference").count() == 0
@@ -2497,6 +2585,7 @@ def test_graph_view_has_no_layer_or_module_rendering() -> None:
             "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) >= 60"
         )
         _wait_for_settled_layout(page)
+        _open_panel_drawer(page)
         assert page.locator(".view-controls, #layout-forceatlas2-noverlap").count() == 0
         assert page.locator("#graph-layers, #graph-groups, #layout-elk, #layout-cluster").count() == 0
         assert page.locator(".graph-layer-band, .graph-namespace-group, .graph-project-group").count() == 0
@@ -2652,6 +2741,7 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         page.set_content(document, wait_until="load")
         page.wait_for_timeout(100)
         assert not errors
+        _open_panel_drawer(page)
         _capture_render_snapshot(page, "constrained-initial")
 
         graph = page.locator("#graph")
@@ -2828,6 +2918,8 @@ def test_html_export_resources_are_usable_in_a_constrained_browser_viewport(tmp_
         _capture_render_snapshot(page, "constrained-after-inventory-search")
         assert page.locator("#inspector-title").inner_text().startswith("Microservice · inventory")
         page.locator("#inspector-close").click()
+        # The drawer covers the graph (U8): close it before using graph controls.
+        page.locator("#toolbar-collapse").click()
         # Pan, zoom and resize retain finite graph geometry and card dimensions.
         page.locator("#graph-mode-center").click()
         _assert_architecture_cards_have_uniform_size(page)

@@ -55,8 +55,21 @@ view.
 
 The left navigation panel MUST provide a visible collapse control. Collapsing
 it hides navigation content while retaining its header controls and leaves the
-graph workspace unchanged. On constrained viewports, the panel uses one bounded
+graph workspace unchanged; floating graph widgets start right of the
+collapsed header. On constrained viewports, the panel uses one bounded
 scroll region so the graph remains visible while users inspect details.
+
+At 900 pixels of width or less the panel starts collapsed, and collapses
+again when the window narrows past that width. Expanded there, it opens as a
+drawer over the graph: the graph keeps its full width and no band is
+reserved for the panel. Widening past 900 pixels expands it again. The rules
+at 720 pixels and below are unchanged.
+
+The theme control reads `☾ Sombre` in the light theme and `☼ Clair` in the
+dark one; Obsidian names the dark palette in this document only. The search
+example names two indexed services, linked by a relation when possible, as
+`a ou a -> b`; an export with fewer than two services shows `service-a ou
+service-a -> service-b`.
 
 A status line sits under the branded header in every view. It starts with
 the index status, `Index : complet` or `Index : N faits à vérifier`, which
@@ -94,8 +107,9 @@ kind and relationship counts when available. Selecting a row opens its docked
 preview; `Inspecter` opens the shared inspector for deeper details.
 
 The catalogue title carries the visible and total counts once. Each category
-shows its own count; an empty category stays listed but is disabled. Rows are
-ordered by kind (category order), then owner, then name.
+shows its own count; an empty category stays listed but is disabled, and an
+empty `Diagnostics` category reads `aucun diagnostic`. Rows are ordered by
+kind (category order), then owner, then name.
 
 Each row opens with a kind tag coloured like the graph type chips; a route
 also shows its HTTP verb as a badge before the path. The Contexte column
@@ -305,9 +319,10 @@ available after details are displayed in the inspector.
 
 Selecting a module title highlights that module and lists its currently visible
 direct members in sorted order. Selecting one listed member returns to ordinary
-node details. A module path is shown once in the Architecture section rather
-than repeated in badges and raw metadata. The project root module carries no
-navigable identity and is not listed.
+node details. The Architecture section names the layer `Couche`. A module
+path is shown once in the Architecture section rather than repeated in badges
+and raw metadata. The project root module carries no navigable identity and
+is not listed.
 
 The introspection title names the current element; its breadcrumb appears only
 after the user has navigated to a related element. A microservice lists every

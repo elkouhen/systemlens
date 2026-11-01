@@ -171,14 +171,28 @@
     window.addEventListener("systemlens:filters-changed", updateGraphFilterSummary);
     updateGraphFilterSummary();
     graphCanvas.dataset.renderMode = graphState.renderMode;
+    // At 900 px or less the panel starts collapsed and reopens as a drawer
+    // over the graph, which then keeps its full width (backlog U8).
+    const toolbarDrawerQuery = window.matchMedia("(max-width: 900px)");
+    function setToolbarCollapsed(collapsed, refit = true) {
+      toolbar?.classList.toggle("is-collapsed", collapsed);
+      document.body.classList.toggle("toolbar-drawer-open", !collapsed && toolbarDrawerQuery.matches);
+      toolbarCollapse?.setAttribute("aria-expanded", String(!collapsed));
+      toolbarCollapse?.setAttribute("aria-label", collapsed ? "Développer le panneau" : "Réduire le panneau");
+      toolbarCollapse?.setAttribute("title", collapsed ? "Développer le panneau" : "Réduire le panneau");
+      if (toolbarCollapse) toolbarCollapse.textContent = collapsed ? "›" : "‹";
+      if (typeof updateWorkspaceViewport === "function" && workspaceViewportReady) updateWorkspaceViewport(refit);
+    }
+    let workspaceViewportReady = false;
     toolbarCollapse?.addEventListener("click", () => {
-      const collapsed = toolbar?.classList.toggle("is-collapsed") || false;
-      toolbarCollapse.setAttribute("aria-expanded", String(!collapsed));
-      toolbarCollapse.setAttribute("aria-label", collapsed ? "Développer le panneau" : "Réduire le panneau");
-      toolbarCollapse.setAttribute("title", collapsed ? "Développer le panneau" : "Réduire le panneau");
-      toolbarCollapse.textContent = collapsed ? "›" : "‹";
-      updateWorkspaceViewport(true);
+      setToolbarCollapsed(!toolbar?.classList.contains("is-collapsed"));
     });
+    function syncToolbarDrawer() {
+      if (document.body.classList.contains("catalogue-active")) return;
+      setToolbarCollapsed(toolbarDrawerQuery.matches);
+    }
+    toolbarDrawerQuery.addEventListener?.("change", syncToolbarDrawer);
+    if (toolbarDrawerQuery.matches) setToolbarCollapsed(true, false);
     const centerFlow = () => {
       if (!graphState.relatedNodes?.size) return;
       const orderedNodes = [...(graphState.pathMicroserviceOrder?.keys() || [])];
@@ -441,9 +455,15 @@
       const toolbarBounds = toolbar?.getBoundingClientRect();
       const compactViewport = window.innerWidth <= 720;
       const reservedLeft = toolbar?.classList.contains("is-collapsed") || compactViewport
+        || toolbarDrawerQuery.matches
         ? 0
         : Math.min((toolbarBounds?.width || 0) + (toolbarBounds?.left || 0) + 24, window.innerWidth * .48);
       root.style.setProperty("--workspace-left", `${Math.round(reservedLeft)}px`);
+      // Floating graph widgets start right of a collapsed panel header.
+      const collapsedPanelRight = toolbar?.classList.contains("is-collapsed") && !compactViewport
+        ? Math.round((toolbarBounds?.right || 0) - 4)
+        : Math.round(reservedLeft);
+      root.style.setProperty("--floating-left", `${collapsedPanelRight}px`);
       const legendSpace = legendReservation(reservedLeft);
       // A docked inspector owns the right edge: cards and fits stay beside it.
       const inspectorDock = Number.parseFloat(root.style.getPropertyValue("--inspector-dock-width")) || 0;
@@ -490,6 +510,7 @@
       }
     }
     updateWorkspaceViewport(false);
+    workspaceViewportReady = true;
     window.addEventListener("systemlens:inspector-layout-changed", () => updateWorkspaceViewport(false));
     const reservedBands = () => ["--workspace-top", "--workspace-bottom"]
       .map(name => document.documentElement.style.getPropertyValue(name)).join("|");

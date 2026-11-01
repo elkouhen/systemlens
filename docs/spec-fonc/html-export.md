@@ -97,8 +97,10 @@ pair, not a call site.
 
 ## Architecture and resource inspectors
 
-New browser sessions open in the Obsidian dark theme. The theme control retains
-the user's explicit light or dark preference where local storage is available.
+New browser sessions open in the Obsidian dark theme. The theme control reads
+`☾ Sombre` or `☼ Clair` and retains the user's explicit light or dark
+preference where local storage is available. At 900 pixels of width or less
+the navigation panel starts collapsed and opens as a drawer over the graph.
 The palette and shared component treatment follow [UX/UI rules](../UX-UI.md).
 
 The AsyncAPI inspector loads its embedded, compressed viewer when a contract
@@ -180,7 +182,8 @@ project root module is not listed.
 
 The catalogue title shows the visible and total counts, for example
 `Catalogue des ressources (24/24)`. Categories show their own counts, and an
-empty category is disabled. Rows are ordered by kind, owner, then name. Each
+empty category is disabled; an empty `Diagnostics` category reads `aucun
+diagnostic`. Rows are ordered by kind, owner, then name. Each
 row starts with a kind tag such as `Route exposée`, and a route shows its
 verb as a badge. The Contexte column reads `owner · detail`, for example
 `inventory-service · 1 client`; a zero count reads `aucun client`. A row

@@ -924,7 +924,7 @@
         const nodeClusterPath = clusterPathForNode(id);
         const clusterPath = isRootClusterPath(nodeClusterPath) ? null : nodeClusterPath;
         const architectureGroup = createDetailsGroup("Architecture");
-        appendList("Layer", [architectureLayerForNode(id)], architectureGroup);
+        appendList("Couche", [architectureLayerForNode(id)], architectureGroup);
         appendActionList("Module", clusterPath ? [{
           label: clusterPath,
           title: `Naviguer vers le module ${clusterPath}`,
@@ -954,7 +954,7 @@
         const clusterPath = clusterPathForNode(id);
         const architectureGroup = createDetailsGroup("Architecture");
         const layer = node.layer_label || node.layer;
-        if (layer && layer.toLowerCase() !== "unknown") appendList("Layer", [layer], architectureGroup);
+        if (layer && layer.toLowerCase() !== "unknown") appendList("Couche", [layer], architectureGroup);
         if (node.technology) appendList("Technologie", [node.technology], architectureGroup);
         const modulePath = isRootClusterPath(clusterPath) ? null : clusterPath;
         appendActionList("Module", modulePath ? [{

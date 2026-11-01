@@ -73,8 +73,8 @@
     document.documentElement.dataset.theme = preferredTheme;
     function updateThemeToggle() {
       const isDark = document.documentElement.dataset.theme === "dark";
-      themeToggle.textContent = isDark ? "☼ Clair" : "☾ Obsidian";
-      themeToggle.title = isDark ? "Passer au thème clair" : "Passer au thème Obsidian";
+      themeToggle.textContent = isDark ? "☼ Clair" : "☾ Sombre";
+      themeToggle.title = isDark ? "Passer au thème clair" : "Passer au thème sombre";
       themeToggle.setAttribute("aria-label", themeToggle.title);
     }
     themeToggle.addEventListener("click", () => {
