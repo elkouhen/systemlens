@@ -97,6 +97,8 @@ __ASYNCAPI_WEB_COMPONENT__
             </fieldset>
         </div>
       </section>
+      <section id="graph-filters-group" class="graph-filters-group" aria-labelledby="graph-filters-title">
+        <p id="graph-filters-title" class="graph-filters-title">Filtres et affichage</p>
       <details id="display-controls" class="display-controls">
         <summary><span>Visibilité</span><span id="graph-filter-summary" class="graph-filter-summary">Tous affichés</span></summary>
         <div class="display-filter-groups">
@@ -142,6 +144,7 @@ __ASYNCAPI_WEB_COMPONENT__
         </div>
       </fieldset>
       </details>
+      </section>
       <p id="layout-status" class="layout-status" role="status">Chargement du graphe…</p>
     </div>
     <div id="microservices-panel" class="toolbar-panel references-view" role="tabpanel" aria-labelledby="microservices-tab" hidden>
@@ -226,6 +229,8 @@ __ASYNCAPI_WEB_COMPONENT__
       <span id="graph-mode-context-help"></span>
     </div>
     <div class="graph-mode-context-actions">
+      <button id="graph-fit-overview" class="graph-action-label graph-secondary-action graph-fit-action" type="button" aria-pressed="false" title="Afficher tout le graphe visible">Tout le graphe</button>
+      <button id="graph-fit-readable" class="graph-action-label graph-secondary-action graph-fit-action" type="button" aria-pressed="true" title="Zoomer pour garder les cartes lisibles">Vue lisible</button>
       <button id="graph-mode-center" class="graph-action-label graph-secondary-action" type="button" aria-label="Recentrer la vue" title="Recentrer la vue sur le graphe visible">Centrer</button>
       <div class="graph-control-group zoom-controls" role="group" aria-label="Zoom">
         <button id="graph-zoom-in" class="graph-action-label graph-secondary-action" type="button" aria-label="Zoomer" title="Augmenter l’échelle du graphe">+</button>
@@ -236,6 +241,7 @@ __ASYNCAPI_WEB_COMPONENT__
           <button id="render-cards" class="graph-action-label render-mode is-active" type="button" aria-label="Afficher les nœuds sous forme de cartes" title="Afficher les nœuds sous forme de cartes" aria-pressed="true">Cartes</button>
           <button id="render-symbols" class="graph-action-label render-mode" type="button" aria-label="Afficher les nœuds sous forme de symboles" title="Hexagones pour les microservices, cercles pour les topics et carrés pour les bases de données" aria-pressed="false">Symboles</button>
       </div>
+      <button id="graph-legend-toggle" class="graph-action-label graph-secondary-action" type="button" aria-pressed="false" title="Afficher ou masquer la légende">Légende</button>
     </div>
   </div>
   <div id="flow-mode-context" class="mode-context flow-mode-context" hidden>

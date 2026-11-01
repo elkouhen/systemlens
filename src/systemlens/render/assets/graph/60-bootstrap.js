@@ -43,13 +43,34 @@
     const toolbarCollapse = document.getElementById("toolbar-collapse");
     const graphModeContext = document.getElementById("graph-mode-context");
     const flowModeContext = document.getElementById("flow-mode-context");
-    if (toolbar && graphPanel) {
-      if (graphModeContext) toolbar.insertBefore(graphModeContext, graphPanel);
-      if (flowModeContext) toolbar.insertBefore(flowModeContext, graphPanel);
-      // Search is the primary action of the Graphe view; camera and
-      // rendering controls follow it.
+    // The graph toolbar floats over the top of the graph area on desktop
+    // (docs/UX-UI.md, "Camera and graph interaction") and returns to the
+    // panel at compact widths, where the panel stacks above the graph.
+    const compactGraphToolbar = window.matchMedia("(max-width: 720px)");
+    const graphTypeCountsStrip = document.getElementById("graph-type-counts");
+    function placeGraphToolbar() {
+      if (!toolbar || !graphPanel || !graphModeContext) return;
       const quickSearchBlock = document.getElementById("quick-search");
-      if (quickSearchBlock && graphModeContext) toolbar.insertBefore(quickSearchBlock, graphModeContext);
+      const floating = !compactGraphToolbar.matches;
+      graphModeContext.classList.toggle("is-floating", floating);
+      if (floating) {
+        if (graphModeContext.parentElement === toolbar) toolbar.after(graphModeContext);
+        const searchAnchor = flowModeContext?.parentElement === toolbar ? flowModeContext : graphPanel;
+        if (quickSearchBlock) toolbar.insertBefore(quickSearchBlock, searchAnchor);
+        if (graphTypeCountsStrip && graphTypeCountsStrip.parentElement !== graphModeContext) {
+          graphModeContext.append(graphTypeCountsStrip);
+        }
+      } else {
+        toolbar.insertBefore(graphModeContext, graphPanel);
+        if (quickSearchBlock) toolbar.insertBefore(quickSearchBlock, graphModeContext);
+        if (graphTypeCountsStrip && graphTypeCountsStrip.parentElement === graphModeContext) {
+          graphModeContext.after(graphTypeCountsStrip);
+        }
+      }
+    }
+    if (toolbar && graphPanel) {
+      if (flowModeContext) toolbar.insertBefore(flowModeContext, graphPanel);
+      placeGraphToolbar();
     }
     const graphFilterSummary = document.getElementById("graph-filter-summary");
     const graphFilterControls = [
@@ -161,10 +182,26 @@
       syncFlowContextCollapse();
     });
     syncFlowContextCollapse();
+    const graphFitOverview = document.getElementById("graph-fit-overview");
+    const graphFitReadable = document.getElementById("graph-fit-readable");
+    const graphLegendToggle = document.getElementById("graph-legend-toggle");
+    graphFitOverview?.addEventListener("click", () => fitCameraToVisibleGraph(renderer, "overview"));
+    graphFitReadable?.addEventListener("click", () => fitCameraToVisibleGraph(renderer, "readable"));
+    const graphLegendElement = document.getElementById("graph-legend");
+    function syncLegendToggle() {
+      graphLegendToggle?.setAttribute("aria-pressed", String(Boolean(graphLegendElement?.open)));
+    }
+    graphLegendToggle?.addEventListener("click", () => {
+      if (!graphLegendElement) return;
+      graphLegendElement.open = !graphLegendElement.open;
+      syncLegendToggle();
+    });
+    graphLegendElement?.addEventListener("toggle", syncLegendToggle);
+    syncLegendToggle();
     function updateFitModeControls(mode) {
       [
-        [null, "overview"],
-        [null, "readable"],
+        [graphFitOverview, "overview"],
+        [graphFitReadable, "readable"],
       ].forEach(([button, buttonMode]) => {
         if (!button) return;
         const active = mode === buttonMode;
@@ -384,8 +421,29 @@
       root.style.setProperty("--workspace-left", `${Math.round(reservedLeft)}px`);
       const legendSpace = legendReservation(reservedLeft);
       root.style.setProperty("--workspace-right", `${legendSpace.right}px`);
-      root.style.setProperty("--workspace-top", "0px");
-      root.style.setProperty("--workspace-bottom", `${legendSpace.bottom}px`);
+      // Reserve the band under the floating graph toolbar so fits and cards
+      // never sit below it.
+      const floatingToolbarBounds = graphModeContext?.classList.contains("is-floating") && !graphModeContext.hidden
+        ? graphModeContext.getBoundingClientRect()
+        : null;
+      const reservedTop = floatingToolbarBounds && floatingToolbarBounds.height
+        ? Math.round(floatingToolbarBounds.bottom + 8)
+        : 0;
+      root.style.setProperty("--workspace-top", `${reservedTop}px`);
+      // The interaction hint sits at the bottom of the graph; keep cards above it.
+      const interactionHint = document.getElementById("graph-interaction-hint");
+      const hintBounds = interactionHint && getComputedStyle(interactionHint).display !== "none"
+        ? interactionHint.getBoundingClientRect()
+        : null;
+      const hintBand = hintBounds && hintBounds.height
+        ? Math.round(window.innerHeight - hintBounds.top + 8)
+        : 0;
+      root.style.setProperty("--workspace-bottom", `${Math.max(legendSpace.bottom, hintBand)}px`);
+      // Sigma rejects a zero-size container: only redraw while a graph
+      // surface is on screen (the Flux list and the catalogue hide it).
+      const graphOnScreen = graphCanvas.getBoundingClientRect().width > 0
+        || !graphCallTreeOverlay.hidden;
+      if (!graphOnScreen) return;
       renderer?.refresh();
       requestGraphRender();
       if (refit) {
@@ -397,6 +455,27 @@
       }
     }
     updateWorkspaceViewport(false);
+    const reservedBands = () => ["--workspace-top", "--workspace-bottom"]
+      .map(name => document.documentElement.style.getPropertyValue(name)).join("|");
+    let lastReservedBands = reservedBands();
+    function refreshToolbarReservation() {
+      updateWorkspaceViewport(false);
+      const next = reservedBands();
+      if (next !== lastReservedBands) {
+        lastReservedBands = next;
+        if (!codeFlowSelection.flowId && graphCanvas.getBoundingClientRect().width > 0) {
+          fitCameraToVisibleGraph(activeRenderer());
+        }
+      }
+    }
+    if (graphModeContext && "ResizeObserver" in window) {
+      new ResizeObserver(() => refreshToolbarReservation()).observe(graphModeContext);
+    }
+    document.addEventListener("systemlens:view-changed", () => requestAnimationFrame(refreshToolbarReservation));
+    compactGraphToolbar.addEventListener?.("change", () => {
+      placeGraphToolbar();
+      refreshToolbarReservation();
+    });
     function runExploreSearch() {
       const query = search.value.trim();
       searchStatus.textContent = "";

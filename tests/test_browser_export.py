@@ -1230,6 +1230,48 @@ def test_index_status_line_and_type_chips_follow_the_filters() -> None:
 
 
 @pytest.mark.slow
+def test_floating_graph_toolbar_fits_without_covering_cards() -> None:
+    """U1: one floating toolbar; fits keep every card clear of it."""
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 0"
+        )
+        _wait_for_settled_layout(page)
+        toolbar = page.locator("#graph-mode-context")
+        assert "is-floating" in (toolbar.get_attribute("class") or "")
+        assert page.evaluate("() => !document.getElementById('architecture-toolbar').contains(document.getElementById('graph-mode-context'))")
+        assert page.locator("#graph-filters-group").is_visible()
+        page.locator("#graph-fit-overview").click()
+        page.wait_for_function("() => document.querySelector('#graph')?.dataset.fitMode === 'overview'")
+        assert page.locator("#graph-fit-overview").get_attribute("aria-pressed") == "true"
+        assert page.locator("#graph-fit-readable").get_attribute("aria-pressed") == "false"
+        overlap = page.evaluate("""() => {
+            const bars = ['graph-mode-context', 'graph-interaction-hint']
+                .map(id => document.getElementById(id).getBoundingClientRect());
+            return [...document.querySelectorAll('.graph-node-card-label')].filter(card => {
+                const r = card.getBoundingClientRect();
+                return bars.some(b => r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top);
+            }).map(card => card.textContent.trim());
+        }""")
+        assert overlap == []
+        page.locator("#graph-legend-toggle").click()
+        assert page.locator("#graph-legend").evaluate("element => element.open")
+        assert page.locator("#graph-legend-toggle").get_attribute("aria-pressed") == "true"
+        page.set_viewport_size({"width": 700, "height": 900})
+        page.wait_for_function("() => !document.getElementById('graph-mode-context').classList.contains('is-floating')")
+        assert page.evaluate("() => document.getElementById('architecture-toolbar').contains(document.getElementById('graph-mode-context'))")
+        browser.close()
+
+
+@pytest.mark.slow
 def test_architecture_arc_opens_node_inspection_modal() -> None:
     document = _current_simple_dataset_document()
     with sync_playwright() as playwright:

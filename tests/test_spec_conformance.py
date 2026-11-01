@@ -114,6 +114,7 @@ UX_LABELS = {
     "Points chauds",
     "Aucun arbre d’appel sélectionné",
     "indexé le",
+    "Filtres et affichage",
     "Tout le graphe",
     "Vue lisible",
 }
@@ -121,10 +122,7 @@ UX_LABELS = {
 # Contract labels the implementation does not render yet, each owned by a
 # backlog task. Remove the entry in the commit that delivers the task; the
 # test below fails if a listed label appears while still listed here.
-KNOWN_UX_GAPS = {
-    "Tout le graphe": "BACKLOG.md U1",
-    "Vue lisible": "BACKLOG.md U1",
-}
+KNOWN_UX_GAPS: dict[str, str] = {}
 
 
 def _graph_asset_text() -> str:

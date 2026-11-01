@@ -158,10 +158,10 @@
     :root[data-theme="dark"] .graph-call-tree-method { color: #cbd5e1; }
     /* Only flow tooltips rise over fixed widgets; graph cards stay below. */
     #graph-flow-tooltips { position: fixed; inset: 0; z-index: 11; pointer-events: none; overflow: visible; }
-    .graph-interaction-hint { position: fixed; z-index: 7; left: calc(var(--workspace-left, 0px) + 24px); bottom: calc(var(--workspace-bottom, 0px) + 16px); display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: min(520px, calc(100vw - var(--workspace-left, 0px) - 260px)); margin: 0; padding: 6px 10px; border: 1px solid #94a3b8; border-radius: 9px; color: #475569; background: color-mix(in srgb, #f8fafc 92%, transparent); box-shadow: 0 4px 16px rgba(15, 23, 42, .18); font-size: var(--type-caption); line-height: 1.4; pointer-events: none; }
+    .graph-interaction-hint { position: fixed; z-index: 7; left: calc(var(--workspace-left, 0px) + 24px); bottom: 16px; display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: min(520px, calc(100vw - var(--workspace-left, 0px) - 260px)); margin: 0; padding: 6px 10px; border: 1px solid #94a3b8; border-radius: 9px; color: #475569; background: color-mix(in srgb, #f8fafc 92%, transparent); box-shadow: 0 4px 16px rgba(15, 23, 42, .18); font-size: var(--type-caption); line-height: 1.4; pointer-events: none; }
     .graph-interaction-hint kbd { display: inline-block; margin-right: 4px; padding: 1px 5px; border: 1px solid #94a3b8; border-radius: 4px; color: #1e293b; background: #ffffff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; line-height: 1.3; }
     #graph[hidden] ~ .graph-interaction-hint, #graph.is-call-tree-hidden ~ .graph-interaction-hint { display: none; }
-    @media (max-width: 720px) { .graph-interaction-hint { display: none; } }
+    @media (max-width: 720px), (max-height: 700px) { .graph-interaction-hint { display: none; } }
     #graph-flow-status { position: fixed; z-index: 10; top: 16px; left: 50%; max-width: min(460px, calc(100vw - 32px)); margin: 0; padding: 8px 11px; transform: translateX(-50%); border: 1px solid #f59e0b; border-radius: 8px; color: #78350f; background: #fffbeb; box-shadow: 0 5px 16px rgba(15, 23, 42, .18); font-size: var(--type-control); font-weight: 700; line-height: 1.35; text-align: center; pointer-events: none; }
     #graph-port-paths, #graph-node-labels {
       left: var(--workspace-left, 0px);

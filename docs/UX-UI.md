@@ -61,12 +61,21 @@ opens the diagnostics catalogue. It continues with the visible relation
 count and `indexé le <date>` when the export carries the index time; the
 date is omitted, never guessed, for an export of an older index.
 
-In the Graphe view, the search block comes first. Camera and node-rendering
-controls follow, then the filters. The layout status is a full sentence such
-as `Disposition active : vue par graphe.`
+In the Graphe view, the panel holds the search block, then one
+`Filtres et affichage` group with `Visibilité`, `Ressources masquées`, and
+`Plus d’options`, then the layout status, a full sentence such as
+`Disposition active : vue par graphe.`
 
-The architecture graph shows a strip of type chips at its top right: one
-chip per node-type filter with nodes in the export (microservices, external
+Camera and rendering controls form one floating graph toolbar anchored at
+the top left of the graph area, beside the panel: `Tout le graphe`,
+`Vue lisible`, `Centrer`, the zoom group, `Cartes`/`Symboles`, `Légende`,
+and `Réinitialiser` while a selection exists. The graph area reserves the
+band under the toolbar, and the band above the interaction hint, so a fit
+never places a card under either. At 720 pixels and below, the toolbar
+returns to the panel under the search block.
+
+The floating graph toolbar ends with a row of type chips: one chip per
+node-type filter with nodes in the export (microservices, external
 services, topics, collections, other resources). A chip counts the nodes of
 its type that are not hidden individually, and its pressed state mirrors
 the matching `Types de nœuds` filter; clicking it toggles that filter. The
@@ -241,8 +250,9 @@ sub-widget inside the left navigation widget.
 
 The graph area shows a permanent interaction hint docked at its bottom left:
 `clic` selects, `⇧ clic` inspects, the wheel zooms, dragging pans. The hint
-is hidden with the Architecture graph, in the selected call tree, and below
-721 pixels. It never overlaps the minimap or the legend. Relations in the introspection window remain interactive
+is hidden with the Architecture graph, in the selected call tree, below 721
+pixels of width, and at 700 pixels of height or less. It never overlaps the
+minimap or the legend. Relations in the introspection window remain interactive
 and open the target while preserving a breadcrumb path. The header back action
 returns to the previous element; nested DTO and persistence-class views use
 the same action and MUST NOT add a second in-body return control.
@@ -304,7 +314,9 @@ weight. REST and Kafka relations keep distinct stroke patterns and colors.
 
 The graph area supports pan, bounded wheel zoom, zoom controls, centering, and
 fit actions. `Tout le graphe` provides the complete overview. `Vue lisible`
-may zoom further to keep fixed-size cards readable. Pan and zoom move the
+may zoom further to keep fixed-size cards readable. The pressed state of
+these two buttons shows the active fit mode. `Légende` opens or closes the
+legend and mirrors its state. Pan and zoom move the
 camera, not graph nodes.
 
 The overview minimap appears for architecture graphs with more than 24 visible
