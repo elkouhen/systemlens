@@ -1,7 +1,126 @@
 lockfile_version: '1'
-generated_at: '2026-10-15T05:06:28.435749+00:00'
+generated_at: '2026-11-01T10:30:36.595267+00:00'
 apm_version: 0.29.0
 dependencies:
+- repo_url: gwagjiug/technical-writing
+  name: technical-writing
+  host: github.com
+  resolved_commit: 5d8ef7a8de5435cc5a03367678b86fc9dd2a078f
+  version: unknown
+  virtual_path: .claude/skills/technical-writing
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/technical-writing
+  - .agents/skills/technical-writing/SKILL.md
+  - .agents/skills/technical-writing/assets/templates/explanation-doc.md
+  - .agents/skills/technical-writing/assets/templates/learning-doc.md
+  - .agents/skills/technical-writing/assets/templates/problem-solving-doc.md
+  - .agents/skills/technical-writing/assets/templates/reference-doc.md
+  - .agents/skills/technical-writing/assets/templates/review-report.md
+  - .agents/skills/technical-writing/assets/templates/technical-article.md
+  - .agents/skills/technical-writing/references/document-types.md
+  - .agents/skills/technical-writing/references/prompt-workflows.md
+  - .agents/skills/technical-writing/references/review-rubric.md
+  - .agents/skills/technical-writing/references/sentence-style.md
+  - .agents/skills/technical-writing/references/source-map.md
+  - .agents/skills/technical-writing/references/structure-principles.md
+  - .claude/skills/technical-writing
+  - .claude/skills/technical-writing/SKILL.md
+  - .claude/skills/technical-writing/assets/templates/explanation-doc.md
+  - .claude/skills/technical-writing/assets/templates/learning-doc.md
+  - .claude/skills/technical-writing/assets/templates/problem-solving-doc.md
+  - .claude/skills/technical-writing/assets/templates/reference-doc.md
+  - .claude/skills/technical-writing/assets/templates/review-report.md
+  - .claude/skills/technical-writing/assets/templates/technical-article.md
+  - .claude/skills/technical-writing/references/document-types.md
+  - .claude/skills/technical-writing/references/prompt-workflows.md
+  - .claude/skills/technical-writing/references/review-rubric.md
+  - .claude/skills/technical-writing/references/sentence-style.md
+  - .claude/skills/technical-writing/references/source-map.md
+  - .claude/skills/technical-writing/references/structure-principles.md
+  - .grok/skills/technical-writing
+  - .grok/skills/technical-writing/SKILL.md
+  - .grok/skills/technical-writing/assets/templates/explanation-doc.md
+  - .grok/skills/technical-writing/assets/templates/learning-doc.md
+  - .grok/skills/technical-writing/assets/templates/problem-solving-doc.md
+  - .grok/skills/technical-writing/assets/templates/reference-doc.md
+  - .grok/skills/technical-writing/assets/templates/review-report.md
+  - .grok/skills/technical-writing/assets/templates/technical-article.md
+  - .grok/skills/technical-writing/references/document-types.md
+  - .grok/skills/technical-writing/references/prompt-workflows.md
+  - .grok/skills/technical-writing/references/review-rubric.md
+  - .grok/skills/technical-writing/references/sentence-style.md
+  - .grok/skills/technical-writing/references/source-map.md
+  - .grok/skills/technical-writing/references/structure-principles.md
+  - .kiro/skills/technical-writing
+  - .kiro/skills/technical-writing/SKILL.md
+  - .kiro/skills/technical-writing/assets/templates/explanation-doc.md
+  - .kiro/skills/technical-writing/assets/templates/learning-doc.md
+  - .kiro/skills/technical-writing/assets/templates/problem-solving-doc.md
+  - .kiro/skills/technical-writing/assets/templates/reference-doc.md
+  - .kiro/skills/technical-writing/assets/templates/review-report.md
+  - .kiro/skills/technical-writing/assets/templates/technical-article.md
+  - .kiro/skills/technical-writing/references/document-types.md
+  - .kiro/skills/technical-writing/references/prompt-workflows.md
+  - .kiro/skills/technical-writing/references/review-rubric.md
+  - .kiro/skills/technical-writing/references/sentence-style.md
+  - .kiro/skills/technical-writing/references/source-map.md
+  - .kiro/skills/technical-writing/references/structure-principles.md
+  deployed_file_hashes:
+    .agents/skills/technical-writing/SKILL.md: sha256:623cef98acaff58fc6fb75efe2251503eb2ef8e0d39d899cdd770ac58a05f199
+    .agents/skills/technical-writing/assets/templates/explanation-doc.md: sha256:6ab62e8198c4661ab4e185e23a7b9e1c02444bcaa809b21d98564fc3dba6ea16
+    .agents/skills/technical-writing/assets/templates/learning-doc.md: sha256:8ea3e704e7ee811bbf6223be025472176cda395bb9f81e1140f6d692d6b2bb80
+    .agents/skills/technical-writing/assets/templates/problem-solving-doc.md: sha256:bd184bd953e7923af920e49c10949b85734e67475589cd6c93888f8c611a0de3
+    .agents/skills/technical-writing/assets/templates/reference-doc.md: sha256:cb40b80a3c39851e39554e6896b37f1aeffbe9c8fb58e3ad1a4283a4abc2d8e8
+    .agents/skills/technical-writing/assets/templates/review-report.md: sha256:5b313c0251e7a282b5d163f967ff878d02b4c8941b73ba3b6d7d1a35999d11f1
+    .agents/skills/technical-writing/assets/templates/technical-article.md: sha256:a15b13d6ee3866ad6504bea2649ec2599a93361d45f447a6bfd6b63c6b03d466
+    .agents/skills/technical-writing/references/document-types.md: sha256:53de1830c0c5dffa016deab64d3df444d41885d96cb70f05b24880a760d1c935
+    .agents/skills/technical-writing/references/prompt-workflows.md: sha256:f726bc16fde428f43d5b5f8d7cf199566000cac5915e13cd36269af03cad4e39
+    .agents/skills/technical-writing/references/review-rubric.md: sha256:3e9bbd682253fffb6bc950ba33aaaab2e6a4f680d19066b6d4ba1d6070343fb6
+    .agents/skills/technical-writing/references/sentence-style.md: sha256:59b1c1885819c02ab92657c780f97daab6f057957100f5b4c2062132795b57e2
+    .agents/skills/technical-writing/references/source-map.md: sha256:1e4ac780170a7d849be85fd6c17fe2134596fa0144f822d5d7c792241a724ddf
+    .agents/skills/technical-writing/references/structure-principles.md: sha256:5ff13dd7782dbb3502623425dccd648897ce860a78bb4c3d199b191811c844ba
+    .claude/skills/technical-writing/SKILL.md: sha256:623cef98acaff58fc6fb75efe2251503eb2ef8e0d39d899cdd770ac58a05f199
+    .claude/skills/technical-writing/assets/templates/explanation-doc.md: sha256:6ab62e8198c4661ab4e185e23a7b9e1c02444bcaa809b21d98564fc3dba6ea16
+    .claude/skills/technical-writing/assets/templates/learning-doc.md: sha256:8ea3e704e7ee811bbf6223be025472176cda395bb9f81e1140f6d692d6b2bb80
+    .claude/skills/technical-writing/assets/templates/problem-solving-doc.md: sha256:bd184bd953e7923af920e49c10949b85734e67475589cd6c93888f8c611a0de3
+    .claude/skills/technical-writing/assets/templates/reference-doc.md: sha256:cb40b80a3c39851e39554e6896b37f1aeffbe9c8fb58e3ad1a4283a4abc2d8e8
+    .claude/skills/technical-writing/assets/templates/review-report.md: sha256:5b313c0251e7a282b5d163f967ff878d02b4c8941b73ba3b6d7d1a35999d11f1
+    .claude/skills/technical-writing/assets/templates/technical-article.md: sha256:a15b13d6ee3866ad6504bea2649ec2599a93361d45f447a6bfd6b63c6b03d466
+    .claude/skills/technical-writing/references/document-types.md: sha256:53de1830c0c5dffa016deab64d3df444d41885d96cb70f05b24880a760d1c935
+    .claude/skills/technical-writing/references/prompt-workflows.md: sha256:f726bc16fde428f43d5b5f8d7cf199566000cac5915e13cd36269af03cad4e39
+    .claude/skills/technical-writing/references/review-rubric.md: sha256:3e9bbd682253fffb6bc950ba33aaaab2e6a4f680d19066b6d4ba1d6070343fb6
+    .claude/skills/technical-writing/references/sentence-style.md: sha256:59b1c1885819c02ab92657c780f97daab6f057957100f5b4c2062132795b57e2
+    .claude/skills/technical-writing/references/source-map.md: sha256:1e4ac780170a7d849be85fd6c17fe2134596fa0144f822d5d7c792241a724ddf
+    .claude/skills/technical-writing/references/structure-principles.md: sha256:5ff13dd7782dbb3502623425dccd648897ce860a78bb4c3d199b191811c844ba
+    .grok/skills/technical-writing/SKILL.md: sha256:623cef98acaff58fc6fb75efe2251503eb2ef8e0d39d899cdd770ac58a05f199
+    .grok/skills/technical-writing/assets/templates/explanation-doc.md: sha256:6ab62e8198c4661ab4e185e23a7b9e1c02444bcaa809b21d98564fc3dba6ea16
+    .grok/skills/technical-writing/assets/templates/learning-doc.md: sha256:8ea3e704e7ee811bbf6223be025472176cda395bb9f81e1140f6d692d6b2bb80
+    .grok/skills/technical-writing/assets/templates/problem-solving-doc.md: sha256:bd184bd953e7923af920e49c10949b85734e67475589cd6c93888f8c611a0de3
+    .grok/skills/technical-writing/assets/templates/reference-doc.md: sha256:cb40b80a3c39851e39554e6896b37f1aeffbe9c8fb58e3ad1a4283a4abc2d8e8
+    .grok/skills/technical-writing/assets/templates/review-report.md: sha256:5b313c0251e7a282b5d163f967ff878d02b4c8941b73ba3b6d7d1a35999d11f1
+    .grok/skills/technical-writing/assets/templates/technical-article.md: sha256:a15b13d6ee3866ad6504bea2649ec2599a93361d45f447a6bfd6b63c6b03d466
+    .grok/skills/technical-writing/references/document-types.md: sha256:53de1830c0c5dffa016deab64d3df444d41885d96cb70f05b24880a760d1c935
+    .grok/skills/technical-writing/references/prompt-workflows.md: sha256:f726bc16fde428f43d5b5f8d7cf199566000cac5915e13cd36269af03cad4e39
+    .grok/skills/technical-writing/references/review-rubric.md: sha256:3e9bbd682253fffb6bc950ba33aaaab2e6a4f680d19066b6d4ba1d6070343fb6
+    .grok/skills/technical-writing/references/sentence-style.md: sha256:59b1c1885819c02ab92657c780f97daab6f057957100f5b4c2062132795b57e2
+    .grok/skills/technical-writing/references/source-map.md: sha256:1e4ac780170a7d849be85fd6c17fe2134596fa0144f822d5d7c792241a724ddf
+    .grok/skills/technical-writing/references/structure-principles.md: sha256:5ff13dd7782dbb3502623425dccd648897ce860a78bb4c3d199b191811c844ba
+    .kiro/skills/technical-writing/SKILL.md: sha256:623cef98acaff58fc6fb75efe2251503eb2ef8e0d39d899cdd770ac58a05f199
+    .kiro/skills/technical-writing/assets/templates/explanation-doc.md: sha256:6ab62e8198c4661ab4e185e23a7b9e1c02444bcaa809b21d98564fc3dba6ea16
+    .kiro/skills/technical-writing/assets/templates/learning-doc.md: sha256:8ea3e704e7ee811bbf6223be025472176cda395bb9f81e1140f6d692d6b2bb80
+    .kiro/skills/technical-writing/assets/templates/problem-solving-doc.md: sha256:bd184bd953e7923af920e49c10949b85734e67475589cd6c93888f8c611a0de3
+    .kiro/skills/technical-writing/assets/templates/reference-doc.md: sha256:cb40b80a3c39851e39554e6896b37f1aeffbe9c8fb58e3ad1a4283a4abc2d8e8
+    .kiro/skills/technical-writing/assets/templates/review-report.md: sha256:5b313c0251e7a282b5d163f967ff878d02b4c8941b73ba3b6d7d1a35999d11f1
+    .kiro/skills/technical-writing/assets/templates/technical-article.md: sha256:a15b13d6ee3866ad6504bea2649ec2599a93361d45f447a6bfd6b63c6b03d466
+    .kiro/skills/technical-writing/references/document-types.md: sha256:53de1830c0c5dffa016deab64d3df444d41885d96cb70f05b24880a760d1c935
+    .kiro/skills/technical-writing/references/prompt-workflows.md: sha256:f726bc16fde428f43d5b5f8d7cf199566000cac5915e13cd36269af03cad4e39
+    .kiro/skills/technical-writing/references/review-rubric.md: sha256:3e9bbd682253fffb6bc950ba33aaaab2e6a4f680d19066b6d4ba1d6070343fb6
+    .kiro/skills/technical-writing/references/sentence-style.md: sha256:59b1c1885819c02ab92657c780f97daab6f057957100f5b4c2062132795b57e2
+    .kiro/skills/technical-writing/references/source-map.md: sha256:1e4ac780170a7d849be85fd6c17fe2134596fa0144f822d5d7c792241a724ddf
+    .kiro/skills/technical-writing/references/structure-principles.md: sha256:5ff13dd7782dbb3502623425dccd648897ce860a78bb4c3d199b191811c844ba
+  content_hash: sha256:40f3de2d9fdb0cdc181197310e35c6066322a314b5d99c96b897339e8eb8c489
 - repo_url: mattpocock/skills
   name: codebase-design
   host: github.com
@@ -524,6 +643,132 @@ deployments:
   content_hash: sha256:aa3fdff5d0e4556177f4dfd5f04117e772aa54f94b6a2e34b6c0edf629c6b9b5
 - kind: project-relative
   target: claude
+  value: .claude/skills/technical-writing
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:623cef98acaff58fc6fb75efe2251503eb2ef8e0d39d899cdd770ac58a05f199
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/assets/templates/explanation-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:6ab62e8198c4661ab4e185e23a7b9e1c02444bcaa809b21d98564fc3dba6ea16
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/assets/templates/learning-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:8ea3e704e7ee811bbf6223be025472176cda395bb9f81e1140f6d692d6b2bb80
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/assets/templates/problem-solving-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:bd184bd953e7923af920e49c10949b85734e67475589cd6c93888f8c611a0de3
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/assets/templates/reference-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:cb40b80a3c39851e39554e6896b37f1aeffbe9c8fb58e3ad1a4283a4abc2d8e8
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/assets/templates/review-report.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:5b313c0251e7a282b5d163f967ff878d02b4c8941b73ba3b6d7d1a35999d11f1
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/assets/templates/technical-article.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:a15b13d6ee3866ad6504bea2649ec2599a93361d45f447a6bfd6b63c6b03d466
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/references/document-types.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:53de1830c0c5dffa016deab64d3df444d41885d96cb70f05b24880a760d1c935
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/references/prompt-workflows.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:f726bc16fde428f43d5b5f8d7cf199566000cac5915e13cd36269af03cad4e39
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/references/review-rubric.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:3e9bbd682253fffb6bc950ba33aaaab2e6a4f680d19066b6d4ba1d6070343fb6
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/references/sentence-style.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:59b1c1885819c02ab92657c780f97daab6f057957100f5b4c2062132795b57e2
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/references/source-map.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:1e4ac780170a7d849be85fd6c17fe2134596fa0144f822d5d7c792241a724ddf
+- kind: project-relative
+  target: claude
+  value: .claude/skills/technical-writing/references/structure-principles.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:5ff13dd7782dbb3502623425dccd648897ce860a78bb4c3d199b191811c844ba
+- kind: project-relative
+  target: claude
   value: .claude/skills/writing-for-agents
   runtime: null
   scope: project
@@ -801,6 +1046,132 @@ deployments:
   - openai/skills/skills/.curated/playwright
   active_owner: openai/skills/skills/.curated/playwright
   content_hash: sha256:aa3fdff5d0e4556177f4dfd5f04117e772aa54f94b6a2e34b6c0edf629c6b9b5
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:623cef98acaff58fc6fb75efe2251503eb2ef8e0d39d899cdd770ac58a05f199
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/assets/templates/explanation-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:6ab62e8198c4661ab4e185e23a7b9e1c02444bcaa809b21d98564fc3dba6ea16
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/assets/templates/learning-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:8ea3e704e7ee811bbf6223be025472176cda395bb9f81e1140f6d692d6b2bb80
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/assets/templates/problem-solving-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:bd184bd953e7923af920e49c10949b85734e67475589cd6c93888f8c611a0de3
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/assets/templates/reference-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:cb40b80a3c39851e39554e6896b37f1aeffbe9c8fb58e3ad1a4283a4abc2d8e8
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/assets/templates/review-report.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:5b313c0251e7a282b5d163f967ff878d02b4c8941b73ba3b6d7d1a35999d11f1
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/assets/templates/technical-article.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:a15b13d6ee3866ad6504bea2649ec2599a93361d45f447a6bfd6b63c6b03d466
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/references/document-types.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:53de1830c0c5dffa016deab64d3df444d41885d96cb70f05b24880a760d1c935
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/references/prompt-workflows.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:f726bc16fde428f43d5b5f8d7cf199566000cac5915e13cd36269af03cad4e39
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/references/review-rubric.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:3e9bbd682253fffb6bc950ba33aaaab2e6a4f680d19066b6d4ba1d6070343fb6
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/references/sentence-style.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:59b1c1885819c02ab92657c780f97daab6f057957100f5b4c2062132795b57e2
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/references/source-map.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:1e4ac780170a7d849be85fd6c17fe2134596fa0144f822d5d7c792241a724ddf
+- kind: project-relative
+  target: codex
+  value: .agents/skills/technical-writing/references/structure-principles.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:5ff13dd7782dbb3502623425dccd648897ce860a78bb4c3d199b191811c844ba
 - kind: project-relative
   target: codex
   value: .agents/skills/writing-for-agents
@@ -1082,6 +1453,132 @@ deployments:
   content_hash: sha256:aa3fdff5d0e4556177f4dfd5f04117e772aa54f94b6a2e34b6c0edf629c6b9b5
 - kind: project-relative
   target: grok-build
+  value: .grok/skills/technical-writing
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: null
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:623cef98acaff58fc6fb75efe2251503eb2ef8e0d39d899cdd770ac58a05f199
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/assets/templates/explanation-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:6ab62e8198c4661ab4e185e23a7b9e1c02444bcaa809b21d98564fc3dba6ea16
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/assets/templates/learning-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:8ea3e704e7ee811bbf6223be025472176cda395bb9f81e1140f6d692d6b2bb80
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/assets/templates/problem-solving-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:bd184bd953e7923af920e49c10949b85734e67475589cd6c93888f8c611a0de3
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/assets/templates/reference-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:cb40b80a3c39851e39554e6896b37f1aeffbe9c8fb58e3ad1a4283a4abc2d8e8
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/assets/templates/review-report.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:5b313c0251e7a282b5d163f967ff878d02b4c8941b73ba3b6d7d1a35999d11f1
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/assets/templates/technical-article.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:a15b13d6ee3866ad6504bea2649ec2599a93361d45f447a6bfd6b63c6b03d466
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/references/document-types.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:53de1830c0c5dffa016deab64d3df444d41885d96cb70f05b24880a760d1c935
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/references/prompt-workflows.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:f726bc16fde428f43d5b5f8d7cf199566000cac5915e13cd36269af03cad4e39
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/references/review-rubric.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:3e9bbd682253fffb6bc950ba33aaaab2e6a4f680d19066b6d4ba1d6070343fb6
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/references/sentence-style.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:59b1c1885819c02ab92657c780f97daab6f057957100f5b4c2062132795b57e2
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/references/source-map.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:1e4ac780170a7d849be85fd6c17fe2134596fa0144f822d5d7c792241a724ddf
+- kind: project-relative
+  target: grok-build
+  value: .grok/skills/technical-writing/references/structure-principles.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:5ff13dd7782dbb3502623425dccd648897ce860a78bb4c3d199b191811c844ba
+- kind: project-relative
+  target: grok-build
   value: .grok/skills/writing-for-agents
   runtime: null
   scope: project
@@ -1359,6 +1856,132 @@ deployments:
   - openai/skills/skills/.curated/playwright
   active_owner: openai/skills/skills/.curated/playwright
   content_hash: sha256:aa3fdff5d0e4556177f4dfd5f04117e772aa54f94b6a2e34b6c0edf629c6b9b5
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: null
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:623cef98acaff58fc6fb75efe2251503eb2ef8e0d39d899cdd770ac58a05f199
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/assets/templates/explanation-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:6ab62e8198c4661ab4e185e23a7b9e1c02444bcaa809b21d98564fc3dba6ea16
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/assets/templates/learning-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:8ea3e704e7ee811bbf6223be025472176cda395bb9f81e1140f6d692d6b2bb80
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/assets/templates/problem-solving-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:bd184bd953e7923af920e49c10949b85734e67475589cd6c93888f8c611a0de3
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/assets/templates/reference-doc.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:cb40b80a3c39851e39554e6896b37f1aeffbe9c8fb58e3ad1a4283a4abc2d8e8
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/assets/templates/review-report.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:5b313c0251e7a282b5d163f967ff878d02b4c8941b73ba3b6d7d1a35999d11f1
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/assets/templates/technical-article.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:a15b13d6ee3866ad6504bea2649ec2599a93361d45f447a6bfd6b63c6b03d466
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/references/document-types.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:53de1830c0c5dffa016deab64d3df444d41885d96cb70f05b24880a760d1c935
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/references/prompt-workflows.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:f726bc16fde428f43d5b5f8d7cf199566000cac5915e13cd36269af03cad4e39
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/references/review-rubric.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:3e9bbd682253fffb6bc950ba33aaaab2e6a4f680d19066b6d4ba1d6070343fb6
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/references/sentence-style.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:59b1c1885819c02ab92657c780f97daab6f057957100f5b4c2062132795b57e2
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/references/source-map.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:1e4ac780170a7d849be85fd6c17fe2134596fa0144f822d5d7c792241a724ddf
+- kind: project-relative
+  target: kiro
+  value: .kiro/skills/technical-writing/references/structure-principles.md
+  runtime: null
+  scope: project
+  owners:
+  - gwagjiug/technical-writing/.claude/skills/technical-writing
+  active_owner: gwagjiug/technical-writing/.claude/skills/technical-writing
+  content_hash: sha256:5ff13dd7782dbb3502623425dccd648897ce860a78bb4c3d199b191811c844ba
 - kind: project-relative
   target: kiro
   value: .kiro/skills/writing-for-agents

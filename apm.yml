@@ -21,6 +21,7 @@ dependencies:
     - mattpocock/skills/skills/productivity/writing-for-agents
     - mattpocock/skills/skills/engineering/codebase-design
     - microsoft/playwright-cli/skills/playwright-cli
+    - gwagjiug/technical-writing/.claude/skills/technical-writing
 includes: auto
 scripts:
   lint: uv run ruff check src tests
