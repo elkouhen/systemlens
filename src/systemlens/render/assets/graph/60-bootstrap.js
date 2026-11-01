@@ -270,7 +270,7 @@
       if (!targetRenderer) return;
       const fitRequest = ++graphState.fitRequest;
       const nextMode = mode === "overview" ? "overview" : "readable";
-      updateGraphState({ fitMode: nextMode });
+      updateGraphState({ fitMode: nextMode, cameraMovedByUser: false });
       updateFitModeControls(nextMode);
       targetRenderer.refresh();
       // Sigma's normalized overview is the default camera state. Apply it
@@ -307,6 +307,7 @@
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
+      graphState.cameraMovedByUser = true;
       camera.setState({ ...state, ratio: Math.max(.01, state.ratio * .8) });
       requestGraphRender();
     };
@@ -315,6 +316,7 @@
       const renderer = activeRenderer();
       const camera = renderer.getCamera();
       const state = camera.getState();
+      graphState.cameraMovedByUser = true;
       camera.setState({ ...state, ratio: Math.min(100, state.ratio * 1.25) });
       requestGraphRender();
     };

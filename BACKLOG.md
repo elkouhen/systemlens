@@ -2,12 +2,13 @@
 
 Status: `proposed` on 2026-11-01. No task starts before the product owner
 validates this backlog, reorders its lots if needed, and settles the
-decision of V3. Owner: SystemLens implementer. Reviewers: product owner
+decision of V3. V7 was requested and validated directly by the product
+owner, and is delivered. Owner: SystemLens implementer. Reviewers: product owner
 and UX maintainer. Baseline: commit `556c0f7`, viewport 1440 by 900.
 
 This backlog replaces the delivered Explorer UX stream U1 to U8. Its
 content and delivery record remain in Git history at commit `556c0f7`.
-The items it carried over from earlier backlogs are restated in section 6
+The items it carried over from earlier backlogs are restated in section 7
 so they stay visible.
 
 ## 1. Problem
@@ -126,6 +127,19 @@ the graph point at the workspace centre fixed.
   card under the workspace centre within two pixels; an untouched graph
   still refits.
 
+### V7. Keep the minimap on screen once the user navigates
+
+The minimap hid whenever every node centre was back inside the graph area,
+so it blinked during a pan and vanished on small graphs. PDR-6 records the
+new rule: it stays visible after any user pan or zoom until the next fit.
+
+- Files: `docs/PDR.md`, `docs/UX-UI.md`, `00-core.js`, `10-rebuild.js`,
+  `20-controls.js`, `55-code-flows.js`, `60-bootstrap.js`,
+  `tests/test_browser_export.py`.
+- Acceptance: a browser test pans a nine-node graph back and forth and
+  asserts the minimap never hides, then hides after `Tout le graphe`.
+- Status: see the delivery record below.
+
 ## 5. Delivery lots and validation
 
 | Lot | Tasks | Why this order |
@@ -133,6 +147,7 @@ the graph point at the workspace centre fixed.
 | 1 | V1, V2 | Ships the existing fix to the pages people open, and keeps it shipped. |
 | 2 | V4, V5 | Local defects without a contract decision. |
 | 3 | V3, V6 | Change a contract rule; V3 needs its PDR entry first. |
+| Fix | V7 | Requested directly by the product owner on 2026-11-01. |
 
 Each task runs:
 
@@ -145,7 +160,13 @@ uv run pytest -m slow tests/test_browser_export.py
 Each lot closes with `uv run mypy`, `uv run pytest`, and
 `uv run python scripts/check_companion_contracts.py`.
 
-## 6. Items carried over from earlier backlogs
+## 6. Delivery record
+
+| ID | Outcome |
+|---|---|
+| V7 | Delivered on 2026-11-01. A user pan, wheel zoom, zoom control, or minimap move sets a flag per surface that keeps the minimap visible; every fit clears it. PDR-6 and `docs/UX-UI.md` record the rule. Verified by `test_minimap_stays_visible_once_the_user_navigates`, which fails on the previous assets; the browser suite (49 tests) and the other slow tests passed with Chrome; default suite, ruff, and mypy clean. A slow pan on a fresh lab export kept the minimap on screen at every step. Deviation: none. The published live model still needs V1 to show the fix. |
+
+## 7. Items carried over from earlier backlogs
 
 Their context lives in Git history before `fdac92e`. Statuses follow
 `docs/process/delivery-practices.md`.
@@ -158,7 +179,7 @@ Their context lives in Git history before `fdac92e`. Statuses follow
 | Make the lab reachable from a scheduled CI job so the three items above can leave `blocked`. | `open`; depends on the lab repository's compose setup |
 | Regenerate the live model in the `pages.yml` pipeline, as `supermarket.html` already is. | `open`; would make V2 redundant once delivered |
 
-## 7. Archived backlogs
+## 8. Archived backlogs
 
 | Document | Purpose |
 |---|---|

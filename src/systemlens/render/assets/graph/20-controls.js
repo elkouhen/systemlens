@@ -50,7 +50,8 @@
             selected: node.dataset.pathKey === graphState.callTreeSelectedPathKey,
           });
         });
-        thresholdReached = treeNodes.length > 12 || totalScale < .82
+        thresholdReached = graphState.callTreeMovedByUser
+          || treeNodes.length > 12 || totalScale < .82
           || width * totalScale > viewport.width * 1.15
           || height * totalScale > viewport.height * 1.15;
         graphMinimapModel = { kind: "tree", left, top, totalScale, width, height, viewport };
@@ -82,7 +83,8 @@
             id,
           });
         });
-        thresholdReached = visibleIds.length > 24
+        thresholdReached = graphState.cameraMovedByUser
+          || visibleIds.length > 24
           || extentPoints.some(point => {
             const screen = renderer.graphToViewport(point);
             return screen.x < 0 || screen.x > viewport.width
@@ -220,6 +222,7 @@
     function navigateGraphMinimap(event) {
       if (!graphMinimapModel) return;
       const point = graphMinimapModel.mapPoint(event);
+      graphState[graphMinimapModel.kind === "tree" ? "callTreeMovedByUser" : "cameraMovedByUser"] = true;
       if (graphMinimapModel.kind === "tree") {
         const { viewport, totalScale, left, top } = graphMinimapModel;
         const canvas = graphCallTreeOverlay.querySelector(".graph-call-tree-canvas");

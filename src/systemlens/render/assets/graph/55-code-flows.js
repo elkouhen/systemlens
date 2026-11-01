@@ -336,6 +336,7 @@
           if (!callTreePan || event.pointerId !== callTreePan.pointerId) return;
           const canvas = graphCallTreeOverlay.querySelector(".graph-call-tree-canvas");
           if (!canvas) return;
+          graphState.callTreeMovedByUser = true;
           canvas.style.left = `${callTreePan.startLeft + event.clientX - callTreePan.startX}px`;
           canvas.style.top = `${callTreePan.startTop + event.clientY - callTreePan.startY}px`;
           scheduleGraphMinimapRender();
@@ -1440,6 +1441,7 @@
       const nextZoom = Math.max(.5, Math.min(64, oldZoom * factor));
       const nextTotalScale = baseScale * nextZoom;
       graphState.callTreeZoom = nextZoom;
+      graphState.callTreeMovedByUser = true;
       canvas.style.left = `${x - logicalX * nextTotalScale}px`;
       canvas.style.top = `${y - logicalY * nextTotalScale}px`;
       canvas.style.transform = `scale(${nextTotalScale})`;
@@ -1456,6 +1458,7 @@
       // `Tout voir`. The selected occurrence stays selected.
       graphState.callTreeZoom = 1;
       graphState.callTreeFitComplete = true;
+      graphState.callTreeMovedByUser = false;
       callTreeRenderSignature = "";
       renderCallTreeOverlay();
       syncCallTreeDepthControl();
@@ -1465,6 +1468,7 @@
       if (!codeFlowSelection.flowId || graphState.callGraphDisplayMode !== "tree") return false;
       graphState.callTreeZoom = 1;
       graphState.callTreeFitComplete = true;
+      graphState.callTreeMovedByUser = false;
       callTreeRenderSignature = "";
       renderCallTreeOverlay();
       syncCallTreeDepthControl();
@@ -1661,6 +1665,7 @@
       graphState.callTreeSelectedPathKey = null;
       graphState.callTreeZoom = 1;
       graphState.callTreeFitComplete = false;
+      graphState.callTreeMovedByUser = false;
       // The owning module is the consumer for an input-triggered flow. The
       // visual root must follow the exported call-graph path instead: it is
       // the upstream producer when a single Kafka source is proven, and the

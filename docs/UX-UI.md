@@ -376,7 +376,9 @@ legend and mirrors its state. Pan and zoom move the
 camera, not graph nodes.
 
 The overview minimap appears for architecture graphs with more than 24 visible
-nodes or with nodes outside the workspace. It shows visible node positions and
+nodes or with nodes outside the workspace. Once the user pans or zooms, by
+gesture, zoom control, or minimap, it stays visible until the next fit, even
+when every node is back on screen (PDR-6). It shows visible node positions and
 the current viewport. Clicking or dragging it centers the camera on the
 pointed position at the current zoom, without changing selection. Node
 positions stay fixed in the minimap while the viewport rectangle moves. The
@@ -508,8 +510,9 @@ displays the indexed trigger event, and controls the tree without repeating the
 hierarchy.
 
 The call-tree minimap appears when more than 12 occurrences are visible, the
-total scale is below 0.82, or the tree exceeds the workspace by 15 percent. It
-shows occurrence positions and the current viewport. Clicking or dragging it
+total scale is below 0.82, or the tree exceeds the workspace by 15 percent.
+After a user pan or zoom it stays visible until the tree refits or another
+flow opens (PDR-6). It shows occurrence positions and the current viewport. Clicking or dragging it
 moves the tree camera while preserving the selected occurrence. It samples at
 most 700 occurrences.
 

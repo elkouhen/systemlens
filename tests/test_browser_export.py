@@ -1296,6 +1296,70 @@ def test_graph_viewport_pan_and_zoom_follow_the_pointer() -> None:
 
 
 @pytest.mark.slow
+def test_minimap_stays_visible_once_the_user_navigates() -> None:
+    """PDR-6: after a pan or zoom the minimap stays until the next fit.
+
+    Regression: on a graph of at most 24 nodes the minimap hid as soon as
+    every node centre was back inside the graph area, so it blinked during a
+    slow pan and vanished when the user zoomed back out.
+    """
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 0"
+        )
+        _wait_for_settled_layout(page)
+        minimap = page.locator("#graph-minimap")
+
+        def minimap_visible() -> bool:
+            page.wait_for_timeout(60)
+            return bool(page.evaluate("() => !document.getElementById('graph-minimap').hidden"))
+
+        assert int(page.locator("#graph").get_attribute("data-visible-node-count") or 0) <= 24
+        assert not minimap_visible()
+
+        stage = _graph_background_point(page, end_dx=240)
+        page.mouse.move(stage["x"], stage["y"])
+        page.mouse.wheel(0, -100)
+        page.mouse.wheel(0, 100)
+        assert minimap_visible()
+
+        page.mouse.down()
+        for step in [*range(1, 21), *range(20, -21, -1), *range(-20, 1)]:
+            page.mouse.move(stage["x"] + step * 12, stage["y"])
+            assert minimap_visible(), f"minimap hidden at pan step {step}"
+        page.mouse.up()
+
+        page.locator("#graph-fit-overview").click()
+        minimap.wait_for(state="hidden")
+        page.locator("#graph-zoom-out").click()
+        minimap.wait_for(state="visible")
+        page.locator("#graph-zoom-in").click()
+        assert minimap_visible()
+
+        page.locator("#flows-tab").click()
+        page.locator(".code-flow-item").first.click()
+        _wait_for_call_tree(page)
+        page.wait_for_timeout(200)
+        assert page.locator(".graph-call-tree-node").count() <= 12
+        assert not minimap_visible()
+        tree = page.locator("#graph-call-tree").bounding_box()
+        assert tree
+        page.mouse.move(tree["x"] + tree["width"] * .5, tree["y"] + tree["height"] * .85)
+        page.mouse.wheel(0, -100)
+        page.mouse.wheel(0, 100)
+        assert minimap_visible()
+        browser.close()
+
+
+@pytest.mark.slow
 def test_narrow_viewport_collapses_the_panel_into_a_drawer_and_wording_is_french() -> None:
     """U8: drawer at 900 px or less, Couche, Sombre/Clair, placeholder, diagnostics."""
     document = _current_simple_dataset_document()

@@ -15,6 +15,7 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-3](#pdr-3-the-export-speaks-french) | The export speaks French | No for the vocabulary; yes for individual labels |
 | [PDR-4](#pdr-4-accessibility-and-cdn-concerns-are-deferred) | Accessibility and CDN concerns are deferred | Yes, by the user only |
 | [PDR-5](#pdr-5-a-first-index-needs-no-external-tool) | A first index needs no external tool | Yes, product owner; see ADR-66 |
+| [PDR-6](#pdr-6-the-minimap-stays-once-the-user-navigates) | The minimap stays once the user navigates | Yes, product owner |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -92,3 +93,22 @@ cover proprietary code; a silent fallback at run time hid that dependency.
 **Consequences:** flows of a first index use the closed-world dispatch rules
 of ADR-61; the companion skill passes the engine explicitly where CodeQL is
 installed.
+
+## PDR-6: The minimap stays once the user navigates
+
+**Status:** Accepted on 2026-11-01 by the product owner, who reported that
+the navigation minimap disappears.
+
+**Decision:** After a user pan, wheel zoom, zoom control, or minimap move,
+the minimap of the Architecture graph and of the call tree stays visible
+until the next fit. A fit is `Tout le graphe`, `Vue lisible`, a layout or
+filter refit, a tree refit, or opening another flow. The earlier size and
+off-screen rules still show it before any navigation.
+
+**Why:** the minimap hid as soon as every node centre was back inside the
+graph area. On small graphs it blinked during a slow pan and vanished at
+the moment the user wanted it to find their way back.
+
+**Consequences:** a programmatic camera move, such as centring a selected
+flow, does not count as navigation. A window resize that refits the graph
+hides the minimap again until V6 of the backlog keeps the camera instead.

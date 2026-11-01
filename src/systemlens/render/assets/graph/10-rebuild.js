@@ -389,6 +389,7 @@
       // its camera from a safe state captured for the previous graph.
       graphState.cameraFitAdjusting = false;
       graphState.lastSafeCameraState = null;
+      graphState.cameraMovedByUser = false;
       portPathOverlay.replaceChildren();
       nodeLabelOverlay.replaceChildren();
       flowTooltipOverlay.replaceChildren();
@@ -1182,6 +1183,7 @@
               event.clientY - forwardedPointer.startY,
             ) > 3) forwardedPointer.moved = true;
             if (!forwardedPointer.moved) return;
+            graphState.cameraMovedByUser = true;
             renderer.getCamera().setState(pannedCameraState(
               renderer,
               forwardedPointer.cameraState,
@@ -2209,6 +2211,7 @@
         // the current camera state. Re-projecting a graph point after
         // setState read a matrix Sigma only refreshes on render, so the
         // correction was zero and the zoom pivoted on the graph centre.
+        graphState.cameraMovedByUser = true;
         camera.setState(renderer.getViewportZoomedState(cursor, ratio));
       };
       // Relation arcs live in their own SVG layer above the canvas: a wheel
@@ -2229,6 +2232,7 @@
       };
       const moveGraphPan = event => {
         if (!graphPan || event.pointerId !== graphPan.pointerId) return;
+        graphState.cameraMovedByUser = true;
         renderer.getCamera().setState(pannedCameraState(
           renderer,
           graphPan.cameraState,

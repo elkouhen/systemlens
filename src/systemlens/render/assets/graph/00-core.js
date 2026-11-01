@@ -202,6 +202,10 @@
       callTreeDepth: 1,
       callTreeZoom: 1,
       callTreeFitComplete: false,
+      // Set by a user pan, wheel, zoom control, or minimap move; cleared by
+      // every fit. While set, the minimap stays on screen (PDR-6).
+      cameraMovedByUser: false,
+      callTreeMovedByUser: false,
       callTreeSelectedPathKey: null,
       callTreeVisibleNodeCount: 0,
       callTreeVisibleEdgeCount: 0,
