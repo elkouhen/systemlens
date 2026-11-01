@@ -695,6 +695,46 @@
       ));
       return consumers;
     }
+    // A relation inspector (served route, HTTP call) shares the node
+    // inspector skeleton: a header strip, one action row with `Centrer dans
+    // le graphe` on the provider, then counted `Relations` and `Sources`
+    // groups (PDR-10).
+    function openRelationInspector({ method, path, status, centerNode, sourceUri, sourceLocation }) {
+      inspectorBody.classList.add("route-inspector");
+      const widget = document.createElement("div");
+      widget.className = "architecture-node-inspector relation-inspector";
+      const summary = document.createElement("section");
+      summary.className = "route-inspector-summary";
+      const methodBadge = document.createElement("span");
+      methodBadge.className = "route-inspector-method";
+      methodBadge.textContent = method;
+      const pathLabel = document.createElement("code");
+      pathLabel.className = "route-inspector-path";
+      pathLabel.textContent = path;
+      summary.append(methodBadge, pathLabel, status);
+      const actions = document.createElement("div");
+      actions.className = "inspector-actions";
+      const center = inspectorCenterAction(centerNode);
+      if (center) actions.append(center);
+      if (sourceUri) {
+        const link = document.createElement("a");
+        link.href = sourceUri;
+        link.className = "inspector-action module-open-action";
+        link.textContent = "Ouvrir dans VS Code";
+        link.title = `Ouvrir ${sourceLocation || "la source"} dans VS Code`;
+        actions.append(link);
+      }
+      widget.append(summary);
+      if (actions.children.length) widget.append(actions);
+      const relations = createDetailsGroup("Relations", true, widget);
+      const sources = createDetailsGroup("Sources", true, widget);
+      inspectorBody.append(widget);
+      return { widget, relations, sources };
+    }
+    function finishRelationInspector(widget) {
+      widget.querySelectorAll(":scope > .details-group").forEach(removeEmptyDetailsGroup);
+      structureInspectorGroups(widget);
+    }
     function openHttpRouteInspector(providerNode, route) {
       if (!providerNode || !route) return;
       expandedHttpRoute = { service: providerNode.name, route: route.route };
@@ -702,20 +742,19 @@
       const parts = httpRouteParts(route);
       const consumers = httpRouteConsumers(providerNode, route);
       openInspector(resourceInspectorTitle("served_route", `${parts.method} ${parts.path}`), { docked: true });
-      inspectorBody.classList.add("route-inspector");
-      const summary = document.createElement("section");
-      summary.className = "route-inspector-summary";
-      const method = document.createElement("span");
-      method.className = "route-inspector-method";
-      method.textContent = parts.method;
-      const path = document.createElement("code");
-      path.className = "route-inspector-path";
-      path.textContent = parts.path;
       const count = document.createElement("span");
       count.className = "route-client-count";
-      count.textContent = `${consumers.length} client${consumers.length > 1 ? "s" : ""}`;
-      summary.append(method, path, count);
-      inspectorBody.append(summary);
+      count.textContent = consumers.length
+        ? `${consumers.length} client${consumers.length > 1 ? "s" : ""}`
+        : "aucun client";
+      const { widget, relations, sources } = openRelationInspector({
+        method: parts.method,
+        path: parts.path,
+        status: count,
+        centerNode: providerNode,
+        sourceUri: route.vscode_uri,
+        sourceLocation: route.location,
+      });
       const openRelatedNode = node => {
         if (!node) return;
         selectNode(node.id, false, false);
@@ -729,7 +768,7 @@
         title: `Afficher le microservice ${providerNode.name}`,
         modelNodeId: providerNode.id,
         action: () => openRelatedNode(providerNode),
-      }], inspectorBody);
+      }], relations);
       appendActionList("Microservices clients", consumers.map(item => ({
         label: `${item.service} · ${item.route}`,
         title: `Afficher le microservice ${item.service}`,
@@ -737,18 +776,13 @@
         action: () => openRelatedNode(
           graphData.nodes.find(node => node.kind === "microservice" && node.name === item.service),
         ),
-      })), inspectorBody);
+      })), relations);
       appendList("DTO REST", (providerNode.rest_dtos || []).map(dto => (
         `${dto.name} · ${dto.roles.join(", ")} · ${dto.location}`
-      )), inspectorBody);
-      appendList("Preuves d’appel", consumers.length
-        ? consumers.map(item => `${item.service} · ${item.location}`)
-        : ["Aucun microservice appelant identifié."], inspectorBody);
-      appendActionList("Code source", route.vscode_uri ? [{
-        label: route.location,
-        title: `Ouvrir ${route.location} dans VS Code`,
-        action: () => { window.location.href = route.vscode_uri; },
-      }] : [], inspectorBody);
+      )), relations);
+      appendList("Code source", route.location ? [route.location] : [], sources);
+      appendList("Preuves d’appel", consumers.map(item => `${item.service} · ${item.location}`), sources);
+      finishRelationInspector(widget);
       selectNode(providerNode.id, false, false);
       // In the resource catalogue the list stays under the docked inspector;
       // the provider's inline details never replace it (PDR-10).
@@ -759,15 +793,6 @@
       inspectorBackAction = null;
       const parts = httpRouteParts(route);
       openInspector(resourceInspectorTitle("called_route", `${parts.method} ${parts.path}`), { docked: true });
-      inspectorBody.classList.add("route-inspector");
-      const summary = document.createElement("section");
-      summary.className = "route-inspector-summary";
-      const method = document.createElement("span");
-      method.className = "route-inspector-method";
-      method.textContent = parts.method;
-      const path = document.createElement("code");
-      path.className = "route-inspector-path";
-      path.textContent = parts.path;
       const targetNode = call?.service
         ? graphData.nodes.find(node => node.kind === "microservice" && node.name === call.service)
         : null;
@@ -777,8 +802,14 @@
       const status = document.createElement("span");
       status.className = "route-client-count";
       status.textContent = targetNode ? `Cible : ${targetNode.name}` : "Cible non rapprochée";
-      summary.append(method, path, status);
-      inspectorBody.append(summary);
+      const { widget, relations, sources } = openRelationInspector({
+        method: parts.method,
+        path: parts.path,
+        status,
+        centerNode: targetNode || callerNode,
+        sourceUri: route.vscode_uri,
+        sourceLocation: route.location,
+      });
       const reopen = () => openHttpCallInspector(callerNode, route, call);
       const openRelatedNode = node => {
         if (!node) return;
@@ -790,16 +821,16 @@
         title: `Afficher le microservice ${callerNode.name}`,
         modelNodeId: callerNode.id,
         action: () => openRelatedNode(callerNode),
-      }], inspectorBody);
+      }], relations);
       if (targetNode) {
         appendActionList("Microservice cible", [{
           label: targetNode.name,
           title: `Afficher le microservice cible ${targetNode.name}`,
           modelNodeId: targetNode.id,
           action: () => openRelatedNode(targetNode),
-        }], inspectorBody);
+        }], relations);
       } else {
-        appendList("Cible déclarée", [call?.service || "Aucun microservice cible rapproché"], inspectorBody);
+        appendList("Cible déclarée", [call?.service || "Aucun microservice cible rapproché"], relations);
       }
       if (servedRoute) {
         appendActionList("Route exposée par la cible", [{
@@ -810,9 +841,10 @@
             inspectorBackAction = reopen;
             renderArchitectureInspectorNavigation();
           },
-        }], inspectorBody);
+        }], relations);
       }
-      appendList("Preuve source", [route.location], inspectorBody);
+      appendList("Preuve source", route.location ? [route.location] : [], sources);
+      finishRelationInspector(widget);
     }
     function appendExpandedHttpRoute(node, route, container) {
       const sourceGroup = createDetailsGroup(`Route sélectionnée · ${route.route}`);

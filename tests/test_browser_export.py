@@ -1837,6 +1837,103 @@ def test_catalogue_inspector_titles_reuse_the_row_kind_label() -> None:
 
 
 @pytest.mark.slow
+def test_route_and_call_inspectors_share_the_node_inspector_skeleton() -> None:
+    """D6 (PDR-10): a relation inspector has a header strip, an action row
+    with `Centrer dans le graphe`, and counted Relations and Sources groups;
+    no section stays outside a group."""
+    cases = [
+        ("Route exposée", "/api/reservations", "inventory-service", "1 client",
+         {"Microservice exposant": 1, "Microservices clients": 1}),
+        ("Route exposée", "/api/health", "inventory-service", "aucun client",
+         {"Microservice exposant": 1}),
+        ("Route appelée", "/api/reservations", "order-service", "Cible : inventory-service",
+         {"Microservice appelant": 1, "Microservice cible": 1, "Route exposée par la cible": 1}),
+    ]
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_catalogue_page(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        for tag, name, owner, status, relations in cases:
+            _inspect_catalogue_row(page, _catalogue_row(page, tag, name, owner))
+            state = page.evaluate(
+                """() => {
+                    const body = document.querySelector('#inspector-body');
+                    const widget = body.querySelector(':scope > .relation-inspector');
+                    return {
+                        loose: [...body.querySelectorAll('.details-section')]
+                            .filter(section => !section.closest('.details-group')).length,
+                        children: [...widget.children].map(child => child.className),
+                        status: widget.querySelector('.route-client-count')?.textContent,
+                        actions: [...widget.querySelectorAll(':scope > .inspector-actions > .inspector-action')]
+                            .map(action => action.textContent),
+                        groups: [...widget.querySelectorAll(':scope > .details-group')].map(group => ({
+                            title: group.querySelector('.details-group-title')?.textContent,
+                            count: Number(group.querySelector('.details-group-count')?.textContent),
+                            sections: Object.fromEntries([...group.querySelectorAll('.details-section')]
+                                .map(section => [section.querySelector('h2').textContent,
+                                                 section.querySelectorAll('li').length])),
+                        })),
+                    };
+                }"""
+            )
+            assert state["loose"] == 0, (tag, state)
+            assert state["children"][:2] == ["route-inspector-summary", "inspector-actions"], state
+            assert state["status"] == status, state
+            assert state["actions"] == ["Centrer dans le graphe", "Ouvrir dans VS Code"], state
+            assert [group["title"] for group in state["groups"]] == ["Relations", "Sources"], state
+            relation_group, source_group = state["groups"]
+            assert relation_group["sections"] == relations, state
+            assert relation_group["count"] == sum(relations.values()), state
+            assert source_group["count"] == sum(source_group["sections"].values()) > 0, state
+            page.locator("#inspector-close").click()
+            page.locator("#inspector-modal").wait_for(state="hidden")
+        browser.close()
+
+
+@pytest.mark.slow
+def test_document_modals_share_one_header_with_the_vscode_action() -> None:
+    """D7 (PDR-10): contract, DTO and persistence-class modals open with one
+    action row holding the VS Code action, before the document body."""
+    cases = [
+        ("Contrat OpenAPI", "openapi.yaml", "inventory-service", "Ouvrir le fichier dans VS Code"),
+        ("Contrat AsyncAPI", "asyncapi.yaml", "inventory-service", "Ouvrir le fichier dans VS Code"),
+        ("DTO", "OrderPlaced", None, "Ouvrir la classe dans VS Code"),
+        ("Classe de persistance MongoDB", "OrderFulfillmentDocument", None, "Ouvrir la classe dans VS Code"),
+    ]
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _open_catalogue_page(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        for tag, name, owner, label in cases:
+            _inspect_catalogue_row(page, _catalogue_row(page, tag, name, owner))
+            if tag == "Contrat OpenAPI" and page.evaluate("() => Boolean(window.SwaggerUIBundle)"):
+                page.locator("#inspector-body .swagger-ui .info").first.wait_for(state="attached")
+            if tag == "Contrat AsyncAPI":
+                page.wait_for_function(
+                    "() => !document.querySelector('#inspector-body')?.textContent.includes('Chargement')"
+                )
+            modal_class = page.locator("#inspector-modal").get_attribute("class") or ""
+            assert "is-docked" not in modal_class, tag
+            first = page.locator("#inspector-body > :first-child")
+            assert "inspector-document-actions" in (first.get_attribute("class") or ""), tag
+            actions = first.locator(".inspector-action")
+            assert actions.all_inner_texts() == [label], tag
+            assert (actions.first.get_attribute("href") or "").startswith("vscode://file/"), tag
+            assert page.locator("#inspector-body a[href^='vscode://']").count() == 1, tag
+            title_box = page.locator(".inspector-header").bounding_box()
+            action_box = actions.first.bounding_box()
+            assert title_box and action_box and action_box["y"] >= title_box["y"] + title_box["height"], tag
+            if tag == "DTO":
+                notice = page.locator("#inspector-body > .dto-summary").first.inner_text()
+                assert notice.startswith("DTO de message · Classe source : "), notice
+            page.locator("#inspector-close").click()
+            page.locator("#inspector-modal").wait_for(state="hidden")
+        browser.close()
+
+
+@pytest.mark.slow
 def test_openapi_modal_keeps_its_vscode_action_above_swagger_ui() -> None:
     """D7 (PDR-10): Swagger UI no longer erases the VS Code action."""
     with sync_playwright() as playwright:
@@ -1850,7 +1947,7 @@ def test_openapi_modal_keeps_its_vscode_action_above_swagger_ui() -> None:
             page.locator("#inspector-body .swagger-ui .info").first.wait_for(state="attached")
         first = page.locator("#inspector-body > :first-child")
         assert "inspector-document-actions" in (first.get_attribute("class") or "")
-        action = first.locator("a.inspector-source-link")
+        action = first.locator("a.inspector-action")
         assert action.inner_text() == "Ouvrir le fichier dans VS Code"
         assert (action.get_attribute("href") or "").startswith("vscode://file/")
         assert action.is_visible()

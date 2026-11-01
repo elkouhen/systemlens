@@ -376,14 +376,14 @@
       });
       return item;
     }
-    function createDetailsGroup(title, open = true) {
+    function createDetailsGroup(title, open = true, container = details) {
       const group = document.createElement("details");
       group.className = "details-group";
       group.open = open;
       const summary = document.createElement("summary");
       summary.textContent = title;
       group.append(summary);
-      details.append(group);
+      container.append(group);
       return group;
     }
     // An empty group stays in the tree, hidden: the inline widget never
@@ -797,16 +797,8 @@
       }
       const actions = document.createElement("div");
       actions.className = "inspector-actions";
-      if (network.hasNode(node.id)) {
-        const center = document.createElement("button");
-        center.type = "button";
-        center.className = "inspector-action";
-        center.textContent = "Centrer dans le graphe";
-        center.title = `Centrer la vue sur ${nodeDisplayName(node)}`;
-        center.disabled = !isVisibleNodeId(node.id);
-        center.addEventListener("click", () => centerCameraOnPath({ nodes: [node.id] }));
-        actions.append(center);
-      }
+      const center = inspectorCenterAction(node);
+      if (center) actions.append(center);
       const flowsGroup = [...widget.querySelectorAll(":scope > .details-group")]
         .find(group => group.querySelector(":scope > summary")?.textContent === "Flux associés");
       const flowCount = flowsGroup && flowsGroup.dataset.empty !== "true"
@@ -834,6 +826,22 @@
         if (anchor) anchor.after(actions);
         else widget.prepend(actions);
       }
+      structureInspectorGroups(widget);
+    }
+    function inspectorCenterAction(node) {
+      if (!node || !network.hasNode(node.id)) return null;
+      const center = document.createElement("button");
+      center.type = "button";
+      center.className = "inspector-action";
+      center.textContent = "Centrer dans le graphe";
+      center.title = `Centrer la vue sur ${nodeDisplayName(node)}`;
+      center.disabled = !isVisibleNodeId(node.id);
+      center.addEventListener("click", () => centerCameraOnPath({ nodes: [node.id] }));
+      return center;
+    }
+    // Node and relation inspectors share counted disclosure groups: the
+    // first three non-empty groups open, an empty one stays listed at zero.
+    function structureInspectorGroups(widget) {
       let openedGroups = 0;
       widget.querySelectorAll(":scope > .details-group").forEach(group => {
         const groupSummary = group.querySelector(":scope > summary");
@@ -979,7 +987,7 @@
         link.href = sourceUri;
         link.textContent = label;
         link.title = label;
-        link.className = "inspector-action inspector-source-link";
+        link.className = "inspector-action module-open-action";
         actions.append(link);
       }
       if (actions.children.length) container.append(actions);
@@ -1011,6 +1019,7 @@
     }
     async function openAsyncApiContract(contract) {
       openInspector(resourceInspectorTitle("asyncapi_contract", contract.path));
+      appendInspectorDocumentActions(contract.vscode_uri, "Ouvrir le fichier dans VS Code");
       const loading = document.createElement("p");
       loading.className = "dto-summary";
       loading.textContent = "Chargement du contrat AsyncAPI…";
@@ -1067,13 +1076,6 @@
       });
       summary.append(summaryCopy, meta);
       shell.append(summary);
-      if (contract.vscode_uri) {
-        const link = document.createElement("a");
-        link.href = contract.vscode_uri;
-        link.textContent = "Ouvrir le fichier dans VS Code";
-        link.className = "inspector-source-link asyncapi-source-link";
-        shell.append(link);
-      }
       const component = document.createElement("asyncapi-component");
       component.schema = JSON.stringify(contract.spec);
       component.config = { show: { info: false, errors: false } };
@@ -1173,17 +1175,11 @@
       if (!entity || entity.kind !== "jpa_entity") return;
       openInspector(resourceInspectorTitle("jpa_entity", entity.display_name || entity.name));
       inspectorBody.classList.add("dto-inspector");
+      appendInspectorDocumentActions(entity.vscode_uri, "Ouvrir la classe dans VS Code");
       const summary = document.createElement("p");
       summary.className = "dto-summary";
       summary.textContent = `${entity.name} · ${entity.source_path}:${entity.source_line}`;
       inspectorBody.append(summary);
-      if (entity.vscode_uri) {
-        const sourceLink = document.createElement("a");
-        sourceLink.href = entity.vscode_uri;
-        sourceLink.className = "inspector-source-link";
-        sourceLink.textContent = "Ouvrir la classe dans VS Code";
-        inspectorBody.append(sourceLink);
-      }
       const ownerNode = findArchitectureNode(["microservice"], entity.owner);
       appendInspectorNodeOrValue(
         "Microservice",
@@ -1234,17 +1230,11 @@
       if (!item) return;
       openInspector(resourceInspectorTitle("mongo_persistence_class", item.name));
       inspectorBody.classList.add("dto-inspector");
+      appendInspectorDocumentActions(item.vscode_uri, "Ouvrir la classe dans VS Code");
       const summary = document.createElement("p");
       summary.className = "dto-summary";
       summary.textContent = `${item.qualified_name} · ${item.source}:${item.line}`;
       inspectorBody.append(summary);
-      if (item.vscode_uri) {
-        const sourceLink = document.createElement("a");
-        sourceLink.href = item.vscode_uri;
-        sourceLink.className = "inspector-source-link";
-        sourceLink.textContent = "Ouvrir la classe dans VS Code";
-        inspectorBody.append(sourceLink);
-      }
       const collectionNode = findArchitectureNode(
         ["mongodb_collection"],
         item.collection,
@@ -1324,6 +1314,7 @@
       if (!dto) return;
       openInspector(resourceInspectorTitle("dto", dto.name));
       inspectorBody.classList.add("dto-inspector");
+      appendInspectorDocumentActions(dto.vscode_uri, "Ouvrir la classe dans VS Code");
       const summary = document.createElement("p");
       summary.className = "dto-summary";
       // The DTO role leaves the title for the notice line (PDR-10).
@@ -1331,13 +1322,6 @@
         ? `Classe source : ${dto.source}`
         : "Classe Java non retrouvée dans les sources indexées ; les relations de messages restent disponibles."}`;
       inspectorBody.append(summary);
-      if (dto.vscode_uri) {
-        const sourceLink = document.createElement("a");
-        sourceLink.href = dto.vscode_uri;
-        sourceLink.className = "inspector-source-link";
-        sourceLink.textContent = "Ouvrir la classe dans VS Code";
-        inspectorBody.append(sourceLink);
-      }
       const fields = dto.fields || [];
       {
         const section = document.createElement("section");

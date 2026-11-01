@@ -344,6 +344,21 @@ for its evidence files. A header without a badge is not drawn.
 OpenAPI file both declare it, the row lists each source with its location.
 The persisted endpoints are unchanged.
 
+A served route or an HTTP call opens the relation inspector, which shares
+this skeleton (PDR-10): a header strip with the method, the path, and the
+client count (`aucun client` at zero) or the call's target, then one row
+with `Centrer dans le graphe` on the provider (the caller while a call's
+target is unresolved) and the VS Code action, then the counted groups
+`Relations` (provider, caller, clients, DTO REST, served route of the
+target) and `Sources` (code source, call evidence). No section stays
+outside a group.
+
+A document view (OpenAPI or AsyncAPI contract, DTO fields, JPA entity or
+persistence-class fields) stays a centered modal with one header: the title
+bar, then one row holding the VS Code action when the fact has a source,
+then the document body. A DTO's role and source path form the first line
+of the body. Swagger UI and the AsyncAPI viewer keep their own styling.
+
 The inspector MUST show an explicit empty state when an indexed DTO, JPA, or
 Mongo class has no fields. Source navigation is a distinct secondary action.
 Actions for modules, source evidence, code flows, and resource focus remain

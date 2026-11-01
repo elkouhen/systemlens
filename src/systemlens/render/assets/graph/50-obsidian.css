@@ -180,10 +180,6 @@
   border-radius: var(--widget-radius);
   padding: 12px;
 }
-:root[data-theme="dark"] .inspector-source-link {
-  color: var(--ui-accent-text);
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-}
 :root[data-theme="dark"] .resource-catalogue-filters {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr);

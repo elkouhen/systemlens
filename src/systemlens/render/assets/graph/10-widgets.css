@@ -387,7 +387,6 @@
     .asyncapi-summary-description { margin: 6px 0 0; color: var(--ui-text); font-size: var(--type-section); line-height: 1.45; }
     .asyncapi-summary-meta { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
     .asyncapi-summary-badge { padding: 4px 8px; border: 1px solid var(--ui-accent-border); border-radius: 999px; color: var(--ui-accent-text); background: var(--ui-control); font-size: var(--type-control); font-weight: 700; white-space: nowrap; }
-    .asyncapi-source-link { display: inline-block; margin: 12px 22px 0; color: var(--ui-accent-text); font-size: var(--type-section); font-weight: 700; }
     .asyncapi-shell > asyncapi-component { display: block; min-height: 100%; }
     .dto-inspector { display: grid; gap: 16px; }
     .dto-summary { margin: 0; color: var(--ui-muted); font-size: var(--type-section); }

@@ -183,7 +183,7 @@ export from a copy of the lab application and copy it to
 |---|---|---|
 | R1 | `delivered` | `327e607` |
 | R2 | `delivered` | `327e607`; title asserted in lot B |
-| R3 | `in progress` | lot B |
-| R4 | `open` | |
-| R5 | `in progress` | lot A (OpenAPI action) |
-| R6 | `open` | |
+| R3 | `delivered` | `680f02c` |
+| R4 | `in progress` | lot C |
+| R5 | `in progress` | `327e607` (OpenAPI action), lot C |
+| R6 | `in progress` | `680f02c` (rule and entity-row test), lot C |
