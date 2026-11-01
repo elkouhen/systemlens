@@ -218,10 +218,18 @@ storage is available. The light presentation remains selectable.
 
 Opening the dedicated introspection window for a microservice, Topic, Mongo
 collection, or any other indexed resource requires `Shift + click` on the node
-or supported relation. A plain click on an Architecture node or relation MUST
-NOT select, open details, or change the graph state. The introspection MUST NOT
-render as a nested sub-widget inside the left
-navigation widget. Relations in the introspection window remain interactive
+or supported relation. A plain click on an Architecture node selects it: the
+details widget shows the node, its incident relations gain emphasis, and
+unrelated nodes dim. A second plain click on the selected node, or a click on
+the empty canvas, clears the selection. A plain click never opens the
+introspection window and never changes persisted facts. A plain click on a
+relation does nothing. The introspection MUST NOT render as a nested
+sub-widget inside the left navigation widget.
+
+The graph area shows a permanent interaction hint docked at its bottom left:
+`clic` selects, `⇧ clic` inspects, the wheel zooms, dragging pans. The hint
+is hidden with the Architecture graph, in the selected call tree, and below
+721 pixels. It never overlaps the minimap or the legend. Relations in the introspection window remain interactive
 and open the target while preserving a breadcrumb path. The header back action
 returns to the previous element; nested DTO and persistence-class views use
 the same action and MUST NOT add a second in-body return control.

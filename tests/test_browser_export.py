@@ -1105,6 +1105,53 @@ def test_graph_node_opens_called_route_in_inspection_modal() -> None:
 
 
 @pytest.mark.slow
+def test_plain_click_selects_a_node_and_the_hint_names_the_gestures() -> None:
+    """U2: a plain click selects without opening; Shift + click inspects."""
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1400, "height": 900})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 0"
+        )
+        hint = page.locator("#graph-interaction-hint")
+        assert hint.is_visible()
+        assert "inspecter" in hint.inner_text() and "sélectionner" in hint.inner_text()
+        legend = page.locator("#graph-legend").bounding_box()
+        hint_box = hint.bounding_box()
+        assert legend and hint_box and hint_box["x"] + hint_box["width"] < legend["x"]
+
+        card = page.locator(".graph-node-card-label").filter(has_text="order-service")
+        card.click(force=True)
+        page.locator(".graph-node-card-label.is-selected").filter(has_text="order-service").wait_for()
+        assert page.locator("#inspector-modal").is_hidden()
+        assert "order-service" in page.locator("#details").inner_text()
+        assert page.locator(".graph-node-card-label.is-dimmed").count() > 0
+
+        card.click(force=True)
+        page.wait_for_function("() => !document.querySelector('.graph-node-card-label.is-selected')")
+        assert page.locator(".graph-node-card-label.is-dimmed").count() == 0
+
+        card.click(force=True, modifiers=["Shift"])
+        assert page.locator("#inspector-modal").is_visible()
+        assert page.locator("#inspector-title").inner_text().startswith("Microservice · order-service")
+        page.locator("#inspector-close").click()
+
+        page.locator("#flows-tab").click()
+        page.locator(".code-flow-item").first.click()
+        page.locator("#graph-call-tree").wait_for(state="visible")
+        assert hint.is_hidden()
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
 def test_architecture_arc_opens_node_inspection_modal() -> None:
     document = _current_simple_dataset_document()
     with sync_playwright() as playwright:

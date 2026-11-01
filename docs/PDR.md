@@ -10,7 +10,7 @@ written down when the choice was made says so, rather than inventing one.
 
 | ID | Decision | Open to revision |
 |---|---|---|
-| [PDR-1](#pdr-1-inspection-requires-shift--click) | Inspection requires Shift + click | Yes, product owner; backlog U2 proposes a hint first |
+| [PDR-1](#pdr-1-inspection-requires-shift--click) | Inspection requires Shift + click; a plain click selects | Yes, product owner |
 | [PDR-2](#pdr-2-the-inspector-is-a-modal) | The inspector is a modal | Yes, product owner; backlog U3 proposes a docked panel |
 | [PDR-3](#pdr-3-the-export-speaks-french) | The export speaks French | No for the vocabulary; yes for individual labels |
 | [PDR-4](#pdr-4-accessibility-and-cdn-concerns-are-deferred) | Accessibility and CDN concerns are deferred | Yes, by the user only |
@@ -18,22 +18,24 @@ written down when the choice was made says so, rather than inventing one.
 
 ## PDR-1: Inspection requires Shift + click
 
-**Status:** Accepted before 2026-11-01; rationale reconstructed from the
-contract, not recorded at decision time.
+**Status:** Accepted before 2026-11-01; amended on 2026-11-01 when the
+product owner validated backlog task U2. The original rationale was
+reconstructed from the contract, not recorded at decision time.
 
 **Decision:** Opening the introspection window of a node or a supported
-relation requires `Shift + click`. A plain click on an Architecture node
-or relation does not select, open details, or change the graph state
-(`docs/UX-UI.md`, "Navigation, selection, and inspection").
+relation requires `Shift + click`. Since 2026-11-01 a plain click on an
+Architecture node selects it (details widget, emphasized relations, dimmed
+unrelated nodes) without opening anything; a plain click on a relation still
+does nothing, and a permanent hint at the bottom of the graph names the
+three gestures (`docs/UX-UI.md`, "Navigation, selection, and inspection").
 
 **Why, as far as the contract says:** a plain click on a crowded graph
 risks opening a window by accident while panning or reading; the modifier
 keeps the graph the primary workspace.
 
-**Consequences:** the primary inspection path is not discoverable without
-a hint. Backlog task U2 adds the hint; the UX review of 2026-11-01 also
-proposes a plain-click selection that emphasizes relations without opening
-anything.
+**Consequences:** the inspection path is named on screen, and a plain
+click gives feedback instead of silence. Selection is a view state: it
+changes no persisted fact.
 
 ## PDR-2: The inspector is a modal
 

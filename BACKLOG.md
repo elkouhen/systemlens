@@ -264,7 +264,7 @@ any deviation from the work package.
 | ID | Outcome |
 |---|---|
 | U1 | Open. |
-| U2 | Open. |
+| U2 | Delivered on 2026-11-01 (commit "Make inspection discoverable with a hint and plain-click selection"). A plain click selects the node (details widget, emphasized relations, dimmed unrelated cards) and a second click or a stage click clears it; `Shift + click` still opens the inspector; a permanent hint names the four gestures and hides with the graph, in the call tree, and below 721 px. PDR-1 amended. Verified by `test_plain_click_selects_a_node_and_the_hint_names_the_gestures`; browser suite 41 passed with Chrome; default suite, ruff, mypy clean. Deviation: none. |
 | U3 | Open. |
 | U4 | Open. |
 | U5 | Open. |

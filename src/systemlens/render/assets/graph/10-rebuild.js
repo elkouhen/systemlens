@@ -1124,10 +1124,16 @@
             if (!label.contains(event.relatedTarget)) flowTooltipOverlay.replaceChildren();
           });
           const activateArchitectureNode = shiftKey => {
-            if (!shiftKey) return;
-            renderDetails(id);
-            openArchitectureNodeInspector(node, { reset: true });
-            hideInlineDetailsAfterModal();
+            if (shiftKey) {
+              renderDetails(id);
+              openArchitectureNodeInspector(node, { reset: true });
+              hideInlineDetailsAfterModal();
+              return;
+            }
+            // A plain click toggles a transient selection: the details widget
+            // and the relation emphasis follow, nothing opens, nothing persists.
+            if (graphState.selectedId === id) { reset(); return; }
+            selectNode(id, false, false);
           };
           // Cards sit above Sigma's canvas and therefore normally consume the
           // pointer stream. Pan the camera directly when a drag starts on a
@@ -2150,8 +2156,9 @@
       renderer.on("leaveEdge", () => flowTooltipOverlay.replaceChildren());
       renderer.on("clickNode", ({ node, event }) => {
         const originalEvent = event?.originalEvent || event;
-        if (!originalEvent?.shiftKey) return;
-        selectNode(node, false, true);
+        if (originalEvent?.shiftKey) { selectNode(node, false, true); return; }
+        if (graphState.selectedId === node) { reset(); return; }
+        selectNode(node, false, false);
       });
       renderer.on("clickEdge", ({ edge, event }) => {
         if (codeFlowSelection.flowId) return;

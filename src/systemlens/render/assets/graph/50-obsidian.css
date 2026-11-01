@@ -552,3 +552,5 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview-source {
   body.catalogue-active #microservices-panel .resource-catalogue-preview { grid-column: 1; }
   body.catalogue-active #microservices-panel .references-list { grid-template-columns: 1fr; max-height: 45vh; }
 }
+    :root[data-theme="dark"] .graph-interaction-hint { border-color: #253140; color: #9fb3c4; background: color-mix(in srgb, #101823 92%, transparent); }
+    :root[data-theme="dark"] .graph-interaction-hint kbd { border-color: #2c3b4c; color: #cfe6f3; background: #131e2b; }
