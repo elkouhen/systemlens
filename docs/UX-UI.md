@@ -113,8 +113,11 @@ preview; `Inspecter` opens the shared inspector for deeper details.
 
 The catalogue title carries the visible and total counts once. Each category
 shows its own count; an empty category stays listed but is disabled, and an
-empty `Diagnostics` category reads `aucun diagnostic`. Rows are ordered by
-kind (category order), then owner, then name.
+empty `Diagnostics` category reads `aucun diagnostic`. A count that does not
+fit beside its label moves below it, aligned right. Rows are ordered by kind
+(category order), then owner, then name. A row's height follows its content
+in every layout, including the docked layout that moves the context under the
+name.
 
 Each row opens with a kind tag coloured like the graph type chips; a route
 also shows its HTTP verb as a badge before the path. The Contexte column

@@ -941,6 +941,62 @@ def test_resource_catalogue_updates_docked_preview() -> None:
 
 
 @pytest.mark.slow
+def test_resource_catalogue_rows_grow_with_docked_preview_context() -> None:
+    """From 1101 px the docked preview moves a row's context under its name;
+    the row must grow with it, and the sidebar counts must not crowd labels."""
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        context = browser.new_context(viewport={"width": 1200, "height": 800})
+        page = context.new_page()
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.locator("#contracts-mode-tab").click()
+        # Every resource overflows the capped list height, which is what
+        # kept the auto rows at their minimum height.
+        page.locator("#resource-catalogue-categories button[data-kind='all']").click()
+        page.locator("#microservices-list .resource-catalogue-row").first.click()
+        assert page.locator("#microservices-list").evaluate(
+            "list => list.scrollHeight > list.clientHeight"
+        )
+        assert page.locator("#resource-catalogue-preview").get_attribute("class").endswith("has-selection")
+        boxes = page.evaluate(
+            """() => {
+              const box = element => {
+                const rect = element.getBoundingClientRect();
+                return {left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom};
+              };
+              const selected = document.querySelector("#microservices-list .resource-catalogue-row.is-selected");
+              const button = document.querySelector("#resource-catalogue-categories button[data-kind='diagnostic']");
+              const label = document.createRange();
+              label.selectNodeContents(button.firstChild);
+              return {
+                row: box(selected),
+                meta: box(selected.querySelector(".reference-meta")),
+                next: box(selected.nextElementSibling),
+                button: box(button),
+                label: box(label),
+                zero: box(button.querySelector("small")),
+                zeroText: button.querySelector("small").textContent,
+              };
+            }"""
+        )
+        row, meta, following = boxes["row"], boxes["meta"], boxes["next"]
+        assert meta["top"] >= row["top"] and meta["bottom"] <= row["bottom"] + 0.5
+        assert row["bottom"] <= following["top"] + 0.5
+        button, label, zero = boxes["button"], boxes["label"], boxes["zero"]
+        assert boxes["zeroText"] == "aucun diagnostic"
+        assert button["left"] <= zero["left"] and zero["right"] <= button["right"] + 0.5
+        assert button["top"] <= zero["top"] and zero["bottom"] <= button["bottom"] + 0.5
+        assert zero["top"] >= label["bottom"] or zero["left"] >= label["right"] + 4
+        context.close()
+        browser.close()
+
+
+@pytest.mark.slow
 def test_resource_catalogue_drills_into_indexed_dto_fields() -> None:
     document = _current_simple_dataset_document()
     graph_match = re.search(r'<script id="graph-data"[^>]*>([\s\S]*?)</script>', document)

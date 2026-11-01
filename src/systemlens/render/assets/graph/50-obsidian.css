@@ -271,8 +271,8 @@ body.catalogue-active #microservices-panel .resource-catalogue-preview h3 {
 }
 body.catalogue-active .resource-catalogue-categories { display: grid; gap: 4px; margin-bottom: 16px; }
 body.catalogue-active .resource-catalogue-category {
-  display: flex; justify-content: space-between; align-items: center;
-  width: 100%; min-height: 30px; padding: 0 9px; border: 1px solid transparent;
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  column-gap: 8px; width: 100%; min-height: 30px; padding: 0 9px; border: 1px solid transparent;
   border-radius: 7px; color: var(--ui-text); background: transparent; text-align: left;
   font-size: var(--type-body);
 }
@@ -283,7 +283,7 @@ body.catalogue-active .resource-catalogue-category:focus-visible {
 body.catalogue-active .resource-catalogue-category.is-active {
   border-color: var(--ui-accent-border); color: var(--ui-on-accent); background: var(--ui-selected); font-weight: 800;
 }
-body.catalogue-active .resource-catalogue-category small { color: var(--ui-muted); }
+body.catalogue-active .resource-catalogue-category small { margin-left: auto; color: var(--ui-muted); white-space: nowrap; }
 body.catalogue-active .resource-catalogue-category:disabled { opacity: .45; cursor: not-allowed; }
 body.catalogue-active .resource-catalogue-category:disabled:hover { border-color: transparent; color: var(--ui-text); background: transparent; }
 body.catalogue-active #microservices-panel .resource-catalogue-no-inspector { color: var(--ui-muted); font-size: var(--type-caption); white-space: nowrap; }
@@ -492,6 +492,7 @@ body.catalogue-active #microservices-panel .references-empty {
 body.catalogue-active #microservices-panel .references-list {
   max-height: calc(100vh - 360px);
   grid-template-columns: 1fr;
+  grid-auto-rows: max-content;
 }
 body.catalogue-active #microservices-panel .reference-item {
   align-items: center;
