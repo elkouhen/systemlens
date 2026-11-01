@@ -184,6 +184,19 @@ export from a copy of the lab application and copy it to
 | R1 | `delivered` | `327e607` |
 | R2 | `delivered` | `327e607`; title asserted in lot B |
 | R3 | `delivered` | `680f02c` |
-| R4 | `in progress` | lot C |
-| R5 | `in progress` | `327e607` (OpenAPI action), lot C |
-| R6 | `in progress` | `680f02c` (rule and entity-row test), lot C |
+| R4 | `delivered` | `8c3b754` |
+| R5 | `delivered` | `327e607` (OpenAPI action), `8c3b754` |
+| R6 | `delivered` | `680f02c` (rule and entity-row test), `8c3b754` |
+
+Each lot passed `uv run ruff check src tests`, `uv run mypy`,
+`uv run pytest`, and the browser suite in headless Chrome. Lot C's ten
+paths were captured again at 1400 by 900 from the baseline's lab data
+with the new assets and compared with section 2.
+
+The regeneration of `docs/models/simple-supermarket.html` is
+`blocked: POC pipeline and lab state`. A fresh export of a copy of the lab
+does not reproduce the checked-in model: it lacks the `poc-ai-analysis`
+facts, the generated DTO sources, and the flow descriptions, and the
+browser suite reads the model's data. BACKLOG task V1 also asks the
+product owner to settle the lab's uncommitted `architecture-ia.html`
+first.
