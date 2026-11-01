@@ -594,88 +594,70 @@
         network.addEdgeWithKey(`edge-${index}`, link.source, link.target, {
           // Keep architecture arcs visually aligned with the fixed 2px SVG
           // routes used by the selected call graph.
-          size: 2, color: relationColor(link), kind: link.kind, type: "arrow",
+          size: 2, color: relationColor(link), kind: link.kind, head: SIGMA_ARROW.name,
         });
         network.addEdgeWithKey(`edge-hit-${index}`, link.source, link.target, {
-          size: 14, color: "rgba(0,0,0,0)", kind: link.kind, hitArea: true, type: "line",
+          size: 14, color: "rgba(0,0,0,0)", kind: link.kind, hitArea: true,
         });
       });
       selectedCallGraphLinks.forEach(({ link, index, edgeKey }) => network.addEdgeWithKey(edgeKey || `edge-${index}`, link.source, link.target, {
         label: String(link.order ?? index + 1), size: 2, color: relationColor(link), kind: link.kind,
-        type: "arrow",
+        head: SIGMA_ARROW.name,
       }));
       initialNodePositions = new Map();
       network.forEachNode((node, attributes) => initialNodePositions.set(node, { x: attributes.x, y: attributes.y }));
       renderer = new Sigma(network, document.getElementById("graph"), {
-        labelColor: { color: document.documentElement.dataset.theme === "dark" ? "#dce8f7" : "#172033" },
-        // SVG overlays use fixed screen-pixel strokes. Keep Sigma edges and
-        // the underlying node markers on the same screen-space scale.
-        zoomToSizeRatioFunction: () => 1,
-        edgeReducer: (edge, data) => {
-          if (data.hitArea || !renderer) return data;
-          const screenScale = renderer.scaleSize(1);
-          return {
-            ...data,
-            // Sigma's graph correction varies with the fitted graph extent.
-            // Compensate it so architecture arcs remain 2px on screen, like
-            // the SVG arcs rendered for the selected call graph.
-            size: 2 / Math.max(screenScale, .001),
-          };
+        primitives: SIGMA_PRIMITIVES,
+        styles: {
+          nodes: [{
+            x: { attribute: "x" }, y: { attribute: "y" },
+            size: { attribute: "size" }, color: { attribute: "color" },
+            label: { attribute: "label" }, labelColor: sigmaLabelColor,
+          }],
+          edges: [{
+            size: { attribute: "size" }, color: { attribute: "color" },
+            label: { attribute: "label" }, labelColor: sigmaLabelColor,
+            head: { attribute: "head" },
+          }],
         },
-        nodeProgramClasses: {
-          microservice: createNodeProgram(MICROSERVICE_FRAGMENT_SHADER),
-          external_microservice: createNodeProgram(EXTERNAL_MICROSERVICE_FRAGMENT_SHADER),
-          kafka_topic: createNodeProgram(KAFKA_TOPIC_FRAGMENT_SHADER),
-          mongodb_collection: createNodeProgram(MONGODB_COLLECTION_FRAGMENT_SHADER),
-          generic: createNodeProgram(MICROSERVICE_FRAGMENT_SHADER),
+        settings: {
+          // SVG overlays use fixed screen-pixel strokes. Keep Sigma edges and
+          // the node markers on the same screen-space scale: sizes are pixels
+          // (the v3 reference) and do not grow with the zoom.
+          itemSizesReference: "screen",
+          zoomToSizeRatioFunction: () => 1,
+          enableEdgeEvents: true,
+          renderEdgeLabels: true, labelDensity: .06, labelGridCellSize: 160, labelRenderedSizeThreshold: 10,
+          // A drag can end close enough to a second click to trigger Sigma's
+          // double-click zoom. Zoom remains available through the wheel and
+          // the explicit controls, so disable this ambiguous gesture.
+          doubleClickZoomingRatio: 1,
+          // The shared camera controller below owns wheel zoom and pan for
+          // the canvas, the HTML cards, and the arcs alike. In Sigma 4 these
+          // two flags also gate camera.setState, so they stay on and Sigma's
+          // own wheel and drag gestures are cancelled at its mouse captor
+          // instead. Node drag and right-drag rotation are off.
+          enableCameraZooming: true,
+          enableCameraPanning: true,
+          enableCameraRotation: false,
+          enableCameraMouseRotation: false,
+          enableNodeDrag: false,
+          inertiaDuration: 0,
+          inertiaRatio: 0,
         },
-        // Sigma uses a separate hover/picking layer. Its default hover
-        // renderer is circular, so use the same rectangular programs here.
-        nodeHoverProgramClasses: {
-          microservice: createNodeProgram(MICROSERVICE_FRAGMENT_SHADER),
-          external_microservice: createNodeProgram(EXTERNAL_MICROSERVICE_FRAGMENT_SHADER),
-          kafka_topic: createNodeProgram(KAFKA_TOPIC_FRAGMENT_SHADER),
-          mongodb_collection: createNodeProgram(MONGODB_COLLECTION_FRAGMENT_SHADER),
-          generic: createNodeProgram(MICROSERVICE_FRAGMENT_SHADER),
-        },
-        // Keep clicks enabled while disabling Sigma's circular hover overlay;
-        // selection feedback is rendered by the HTML card glow instead.
-        enableNodeHoverEvents: true,
-        enableEdgeHoverEvents: true,
-        hoverRenderer: () => {},
-        renderEdgeLabels: true, labelDensity: .06, labelGridCellSize: 160, labelRenderedSizeThreshold: 10,
-        // A drag can end close enough to a second click to trigger Sigma's
-        // double-click zoom. Zoom remains available through the wheel and the
-        // explicit controls, so disable this ambiguous gesture.
-        doubleClickZoomingRatio: 1,
-        // The shared wheel handler below keeps canvas and HTML-card zoom
-        // behavior identical. Native Sigma wheel zoom would only receive
-        // events whose target is the canvas. Sigma 2.4 ignores this Sigma 3
-        // setting and zooms by a fixed 1.7 on every canvas wheel; the shared
-        // handler therefore listens in the capture phase and stops the event
-        // before Sigma's captor sees it.
-        enableCameraZooming: false,
-        // Panning is handled by the shared camera controller below. Disable
-        // Sigma's native inertia so releasing the pointer cannot continue the
-        // gesture with an unexpected drift.
-        enableCameraPanning: false,
-        inertiaDuration: 0,
-        inertiaRatio: 0,
-        labelAlignment: "center",
         nodeReducer: (node, data) => {
-          if (!callGraphOnly && !isVisibleNodeId(node)) return { ...data, hidden: true, label: "" };
+          if (!callGraphOnly && !isVisibleNodeId(node)) return { ...data, visibility: "hidden", label: "" };
           if (codeFlowSelection.flowId && nodeDataById.get(node)?.kind !== "microservice") {
-            return { ...data, hidden: true, label: "" };
+            return { ...data, visibility: "hidden", label: "" };
           }
           if (codeFlowSelection.flowId && !graphState.relatedNodes?.has(node)) {
-            return { ...data, hidden: true, label: "" };
+            return { ...data, visibility: "hidden", label: "" };
           }
           const renderedData = graphState.renderMode === "symbols" ? { ...data, size: .5 } : data;
           if (codeFlowSelection.flowId && graphState.relatedNodes.has(node)) {
             return {
               ...renderedData,
               size: renderedData.size * 1.22,
-              highlighted: true,
               zIndex: 2,
             };
           }
@@ -685,16 +667,16 @@
           }
           return { ...renderedData, color: "#d8e0ea", label: "" };
         },
-        edgeReducer: (edge, data) => {
+        edgeReducer: (edge, data, attributes) => {
           if (!callGraphOnly && (!isVisibleNodeId(network.source(edge)) || !isVisibleNodeId(network.target(edge)))) {
-            return { ...data, hidden: true };
+            return { ...data, visibility: "hidden" };
           }
-          if (data.hitArea) return data;
+          if (attributes.hitArea) return data;
           if (codeFlowSelection.flowId) {
-            // The selected call graph is rendered once by the LibAvoid SVG
-            // overlay. Keeping Sigma's straight edge underneath would draw
-            // every connector twice and make routes appear broken.
-            return { ...data, hidden: true };
+            // The selected call graph is rendered once by its SVG overlay.
+            // Keeping Sigma's straight edge underneath would draw every
+            // connector twice and make routes appear broken.
+            return { ...data, visibility: "hidden" };
           }
           if (graphState.selectedId && graphState.relatedEdges.has(edge)) return { ...data, size: 1.5 };
           if (graphState.selectedId) return { ...data, color: "#d8dee9", size: .35 };
@@ -766,42 +748,6 @@
         });
         return placements;
       }
-      let libavoidRoutes = new Map();
-      let libavoidRouteKey = "";
-      let libavoidRequestId = 0;
-      let libavoidUnavailableLogged = false;
-      const routeWithLibavoid = (routeKey, routeGraph) => {
-        if (!routeGraph.edges.length || routeKey === libavoidRouteKey) return;
-        libavoidRouteKey = routeKey;
-        libavoidRoutes = new Map();
-        const requestId = ++libavoidRequestId;
-        libavoidLibrary.then(async libavoid => {
-          if (!libavoid?.routeEdges) throw new Error("libavoid indisponible");
-          await libavoid.init(
-            "https://cdn.jsdelivr.net/npm/libavoid-js@0.5.0-beta.5/dist/libavoid.wasm"
-          );
-          return libavoid.routeEdges(routeGraph, {
-            routingType: "orthogonal",
-            shapeBufferDistance: 14,
-            idealNudgingDistance: 18,
-            crossingPenalty: 1000,
-            fixedSharedPathPenalty: 100,
-            nudgeOrthogonalSegmentsConnectedToShapes: true,
-            nudgeOrthogonalTouchingColinearSegments: true,
-            nudgeSharedPathsWithCommonEndPoint: true,
-          });
-        }).then(routes => {
-          if (requestId !== libavoidRequestId) return;
-          libavoidRoutes = routes;
-          renderer.refresh();
-          requestGraphRender();
-        }).catch(error => {
-          if (!libavoidUnavailableLogged) {
-            console.warn("Impossible de charger libavoid ; routage orthogonal de repli utilisé.", error);
-            libavoidUnavailableLogged = true;
-          }
-        });
-      };
       renderOverlays = () => {
         const renderGeneration = ++overlayRenderGeneration;
         const isCurrentRender = () => renderGeneration === overlayRenderGeneration;
@@ -1209,14 +1155,6 @@
             window.addEventListener("pointerup", finishForwardedPointer, true);
             window.addEventListener("pointercancel", finishForwardedPointer, true);
           });
-          // Sigma also listens to the legacy mouse stream. Without stopping
-          // it, a card drag would be handled once by our direct pan and once
-          // by Sigma's native mouse pan, producing an amplified movement.
-          label.addEventListener("mousedown", event => {
-            if (event.button !== 0 || event.target.closest?.(".graph-node-port-reference")) return;
-            event.preventDefault();
-            event.stopImmediatePropagation();
-          });
           label.addEventListener("click", event => {
             event.stopPropagation();
             if (suppressNextCardClick) {
@@ -1623,154 +1561,6 @@
           return { d: orthogonal.d, points: orthogonal.points, obstacleRouted: true };
         };
         const occupiedCallGraphSegments = [];
-        const libavoidNodes = new Map();
-        const libavoidEdges = [];
-        const addLibavoidObstacle = card => {
-          const nodeId = card.dataset.nodeId;
-          if (libavoidNodes.has(nodeId)) return;
-          const bounds = card.getBoundingClientRect();
-          libavoidNodes.set(nodeId, {
-            id: nodeId,
-            x: bounds.left - overlayBounds.left,
-            y: bounds.top - overlayBounds.top,
-            width: bounds.width,
-            height: bounds.height,
-            ports: [],
-          });
-        };
-        const ensureLibavoidNode = (card, bounds, anchor, portId, side) => {
-          const nodeId = card.dataset.nodeId;
-          if (!libavoidNodes.has(nodeId)) {
-            libavoidNodes.set(nodeId, {
-              id: nodeId,
-              x: bounds.left - overlayBounds.left,
-              y: bounds.top - overlayBounds.top,
-              width: bounds.width,
-              height: bounds.height,
-              ports: [],
-            });
-          }
-          const node = libavoidNodes.get(nodeId);
-          if (!node.ports.some(port => port.id === portId)) {
-            const anchorBounds = (anchor || card).getBoundingClientRect();
-            const portX = side === "EAST"
-              ? anchorBounds.right - bounds.left
-              : side === "WEST"
-                ? anchorBounds.left - bounds.left
-                : anchorBounds.left + anchorBounds.width / 2 - bounds.left;
-            const portY = side === "SOUTH"
-              ? anchorBounds.bottom - bounds.top
-              : side === "NORTH"
-                ? anchorBounds.top - bounds.top
-                : anchorBounds.top + anchorBounds.height / 2 - bounds.top;
-            node.ports.push({
-              id: portId,
-              x: portX,
-              y: portY,
-              width: 1,
-              height: 1,
-              layoutOptions: { "org.eclipse.elk.port.side": side },
-            });
-          }
-          return nodeId;
-        };
-        // Libavoid must know every visible microservice, not only the source
-        // and target of the edges currently being routed. Otherwise an
-        // unrelated service is invisible to the obstacle model and an arc can
-        // cross straight through its card.
-        [...nodeLabelOverlay.querySelectorAll(".graph-node-card-label")]
-          .filter(card => nodeDataById.get(card.dataset.nodeId)?.kind === "microservice")
-          .forEach(addLibavoidObstacle);
-        const routePointsToPath = (route, start, end, sourceId, targetId) => {
-          if (!route?.sourcePoint || !route?.targetPoint) return null;
-          const points = [route.sourcePoint, ...(route.bendPoints || []), route.targetPoint]
-            .map(point => [point.x, point.y])
-            .filter(point => point.every(Number.isFinite));
-          if (points.length < 2) return null;
-          const directLength = Math.hypot(end[0] - start[0], end[1] - start[1]);
-          const routeLength = points.slice(1).reduce((total, point, index) => (
-            total + Math.abs(point[0] - points[index][0]) + Math.abs(point[1] - points[index][1])
-          ), 0);
-          // Libavoid is obstacle-aware but does not optimize for the visible
-          // viewport. Reject pathological routes that travel around the
-          // entire canvas; the bounded local fallback can then choose a
-          // shorter corridor.
-          if (routeLength > Math.max(280, directLength * 2.6)) return null;
-          points[0] = start;
-          points[points.length - 1] = end;
-          if (points.length === 2) {
-            const obstacles = obstacleBounds
-              .filter(obstacle => ![sourceId, targetId].includes(obstacle.id))
-              .map(obstacle => ({
-                left: obstacle.left - overlayBounds.left - 14,
-                top: obstacle.top - overlayBounds.top - 14,
-                right: obstacle.right - overlayBounds.left + 14,
-                bottom: obstacle.bottom - overlayBounds.top + 14,
-              }));
-            if (!pathIsClear([start, end], obstacles)) {
-              const laneCandidates = [
-                Math.max(start[1], end[1]) + 80,
-                Math.min(start[1], end[1]) - 80,
-                (start[1] + end[1]) / 2 + 120,
-                (start[1] + end[1]) / 2 - 120,
-              ].map(lane => Math.max(42, Math.min(overlayBounds.height - 42, lane)));
-              const rectangular = laneCandidates.map(lane => [
-                start,
-                [start[0], lane],
-                [end[0], lane],
-                end,
-              ]).find(candidate => pathIsClear(candidate, obstacles));
-              if (rectangular) points.splice(0, points.length, ...rectangular);
-            }
-          }
-          // Libavoid receives virtual viewport obstacles below, so modifying
-          // its points after routing would invalidate its obstacle guarantees.
-          // Reject an out-of-bounds route and let the geometry fallback choose
-          // a safe path instead.
-          const viewportMargin = 90;
-          const routeInsideViewport = points.slice(1, -1).every(([x, y]) => (
-            x >= viewportMargin
-            && x <= overlayBounds.width - viewportMargin
-            && y >= viewportMargin
-            && y <= overlayBounds.height - viewportMargin
-          ));
-          if (!routeInsideViewport) return null;
-          const routeObstacles = obstacleBounds
-            .filter(obstacle => ![sourceId, targetId].includes(obstacle.id))
-            .map(obstacle => ({
-              left: obstacle.left - overlayBounds.left - 14,
-              top: obstacle.top - overlayBounds.top - 14,
-              right: obstacle.right - overlayBounds.left + 14,
-              bottom: obstacle.bottom - overlayBounds.top + 14,
-            }));
-          if (!portPathIsExternal(points, "EAST", "WEST")) return null;
-          if (!pathIsClear(points, routeObstacles)) return null;
-          const roundedPath = points.length < 3
-            ? `M ${points[0][0]} ${points[0][1]} L ${points[points.length - 1][0]} ${points[points.length - 1][1]}`
-            : points.slice(1, -1).reduce((path, point, index) => {
-              const previous = points[index];
-              const next = points[index + 2];
-              const previousDistance = Math.hypot(point[0] - previous[0], point[1] - previous[1]);
-              const nextDistance = Math.hypot(next[0] - point[0], next[1] - point[1]);
-              const radius = Math.min(12, previousDistance / 2, nextDistance / 2);
-              const entry = [
-                point[0] + ((previous[0] - point[0]) * radius / previousDistance),
-                point[1] + ((previous[1] - point[1]) * radius / previousDistance),
-              ];
-              const exit = [
-                point[0] + ((next[0] - point[0]) * radius / nextDistance),
-                point[1] + ((next[1] - point[1]) * radius / nextDistance),
-              ];
-              return `${path} L ${entry[0]} ${entry[1]} Q ${point[0]} ${point[1]} ${exit[0]} ${exit[1]}`;
-            }, `M ${points[0][0]} ${points[0][1]}`)
-              + ` L ${points[points.length - 1][0]} ${points[points.length - 1][1]}`;
-          return {
-            d: roundedPath,
-            points,
-            obstacleRouted: true,
-            router: "libavoid",
-          };
-        };
         const callGraphPath = (link, edgeKey, index) => {
           const sourceId = link.source;
           const targetId = link.target;
@@ -2017,30 +1807,6 @@
             if (isCurrentRender()) focusCallGraphArc(activeIndex);
           });
         }
-        const libavoidRouteKeyForGeometry = [
-          ...[...libavoidNodes.values()].map(node => (
-            `${node.id}:${node.x}:${node.y}:${node.width}:${node.height}:`
-            + (node.ports || []).map(port => `${port.id}:${port.x}:${port.y}`).join(",")
-          )),
-          ...libavoidEdges.map(edge => `${edge.id}:${edge.source}:${edge.target}`),
-        ].join("|");
-        routeWithLibavoid(
-          libavoidRouteKeyForGeometry,
-          {
-            id: "call-graph-routing",
-            children: [
-              ...libavoidNodes.values(),
-              // libavoid routes around obstacles but has no viewport bounds.
-              // These four virtual shapes keep detours inside the readable
-              // SVG area instead of allowing a horizontal lane at its edge.
-              { id: "__viewport-top", x: -100, y: -100, width: overlayBounds.width + 200, height: 128 },
-              { id: "__viewport-bottom", x: -100, y: overlayBounds.height - 28, width: overlayBounds.width + 200, height: 128 },
-              { id: "__viewport-left", x: -100, y: 0, width: 128, height: overlayBounds.height },
-              { id: "__viewport-right", x: overlayBounds.width - 28, y: 0, width: 128, height: overlayBounds.height },
-            ],
-            edges: libavoidEdges,
-          },
-        );
         const occupiedPortSegments = [];
         const portPath = (source, target) => {
           const sourceBounds = source.getBoundingClientRect();
@@ -2185,6 +1951,11 @@
         inspectArchitectureLink(link);
         event?.preventSigmaDefault?.();
       });
+      // Sigma still receives pointer events so that clicks on nodes and on
+      // the stage keep working, but it must not move the camera itself.
+      const sigmaMouse = renderer.getMouseCaptor();
+      sigmaMouse.on("mousemovebody", event => event.preventSigmaDefault());
+      sigmaMouse.on("wheel", event => event.preventSigmaDefault());
       renderer.on("clickStage", reset);
       renderer.on("doubleClickStage", event => event.preventSigmaDefault?.());
       renderer.on("doubleClickNode", event => event.preventSigmaDefault?.());
@@ -2228,7 +1999,6 @@
         window.removeEventListener("pointermove", moveGraphPan, true);
         window.removeEventListener("pointerup", finishGraphPan, true);
         window.removeEventListener("pointercancel", finishGraphPan, true);
-        try { graphCanvas.releasePointerCapture?.(event.pointerId); } catch (_error) { /* canvas was rebuilt during the gesture */ }
       };
       const moveGraphPan = event => {
         if (!graphPan || event.pointerId !== graphPan.pointerId) return;
@@ -2248,9 +2018,10 @@
           startY: event.clientY,
           cameraState: renderer.getCamera().getState(),
         };
+        // Let Sigma see the press and the release: Sigma 4 derives node and
+        // stage clicks from a release over its mouse layer, so the pointer is
+        // not captured here; window listeners already follow the drag.
         event.preventDefault();
-        event.stopImmediatePropagation();
-        graphCanvas.setPointerCapture?.(event.pointerId);
         window.addEventListener("pointermove", moveGraphPan, true);
         window.addEventListener("pointerup", finishGraphPan, true);
         window.addEventListener("pointercancel", finishGraphPan, true);
@@ -2274,7 +2045,6 @@
         document.removeEventListener("wheel", forwardBackgroundWheel);
         document.removeEventListener("pointerdown", forwardBackgroundPointer, true);
         graphCanvas.removeEventListener("pointerdown", startGraphPan, true);
-        try { graphCanvas.releasePointerCapture?.(graphPan?.pointerId); } catch (_error) { /* canvas was rebuilt during the gesture */ }
         window.removeEventListener("pointermove", moveGraphPan, true);
         window.removeEventListener("pointerup", finishGraphPan, true);
         window.removeEventListener("pointercancel", finishGraphPan, true);
@@ -2290,5 +2060,5 @@
       keepSelectedCallGraphArcVisible();
       // Keep Sigma's native camera coordinate system; layout coordinates are
       // centered above so the complete vertical stack stays in view.
-      renderer.getCamera().animatedReset({ duration: 0 });
+      renderer.getCamera().reset({ duration: 0 });
     }

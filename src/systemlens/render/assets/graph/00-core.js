@@ -82,8 +82,7 @@
       document.documentElement.dataset.theme = theme;
       try { localStorage.setItem(themeStorageKey, theme); } catch (_error) { /* optional preference */ }
       updateThemeToggle();
-      const labelColor = { color: theme === "dark" ? "#dce8f7" : "#172033" };
-      renderer?.setSetting("labelColor", labelColor);
+      // Label colours are style functions of the theme; a refresh re-reads them.
       renderer?.refresh();
     });
     updateThemeToggle();
@@ -304,11 +303,6 @@
       console.warn("Impossible de charger les dispositions du graphe.", error);
       return null;
     });
-    const libavoidLibrary = import("https://esm.sh/@mr_mint/elkjs-libavoid")
-      .catch(error => {
-        console.warn("Impossible de charger libavoid.", error);
-        return null;
-      });
 
     // Sigma invokes reducers while it is constructed, so these controls must
     // exist before creating the renderer.
@@ -355,171 +349,14 @@
       return nodeOther.checked;
     }
     function isVisibleNodeId(id) { return isVisibleNode(nodeDataById.get(id)); }
-    const NODE_VERTEX_SHADER = `
-      attribute vec2 a_position;
-      attribute float a_size;
-      attribute vec4 a_color;
-      uniform float u_ratio;
-      uniform float u_scale;
-      uniform mat3 u_matrix;
-      varying vec4 v_color;
-      void main() {
-        gl_Position = vec4((u_matrix * vec3(a_position, 1.0)).xy, 0.0, 1.0);
-        gl_PointSize = a_size * u_ratio * u_scale * 2.0;
-        v_color = a_color;
-      }
-    `;
-    const MICROSERVICE_FRAGMENT_SHADER = `
-      precision mediump float;
-      varying vec4 v_color;
-      void main() {
-        vec2 point = gl_PointCoord - vec2(.5);
-        vec2 bounds = vec2(.46, .34);
-        vec2 corner = abs(point) - (bounds - .06);
-        float distance = length(max(corner, 0.0)) + min(max(corner.x, corner.y), 0.0) - .06;
-        float alpha = 1.0 - smoothstep(-.014, .014, distance);
-        if (alpha < .01) discard;
-        float border = smoothstep(-.02, .035, distance);
-        vec3 fill = mix(vec3(.98, .99, 1.0), v_color.rgb, .18);
-        vec3 card = mix(fill, v_color.rgb, border * .82 + .18);
-        float icon = max(abs(point.x - .31), abs(point.y - .21)) - .035;
-        card = mix(card, v_color.rgb, 1.0 - smoothstep(-.01, .01, icon));
-        gl_FragColor = vec4(card, v_color.a * alpha);
-      }
-    `;
-    const EXTERNAL_MICROSERVICE_FRAGMENT_SHADER = `
-      precision mediump float;
-      varying vec4 v_color;
-      void main() {
-        vec2 point = gl_PointCoord - vec2(.5);
-        vec2 bounds = vec2(.46, .34);
-        vec2 corner = abs(point) - (bounds - .06);
-        float distance = length(max(corner, 0.0)) + min(max(corner.x, corner.y), 0.0) - .06;
-        float alpha = 1.0 - smoothstep(-.014, .014, distance);
-        if (alpha < .01) discard;
-        float border = smoothstep(-.02, .035, distance);
-        vec3 fill = mix(vec3(.98, .99, 1.0), v_color.rgb, .18);
-        vec3 card = mix(fill, v_color.rgb, border * .82 + .18);
-        float icon = max(abs(point.x - .31), abs(point.y - .21)) - .035;
-        card = mix(card, v_color.rgb, 1.0 - smoothstep(-.01, .01, icon));
-        gl_FragColor = vec4(card, v_color.a * alpha);
-      }
-    `;
-    const KAFKA_TOPIC_FRAGMENT_SHADER = `
-      precision mediump float;
-      varying vec4 v_color;
-      void main() {
-        vec2 point = gl_PointCoord - vec2(.5);
-        vec2 bounds = vec2(.46, .34);
-        vec2 corner = abs(point) - (bounds - .06);
-        float distance = length(max(corner, 0.0)) + min(max(corner.x, corner.y), 0.0) - .06;
-        float alpha = 1.0 - smoothstep(-.014, .014, distance);
-        if (alpha < .01) discard;
-        float border = smoothstep(-.02, .035, distance);
-        vec3 fill = vec3(.98, .99, 1.0);
-        vec3 card = mix(fill, v_color.rgb, border);
-        float bar1 = max(abs(point.x - .22) - .012, abs(point.y - .31) - .05);
-        float bar2 = max(abs(point.x - .19) - .012, abs(point.y - .31) - .05);
-        float bar3 = max(abs(point.x - .16) - .012, abs(point.y - .31) - .05);
-        float icon = min(bar1, min(bar2, bar3));
-        card = mix(card, v_color.rgb, 1.0 - smoothstep(-.01, .01, icon));
-        gl_FragColor = vec4(card, v_color.a * alpha);
-      }
-    `;
-    const MONGODB_COLLECTION_FRAGMENT_SHADER = `
-      precision mediump float;
-      varying vec4 v_color;
-      void main() {
-        vec2 point = gl_PointCoord - vec2(.5);
-        vec2 bounds = vec2(.46, .34);
-        float radius = .06;
-        vec2 corner = abs(point) - (bounds - radius);
-        float distance = length(max(corner, 0.0)) + min(max(corner.x, corner.y), 0.0) - radius;
-        float alpha = 1.0 - smoothstep(-.014, .014, distance);
-        if (alpha < .01) discard;
-        float border = smoothstep(-.02, .035, distance);
-        vec3 fill = vec3(.98, .99, 1.0);
-        vec3 card = mix(fill, v_color.rgb, border);
-        float disk = length(vec2(point.x - .31, point.y - .22)) - .045;
-        card = mix(card, v_color.rgb, 1.0 - smoothstep(-.01, .01, disk));
-        gl_FragColor = vec4(card, v_color.a * alpha);
-      }
-    `;
-    const packedColorBuffer = new ArrayBuffer(4);
-    const packedColorBytes = new Uint8Array(packedColorBuffer);
-    const packedColorFloat = new Float32Array(packedColorBuffer);
-    function packColor(color) {
-      color = typeof color === "string" && color ? color : "#94a3b8";
-      const value = color.startsWith("#") ? color.slice(1) : color;
-      packedColorBytes[0] = parseInt(value.slice(0, 2), 16) || 0;
-      packedColorBytes[1] = parseInt(value.slice(2, 4), 16) || 0;
-      packedColorBytes[2] = parseInt(value.slice(4, 6), 16) || 0;
-      packedColorBytes[3] = 254;
-      return packedColorFloat[0];
-    }
-    function compileShader(gl, type, source) {
-      const shader = gl.createShader(type);
-      gl.shaderSource(shader, source);
-      gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        throw new Error(`Impossible de compiler le shader WebGL: ${gl.getShaderInfoLog(shader)}`);
-      }
-      return shader;
-    }
-    function createNodeProgram(fragmentShader) {
-      return class ShapeNodeProgram {
-        constructor(gl) {
-          this.gl = gl;
-          this.array = new Float32Array();
-          this.buffer = gl.createBuffer();
-          const vertexShader = compileShader(gl, gl.VERTEX_SHADER, NODE_VERTEX_SHADER);
-          const pixelShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentShader);
-          this.program = gl.createProgram();
-          gl.attachShader(this.program, vertexShader);
-          gl.attachShader(this.program, pixelShader);
-          gl.linkProgram(this.program);
-          if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
-            throw new Error(`Impossible d'associer le shader WebGL: ${gl.getProgramInfoLog(this.program)}`);
-          }
-          this.positionLocation = gl.getAttribLocation(this.program, "a_position");
-          this.sizeLocation = gl.getAttribLocation(this.program, "a_size");
-          this.colorLocation = gl.getAttribLocation(this.program, "a_color");
-          this.matrixLocation = gl.getUniformLocation(this.program, "u_matrix");
-          this.ratioLocation = gl.getUniformLocation(this.program, "u_ratio");
-          this.scaleLocation = gl.getUniformLocation(this.program, "u_scale");
-          this.bind();
-        }
-        allocate(capacity) { this.array = new Float32Array(capacity * 4); }
-        process(data, hidden, offset) {
-          const index = offset * 4;
-          if (hidden) {
-            this.array.fill(0, index, index + 4);
-            return;
-          }
-          this.array[index] = data.x;
-          this.array[index + 1] = data.y;
-          this.array[index + 2] = data.size;
-          this.array[index + 3] = packColor(data.color);
-        }
-        bind() {
-          const gl = this.gl;
-          gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
-          gl.enableVertexAttribArray(this.positionLocation);
-          gl.enableVertexAttribArray(this.sizeLocation);
-          gl.enableVertexAttribArray(this.colorLocation);
-          gl.vertexAttribPointer(this.positionLocation, 2, gl.FLOAT, false, 16, 0);
-          gl.vertexAttribPointer(this.sizeLocation, 1, gl.FLOAT, false, 16, 8);
-          gl.vertexAttribPointer(this.colorLocation, 4, gl.UNSIGNED_BYTE, true, 16, 12);
-        }
-        bufferData() { this.gl.bufferData(this.gl.ARRAY_BUFFER, this.array, this.gl.DYNAMIC_DRAW); }
-        render(params) {
-          if (!this.array.length) return;
-          const gl = this.gl;
-          gl.useProgram(this.program);
-          gl.uniform1f(this.ratioLocation, 1 / Math.sqrt(params.ratio));
-          gl.uniform1f(this.scaleLocation, params.scalingRatio);
-          gl.uniformMatrix3fv(this.matrixLocation, false, params.matrix);
-          gl.drawArrays(gl.POINTS, 0, this.array.length / 4);
-        }
-      };
-    }
+    // Sigma 4 compiles one program from declared primitives (ADR-69). The
+    // node marker only sits under the fixed-size HTML card, so a filled
+    // square is enough; relations use a straight path and an arrow head.
+    const SIGMA_ARROW = Sigma.rendering.extremityArrow();
+    const SIGMA_PRIMITIVES = {
+      nodes: { shapes: [Sigma.rendering.sdfSquare()], layers: [Sigma.rendering.layerFill()] },
+      edges: { paths: [Sigma.rendering.pathLine()], extremities: [SIGMA_ARROW] },
+    };
+    const sigmaLabelColor = () => (
+      document.documentElement.dataset.theme === "dark" ? "#dce8f7" : "#172033"
+    );

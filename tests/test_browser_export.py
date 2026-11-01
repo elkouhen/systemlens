@@ -1149,6 +1149,16 @@ def test_plain_click_selects_a_node_and_the_hint_names_the_gestures() -> None:
         page.wait_for_function("() => !document.querySelector('.graph-node-card-label.is-selected')")
         assert page.locator(".graph-node-card-label.is-dimmed").count() == 0
 
+        # Regression: the pan controller captured the pointer on the graph
+        # container, so the release never reached Sigma's mouse layer and a
+        # click on the empty stage did not clear the selection.
+        card.click(force=True)
+        page.wait_for_function("() => document.querySelector('.graph-node-card-label.is-selected')")
+        stage = _graph_background_point(page)
+        page.mouse.click(stage["x"], stage["y"])
+        page.wait_for_function("() => !document.querySelector('.graph-node-card-label.is-selected')")
+        assert page.locator(".graph-node-card-label.is-dimmed").count() == 0
+
         card.click(force=True, modifiers=["Shift"])
         assert page.locator("#inspector-modal").is_visible()
         assert page.locator("#inspector-title").inner_text().startswith("Microservice · order-service")

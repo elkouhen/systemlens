@@ -577,7 +577,7 @@
       }
       else {
         delete graphCanvas.dataset.flowFocusRatio;
-        renderer.getCamera().animatedReset({ duration: 220 });
+        renderer.getCamera().reset({ duration: 220 });
       }
       persistState();
     }

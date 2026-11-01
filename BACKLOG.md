@@ -2,8 +2,8 @@
 
 Status: `proposed` on 2026-11-01. No task starts before the product owner
 validates this backlog, reorders its lots if needed, and settles the
-decision of V3. V7 was requested and validated directly by the product
-owner, and is delivered. Owner: SystemLens implementer. Reviewers: product owner
+decision of V3. V7 and V8 were requested and validated directly by the
+product owner, and are delivered. Owner: SystemLens implementer. Reviewers: product owner
 and UX maintainer. Baseline: commit `556c0f7`, viewport 1440 by 900.
 
 This backlog replaces the delivered Explorer UX stream U1 to U8. Its
@@ -140,6 +140,19 @@ new rule: it stays visible after any user pan or zoom until the next fit.
   asserts the minimap never hides, then hides after `Tout le graphe`.
 - Status: see the delivery record below.
 
+### V8. Upgrade Sigma to version 4 and remove libavoid
+
+The export used Sigma 2.4.0, whose camera settings are ignored, and loaded
+an unversioned libavoid module that no code path called. ADR-69 records the
+upgrade and the removal.
+
+- Files: `docs/ADR.md`, `docs/spec-tech/graph-layout.md`, `graph.html`,
+  `00-core.js`, `10-rebuild.js`, `50-paths.js`,
+  `tests/test_browser_export.py`.
+- Acceptance: the browser suite passes on Sigma 4; pan, zoom, clicks,
+  right drag, and double click behave as before in Chrome, WebKit, and
+  Firefox; no request reaches esm.sh for libavoid.
+
 ## 5. Delivery lots and validation
 
 | Lot | Tasks | Why this order |
@@ -147,7 +160,7 @@ new rule: it stays visible after any user pan or zoom until the next fit.
 | 1 | V1, V2 | Ships the existing fix to the pages people open, and keeps it shipped. |
 | 2 | V4, V5 | Local defects without a contract decision. |
 | 3 | V3, V6 | Change a contract rule; V3 needs its PDR entry first. |
-| Fix | V7 | Requested directly by the product owner on 2026-11-01. |
+| Fix | V7, V8 | Requested directly by the product owner on 2026-11-01. |
 
 Each task runs:
 
@@ -165,6 +178,7 @@ Each lot closes with `uv run mypy`, `uv run pytest`, and
 | ID | Outcome |
 |---|---|
 | V7 | Delivered on 2026-11-01. A user pan, wheel zoom, zoom control, or minimap move sets a flag per surface that keeps the minimap visible; every fit clears it. PDR-6 and `docs/UX-UI.md` record the rule. Verified by `test_minimap_stays_visible_once_the_user_navigates`, which fails on the previous assets; the browser suite (49 tests) and the other slow tests passed with Chrome; default suite, ruff, and mypy clean. A slow pan on a fresh lab export kept the minimap on screen at every step. Deviation: none. The published live model still needs V1 to show the fix. |
+| V8 | Delivered on 2026-11-01. Sigma 4.0.4 from jsDelivr and graphology 0.26.0 from cdnjs replace Sigma 2.4.0 and graphology 0.25.4. One square node primitive and one straight arrow edge primitive replace the custom WebGL programs; reducers return `visibility`. Sigma's gestures are cancelled at its mouse captor because its camera flags now gate `setState`. libavoid, its WASM loader, and its dead obstacle code are removed. Verified by the browser suite (49 tests) and all 57 slow tests with Chrome, the default suite, ruff, mypy, and the companion contract check. Cards and symbols renders of the lab export are pixel-identical to Sigma 2.4. Deviation: a defect fix, because the pan controller captured the pointer and a click on the empty stage never cleared the selection; `test_plain_click_selects_a_node_and_the_hint_names_the_gestures` now covers it and fails on the previous assets. |
 
 ## 7. Items carried over from earlier backlogs
 

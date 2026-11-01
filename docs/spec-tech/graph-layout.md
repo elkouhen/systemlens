@@ -208,10 +208,16 @@ its upper-left portion, while nodes and relations remain rendered in the usable
 space below the toolbar.
 The Sigma canvas and HTML card overlays are recomputed from one camera state
 per frame.
+Sigma 4 draws each node as a filled square primitive under its HTML card and
+each relation as a straight path with an arrow head. Sizes use the screen
+reference, so markers and arcs keep their pixel size at every zoom. The
+export requires WebGL 2.
 
-Wheel zoom is handled once for both the Sigma canvas and the HTML overlays;
-the native Sigma wheel handler is disabled so hovering a card cannot change
-the zoom behavior. Each wheel event applies a bounded exponential camera-ratio
+Wheel zoom is handled once for both the Sigma canvas and the HTML overlays.
+Sigma 4 keeps camera panning and zooming enabled, since they also gate
+`camera.setState`; its own wheel and drag are cancelled at the mouse captor
+with `preventSigmaDefault`, so hovering a card cannot change the zoom
+behavior (ADR-69). Each wheel event applies a bounded exponential camera-ratio
 step within the camera ratio bounds.
 
 ### Layout engines

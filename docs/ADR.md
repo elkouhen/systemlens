@@ -447,7 +447,8 @@ a fully reconciled topology path without discarding either one.
 
 ## ADR-28: Render selected call-graph arcs with orthogonal port routes
 
-**Status:** Accepted.
+**Status:** Accepted; the libavoid router was removed by ADR-69, and the
+local orthogonal router is the only one.
 
 **Context:** The focused call-graph view needs to distinguish several
 service-to-service dependencies that share the same endpoints and must keep
@@ -1461,3 +1462,32 @@ widget keeps its badges; only the inspector clone is restructured, so the
 inline contract is unchanged. A plain click still opens nothing (PDR-1).
 Tests select the modal fallback by viewport width, not by inspector kind.
 
+## ADR-69: Render the graph with Sigma 4 and drop libavoid
+
+**Status:** Accepted on 2026-11-01. The product owner asked for both changes,
+which lifts the deferral of CDN dependency work for these two libraries only.
+
+**Context:** The export loaded Sigma 2.4.0 and graphology 0.25.4; Sigma 4.0.4
+is current. Sigma 2.4 ignores its documented camera settings, so the export
+cancels its gestures by event interception alone. The export also imported
+`@mr_mint/elkjs-libavoid` from esm.sh without a version on every page load.
+Its router was never called: the obstacle list it routed had no edges since
+the selected call graph became a call tree.
+
+**Decision:** Load Sigma 4.0.4 from jsDelivr, the first CDN that serves it,
+and graphology 0.26.0 from cdnjs. Declare one node primitive, a filled square
+under each HTML card, and one edge primitive, a straight path with an arrow
+head. Styles read the graph attributes; the existing reducers stay as the
+selection and filter rules and return `visibility: "hidden"` instead of
+`hidden`. Sizes keep the screen-pixel reference of Sigma 2. Sigma's camera
+panning and zooming stay enabled, because Sigma 4 also gates
+`camera.setState` on them. The shared controller cancels Sigma's own wheel
+and drag at the mouse captor, and node drag and camera rotation are off.
+Remove libavoid, its WASM loader, and its dead obstacle code.
+
+**Consequences:** The export needs WebGL 2. Sigma receives every press and
+release, so a click on the empty stage clears the selection again; the pan
+controller no longer captures the pointer. Rendering in cards and symbols
+modes is pixel-identical on the supermarket lab export in Chrome. Arcs of the
+selected call graph keep the local orthogonal router of ADR-28. Swagger UI
+and the layout libraries keep their versions.
