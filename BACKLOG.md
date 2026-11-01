@@ -1,528 +1,286 @@
-# Backlog: data operations and runtime observations
+# Backlog: Explorer UX improvements
 
-Status: delivered on 2026-10-31; see section 7 for the delivery record and
-the open promotion gate of the review aids. Owner: SystemLens implementer.
-Reviewers: product owner and architecture maintainer.
-Review date: 2026-10-31, on commit `632af79` plus the uncommitted delivery of
-the widget readability backlog.
+Status: open, created on 2026-11-01 from the UX review of the generated
+HTML export. Owner: SystemLens implementer. Reviewers: product owner and
+UX maintainer. Review baseline: commit `fdac92e`, live model
+`docs/models/simple-supermarket.html`, viewport 1440 by 900, Obsidian theme.
 
-This backlog carries two work streams selected after a product review of the
-value axes on 2026-10-31:
+This backlog carries one work stream, **Stream U**, which reworks how the
+Explorer exposes its commands, its inspection path, and its empty states.
+The review that motivates it is published as a page with before and after
+captures; a local copy lives in `output/ux-review/revue-ux-explorer.html`
+(git-ignored) with its captures under `output/ux-review/img/`.
 
-- **Stream D** finishes the
-  [data operations plan](docs/plans/data-operations-in-internal-flows.md).
-  It adds the persisted operation table and the JPA, `EntityManager`, and
-  JDBC coverage that remain open, then the transaction and conflict-control
-  facts that two review aids need: dual write and lost update.
-- **Stream R** extends the
-  [runtime observations](docs/spec-tech/runtime-observations.md) beyond
-  call sums: latency percentiles, ranked hotspots, completeness facts, and a
-  second collection source based on OpenTelemetry metrics.
-
-The previous root backlog (widget readability in the HTML export, delivered
-on 2026-10-31) was removed from this file on 2026-10-31. Its content and
-delivery record remain in Git history before that date.
+The previous root backlog (data operations and runtime observations,
+delivered on 2026-10-31) was removed from this file on 2026-11-01. Its
+content and delivery record remain in Git history up to commit `fdac92e`.
+Its open items are restated in section 8 so they are not lost.
 
 ## 1. Index and scope
 
 | Document | Purpose |
 |---|---|
-| [Product requirements](docs/PRD.md) | Scope boundaries and the hotspot success measure. |
-| [Data operations plan](docs/plans/data-operations-in-internal-flows.md) | Representation, open tasks 4.3 to 4.5, JDBC extension, lost-update gate. |
-| [Feasibility of microservice diagnostics](docs/microservices-bad-practices.md) | Ratings of the dual-write and lost-update candidates. |
-| [Algorithms](docs/spec-tech/algorithms.md) | Sections 7 and 8: access association and consistency detector. |
-| [Data model](docs/spec-tech/data-model.md) | Flow steps, data access projection, consistency diagnostics. |
-| [Extraction rules](docs/spec-fonc/extraction-rules.md) | Observable JPA and MongoDB extraction contract. |
-| [Runtime observations](docs/spec-tech/runtime-observations.md) | Elastic APM collection, persistence, reconciliation, overlay. |
-| [Runtime export plan](docs/plans/runtime-observations-in-export.md) | Delivered overlay and its lab validation. |
-| [CLI reference](docs/spec-fonc/cli.md) | `observe`, `analyze`, and `flows` contracts. |
+| [UX/UI rules](docs/UX-UI.md) | Normative contract of the export; every task changes it first. |
+| [Functional specification](docs/SPEC-FONC.md) | Observable behavior of the export and the CLI. |
+| [Technical specification](docs/SPEC-TECH.md) | Data carried by the export and layout algorithms. |
+| [Architecture decisions](docs/ADR.md) | Record for U3, which changes a contract rule. |
+| [Product requirements](docs/PRD.md) | Personas and the "graph is the workspace" intent. |
 | [Archived consistency backlog](BACKLOG.consistency-diagnostics.md) | Historical diagnostic rendering tasks. |
 | [Earlier backlog](BACKLOG.previous.md) | Historical index of data-operation work. |
 
-The deferred concerns of `AGENTS.md` still apply: no task below may add CDN
-dependencies, ARIA semantics, or keyboard navigation work. The engineering
-invariants of `AGENTS.md` apply to every task: relative source paths only,
-additive SQLite migrations before the index transaction, exports that read
-the persisted snapshot only, conservative extraction, and no secret in a
-persisted fact.
+The deferred concerns of `AGENTS.md` still apply: no task below may add
+CDN dependencies, ARIA semantics, or keyboard navigation work. A task that
+touches a control keeps its current markup role and labels; it moves or
+restyles the control without widening that scope.
+
+The engineering invariants of `AGENTS.md` apply to every task: exports
+read the persisted snapshot only, no local path is disclosed beyond the
+existing `--root-path` resolution, and no task re-parses source files to
+fill a new widget.
 
 ## 2. Baseline
 
-Verified on the working tree at the review date.
-
-### 2.1 Data operations
+Verified on the live model at the review date.
 
 | Fact | Where | Consequence |
 |---|---|---|
-| MongoDB calls are classified into `read`, `insert`, `update`, `delete`, `create_or_update`, and `read_update` with read/write facets. | `src/systemlens/domain/mongo_operations.py` | The action vocabulary of plan task 4.1 exists. |
-| JPA calls are accepted on a field typed by a source-declared interface that extends `JpaRepository`, for 14 CRUD method names. | `discover_jpa_methods` in `src/systemlens/discovery/build/modules.py` | `CrudRepository`, `ListCrudRepository`, `PagingAndSortingRepository`, constructor-injected repositories, derived queries, `@Query`, `@Modifying`, and `EntityManager` create no fact. |
-| A key expression is kept only for `findById`, `existsById`, and `deleteById`; key identity is derived for exact literals and traced through unmodified scalar parameters. | `JpaMethod.key_expression`, `src/systemlens/indexing/java_value_origins.py` | Derived-query predicates and Mongo query objects carry no key identity. |
-| Operations are persisted inside the module inventory JSON and as `code_flows` steps; there is no operation table. | `modules` columns and `_migrate_module_columns` in `src/systemlens/storage/sqlite.py` | Plan task 4.3 is open. A reached operation exists only where a flow materialised it. |
-| Each reachable HTTP, Kafka, or scheduled entry gets a potential path to each supported Mongo or JPA call through the persisted call graph. | `src/systemlens/indexing/code_flows.py` | Plan task 4.5 is implemented for the supported calls. |
-| The consistency detector accepts `transaction_id`, `isolation`, `guard`, `guard_scope`, `value_dependencies`, and `concurrency` on steps, but source extraction never produces them. | `CodeFlowStep` in `src/systemlens/domain/code_flows.py`, `src/systemlens/application/flow_consistency.py` | Lost-update and dirty-read refinements fire only on manifest facts. |
-| No JDBC extraction exists. | plan section 5 | `JdbcTemplate` traffic is invisible, and coverage output does not say so. |
-| The lab application uses Spring Data JPA on PostgreSQL and Spring Data MongoDB. | `../systemlens-observability-lab/apps/supermarket-demo` | Both technologies can be validated on a real repository. |
-
-### 2.2 Runtime observations
-
-| Fact | Where | Consequence |
-|---|---|---|
-| Collection reads `metrics-apm.service_destination.<interval>-*` and `metrics-apm.transaction.<interval>-*` through composite aggregations, plus `logs-apm.error-*` for error groups. | `src/systemlens/discovery/elastic_apm.py` | Only `calls`, `failures`, and `duration_sum_us` are measured. |
-| `runtime_observations` has one row per kind, service, target, and target type; a collection replaces every row of its source. | `src/systemlens/storage/sqlite.py` | No percentile column, no collection history, no completeness record. |
-| The `source` column exists on both runtime tables but only `elastic` writes it. | same | A second source can coexist without a schema change for identity. |
-| Reconciliation and the export overlay are source-agnostic once rows exist; service mapping comes from `runtime.service_map`. | `src/systemlens/application/runtime_observations.py` | A new collector reuses the matching rules unchanged. |
-| APM aggregation overflow buckets (`_other`) are not detected. | collector | A high-cardinality service silently loses targets. |
-| The lab ships the OpenTelemetry Java agent and the Elastic OTel collector; its configuration mentions a Prometheus exporter and a PostgreSQL receiver. | `../systemlens-observability-lab` | A Prometheus-backed source can be validated there once a server is exposed. |
-
-## 3. Invariants for both streams
-
-- A data operation is a source-level attempt. `insert` does not prove a
-  row was created, and a reachable operation does not prove execution.
-- Every candidate review aid says "protection not established" or
-  "recovery not established" and links both source sites. It never claims
-  a defect.
-- Runtime counts and percentiles are lower bounds and approximations
-  that depend on sampling, aggregation, and the backend version. The UI
-  and the CLI say so wherever they show one.
-- Observations never create, confirm, or remove a static fact. A second
-  runtime source follows the same rule.
-- Older indexes stay readable. New columns are nullable, new tables are
-  created on first write, and the absence of a fact is reported as unknown.
-
-## 4. Stream D: data operations
-
-Dependencies: D1 before D2 to D5; D6 before D7 and D8; D9 closes the
-stream.
-
-### D1. Persist operations in a dedicated table
-
-Files: `src/systemlens/storage/sqlite.py`,
-`src/systemlens/storage/serialization.py`,
-`src/systemlens/indexing/service.py`, `tests/test_storage_uniqueness.py`.
-
-Add a `data_operations` table keyed by a stable ID derived from module,
-relative path, enclosing method, line, technology, and raw operation.
-Columns: technology, raw operation, action, read/write facets, resource
-identity, key expression, key identity, confidence, unresolved reason, and
-the evidence range. Create it additively before the index transaction.
-Replace the rows of changed paths and remove the rows of deleted paths
-during incremental indexing. Flow materialisation reads this table instead
-of the module JSON, which stays readable for older consumers.
-
-Acceptance:
-
-- An index created before this task opens, reindexes, and produces rows.
-- Deleting a source file removes its rows on the next index run.
-- Two consecutive index runs produce identical IDs.
-- `flows calculate` produces the same steps from the table as from the
-  module JSON on the lab application.
-
-### D2. Widen repository resolution
-
-Files: `discover_jpa_methods` and the Mongo repository resolution in
-`src/systemlens/discovery/build/modules.py`, `tests/test_modules.py`.
-
-Accept interfaces extending `CrudRepository`, `ListCrudRepository`,
-`PagingAndSortingRepository`, `JpaRepository`, and `MongoRepository`, in
-any generic order, and interfaces that extend such an interface declared in
-the same module. Accept receivers that are constructor parameters assigned
-to a final field, as well as fields. Keep an interface whose entity cannot be
-resolved to exactly one indexed entity unresolved, with a reason.
-
-Acceptance:
-
-- A `CrudRepository<Order, UUID>` injected through a constructor yields the
-  same facts as a `JpaRepository` field.
-- A repository whose entity matches two indexed classes yields an
-  unresolved fact, not a guessed entity.
-- A class with a method named `save` on a non-repository field yields
-  nothing.
-
-### D3. Derived queries and literal `@Query`
-
-Files: `src/systemlens/discovery/build/modules.py`, a new
-`src/systemlens/domain/data_operations.py` for the classifier,
-`tests/test_data_operations.py`.
-
-Classify repository interface methods by the Spring Data prefix grammar:
-`find`, `read`, `get`, `query`, `search`, `stream`, `count`, and `exists`
-are reads; `delete` and `remove` are deletes. Record the key expression when
-the predicate is a single `By<Property>` equality with one argument, and
-the key identity when that argument is an exact literal or a traced scalar.
-For a literal `@Query`, classify JPQL `select` as read, and `update` or
-`delete` with `@Modifying` as update or delete. A native query, a
-`Specification`, `Example`, or `Querydsl` call, and a non-literal query
-string remain unknown with a reason.
-
-Acceptance:
-
-- `findByCustomerId(id)` is a read on the entity with the key expression
-  `id`; `deleteByStatus(status)` is a delete without a key identity.
-- A `@Modifying @Query("update Order o set ...")` is an update; the same
-  query without `@Modifying` is unknown, not a read.
-- A derived method name that the grammar cannot parse is unknown.
-
-### D4. `EntityManager` operations
-
-Files: `src/systemlens/discovery/build/modules.py`,
-`tests/test_data_operations.py`.
-
-On a field or constructor parameter typed `EntityManager`, classify
-`persist` as insert, `merge` as create-or-update, `remove` as delete, and
-`find` or `getReference` as read, with the entity taken from the argument
-type or the class literal. `createQuery` with a literal JPQL string follows
-the D3 rules. `createNativeQuery` is handed to D5. A `Query` object whose
-string is built dynamically remains unknown.
-
-Acceptance:
-
-- `entityManager.find(Order.class, id)` is a read on `Order` with key
-  expression `id`.
-- `entityManager.createQuery(sql)` where `sql` is a parameter is unknown.
-
-### D5. Literal JDBC statements
-
-Files: a new `src/systemlens/discovery/build/jdbc_operations.py`,
-`tests/test_data_operations.py`.
-
-On `JdbcTemplate` and `NamedParameterJdbcTemplate` receivers, classify
-`query*` and `queryForObject` as reads and `update`, `batchUpdate`, and
-`execute` by the first keyword of a literal single-statement SQL string
-(`SELECT`, `INSERT`, `UPDATE`, `DELETE`). The string may be a literal or a
-`static final` constant of the same class. Use the resource identity
-`jdbc:<module>:<table>` only when the statement names exactly one table.
-Joins, subqueries, stored procedures, multiple statements, and concatenated
-or formatted strings remain unknown, with a reason.
-
-Acceptance:
-
-- `jdbc.update("DELETE FROM orders WHERE id = ?", id)` is a delete on
-  `orders` with key expression `id`.
-- `jdbc.query("SELECT ... FROM orders o JOIN lines l ...")` is a read with
-  an unknown resource.
-- `jdbc.update(buildSql(), ...)` is unknown.
-
-### D6. Transaction scope facts
-
-Files: `src/systemlens/discovery/build/modules.py`, flow materialisation
-in `src/systemlens/indexing/code_flows.py`, `tests/test_code_flows.py`,
-`tests/test_flow_consistency.py`.
-
-Attach `transaction_id`, propagation, `isolation`, and read-only flags to
-an operation whose enclosing method or class carries `@Transactional`, or
-that runs inside a `TransactionTemplate.execute` lambda. Use a stable ID
-from module, path, and method. A method without an annotation inherits the
-class annotation; a method called from a transactional method does not
-inherit anything, because propagation is a runtime decision. `@Transactional`
-is scope evidence only; it is never recorded as a guard.
-
-Acceptance:
-
-- Two operations in one `@Transactional` method share one
-  `transaction_id`; a helper called from it has none.
-- `isolation = READ_UNCOMMITTED` reaches the dirty-read rule of the
-  detector unchanged, and the default isolation is recorded as unknown.
-
-### D7. Conflict-control inventory
-
-Files: `src/systemlens/discovery/build/modules.py`,
-`src/systemlens/indexing/code_flows.py`, `tests/test_flow_consistency.py`.
-
-Record a `guard` with its `guard_scope` when the evidence is explicit: a
-`@Version` field on the resolved entity (`optimistic_version`, scope
-resource), `@Lock(PESSIMISTIC_READ|WRITE)` on the repository method
-(`pessimistic_lock`, scope operation), a Mongo `findAndModify` or an
-update whose document uses only `$inc`, `$set` with a version predicate, or
-`upsert` (`atomic_update`, scope operation), and a JDBC `UPDATE ... WHERE`
-with a version column named in the statement (`conditional_update`). An
-unknown mechanism is recorded as absent evidence, never as "unprotected".
-
-Acceptance:
-
-- An entity with `@Version` makes every write on it carry
-  `optimistic_version`; removing the field removes the guard on reindex.
-- A `$set` update without a predicate carries no guard.
-
-### D8. Same-method read-modify-write and dual-write review aids
-
-Files: `src/systemlens/application/flow_consistency.py`,
-`src/systemlens/indexing/java_value_origins.py`,
-`tests/test_flow_consistency.py`, renderer tests.
-
-Derive `value_dependencies` when a write argument is the unmodified result
-of a read in the same method, or a final local initialised from it. With D6
-and D7, the existing lost-update refinement then runs on source facts for
-same-method sequences. Add a dual-write candidate: a data write and a Kafka
-publication reachable in one flow, with the transaction evidence of D6,
-reported as "potential dual write; recovery not established". Recognise an
-outbox pattern conservatively: a write to a resource named `*outbox*` with
-no publication, or a `@TransactionalEventListener` on the publishing method,
-downgrades the candidate to "recovery mechanism present, not verified".
-
-Both aids are gated by the plan's section 6: before they become default
-diagnostics, record precision, abstention rate, and reviewer time on the lab
-and on one more Spring application in the delivery record.
-
-Acceptance:
-
-- `var o = repo.findById(id); o.setQty(o.getQty() - 1); repo.save(o);`
-  inside `@Transactional` without `@Version` yields a lost-update candidate
-  with both source sites and "protection not established".
-- The same code with `@Version` on the entity yields a guarded pair.
-- A read and a write without a value dependency yield no candidate.
-- `repo.save(order); kafka.send("orders", event);` yields a dual-write
-  candidate; adding an outbox write and removing the send yields none.
-
-### D9. Coverage, surfaces, documentation, and skill
-
-Files: `inventory_coverage` in `src/systemlens/application/architecture.py`,
-`src/systemlens/application/code_flows.py`,
-`src/systemlens/render/html_export.py`,
-`src/systemlens/render/assets/graph/55-code-flows.js`, the owning
-documents, `docs/ADR.md`, `../systemlens-skill/`.
-
-Make `analyze coverage` list persistence technologies with their supported,
-partial, and unsupported operation counts and the unresolved reasons, so an
-analyst can see that a JDBC-heavy module is partially covered. Show the
-`jdbc:` resource kind and the guard and transaction facts in `flows show`
-and in the call-tree badge tooltip. Update extraction rules, the data model,
-algorithms section 8, and the companion skill's manifest guidance for the
-new fields. Record the table and the review-aid gate as an ADR.
-
-Acceptance:
-
-- `analyze coverage --json` on the lab reports JPA and MongoDB as supported
-  and lists every unknown operation with its reason.
-- CLI and HTML describe the same operation, guard, and transaction from an
-  index after the source tree is removed.
-- `scripts/check_companion_contracts.py` passes.
-
-## 5. Stream R: runtime observations beyond sums
-
-Dependencies: R1 and R4 are independent; R2 needs R1; R3 needs R1 and R4;
-R5 needs R2 and R3; R6 closes the stream.
-
-### R1. Latency percentiles per entry point
-
-Files: `src/systemlens/discovery/elastic_apm.py`,
-`src/systemlens/domain/runtime.py`, `src/systemlens/storage/sqlite.py`,
-`tests/test_runtime_observations.py`.
-
-Add a `percentiles` sub-aggregation on `transaction.duration.histogram`
-for p50, p95, and p99 to the transaction query, folded per service and
-transaction name. Persist them as nullable `duration_p50_us`,
-`duration_p95_us`, and `duration_p99_us` columns added by an additive
-migration. Service destination streams expose only a sum and a count, so a
-destination row keeps an average and no percentile; the report says so.
-Verify the field name and histogram type on the lab's Elastic 9.5 cluster
-before merging, and record the outcome in section 7.
-
-Acceptance:
-
-- A fake cluster returning histogram percentiles yields rows with the
-  three values; a cluster without the field yields rows with `NULL` and a
-  warning in the report, not an error.
-- An index collected before this task reports its rows without percentiles.
-- The existing `observe report --json` fields keep their names and values.
-
-### R2. Ranked hotspots in the report and the export
-
-Files: `src/systemlens/application/runtime_observations.py`,
-`src/systemlens/delivery/cli.py`, `src/systemlens/render/html_export.py`,
-graph assets under `src/systemlens/render/assets/graph/`,
-`docs/spec-fonc/cli.md`, `docs/spec-fonc/html-export.md`, `docs/UX-UI.md`.
-
-Add `observe report --hotspots N --by p95|p99|failures|errors` listing the
-N highest entry points, each with its indexed `endpoint_ids`, service,
-window, calls, the ranking value, and a completeness note from R5 when
-available. Entry points that are `not_compared` or `unverified` are listed
-apart. In the export, add a "Hotspots" group to the runtime panel; selecting
-a row selects the endpoint's card and arc, as an existing runtime gap row
-does. No new graph edge and no change to layout or camera.
-
-Acceptance:
-
-- The ranking is deterministic for equal values (service, then target).
-- A browser test selects a hotspot row and asserts the selected endpoint
-  and an unchanged camera.
-- The PRD success measure on hotspots is satisfied on the lab export: the
-  analyst sees the ranked list, its completeness, and the linked evidence.
-
-### R3. Collection history and window comparison
-
-Files: `src/systemlens/storage/sqlite.py`,
-`src/systemlens/application/runtime_observations.py`,
-`tests/test_runtime_observations.py`.
-
-Add a `runtime_collections` table (ID, source, origin, window, interval,
-collected time, page counts, overflow flag from R5) and a `collection_id`
-column on both observation tables. Keep the last three collections per
-source and prune older ones in the same transaction. `observe report` and
-the export use the latest collection by default; `observe report
---compare-previous` adds the delta of calls, failure ratio, and p95 per
-matched row. The export shows the delta only when two collections of the
-same source and interval exist.
-
-Acceptance:
-
-- A fourth collection removes the first one's rows atomically.
-- A delta is computed only between collections with the same interval and
-  source; otherwise the report states why no comparison is shown.
-- An index with only the old schema reports its single collection.
-
-### R4. Second runtime source: OpenTelemetry metrics through Prometheus
-
-Files: a new `src/systemlens/discovery/prometheus_otel.py`, a
-`RuntimeSource` protocol in
-`src/systemlens/application/runtime_observations.py`,
-`src/systemlens/delivery/cli.py`, `docs/spec-tech/runtime-observations.md`,
-`docs/spec-fonc/cli.md`, `docs/spec-fonc/configuration.md`.
-
-Extract the Elastic-specific collection behind a `RuntimeSource` interface
-that returns observations, error groups, and a completeness record. Add
-`systemlens observe prometheus --url URL --since 7d [--bearer-env NAME]
-[--ca-cert FILE]` reading the HTTP query API only, with instant queries over
-range vectors computed server side. Map OpenTelemetry HTTP semantic
-conventions: `http.server.request.duration` by `service.name`,
-`http.request.method`, and `http.route` to request transactions;
-`http.client.request.duration` by `server.address` and `server.port` to REST
-destinations; `messaging.client.*` by `messaging.destination.name` to Kafka
-producers and consumers. Compute p50, p95, and p99 with `histogram_quantile`
-server side. Accept the Prometheus naming of those metrics (underscores,
-unit suffixes). Metrics without a route label or with another convention
-become `not_compared` with the reason. Store `source = prometheus`. The
-reconciliation rules and `runtime.service_map` apply unchanged.
-
-The lab must expose a Prometheus server scraping the collector before this
-task can be validated; that change belongs to the lab repository and is a
-prerequisite, not part of this task.
-
-Acceptance:
-
-- A fake Prometheus API with the lab's service names yields the same
-  reconciliation statuses as the Elastic collection for matched routes and
-  destinations.
-- A URL with credentials is rejected; the token is never persisted or
-  logged.
-- Observations of the two sources coexist in the tables and the report
-  names the source it reconciles.
-
-### R5. Completeness facts
-
-Files: `src/systemlens/discovery/elastic_apm.py`,
-`src/systemlens/discovery/prometheus_otel.py`,
-`src/systemlens/application/runtime_observations.py`, report and overlay
-text.
-
-Detect Elastic APM overflow buckets (`_other` service, transaction, or
-destination names) and record an overflow flag with the affected service on
-the collection. Record the interval, the page count per query, and whether
-any query hit the 100-page bound. For Prometheus, record the scrape
-interval and the step. The report and the runtime panel header show one
-completeness line: window, interval, source, and the overflow or truncation
-state. A hotspot row from R2 carries "incomplete" when its service overflowed.
-
-Acceptance:
-
-- A fake cluster emitting an `_other` bucket marks the collection as
-  overflowed and names the service; counts of that service are shown with
-  the lower-bound wording.
-- Without overflow or truncation, the completeness line says so
-  explicitly.
-
-### R6. Documentation, ADR, skill, and lab validation
-
-Files: `docs/spec-tech/runtime-observations.md`, `docs/spec-fonc/cli.md`,
-`docs/spec-fonc/html-export.md`, `docs/UX-UI.md`, `docs/PRD.md` scope
-tables, `docs/ADR.md`, `../systemlens-skill/`.
-
-Record the `RuntimeSource` seam, the percentile semantics, and the
-history retention as a new ADR that references ADR-60. Move the Elastic
-collection section of the runtime specification under a per-source
-heading. Update the PRD delivered scope. Update the skill's rule that
-static evidence is never described as runtime observation to cover
-percentiles and hotspots. Validate against the lab's Elastic 9.5 cluster
-and, when the lab exposes one, its Prometheus server, and record both in
-section 7.
-
-Acceptance:
-
-- Every public field added by R1 to R5 appears in the owning document.
-- `scripts/check_companion_contracts.py` passes.
-
-## 6. Validation
+| Camera and rendering controls (`Centrer`, zoom, `Cartes`/`Symboles`, `Réinitialiser`) render inside the left panel, between the search block and the filters. | `.graph-mode-context-actions` in `src/systemlens/render/assets/graph.html` | The controls sit about 500 px from the surface they act on. |
+| `Tout le graphe` and `Vue lisible` are specified in the camera section of `docs/UX-UI.md` but the Explorer exposes no such buttons. | `docs/UX-UI.md`, section "Camera and graph interaction" | The contract and the implementation disagree; U1 resolves it. |
+| Opening the inspector requires `Shift + click`; a plain click does nothing and nothing on screen says so. | `docs/UX-UI.md`, section "Navigation, selection, and inspection"; `src/systemlens/render/assets/graph/50-paths.js` | First-time users cannot find the primary inspection path. |
+| The inspector is a centered modal with a blurred backdrop. | `#inspector-modal` in `graph.html`, `src/systemlens/render/assets/graph/40-ergonomics.css` | The graph context is lost while inspecting. |
+| The inspector of `inventory-service` lists `GET /api/products/{productId}` twice: once from the Java controller (`endpoint_id b6f1d065232ad37e`) and once from the OpenAPI contract (`a9cbdc7ef35fd27c`). | `http_routes` of the node in the export JSON; rendered by `appendActionList("Routes exposées", …)` in `50-paths.js` | Two evidence sources of one route render as two routes. |
+| The `Flux de code` view shows an empty canvas and five disabled controls before a flow is selected. | `#flow-mode-context` in `graph.html`; `src/systemlens/render/assets/graph/55-code-flows.js` | The only view without an explanatory empty state. |
+| Changing the call-tree depth does not refit the tree; at depth 4 the last occurrence is outside the viewport. | depth control in `55-code-flows.js` | `Déplier tout le graphe` refits, the depth control does not. |
+| The resource catalogue spans the full viewport width; every row carries an `Inspecter` button; `0 client` is repeated per route; the kind is the first segment of the Contexte text. | `src/systemlens/render/assets/graph/42-resource-catalogue.js` | Scanning cost grows with the inventory. |
+| `Index : complet` is a standalone button in the panel; no visible count of resources per type exists; the index date is persisted (`files.indexed_at`) but not exported. | `#inventory-status` in `graph.html`; `src/systemlens/storage/sqlite.py` | The export cannot show when it was indexed. |
+| The left panel keeps its width below 900 px; the only breakpoint is at 700 px. | `@media (max-width: 700px)` in `40-ergonomics.css` | At 820 px the graph keeps about 400 px. |
+| `Layer` is the only English heading of the inspector; the search placeholder cites `orders -> payments`, two names absent from the project; the theme toggle reads `Clair` or `Obsidian`. | `50-paths.js` lines 891 and 921; `graph.html` line 69; `00-core.js` line 76 | Small wording defects visible on every export. |
+
+## 3. Invariants for Stream U
+
+1. A visual rule changes in `docs/UX-UI.md` first, then in the assets,
+   then in `tests/test_browser_export.py`, in the same commit.
+2. No task changes persisted facts, identifiers, or the export JSON
+   contract except U7, which adds one optional field.
+3. Every moved control keeps its `id`, its label, and its handler, so the
+   existing browser tests keep locating it.
+4. Light and Obsidian themes receive the same change; a task is not done
+   until both are captured.
+5. Nothing below 700 px regresses: the existing bounded scroll region and
+   legend placement rules stay valid.
+
+## 4. Stream U: Explorer UX
+
+Tasks are ordered by delivery lot (section 6). Each task names its files,
+its acceptance criteria, and the browser test to add or extend.
+
+### U1. Floating graph toolbar
+
+Move the camera and rendering controls out of the left panel into one
+floating bar anchored at the top of the graph area, shared by the
+Architecture graph and the selected call tree.
+
+- Files: `graph.html`, `20-controls.js`, `30-layouts.js`,
+  `40-ergonomics.css`, `50-obsidian.css`, `docs/UX-UI.md` ("Workspace
+  shell", "Camera and graph interaction").
+- Content, left to right: `Tout le graphe`, `Vue lisible`, `Centrer`,
+  zoom group, `Cartes`/`Symboles`, `Légende`, `Réinitialiser`.
+- The bar reserves a top band; the initial fit and `Tout le graphe`
+  exclude that band so the highest node is never under the bar.
+- The left panel keeps the search block and one `Filtres et affichage`
+  group that wraps `Visibilité`, `Ressources masquées`, and
+  `Plus d’options`.
+- Acceptance: the two missing buttons exist and behave as specified; the
+  existing camera tests pass unchanged; a new test asserts that no node
+  card intersects the bar after `Tout le graphe`.
+
+### U2. Discoverable inspection
+
+Add a persistent interaction hint at the bottom of the graph area and make
+the selection feedback of a plain click visible.
+
+- Files: `graph.html`, `40-details.js`, `40-ergonomics.css`,
+  `docs/UX-UI.md` ("Navigation, selection, and inspection").
+- Hint text: `clic` selects and emphasizes relations, `⇧ clic` inspects,
+  wheel zooms, drag pans. It hides below 700 px.
+- A plain click on a node selects it and applies the existing emphasis of
+  incident relations; it still opens nothing. If the product owner prefers
+  a click to open a docked summary instead, record the decision in the
+  ADR of U3 before implementing.
+- Acceptance: a browser test clicks a card and asserts the emphasis class
+  on its incident arcs and the absence of the inspector; the hint is
+  present in both themes.
+
+### U3. Docked inspector
+
+Replace the centered modal by a panel docked to the right edge, the graph
+staying visible and shifted, with a modal fallback under 900 px.
+
+- Files: `graph.html`, `50-paths.js`, `40-ergonomics.css`,
+  `50-obsidian.css`, `docs/UX-UI.md` ("Widget inventory", "Navigation,
+  selection, and inspection"), `docs/ADR.md` (new ADR).
+- Header keeps title, breadcrumb, back, and close. A four-tile strip
+  summarizes relations, proven, inferred, and without evidence level,
+  using the existing badge counts. Secondary actions (`Centrer dans le
+  graphe`, `Flux de code (N)`, VS Code) form one row under the strip.
+- Relation sections become disclosure groups with a count; the first three
+  open by default; an empty group stays listed and disabled.
+- The inspected node receives a halo in the graph while the panel is open.
+- `Routes exposées` merges entries with the same method and path and lists
+  each evidence source (Java, OpenAPI) under the merged row, so the
+  duplicate `GET /api/products/{productId}` renders once. The persisted
+  endpoints are unchanged.
+- Acceptance: existing inspector tests pass with updated selectors; new
+  tests cover the merged route row, the halo, and the modal fallback at
+  820 px.
+
+### U4. Empty state of the Flux de code view
+
+Show an explanatory card on the canvas when no flow is selected, and hide
+the tree controls until a flow is open.
+
+- Files: `graph.html`, `55-code-flows.js`, `40-ergonomics.css`,
+  `docs/UX-UI.md` ("Shared states", "Selected call tree").
+- The card states that flows are potential paths, explains that selecting
+  an entry point unfolds HTTP and Kafka calls with their evidence level,
+  and lists the flows as shortcuts with method badge, path, service chain,
+  step count, and the count of steps with insufficient evidence.
+- Choosing a shortcut selects the same flow as the panel list.
+- Acceptance: a browser test opens the view, asserts the card and the
+  hidden controls, selects a shortcut, and asserts the tree.
+
+### U5. Call-tree context on the canvas
+
+Move the flow summary, the tree controls, and the access key out of the
+left panel onto the canvas, and refit on depth changes.
+
+- Files: `graph.html`, `55-code-flows.js`, `40-ergonomics.css`,
+  `docs/UX-UI.md` ("Selected call tree").
+- Top bar: trigger and owner service, node and arc counts, depth, and
+  three coloured counts (risks, insufficient evidence, guarantees); then
+  the controls that are currently enabled. Disabled actions are hidden
+  rather than greyed; `Sélection` appears once an occurrence is selected.
+- The C/R/U/D key becomes a collapsible docked at the bottom left of the
+  canvas, open by default, remembered per viewer.
+- Changing the depth with `−` or `+` refits the tree like
+  `Déplier tout le graphe`; `+N appels` keeps the current rule and does
+  not move the viewport.
+- The left panel keeps only the flow list, with the selected flow first.
+- Acceptance: the existing call-tree tests pass; a new test increases the
+  depth to 4 and asserts every occurrence card is inside the viewport.
+
+### U6. Denser resource catalogue
+
+Bound the catalogue width, label the kind, and reveal the action on hover.
+
+- Files: `42-resource-catalogue.js`, `40-ergonomics.css`,
+  `docs/UX-UI.md` ("Workspace shell", catalogue paragraphs).
+- Layout bounded to 1180 px and centered; the mode tabs keep their panel
+  width; the collapse control stays in the panel header.
+- Each row shows a kind tag coloured like the graph outlines, the HTTP
+  verb as a badge, the owner, and a relation summary; `0 client` renders
+  as a muted `aucun client`. `Aperçu seul` keeps its muted label.
+- `Inspecter` appears on row hover and on the selected row; the row itself
+  keeps opening the docked preview.
+- Default order: kind, then owner, then name.
+- Acceptance: the three catalogue tests pass; a new test asserts the tag
+  text per kind and the hover-only action.
+
+### U7. Index status and type counts
+
+Show the index status with its date under the panel header and a strip of
+per-type counts under the graph toolbar.
+
+- Files: `src/systemlens/render/html_export.py` (export the latest
+  `files.indexed_at` as an optional `indexed_at` field), `graph.html`,
+  `10-rebuild.js`, `docs/SPEC-TECH.md` (export contract), `docs/UX-UI.md`.
+- Status line: `Index complet` or `Index : N faits à vérifier`, with the
+  relation count and `indexé le <date>`; the date is omitted, not
+  invented, when the field is absent from an older export.
+- Count strip: one chip per visible type (microservices, topics,
+  collections, entities, others) computed from the rendered graph;
+  clicking a chip toggles the matching visibility filter.
+- Acceptance: a unit test in `tests/test_render.py` for the new field and
+  an older snapshot without it; a browser test asserts chip counts after
+  hiding a microservice.
+
+### U8. Narrow viewports and wording
+
+- Collapse the left panel automatically below 900 px and reopen it as a
+  drawer over the graph; the 700 px rules stay as they are.
+- Rename the `Layer` heading to `Couche`.
+- Generate the search placeholder from two indexed services of the export
+  when at least two exist, else keep a neutral example.
+- Theme toggle reads `Sombre` and `Clair`; `Obsidian` stays the palette
+  name in the documentation.
+- The `Diagnostics` category with zero entries shows `aucun diagnostic`.
+- Files: `40-ergonomics.css`, `50-paths.js`, `00-core.js`, `graph.html`,
+  `42-resource-catalogue.js`, `docs/UX-UI.md`, `docs/spec-fonc/html-export.md`.
+- Acceptance: a browser test at 820 px asserts the collapsed panel and the
+  drawer; string assertions cover the four wording changes.
+
+## 5. Validation
 
 For each task:
 
 ```bash
 uv run ruff check src tests
-uv run pytest tests/test_data_operations.py tests/test_code_flows.py \
-  tests/test_flow_consistency.py tests/test_runtime_observations.py
+uv run pytest tests/test_render.py tests/test_modules.py
+SYSTEMLENS_CHROME_BIN=/path/to/chrome uv run pytest -m slow tests/test_browser_export.py
 ```
 
-For D1 and R3, which touch the SQLite schema, and before closing each
-stream:
+Before closing each lot:
 
 ```bash
 uv run mypy
 uv run pytest
-```
-
-For R2 and any task that changes generated HTML interactions, when Chrome
-is available:
-
-```bash
-SYSTEMLENS_CHROME_BIN=/path/to/chrome \
-  uv run pytest -m slow tests/test_browser_export.py
-```
-
-Before closing D9 and R6, and whenever a task changes the documented agent
-workflow:
-
-```bash
 uv run python scripts/check_companion_contracts.py
 ```
 
-For R1, R4, and R5, run the collection against the lab cluster from a
-fresh copy of the lab application and inspect the report. State the
-validation as unverified when the cluster, Chrome, or CodeQL is unavailable.
+After U7 and at the end of the stream, regenerate the lab export from
+`../systemlens-observability-lab/apps/supermarket-demo/architecture-ia.html`
+and copy it to `docs/models/simple-supermarket.html`, as `AGENTS.md`
+requires. Capture the Explorer, the inspector, the empty flow view, a
+depth-4 call tree, and the catalogue in both themes and attach them to the
+delivery record. State the validation as unverified when Chrome or the lab
+checkout is unavailable.
+
+## 6. Delivery lots
+
+| Lot | Tasks | Why this order |
+|---|---|---|
+| 1 | U2, U4, U7 | Surface additions without a contract change. |
+| 2 | U1, U5 | Share one floating-bar component and the refit rule. |
+| 3 | U3 | Changes the modal rule of the contract; needs an ADR. |
+| 4 | U6, U8 | Polishing once the shell is stable. |
 
 ## 7. Delivery record
 
-Each task is recorded with its commit, the validation that ran, any
-deviation from the work package, and, for D8, the measured precision,
-abstention rate, and reviewer time. Stream D is delivered in commits
-`dbdffea` to `85a3783` (ADR-64); Stream R in `33bcddb` to `cf54f3b`
-(ADR-65). Validation on the merged tree: `uv run ruff check src tests`,
-`uv run mypy`, and `uv run pytest` (633 passed); the browser suite, the
-companion contract check, and the lab measurement are recorded per task.
+Each task is recorded here with its commit, the validation that ran, and
+any deviation from the work package.
 
 | ID | Outcome |
 |---|---|
-| D1 | Delivered in `dbdffea`. `data_operations` table (schema 39), stable IDs from module, relative path, owner method, line, technology, and raw operation; flows read the table and project the module JSON of an older index. Acceptance verified by `tests/test_data_operations.py` (older index reopens and reindexes, deleted file loses its rows, identical IDs across two runs, identical steps from table and JSON). Deviation: the table is rebuilt as a whole on each run because module discovery is a full rescan; deleted paths are also purged by `remove_files`. |
-| D2 | Delivered in `525073d`. Receivers resolved by declared type (field, parameter, local; shadowing wins); Spring Data bases accepted through module-local interfaces with generic substitution; ambiguous or unindexed entity keeps an unresolved resource with a reason. The Mongo extractor reuses the resolver. Verified by the constructor-injected `CrudRepository`, inheritance, ambiguity, and non-repository tests. |
-| D3 | Delivered in `525073d`. Derived-query grammar in `domain/data_operations.py` (`findByCustomerId(id)` read keyed by `customerId`; `deleteByStatus` delete without key identity), literal `@Query` JPQL with `@Modifying`, native queries kept on a JDBC table, `Specification`/`Example`/Querydsl and non-literal queries unknown. Deviation: a key on a non-ID property scopes its identity with `#property` so it never matches the entity ID. |
-| D4 | Delivered in `525073d`. `persist`, `merge`, `remove`, `find`, `getReference`, literal `createQuery` and `createNativeQuery`; a parameter query string and a named query stay unknown. Verified by `test_entity_manager_operations_classify_arguments_and_literal_queries`. |
-| D5 | Delivered in `525073d` (`discovery/build/jdbc_operations.py`). Literal or same-class constant SQL, single-table resource `jdbc:<module>:<table>`, key bound from the single `column = ?` placeholder; joins, subqueries, several tables, procedures, multiple statements, concatenated and formatted strings unknown with a reason. `JdbcClient` receivers are accepted with the same rules. |
-| D6 | Delivered in `6c22d4a`. Scope ID from module, path, and `Class.method` (or the template lambda line); propagation defaults to `REQUIRED`, isolation stays unknown unless stated and reaches the step as `read_uncommitted`; helpers inherit nothing. Verified end to end by `test_isolation_evidence_reaches_the_flow_step_unchanged`. |
-| D7 | Delivered in `6c22d4a`. `optimistic_version` on every write to an entity whose `@Version` field is now inventoried, `pessimistic_lock` from `@Lock` on the declared method, `atomic_update` from the Mongo invocation text, `conditional_update` from a JDBC `WHERE` naming a version column. Deviation: a Mongo update built outside the call is not inspected and records no guard. |
-| D8 | Delivered in `c664b09`, behind `export microservices --review-aids`; the gate of plan section 6 stays closed. Lab measurement (source engine, fresh copy, 3 roots): read-modify-write: 1 distinct candidate (`ProductPersistenceAdapter.save`), a genuine pattern protected at runtime by `PESSIMISTIC_WRITE` inside the service transaction; the aid abstains with "verrou pessimiste présent, portée transactionnelle non établie" because the lock and the `@Transactional` live in different methods, so precision 1/1 as a candidate and abstention 1/1. Dual write: 4 distinct pairs for 1 real pattern (`reserve` writes four resources then publishes `StockDepleted` without outbox or after-commit listener), 0 false candidates. Reviewer time: about 10 minutes for the 5 pairs by the implementer, not an independent analyst. No second Spring application was available in the workspace, so the measurement on one more application is open and the aids remain review aids. |
-| D9 | Delivered in `d246fa2` and `85a3783`. `analyze coverage --json` on the lab reports MongoDB 2/2 and JPA 6/6 supported, JDBC 0, no unresolved operation; `flows show` and the HTML badge tooltip state operation, resource kind, key, guard, and transaction, verified after removing the source tree. ADR-64, extraction rules, persistence, data model, algorithms, CLI, export, UX, plan status, and the companion skill updated. `scripts/check_companion_contracts.py` and the browser suite: see the final validation note below. |
-| R1 | Delivered. Transaction query folds per service, type, and name with a failure filter and p50/p95/p99 of `transaction.duration.histogram`; nullable percentile columns added additively; missing histogram yields `NULL` and a collection note. Validated with fakes (`uv run pytest tests/test_runtime_observations.py`); not run against the lab cluster, which was unreachable. |
-| R2 | Delivered. `observe report --hotspots N --by p95|p99|failures|errors`, `runtime.hotspots` in the export, "Points chauds" inspector whose row selects the service card and route inspector. Browser test `test_runtime_hotspot_row_selects_its_endpoint_without_moving_the_camera` passed three times with Chrome. The PRD measure is verified on a synthetic export, not on the lab export. |
-| R3 | Delivered. `runtime_collections` table, `collection_id` on both observation tables, last three collections per source pruned in the same transaction, `--compare-previous` deltas gated on same source and interval; legacy rows without collection reported until the next collection. |
-| R4 | Delivered against a fake query API: `RuntimeSource` seam, `discovery/prometheus_otel.py`, `observe prometheus --url --since --bearer-env --ca-cert`, OTel HTTP and messaging mapping, credentials in the URL rejected, token never persisted. Deviation: the Prometheus scrape interval is read from `prometheus_target_interval_length_seconds` when exposed, otherwise recorded as unknown. Unverified on the lab: no Prometheus server was reachable. |
-| R5 | Delivered. `_other` overflow buckets dropped and their services recorded; page counts per query; completeness line in the report, the legend, and the inspectors, explicit when none; hotspot rows of an overflowed service read "incomplet". Deviation: the 100-page bound still stops collection with an error (unchanged contract), so `truncated` is recorded but never set by the Elastic collector. |
-| R6 | Delivered. ADR-65, runtime specification restructured per source, CLI, configuration, export, UX, and PRD updated; skill rule extended to percentiles and hotspots. Lab validation of both sources is unverified: neither the Elastic cluster nor a Prometheus server answered from the delivery machine. |
+| U1 | Open. |
+| U2 | Open. |
+| U3 | Open. |
+| U4 | Open. |
+| U5 | Open. |
+| U6 | Open. |
+| U7 | Open. |
+| U8 | Open. |
 
-Final validation on the merged tree (commit after `cf54f3b`):
-`uv run ruff check src tests`, `uv run mypy`, and `uv run pytest` passed
-(633 tests); `SYSTEMLENS_CHROME_BIN=... uv run pytest -m slow
-tests/test_browser_export.py` passed (40 tests, Chrome); and
-`uv run python scripts/check_companion_contracts.py` validated the skill
-and a CodeQL-backed index, fact import, and HTML export of a fresh lab
-copy. Not done: the lab's Elastic cluster and a Prometheus server were
-unreachable, so R1, R4, and R5 are validated with fakes only, and the
-checked-in live model `docs/models/simple-supermarket.html` was not
-regenerated; it predates the hotspot group and the badge facts and needs a
-lab reindex plus a runtime collection.
+## 8. Items carried over from the previous backlog
+
+These items were left open on 2026-10-31 and stay open; see the delivery
+record in Git history before `fdac92e` for their context.
+
+- The read-modify-write and dual-write review aids stay behind
+  `export microservices --review-aids`; promoting them needs a precision
+  measurement on a second Spring application.
+- Runtime percentiles, the Prometheus source, and completeness facts were
+  validated with fakes only; the lab Elastic cluster and a Prometheus
+  server were unreachable.
+- `docs/models/simple-supermarket.html` predates the hotspot group and the
+  badge facts; it needs a lab reindex plus a runtime collection, which the
+  validation of section 5 covers.
