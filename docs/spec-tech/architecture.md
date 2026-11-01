@@ -55,7 +55,10 @@ do not rescan the complete inventory for every object.
 `delivery/cli.py` and the standard-library local HTTP server
 in `delivery/web.py` are delivery layers over the domain modules. Shared CLI
 option resolution, manifest validation, progress reporting, and architecture
-output formatting live in `delivery/cli_support.py`. REST route normalization
+output formatting live in `delivery/cli_support.py`. The provisional
+CodeQL progress export and the direct queries against an existing CodeQL
+database live in `delivery/call_graph.py`, which reaches the engine through
+the `callgraph` registry only. REST route normalization
 lives in `scanner/rest_paths.py`, separate from framework-specific extraction.
 The CLI export and
 `systemlens web` both use `application/architecture_projection.py` to select the same

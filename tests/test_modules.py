@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 from typer.testing import CliRunner
 
+from systemlens.delivery import call_graph as delivery_call_graph
 from systemlens.delivery import cli
 from systemlens.application.architecture_inventory import is_deployable_service
 from systemlens.delivery.cli import app
@@ -61,7 +62,7 @@ def test_microservice_html_export_uses_the_explicit_root_path(
     )
     monkeypatch.setattr(cli, "_load_microservice_graph", lambda *_args, **_kwargs: graph_data)
     monkeypatch.setattr(
-        cli, "render_graph_html",
+        delivery_call_graph, "render_graph_html",
         lambda *args, **_kwargs: captured.update({"args": args}) or "<html></html>",
     )
 
@@ -86,7 +87,7 @@ def test_microservice_html_export_defaults_root_path_to_the_current_directory(
     )
     monkeypatch.setattr(cli, "_load_microservice_graph", lambda *_args, **_kwargs: graph_data)
     monkeypatch.setattr(
-        cli, "render_graph_html",
+        delivery_call_graph, "render_graph_html",
         lambda *args, **_kwargs: captured.update({"args": args}) or "<html></html>",
     )
 

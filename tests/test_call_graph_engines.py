@@ -117,7 +117,7 @@ def test_an_unavailable_engine_falls_back_to_the_source_engine(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo = _repository(tmp_path / "repo")
-    monkeypatch.setattr(codeql, "codeql_executable", lambda: None)
+    monkeypatch.setattr(codeql.database, "codeql_executable", lambda: None)
     messages: list[str] = []
 
     with Store(repo) as store:

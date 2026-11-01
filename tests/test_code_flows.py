@@ -45,7 +45,7 @@ from systemlens.indexing.integration_methods import (
     materialize_integration_methods,
     scheduled_trigger_endpoints,
 )
-from systemlens.indexing import service as indexing_service
+from systemlens.indexing import call_graph_stage
 from systemlens.infrastructure.config import Config
 from systemlens.indexing.service import index_repo
 from systemlens.storage.sqlite import SCHEMA_VERSION, Store
@@ -1438,13 +1438,13 @@ def test_index_uses_automatic_codeql_database_when_available(
     )
     observed_roots = []
     materializations = []
-    original_materialize = indexing_service.materialize_call_graph_flows
+    original_materialize = call_graph_stage.materialize_call_graph_flows
 
     def counted_materialize(*args, **kwargs):
         materializations.append(1)
         return original_materialize(*args, **kwargs)
 
-    monkeypatch.setattr(indexing_service, "materialize_call_graph_flows", counted_materialize)
+    monkeypatch.setattr(call_graph_stage, "materialize_call_graph_flows", counted_materialize)
 
     @contextmanager
     def automatic_database(
@@ -1462,16 +1462,16 @@ def test_index_uses_automatic_codeql_database_when_available(
         assert ram_mb is None
         yield tmp_path / "codeql-db"
 
-    monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
-    monkeypatch.setattr(codeql, "automatic_codeql_database", automatic_database)
+    monkeypatch.setattr(codeql.database, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql.database, "automatic_codeql_database", automatic_database)
     monkeypatch.setattr(
-        codeql, "extract_codeql_calls", lambda _database, **_kwargs: []
+        codeql.extraction, "extract_codeql_calls", lambda _database, **_kwargs: []
     )
     monkeypatch.setattr(
-        codeql, "extract_codeql_methods", lambda _database, **_kwargs: []
+        codeql.extraction, "extract_codeql_methods", lambda _database, **_kwargs: []
     )
     monkeypatch.setattr(
-        codeql, "extract_codeql_reachability",
+        codeql.extraction, "extract_codeql_reachability",
         lambda _database, _methods, **_kwargs: [],
     )
 
@@ -1551,16 +1551,16 @@ def test_module_codeql_view_refresh_reuses_the_persisted_call_graph(
     def automatic_database(*_args, **_kwargs):
         yield tmp_path / "codeql-db"
 
-    monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
-    monkeypatch.setattr(codeql, "automatic_codeql_database", automatic_database)
+    monkeypatch.setattr(codeql.database, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql.database, "automatic_codeql_database", automatic_database)
     monkeypatch.setattr(
-        codeql, "extract_codeql_calls", lambda _database, **_kwargs: []
+        codeql.extraction, "extract_codeql_calls", lambda _database, **_kwargs: []
     )
     monkeypatch.setattr(
-        codeql, "extract_codeql_methods", lambda _database, **_kwargs: []
+        codeql.extraction, "extract_codeql_methods", lambda _database, **_kwargs: []
     )
     monkeypatch.setattr(
-        codeql, "extract_codeql_reachability",
+        codeql.extraction, "extract_codeql_reachability",
         lambda _database, _methods, **_kwargs: [],
     )
 
@@ -1570,14 +1570,14 @@ def test_module_codeql_view_refresh_reuses_the_persisted_call_graph(
     def unexpected_global_call_query(*_args, **_kwargs):
         raise AssertionError("module refresh must reuse the persisted call graph")
 
-    monkeypatch.setattr(codeql, "extract_codeql_calls", unexpected_global_call_query)
+    monkeypatch.setattr(codeql.extraction, "extract_codeql_calls", unexpected_global_call_query)
     queried_prefixes: list[str] = []
 
     def query_module_methods(_database, **kwargs):
         queried_prefixes.append(kwargs["source_prefix"])
         return []
 
-    monkeypatch.setattr(codeql, "extract_codeql_methods", query_module_methods)
+    monkeypatch.setattr(codeql.extraction, "extract_codeql_methods", query_module_methods)
     with Store(repo) as store:
         index_repo(
             repo,
@@ -1608,8 +1608,8 @@ def test_codeql_timeout_commits_partial_snapshot_and_runs_post_processing(
         raise subprocess.TimeoutExpired(["codeql"], kwargs.get("timeout_seconds", 600))
         yield  # pragma: no cover - keeps this a contextmanager for the patch
 
-    monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
-    monkeypatch.setattr(codeql, "automatic_codeql_database", timed_out_database)
+    monkeypatch.setattr(codeql.database, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql.database, "automatic_codeql_database", timed_out_database)
     progress: list[str] = []
 
     with Store(repo) as store:
@@ -1640,9 +1640,9 @@ def test_real_codeql_database_creation_timeout_is_soft_boundary(
     def timeout(*_args, **kwargs):
         raise subprocess.TimeoutExpired(["codeql", "database", "create"], kwargs["timeout"])
 
-    monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
-    monkeypatch.setattr(codeql, "codeql_executable", lambda: "codeql")
-    monkeypatch.setattr(codeql, "_run_with_progress", timeout)
+    monkeypatch.setattr(codeql.database, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql.database, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql.database, "_run_with_progress", timeout)
     progress: list[str] = []
 
     with Store(repo) as store:
@@ -1666,7 +1666,7 @@ def test_codeql_module_roots_assign_each_java_file_to_its_deepest_project(tmp_pa
         DiscoveredModule("second", second, "gradle", None, "library", False, ""),
     ]
 
-    roots = indexing_service._call_graph_module_roots(
+    roots = call_graph_stage._call_graph_module_roots(
         tmp_path,
         [
             "first/src/main/java/A.java",
@@ -1701,7 +1701,7 @@ def test_global_codeql_calls_are_partitioned_without_losing_cross_project_edges(
         ),
     ]
 
-    partitioned = indexing_service._partition_calls(calls, roots)
+    partitioned = call_graph_stage._partition_calls(calls, roots)
 
     assert [name for name, _calls in partitioned] == ["first", "second"]
     assert partitioned[0][1] == [calls[0]]

@@ -33,9 +33,12 @@ domain/ + infrastructure/
 
 `callgraph/` holds the engine-neutral call types, the `CallGraphEngine`
 protocol, the tree-sitter `source` engine, and a registry that loads other
-engines by module path. `engines/codeql.py` implements that protocol for
-CodeQL and depends on `callgraph/`, never the reverse: no core module imports
-it (ADR-61).
+engines by module path. The `engines/codeql/` package implements that
+protocol for CodeQL and depends on `callgraph/`, never the reverse: no core
+module imports it (ADR-61). Inside the package, `queries.py` holds the QL
+text, `database.py` the CLI, database lifecycle and query runner,
+`extraction.py` the row parsers, `engine.py` the protocol adapter and
+`errors.py` the error types (ADR-67).
 
 The package root contains only `__init__.py` and directories. Implementation
 modules must live in the package that owns their responsibility:
@@ -58,9 +61,12 @@ The `render/` package (formerly the single `render.py` file, still imported as
 `from systemlens.render import ...`) is an output adapter. It may consume
 query results and models, but must not perform indexing or persist data.
 `application/` contains queries and projections shared by delivery adapters.
-`indexing/service.py` is the write-side application service;
-`indexing/file_inventory.py` and `indexing/freshness.py` own incremental
-refresh policy. `infrastructure/config.py` and `infrastructure/paths.py` are
+`indexing/service.py` is the write-side application service; it owns the
+file inventory, the extraction pass and the index transaction.
+`indexing/call_graph_stage.py` runs the interprocedural stage inside that
+transaction: engine session, join checkpoints, flow materialization and
+reconciliation. `indexing/file_inventory.py` and `indexing/freshness.py`
+own incremental refresh policy. `infrastructure/config.py` and `infrastructure/paths.py` are
 small cross-cutting utilities.
 
 `scanner.py` was split into the `scanner/` package (see below) the same way:
@@ -173,7 +179,12 @@ they are not cross-module entry points.
 | Shared module inventory types | `domain/module_inventory.py` |
 | Same-method potential flow materialization | `indexing/code_flows.py` |
 | Call-graph engine contract or selection | `callgraph/engine.py`, `callgraph/registry.py` |
-| CodeQL queries and database lifecycle | `engines/codeql.py` |
+| CodeQL QL text | `engines/codeql/queries.py` |
+| CodeQL CLI, database lifecycle, query runner | `engines/codeql/database.py` |
+| CodeQL row parsing into call types | `engines/codeql/extraction.py` |
+| CodeQL engine adapter | `engines/codeql/engine.py` |
+| Call-graph stage of an index (session, join, flows) | `indexing/call_graph_stage.py` |
+| CodeQL progress export or direct database query | `delivery/call_graph.py` |
 | Maven/Gradle source generation | `indexing/source_generation.py` |
 | File eligibility or incremental refresh policy | `indexing/file_inventory.py` |
 | Persisted architecture relation derivation | `indexing/relations.py` |

@@ -17,7 +17,7 @@ functional or technical contract.
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor) |
-| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default) |
+| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -1225,7 +1225,7 @@ pass already built flows, but only as an implicit fallback named `none`.
 **Decision:** The core depends on an engine-neutral seam, `callgraph/`: call
 types, a `CallGraphEngine` protocol whose session reports calls, methods,
 reachability, and Kafka payload types, and a registry that loads engines by
-name. `codeql` lives in `engines/codeql.py` and is imported lazily. `source`
+name. `codeql` lives in `engines/codeql/` and is imported lazily. `source`
 is a first-class engine: it reports no call itself, and the shared
 tree-sitter symbol pass becomes the whole call graph. `none` builds no
 interprocedural path. An unavailable engine is announced, then replaced by
@@ -1388,3 +1388,40 @@ closed-world dispatch rules of ADR-61. Existing configurations are unchanged:
 `init` wrote both keys explicitly. The companion skill and the laboratory
 check still pass `--call-graph-engine codeql` explicitly where CodeQL is
 installed. Persisted `codeql_*` names and settings are unchanged.
+
+## ADR-67: Split CodeQL and the call-graph stage into dedicated modules
+
+**Status:** Accepted. Completes ADR-61.
+
+**Context:** After ADR-61 and ADR-66, CodeQL was an optional engine, but its
+code still lived in one 1,200-line module mixing QL text, CLI invocation,
+database lifecycle, row parsing and the engine adapter. The index service
+held the whole interprocedural stage inline, so a change to the join or to
+flow materialization meant editing the file that also owns the file
+inventory and the transaction. Two CodeQL-specific delivery helpers (the
+provisional progress export and the direct database query) sat among the
+Typer commands.
+
+**Decision:** CodeQL becomes the `engines/codeql/` package: `queries.py`
+(QL text), `database.py` (CLI lookup, database lifecycle, one shared query
+runner), `extraction.py` (rows to call types), `engine.py` (the protocol
+adapter) and `errors.py`. The package facade re-exports the previous public
+names, and the registry entry `systemlens.engines.codeql` is unchanged.
+Submodules import each other by their full module path, never through the
+facade, so the import graph stays acyclic.
+
+The interprocedural stage of an index moves to
+`indexing/call_graph_stage.py`, which exposes `run_call_graph_stage` and the
+progress contract. `indexing/service.py` keeps the file inventory, the
+extraction pass and the transaction, and re-exports the progress types that
+delivery adapters already import. The two delivery helpers move to
+`delivery/call_graph.py`, which reaches the engine through the `callgraph`
+registry only.
+
+**Consequences:** Persisted names (`codeql_call_edges`, `codeql_methods`,
+`codeql_*` meta keys) and CLI flags are unchanged, so existing indexes and
+scripts keep working. Tests patch the submodule that owns a behavior
+(`engines.codeql.database`, `engines.codeql.extraction`,
+`indexing.call_graph_stage`, `delivery.call_graph`) instead of one flat
+module. The core-never-imports-CodeQL check of ADR-61 still holds, and the
+acyclic import test now also guards the package facade.
