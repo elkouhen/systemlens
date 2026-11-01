@@ -354,8 +354,10 @@ reports an actionable reason.
 
 The architecture graph shows the indexed resources and relations in one graph
 view. It does not draw software-layer bands or module containers. A resource's
-layer and module remain available in its details, and module details support
-hierarchy navigation without switching graph layout.
+module remains available in its details, and module details support hierarchy
+navigation without switching graph layout. The software layer is a module
+property (PDR-8): the inspector of a topic or a collection shows no `Couche`
+row, while a microservice shows it when its layer is known.
 
 Filtering, selection, zooming, resizing, and layout changes MUST keep graph
 coordinates and node overlays synchronized. Empty or filtered graphs MUST clear

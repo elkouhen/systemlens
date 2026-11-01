@@ -1481,7 +1481,7 @@ def test_narrow_viewport_collapses_the_panel_into_a_drawer_and_wording_is_french
         theme.click()
 
         _wait_for_settled_layout(page)
-        page.locator(".graph-node-card-label").filter(has_text="supermarket.order.placed").click(
+        page.locator('.graph-node-card-label[data-node-id="microservice:order-service"]').click(
             force=True, modifiers=["Shift"]
         )
         page.locator("#inspector-modal").wait_for(state="visible")
@@ -1500,6 +1500,53 @@ def test_narrow_viewport_collapses_the_panel_into_a_drawer_and_wording_is_french
         assert page.locator("#search").get_attribute("placeholder") == (
             "service-a ou service-a -> service-b"
         )
+        browser.close()
+
+
+@pytest.mark.slow
+def test_resource_inspector_shows_no_software_layer() -> None:
+    """PDR-8: a topic or a collection has no Couche row; a microservice keeps it."""
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        page = browser.new_page(viewport={"width": 1400, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        _wait_for_settled_layout(page)
+
+        def inspect(node_id: str) -> tuple[str, dict[str, list[str]]]:
+            page.locator(f'.graph-node-card-label[data-node-id="{node_id}"]').click(
+                force=True, modifiers=["Shift"]
+            )
+            page.locator("#inspector-modal").wait_for(state="visible")
+            title = page.locator("#inspector-title").inner_text()
+            sections = page.evaluate(
+                """() => Object.fromEntries(
+                    [...document.querySelectorAll('#inspector-body .details-section')]
+                        .map(section => [
+                            section.querySelector('h2')?.textContent.trim() || '',
+                            [...section.querySelectorAll('li')].map(item => item.textContent.trim()),
+                        ])
+                )"""
+            )
+            page.locator("#inspector-close").click()
+            page.locator("#inspector-modal").wait_for(state="hidden")
+            return title, sections
+
+        for node_id, kind in (
+            ("kafka_topic:supermarket.order.placed", "Topic"),
+            ("mongodb_collection:inventory-service:order_fulfillments", "Donnée"),
+        ):
+            title, sections = inspect(node_id)
+            assert title.startswith(kind), title
+            assert "Couche" not in sections, (node_id, sections)
+            assert not any("Unknown" in value for values in sections.values() for value in values)
+
+        _title, sections = inspect("microservice:inventory-service")
+        assert sections.get("Couche") == ["Application"], sections
         browser.close()
 
 

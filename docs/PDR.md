@@ -17,6 +17,7 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-5](#pdr-5-a-first-index-needs-no-external-tool) | A first index needs no external tool | Yes, product owner; see ADR-66 |
 | [PDR-6](#pdr-6-the-minimap-stays-once-the-user-navigates) | The minimap stays once the user navigates | Yes, product owner |
 | [PDR-7](#pdr-7-one-french-word-per-concept-in-the-export-and-the-cli) | One French word per concept in the export and the CLI | Yes, product owner; the glossary owns the list |
+| [PDR-8](#pdr-8-a-resource-has-no-software-layer) | A resource has no software layer | Yes, product owner |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -157,3 +158,26 @@ contract and keep their spelling. A renamed contractual label is updated
 in `docs/UX-UI.md`, `tests/test_spec_conformance.py`, and the export in
 the same change. The four-mode navigation drift from the UX contract is a
 separate backlog concern, not a vocabulary one.
+
+## PDR-8: A resource has no software layer
+
+**Status:** Accepted on 2026-11-01 by the product owner, who reported a
+Kafka topic shown with a software layer in the graph inspector.
+
+**Decision:** A topic or a collection is a resource, not a module. Its
+inspector shows no `Couche` row; its Architecture section shows only its
+owner module. A microservice keeps its `Couche` row when its layer is
+known.
+
+**Why:** the software layer is a property of a module. The inspector gave
+a resource the layer of its owner module, so a topic published by a module
+without a layer convention read `Couche : Application`, which is none of
+the conventional layers (`api`, `orchestration`, `domain`, `infrastructure`,
+`persistence`, `shared`). Unknown owners fell back to the English `Unknown`.
+
+**Consequences:** the `docs/UX-UI.md` sentence "A resource's layer and
+module remain available in its details" becomes "A resource's module
+remains available in its details". The JSON `architecture_layer` field on
+resource nodes is unchanged: it records the owner layer used to order owner
+candidates. The software-layer model keeps its `Application` pseudo-layer
+for modules that start an application.

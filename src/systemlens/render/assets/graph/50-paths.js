@@ -925,7 +925,7 @@
         const nodeClusterPath = clusterPathForNode(id);
         const clusterPath = isRootClusterPath(nodeClusterPath) ? null : nodeClusterPath;
         const architectureGroup = createDetailsGroup("Architecture");
-        appendList("Couche", [architectureLayerForNode(id)], architectureGroup);
+        // A topic or a collection has no software layer (PDR-8): only its module.
         appendActionList("Module", clusterPath ? [{
           label: clusterPath,
           title: `Naviguer vers le module ${clusterPath}`,

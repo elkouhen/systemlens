@@ -540,12 +540,6 @@
           || left.name.localeCompare(right.name)
         ))[0];
     }
-    function architectureLayerForNode(node) {
-      const data = nodeDataById.get(node);
-      if (data?.layer_label || data?.layer) return data.layer_label || data.layer;
-      const owner = preferredOwnerForNode(node);
-      return owner?.layer_label || owner?.layer || "Unknown";
-    }
     function normalizeClusterPath(path) {
       const normalized = String(path || "root").replace(/^\/+|\/+$/g, "");
       return !normalized || normalized === "ROOT" ? "root" : normalized;
