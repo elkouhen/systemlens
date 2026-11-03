@@ -3119,3 +3119,49 @@ def test_exact_edge_confidence_keeps_an_exact_only_reachability(tmp_path: Path) 
 
     assert [(flow.steps[0].endpoint_id, flow.steps[-1].endpoint_id, flow.confidence)
             for flow in flows] == [("entry", "output", "medium")]
+
+
+def test_port_in_local_named_class_belongs_to_its_own_method(tmp_path: Path) -> None:
+    # Review F7 (2026-11-03): a port inside a method of a local named class
+    # belongs to that method only, never to the enclosing method that merely
+    # declares the class; otherwise a flow runs through code never called.
+    path = "orders/src/main/java/com/example/C.java"
+    source = tmp_path / path
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        """package com.example;
+class C {
+  @PostMapping("/x")
+  void entry() {
+    class Local {
+      void send() { kafka.send(); }
+    }
+    log();
+  }
+  void log() {}
+}
+""",
+        encoding="utf-8",
+    )
+    endpoints = [
+        _endpoint("in", "serve", "rest", "POST /x", path, 3),
+        _endpoint("out", "produce", "kafka", "t", path, 6),
+    ]
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+
+    methods = materialize_integration_methods(tmp_path, endpoints, [path], [module])
+    ports = {
+        method.qualified_method: (method.input_endpoint_ids, method.output_endpoint_ids)
+        for method in methods
+    }
+    flows = materialize_call_graph_flows(
+        methods, endpoints, [], repo_root=tmp_path, modules=[module],
+        source_paths=[path], closed_world=True,
+    )
+
+    assert ports["com.example.C.entry"] == (("in",), ())
+    assert ports["com.example.C.Local.send"] == ((), ("out",))
+    assert not [flow for flow in flows if flow.steps and flow.steps[-1].endpoint_id == "out"]

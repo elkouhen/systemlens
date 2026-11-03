@@ -294,6 +294,9 @@ the inventory up to that bound; larger repositories reparse the excess files.
 A method of an anonymous class is not indexed; its body belongs to the named
 method creating the instance, like a lambda body (ADR-62). In that body, a
 call on `this`, `super`, `this.field` or without receiver stays unresolved.
+A method of a local named class is indexed as its own method: a port in its
+body belongs only to that innermost declaring method, never to the enclosing
+method that declares the class.
 Symbol collection scans source bytes and syntax nodes once per flow rebuild.
 `JavaSymbols.resolve` accepts explicit imports and qualified type names as
 signature identities even when dependency sources are absent. Callees still

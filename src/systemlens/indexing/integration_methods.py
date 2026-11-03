@@ -221,6 +221,31 @@ def declared_parameter_types(declaration, source: bytes) -> tuple[str, ...] | No
     return tuple(declared_types)
 
 
+def _innermost_declaring_spans(
+    declarations: list, endpoints: list[MessageEndpoint]
+) -> dict[str, tuple[int, int]]:
+    """Map each endpoint to the byte span of its innermost declaring method.
+
+    A method of a local named class is a method of its own: a port in its
+    body belongs to it, not to the enclosing method that declares the class
+    (review F7). The narrowest line range that contains the port wins.
+    """
+    owners: dict[str, tuple[int, int]] = {}
+    for endpoint in endpoints:
+        best: tuple[int, int, int] | None = None
+        for declaration in declarations:
+            start_line = declaration.start_point.row + 1
+            end_line = declaration.end_point.row + 1
+            if not start_line <= endpoint.start_line <= end_line:
+                continue
+            width = declaration.end_byte - declaration.start_byte
+            if best is None or width < best[0]:
+                best = (width, declaration.start_byte, declaration.end_byte)
+        if best is not None:
+            owners[endpoint.id] = (best[1], best[2])
+    return owners
+
+
 def materialize_integration_methods(
     repo_root: Path, endpoints: list[MessageEndpoint], java_paths: list[str], modules: list[DiscoveredModule]
 ) -> list[IntegrationMethod]:
@@ -250,19 +275,24 @@ def materialize_integration_methods(
         if parsed is None:
             continue
         source, root = parsed
-        for declaration in java_parser.walk(root):
-            # An anonymous class method has no source type of its own: its
-            # body is part of the named method that creates the instance.
-            if declaration.type != "method_declaration" or java_parser.is_anonymous_member(declaration):
-                continue
+        # An anonymous class method has no source type of its own: its body
+        # is part of the named method that creates the instance.
+        declarations = [
+            declaration for declaration in java_parser.walk(root)
+            if declaration.type == "method_declaration"
+            and not java_parser.is_anonymous_member(declaration)
+        ]
+        owner_span = _innermost_declaring_spans(declarations, path_endpoints)
+        for declaration in declarations:
             name = java_parser.declaration_name(declaration, source)
             if name is None:
                 continue
             start_line = declaration.start_point.row + 1
             end_line = declaration.end_point.row + 1
+            span = (declaration.start_byte, declaration.end_byte)
             contained = [
                 endpoint for endpoint in path_endpoints
-                if start_line <= endpoint.start_line <= end_line
+                if owner_span.get(endpoint.id) == span
             ]
             inputs = tuple(sorted(
                 endpoint.id for endpoint in contained
