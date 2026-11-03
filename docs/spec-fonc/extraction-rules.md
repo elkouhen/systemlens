@@ -311,8 +311,15 @@ It does not infer a match from a partial key or an undeclared topic; a
 literal send topic is validated by its full normalized key or its declared
 value, never by its last segment.
 Only the `topics` attribute of `@KafkaListener` is inspected for topic
-references; a kebab-case key such as `commande-creee` matches `COMMANDE_CREEE`. Properties such as `topics.<key>.groupe` in `groupId` are
+references; a kebab-case key such as `commande-creee` matches
+`COMMANDE_CREEE`. Properties such as `topics.<key>.groupe` in `groupId` are
 consumer-group settings, not topic references, and are ignored.
+
+Strategy1 reads Java code, not text. A commented-out `@KafkaListener` is not
+a consumer, and a listener's payload type is its `@Payload` or first payload
+parameter. A `getTopics().getXxx()` accessor makes a producer only as the
+topic of a send call, a `ProducerRecord` or a message `TOPIC` header; a
+`NewTopic` bean, a log line or a commented-out send publishes nothing.
 
 If the declared value starts with `${kafka.prefix-topic}.`, Strategy1 removes
 that environment prefix before persisting and matching the physical topic.

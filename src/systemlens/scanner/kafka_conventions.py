@@ -15,11 +15,13 @@ from pathlib import Path
 
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
-from systemlens.scanner._core import _build_endpoint
 from systemlens.scanner.kafka_ast import (
+    _listener_payload_type,
+    _producer_record_payload_type,
     _producer_send_payload_type,
     _kafka_endpoint,
     _kafka_topic_from_value,
+    _type_simple_name,
 )
 from systemlens.scanner.kafka_payload_types import payload_expression_type
 from systemlens.scanner._spring_properties import (
@@ -269,51 +271,54 @@ def _strategy1_topic_values(
     ))
 
 
-def _kafka_listener_annotation_blocks(source: str) -> list[tuple[int, str]]:
-    """Return complete `@KafkaListener(...)` blocks without parsing Java AST."""
-    blocks: list[tuple[int, str]] = []
-    for match in re.finditer(r"@KafkaListener\s*\(", source):
-        depth = 0
-        for index in range(match.end() - 1, len(source)):
-            character = source[index]
-            if character == "(":
-                depth += 1
-            elif character == ")":
-                depth -= 1
-                if depth == 0:
-                    blocks.append((match.start(), source[match.start():index + 1]))
-                    break
-    return blocks
+def _strategy1_accessor_key(node, source: bytes) -> str | None:
+    """``Xxx`` when ``node`` is exactly ``<receiver>.getTopics().getXxx()``."""
+    if node is None:
+        return None
+    if node.type == "parenthesized_expression" and node.named_children:
+        return _strategy1_accessor_key(node.named_children[0], source)
+    if node.type != "method_invocation":
+        return None
+    receiver, name, arguments = java_parser.invocation_parts(node, source)
+    if arguments or name is None or receiver is None or receiver.type != "method_invocation":
+        return None
+    match = re.fullmatch(r"get([A-Z]\w*)", name)
+    _inner_receiver, inner_name, inner_arguments = java_parser.invocation_parts(receiver, source)
+    if match is None or inner_name != "getTopics" or inner_arguments:
+        return None
+    return match.group(1)
 
 
-def _kafka_listener_topics_value(annotation: str) -> str:
-    """Return only the value assigned to the `topics` annotation attribute."""
-    match = re.search(r"\btopics\s*=", annotation)
-    if match is None:
-        return ""
-    start = match.end()
-    depth = 0
-    quote: str | None = None
-    escaped = False
-    for index in range(start, len(annotation)):
-        character = annotation[index]
-        if quote is not None:
-            if escaped:
-                escaped = False
-            elif character == "\\":
-                escaped = True
-            elif character == quote:
-                quote = None
-            continue
-        if character in {"'", '"'}:
-            quote = character
-        elif character in "({[":
-            depth += 1
-        elif character in ")}]":
-            depth = max(0, depth - 1)
-        elif character == "," and depth == 0:
-            return annotation[start:index]
-    return annotation[start:]
+def _message_topic_headers(message, source: bytes, send_invocation) -> list:
+    """Topic values of ``setHeader(KafkaHeaders.TOPIC, value)`` for ``send(message)``.
+
+    The message is built inline or by a local variable of the enclosing
+    method; the header value then goes through the Strategy1 branch resolver.
+    """
+    builders = [message]
+    if message.type == "identifier":
+        name = java_parser.node_text(source, message)
+        method = java_parser.enclosing(send_invocation, "method_declaration")
+        builders = [
+            value
+            for declarator in (java_parser.walk(method) if method is not None else ())
+            if declarator.type == "variable_declarator"
+            and (ident := declarator.child_by_field_name("name")) is not None
+            and java_parser.node_text(source, ident) == name
+            and (value := declarator.child_by_field_name("value")) is not None
+        ]
+    topics = []
+    for builder in builders:
+        for invocation in java_parser.walk(builder):
+            if invocation.type != "method_invocation":
+                continue
+            _receiver, name, arguments = java_parser.invocation_parts(invocation, source)
+            if name != "setHeader" or len(arguments) < 2:
+                continue
+            header = java_parser.node_text(source, arguments[0])
+            if header == "TOPIC" or header.endswith(".TOPIC"):
+                topics.extend(_strategy1_topic_expression_nodes(arguments[1], source, send_invocation))
+    return topics
 
 
 def _strategy1_method_payload_type(
@@ -362,111 +367,102 @@ def infer_kafka_topic_strategy1_endpoints(
         if parsed is None:
             continue
         source_bytes, root = parsed
-        source = source_bytes.decode("utf-8", errors="replace")
-        lines = source.splitlines()
-        strategy_send_nodes = []
-        for candidate in java_parser.walk(root):
-            if candidate.type != "method_invocation":
-                continue
-            _object_node, candidate_name, candidate_args = java_parser.invocation_parts(
-                candidate, source_bytes
-            )
-            if (
-                candidate_name is not None
-                and candidate_name.startswith(_STRATEGY1_SEND_METHOD_PREFIX)
-                and len(candidate_args) >= 2
-            ):
-                strategy_send_nodes.append(candidate)
-        strategy_send_methods = [
-            method
-            for node in strategy_send_nodes
-            if (method := java_parser.enclosing(node, "method_declaration")) is not None
+        strategy_send_nodes = [
+            candidate
+            for candidate in java_parser.walk(root)
+            if candidate.type == "method_invocation"
+            and (candidate_name := java_parser.invocation_parts(candidate, source_bytes)[1]) is not None
+            and candidate_name.startswith(_STRATEGY1_SEND_METHOD_PREFIX)
+            and len(java_parser.argument_nodes(candidate)) >= 2
         ]
-        for match in _STRATEGY1_PRODUCER_RE.finditer(source):
-            match_offset = len(source[:match.start()].encode("utf-8"))
-            if any(
-                candidate.start_byte <= match_offset < candidate.end_byte
-                for candidate in strategy_send_nodes
-            ) or any(
-                method.start_byte <= match_offset < method.end_byte
-                for method in strategy_send_methods
+        # A producer is a send call whose topic argument is the accessor
+        # expression; a bean, a log line or a comment that mentions the
+        # accessor publishes nothing (K1).
+        for node in java_parser.walk(root):
+            payload_type: str | None
+            if node.type == "method_invocation":
+                _object_node, name, args = java_parser.invocation_parts(node, source_bytes)
+                if name != "send" or not args:
+                    continue
+                topic_expressions = (
+                    _strategy1_topic_expression_nodes(args[0], source_bytes, node)
+                    if len(args) >= 2
+                    else _message_topic_headers(args[0], source_bytes, node)
+                )
+                payload_type = _producer_send_payload_type(repo_root, rel_path, source_bytes, node)
+            elif (
+                node.type == "object_creation_expression"
+                and _type_simple_name(source_bytes, node.child_by_field_name("type")) == "ProducerRecord"
             ):
+                args = java_parser.argument_nodes(node)
+                if len(args) < 2:
+                    continue
+                topic_expressions = _strategy1_topic_expression_nodes(args[0], source_bytes, node)
+                payload_type = _producer_record_payload_type(repo_root, rel_path, source_bytes, node)
+            else:
                 continue
-            # The regex works on text; tree-sitter positions are bytes.
-            send_invocation = next(
-                (
-                    node
-                    for node in java_parser.walk(root)
-                    if node.type == "method_invocation"
-                    and node.start_byte <= match_offset < node.end_byte
-                    and java_parser.invocation_parts(node, source_bytes)[1] in {"send", "sendDefault"}
-                ),
-                None,
+            logical_keys = dict.fromkeys(
+                key
+                for expression in topic_expressions
+                if (key := _strategy1_accessor_key(expression, source_bytes)) is not None
             )
-            # Anchor the fact on the send statement so a multi-line call
-            # has one site for the generic and the Strategy1 extractors.
-            line_no = (
-                send_invocation.start_point.row + 1 if send_invocation is not None
-                else source.count("\n", 0, match.start()) + 1
-            )
-            logical_key = match.group(1)
-            topic, topic_dynamic = _validate_strategy1_topic(logical_key, kafka_catalog, logical_key)
-            endpoint = _build_endpoint(
-                repo_root,
-                rel_path,
-                line_no,
-                line_no,
-                "produce",
-                "kafka",
-                topic,
-                "kafka-topic-strategy1",
-                lines[line_no - 1].strip(),
-            )
-            endpoint = replace(
-                endpoint,
-                # The payload is the value argument of the enclosing send; a
-                # method parameter is not evidence of the message type.
-                message_type=(
-                    _producer_send_payload_type(repo_root, rel_path, source_bytes, send_invocation)
-                    if send_invocation is not None else None
-                ),
-                topic_dynamic=topic_dynamic,
-                topic_display=topic if topic_dynamic else logical_key,
-            )
-            endpoints[endpoint.id] = endpoint
-        for offset, annotation in _kafka_listener_annotation_blocks(source):
-            line_no = source.count("\n", 0, offset) + 1
-            topics_value = _kafka_listener_topics_value(annotation)
-            for key_match in _STRATEGY1_KAFKA_KEY_RE.finditer(topics_value):
-                property_key = key_match.group(1)
-                property_parts = property_key.split(".")
-                logical_key = (
-                    property_parts[-2]
-                    if property_parts[-1].casefold() == "nom" and len(property_parts) > 1
-                    else property_parts[-1]
+            for logical_key in logical_keys:
+                topic, topic_dynamic = _validate_strategy1_topic(logical_key, kafka_catalog, logical_key)
+                endpoint = _kafka_endpoint(
+                    repo_root, rel_path, source_bytes, node, "produce", "kafka-topic-strategy1",
+                    topic, topic_dynamic, payload_type,
                 )
-                resolved = (
-                    kafka_catalog.get(normalize_strategy1_kafka_key(logical_key))
-                    if kafka_catalog is not None
-                    else None
-                )
-                endpoint = _build_endpoint(
-                    repo_root,
-                    rel_path,
-                    line_no,
-                    line_no + annotation.count("\n"),
-                    "consume",
-                    "kafka",
-                    resolved or "<dynamic>",
-                    "kafka-topic-strategy1",
-                    annotation,
-                )
-                endpoint = replace(
-                    endpoint,
-                    topic_dynamic=resolved is None,
-                    topic_display=resolved or logical_key,
-                )
+                endpoint = replace(endpoint, topic_display=topic if topic_dynamic else logical_key)
                 endpoints[endpoint.id] = endpoint
+        # Listeners come from the AST, so a commented-out annotation is not
+        # a consumer, and the payload is the listener parameter (K2).
+        for declaration in java_parser.walk(root):
+            if declaration.type == "method_declaration":
+                listener_payload = _listener_payload_type(source_bytes, declaration)
+            elif declaration.type == "class_declaration":
+                handlers = [
+                    member for member in java_parser.walk(declaration)
+                    if member.type == "method_declaration"
+                    and java_parser.enclosing(member, "class_declaration") is declaration
+                    and any(java_parser.annotation_name(ann, source_bytes) == "KafkaHandler"
+                            for ann in java_parser.annotations_of(member))
+                ]
+                listener_payload = (
+                    _listener_payload_type(source_bytes, handlers[0]) if len(handlers) == 1 else None
+                )
+            else:
+                continue
+            for annotation_node in java_parser.annotations_of(declaration):
+                if java_parser.annotation_name(annotation_node, source_bytes) != "KafkaListener":
+                    continue
+                topics_node = java_parser.annotation_argument(annotation_node, source_bytes, key="topics")
+                if topics_node is None:
+                    continue
+                topics_value = "\n".join(
+                    java_parser.node_text(source_bytes, literal)
+                    for literal in java_parser.walk(topics_node)
+                    if literal.type == "string_literal"
+                )
+                for key_match in _STRATEGY1_KAFKA_KEY_RE.finditer(topics_value):
+                    property_key = key_match.group(1)
+                    property_parts = property_key.split(".")
+                    logical_key = (
+                        property_parts[-2]
+                        if property_parts[-1].casefold() == "nom" and len(property_parts) > 1
+                        else property_parts[-1]
+                    )
+                    resolved = (
+                        kafka_catalog.get(normalize_strategy1_kafka_key(logical_key))
+                        if kafka_catalog is not None
+                        else None
+                    )
+                    endpoint = _kafka_endpoint(
+                        repo_root, rel_path, source_bytes, annotation_node, "consume",
+                        "kafka-topic-strategy1", resolved or "<dynamic>", resolved is None,
+                        listener_payload,
+                    )
+                    endpoint = replace(endpoint, topic_display=resolved or logical_key)
+                    endpoints[endpoint.id] = endpoint
         for node in strategy_send_nodes:
             _object_node, method_name, args = java_parser.invocation_parts(node, source_bytes)
             if (

@@ -922,3 +922,101 @@ class P { KafkaTemplate<String, Order> kafkaTemplate; void s(Order o) { kafkaTem
 }
 """)
     assert _edges(tmp_path) == [("a", "b")]
+def test_strategy1_get_topics_outside_a_send_is_not_a_producer(tmp_path: Path) -> None:
+    """K1: a topic bean, a log line and a commented-out send publish nothing."""
+    _write(tmp_path, "src/main/resources/kafka.yml",
+           "kafka:\n  topics:\n    commande-creee:\n      nom: cmd.creee\n")
+    _write(tmp_path, "src/main/java/p/C.java", """package p;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.springframework.kafka.config.TopicBuilder;
+class C {
+  Props props;
+  @org.springframework.context.annotation.Bean NewTopic t() { return TopicBuilder.name(props.getTopics().getCommandeCreee()).build(); }
+  void log() { System.out.println("listening " + props.getTopics().getCommandeCreee()); }
+  // kafkaTemplate.send(props.getTopics().getCommandeCreee(), dto);
+  /* kafkaTemplate.send(props.getTopics().getCommandeCreee(), dto); */
+}
+""")
+    assert infer_kafka_topic_strategy1_endpoints(tmp_path) == []
+
+
+def test_strategy1_get_topics_send_and_record_are_producers(tmp_path: Path) -> None:
+    """K1: the topic argument of a send or a ProducerRecord is the evidence."""
+    _dto(tmp_path)
+    _write(tmp_path, "src/main/resources/kafka.yml",
+           "kafka:\n  topics:\n    commande-creee:\n      nom: cmd.creee\n")
+    _write(tmp_path, "src/main/java/p/C.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.apache.kafka.clients.producer.ProducerRecord;
+class C {
+  Props props;
+  KafkaTemplate<String, Order> kafkaTemplate;
+  void a(Order o) { kafkaTemplate.send(props.getTopics().getCommandeCreee(), o); }
+  void b(Order o) {
+    String topic = props.getTopics().getCommandeCreee();
+    kafkaTemplate.send(topic, o);
+  }
+  void c(Order o) { kafkaTemplate.send(new ProducerRecord<>(props.getTopics().getCommandeCreee(), o)); }
+}
+""")
+    facts = sorted(
+        (e.role, e.topic, e.topic_dynamic, e.message_type, e.start_line)
+        for e in infer_kafka_topic_strategy1_endpoints(tmp_path)
+    )
+    assert facts == [
+        ("produce", "cmd.creee", False, "Order", 7),
+        ("produce", "cmd.creee", False, "Order", 10),
+        ("produce", "cmd.creee", False, "Order", 12),
+    ], facts
+def test_strategy1_commented_listener_is_not_a_consumer_and_ast_payload_wins(
+    tmp_path: Path,
+) -> None:
+    """K2: listeners come from the AST; the @Payload parameter is the type."""
+    _dto(tmp_path)
+    _write(tmp_path, "src/main/resources/kafka.yml",
+           "kafka:\n  topics:\n    commande-creee:\n      nom: cmd.creee\n"
+           "    paiement:\n      nom: pay.done\n")
+    _write(tmp_path, "src/main/java/p/L.java", """package p;
+import org.springframework.kafka.annotation.*;
+import org.springframework.kafka.support.KafkaHeaders;
+class L {
+  // @KafkaListener(topics = "${kafka.topics.paiement.nom}")
+  @KafkaListener(topics = "${kafka.topics.commande-creee.nom}")
+  public void consume(@Header(KafkaHeaders.RECEIVED_KEY) String key, @Payload Order order) {
+  }
+  private void helper(Payment p) {
+  }
+}
+""")
+    facts = _facts(infer_kafka_endpoints(tmp_path, strategy1=True))
+    assert facts == [
+        ("consume", "cmd.creee", False, "Order", "kafka-topic-strategy1", 6),
+    ], facts
+
+
+def test_strategy1_get_topics_in_a_message_topic_header_is_a_producer(tmp_path: Path) -> None:
+    """K1: a `Message` whose TOPIC header is the accessor is still sent."""
+    _dto(tmp_path)
+    _write(tmp_path, "src/main/resources/kafka.yml",
+           "kafka:\n  topics:\n    commande-creee:\n      nom: cmd.creee\n")
+    _write(tmp_path, "src/main/java/p/C.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.support.MessageBuilder;
+class C {
+  Props props;
+  KafkaTemplate<String, Order> kafkaTemplate;
+  void a(Order o) {
+    kafkaTemplate.send(MessageBuilder.withPayload(o).setHeader(KafkaHeaders.TOPIC, props.getTopics().getCommandeCreee()).build());
+  }
+  void b(Order o) {
+    var message = MessageBuilder.withPayload(o).setHeader(KafkaHeaders.TOPIC, props.getTopics().getCommandeCreee()).build();
+    kafkaTemplate.send(message);
+  }
+}
+""")
+    facts = sorted(
+        (e.topic, e.message_type, e.start_line)
+        for e in infer_kafka_topic_strategy1_endpoints(tmp_path)
+    )
+    assert facts == [("cmd.creee", "Order", 9), ("cmd.creee", "Order", 13)], facts

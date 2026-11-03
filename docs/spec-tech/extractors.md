@@ -139,10 +139,16 @@ takes the value serde of a `Produced.with(...)` argument, then the declared
 `new X<>(V.class)`, a `Serdes.V()` factory or a declared `Serde<V>`. A
 chained receiver such as `s.mapValues(...).to(topic)` is unknown.
 
-The Strategy1 accessor path
-anchors its fact on the enclosing send statement and types it from that
-statement's value argument, so a multi-line send has one site for both
-extractors and a method parameter is never the message type.
+The Strategy1 accessor path reads the syntax tree, never the raw text. A
+producer is a `send(topic, ...)` call or a `new ProducerRecord(topic, ...)`
+whose topic argument is exactly `<receiver>.getTopics().getXxx()`, directly
+or through a local variable resolved by the Strategy1 branch resolver. A
+one-argument `send(message)` counts when the message's
+`setHeader(KafkaHeaders.TOPIC, ...)` value is that accessor. A `NewTopic`
+bean, a log line or a comment that mentions the accessor publishes nothing.
+The fact is anchored on the send call or the record and typed from its
+value argument, so a multi-line send has one site for both extractors and a
+method parameter is never the message type.
 
 Both producer paths, `KafkaTemplate.send` and the Strategy1
 `envoyerMessageKafka*` methods, type their value argument with one rule in
@@ -237,14 +243,19 @@ matching catalog entry. This includes a ternary expression and a topic variable
 assigned in `if/else` or `switch` branches. Other values use the conservative
 topic resolver and remain dynamic unless they match an exact declared value.
 
-For listeners, the extractor inspects only the `topics` attribute. Only
-`${kafka.topics.<key>.nom}` placeholders in that attribute create consume
-endpoints. The key may use Spring's kebab case (`commande-creee`); it is
-normalized like a `kafka.yml` key. A `${kafka.topics.<key>.groupe}` placeholder in `groupId` identifies
-the consumer group and is ignored by topic extraction.
-The second argument is always
-typed by the shared payload rule above, including calls with three
-arguments; an overload of the same arity leaves the type to the call-graph
+For listeners, the extractor reads `@KafkaListener` annotations from the
+syntax tree, on methods and on classes with `@KafkaHandler` methods, so a
+commented-out listener is not a consumer. It inspects only the string
+literals of the `topics` attribute. Only `${kafka.topics.<key>.nom}`
+placeholders there create consume endpoints. The key may use Spring's kebab
+case (`commande-creee`); it is normalized like a `kafka.yml` key. A
+`${kafka.topics.<key>.groupe}` placeholder in `groupId` identifies the
+consumer group and is ignored by topic extraction. The payload type is the
+listener parameter chosen by the generic AST rule, never a later method.
+
+The second argument of an `envoyerMessageKafka*` call is always typed by
+the shared payload rule above, including calls with three arguments; an
+overload of the same arity leaves the type to the call-graph
 engine. This positional rule applies identically to
 `envoyerMessageKafka`, `envoyerMessageKafkaRequest` and
 `envoyerMessageKafkaReply`.
