@@ -153,6 +153,16 @@ argument of the receiver's `KafkaTemplate<K, V>`, `KafkaOperations<K, V>` or
 `ReplyingKafkaTemplate<K, V, R>` declaration is the fallback. A written type
 always wins over this fallback.
 
+A `new ProducerRecord(...)` is typed by its written `ProducerRecord<K, V>`,
+on the `new` expression or on the local declaration it initializes. A
+diamond types the value argument picked by constructor arity: the last of
+two to four arguments, the fifth of six. Five arguments are either
+`(topic, partition, key, value, headers)` or `(topic, partition, timestamp,
+key, value)`: a last argument typed `Headers`, `RecordHeaders` or a
+collection of `Header` selects the fourth, a `long` third argument the
+fifth, and anything else leaves the payload unknown. The headers argument
+is never the payload.
+
 The result then passes `domain.message_types.informative_message_type`, as
 do listener parameters and CodeQL evidence: `Object`, `String`, `byte[]`,
 wildcards, diamonds, raw containers and the type variables declared by the

@@ -382,6 +382,12 @@ declaration, a getter, a Lombok builder, or `MessageBuilder.withPayload`.
 When the value stays unknown, the value type `V` of the receiving
 `KafkaTemplate<K, V>` is used, unless `V` itself names no DTO.
 
+A `new ProducerRecord(...)` takes its written `ProducerRecord<K, V>` type,
+else the type of its value argument chosen by constructor arity. Its
+headers, timestamp, partition and key arguments are never the payload;
+when a five-argument record does not show whether it carries headers or a
+timestamp, the payload is unknown.
+
 The export keeps unmatched concrete endpoints and dynamic topic expressions
 as partial, explicitly unresolved topic evidence; dynamic topics never imply
 a producer/consumer pairing. Different known producer and consumer types are

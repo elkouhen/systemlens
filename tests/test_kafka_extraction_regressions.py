@@ -782,3 +782,30 @@ import org.springframework.kafka.annotation.KafkaListener;
 class L { @KafkaListener(topics = "orders") void on(Order o) {} }
 """)
     assert _edges(tmp_path) == [("a", "b")]
+def test_producer_record_value_is_chosen_by_constructor_arity(tmp_path: Path) -> None:
+    """K4: the headers or timestamp argument is never the payload."""
+    _dto(tmp_path)
+    _write(tmp_path, "src/main/java/p/P.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
+import java.util.List;
+class P {
+  KafkaTemplate<String, Order> kafkaTemplate;
+  void a(Order o, List<Header> headers) { kafkaTemplate.send(new ProducerRecord<>("orders", null, "k", o, headers)); }
+  void b(Order o, Iterable<Header> headers) { ProducerRecord<String, Order> r = new ProducerRecord<>("orders-b", null, "k", o, headers); kafkaTemplate.send(r); }
+  void c(Order o, org.apache.kafka.common.header.internals.RecordHeaders hs) { kafkaTemplate.send(new ProducerRecord<>("orders-c", null, null, "k", o, hs)); }
+  void d(Order o, long ts) { kafkaTemplate.send(new ProducerRecord<>("orders-d", 0, ts, "k", o)); }
+  void e(Order o) { kafkaTemplate.send(new ProducerRecord<>("orders-e", 0, "k", o)); }
+  void f(List<Header> hs) { kafkaTemplate.send(new ProducerRecord<String, Order>("orders-f", null, "k", null, hs)); }
+}
+""")
+    facts = sorted((e.topic, e.message_type) for e in infer_kafka_endpoints(tmp_path))
+    assert facts == [
+        ("orders", "Order"),
+        ("orders-b", "Order"),
+        ("orders-c", "Order"),
+        ("orders-d", "Order"),
+        ("orders-e", "Order"),
+        ("orders-f", "Order"),
+    ], facts

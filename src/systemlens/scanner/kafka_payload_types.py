@@ -682,6 +682,12 @@ def payload_expression_type(repo_root: Path, path: str, source: bytes, node: Nod
     return _kafka_payload_type(typed.text) if typed is not None else None
 
 
+def expression_type_text(repo_root: Path, path: str, source: bytes, node: Node | None) -> str | None:
+    """Written type of an expression, informative or not; ``None`` when unknown."""
+    typed = _Typer(repo_root).expression(path, source, node)
+    return typed.text if typed is not None else None
+
+
 def template_value_type(repo_root: Path, path: str, source: bytes, receiver: Node | None) -> str | None:
     """Value type ``V`` of the ``KafkaTemplate<K, V>`` that ``receiver`` names."""
     typed = _Typer(repo_root).expression(path, source, receiver)

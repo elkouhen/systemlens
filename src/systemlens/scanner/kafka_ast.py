@@ -28,6 +28,7 @@ from systemlens.scanner._spring_properties import (
 )
 from systemlens.scanner.java_strings import local_string, locally_declared_names
 from systemlens.scanner.kafka_payload_types import (
+    expression_type_text,
     payload_expression_type,
     template_value_type,
     type_variables_in_scope,
@@ -276,7 +277,7 @@ def _listener_payload_type(source: bytes, method_node) -> str | None:
         return _kafka_payload_type(type_name, type_variables_in_scope(param, source))
     return None
 def _producer_send_payload_type(repo_root: Path, rel_path: str, source: bytes, invocation) -> str | None:
-    """Type de payload d'un envoi Kafka (``send``, ``ProducerRecord``).
+    """Type de payload d'un appel d'envoi Kafka (``send``, ``sendDefault``).
 
     Spring Kafka places the value last in every topic-based overload, including
     ``send(topic, key, value)`` and ``send(topic, partition, key, value)``.
@@ -304,6 +305,82 @@ def _producer_send_payload_type(repo_root: Path, rel_path: str, source: bytes, i
             repo_root, rel_path, source, invocation.child_by_field_name("object")
         )
     return payload
+_HEADER_TYPES = frozenset({"Header", "Headers", "RecordHeader", "RecordHeaders"})
+_TIMESTAMP_CALLS = frozenset({"currentTimeMillis", "toEpochMilli", "timestamp"})
+
+
+def _is_headers_argument(repo_root: Path, rel_path: str, source: bytes, node: Node) -> bool:
+    """Whether ``node`` is typed as Kafka headers (``Headers``, ``Iterable<Header>``)."""
+    text = expression_type_text(repo_root, rel_path, source, node)
+    if text is None:
+        return False
+    names = {name.rsplit(".", 1)[-1] for name in re.findall(r"[A-Za-z_$][\w$.]*", text)}
+    return bool(names & _HEADER_TYPES)
+
+
+def _is_timestamp_argument(repo_root: Path, rel_path: str, source: bytes, node: Node) -> bool:
+    """Whether ``node`` is a ``long`` epoch timestamp, as written or typed."""
+    if node.type == "decimal_integer_literal":
+        return java_parser.node_text(source, node).rstrip().endswith(("L", "l"))
+    if node.type == "method_invocation":
+        _receiver, name, arguments = java_parser.invocation_parts(node, source)
+        if name in _TIMESTAMP_CALLS and not arguments:
+            return True
+    text = expression_type_text(repo_root, rel_path, source, node)
+    return text is not None and text.rsplit(".", 1)[-1] in {"long", "Long"}
+
+
+def _producer_record_value(repo_root: Path, rel_path: str, source: bytes, creation: Node) -> Node | None:
+    """Value argument of ``new ProducerRecord(...)`` chosen by constructor arity.
+
+    Kafka's constructors are ``(topic, value)``, ``(topic, key, value)``,
+    ``(topic, partition, key, value)``, ``(topic, partition, key, value,
+    headers)``, ``(topic, partition, timestamp, key, value)`` and
+    ``(topic, partition, timestamp, key, value, headers)``. The two
+    five-argument forms are told apart by a headers-typed last argument or a
+    timestamp third argument; otherwise the value is unknown.
+    """
+    arguments = java_parser.argument_nodes(creation)
+    if len(arguments) in {2, 3, 4}:
+        return arguments[-1]
+    if len(arguments) == 6:
+        return arguments[4]
+    if len(arguments) == 5:
+        if _is_headers_argument(repo_root, rel_path, source, arguments[4]):
+            return arguments[3]
+        if _is_timestamp_argument(repo_root, rel_path, source, arguments[2]):
+            return arguments[4]
+    return None
+
+
+def _producer_record_payload_type(repo_root: Path, rel_path: str, source: bytes, creation: Node) -> str | None:
+    """Payload type of ``new ProducerRecord(...)``.
+
+    A written ``ProducerRecord<K, V>`` wins, on the ``new`` expression or on
+    the declaration it initializes; a diamond falls back to the value
+    argument picked by constructor arity, never to the headers.
+    """
+    written = payload_expression_type(repo_root, rel_path, source, creation)
+    if written is not None:
+        return written
+    declarator = creation.parent
+    if (
+        declarator is not None
+        and declarator.type == "variable_declarator"
+        and declarator.child_by_field_name("value") == creation
+        and declarator.parent is not None
+    ):
+        type_node = declarator.parent.child_by_field_name("type")
+        if type_node is not None and java_parser.node_text(source, type_node).strip() != "var":
+            declared = _kafka_payload_type(
+                java_parser.node_text(source, type_node), type_variables_in_scope(declarator, source)
+            )
+            if declared is not None:
+                return declared
+    value = _producer_record_value(repo_root, rel_path, source, creation)
+    return payload_expression_type(repo_root, rel_path, source, value) if value is not None else None
+
+
 def _kafka_endpoint(
     repo_root: Path, rel_path: str, source: bytes, node, role: str, framework: str,
     topic: str, topic_dynamic: bool, message_type: str | None, end_node=None,
@@ -507,8 +584,7 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
                         first_arg, source, repo_root, rel_path
                     ):
                         add(node, "produce", "kafka-clients", topic, dynamic,
-                            payload_expression_type(repo_root, rel_path, source, node)
-                            or _producer_send_payload_type(repo_root, rel_path, source, node))
+                            _producer_record_payload_type(repo_root, rel_path, source, node))
     return list(endpoints.values())
 def _extract_kafka_topic(
     snippet: str, repo_root: Path, source_path: str | None = None
