@@ -20,6 +20,7 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-8](#pdr-8-a-resource-has-no-software-layer) | A resource has no software layer | Yes, product owner |
 | [PDR-9](#pdr-9-one-inspector-skeleton-for-every-node-kind) | One inspector skeleton for every node kind | Yes, product owner; refines ADR-68 |
 | [PDR-10](#pdr-10-inspecter-opens-one-surface-per-kind-of-fact) | `Inspecter` opens one surface per kind of fact | Yes, product owner; refines ADR-68 and PDR-9 |
+| [PDR-11](#pdr-11-spring-conventions-add-possible-call-edges) | Proposed: Spring conventions add possible call edges | Yes, product owner; not validated |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -282,3 +283,36 @@ order_fulfillments`); the Architecture group still names it. The DTO role
 (`DTO de message`, `DTO REST`) moves from the title to the header strip.
 Swagger UI and the AsyncAPI viewer are not restyled; only the chrome around
 them changes. The JSON contract and persisted facts are unchanged.
+
+## PDR-11: Spring conventions add possible call edges
+
+**Status:** Proposed on 2026-11-03 for task K8 of the
+[call-graph coverage plan](plans/call-graph-coverage.md). Not validated;
+the product owner decides.
+
+**Problem:** Some calls happen through Spring, not through Java
+dispatch. A `publishEvent(event)` reaches the `@EventListener` methods
+whose parameter type matches the event, and an injected interface may
+have one implementation selected by `@Qualifier` or `@Primary`. Java
+semantics alone cannot prove either, so the call graph shows no edge for
+the first and every implementation for the second.
+
+**Proposed rule:**
+1. `ApplicationEventPublisher.publishEvent(x)` gets a `possible` edge to
+   every `@EventListener` or `@TransactionalEventListener` method, in the
+   caller's visible modules, whose single parameter type is the static
+   type of `x` or one of its ancestors.
+2. An injected field or constructor parameter annotated `@Qualifier("n")`
+   keeps only the implementation whose bean name is `n`. A
+   `@Primary` implementation is kept alone only when it is the single
+   `@Primary` candidate. Any doubt keeps every candidate.
+3. `@Profile` and `@ConditionalOn*` never narrow candidates: they depend
+   on the runtime configuration.
+4. `@PostConstruct` methods and `CommandLineRunner` or `ApplicationRunner`
+   implementations become flow entry points only if task K0 shows them
+   on the reference projects; otherwise this point is withdrawn.
+
+**Why:** these edges are what a reader of a Spring application expects to
+see, and keeping them `possible` respects the conservative rule. The
+narrowing of point 2 removes false candidates only when the annotation
+proves it.

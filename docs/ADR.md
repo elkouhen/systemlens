@@ -17,7 +17,7 @@ functional or technical contract.
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor), [ADR-68](#adr-68-dock-the-node-inspector-beside-the-graph) |
-| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules) |
+| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules); proposed: [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -1588,3 +1588,109 @@ report the same 406 `potential` flows; CodeQL adds two `cycle` flows,
 `queryInfoInparallel` and `imageCode`, which C6 of the plan addresses. The
 [dispatch-scope plan](plans/call-graph-external-dispatch-scope.md) records
 the measurement.
+
+## ADR-72: Keep dispatch possible when an implicit implementation exists
+
+**Status:** Proposed on 2026-11-03 for task K3 of the
+[call-graph coverage plan](plans/call-graph-coverage.md). Not validated.
+Amends ADR-70.
+
+**Context:** ADR-70 keeps a call on an external interface `possible` when
+an anonymous class or a lambda can implement it. A call on a source type
+does not get that prudence. A field typed by a source interface `Fn`, with
+one named implementation `FnImpl` and a lambda `() -> {}` assigned to an
+`Fn` elsewhere, yields an exact edge to `FnImpl.apply`. A variable holding
+`new Base() { void hook() {} }` yields an exact edge to `Base.hook`. Both
+edges claim a proof the sources do not give: ADR-62 attributes anonymous
+and lambda bodies to the creating method, so no indexed method stands for
+the runtime body.
+
+**Decision:** A call whose receiver type is a source type stays
+`possible` when the sources contain an anonymous class extending or
+implementing that type, or its ancestors, or a lambda or method reference
+whose target type is that type. The lambda's target type is known only
+when it is assigned, returned or passed to a declared source type;
+otherwise it does not count. The named implementations stay the targets:
+no edge is added to the creating method.
+
+**Consequences:** Some exact edges become `possible`, and some flows lose
+their exact confidence. No edge disappears. The measured change on
+train-ticket is recorded in the plan before delivery.
+
+## ADR-73: Scope every dispatch to the caller's visible modules
+
+**Status:** Proposed on 2026-11-03 for task K4 of the
+[call-graph coverage plan](plans/call-graph-coverage.md). Not validated.
+Amends ADR-71; would also deliver task C6 of the
+[dispatch-scope plan](plans/call-graph-external-dispatch-scope.md).
+
+**Context:** ADR-71 limits dispatch on external interfaces to the
+caller's module and its transitive dependencies. Dispatch on a source
+type is not limited: a call in a library on a class it declares still
+reaches an override in a service that depends on the library. The
+`codeql` engine has the same defect for both kinds: on train-ticket it
+persists 16 edges outside the caller's dependencies and two false
+`cycle` flows. When one qualified type is declared in two modules, the
+call stays `possible` even when only one module is visible.
+
+**Decision:** Every call edge, from either engine, targets a method
+declared in the caller's module or in its transitive module dependencies.
+The `source` engine applies the rule while selecting candidates; the
+join of `code_flows.py` drops a `codeql` edge that breaks it. When one
+qualified type has a single visible declaration, it is the receiver
+type. A module with no known dependency sees only itself.
+
+**Consequences:** A library never calls into a module that uses it in
+the persisted graph, for either engine. On train-ticket the `codeql`
+engine is expected to lose its 16 out-of-scope edges and the two false
+cycles; the measured flow count is recorded before delivery. A real callback from a
+library into an application, through an interface it declares, is no
+longer shown: the graph has no classpath context to tell which
+application loaded the library.
+
+## ADR-74: Dispatch calls on external classes to source overrides
+
+**Status:** Proposed on 2026-11-03 for task K6 of the
+[call-graph coverage plan](plans/call-graph-coverage.md). Not validated.
+Extends ADR-70 and ADR-71.
+
+**Context:** ADR-70 dispatches a call on an external interface to its
+source implementations. A call on an external class does not dispatch:
+`Thread t; t.run()` never reaches `MyRunner.run` when `MyRunner extends
+Thread`. ADR-70 names this gap for the remaining CodeQL-only flow through
+`TSOStr.write`, a subclass of the servlet API's `ServletOutputStream`.
+
+**Decision:** A call on an external class dispatches to the most
+specific source override of the method name and arity in each source
+subtype, in the caller's visible modules. The edge is always `possible`,
+because the external class has its own body and other library
+subclasses. Overloads the arguments cannot separate stay unresolved.
+
+**Consequences:** Framework subclasses, such as threads, filters or
+output streams, become reachable through their library supertype.
+Edges are added, never made exact.
+
+## ADR-75: Make constructors and initializers part of the call graph
+
+**Status:** Proposed on 2026-11-03 for task K7 of the
+[call-graph coverage plan](plans/call-graph-coverage.md). Not validated.
+
+**Context:** The call graph has one node per method declaration.
+Constructors, instance and static initializers, and field initializers
+are not nodes, so the calls they make have no caller, and `new X(...)`
+reaches nothing. The CodeQL query already reads calls whose enclosing
+callable is a constructor, but it only reports `Method` targets.
+
+**Decision:** A constructor becomes a node with the qualified name
+`Owner.<init>` and its parameter types; each type with initializer code
+gets one `Owner.<clinit>` node for static code and its field and instance
+initializers are attributed to every constructor of the type. A
+`new X(...)` call targets the constructor its arguments select, exact
+when one matches; `this(...)` and `super(...)` are exact calls. A
+constructor is never an IN or OUT port and never starts a flow.
+
+**Consequences:** New rows enter `integration_methods` with names that
+cannot collide with Java method names, so existing identifiers and the
+schema keep their shape. Existing indexes need a reindex to show the new
+nodes; the code-flow signature changes to trigger it. The export and the
+UX contract need a rule for constructor nodes, decided with this record.
