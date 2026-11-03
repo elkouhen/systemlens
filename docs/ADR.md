@@ -17,7 +17,7 @@ functional or technical contract.
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor), [ADR-68](#adr-68-dock-the-node-inspector-beside-the-graph) |
-| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules) |
+| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -1545,3 +1545,33 @@ through `TSOStr.write`: it needs dispatch from `java.io.OutputStream` to a
 subclass of the servlet API's `ServletOutputStream`, a library hierarchy
 the sources do not contain. Dispatch on an external interface stays
 `possible` when an anonymous class or a lambda can implement it.
+
+## ADR-71: Scope external-interface dispatch to the caller's visible modules
+
+**Status:** Accepted on 2026-11-03. Amends ADR-70.
+
+**Context:** ADR-70 lets a call on an interface outside the sources, such
+as `ExecutorService`, `Callable` or `UserDetails`, dispatch to the source
+classes that implement it. The candidates come from every indexed module,
+because the symbol pass does not receive the module dependencies. On
+train-ticket this adds nine edges from a caller to a module that is not
+among its transitive dependencies. One of them is `exact`:
+`TravelServiceImpl.queryInParallel` reaches `TEServ.submit`, a monitoring
+library under `old-docs/`, and produces a false `cycle` flow. The pool is
+a JDK class, so the single source body proved nothing.
+
+**Decision:** A call on an external interface dispatches only to source
+implementations declared in the caller's module or in its transitive
+module dependencies. A library therefore never dispatches into a module
+that depends on it: the persisted graph has no classpath context, and a
+flow entering the library from one service would continue into another
+service. This dispatch is always `possible`, even with one source body,
+because a library can supply the implementation. When no module
+dependency is known for the caller, only its own module is visible.
+
+**Consequences:** The nine edges and the false cycle flow disappear on
+train-ticket. Calls through `ExecutorService`, `Callable` and similar
+interfaces no longer raise a flow's confidence. Edges to source interfaces,
+witnesses, and the other ADR-70 shapes are unchanged. The measured edge,
+flow and CodeQL-parity figures are recorded in the
+[dispatch-scope plan](plans/call-graph-external-dispatch-scope.md).
