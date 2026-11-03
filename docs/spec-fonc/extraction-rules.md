@@ -350,11 +350,33 @@ The architecture graph remains conservative when message payload typing is
 missing or contradictory: a producer/consumer service edge requires the same
 concrete topic, while two known and different Java message types prevent the
 edge. Missing type evidence does not prevent the edge and is shown as a partial
-or unknown type status with medium confidence. The export keeps unmatched
-concrete endpoints and dynamic topic expressions as partial, explicitly
-unresolved topic evidence; dynamic topics never imply a producer/consumer
-pairing. Different known producer and consumer types are displayed as warnings
-on the topic, relation, or integration port.
+or unknown type status with medium confidence.
+
+A payload type is known only when it names a DTO. `Object`, `String`,
+`byte[]`, wildcards, raw containers such as `Message` or `List`, and a type
+variable declared by the enclosing method or class are unknown on both the
+producer and the consumer side: a `String` payload is serialized, so its
+static type says nothing about the DTO. A consumer typed `String` is
+therefore unknown too, and it pairs with any producer on the topic.
+
+Two types are compared without package qualifiers, so `p.OrderEvent` and
+`OrderEvent` match. Generic arguments stay part of the type: a
+`List<OrderEvent>` sent as one message is the real payload and differs from
+`OrderEvent`. The stored type keeps its source spelling. Two different DTO
+names still prevent the edge.
+
+A producer value is typed from its declaration: a parameter, a local
+variable (also `var` with a typed initializer), a field of the class or a
+source superclass, `new`, a cast, a ternary whose branches agree, a lambda
+or for-each variable over a typed collection, a call with one source
+declaration, a getter, a Lombok builder, or `MessageBuilder.withPayload`.
+When the value stays unknown, the value type `V` of the receiving
+`KafkaTemplate<K, V>` is used, unless `V` itself names no DTO.
+
+The export keeps unmatched concrete endpoints and dynamic topic expressions
+as partial, explicitly unresolved topic evidence; dynamic topics never imply
+a producer/consumer pairing. Different known producer and consumer types are
+displayed as warnings on the topic, relation, or integration port.
 
 The `flows-diagnostic` analysis may still report a possible composition gap
 for a concrete topic with a downstream consumer when payload types are absent.

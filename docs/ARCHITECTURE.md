@@ -177,6 +177,7 @@ they are not cross-module entry points.
 | Shared Java parser primitives | `discovery/java/parser.py` |
 | Kubernetes runtime discovery | `discovery/kubernetes.py` |
 | Shared module inventory types | `domain/module_inventory.py` |
+| Kafka payload type informativeness and comparison | `domain/message_types.py` |
 | Same-method potential flow materialization | `indexing/code_flows.py` |
 | Call-graph engine contract or selection | `callgraph/engine.py`, `callgraph/registry.py` |
 | CodeQL QL text | `engines/codeql/queries.py` |
@@ -209,7 +210,8 @@ import boundary other modules should rely on
 | `_spring_properties.py` | Spring `application*.yml/properties` discovery and flattening, `${...}` property resolution, `@Value`-annotated field resolution |
 | `rest_client_config.py` | "Configured API client" discovery (Strategy1 `Rest*Config*` classes and their external-service constants); also hosts the `_trace`/`_trace_rest_client` debug helpers used only here |
 | `rest_mvc.py` | REST/OpenAPI inference (MVC, Feign, Spring Data REST, Swagger/OpenAPI generator, RestTemplate/RestClient, WebClient, WebFlux, Spring Cloud Gateway) and the `infer_framework_endpoints` orchestrator; imports from `_core.py`, `_spring_properties.py`, and `rest_client_config.py` |
-| `kafka_ast.py` | AST-level Kafka endpoint inference (`@KafkaListener`, `KafkaTemplate`, `ProducerRecord`, Kafka Streams); imports from `_core.py` and `_spring_properties.py` |
+| `kafka_payload_types.py` | Payload typing of a Kafka send expression, shared by both producer paths (ADR-76); imports from `_core.py` |
+| `kafka_ast.py` | AST-level Kafka endpoint inference (`@KafkaListener`, `KafkaTemplate`, `ProducerRecord`, Kafka Streams); imports from `_core.py`, `_spring_properties.py` and `kafka_payload_types.py` |
 | `kafka_conventions.py` | Strategy1 naming-convention Kafka inference plus Markdown/JSON topic-manifest inference; imports from `_core.py` and `kafka_ast.py` |
 | `__init__.py` | Re-exports the public API and implements `clear_analysis_caches()`, which must reach into nearly every submodule to clear their `lru_cache`-decorated functions plus `discovery/java/parser.py` and `discovery/build/` caches |
 

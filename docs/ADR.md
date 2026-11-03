@@ -14,7 +14,7 @@ functional or technical contract.
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
 | Indexed contracts and implementation boundaries | [ADR-25](#adr-25-separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26-organize-implementation-modules-by-architectural-ownership) |
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch) |
-| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
+| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-76](#adr-76-type-kafka-payloads-with-one-shared-scanner-rule), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor), [ADR-68](#adr-68-dock-the-node-inspector-beside-the-graph) |
 | Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules); proposed: [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph) |
@@ -1694,3 +1694,48 @@ cannot collide with Java method names, so existing identifiers and the
 schema keep their shape. Existing indexes need a reindex to show the new
 nodes; the code-flow signature changes to trigger it. The export and the
 UX contract need a rule for constructor nodes, decided with this record.
+
+## ADR-76: Type Kafka payloads with one shared scanner rule
+
+**Status:** Accepted on 2026-11-03, at the product owner's request.
+
+**Context:** A producer's `message_type` came from two local readers:
+`KafkaTemplate.send` typed its last argument, the Strategy1
+`envoyerMessageKafka*` methods their second. Both lost common shapes
+(`this.field`, inherited fields, mapper calls, getters, casts, lambdas),
+and both stored types that name no DTO, such as `T`, `Object` or a JSON
+`String`. Such a type blocked the pairing with a consumer typed
+`OrderEvent`, as did `p.OrderEvent` against `OrderEvent`.
+
+The call-graph symbol pass (`indexing/java_symbols.py`) already types
+expressions, but it erases generic arguments and `scanner/` must not
+import `indexing/`. Completing types in the indexing stage, as CodeQL does
+for Strategy1, would also rebuild relations and DTO definitions after
+flows, and it would add a second rule beside the scanner's own.
+
+**Decision:** One module, `scanner/kafka_payload_types.py`, types the value
+expression of both send paths at scan time. It reads written types, so
+`Message<T>`, `KafkaTemplate<K, V>` and collection element types stay
+visible, and it resolves receivers across repository Java files through
+imports and packages. When the value stays unknown, the value type of the
+receiving `KafkaTemplate<K, V>` is the fallback.
+
+`domain/message_types.py` decides what is known: `Object`, `String`,
+`byte[]`, wildcards, raw containers and declared type variables are
+unknown, on both sides of a topic and for CodeQL evidence. Pairing compares
+keys without package qualifiers and with generic arguments. The stored
+type keeps its source spelling. Two different known DTO names still
+prevent the edge.
+
+**Consequences:** More producers get a type, and fewer edges are blocked
+by a type that says nothing. No schema change: existing indexes compare
+correctly at once, and a reindex refreshes the stored types. A consumer
+typed `String` becomes unknown. `List<OrderEvent>` stays distinct from
+`OrderEvent`, which can block a batch listener; that case is not
+addressed here.
+
+The scanner holds a second, smaller typing rule beside the symbol pass.
+An incremental index rescans changed files only, so a type taken from an
+unchanged file refreshes at the next full index. A call is typed only
+when one source declaration matches its name and arity; generic
+substitution beyond collection elements stays unknown.

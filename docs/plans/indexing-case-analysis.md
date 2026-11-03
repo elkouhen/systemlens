@@ -103,10 +103,35 @@ Each case gets one status:
 | K4 | Conditional topic: ternary, `if/else`, `switch` | `verified` | Strategy1 probe; three gaps measured |
 | K5 | Spring Cloud Stream bindings and `StreamBridge` | `specified` | `spring.cloud.stream` support |
 | K6 | Kafka Streams topology | `specified` | extractors |
-| K7 | Payload type through `Message<T>` or `ProducerRecord` | `specified` | extractors |
+| K7 | Payload type through `Message<T>` or `ProducerRecord` | `verified` | fixture; ADR-76 |
 | K8 | RabbitMQ (`@RabbitListener`, `RabbitTemplate`) | `absent` | |
 | K9 | JMS (`@JmsListener`, `JmsTemplate`) | `absent` | |
 | K10 | Reply topic `@SendTo` | `absent` | |
+
+Producer payload shapes, measured on both send paths (`KafkaTemplate.send`
+and Strategy1 `envoyerMessageKafka*`) on 2026-11-03, before and after
+ADR-76. Each `verified` row has a regression test in
+`tests/test_kafka_extraction_regressions.py`.
+
+| # | Payload shape | Before | After |
+|---|---|---|---|
+| KP1 | Method parameter, typed local, `var x = new T()`, class field, `new` | typed | `verified` |
+| KP2 | `Message<T>` local, `ProducerRecord<K, V>` | typed | `verified` |
+| KP3 | `this.field`, inherited field from another file | unknown | `verified` |
+| KP4 | `var x = mapper.toEvent(o)`, direct mapper call | unknown | `verified` |
+| KP5 | Getter `h.getEvent()` (declared, record or Lombok) | unknown | `verified` |
+| KP6 | Lombok `X.builder()...build()` | unknown | `verified` with `@Builder`; unknown without |
+| KP7 | Cast, ternary (`null` branch neutral) | unknown | `verified` |
+| KP8 | Lambda parameter, for-each variable over a typed collection | unknown | `verified` |
+| KP9 | Same-class helper for `KafkaTemplate.send` | unknown | `verified` |
+| KP10 | `MessageBuilder.withPayload(p)` sent alone | unknown | `verified` |
+| KP11 | Untyped value, `KafkaTemplate<K, V>` receiver | unknown | `verified`: `V` |
+| KP12 | Type variable `T`, `Object`, JSON `String`, `byte[]` | wrong known type | `verified`: unknown |
+| KP13 | `p.OrderEvent` against `OrderEvent` | blocked pairing | `verified`: paired |
+| KP14 | `List<OrderEvent>` sent as one message | `List<OrderEvent>` | unchanged by decision |
+| KP15 | Consumer typed `String`, `Object`, `byte[]` | known | `verified`: unknown |
+| KP16 | Two different DTO names on one topic | blocked pairing | unchanged: blocked |
+| KP17 | Generic substitution (`Holder<E>.get()`), overloads of one arity | unknown | `specified`: stays unknown |
 
 ## 7. Data resources
 

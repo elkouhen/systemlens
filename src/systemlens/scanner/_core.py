@@ -9,12 +9,14 @@ construction d'un ``MessageEndpoint`` (id, evidence)."""
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from functools import lru_cache
 from pathlib import Path
 
 from systemlens.discovery.java import parser as java_parser
 from systemlens.discovery.build.gradle import gradle_service_for_path
 from systemlens.discovery.build.maven import module_name_for_path
+from systemlens.domain.message_types import informative_message_type
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 
 def _read_snippet(repo_root: Path, rel_path: str, start_line: int, end_line: int) -> str:
@@ -123,12 +125,23 @@ def _message_payload_type(declared_type: str | None) -> str | None:
     normalized = re.sub(r"\b(?:final|volatile)\b\s*", "", normalized).strip()
     if not normalized or normalized in {"var", "?", "void"}:
         return None
-    for container in ("ConsumerRecord", "Message", "KafkaTemplate", "KafkaConsumer", "ProducerRecord", "KStream", "KTable"):
+    for container in ("ConsumerRecord", "Message", "GenericMessage", "KafkaTemplate", "KafkaConsumer", "ProducerRecord", "KStream", "KTable"):
         match = re.fullmatch(rf"(?:[\w.]+\.)?{container}\s*<(.*)>", normalized)
         if match is not None:
             arguments = _split_java_type_arguments(match.group(1))
             return _message_payload_type(arguments[-1] if arguments else None)
     return normalized.replace("...", "[]")
+def _kafka_payload_type(
+    declared_type: str | None, type_variables: Collection[str] = (),
+) -> str | None:
+    """Kafka payload of a declared type, ``None`` when it names no DTO.
+
+    Unwraps the message containers like :func:`_message_payload_type`, then
+    applies the shared informativeness rule (ADR-76): ``Object``, ``String``,
+    ``byte[]``, wildcards, raw containers and the type variables in scope at
+    the declaration are unknown, never a known type that blocks a pairing.
+    """
+    return informative_message_type(_message_payload_type(declared_type), type_variables)
 def _first_listener_payload_type(source: str, start_line: int) -> str | None:
     lines = source.splitlines()
     context = "\n".join(lines[max(0, start_line - 1): min(len(lines), start_line + 16)])
@@ -194,6 +207,19 @@ def _infer_kafka_message_type(
     The result is the source-level Java type (for example `OrderCreated`), not
     a serializer guess. Returning `None` is preferable to inventing a type.
     """
+    return _kafka_payload_type(_infer_kafka_message_type_as_written(
+        repo_root, rel_path, start_line, role, framework, snippet
+    ))
+
+
+def _infer_kafka_message_type_as_written(
+    repo_root: Path,
+    rel_path: str,
+    start_line: int,
+    role: str,
+    framework: str | None,
+    snippet: str,
+) -> str | None:
     source = _java_source(str(repo_root), rel_path)
     if not source:
         return None

@@ -10,6 +10,7 @@ from collections.abc import Callable
 from typing import Literal
 
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
+from systemlens.domain.message_types import message_types_conflict
 
 
 @dataclass(frozen=True)
@@ -484,11 +485,7 @@ def build_graph(
         for consume_service, consume in consumes_by_topic.get(produce.topic, ()):
             if produce_service == consume_service:
                 continue
-            if (
-                produce.message_type is None
-                or consume.message_type is None
-                or produce.message_type == consume.message_type
-            ):
+            if not message_types_conflict(produce.message_type, consume.message_type):
                 key = ("kafka", produce_service, consume_service, produce.id, consume.id)
                 if key in seen:
                     continue
@@ -575,11 +572,7 @@ def graph_edges_from_facts(
         consumers = kafka_endpoint_index.get((target_service, fact_channel, "consume"), ())
         for producer in producers:
             for consumer in consumers:
-                if (
-                    producer.message_type is not None
-                    and consumer.message_type is not None
-                    and producer.message_type != consumer.message_type
-                ):
+                if message_types_conflict(producer.message_type, consumer.message_type):
                     continue
                 key = ("kafka", source_service, target_service, producer.id, consumer.id)
                 if key in seen:
@@ -635,9 +628,7 @@ def graph_edges_from_relations(
             consumers = consumers_index.get((target_service, source_endpoint.topic), [])
             return [
                 consumer for consumer in consumers
-                if source_endpoint.message_type is None
-                or consumer.message_type is None
-                or consumer.message_type == source_endpoint.message_type
+                if not message_types_conflict(source_endpoint.message_type, consumer.message_type)
             ]
         return [
             serve for serve in serves_index.get(target_service, [])

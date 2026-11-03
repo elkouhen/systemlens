@@ -32,6 +32,7 @@ from systemlens.domain.code_flows import (
 )
 from systemlens.domain.data_operations import DataOperation
 from systemlens.domain.graph import DEFAULT_REST_TARGET_POLICY, build_graph, group_endpoints_by_module
+from systemlens.domain.message_types import informative_message_type
 from systemlens.domain.models import ArchitectureRelation, MessageEndpoint, ensure_unique_endpoint_ids
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.indexing.code_flows import (
@@ -291,7 +292,11 @@ def run_call_graph_stage(
         evidence = session.payload_types()
         by_site: dict[tuple[str, int], set[str]] = {}
         for item in evidence:
-            by_site.setdefault((item.path, item.line), set()).add(item.message_type)
+            # Engine evidence follows the same rule as the AST: a type that
+            # names no DTO (``Object``, ``String``) stays unknown (ADR-76).
+            informative = informative_message_type(item.message_type)
+            if informative is not None:
+                by_site.setdefault((item.path, item.line), set()).add(informative)
 
         def complete_endpoint(endpoint: MessageEndpoint) -> MessageEndpoint:
             types = by_site.get((endpoint.path, endpoint.start_line), set())

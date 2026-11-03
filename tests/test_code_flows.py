@@ -1004,7 +1004,8 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
             "id": flows[0].id,
             "module": flows[0].module,
             "input_flow": "orders.created",
-            "input_java_type": "String",
+            # A `String` listener payload names no DTO (ADR-76).
+            "input_java_type": None,
             "output_flow": "POST /charge",
             "output_java_type": None,
             "target_modules": [],

@@ -96,8 +96,8 @@ plugin or dependency, source generation fails instead of accessing a registry.
 
 `infer_kafka_endpoints` recognises Spring Kafka listeners and send sites,
 KafkaTemplate/ProducerRecord usage and Spring Cloud Stream StreamBridge calls.
-It preserves dynamic topic expressions and derives a payload type only from an
-explicit listener parameter or client generic signature. A concrete shared
+It preserves dynamic topic expressions and derives a payload type only from
+declared Java types, never from a serializer guess. A concrete shared
 topic creates a producer/consumer service edge even when one or both Java
 message types are unknown. The edge has medium confidence when type evidence is
 missing. Two known and different types remain incompatible and do not create an
@@ -127,6 +127,46 @@ gives a Kafka Streams fact no payload type. The Strategy1 accessor path
 anchors its fact on the enclosing send statement and types it from that
 statement's value argument, so a multi-line send has one site for both
 extractors and a method parameter is never the message type.
+
+Both producer paths, `KafkaTemplate.send` and the Strategy1
+`envoyerMessageKafka*` methods, type their value argument with one rule in
+`scanner/kafka_payload_types.py` (ADR-76). The rule reads written types, so
+generic arguments survive. It walks lexical scopes outward from the
+argument: lambda and for-each variables, method and constructor parameters,
+preceding local declarations, then fields of the enclosing, outer and
+source super types. A `var` takes its initializer's type. Calls, getters and
+field accesses resolve the receiver's source declaration through the file's
+own types, its imports, its package and its wildcard imports.
+
+A call is typed only when one source method has that name and arity on the
+receiver type or its source supertypes; otherwise it stays unknown. A record
+accessor and a Lombok getter (`@Data`, `@Value`, `@Getter`) give the field
+type. `X.builder()...build()` gives `X` only when `X` carries Lombok
+`@Builder` or `@SuperBuilder`. A ternary is typed when its non-`null`
+branches agree. A lambda parameter takes the element type of the receiver
+of `forEach`, `filter` and similar calls on a collection, stream or optional;
+`Map.forEach` gives the key and the value types.
+
+A single-argument `send(message)` is typed from its `Message<T>` or
+`ProducerRecord<K, V>`. When the value is still unknown, the second type
+argument of the receiver's `KafkaTemplate<K, V>`, `KafkaOperations<K, V>` or
+`ReplyingKafkaTemplate<K, V, R>` declaration is the fallback. A written type
+always wins over this fallback.
+
+The result then passes `domain.message_types.informative_message_type`, as
+do listener parameters and CodeQL evidence: `Object`, `String`, `byte[]`,
+wildcards, diamonds, raw containers and the type variables declared by the
+enclosing method or types are unknown. A listener's first payload parameter
+decides; an uninformative type there does not fall through to a later one.
+Pairing compares `message_type_key` values, which drop package qualifiers
+and keep generic arguments. Persisted types keep their source spelling, so
+existing indexes need no migration.
+
+Cross-file lookups read only repository Java files outside `target` and
+`build`, through the shared parse cache, with recursion bounded at 12
+levels. An incremental index rescans changed files only: a producer whose
+type comes from an unchanged file keeps it, and a change to that other file
+reaches the producer at the next full index.
 
 Kafka consumers are indexed by concrete topic before producer matching. With
 `P` producers and `K` consumers, relation construction costs `O(P + K + M)`,
@@ -174,12 +214,9 @@ endpoints. The key may use Spring's kebab case (`commande-creee`); it is
 normalized like a `kafka.yml` key. A `${kafka.topics.<key>.groupe}` placeholder in `groupId` identifies
 the consumer group and is ignored by topic extraction.
 The second argument is always
-used to derive the payload type from its method parameter, local variable
-declaration or enclosing class field, including calls with three arguments.
-An unqualified or `this.` call to one method of the enclosing class with that
-name and arity gives its declared return type, unwrapping `Message<T>`; an
-overload of the same arity leaves the type to the call-graph engine.
-This positional rule applies identically to
+typed by the shared payload rule above, including calls with three
+arguments; an overload of the same arity leaves the type to the call-graph
+engine. This positional rule applies identically to
 `envoyerMessageKafka`, `envoyerMessageKafkaRequest` and
 `envoyerMessageKafkaReply`.
 
@@ -191,8 +228,8 @@ When CodeQL is available, it completes a missing Strategy1 producer type from
 the second argument, including local data-flow within the enclosing method.
 `Message<T>`, `GenericMessage<T>` and `ProducerRecord<K,V>` are unwrapped to
 their payload type. An existing AST type is never replaced. A result is
-applied only when CodeQL returns one type for the source call; ambiguous or
-unresolved results remain unknown.
+applied only when CodeQL returns one informative type for the source call;
+ambiguous, uninformative or unresolved results remain unknown.
 
 Strategy1 also enables the `getXxxServiceUrl()` REST target-name convention;
 without it, SystemLens uses only an explicit URL or `lb://` service target.

@@ -20,11 +20,8 @@ from systemlens.scanner.kafka_ast import (
     _producer_send_payload_type,
     _kafka_endpoint,
     _kafka_topic_from_value,
-    _message_payload_type,
-    _object_creation_type,
-    _declared_identifier_payload_type,
-    _method_param_payload_type,
 )
+from systemlens.scanner.kafka_payload_types import payload_expression_type
 from systemlens.scanner._spring_properties import (
     normalize_strategy1_kafka_key,
     remove_strategy1_kafka_prefix,
@@ -319,62 +316,21 @@ def _kafka_listener_topics_value(annotation: str) -> str:
     return annotation[start:]
 
 
-def _strategy1_method_payload_type(source: bytes, invocation) -> str | None:
+def _strategy1_method_payload_type(
+    repo_root: Path, rel_path: str, source: bytes, invocation,
+) -> str | None:
     """Resolve the DTO from the second argument of a Strategy1 send method.
 
     The repository convention is positional: the second argument is the DTO
     for ``envoyerMessageKafka``, ``envoyerMessageKafkaRequest`` and
     ``envoyerMessageKafkaReply``. A third argument does not change that rule.
+    The argument is typed by the rule shared with ``KafkaTemplate.send``
+    (ADR-76).
     """
     arguments = java_parser.argument_nodes(invocation)
     if len(arguments) < 2:
         return None
-    payload = arguments[1]
-    if payload.type == "identifier":
-        method = java_parser.enclosing(invocation, "method_declaration")
-        if method is None:
-            return None
-        variable_name = java_parser.node_text(source, payload)
-        return (
-            _method_param_payload_type(source, method, variable_name)
-            or _declared_identifier_payload_type(source, invocation, variable_name)
-        )
-    if payload.type == "object_creation_expression":
-        return _message_payload_type(_object_creation_type(source, payload))
-    if payload.type == "method_invocation":
-        return _same_class_return_payload_type(source, payload)
-    return None
-
-
-def _same_class_return_payload_type(source: bytes, call) -> str | None:
-    """Type a ``helper(...)`` payload by its declared return type.
-
-    Only an unqualified (or ``this.``) call to one method of the enclosing
-    class with that name and arity qualifies; overloads, inherited helpers and
-    other receivers stay unknown, so no engine is needed for this local case.
-    """
-    receiver, name, arguments = java_parser.invocation_parts(call, source)
-    if name is None or (receiver is not None and receiver.type != "this"):
-        return None
-    owner = java_parser.enclosing(call, "class_declaration", "enum_declaration", "record_declaration")
-    body = owner.child_by_field_name("body") if owner is not None else None
-    if body is None:
-        return None
-    candidates = []
-    for declaration in body.named_children:
-        if declaration.type != "method_declaration":
-            continue
-        parameters = declaration.child_by_field_name("parameters")
-        arity = len([child for child in parameters.named_children
-                     if child.type in {"formal_parameter", "spread_parameter"}]) if parameters is not None else 0
-        if java_parser.declaration_name(declaration, source) == name and arity == len(arguments):
-            candidates.append(declaration)
-    if len(candidates) != 1:
-        return None
-    return_type = candidates[0].child_by_field_name("type")
-    if return_type is None or return_type.type == "void_type":
-        return None
-    return _message_payload_type(java_parser.node_text(source, return_type))
+    return payload_expression_type(repo_root, rel_path, source, arguments[1])
 
 
 def infer_kafka_topic_strategy1_endpoints(
@@ -471,7 +427,7 @@ def infer_kafka_topic_strategy1_endpoints(
                 # The payload is the value argument of the enclosing send; a
                 # method parameter is not evidence of the message type.
                 message_type=(
-                    _producer_send_payload_type(source_bytes, send_invocation)
+                    _producer_send_payload_type(repo_root, rel_path, source_bytes, send_invocation)
                     if send_invocation is not None else None
                 ),
                 topic_dynamic=topic_dynamic,
@@ -531,7 +487,7 @@ def infer_kafka_topic_strategy1_endpoints(
                     "kafka-topic-strategy1",
                     topic,
                     dynamic,
-                    _strategy1_method_payload_type(source_bytes, node),
+                    _strategy1_method_payload_type(repo_root, rel_path, source_bytes, node),
                 )
                 endpoint = replace(endpoint, topic_display=topic_display)
                 endpoints[endpoint.id] = endpoint

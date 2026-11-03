@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from systemlens.domain.graph import GraphEdge
+from systemlens.domain.message_types import message_type_key
 from systemlens.domain.models import Finding, GraphFact, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule
 
@@ -53,8 +54,8 @@ def kafka_message_type_status(
     producer: MessageEndpoint | None, consumer: MessageEndpoint | None,
 ) -> tuple[str, str | None]:
     """Describe Kafka payload evidence without changing topic identity."""
-    produced = producer.message_type if producer else None
-    consumed = consumer.message_type if consumer else None
+    produced = message_type_key(producer.message_type) if producer else None
+    consumed = message_type_key(consumer.message_type) if consumer else None
     if produced and consumed:
         if produced == consumed:
             return "consistent", None

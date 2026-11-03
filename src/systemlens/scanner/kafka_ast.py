@@ -11,13 +11,15 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tree_sitter import Node
+
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.scanner._core import (
     _find_first_literal,
     _invocation_receiver,
     _java_qualified_name,
-    _message_payload_type,
+    _kafka_payload_type,
     _module_for_path,
 )
 from systemlens.scanner._spring_properties import (
@@ -25,6 +27,11 @@ from systemlens.scanner._spring_properties import (
     resolve_spring_property,
 )
 from systemlens.scanner.java_strings import local_string, locally_declared_names
+from systemlens.scanner.kafka_payload_types import (
+    payload_expression_type,
+    template_value_type,
+    type_variables_in_scope,
+)
 from systemlens.domain.topic_expressions import spring_topic_reference
 
 _BARE_TOPIC_VAR_RE = re.compile(
@@ -216,10 +223,6 @@ def _kafka_listener_topics(listener_ann, source: bytes, repo_root: Path, rel_pat
             topic_pattern, source, repo_root, rel_path
         )]
     return [("<dynamic>", True)]
-def _object_creation_type(source: bytes, node) -> str:
-    """Type construit d'un ``new Foo<...>(...)`` : ``ProducerRecord<...>``."""
-    type_node = node.child_by_field_name("type")
-    return java_parser.node_text(source, type_node) if type_node is not None else ""
 def _type_simple_name(source: bytes, type_node) -> str | None:
     """Nom non paramétré d'un type AST : ``ProducerRecord`` pour
     ``ProducerRecord<String, Order>``.
@@ -242,7 +245,12 @@ def _declaration_anchor(node):
     """
     return java_parser.enclosing(node, "local_variable_declaration") or node
 def _listener_payload_type(source: bytes, method_node) -> str | None:
-    """Type de payload du premier paramètre utile d'un ``@KafkaListener``."""
+    """Type de payload du premier paramètre utile d'un ``@KafkaListener``.
+
+    The first parameter that is not a header or listener infrastructure is
+    the payload; when its type names no DTO (``String``, ``Object``, a type
+    variable), the payload is unknown rather than taken from a later one.
+    """
     params = method_node.child_by_field_name("parameters")
     if params is None:
         return None
@@ -265,102 +273,37 @@ def _listener_payload_type(source: bytes, method_node) -> str | None:
         type_name = java_parser.node_text(source, type_node)
         if type_name in {"Acknowledgment", "Consumer", "ConsumerRecordMetadata"}:
             continue
-        payload = _message_payload_type(type_name)
-        if payload is not None:
-            return payload
+        return _kafka_payload_type(type_name, type_variables_in_scope(param, source))
     return None
-def _method_param_payload_type(source: bytes, method_node, var_name: str) -> str | None:
-    params = method_node.child_by_field_name("parameters")
-    if params is None:
-        return None
-    for param in params.children:
-        if param.type != "formal_parameter":
-            continue
-        name_node = param.child_by_field_name("name")
-        if name_node is None or java_parser.node_text(source, name_node) != var_name:
-            continue
-        type_node = param.child_by_field_name("type")
-        return _message_payload_type(java_parser.node_text(source, type_node)) if type_node else None
-    return None
-def _declared_identifier_payload_type(source: bytes, invocation, var_name: str) -> str | None:
-    """Resolve an identifier from its closest local declaration, then a field.
-
-    This remains deliberately local to the enclosing Java method/class: an
-    unrelated declaration in another method must never supply a Kafka DTO type.
-    """
-    method = java_parser.enclosing(invocation, "method_declaration")
-    if method is None:
-        return None
-    local_declarations = []
-    for declaration in java_parser.walk(method):
-        if declaration.type != "local_variable_declaration" or declaration.start_byte > invocation.start_byte:
-            continue
-        if not any(
-            java_parser.node_text(source, name) == var_name
-            for declarator in declaration.children
-            if declarator.type == "variable_declarator"
-            if (name := declarator.child_by_field_name("name")) is not None
-        ):
-            continue
-        local_declarations.append(declaration)
-    if local_declarations:
-        declaration = max(local_declarations, key=lambda item: item.start_byte)
-        type_node = declaration.child_by_field_name("type")
-        payload = _message_payload_type(java_parser.node_text(source, type_node)) if type_node else None
-        if payload is not None:
-            return payload
-        for declarator in declaration.children:
-            if declarator.type != "variable_declarator":
-                continue
-            name = declarator.child_by_field_name("name")
-            if name is None or java_parser.node_text(source, name) != var_name:
-                continue
-            value = declarator.child_by_field_name("value")
-            if value is not None and value.type == "object_creation_expression":
-                return _message_payload_type(_object_creation_type(source, value))
-
-    owner = java_parser.enclosing(method, "class_declaration") or java_parser.enclosing(method, "record_declaration")
-    if owner is None:
-        return None
-    for declaration in java_parser.walk(owner):
-        if declaration.type != "field_declaration":
-            continue
-        type_node = declaration.child_by_field_name("type")
-        if type_node is None:
-            continue
-        for declarator in declaration.children:
-            if declarator.type != "variable_declarator":
-                continue
-            name = declarator.child_by_field_name("name")
-            if name is not None and java_parser.node_text(source, name) == var_name:
-                return _message_payload_type(java_parser.node_text(source, type_node))
-    return None
-def _producer_send_payload_type(source: bytes, invocation) -> str | None:
-    """Type de payload d'un ``KafkaTemplate.send``.
+def _producer_send_payload_type(repo_root: Path, rel_path: str, source: bytes, invocation) -> str | None:
+    """Type de payload d'un envoi Kafka (``send``, ``ProducerRecord``).
 
     Spring Kafka places the value last in every topic-based overload, including
     ``send(topic, key, value)`` and ``send(topic, partition, key, value)``.
     Resolve that argument first so a key (often ``String``) is never reported
-    as the message payload.
+    as the message payload. A single-argument ``send`` carries a
+    ``Message<T>`` or a ``ProducerRecord<K, V>``. When the value names no DTO,
+    the value type ``V`` of the receiving ``KafkaTemplate<K, V>`` is the
+    fallback (ADR-76).
     """
-    method = java_parser.enclosing(invocation, "method_declaration")
-    if method is None:
-        return None
-    # Only the last argument is the value; a preceding key or partition is
-    # never reported when the value itself cannot be typed.
-    arguments = java_parser.argument_nodes(invocation)[1:]
-    if not arguments:
-        return None
-    arg = arguments[-1]
-    if arg.type == "identifier":
-        variable_name = java_parser.node_text(source, arg)
-        payload = _method_param_payload_type(source, method, variable_name)
-        if payload is not None:
-            return payload
-        return _declared_identifier_payload_type(source, invocation, variable_name)
-    if arg.type == "object_creation_expression":
-        return _message_payload_type(_object_creation_type(source, arg))
-    return None
+    arguments = java_parser.argument_nodes(invocation)
+    is_call = invocation.type == "method_invocation"
+    value: Node | None
+    if is_call and len(arguments) == 1:
+        value = arguments[0]
+    else:
+        # Only the last argument is the value; a preceding key or partition
+        # is never reported when the value itself cannot be typed.
+        value = arguments[-1] if len(arguments) >= 2 else None
+    payload = (
+        payload_expression_type(repo_root, rel_path, source, value)
+        if value is not None else None
+    )
+    if payload is None and is_call:
+        payload = template_value_type(
+            repo_root, rel_path, source, invocation.child_by_field_name("object")
+        )
+    return payload
 def _kafka_endpoint(
     repo_root: Path, rel_path: str, source: bytes, node, role: str, framework: str,
     topic: str, topic_dynamic: bool, message_type: str | None, end_node=None,
@@ -419,13 +362,15 @@ def _message_builder_topic_for(
     return None
 def _method_return_payload_type(source: bytes, method_node) -> str | None:
     """Type de payload déduit du type de retour de la méthode englobante
-    (ex. ``KStream<Long, Order>`` -> ``Order``), via ``_message_payload_type``."""
+    (ex. ``KStream<Long, Order>`` -> ``Order``), via ``_kafka_payload_type``."""
     if method_node is None:
         return None
     type_node = method_node.child_by_field_name("type")
     if type_node is None or type_node.type == "void_type":
         return None
-    return _message_payload_type(java_parser.node_text(source, type_node))
+    return _kafka_payload_type(
+        java_parser.node_text(source, type_node), type_variables_in_scope(method_node, source)
+    )
 def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> list[MessageEndpoint]:
     """Découvre tous les endpoints Kafka depuis le code Java via tree-sitter.
 
@@ -516,20 +461,21 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
                             args[0], source, repo_root, rel_path
                         ):
                             add(node, "produce", "spring-kafka", topic, dynamic,
-                                _producer_send_payload_type(source, node))
+                                _producer_send_payload_type(repo_root, rel_path, source, node))
                     elif len(args) == 1 and args[0].type == "identifier":
                         built = _message_builder_topic_for(
                             source, node, java_parser.node_text(source, args[0]), repo_root, rel_path
                         )
                         if built is not None:
                             topic, dynamic = built
-                            add(node, "produce", "spring-kafka", topic, dynamic, None)
+                            add(node, "produce", "spring-kafka", topic, dynamic,
+                                _producer_send_payload_type(repo_root, rel_path, source, node))
                 elif method_name == "send" and receiver and receiver.lower().endswith("streambridge") and has_stream_bridge and args:
                     for topic, dynamic in _kafka_topics_from_value(
                         args[0], source, repo_root, rel_path
                     ):
                         add(node, "produce", "spring-cloud-stream", topic, dynamic,
-                            _producer_send_payload_type(source, node))
+                            _producer_send_payload_type(repo_root, rel_path, source, node))
                 elif method_name == "to" and has_kafka_streams and args:
                     for topic, dynamic in _kafka_topics_from_value(
                         args[0], source, repo_root, rel_path
@@ -561,8 +507,8 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
                         first_arg, source, repo_root, rel_path
                     ):
                         add(node, "produce", "kafka-clients", topic, dynamic,
-                            _message_payload_type(_object_creation_type(source, node))
-                            or _producer_send_payload_type(source, node))
+                            payload_expression_type(repo_root, rel_path, source, node)
+                            or _producer_send_payload_type(repo_root, rel_path, source, node))
     return list(endpoints.values())
 def _extract_kafka_topic(
     snippet: str, repo_root: Path, source_path: str | None = None

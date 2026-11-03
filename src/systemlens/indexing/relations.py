@@ -6,6 +6,7 @@ from dataclasses import replace
 from typing import TypedDict
 
 from systemlens.domain.models import ArchitectureRelation, MessageEndpoint, compute_architecture_relation_id
+from systemlens.domain.message_types import message_type_key
 from systemlens.domain.graph import DEFAULT_REST_TARGET_POLICY, build_graph, group_endpoints_by_module
 from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
@@ -217,8 +218,8 @@ def build_architecture_relations(
             confidence = "medium"
         elif edge.kind == "kafka" and (
             edge.to_endpoint is None
-            or edge.from_endpoint.message_type is None
-            or edge.to_endpoint.message_type is None
+            or message_type_key(edge.from_endpoint.message_type) is None
+            or message_type_key(edge.to_endpoint.message_type) is None
         ):
             confidence = "medium"
         add(_relation(

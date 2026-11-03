@@ -424,3 +424,316 @@ class P {
 
 def test_message_payload_type_void() -> None:
     assert _message_payload_type("void") is None
+
+
+# ------------------------------------------------- payload typing (ADR-76)
+# One expression-typing rule serves ``KafkaTemplate.send`` and the Strategy1
+# ``envoyerMessageKafka*`` methods. The template is ``KafkaTemplate<String,
+# Object>`` so its value type, which is no DTO, never masks the argument.
+_PAYLOAD_FILES = {
+    "src/main/java/p/OrderEvent.java": "package p;\npublic record OrderEvent(String id) {}\n",
+    "src/main/java/p/Order.java": "package p;\npublic record Order(String id) {}\n",
+    "src/main/java/p/base/Base.java": """package p.base;
+import p.OrderEvent;
+public class Base { protected OrderEvent inherited; }
+""",
+    "src/main/java/p/mapping/Mapper.java": """package p.mapping;
+import p.Order;
+import p.OrderEvent;
+public interface Mapper { OrderEvent toEvent(Order order); }
+""",
+    "src/main/java/p/Holder.java": """package p;
+import lombok.Getter;
+public class Holder { @Getter private OrderEvent event; }
+""",
+    "src/main/java/p/Built.java": """package p;
+import lombok.Builder;
+@Builder
+public class Built { private String id; }
+""",
+}
+_PAYLOAD_HEADER = """package p;
+import java.util.List;
+import org.springframework.kafka.core.KafkaTemplate;
+import p.base.Base;
+import p.mapping.Mapper;
+"""
+
+
+def _producer_types(tmp_path: Path, members: str, path: str) -> list[str | None]:
+    for rel, text in _PAYLOAD_FILES.items():
+        _write(tmp_path, rel, text)
+    _write(tmp_path, "kafka.yml", "kafka:\n  topics:\n    a:\n      nom: t.a\n")
+    if path == "template":
+        body = members.replace("SEND(", 'template.send("t.a", ')
+        _write(tmp_path, "src/main/java/p/P.java", _PAYLOAD_HEADER
+               + "class P extends Base {\n  KafkaTemplate<String, Object> template;\n  "
+               + body + "\n}\n")
+        endpoints = infer_kafka_endpoints(tmp_path, ["src/main/java/p/P.java"])
+    else:
+        body = members.replace("SEND(", "kafkaService.envoyerMessageKafka(kafkaProperties.getTopics().getA(), ")
+        _write(tmp_path, "src/main/java/p/P.java", _PAYLOAD_HEADER
+               + "class P extends Base {\n  " + body + "\n}\n")
+        endpoints = infer_kafka_topic_strategy1_endpoints(tmp_path, ["src/main/java/p/P.java"])
+    return sorted(
+        (e.message_type for e in endpoints if e.role == "produce"), key=lambda value: str(value)
+    )
+
+
+_LOST_SHAPES = [
+    ("this-field", "OrderEvent field; void s() { SEND(this.field); }"),
+    ("inherited-field", "void s() { SEND(inherited); }"),
+    ("var-from-call", "Mapper mapper; void s(Order o) { var e = mapper.toEvent(o); SEND(e); }"),
+    ("mapper-call", "Mapper mapper; void s(Order o) { SEND(mapper.toEvent(o)); }"),
+    ("getter", "void s(Holder h) { SEND(h.getEvent()); }"),
+    ("cast", "void s(Object o) { SEND((OrderEvent) o); }"),
+    ("ternary", "void s(OrderEvent a, OrderEvent b, boolean c) { SEND(c ? a : b); }"),
+    ("ternary-null", "void s(OrderEvent a, boolean c) { SEND(c ? a : null); }"),
+    ("lambda-parameter", "void s(List<OrderEvent> l) { l.forEach(e -> SEND(e)); }"),
+    ("stream-lambda", "void s(List<OrderEvent> l) { l.stream().filter(x -> true).forEach(e -> SEND(e)); }"),
+    ("for-each-var", "void s(List<OrderEvent> l) { for (var e : l) { SEND(e); } }"),
+    ("same-class-helper", "OrderEvent build() { return null; } void s() { SEND(build()); }"),
+    ("declared-getter", "static class Box { OrderEvent get() { return null; } } void s(Box b) { SEND(b.get()); }"),
+    ("record-accessor", "record Wrap(OrderEvent event) {} void s(Wrap w) { SEND(w.event()); }"),
+    ("map-for-each", "void s(java.util.Map<String, OrderEvent> m) { m.forEach((k, v) -> SEND(v)); }"),
+    ("list-get", "void s(List<OrderEvent> l) { SEND(l.get(0)); }"),
+]
+
+
+@pytest.mark.parametrize("path", ["template", "strategy1"])
+@pytest.mark.parametrize(("shape", "members"), _LOST_SHAPES, ids=[shape for shape, _ in _LOST_SHAPES])
+def test_payload_expression_shapes_are_typed(tmp_path: Path, path: str, shape: str, members: str) -> None:
+    # Rule ADR-76 point 4: each shape lost its DTO type before the shared rule.
+    assert _producer_types(tmp_path, members, path) == ["OrderEvent"], shape
+
+
+@pytest.mark.parametrize("path", ["template", "strategy1"])
+def test_lombok_builder_payload_is_the_built_type(tmp_path: Path, path: str) -> None:
+    members = 'void s() { SEND(Built.builder().id("1").build()); }'
+    assert _producer_types(tmp_path, members, path) == ["Built"]
+
+
+@pytest.mark.parametrize("path", ["template", "strategy1"])
+def test_builder_without_lombok_annotation_stays_unknown(tmp_path: Path, path: str) -> None:
+    # ``OrderEvent`` declares no ``@Builder``: nothing says what ``build()`` returns.
+    members = 'void s() { SEND(OrderEvent.builder().id("1").build()); }'
+    assert _producer_types(tmp_path, members, path) == [None]
+
+
+_UNINFORMATIVE_SHAPES = [
+    ("method-type-variable", "<T> void s(T e) { SEND(e); }"),
+    ("object", "void s(Object e) { SEND(e); }"),
+    ("json-string", "com.fasterxml.jackson.databind.ObjectMapper om; "
+                    "void s(OrderEvent e) throws Exception { String json = om.writeValueAsString(e); SEND(json); }"),
+    ("bytes", "void s(byte[] e) { SEND(e); }"),
+    ("generic-of-type-variable", "<T> void s(List<T> e) { SEND(e); }"),
+]
+
+
+@pytest.mark.parametrize("path", ["template", "strategy1"])
+@pytest.mark.parametrize(("shape", "members"), _UNINFORMATIVE_SHAPES, ids=[shape for shape, _ in _UNINFORMATIVE_SHAPES])
+def test_uninformative_payload_types_are_unknown(tmp_path: Path, path: str, shape: str, members: str) -> None:
+    # Rule ADR-76 point 1: such a type names no DTO and must not block a pairing.
+    assert _producer_types(tmp_path, members, path) == [None], shape
+
+
+def test_class_type_variable_payload_is_unknown(tmp_path: Path) -> None:
+    _write(tmp_path, "src/main/java/p/P.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+class P<E> {
+  KafkaTemplate<String, E> template;
+  void s(E event) { template.send("t.a", event); }
+}
+""")
+    assert [e.message_type for e in infer_kafka_endpoints(tmp_path)] == [None]
+
+
+@pytest.mark.parametrize("path", ["template", "strategy1"])
+def test_collection_payload_keeps_its_written_type(tmp_path: Path, path: str) -> None:
+    # A list sent as one message is the real payload type; it is not unwrapped.
+    assert _producer_types(tmp_path, "void s(List<OrderEvent> l) { SEND(l); }", path) == ["List<OrderEvent>"]
+
+
+def test_template_value_type_is_the_fallback(tmp_path: Path) -> None:
+    # Rule ADR-76 point 3: an untyped value takes V of KafkaTemplate<K, V>.
+    _write(tmp_path, "src/main/java/p/P.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+class P {
+  private final KafkaTemplate<String, OrderEvent> template;
+  void s(Object event, String json) {
+    template.send("t.a", event);
+    this.template.send("t.b", "k", json);
+    template.send("t.c", unknown());
+  }
+}
+""")
+    facts = {e.topic: e.message_type for e in infer_kafka_endpoints(tmp_path)}
+    assert facts == {"t.a": "OrderEvent", "t.b": "OrderEvent", "t.c": "OrderEvent"}, facts
+
+
+def test_template_value_object_gives_no_fallback(tmp_path: Path) -> None:
+    _write(tmp_path, "src/main/java/p/P.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+class P {
+  KafkaTemplate<String, Object> template;
+  KafkaTemplate<String, String> json;
+  void s(Object event) { template.send("t.a", event); json.send("t.b", event); }
+}
+""")
+    assert sorted(str(e.message_type) for e in infer_kafka_endpoints(tmp_path)) == ["None", "None"]
+
+
+def test_argument_type_wins_over_template_value_type(tmp_path: Path) -> None:
+    _write(tmp_path, "src/main/java/p/P.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+class P {
+  KafkaTemplate<String, Object> template;
+  KafkaTemplate<String, BaseEvent> typed;
+  void s(OrderEvent event) { typed.send("t.a", event); }
+}
+""")
+    assert [e.message_type for e in infer_kafka_endpoints(tmp_path)] == ["OrderEvent"]
+
+
+def test_message_builder_single_argument_send_is_typed(tmp_path: Path) -> None:
+    _write(tmp_path, "src/main/java/p/P.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.support.MessageBuilder;
+class P {
+  KafkaTemplate<String, Object> template;
+  void s(OrderEvent event) {
+    var message = MessageBuilder.withPayload(event).setHeader(KafkaHeaders.TOPIC, "t.a").build();
+    template.send(message);
+  }
+}
+""")
+    assert [(e.topic, e.message_type) for e in infer_kafka_endpoints(tmp_path)] == [("t.a", "OrderEvent")]
+
+
+@pytest.mark.parametrize(
+    ("parameter", "expected"),
+    [
+        ("String json", None),
+        ("Object payload", None),
+        ("byte[] payload", None),
+        ("ConsumerRecord<String, String> record", None),
+        ("ConsumerRecord record", None),
+        ("Message<?> message", None),
+        ("String json, Acknowledgment ack", None),
+        ("OrderEvent event", "OrderEvent"),
+        ("ConsumerRecord<String, OrderEvent> record", "OrderEvent"),
+    ],
+)
+def test_listener_uninformative_payload_is_unknown(tmp_path: Path, parameter: str, expected: str | None) -> None:
+    # Rule ADR-76 point 1 applies to consumers too, so both sides stay symmetric.
+    _write(tmp_path, "src/main/java/p/L.java", f"""package p;
+import org.springframework.kafka.annotation.KafkaListener;
+class L {{
+  @KafkaListener(topics = "t.a")
+  void on({parameter}) {{}}
+}}
+""")
+    assert [e.message_type for e in infer_kafka_endpoints(tmp_path)] == [expected]
+
+
+def test_generic_listener_type_variable_is_unknown(tmp_path: Path) -> None:
+    _write(tmp_path, "src/main/java/p/L.java", """package p;
+import org.springframework.kafka.annotation.KafkaListener;
+class L<E> {
+  @KafkaListener(topics = "t.a")
+  void on(E event) {}
+}
+""")
+    assert [e.message_type for e in infer_kafka_endpoints(tmp_path)] == [None]
+
+
+def test_strategy1_listener_string_payload_is_unknown(tmp_path: Path) -> None:
+    _write(tmp_path, "kafka.yml", "kafka:\n  topics:\n    a:\n      nom: t.a\n")
+    _write(tmp_path, "src/main/java/p/L.java", """package p;
+import org.springframework.kafka.annotation.KafkaListener;
+class L {
+  @KafkaListener(topics = "${kafka.topics.a.nom}")
+  public void consume(String json) {}
+}
+""")
+    consumers = [e for e in infer_kafka_endpoints(tmp_path, strategy1=True) if e.role == "consume"]
+    assert [(e.topic, e.message_type) for e in consumers] == [("t.a", None)]
+
+
+# ------------------------------------------------------ pairing (ADR-76)
+def _kafka_edges(tmp_path: Path, producer: str, consumer: str) -> list:
+    from systemlens.domain.graph import build_graph
+
+    _write(tmp_path, "orders/src/main/java/p/OrderEvent.java", "package p;\npublic record OrderEvent(String id) {}\n")
+    _write(tmp_path, "orders/src/main/java/p/P.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+class P {
+  KafkaTemplate<String, Object> template;
+  """ + producer + """
+}
+""")
+    _write(tmp_path, "stock/src/main/java/s/C.java", """package s;
+import org.springframework.kafka.annotation.KafkaListener;
+import p.OrderEvent;
+class C {
+  @KafkaListener(topics = "t.a")
+  """ + consumer + """
+}
+""")
+    endpoints = infer_kafka_endpoints(tmp_path)
+    by_service = {
+        "orders": [e for e in endpoints if e.role == "produce"],
+        "stock": [e for e in endpoints if e.role == "consume"],
+    }
+    return [edge for edge in build_graph(by_service) if edge.kind == "kafka"]
+
+
+@pytest.mark.parametrize(
+    "producer",
+    [
+        '<T> void s(T e) { template.send("t.a", e); }',
+        'void s(Object e) { template.send("t.a", e); }',
+        'com.fasterxml.jackson.databind.ObjectMapper om; '
+        'void s(OrderEvent e) throws Exception { template.send("t.a", om.writeValueAsString(e)); }',
+        'void s(p.OrderEvent e) { template.send("t.a", e); }',
+    ],
+    ids=["type-variable", "object", "json-string", "qualified-name"],
+)
+def test_uninformative_or_qualified_producer_type_pairs_with_consumer(tmp_path: Path, producer: str) -> None:
+    # Rules ADR-76 points 1 and 2: these producers no longer block the edge.
+    edges = _kafka_edges(tmp_path, producer, "void on(OrderEvent event) {}")
+    assert [(edge.from_service, edge.to_service) for edge in edges] == [("orders", "stock")]
+
+
+def test_string_consumer_pairs_with_typed_producer(tmp_path: Path) -> None:
+    edges = _kafka_edges(tmp_path, 'void s(OrderEvent e) { template.send("t.a", e); }', "void on(String json) {}")
+    assert [(edge.from_service, edge.to_service) for edge in edges] == [("orders", "stock")]
+
+
+def test_different_known_dto_types_still_block_pairing(tmp_path: Path) -> None:
+    # The blocking rule itself is unchanged: two named DTOs that differ conflict.
+    edges = _kafka_edges(
+        tmp_path, 'void s(OrderPlacedEvent e) { template.send("t.a", e); }', "void on(OrderEvent event) {}",
+    )
+    assert edges == []
+
+
+@pytest.mark.parametrize(
+    ("produced", "consumed", "conflict"),
+    [
+        ("p.OrderEvent", "OrderEvent", False),
+        ("java.util.List<p.OrderEvent>", "List<OrderEvent>", False),
+        ("String", "OrderEvent", False),
+        ("java.lang.Object", "OrderEvent", False),
+        ("Map<String, Object>", "OrderEvent", False),
+        (None, "OrderEvent", False),
+        ("OrderPlacedEvent", "OrderEvent", True),
+        ("List<OrderEvent>", "OrderEvent", True),
+    ],
+)
+def test_message_type_comparison_key(produced: str | None, consumed: str, conflict: bool) -> None:
+    # Persisted indexes keep the spelling: the key is computed at comparison time.
+    from systemlens.domain.message_types import message_types_conflict
+
+    assert message_types_conflict(produced, consumed) is conflict

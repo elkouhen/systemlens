@@ -23,6 +23,7 @@ from systemlens.domain.module_inventory import (
     module_identity,
 )
 from systemlens.domain.code_flows import CodeFlow, CallGraphEdge, IntegrationMethod
+from systemlens.domain.message_types import message_type_key
 from systemlens.domain.mongo_operations import mongo_facets
 from systemlens.render.namespaces import project_namespace, project_namespace_path
 from systemlens.render.software_layers import software_layer
@@ -793,7 +794,10 @@ def build_graph_view_model(
                 else "partial"
                 if any(not endpoint.message_type for endpoint in kafka_endpoints if endpoint.topic == name)
                 else "mixed"
-                if len({endpoint.message_type for endpoint in kafka_endpoints if endpoint.topic == name}) > 1
+                if len({
+                    message_type_key(endpoint.message_type)
+                    for endpoint in kafka_endpoints if endpoint.topic == name
+                } - {None}) > 1
                 else "known"
             ),
             "width": 190,
@@ -860,7 +864,7 @@ def build_graph_view_model(
                 else "partial"
                 if any(not endpoint.message_type for endpoint in grouped_endpoints)
                 else "mixed"
-                if len(message_types) > 1
+                if len({message_type_key(value) for value in message_types} - {None}) > 1
                 else "known"
             ),
             "width": 190,
