@@ -482,6 +482,7 @@ def run_call_graph_stage(
                     max_hops=config.codeql_max_hops,
                     codeql_edge_confidence=config.codeql_edge_confidence,
                     closed_world=not engine.resolves_types,
+                    module_dependencies=relation_dependencies,
                     progress=progress,
                     call_graph_sink=persist_call_graph,
                 )
@@ -660,6 +661,7 @@ def run_call_graph_stage(
                 max_hops=config.codeql_max_hops,
                 codeql_edge_confidence=config.codeql_edge_confidence,
                 closed_world=not engine.resolves_types,
+                module_dependencies=relation_dependencies,
                 stats=codeql_stats, reachability=reachability,
                 progress=progress,
                 call_chain_progress=progress if show_call_chains else None,
@@ -720,6 +722,7 @@ def run_call_graph_stage(
             max_hops=config.codeql_max_hops,
             codeql_edge_confidence=config.codeql_edge_confidence,
             closed_world=not engine.resolves_types,
+            module_dependencies=relation_dependencies,
             stats=codeql_stats,
             reachability=reachability,
             progress=progress,

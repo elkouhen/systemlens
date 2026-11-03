@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from systemlens.domain.module_inventory import DiscoveredModule
+from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency
 from systemlens.indexing.integration_methods import materialize_integration_methods
 from systemlens.indexing.java_symbols import JavaSymbols
 
@@ -461,18 +461,119 @@ def test_an_external_interface_dispatches_to_its_source_implementations(tmp_path
     )
     opened = [call for call in symbols.fallback_calls(set()) if call.caller.startswith("p.Svc.")]
 
-    # One body in the closed world is exact. A lambda can implement
+    # One source body stays possible: a library can supply another (ADR-71).
+    # A lambda can implement
     # ``Callable`` and an anonymous class implements ``Account``: both stay
     # possible. A ``Thread`` subclass is a ``Runnable``. Two same-arity
     # overloads that the argument cannot separate leave the call unresolved.
     assert closed == [
-        ("keep", "p.Disk.save", "exact"),
+        ("keep", "p.Disk.save", "possible"),
         ("login", "p.User.name", "possible"),
         ("start", "p.Loop.run", "possible"),
         ("start", "p.Poller.run", "possible"),
         ("submit", "p.Job.call", "possible"),
     ]
     assert opened == []
+
+
+def _symbols_in_modules(
+    tmp_path: Path, files: dict[str, str], dependencies: list[ModuleDependency],
+) -> JavaSymbols:
+    """Symbols over one module per top-level directory of ``files``."""
+    for path, text in files.items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(text, encoding="utf-8")
+    modules = [
+        DiscoveredModule(
+            name=name, path=tmp_path / name, build_system="maven", version=None,
+            kind="application", starts_application=True, configuration_example="",
+        )
+        for name in sorted({path.split("/", 1)[0] for path in files})
+    ]
+    methods = materialize_integration_methods(tmp_path, [], list(files), modules)
+    return JavaSymbols(tmp_path, methods, list(files), module_dependencies=dependencies)
+
+
+def _external_calls(symbols: JavaSymbols, caller_prefix: str) -> list[tuple[str, str]]:
+    return sorted(
+        (call.callee, call.dispatch_confidence)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+        if call.caller.startswith(caller_prefix)
+    )
+
+
+_POOL = (
+    "package {package};\n"
+    "import java.util.concurrent.*;\n"
+    "public class Pool implements ExecutorService {{\n"
+    "  public void shutdown() {{}}\n"
+    "}}\n"
+)
+
+
+def test_an_external_interface_dispatches_only_into_visible_modules(tmp_path: Path) -> None:
+    symbols = _symbols_in_modules(tmp_path, {
+        "first/src/main/java/a/Pool.java": _POOL.format(package="a"),
+        "first/src/main/java/a/Svc.java": (
+            "package a;\n"
+            "import java.util.concurrent.*;\n"
+            "class Svc {\n"
+            "  private ExecutorService pool;\n"
+            "  void stop() { pool.shutdown(); }\n"
+            "}\n"
+        ),
+        "second/src/main/java/b/Pool.java": _POOL.format(package="b"),
+    }, [])
+
+    # ADR-71: ``second`` is not on the classpath of ``first``.
+    assert _external_calls(symbols, "a.Svc.") == [("a.Pool.shutdown", "possible")]
+
+
+def test_a_library_never_dispatches_into_a_module_that_depends_on_it(tmp_path: Path) -> None:
+    symbols = _symbols_in_modules(tmp_path, {
+        "lib/src/main/java/l/Chain.java": (
+            "package l;\n"
+            "import java.util.concurrent.Callable;\n"
+            "public class Chain implements Callable<String> {\n"
+            "  private Callable<String> next;\n"
+            "  public String call() throws Exception { return next.call(); }\n"
+            "}\n"
+        ),
+        "svc/src/main/java/s/Job.java": (
+            "package s;\n"
+            "import java.util.concurrent.Callable;\n"
+            "class Job implements Callable<String> { public String call() { return \"\"; } }\n"
+        ),
+        "svc/src/main/java/s/Run.java": (
+            "package s;\n"
+            "import java.util.concurrent.Callable;\n"
+            "class Run { void go(Callable<String> task) throws Exception { task.call(); } }\n"
+        ),
+    }, [ModuleDependency("svc", "lib")])
+
+    # The library's own body is visible to it; the service's is not. The
+    # service still dispatches into the library it depends on.
+    assert _external_calls(symbols, "l.Chain.") == [("l.Chain.call", "possible")]
+    assert _external_calls(symbols, "s.Run.") == [
+        ("l.Chain.call", "possible"), ("s.Job.call", "possible"),
+    ]
+
+
+def test_a_single_source_body_of_an_external_interface_stays_possible(tmp_path: Path) -> None:
+    symbols = _symbols_in_modules(tmp_path, {
+        "app/src/main/java/a/Pool.java": _POOL.format(package="a"),
+        "app/src/main/java/a/Svc.java": (
+            "package a;\n"
+            "import java.util.concurrent.*;\n"
+            "class Svc {\n"
+            "  private ExecutorService pool;\n"
+            "  void stop() { pool.shutdown(); }\n"
+            "}\n"
+        ),
+    }, [])
+
+    # ADR-71: a library can supply the pool, so one source body proves nothing.
+    assert _external_calls(symbols, "a.Svc.") == [("a.Pool.shutdown", "possible")]
 
 
 def test_object_methods_reach_the_body_a_source_type_declares(tmp_path: Path) -> None:

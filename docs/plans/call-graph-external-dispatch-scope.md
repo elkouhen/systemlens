@@ -133,6 +133,7 @@ filter the candidates of `_external_dispatch` by the visible modules.
 - Acceptance: on train-ticket, no edge links a caller to a module outside
   its transitive dependencies, unless C1 keeps callbacks; the
   `queryInfoInparallel` cycle flow is gone.
+- Outcome: delivered; see section 6.
 
 ### C3. Keep external-interface dispatch possible
 
@@ -146,6 +147,7 @@ Apply part 2 of C1: one source body on an external interface gives a
 - Acceptance: the test fails on `184f145` and passes after the change.
   The train-ticket flow count and flow confidences are recorded; a drop
   below 406 flows is reported to the product owner before delivery.
+- Outcome: delivered; see section 6.
 
 ### C4. Check the witness duplicate in the exported call tree
 
@@ -159,6 +161,7 @@ three edges.
 - Acceptance: a fresh lab export shows one arc per call site and
   implementation in the call tree. If it shows two, a proposed fix is added
   to this plan for validation.
+- Outcome: no defect; see section 6.
 
 ### C5. Update ADR-70's measured figures
 
@@ -167,6 +170,7 @@ and CodeQL-parity figures in ADR-71.
 
 - Files: `docs/ADR.md`, `docs/spec-tech/indexing.md`.
 - Acceptance: the figures match a fresh index of a train-ticket copy.
+- Outcome: delivered; see section 6.
 
 ### C6. Apply the same scope to the `codeql` engine
 
@@ -208,3 +212,39 @@ measurement of section 2.
 |---|---|
 | C0 | Delivered on 2026-11-03; result in section 2. |
 | C1 | Delivered on 2026-11-03 as ADR-71. |
+| C2 | Delivered on 2026-11-03. The stage passes the discovered module dependencies to `JavaSymbols`, which keeps an external-interface body only when its module is the caller's or a transitive dependency. Tests: `test_an_external_interface_dispatches_only_into_visible_modules`, `test_a_library_never_dispatches_into_a_module_that_depends_on_it`. |
+| C3 | Delivered on 2026-11-03. External-interface dispatch is always `possible`. Test: `test_a_single_source_body_of_an_external_interface_stays_possible`; the ADR-70 test now expects `possible` for `Disk.save`. |
+| C4 | Checked on 2026-11-03: no defect. See the C4 note below. |
+| C5 | Delivered on 2026-11-03 in ADR-71 and `docs/spec-tech/indexing.md`. |
+
+Verification: the three new tests failed on `274251e`, each for the
+expected reason, and pass after the change. `ruff`, `mypy`, the default
+suite (705 passed) and `scripts/check_companion_contracts.py` pass.
+
+Train-ticket, fresh `source` index of a copy:
+
+| Measure | `184f145` | After C2 and C3 |
+|---|---|---|
+| Edges | 3008 | 2999 |
+| Exact / possible edges | 1874 / 1134 | 1844 / 1155 |
+| Edges outside the caller's dependencies | 9 | 0 |
+| Flows | 407 | 406 |
+| Flow status and confidence | 406 `potential` `medium`, 1 `cycle` `medium` | 406 `potential` `medium` |
+
+The 406 flows are the same set as on `7d5f709` and as the `potential`
+flows of the `codeql` index. Besides the nine dropped edges, 29 exact
+edges inside `micro-service-monitoring-core` become `possible`. The lab,
+indexed fresh at `274251e` and after the change, keeps the same 87 edges
+and 23 flows.
+
+C4 note: a fresh lab export renders the call tree from flow steps and
+flow transitions. No flow repeats a call site in its `method_call` steps.
+The exported `codeql_call_graph.edges` holds 14 site pairs, each an exact
+edge and the inferred `possible` edge to the same implementation, but
+`55-code-flows.js` reads only that object's `nodes`. The pair is visible
+only in the raw JSON; a future consumer of those edges must deduplicate
+by caller, callee and site.
+
+Deviation: `JavaSymbols` filters on the module of the body's method, not
+of the subtype that inherits it, matching ADR-71's "implementations
+declared in" a visible module.

@@ -63,6 +63,7 @@ def _engine_run(
         source_paths=paths, max_hops=max_hops, codeql_edge_confidence=edge_confidence,
         reachability=reachability, call_graph_sink=graphs.append,
         closed_world=not engine.resolves_types,
+        module_dependencies=store.all_module_dependencies(),
     )
     flows = [flow for flow in flows if any(step.kind == "method_call" for step in flow.steps)]
     names = {method.id: method.qualified_method for method in methods}

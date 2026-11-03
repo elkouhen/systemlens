@@ -203,8 +203,8 @@ A concrete method with an unresolved parameter still implements itself, so
 self-calls to it resolve. A call is `exact` when one concrete body sits on
 the receiver's declared type or one of its ancestors. With the `source`
 engine the pass is the whole call graph and runs in a closed world, like
-CodeQL's `exactVirtualMethod`: a unique source implementation of an
-interface is also `exact`. Gap-filling for `codeql` stays open-world, so
+CodeQL's `exactVirtualMethod`: a unique source implementation of a
+source interface is also `exact`. Gap-filling for `codeql` stays open-world, so
 there interface dispatch to a subtype is `possible`.
 Several implementations are always `possible`. A call with no source body
 reaches the one abstract declaration no source type implements, such as a
@@ -226,13 +226,22 @@ witness; neither does a call whose dispatch is already `possible`.
 A receiver typed by an external interface, one that a source type lists in
 `implements` or `extends` (and `Thread` as a `Runnable`), dispatches to the
 most specific concrete, non-static, non-private body of that name and arity
-on each source subtype: `exact` when one body exists, otherwise `possible`
-to each. The call stays `possible` when an anonymous class in the sources
-implements the interface, or when a lambda can (`Runnable`, `Callable`):
-such a body has no indexed method. A subtype whose same-arity overloads the
-arguments cannot separate leaves the call unresolved. A call on an external
-class, such as `Object` or `OutputStream`, reaches no source override: the
-class hierarchy of a library is not in the sources.
+on each source subtype. The edge is always `possible`, even with one body,
+because a library can supply the implementation (ADR-71). A subtype whose
+same-arity overloads the arguments cannot separate leaves the call
+unresolved. A call on an external class, such as `Object` or
+`OutputStream`, reaches no source override: the class hierarchy of a
+library is not in the sources.
+
+ADR-71 scopes these candidates to the caller's visible modules: a body
+counts only when its method belongs to the caller's module or to one of
+that module's transitive build dependencies. Both sides use the module
+identity of `module_identity`, which `module_dependencies` also stores.
+The call-graph stage passes the discovered dependencies to the symbol
+pass; a caller module without a known dependency sees only itself. A
+library therefore never dispatches into a module that depends on it. The
+dependency closure is computed once per caller module, and the candidate
+cache is keyed by that visible set.
 
 Each Spring `@Scheduled` method yields a transient scheduler trigger, used
 only while flows are built and never persisted as an endpoint. It makes the

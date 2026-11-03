@@ -25,7 +25,7 @@ from systemlens.domain.data_operation_projection import data_operations_from_mod
 from systemlens.domain.data_operations import DataOperation, key_identity_base
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
-from systemlens.domain.module_inventory import DiscoveredModule, module_identity
+from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.callgraph.model import MethodCall, MethodReachability
 from systemlens.indexing.integration_methods import SCHEDULER_TRIGGER, path_module_resolver
 from systemlens.indexing.java_symbols import JavaSymbols
@@ -607,6 +607,7 @@ def _build_call_graph(
     persisted_methods: Sequence[PersistedCallGraphMethod] = (),
     closed_world: bool = False,
     modules: Sequence[DiscoveredModule] = (),
+    module_dependencies: Sequence[ModuleDependency] = (),
 ) -> CallGraph:
     """Resolve engine call rows into the internal graph consumed by reconstruction."""
     def prefer_caller_module(
@@ -768,7 +769,10 @@ def _build_call_graph(
         return min(enclosing, key=lambda item: item.end_line - item.start_line) if enclosing else None
 
     adjacency: dict[str, list[CallEdgeEntry]] = defaultdict(list)
-    symbols = JavaSymbols(repo_root, methods, source_paths) if repo_root is not None else None
+    symbols = (
+        JavaSymbols(repo_root, methods, source_paths, module_dependencies=module_dependencies)
+        if repo_root is not None else None
+    )
     implementation_targets: dict[tuple[str, str], tuple[IntegrationMethod, ...]] = {}
     resolved_sites: set[tuple[str, int, str]] = set()
     seen_edges: set[tuple[str, str, int, str, bool]] = set()
@@ -951,6 +955,7 @@ def materialize_call_graph_flows(
     modules: Sequence[DiscoveredModule] = (),
     closed_world: bool = False,
     operations: Sequence[DataOperation] | None = None,
+    module_dependencies: Sequence[ModuleDependency] = (),
 ) -> list[CodeFlow]:
     """Reconstruct endpoint flows from the internal method-call graph.
 
@@ -962,6 +967,9 @@ def materialize_call_graph_flows(
     that resolves no types): a unique source implementation is then exact.
     ``operations`` are the persisted data facts; ``None`` projects the module
     inventory of an older index (``repo_root`` is then required).
+    ``module_dependencies`` scope a closed-world dispatch on an external
+    interface to the caller's module and its transitive dependencies
+    (ADR-71); without them each module sees only itself.
     """
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
     confidence_rank = {"high": 0, "medium": 1, "low": 2}
@@ -1072,6 +1080,7 @@ def materialize_call_graph_flows(
         persisted_methods=persisted_methods,
         closed_world=closed_world,
         modules=modules,
+        module_dependencies=module_dependencies,
     )
     dispatch_symbols = call_graph.symbols
     if call_graph_sink is not None:

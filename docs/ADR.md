@@ -1572,6 +1572,19 @@ dependency is known for the caller, only its own module is visible.
 **Consequences:** The nine edges and the false cycle flow disappear on
 train-ticket. Calls through `ExecutorService`, `Callable` and similar
 interfaces no longer raise a flow's confidence. Edges to source interfaces,
-witnesses, and the other ADR-70 shapes are unchanged. The measured edge,
-flow and CodeQL-parity figures are recorded in the
-[dispatch-scope plan](plans/call-graph-external-dispatch-scope.md).
+witnesses, and the other ADR-70 shapes are unchanged.
+
+Measured on 2026-11-03 with fresh `source` indexes of copies. Train-ticket
+goes from 3008 to 2999 edges (exact 1874 to 1844, possible 1134 to 1155)
+and from 407 to 406 flows. The 406 flows are all `potential` and `medium`,
+the same set as before ADR-70; only the `queryInfoInparallel` cycle goes.
+No edge leaves its caller's visible modules. Besides the nine dropped
+edges, 29 exact edges inside `micro-service-monitoring-core` become
+`possible`. The lab keeps 87 edges and 23 flows.
+
+CodeQL parity: the `codeql` engine on train-ticket reports 408 flows and
+8264 edges, 16 of them outside the caller's dependencies. Both engines
+report the same 406 `potential` flows; CodeQL adds two `cycle` flows,
+`queryInfoInparallel` and `imageCode`, which C6 of the plan addresses. The
+[dispatch-scope plan](plans/call-graph-external-dispatch-scope.md) records
+the measurement.

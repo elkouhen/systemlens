@@ -14,6 +14,7 @@ from tree_sitter import Node
 
 from systemlens.discovery.java import parser
 from systemlens.domain.code_flows import IntegrationMethod
+from systemlens.domain.module_inventory import ModuleDependency
 from systemlens.callgraph.model import MethodCall
 
 
@@ -126,7 +127,10 @@ class _Method:
 class JavaSymbols:
     """Build once per join; index types by FQN and methods by name/arity."""
 
-    def __init__(self, root: Path, methods: list[IntegrationMethod], source_paths: Sequence[str] = ()):
+    def __init__(
+        self, root: Path, methods: list[IntegrationMethod], source_paths: Sequence[str] = (),
+        *, module_dependencies: Sequence[ModuleDependency] = (),
+    ):
         self.units: dict[str, _Unit] = {}
         self.types: dict[str, list[tuple[str, Node]]] = defaultdict(list)
         self.path_modules: dict[str, str] = {}
@@ -143,8 +147,15 @@ class JavaSymbols:
         self.interface_witnesses: dict[MethodCall, MethodCall] = {}
         # Types an anonymous class body extends or implements somewhere.
         self.anonymous_supertypes: set[str] = set()
+        # Build dependencies between module identities (ADR-71), and the
+        # modules each caller module sees, computed on demand.
+        self.module_dependencies: dict[str, set[str]] = defaultdict(set)
+        for dependency in module_dependencies:
+            self.module_dependencies[dependency.source].add(dependency.target)
+        self._visible_modules: dict[str, frozenset[str]] = {}
         self._external_targets: dict[
-            tuple[str, str, int, tuple[str | None, ...] | None], list[IntegrationMethod]
+            tuple[str, str, int, tuple[str | None, ...] | None, frozenset[str]],
+            list[IntegrationMethod],
         ] = {}
         by_path: dict[str, list[IntegrationMethod]] = defaultdict(list)
         for method in methods:
@@ -1138,8 +1149,26 @@ class JavaSymbols:
             scope = scope.rpartition(".")[0]
         return None
 
+    def visible_modules(self, module: str) -> frozenset[str]:
+        """``module`` and its transitive build dependencies (ADR-71).
+
+        A module without a known dependency sees only itself.
+        """
+        visible = self._visible_modules.get(module)
+        if visible is None:
+            seen = {module}
+            pending = [module]
+            while pending:
+                for target in self.module_dependencies.get(pending.pop(), ()):
+                    if target not in seen:
+                        seen.add(target)
+                        pending.append(target)
+            visible = self._visible_modules[module] = frozenset(seen)
+        return visible
+
     def _external_dispatch(
         self, interface: str, name: str, arity: int, argument_types: tuple[str | None, ...] | None,
+        visible: frozenset[str],
     ) -> list[IntegrationMethod]:
         """Source bodies a call on an external interface can dispatch to.
 
@@ -1147,9 +1176,11 @@ class JavaSymbols:
         concrete, non-static, non-private body of ``name``/``arity`` it
         declares or inherits from a source ancestor. A subtype whose
         same-arity overloads the arguments cannot separate makes the whole
-        call unresolved: the implemented signature is unknown.
+        call unresolved: the implemented signature is unknown. Only bodies
+        declared in a ``visible`` module are kept (ADR-71): a library never
+        dispatches into a module that depends on it.
         """
-        key = (interface, name, arity, argument_types)
+        key = (interface, name, arity, argument_types, visible)
         if key in self._external_targets:
             return self._external_targets[key]
         direct = self.external_implementors.get(interface, set())
@@ -1176,7 +1207,7 @@ class JavaSymbols:
                 candidate for candidate in declarations
                 if candidate.concrete and not self._modifiers(candidate) & {"static", "private"}
             ])
-            if body is not None:
+            if body is not None and body.method.module in visible:
                 bodies[body.method.id] = body.method
         targets = sorted(bodies.values(), key=lambda method: method.id)
         self._external_targets[key] = targets
@@ -1218,7 +1249,8 @@ class JavaSymbols:
         adds the shapes of the CodeQL query (ADR-70): a possible witness edge
         to the source interface method the call names next to its exact
         implementation, and dispatch on an external interface to its source
-        implementations.
+        implementations in the caller's visible modules, always possible
+        (ADR-71).
         """
         calls: list[MethodCall] = []
         # Witness call -> the exact call it accompanies at the same site.
@@ -1275,6 +1307,7 @@ class JavaSymbols:
                     )
                 arguments_count = arity
                 pruned = False
+                external = False
                 declaration: _Method | None = None
                 if receiver is not None and receiver.type == "super":
                     direct_bases = self.bases.get((info.owner, info.module), set())
@@ -1299,7 +1332,11 @@ class JavaSymbols:
                     if not targets and closed_world and receiver_type not in self.types:
                         targets = self._external_dispatch(
                             receiver_type, name, arguments_count, argument_types,
+                            self.visible_modules(info.module),
                         )
+                        # A library can supply the implementation: one source
+                        # body proves nothing (ADR-71).
+                        external = bool(targets)
                         # An anonymous class or a lambda is a body no
                         # indexed method stands for: the dispatch stays open.
                         pruned = bool(targets) and (
@@ -1315,10 +1352,11 @@ class JavaSymbols:
                 # CodeQL's ``exactVirtualMethod``; otherwise dependencies may
                 # add implementations and the call stays possible. A target
                 # left unique by preferring the caller's module stays
-                # possible: the preference is a heuristic, not a proof.
+                # possible: the preference is a heuristic, not a proof. A call
+                # on an external interface stays possible (ADR-71).
                 dispatch = (
                     "exact"
-                    if len(targets) == 1 and not pruned and (
+                    if len(targets) == 1 and not pruned and not external and (
                         self._declared_concretely(targets[0], receiver_type, info)
                         or closed_world and self._concrete(targets[0])
                     )
