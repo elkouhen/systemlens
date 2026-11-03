@@ -1767,6 +1767,7 @@ carrier. A carrier is unknown on both sides of a topic, like `Object`.
 the same topic, with the medium confidence of an unknown type. A carrier
 type is no longer persisted as `message_type`. No schema change: the
 export compares stored types with the same rule, and a reindex refreshes
-the persisted relations. A generated Avro class keeps its own name and stays a known DTO. A
-project DTO that reuses a carrier name, such as a class named `Bytes`, is
-unknown too; that loss is accepted over a false mismatch.
+the persisted relations. A generated Avro class keeps its own name and
+stays a known DTO. A project DTO that reuses a carrier name, such as a
+class named `Bytes`, is unknown too; that loss is accepted over a false
+mismatch.
