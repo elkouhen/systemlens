@@ -83,6 +83,34 @@ substring matching are not used. Route compatibility is evaluated only within
 that service. A targetless or ambiguous call remains an endpoint fact and is
 reported as unresolved rather than creating an internal edge.
 
+`domain/graph.py` derives the hint from a URL host with
+`service_hint_from_host`. A single DNS label is the hint, and a host ending in
+`.svc` or `.svc.cluster.local` gives its first label. An IPv4 address or a
+malformed host gives no hint; any other multi-label host is kept whole, so it
+matches only an exact alias. The scanner stamps `systemlens-api-domain:` only
+for a single-label hint (`url_service_hint`). The first `http://` or `lb://`
+URI of a snippet is the target evidence; a later one never overrides it.
+
+The marker on a RestTemplate, WebClient, RestClient or HTTP-interface call is
+host evidence only. `_resolved_configured_api_call` projects a dynamic call
+onto the host's routes only for other frameworks, in practice the
+`configured-api-client-factory` endpoint. An ordinary call that matches no
+route gets the service-level edge without `to_endpoint`.
+
+`select_matching_routes` applies ADR-77 among the routes `paths_match`
+accepts. Each candidate is ranked by whether it guesses a call template's
+value, whether it ends in `**`, the number of call literals it binds to
+templates, and `ANY` against an explicit method. The best rank wins, ties
+included; when every candidate guesses, all stay. An `ANY` call is ranked per
+served method, and a call ending in `**` keeps all candidates.
+`graph_edges_from_relations` applies the same selection. A
+`{name:regex}` constraint is compiled with Python `re`; one that does not
+compile leaves the template unconstrained.
+
+A Spring Cloud Gateway Java route takes its snippet and start line from its
+own `route` name to the end of its invocation, not from the whole builder
+chain, so the n-th route reads only its own `uri(...)`.
+
 REST graph matching indexes served routes by resolved target service before
 checking route compatibility. If `C` is the number of calls and `S` the number
 of served routes, matching costs `O(C + S + M)`, where `M` is the number of

@@ -1,6 +1,15 @@
 """Regression coverage for conservative REST extraction rules."""
 from pathlib import Path
 
+from systemlens.domain.graph import (
+    build_graph,
+    group_endpoints_by_module,
+    paths_match,
+    resolve_rest_target_service,
+    select_matching_routes,
+    service_hint_from_host,
+)
+from systemlens.domain.models import MessageEndpoint
 from systemlens.scanner import clear_analysis_caches
 from systemlens.scanner.rest_mvc import infer_framework_endpoints
 
@@ -252,3 +261,290 @@ class Client {
 }
 """)
     assert _topics(tmp_path, [rel]) == [("call", "POST /users", False)], _topics(tmp_path, [rel])
+
+
+# ---------------------------------------------------------------- lot 2 (2026-11-03 review): HTTP false facts
+def _module(root: Path, name: str, files: dict[str, str]) -> None:
+    _write(root, f"{name}/pom.xml", (
+        "<project><modelVersion>4.0.0</modelVersion><groupId>g</groupId>"
+        f"<artifactId>{name}</artifactId><version>1</version></project>"
+    ))
+    for rel, text in files.items():
+        _write(root, f"{name}/{rel}", text)
+
+
+def _rest_edges(root: Path):
+    clear_analysis_caches()
+    endpoints = infer_framework_endpoints(root)
+    return [
+        edge for edge in build_graph(group_endpoints_by_module(endpoints))
+        if edge.kind == "rest"
+    ]
+
+
+def _endpoint(role: str, topic: str, line: int, snippet: str = "", **fields) -> MessageEndpoint:
+    values = dict(
+        id=f"{role}{line}", role=role, system="rest", topic=topic, topic_dynamic=False,
+        source="code", framework="spring", path="x/C.java", start_line=line,
+        end_line=line, snippet=snippet, module="m",
+    )
+    values.update(fields)
+    return MessageEndpoint(**values)
+
+
+_CATALOG_CONTROLLER = """
+package c;
+import org.springframework.web.bind.annotation.*;
+@RestController
+public class A {
+  @GetMapping("/admin/stats") public String s() { return ""; }
+  @GetMapping("/brands") public String b() { return ""; }
+  @GetMapping("/categories/{id}/tree") public String t(@PathVariable String id) { return ""; }
+}
+"""
+
+_INVENTORY_CONTROLLER = """
+package i;
+import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/items")
+public class InvController {
+  @GetMapping("/{id}") public String get(@PathVariable String id) { return ""; }
+  @GetMapping("/search") public String search() { return ""; }
+  @GetMapping("/count") public String count() { return ""; }
+}
+"""
+
+
+def test_h1_dynamic_call_with_known_host_is_not_projected_on_every_route(tmp_path):
+    """H1: an ordinary call's host marker never makes it a configured client."""
+    _module(tmp_path, "catalog", {"src/main/java/c/A.java": _CATALOG_CONTROLLER})
+    _module(tmp_path, "order-service", {"src/main/java/o/T.java": """
+package o;
+import org.springframework.web.client.RestTemplate;
+public class T {
+  private final RestTemplate restTemplate = new RestTemplate();
+  public Object b(String sku) { return restTemplate.getForObject("http://catalog/products/" + sku, String.class); }
+}
+"""})
+
+    edges = _rest_edges(tmp_path)
+
+    assert [(e.from_service, e.to_service) for e in edges] == [("order-service", "catalog")]
+    (edge,) = edges
+    assert edge.to_endpoint is None, edge.to_endpoint
+    assert edge.from_endpoint.topic == "GET /products/{sku}"
+    assert edge.from_endpoint.topic_dynamic is True
+
+
+def test_h1_fully_dynamic_call_keeps_one_service_relation(tmp_path):
+    _module(tmp_path, "inventory-service", {"src/main/java/i/InvController.java": _INVENTORY_CONTROLLER})
+    _module(tmp_path, "order-service", {"src/main/java/o/Helper.java": """
+package o;
+import org.springframework.web.client.RestTemplate;
+public class Helper {
+  private final RestTemplate restTemplate = new RestTemplate();
+  private static final String BASE = "http://inventory-service";
+  private String get(String path) { return restTemplate.getForObject(BASE + path, String.class); }
+}
+"""})
+
+    edges = _rest_edges(tmp_path)
+
+    assert len(edges) == 1, [(e.from_endpoint.topic, e.to_endpoint) for e in edges]
+    assert edges[0].to_endpoint is None
+
+
+def test_h2_gateway_java_routes_each_use_their_own_uri_and_line(tmp_path):
+    """H2: the n-th ``.route(...)`` must not read the whole builder chain."""
+    _module(tmp_path, "gateway", {"src/main/java/g/Routes.java": """
+package g;
+import org.springframework.cloud.gateway.route.RouteLocator;
+import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
+public class Routes {
+  public RouteLocator routes(RouteLocatorBuilder builder) {
+    return builder.routes()
+        .route("users", r -> r.path("/users/**").uri("http://user-service:8080"))
+        .route("orders", r -> r.path("/orders/**").uri("lb://order-service"))
+        .build();
+  }
+}
+"""})
+    _module(tmp_path, "user-service", {"src/main/java/u/C.java": """
+package u;
+import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/users")
+public class C { @GetMapping("/{id}") public String g(@PathVariable String id) { return ""; } }
+"""})
+    _module(tmp_path, "order-service", {"src/main/java/o/C.java": """
+package o;
+import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/orders")
+public class C { @GetMapping("/{id}") public String g(@PathVariable String id) { return ""; } }
+"""})
+
+    edges = _rest_edges(tmp_path)
+
+    by_route = {e.from_endpoint.topic: (e.to_service, e.from_endpoint.start_line) for e in edges}
+    assert by_route == {
+        "ANY /users/**": ("user-service", 8),
+        "ANY /orders/**": ("order-service", 9),
+    }, by_route
+
+
+def test_h2_gateway_lb_uri_wins_over_a_later_http_url():
+    call = _endpoint(
+        "call", "ANY /orders/**", 1,
+        'route(r -> r.path("/orders/**").uri("lb://order-service")'
+        '.filters(f -> f.addRequestHeader("X-Doc", "http://user-service/doc")))',
+        framework="spring-cloud-gateway", module="gateway",
+    )
+
+    resolution = resolve_rest_target_service(call, ["gateway", "order-service", "user-service"])
+
+    assert resolution.service == "order-service", resolution
+
+
+def test_h4_literal_route_wins_over_sibling_template(tmp_path):
+    """H4 / ADR-77: Spring MVC prefers ``/items/count`` over ``/items/{id}``."""
+    _module(tmp_path, "inventory-service", {"src/main/java/i/InvController.java": _INVENTORY_CONTROLLER})
+    _module(tmp_path, "report-service", {"src/main/java/r/Rep.java": """
+package r;
+import org.springframework.web.client.RestTemplate;
+public class Rep {
+  private final RestTemplate restTemplate = new RestTemplate();
+  public Object x() { return restTemplate.getForObject("http://inventory-service/items/count", String.class); }
+  public Object y() { return restTemplate.getForObject("http://inventory-service/items/me", String.class); }
+  public Object z(String path) { return restTemplate.getForObject("http://inventory-service/items/" + path, String.class); }
+}
+"""})
+
+    edges = _rest_edges(tmp_path)
+
+    targets = sorted((e.from_endpoint.topic, e.to_endpoint.topic) for e in edges if e.to_endpoint)
+    assert targets == [
+        ("GET /items/count", "GET /items/count"),
+        ("GET /items/me", "GET /items/{id}"),
+        ("GET /items/{path}", "GET /items/{id}"),
+    ], targets
+
+
+def test_h4_templated_call_without_aligned_route_keeps_every_candidate():
+    serves = [_endpoint("serve", "GET /items/search", 1), _endpoint("serve", "GET /items/count", 2)]
+
+    selected = select_matching_routes("GET /items/{path}", serves)
+
+    assert [s.topic for s in selected] == ["GET /items/search", "GET /items/count"]
+
+
+def test_h4_any_call_is_ranked_per_served_method():
+    serves = [
+        _endpoint("serve", "GET /items/{id}", 1),
+        _endpoint("serve", "GET /items/count", 2),
+        _endpoint("serve", "DELETE /items/{id}", 3),
+    ]
+
+    selected = select_matching_routes("ANY /items/count", serves)
+
+    assert [s.topic for s in selected] == ["GET /items/count", "DELETE /items/{id}"]
+
+
+def test_h4_template_constraint_is_honoured():
+    assert paths_match("GET /orders/42", r"GET /orders/{id:\d+}")
+    assert not paths_match("GET /orders/abc", r"GET /orders/{id:\d+}")
+    assert paths_match("GET /orders/{orderId}", r"GET /orders/{id:\d+}")
+    # A constraint Python cannot compile leaves the template unconstrained.
+    assert paths_match("GET /orders/abc", r"GET /orders/{id:\p{Alpha}+}")
+
+
+def test_h4_literal_call_does_not_reach_constrained_template(tmp_path):
+    _module(tmp_path, "order-service", {"src/main/java/o/C.java": r"""
+package o;
+import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/orders")
+public class C {
+  @GetMapping("/{id:\\d+}") public String byId(@PathVariable String id) { return ""; }
+  @GetMapping("/{name:[a-z]+}") public String byName(@PathVariable String name) { return ""; }
+}
+"""})
+    _module(tmp_path, "billing", {"src/main/java/b/B.java": """
+package b;
+import org.springframework.web.client.RestTemplate;
+public class B {
+  private final RestTemplate restTemplate = new RestTemplate();
+  public Object a() { return restTemplate.getForObject("http://order-service/orders/latest", String.class); }
+}
+"""})
+
+    edges = _rest_edges(tmp_path)
+
+    assert [e.to_endpoint.topic for e in edges if e.to_endpoint] == ["GET /orders/{name:[a-z]+}"]
+
+
+def test_h5_public_multi_label_host_does_not_name_an_internal_service(tmp_path):
+    """H5: ``auth.okta.com`` is external; its first label is not module ``auth``."""
+    _module(tmp_path, "auth", {"src/main/java/a/TokenController.java": """
+package a;
+import org.springframework.web.bind.annotation.*;
+@RestController
+public class TokenController { @PostMapping("/oauth2/token") public String t() { return ""; } }
+"""})
+    _module(tmp_path, "order-service", {"src/main/java/o/A.java": """
+package o;
+import org.springframework.web.client.RestTemplate;
+public class A {
+  private final RestTemplate restTemplate = new RestTemplate();
+  private static final String IDP = "https://auth.okta.com";
+  public Object o() { return restTemplate.postForObject("https://auth.okta.com/oauth2/token", null, String.class); }
+  public Object p() { return restTemplate.postForObject(IDP + "/oauth2/token", null, String.class); }
+}
+"""})
+
+    clear_analysis_caches()
+    calls = [e for e in infer_framework_endpoints(tmp_path) if e.role == "call"]
+    assert len(calls) == 2
+    assert all("systemlens-api-domain" not in e.snippet for e in calls), [e.snippet for e in calls]
+    assert _rest_edges(tmp_path) == []
+
+
+def test_h5_ip_host_yields_no_service_hint(tmp_path):
+    rel = _write(tmp_path, "src/main/java/Client.java", """
+import org.springframework.web.client.RestTemplate;
+class Client {
+  RestTemplate restTemplate;
+  private static final String BASE = "http://10.0.0.5:8080";
+  void run() { restTemplate.getForObject(BASE + "/users", String.class); }
+  void literal() { restTemplate.getForObject("http://10.0.0.5/users", String.class); }
+}
+""")
+    calls = _calls(tmp_path, [rel])
+
+    assert len(calls) == 2
+    assert all("systemlens-api-domain" not in e.snippet for e in calls), [e.snippet for e in calls]
+    for call in calls:
+        resolution = resolve_rest_target_service(call, ["10", "users"])
+        assert resolution.status == "unresolved" and resolution.hint is None, resolution
+
+
+def test_h5_internal_host_shapes_and_exact_alias():
+    assert service_hint_from_host("inventory-service") == "inventory-service"
+    assert service_hint_from_host("inventory.shop.svc.cluster.local") == "inventory"
+    assert service_hint_from_host("inventory.shop.svc") == "inventory"
+    assert service_hint_from_host("auth.okta.com") == "auth.okta.com"
+    assert service_hint_from_host("10.0.0.5") is None
+    assert service_hint_from_host("inventory-") is None
+
+    def call(url: str) -> MessageEndpoint:
+        return _endpoint(
+            "call", "GET /x", 1, f'restTemplate.getForObject("{url}/x", String.class)',
+            framework="resttemplate", module="order-service",
+        )
+
+    services = ["order-service", "inventory", "auth"]
+    cluster = resolve_rest_target_service(call("http://inventory.shop.svc.cluster.local:8080"), services)
+    assert cluster.service == "inventory", cluster
+    public = resolve_rest_target_service(call("https://auth.okta.com"), services)
+    assert public.status == "unresolved", public
+    aliased = resolve_rest_target_service(
+        call("https://auth.okta.com"), services, service_aliases={"auth": ("auth.okta.com",)},
+    )
+    assert aliased.service == "auth", aliased

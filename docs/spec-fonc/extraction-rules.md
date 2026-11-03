@@ -194,7 +194,10 @@ prefix. A Spring Data REST repository without `@RepositoryRestResource` is
 served at the pluralized, uncapitalized entity name (`OrderItem` at
 `/orderItems`). A Spring Cloud Gateway Java route is recognised with or
 without a route identifier; without a `method(...)` predicate it serves and
-proxies every verb as `ANY`, like a YAML route.
+proxies every verb as `ANY`, like a YAML route. Each route of a builder chain
+keeps its own `uri(...)` target and the line of its own `route` call; the
+first target URI of its evidence wins, so a later `http://` URL in a filter
+does not override `lb://`.
 
 Indexing materializes AST method facts that associate each Java method with its
 HTTP/message entry endpoints and HTTP/message output endpoints. It then
@@ -425,6 +428,23 @@ method and route only refines a resource within that already identified
 service; it never identifies a service by itself. Calls without a unique target
 remain indexed as unresolved evidence and are reported by coverage and indexing
 issues rather than being linked to a coincidentally similar route.
+
+Only an internal-shaped host names a service: a single DNS label
+(`inventory-service`) or a Kubernetes cluster-local name ending in `.svc` or
+`.svc.cluster.local`, which names its first label. An IP address is never a
+service. Another multi-label host, such as `auth.okta.com`, resolves only
+through an exact configured alias; otherwise the call stays unresolved.
+
+Inside the target service, route matching follows Spring MVC (ADR-77). A
+literal segment wins over a template, so `GET /items/count` reaches
+`/items/count` and not `/items/{id}`. A `{id:\d+}` constraint rejects a
+literal it does not match. A templated call such as `/items/{path}` keeps the
+route whose templates align with its own; without one, every candidate stays.
+
+A RestTemplate, WebClient, RestClient or HTTP-interface call whose route
+matches no served route keeps one relation to the service, without a
+resource. It is never projected onto every route of the target; only a
+configured client factory without a route at its call site is.
 
 Each unresolved dynamic endpoint contributes an informational indexing diagnostic
 grouped by source path and extractor. The diagnostic records the endpoint role,

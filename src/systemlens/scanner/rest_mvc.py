@@ -18,6 +18,7 @@ import yaml
 from systemlens.discovery.java import parser as java_parser
 from systemlens.conventions.strategy1.indexing import is_openapi_declaration_path
 from systemlens.discovery.build import maven as maven_module
+from systemlens.domain.graph import url_service_hint
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.discovery.build.modules import discover_rest_controllers, maven_module_dependencies
 from systemlens.scanner._core import (
@@ -266,8 +267,7 @@ def _resolved_http_host(
     expr: str, repo_root: Path, source_path: str, shadowed: frozenset[str] = frozenset(),
 ) -> str | None:
     raw, _dynamic = _resolve_rest_expression(expr, repo_root, source_path, shadowed=shadowed)
-    match = re.match(r"https?://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", raw, re.IGNORECASE)
-    return match.group(1).lower() if match is not None else None
+    return url_service_hint(raw)
 
 
 def _resolve_rest_ast_expression(
@@ -294,8 +294,7 @@ def _resolve_rest_ast_expression(
 def _resolved_http_host_ast(expression, source: bytes, repo_root: Path, source_path: str) -> str | None:
     resolved = local_string(source, expression)
     if resolved is not None:
-        match = re.match(r"https?://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", resolved, re.IGNORECASE)
-        return match.group(1).lower() if match is not None else None
+        return url_service_hint(resolved)
     return _resolved_http_host(
         java_parser.node_text(source, expression), repo_root, source_path,
         shadowed=locally_declared_names(expression, source),
@@ -1670,12 +1669,21 @@ def _infer_spring_cloud_gateway_routes(repo_root: Path, rel_path: str) -> list[M
         # without ``.method(...)`` proxies every verb.
         http_method = http_method or "ANY"
         route = normalize_path(path_value)
+        # In ``builder.routes().route(a).route(b)`` the invocation of ``b``
+        # spans the whole chain before it. The route's own evidence starts at
+        # its ``route`` name, so each route keeps its own ``uri(...)`` target
+        # and its own line instead of the chain's first one.
+        name_node = invocation.child_by_field_name("name")
+        start_node = name_node if name_node is not None else invocation
+        snippet = source[start_node.start_byte:invocation.end_byte].decode(
+            "utf-8", errors="replace"
+        )
         for role in ("serve", "call"):
             inferred.append(
                 _build_endpoint(
-                    repo_root, rel_path, invocation.start_point.row + 1,
+                    repo_root, rel_path, start_node.start_point.row + 1,
                     invocation.end_point.row + 1, role, "rest", f"{http_method} {route}",
-                    "spring-cloud-gateway", java_parser.node_text(source, invocation),
+                    "spring-cloud-gateway", snippet,
                 )
             )
     return inferred

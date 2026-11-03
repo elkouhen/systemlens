@@ -1740,6 +1740,34 @@ unchanged file refreshes at the next full index. A call is typed only
 when one source declaration matches its name and arity; generic
 substitution beyond collection elements stays unknown.
 
+## ADR-77: Match REST routes by Spring MVC specificity
+
+**Status:** Accepted on 2026-11-03 by the product owner.
+
+**Context:** A `{var}` segment matched literal segments both ways, so a call
+to `GET /items/count` reached `/items/count` and its sibling `/items/{id}`;
+a templated call reached every literal sibling. A `{id:\d+}` constraint was
+ignored, so `/orders/abc` reached it (review finding H4).
+
+**Decision:** Route matching inside an identified target service follows
+Spring MVC: the most specific compatible route wins. A literal segment beats
+a template, a route without `**` beats one with it, and an explicit HTTP
+method beats `ANY`. A `{name:regex}` constraint must match a literal
+segment; a constraint Python cannot compile is treated as unconstrained.
+
+A templated call, such as `/items/{path}`, keeps the route whose templates
+align with its own (`/items/{id}`). When every candidate would need a guess
+about the call's unknown value, no single best match exists and every
+candidate is kept. A call with `ANY` is ranked per served method, and a
+gateway call ending in `**` keeps every compatible route.
+
+**Consequences:** Fewer false route edges, and flows enter the route Spring
+would dispatch to. When several candidates are kept, the route ambiguity is
+visible as several edges; the service relation keeps its confidence, because
+the host, not the route, identifies the service. A templated call aligned
+with a template route no longer reaches a literal sibling that the runtime
+value might hit.
+
 ## ADR-79: Treat generic payload carriers as unknown Kafka types
 
 **Status:** Accepted on 2026-11-03 with lot 2 of the indexing review (K7).

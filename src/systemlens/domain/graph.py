@@ -136,13 +136,87 @@ def _is_template_segment(segment: str) -> bool:
     return segment.startswith("{") and segment.endswith("}")
 
 
+def _template_constraint(segment: str) -> re.Pattern[str] | None:
+    """Return the regular expression of a ``{name:regex}`` segment.
+
+    An unconstrained template, or a constraint that Python cannot compile,
+    returns ``None``: the segment then accepts any literal (ADR-77).
+    """
+    _name, separator, pattern = segment[1:-1].partition(":")
+    if not separator or not pattern:
+        return None
+    try:
+        return re.compile(pattern)
+    except re.error:
+        return None
+
+
+def _literal_fits_template(literal: str, template: str) -> bool:
+    constraint = _template_constraint(template)
+    return constraint is None or constraint.fullmatch(literal) is not None
+
+
 def _segment_matches(call_segment: str, serve_segment: str) -> bool:
-    if call_segment == serve_segment:
+    """Whether one call segment may reach one served segment (ADR-77).
+
+    Two templates are compatible: both values are unknown. A literal reaches a
+    template only when it satisfies the template's ``{name:regex}`` constraint.
+    """
+    call_is_template = _is_template_segment(call_segment)
+    serve_is_template = _is_template_segment(serve_segment)
+    if call_is_template and serve_is_template:
         return True
-    return _is_template_segment(serve_segment) or _is_template_segment(call_segment)
+    if serve_is_template:
+        return _literal_fits_template(call_segment, serve_segment)
+    if call_is_template:
+        return _literal_fits_template(serve_segment, call_segment)
+    return call_segment == serve_segment
 
 
-_SERVICE_URL_HOST_RE = re.compile(r"https?://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", re.IGNORECASE)
+_URL_HOST_RE = re.compile(r"https?://([^/\s:?#\"'`]+)", re.IGNORECASE)
+_DNS_LABEL_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", re.IGNORECASE)
+_IPV4_HOST_RE = re.compile(r"\d{1,3}(?:\.\d{1,3}){3}")
+_CLUSTER_LOCAL_SUFFIXES = (".svc", ".svc.cluster.local")
+
+
+def service_hint_from_host(host: str) -> str | None:
+    """Return the service identity an HTTP host may designate, or ``None``.
+
+    Only a host shaped like an internal service name yields a service name:
+    a single DNS label (``inventory-service``) or a Kubernetes cluster-local
+    name (``inventory.shop.svc.cluster.local`` yields ``inventory``). An IP
+    address or a malformed host yields ``None``. Any other multi-label host
+    (``auth.okta.com``) is returned whole, so it can only match an exact
+    configured service alias and otherwise stays unresolved; its first DNS
+    label never names a service.
+    """
+    normalized = host.strip().casefold().rstrip(".")
+    if not normalized or _IPV4_HOST_RE.fullmatch(normalized):
+        return None
+    labels = normalized.split(".")
+    if not all(_DNS_LABEL_RE.fullmatch(label) for label in labels):
+        return None
+    if len(labels) == 1:
+        return normalized
+    if normalized.endswith(_CLUSTER_LOCAL_SUFFIXES):
+        return labels[0]
+    return normalized
+
+
+def url_service_hint(url: str) -> str | None:
+    """Service name of the host of a URL that starts with ``http(s)://``.
+
+    Unlike :func:`service_hint_from_host`, a multi-label public host yields
+    ``None``: the scanner stamps only names that can designate an indexed
+    service without an alias table.
+    """
+    match = _URL_HOST_RE.match(url.strip())
+    if match is None:
+        return None
+    hint = service_hint_from_host(match.group(1))
+    return hint if hint is not None and "." not in hint else None
+
+
 _LOAD_BALANCED_URI_RE = re.compile(r"lb://([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\b", re.IGNORECASE)
 _CONFIGURED_API_DOMAIN_RE = re.compile(r"\bsystemlens-api-domain:([a-z0-9][a-z0-9-]*)\b", re.IGNORECASE)
 _OPENAPI_CONTRACT_RE = re.compile(r"systemlens-openapi-contract:([^\s]+)", re.IGNORECASE)
@@ -192,13 +266,27 @@ def _rest_target_service_hint(
 ) -> str | None:
     if hint := rest_policy.target_hint(call):
         return hint
-    host_match = _SERVICE_URL_HOST_RE.search(call.snippet)
-    if host_match is not None:
-        return host_match.group(1).lower()
+    host_match = _URL_HOST_RE.search(call.snippet)
     load_balanced_match = _LOAD_BALANCED_URI_RE.search(call.snippet)
-    if load_balanced_match is not None:
+    if load_balanced_match is not None and (
+        host_match is None or load_balanced_match.start() < host_match.start()
+    ):
+        # The first target URI of the evidence wins; an ``http://`` later in
+        # the snippet does not override an earlier ``lb://`` (finding H2).
         return load_balanced_match.group(1).lower()
+    if host_match is not None:
+        # The explicit URL is the target evidence, even when its host is
+        # external or not service-shaped: never fall back to another marker.
+        return service_hint_from_host(host_match.group(1))
     return configured_api_client_domain(call)
+
+
+# Clients whose call site declares its own route. The scanner stamps their
+# resolved HTTP host as ``systemlens-api-domain:`` evidence, but an unresolved
+# route never makes them configured clients (finding H1).
+_ROUTE_DECLARING_HTTP_CLIENTS = frozenset(
+    {"resttemplate", "webclient", "restclient", "http-interface"}
+)
 
 
 def _is_configured_api_client_call(call: MessageEndpoint) -> bool:
@@ -206,9 +294,15 @@ def _is_configured_api_client_call(call: MessageEndpoint) -> bool:
 
     Son code d'appel ne porte pas nécessairement le chemin HTTP. Le domaine
     injecté par le scanner permet alors de le résoudre contre les ressources
-    exposées par le microservice hôte pendant la fédération.
+    exposées par le microservice hôte pendant la fédération. Un appel
+    RestTemplate, WebClient, RestClient ou HTTP interface porte le même
+    marqueur pour son hôte, mais déclare sa propre route : il n'est jamais
+    projeté sur les routes de l'hôte.
     """
-    return configured_api_client_domain(call) is not None
+    return (
+        call.framework not in _ROUTE_DECLARING_HTTP_CLIENTS
+        and configured_api_client_domain(call) is not None
+    )
 
 
 def _http_methods_match(call_topic: str, serve_topic: str) -> bool:
@@ -328,6 +422,67 @@ def paths_match(call_topic: str, serve_topic: str) -> bool:
     return False
 
 
+def _route_rank(call_segments: list[str], serve_segments: list[str]) -> tuple[int, int, int]:
+    """Specificity rank of a served route that matches a call (ADR-77).
+
+    Lower is better: a route that needs no guess about a call template comes
+    first, then a route without ``**``, then the route binding the fewest call
+    literals to templates (a literal segment wins over a template segment).
+    """
+    if serve_segments and serve_segments[-1] == "**":
+        return (0, 1, len(serve_segments))
+    guessed = sum(
+        1
+        for call_seg, serve_seg in zip(call_segments, serve_segments)
+        if _is_template_segment(call_seg) and not _is_template_segment(serve_seg)
+    )
+    bound = sum(
+        1
+        for call_seg, serve_seg in zip(call_segments, serve_segments)
+        if not _is_template_segment(call_seg) and _is_template_segment(serve_seg)
+    )
+    return (1 if guessed else 0, 0, bound)
+
+
+def select_matching_routes(
+    call_topic: str, serves: list[MessageEndpoint],
+) -> list[MessageEndpoint]:
+    """Served routes of one target service that a call reaches (ADR-77).
+
+    Spring MVC's rule applies among the routes :func:`paths_match` accepts:
+    the most specific route wins, so ``GET /items/count`` reaches the literal
+    route and not its sibling ``/items/{id}``. A templated call keeps the route
+    whose templates align with its own; when every candidate would need a
+    guess about the call's unknown value, no single best match exists and all
+    candidates are kept. A call ending in ``**`` (a gateway proxy) keeps every
+    compatible route. Among routes of equal path rank, an explicit HTTP method
+    beats ``ANY``; a call with ``ANY`` is ranked per served method.
+    """
+    candidates = [serve for serve in serves if paths_match(call_topic, serve.topic)]
+    call_method, _, call_path = call_topic.partition(" ")
+    call_segments = _split_path(call_path)
+    if len(candidates) < 2 or (call_segments and call_segments[-1] == "**"):
+        return candidates
+    groups: dict[str, list[tuple[tuple[int, int, int, int], MessageEndpoint]]] = {}
+    for serve in candidates:
+        serve_method, _, serve_path = serve.topic.partition(" ")
+        rank = (
+            *_route_rank(call_segments, _split_path(serve_path)),
+            1 if serve_method == "ANY" and call_method != "ANY" else 0,
+        )
+        group = serve_method if call_method == "ANY" else ""
+        groups.setdefault(group, []).append((rank, serve))
+    selected: set[str] = set()
+    for ranked in groups.values():
+        best = min(rank for rank, _serve in ranked)
+        if best[0]:
+            # Every candidate guesses the value of a call template.
+            selected.update(serve.id for _rank, serve in ranked)
+            continue
+        selected.update(serve.id for rank, serve in ranked if rank == best)
+    return [serve for serve in candidates if serve.id in selected]
+
+
 def build_graph(
     endpoints_by_service: dict[str, list[MessageEndpoint]], *,
     rest_policy: RestTargetPolicy = DEFAULT_REST_TARGET_POLICY,
@@ -412,14 +567,19 @@ def build_graph(
         if resolution.status != "resolved" or resolution.service is None:
             continue
         target_service = resolution.service
-        for serve in serves_by_service.get(target_service, ()):
+        if call_service == target_service:
+            continue
+        target_serves = serves_by_service.get(target_service, [])
+        selected_ids = {
+            serve.id for serve in select_matching_routes(call.topic, target_serves)
+        }
+        for serve in target_serves:
             serve_service = target_service
-            if call_service == serve_service:
-                continue
-            if serve_service != target_service:
-                continue
             effective_call = call
-            if not paths_match(call.topic, serve.topic):
+            if serve.id not in selected_ids:
+                if paths_match(call.topic, serve.topic):
+                    # Compatible, but a more specific route wins (ADR-77).
+                    continue
                 resolved_call = _resolved_configured_api_call(call, serve)
                 if resolved_call is None:
                     continue
@@ -630,10 +790,9 @@ def graph_edges_from_relations(
                 consumer for consumer in consumers
                 if not message_types_conflict(source_endpoint.message_type, consumer.message_type)
             ]
-        return [
-            serve for serve in serves_index.get(target_service, [])
-            if paths_match(source_endpoint.topic, serve.topic)
-        ]
+        return select_matching_routes(
+            source_endpoint.topic, serves_index.get(target_service, [])
+        )
 
     edges: list[GraphEdge] = []
     seen: set[tuple[str, str, str, str, str | None]] = set()
