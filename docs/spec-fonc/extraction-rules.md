@@ -388,6 +388,12 @@ When the value stays unknown, the value type `V` of the receiving
 first argument is a key or a partition, never the topic; its last argument
 is the payload, and the one-argument `sendDefault(value)` is a producer too.
 
+A Kafka Streams source or sink is typed from its `KStream<K, V>` or
+`KTable<K, V>` declaration, explicit type arguments, or the value serde of
+a `Consumed` or `Produced` argument when they are statically known. The
+return type of the enclosing method, such as a `Topology` bean, is never the
+payload; without written evidence the payload is unknown.
+
 A `new ProducerRecord(...)` takes its written `ProducerRecord<K, V>` type,
 else the type of its value argument chosen by constructor arity. Its
 headers, timestamp, partition and key arguments are never the payload;

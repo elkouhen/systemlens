@@ -129,8 +129,17 @@ typed. `sendDefault` has no topic argument: its topic is a
 different `setDefaultTopic` values are dynamic too. Its value is its last
 argument, also in the one-argument form.
 
-A `void` enclosing method gives a Kafka Streams fact no payload type. The
-Strategy1 accessor path
+A Kafka Streams fact is typed only by what the source writes for it, never
+by the enclosing method's return type. `builder.stream(topic)` takes, in
+order, explicit type arguments (`builder.<K, V>stream`), the value serde of
+a `Consumed.with(keySerde, valueSerde)` argument, then the `KStream<K, V>`
+or `KTable<K, V>` declaration it initializes directly. `stream.to(topic)`
+takes the value serde of a `Produced.with(...)` argument, then the declared
+`KStream<K, V>` of its receiver. A serde is typed from `new X<V>(...)`,
+`new X<>(V.class)`, a `Serdes.V()` factory or a declared `Serde<V>`. A
+chained receiver such as `s.mapValues(...).to(topic)` is unknown.
+
+The Strategy1 accessor path
 anchors its fact on the enclosing send statement and types it from that
 statement's value argument, so a multi-line send has one site for both
 extractors and a method parameter is never the message type.

@@ -17,6 +17,7 @@ from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.scanner._core import (
     _find_first_literal,
+    _split_java_type_arguments,
     _invocation_receiver,
     _java_qualified_name,
     _kafka_payload_type,
@@ -472,17 +473,116 @@ def _template_default_topic(
     return "<dynamic>", True
 
 
-def _method_return_payload_type(source: bytes, method_node) -> str | None:
-    """Type de payload déduit du type de retour de la méthode englobante
-    (ex. ``KStream<Long, Order>`` -> ``Order``), via ``_kafka_payload_type``."""
-    if method_node is None:
+# ``Serdes.X()`` factories and the type they (de)serialize.
+_SERDES_FACTORIES = {
+    "ByteArray": "byte[]", "ByteBuffer": "ByteBuffer", "Bytes": "Bytes", "Double": "Double",
+    "Float": "Float", "Integer": "Integer", "Long": "Long", "Short": "Short", "String": "String",
+    "UUID": "UUID", "Void": "Void",
+}
+
+
+def _last_type_argument(text: str | None) -> str | None:
+    if not text or "<" not in text:
         return None
-    type_node = method_node.child_by_field_name("type")
-    if type_node is None or type_node.type == "void_type":
+    inner = text[text.find("<") + 1:text.rfind(">")]
+    arguments = _split_java_type_arguments(inner)
+    return arguments[-1] if arguments and arguments[-1].strip() else None
+
+
+def _serde_value_type(repo_root: Path, rel_path: str, source: bytes, node: Node | None) -> str | None:
+    """Type a value serde handles: ``new JsonSerde<>(Order.class)``, ``Serde<Order>``."""
+    if node is None:
         return None
-    return _kafka_payload_type(
-        java_parser.node_text(source, type_node), type_variables_in_scope(method_node, source)
-    )
+    if node.type == "object_creation_expression":
+        type_node = node.child_by_field_name("type")
+        written = _last_type_argument(java_parser.node_text(source, type_node)) if type_node is not None else None
+        if written is not None:
+            return written
+        first = next(iter(java_parser.argument_nodes(node)), None)
+        if first is not None and first.type == "class_literal":
+            return java_parser.node_text(source, first).rsplit(".class", 1)[0].strip()
+        return None
+    if node.type == "method_invocation":
+        receiver, name, arguments = java_parser.invocation_parts(node, source)
+        if (
+            receiver is not None and java_parser.node_text(source, receiver).rsplit(".", 1)[-1] == "Serdes"
+            and not arguments and name in _SERDES_FACTORIES
+        ):
+            return _SERDES_FACTORIES[name]
+    typed = expression_type_text(repo_root, rel_path, source, node)
+    if typed is not None and typed.split("<", 1)[0].rsplit(".", 1)[-1].endswith("Serde"):
+        return _last_type_argument(typed)
+    return None
+
+
+def _streams_options_value_type(
+    repo_root: Path, rel_path: str, source: bytes, node: Node | None, options: str,
+) -> str | None:
+    """Value type of a ``Consumed`` or ``Produced`` argument, through its serde."""
+    current = node
+    while current is not None and current.type == "method_invocation":
+        receiver, name, arguments = java_parser.invocation_parts(current, source)
+        if (
+            name == "with" and receiver is not None and len(arguments) >= 2
+            and java_parser.node_text(source, receiver).rsplit(".", 1)[-1] == options
+        ):
+            return _serde_value_type(repo_root, rel_path, source, arguments[1])
+        current = receiver
+    if node is not None and node.type in {"identifier", "field_access"}:
+        typed = expression_type_text(repo_root, rel_path, source, node)
+        if typed is not None and typed.split("<", 1)[0].rsplit(".", 1)[-1] == options:
+            return _last_type_argument(typed)
+    return None
+
+
+def _is_stream_type(text: str | None) -> bool:
+    return text is not None and text.split("<", 1)[0].rsplit(".", 1)[-1].strip() in {"KStream", "KTable"}
+
+
+def _streams_source_payload_type(repo_root: Path, rel_path: str, source: bytes, call: Node) -> str | None:
+    """Payload of ``builder.stream(...)`` from what the source writes for it.
+
+    In order: explicit type arguments (``builder.<K, V>stream``), the value
+    serde of a ``Consumed`` argument, then the ``KStream<K, V>`` or
+    ``KTable<K, V>`` declaration that this call initializes directly. The
+    enclosing method's return type is never evidence (K6).
+    """
+    scope = type_variables_in_scope(call, source)
+    type_arguments = call.child_by_field_name("type_arguments")
+    if type_arguments is not None:
+        written = _last_type_argument(java_parser.node_text(source, type_arguments))
+        if written is not None:
+            return _kafka_payload_type(written, scope)
+    for argument in java_parser.argument_nodes(call)[1:]:
+        serde = _streams_options_value_type(repo_root, rel_path, source, argument, "Consumed")
+        if serde is not None:
+            return _kafka_payload_type(serde, scope)
+    declarator = call.parent
+    if (
+        declarator is not None and declarator.type == "variable_declarator"
+        and declarator.child_by_field_name("value") == call and declarator.parent is not None
+    ):
+        type_node = declarator.parent.child_by_field_name("type")
+        declared = java_parser.node_text(source, type_node) if type_node is not None else None
+        if _is_stream_type(declared):
+            return _kafka_payload_type(declared, scope)
+    return None
+
+
+def _streams_sink_payload_type(repo_root: Path, rel_path: str, source: bytes, call: Node) -> str | None:
+    """Payload of ``stream.to(...)``: the ``Produced`` serde or the receiver's ``KStream<K, V>``."""
+    scope = type_variables_in_scope(call, source)
+    for argument in java_parser.argument_nodes(call)[1:]:
+        serde = _streams_options_value_type(repo_root, rel_path, source, argument, "Produced")
+        if serde is not None:
+            return _kafka_payload_type(serde, scope)
+    receiver = call.child_by_field_name("object")
+    typed = expression_type_text(repo_root, rel_path, source, receiver) if receiver is not None else None
+    if _is_stream_type(typed):
+        return _kafka_payload_type(typed, scope)
+    return None
+
+
 def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> list[MessageEndpoint]:
     """Découvre tous les endpoints Kafka depuis le code Java via tree-sitter.
 
@@ -602,13 +702,13 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
                         args[0], source, repo_root, rel_path
                     ):
                         add(node, "produce", "kafka-streams", topic, dynamic,
-                            _method_return_payload_type(source, java_parser.enclosing(node, "method_declaration")))
+                            _streams_sink_payload_type(repo_root, rel_path, source, node))
                 elif method_name == "stream" and receiver == "builder" and has_kafka_streams and args:
                     for topic, dynamic in _kafka_topics_from_value(
                         args[0], source, repo_root, rel_path
                     ):
                         add(_declaration_anchor(node), "consume", "kafka-streams", topic, dynamic,
-                            _method_return_payload_type(source, java_parser.enclosing(node, "method_declaration")))
+                            _streams_source_payload_type(repo_root, rel_path, source, node))
                 elif (
                     method_name == "subscribe"
                     and receiver

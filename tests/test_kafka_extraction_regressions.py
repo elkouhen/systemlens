@@ -855,3 +855,70 @@ class Q {
         ("P.java", "orders", False, "Order"),
         ("Q.java", "payments", False, "Payment"),
     ], facts
+_STREAMS_IMPORTS = """package p;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.*;
+import org.apache.kafka.streams.kstream.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.kafka.support.serializer.JsonSerde;
+"""
+
+
+def test_kafka_streams_facts_are_never_typed_by_the_enclosing_return_type(
+    tmp_path: Path,
+) -> None:
+    """K6: the KStream declaration or the serde types a stream, else unknown."""
+    _dto(tmp_path)
+    _write(tmp_path, "src/main/java/p/T.java", _STREAMS_IMPORTS + """class T {
+  @Bean public Topology topo(StreamsBuilder builder) {
+    KStream<String, Order> s = builder.stream("orders");
+    s.mapValues(o -> new Payment()).to("payments");
+    return builder.build();
+  }
+  @Bean public KStream<String, Payment> k(StreamsBuilder builder) {
+    KStream<String, Order> s = builder.stream("orders-b");
+    KStream<String, Payment> out = s.mapValues(o -> new Payment());
+    out.to("payments-b");
+    return out;
+  }
+  @Bean public KStream<String, Payment> serdes(StreamsBuilder builder) {
+    KStream<String, Payment> out = builder.stream("orders-c", Consumed.with(Serdes.String(), new JsonSerde<>(Order.class)))
+        .mapValues(o -> new Payment());
+    out.to("payments-c", Produced.with(Serdes.String(), new JsonSerde<>(Payment.class)));
+    return out;
+  }
+  @Bean public KStream<String, Payment> chained(StreamsBuilder builder) {
+    KStream<String, Payment> out = builder.<String, Order>stream("orders-d").mapValues(o -> new Payment());
+    return out;
+  }
+}
+""")
+    facts = sorted(
+        (e.role, e.topic, e.message_type) for e in infer_kafka_endpoints(tmp_path)
+    )
+    assert facts == [
+        ("consume", "orders", "Order"),
+        ("consume", "orders-b", "Order"),
+        ("consume", "orders-c", "Order"),
+        ("consume", "orders-d", "Order"),
+        ("produce", "payments", None),
+        ("produce", "payments-b", "Payment"),
+        ("produce", "payments-c", "Payment"),
+    ], facts
+
+
+def test_kafka_streams_consumer_pairs_with_a_typed_producer(tmp_path: Path) -> None:
+    """K6: a `Topology` bean no longer blocks the pairing on `orders`."""
+    for module in ("a", "b"):
+        _write(tmp_path, f"{module}/src/main/java/p/Order.java", _ORDER)
+    _write(tmp_path, "a/src/main/java/p/P.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+class P { KafkaTemplate<String, Order> kafkaTemplate; void s(Order o) { kafkaTemplate.send("orders", o); } }
+""")
+    _write(tmp_path, "b/src/main/java/p/T.java", _STREAMS_IMPORTS + """class T {
+  @Bean public Topology topo(StreamsBuilder builder) {
+    KStream<String, Order> s = builder.stream("orders"); s.foreach((k, v) -> {}); return builder.build();
+  }
+}
+""")
+    assert _edges(tmp_path) == [("a", "b")]
