@@ -737,3 +737,48 @@ def test_message_type_comparison_key(produced: str | None, consumed: str, confli
     from systemlens.domain.message_types import message_types_conflict
 
     assert message_types_conflict(produced, consumed) is conflict
+
+
+# ------------------------------------------- indexing review 2026-11-03, lot 2
+_ORDER = "package p; public class Order {}"
+_PAYMENT = "package p; public class Payment {}"
+
+
+def _dto(root: Path) -> None:
+    _write(root, "src/main/java/p/Order.java", _ORDER)
+    _write(root, "src/main/java/p/Payment.java", _PAYMENT)
+
+
+def _edges(root: Path) -> list[tuple[str, str]]:
+    from systemlens.domain.graph import build_graph
+
+    by_module: dict[str, list] = {}
+    for endpoint in infer_kafka_endpoints(root):
+        by_module.setdefault(endpoint.path.split("/")[0], []).append(endpoint)
+    return [(edge.from_service, edge.to_service) for edge in build_graph(by_module)]
+@pytest.mark.parametrize("carrier", [
+    "JsonNode", "com.fasterxml.jackson.databind.JsonNode", "ObjectNode",
+    "GenericRecord", "SpecificRecord", "Bytes", "ByteBuffer", "java.io.Serializable",
+    "Map", "Map<String, Order>", "java.util.HashMap<String, Object>",
+])
+def test_generic_carrier_types_name_no_dto(carrier: str) -> None:
+    """K7: a carrier type is unknown and never blocks a pairing."""
+    from systemlens.domain.message_types import informative_message_type, message_types_conflict
+
+    assert informative_message_type(carrier) is None
+    assert not message_types_conflict(carrier, "Order")
+
+
+def test_generic_carrier_producer_pairs_with_a_typed_consumer(tmp_path: Path) -> None:
+    """K7: a `JsonNode` producer no longer blocks the `Order` consumer."""
+    _write(tmp_path, "b/src/main/java/p/Order.java", _ORDER)
+    _write(tmp_path, "a/src/main/java/p/P.java", """package p;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.kafka.core.KafkaTemplate;
+class P { KafkaTemplate<String, JsonNode> kafkaTemplate; void s(JsonNode o) { kafkaTemplate.send("orders", o); } }
+""")
+    _write(tmp_path, "b/src/main/java/p/L.java", """package p;
+import org.springframework.kafka.annotation.KafkaListener;
+class L { @KafkaListener(topics = "orders") void on(Order o) {} }
+""")
+    assert _edges(tmp_path) == [("a", "b")]

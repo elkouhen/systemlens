@@ -359,6 +359,15 @@ producer and the consumer side: a `String` payload is serialized, so its
 static type says nothing about the DTO. A consumer typed `String` is
 therefore unknown too, and it pairs with any producer on the topic.
 
+Generic carriers are unknown too, whatever their package or generic
+arguments (ADR-79): JSON trees (`JsonNode`, `ObjectNode`, `ArrayNode`,
+`JsonElement`, `JsonObject`, `JSONObject`), Avro records (`GenericRecord`,
+`GenericContainer`, `IndexedRecord`, `SpecificRecord`,
+`SpecificRecordBase`), Protobuf base messages (`AbstractMessage`,
+`DynamicMessage`, `GeneratedMessage`, `GeneratedMessageV3`), `Bytes`,
+`ByteBuffer`, `Serializable`, `Properties` and every `Map` type, raw or
+parameterised. A generated Avro or Protobuf class keeps its own name.
+
 Two types are compared without package qualifiers, so `p.OrderEvent` and
 `OrderEvent` match. Generic arguments stay part of the type: a
 `List<OrderEvent>` sent as one message is the real payload and differs from

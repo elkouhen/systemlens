@@ -156,7 +156,10 @@ always wins over this fallback.
 The result then passes `domain.message_types.informative_message_type`, as
 do listener parameters and CodeQL evidence: `Object`, `String`, `byte[]`,
 wildcards, diamonds, raw containers and the type variables declared by the
-enclosing method or types are unknown. A listener's first payload parameter
+enclosing method or types are unknown. So is a type whose erased simple
+name is in `CARRIER_TYPES`, the generic carriers of ADR-79 (JSON trees,
+Avro and Protobuf base records, `Bytes`, `ByteBuffer`, `Serializable`,
+maps); the check is one set lookup per comparison. A listener's first payload parameter
 decides; an uninformative type there does not fall through to a later one.
 Pairing compares `message_type_key` values, which drop package qualifiers
 and keep generic arguments. Persisted types keep their source spelling, so

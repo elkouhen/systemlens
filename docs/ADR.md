@@ -14,7 +14,7 @@ functional or technical contract.
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
 | Indexed contracts and implementation boundaries | [ADR-25](#adr-25-separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26-organize-implementation-modules-by-architectural-ownership) |
 | Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch) |
-| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-76](#adr-76-type-kafka-payloads-with-one-shared-scanner-rule), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
+| Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-76](#adr-76-type-kafka-payloads-with-one-shared-scanner-rule), [ADR-79](#adr-79-treat-generic-payload-carriers-as-unknown-kafka-types), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor), [ADR-68](#adr-68-dock-the-node-inspector-beside-the-graph) |
 | Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules); proposed: [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph) |
@@ -1739,3 +1739,34 @@ An incremental index rescans changed files only, so a type taken from an
 unchanged file refreshes at the next full index. A call is typed only
 when one source declaration matches its name and arity; generic
 substitution beyond collection elements stays unknown.
+
+## ADR-79: Treat generic payload carriers as unknown Kafka types
+
+**Status:** Accepted on 2026-11-03 with lot 2 of the indexing review (K7).
+Amends the unknown-type list of ADR-76.
+
+**Context:** ADR-76 makes `Object`, `String`, `byte[]`, wildcards, raw
+containers and type variables unknown. A producer typed `JsonNode`,
+`GenericRecord`, `ByteBuffer` or `Map<String, Object>` still counted as a
+known DTO. Its name differs from the consumer's `OrderEvent`, so the
+pairing was blocked by a type that says nothing about the payload.
+
+**Decision:** `domain/message_types.py` holds one list, `CARRIER_TYPES`, of
+generic carriers: JSON trees (`JsonNode`, `ObjectNode`, `ArrayNode`,
+`JsonElement`, `JsonObject`, `JSONObject`), Avro records (`GenericRecord`,
+`GenericContainer`, `IndexedRecord`, `SpecificRecord`,
+`SpecificRecordBase`), Protobuf base messages (`AbstractMessage`,
+`DynamicMessage`, `GeneratedMessage`, `GeneratedMessageV3`), `Bytes`,
+`ByteBuffer`, `Serializable` and the `Map` family with `Properties`.
+
+A type is a carrier when its erased simple name is in the list, so the
+package and the generic arguments do not matter: `Map<String, Order>` is a
+carrier. A carrier is unknown on both sides of a topic, like `Object`.
+
+**Consequences:** Such a producer or consumer pairs with any typed peer on
+the same topic, with the medium confidence of an unknown type. A carrier
+type is no longer persisted as `message_type`. No schema change: the
+export compares stored types with the same rule, and a reindex refreshes
+the persisted relations. A generated Avro class keeps its own name and stays a known DTO. A
+project DTO that reuses a carrier name, such as a class named `Bytes`, is
+unknown too; that loss is accepted over a false mismatch.

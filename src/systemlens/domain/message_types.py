@@ -8,8 +8,9 @@ and generic arguments stay part of the type, so ``List<OrderEvent>`` is not
 
 A type that says nothing about the DTO is unknown rather than known:
 ``Object``, ``String`` and ``byte[]`` (a serialized payload), wildcards,
-raw message or collection containers, and declared type variables. An
-unknown type never blocks a producer/consumer pairing.
+raw message or collection containers, declared type variables, and the
+generic carriers of :data:`CARRIER_TYPES` (ADR-79). An unknown type never
+blocks a producer/consumer pairing.
 """
 
 from __future__ import annotations
@@ -21,6 +22,23 @@ _IDENTIFIER_RE = re.compile(r"[A-Za-z_$][\w$]*")
 _QUALIFIED_RE = re.compile(r"\b(?:[A-Za-z_$][\w$]*\.)+([A-Za-z_$][\w$]*)")
 # The static type of a serialized or untyped payload names no DTO.
 _NON_INFORMATIVE = frozenset({"Object", "String", "byte[]", "Byte[]", "CharSequence"})
+# A generic carrier holds any payload: a JSON tree, an Avro record, raw
+# bytes, a map or a marker interface. Matched by its erased simple name, so
+# ``Map<String, Order>`` and ``com.fasterxml.jackson.databind.JsonNode`` are
+# carriers too (ADR-79).
+CARRIER_TYPES = frozenset({
+    # JSON trees (Jackson, Gson, org.json, Jakarta JSON).
+    "JsonNode", "ObjectNode", "ArrayNode", "JsonElement", "JsonObject", "JSONObject",
+    # Avro records: the generic API and the base types of generated classes.
+    "GenericRecord", "GenericContainer", "IndexedRecord", "SpecificRecord", "SpecificRecordBase",
+    # Protobuf base and dynamic messages.
+    "AbstractMessage", "DynamicMessage", "GeneratedMessage", "GeneratedMessageV3",
+    # Raw bytes and marker interfaces.
+    "Bytes", "ByteBuffer", "Serializable",
+    # Maps, raw or parameterised.
+    "Map", "HashMap", "LinkedHashMap", "TreeMap", "SortedMap", "NavigableMap",
+    "ConcurrentMap", "ConcurrentHashMap", "Properties",
+})
 # A raw container hides its element or payload type.
 _RAW_CONTAINERS = frozenset({
     "ConsumerRecord", "ConsumerRecords", "Message", "GenericMessage", "ProducerRecord",
@@ -47,6 +65,8 @@ def informative_message_type(
     if not simple or "?" in simple or "<>" in simple:
         return None
     if simple in _NON_INFORMATIVE or simple in _RAW_CONTAINERS:
+        return None
+    if simple.split("<", 1)[0] in CARRIER_TYPES:
         return None
     tokens = set(_IDENTIFIER_RE.findall(simple))
     if "Object" in tokens or tokens & set(type_variables):
