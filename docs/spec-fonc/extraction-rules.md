@@ -382,6 +382,12 @@ declaration, a getter, a Lombok builder, or `MessageBuilder.withPayload`.
 When the value stays unknown, the value type `V` of the receiving
 `KafkaTemplate<K, V>` is used, unless `V` itself names no DTO.
 
+`KafkaTemplate.sendDefault` publishes to the template's default topic: a
+`setDefaultTopic("...")` on that template in the same file, else the
+`spring.kafka.template.default-topic` property, else a dynamic topic. Its
+first argument is a key or a partition, never the topic; its last argument
+is the payload, and the one-argument `sendDefault(value)` is a producer too.
+
 A `new ProducerRecord(...)` takes its written `ProducerRecord<K, V>` type,
 else the type of its value argument chosen by constructor arity. Its
 headers, timestamp, partition and key arguments are never the payload;

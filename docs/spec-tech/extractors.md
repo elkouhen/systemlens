@@ -118,12 +118,19 @@ source-local conventionally named uppercase `static final` string constants
 and binary string concatenations through the bounded Java string evaluator. It
 returns a concrete topic only when every operand resolves; a partially dynamic
 concatenation remains `<dynamic>` with `topic_dynamic=true`. This rule prevents
-the first literal in an expression from becoming a false topic identity. For
-topic-based
-`KafkaTemplate.send` overloads, the final argument is the payload: preceding
-arguments are a partition and/or key and are never reported as a message type,
-even when the final argument itself cannot be typed. A `void` enclosing method
-gives a Kafka Streams fact no payload type. The Strategy1 accessor path
+the first literal in an expression from becoming a false topic identity.
+
+For topic-based `KafkaTemplate.send` overloads, the final argument is the
+payload: preceding arguments are a partition and/or key and are never
+reported as a message type, even when the final argument itself cannot be
+typed. `sendDefault` has no topic argument: its topic is a
+`setDefaultTopic(...)` on the same receiver name in the file, else the
+`spring.kafka.template.default-topic` property, else dynamic. Several
+different `setDefaultTopic` values are dynamic too. Its value is its last
+argument, also in the one-argument form.
+
+A `void` enclosing method gives a Kafka Streams fact no payload type. The
+Strategy1 accessor path
 anchors its fact on the enclosing send statement and types it from that
 statement's value argument, so a multi-line send has one site for both
 extractors and a method parameter is never the message type.

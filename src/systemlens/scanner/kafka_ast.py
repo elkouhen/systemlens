@@ -437,6 +437,41 @@ def _message_builder_topic_for(
             if header == "TOPIC" or header.endswith(".TOPIC"):
                 return _kafka_topic_from_value(args[1], source, repo_root, rel_path)
     return None
+_DEFAULT_TOPIC_PROPERTIES = ("spring.kafka.template.default-topic", "spring.kafka.template.defaultTopic")
+
+
+def _template_default_topic(
+    repo_root: Path, rel_path: str, source: bytes, root: Node, receiver: str,
+) -> tuple[str, bool]:
+    """Default topic of the template that a ``sendDefault`` call uses.
+
+    ``sendDefault`` has no topic argument. A ``setDefaultTopic(...)`` on the
+    same receiver name in the file wins; otherwise the Spring Boot property
+    ``spring.kafka.template.default-topic`` is read. Several different
+    values, or none, leave the topic dynamic.
+    """
+    assigned: set[tuple[str, bool]] = set()
+    for node in java_parser.walk(root):
+        if node.type != "method_invocation":
+            continue
+        object_node, name, arguments = java_parser.invocation_parts(node, source)
+        if (
+            name == "setDefaultTopic"
+            and len(arguments) == 1
+            and _invocation_receiver(source, object_node) == receiver
+        ):
+            assigned.add(_kafka_topic_from_value(arguments[0], source, repo_root, rel_path))
+    if len(assigned) == 1:
+        return next(iter(assigned))
+    if assigned:
+        return "<dynamic>", True
+    for key in _DEFAULT_TOPIC_PROPERTIES:
+        configured = resolve_spring_property(repo_root, key, rel_path)
+        if configured:
+            return (configured, True) if "${" in configured else (configured, False)
+    return "<dynamic>", True
+
+
 def _method_return_payload_type(source: bytes, method_node) -> str | None:
     """Type de payload déduit du type de retour de la méthode englobante
     (ex. ``KStream<Long, Order>`` -> ``Order``), via ``_kafka_payload_type``."""
@@ -533,7 +568,16 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
                         or receiver.rsplit(".", 1)[-1] in kafka_template_receivers
                     )
                 ):
-                    if len(args) >= 2:
+                    if method_name == "sendDefault":
+                        # The topic is the template's default, never the
+                        # key; the value is the last argument.
+                        if args:
+                            topic, dynamic = _template_default_topic(
+                                repo_root, rel_path, source, root, receiver.rsplit(".", 1)[-1]
+                            )
+                            add(node, "produce", "spring-kafka", topic, dynamic,
+                                _producer_send_payload_type(repo_root, rel_path, source, node))
+                    elif len(args) >= 2:
                         for topic, dynamic in _kafka_topics_from_value(
                             args[0], source, repo_root, rel_path
                         ):

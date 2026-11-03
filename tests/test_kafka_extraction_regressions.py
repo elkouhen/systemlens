@@ -809,3 +809,49 @@ class P {
         ("orders-e", "Order"),
         ("orders-f", "Order"),
     ], facts
+def test_send_default_topic_is_the_template_default_never_the_key(tmp_path: Path) -> None:
+    """K3: sendDefault has no topic argument; the value is the last argument."""
+    _dto(tmp_path)
+    _write(tmp_path, "src/main/java/p/P.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+class P {
+  KafkaTemplate<String, Order> kafkaTemplate;
+  void a(Order o) { kafkaTemplate.sendDefault("order-key", o); }
+  void b(Order o) { kafkaTemplate.sendDefault(o); }
+}
+""")
+    facts = _facts(infer_kafka_endpoints(tmp_path))
+    assert facts == [
+        ("produce", "<dynamic>", True, "Order", "spring-kafka", 5),
+        ("produce", "<dynamic>", True, "Order", "spring-kafka", 6),
+    ], facts
+
+
+def test_send_default_uses_the_configured_or_set_default_topic(tmp_path: Path) -> None:
+    """K3: `spring.kafka.template.default-topic` or `setDefaultTopic`."""
+    _dto(tmp_path)
+    _write(tmp_path, "src/main/resources/application.yml",
+           "spring:\n  kafka:\n    template:\n      default-topic: orders\n")
+    _write(tmp_path, "src/main/java/p/P.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+class P {
+  KafkaTemplate<String, Order> kafkaTemplate;
+  void a(Order o) { kafkaTemplate.sendDefault("order-key", o); }
+}
+""")
+    _write(tmp_path, "src/main/java/p/Q.java", """package p;
+import org.springframework.kafka.core.KafkaTemplate;
+class Q {
+  KafkaTemplate<String, Payment> paymentTemplate;
+  Q(KafkaTemplate<String, Payment> t) { paymentTemplate = t; paymentTemplate.setDefaultTopic("payments"); }
+  void a(Payment p) { paymentTemplate.sendDefault(0, "k", p); }
+}
+""")
+    facts = sorted(
+        (e.path.rsplit("/", 1)[-1], e.topic, e.topic_dynamic, e.message_type)
+        for e in infer_kafka_endpoints(tmp_path)
+    )
+    assert facts == [
+        ("P.java", "orders", False, "Order"),
+        ("Q.java", "payments", False, "Payment"),
+    ], facts
