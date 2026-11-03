@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
-from defusedxml import ElementTree as ET
 
 from systemlens.discovery.java import parser as java_parser
 from systemlens.discovery.build.data_operations import (
@@ -20,7 +19,12 @@ from systemlens.discovery.build.data_operations import (
 from systemlens.domain.data_operation_projection import mongo_data_operation
 from systemlens.domain.data_operations import DataOperation, sort_data_operations
 from systemlens.discovery.build.gradle import discover_gradle_modules, gradle_module_identity
-from systemlens.discovery.build.maven import module_name_for_path, parse_pom, pom_version
+from systemlens.discovery.build.maven import (
+    module_name_for_path,
+    parse_pom,
+    parse_pom_root,
+    pom_version,
+)
 from systemlens.discovery.configuration import service_configuration_example
 from systemlens.domain.module_inventory import (
     BlockingPoint,
@@ -1417,9 +1421,8 @@ def discover_module_dependencies(root: Path, modules: list[DiscoveredModule]) ->
 
 def maven_module_dependencies(pom_path: Path) -> set[str]:
     """Return direct Maven artifact dependencies declared by ``pom_path``."""
-    try:
-        root = ET.fromstring(pom_path.read_text(encoding="utf-8", errors="replace"))
-    except (ET.ParseError, OSError):
+    root = parse_pom_root(pom_path)
+    if root is None:
         return set()
     namespace = "{http://maven.apache.org/POM/4.0.0}"
     dependencies = root.find(f"{namespace}dependencies")

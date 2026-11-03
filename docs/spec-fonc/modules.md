@@ -9,6 +9,10 @@ contains the substring `test`; names such as `attestation-service` and
 Spring Boot entry point only through its own sources: an aggregator or parent
 never inherits the `main` method of a nested module.
 
+A `pom.xml` that cannot be read, is malformed, or declares a DTD entity that
+the safe XML parser refuses contributes no module and no dependency. The
+index goes on with the other modules; the parser protection stays on.
+
 The shared presentation and interaction rules are defined in
 [UX/UI rules](../UX-UI.md). This page owns module membership, resource
 ownership, and module-specific behavior.

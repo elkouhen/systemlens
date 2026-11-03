@@ -9,6 +9,7 @@ import re
 # Element is used only for annotations; parsing is performed by defusedxml below.
 from xml.etree.ElementTree import Element  # nosec B405
 
+from defusedxml import DefusedXmlException
 from defusedxml import ElementTree as ET
 
 from systemlens.discovery.java import parser as java_parser
@@ -38,10 +39,16 @@ def _pom_findall(root: Element, path: str) -> list[Element]:
     return merged
 
 
-def _parse_pom_root(pom_path: Path) -> Element | None:
+def parse_pom_root(pom_path: Path) -> Element | None:
+    """Parse ``pom_path`` or return ``None`` when it cannot be read safely.
+
+    A POM that defusedxml refuses (an internal DTD entity, an external
+    reference) is treated like a malformed POM: the module is skipped and the
+    discovery of the other modules goes on. The protection itself stays on.
+    """
     try:
         return ET.fromstring(pom_path.read_text(encoding="utf-8", errors="replace"))
-    except (ET.ParseError, OSError):
+    except (ET.ParseError, DefusedXmlException, OSError):
         return None
 
 
@@ -211,10 +218,8 @@ def parse_pom(pom_path: Path) -> tuple[str | None, bool, str | None]:
     """Renvoie (artifactId, is_spring_boot_app, packaging). Un pom.xml illisible ou mal
     formé renvoie (None, False, None) plutôt que de faire échouer toute la
     découverte — un seul module cassé ne doit pas bloquer les autres."""
-    try:
-        text = pom_path.read_text(encoding="utf-8", errors="replace")
-        root = ET.fromstring(text)
-    except (ET.ParseError, OSError):
+    root = parse_pom_root(pom_path)
+    if root is None:
         return None, False, None
     artifact_id = _pom_child_text(root, "artifactId")
     packaging = _pom_child_text(root, "packaging")
@@ -227,9 +232,8 @@ def parse_pom(pom_path: Path) -> tuple[str | None, bool, str | None]:
 
 def pom_version(pom_path: Path) -> str | None:
     """Return the locally declared Maven version or its parent declaration."""
-    try:
-        root = ET.fromstring(pom_path.read_text(encoding="utf-8", errors="replace"))
-    except (ET.ParseError, OSError):
+    root = parse_pom_root(pom_path)
+    if root is None:
         return None
     version = _pom_child_text(root, "version")
     if version is not None:
@@ -248,7 +252,7 @@ def is_runtime_service(packaging: str | None, is_spring_boot_app: bool) -> bool:
 
 def _has_openapi_generator_plugin(pom_path: Path) -> bool:
     """Détecte la présence du plugin openapi-generator-maven-plugin dans le pom.xml."""
-    root = _parse_pom_root(pom_path)
+    root = parse_pom_root(pom_path)
     if root is None:
         return False
     return bool(_iter_openapi_generator_plugins(root))
@@ -261,7 +265,7 @@ def detect_openapi_generator_input_specs(pom_path: Path) -> tuple[str, ...]:
     publient l'API décrite par ``inputSpec`` ou ``inputSpecRootDirectory`` même quand les classes
     ``@RestController`` n'exposent aucune annotation de méthode locale.
     """
-    root = _parse_pom_root(pom_path)
+    root = parse_pom_root(pom_path)
     if root is None:
         return ()
     properties = _pom_properties(root, pom_path)

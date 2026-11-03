@@ -104,3 +104,41 @@ def test_key_identity_parameter_index_ignores_comments_in_parameter_list(tmp_pat
 
     # ``y`` is the second parameter: the key flows from ``b`` (index 1).
     assert identity == "jpa:orders:example.Order:parameter:entry-method:1", identity
+
+
+_ENTITY_POM = (
+    '<?xml version="1.0"?>\n'
+    '<!DOCTYPE project [<!ENTITY name "evil">]>\n'
+    '<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>'
+    "<groupId>com.acme</groupId><artifactId>&name;</artifactId><version>1.0.0</version>"
+    "<dependencies><dependency><artifactId>orders-api</artifactId></dependency></dependencies>"
+    "</project>"
+)
+
+
+def test_pom_with_internal_dtd_entity_is_skipped_like_a_malformed_pom(tmp_path: Path) -> None:
+    # Review I10 (2026-11-03): defusedxml refuses entity declarations with
+    # EntitiesForbidden, a ValueError that aborted the whole index. The POM is
+    # now treated like an unparsable POM; the protection stays on.
+    from systemlens.discovery.build.maven import parse_pom, parse_pom_root, pom_version
+    from systemlens.discovery.build.modules import maven_module_dependencies
+    from systemlens.indexing.service import index_repo
+    from systemlens.infrastructure.config import Config
+    from systemlens.storage.sqlite import Store
+
+    _pom(tmp_path / "orders" / "pom.xml", "orders-api")
+    hostile = tmp_path / "hostile" / "pom.xml"
+    hostile.parent.mkdir()
+    hostile.write_text(_ENTITY_POM, encoding="utf-8")
+
+    assert parse_pom_root(hostile) is None
+    assert parse_pom(hostile) == (None, False, None)
+    assert pom_version(hostile) is None
+    assert maven_module_dependencies(hostile) == set()
+
+    with Store(tmp_path) as store:
+        index_repo(tmp_path, Config(), store, full=True)
+        names = [module.name for module in store.all_modules()]
+
+    assert "orders-api" in names
+    assert "evil" not in names
