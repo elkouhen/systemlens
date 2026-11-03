@@ -170,23 +170,35 @@ source symbol pass then follows receiver-typed calls between indexed Java
 methods: with the `source` engine it is the whole call graph, with `codeql`
 it fills the gaps. A receiver is typed from a field, parameter, local or
 `var` initializer, a declared return type, a field access (`obj.field`,
-`Type.CONSTANT`, enum constants), or a capitalized type name for a static
-call; `receiver::name` is a call when that name has one declared arity.
+`Type.CONSTANT`, enum constants), an array element, or a capitalized type
+name for a static call; `receiver::name` is a call when that name has one
+declared arity. A zero-argument `getX()` (`isX()` for a `boolean`) that no
+source type declares takes the field type when Lombok `@Data`, `@Value` or
+`@Getter` generates it. `toString()`, `hashCode()` and `equals(x)` return
+`String`, `int` and `boolean` on any receiver.
 Variables declared by an enclosing statement also type receivers: an enhanced
 `for` variable, a single-type `catch` parameter, a try-with-resources
 resource, and an explicitly typed lambda parameter. An untyped lambda
 parameter, a `var` loop variable or a multi-catch parameter has no type, but
 still shadows a field of the same name.
-An unqualified call that the enclosing type, its ancestors and its outer
-types do not declare under that name, at any arity, resolves through a
-single static import, then through the one static wildcard import whose
-source type declares that name and arity. Several candidates stay
-unresolved.
+An unqualified call binds to the innermost enclosing type, anonymous classes
+included, that declares or inherits the name at any arity; a named inner
+class thus reaches its outer type's methods. A scope with an external
+supertype stops the search, since that supertype may declare the name,
+unless it is a JDK type with fixed members (`Runnable`, `Callable`,
+`Serializable`, `Comparable`, `AutoCloseable`, `Closeable`, `Cloneable`).
+A name no enclosing type has resolves through a single static import, then
+through the one static wildcard import whose source type declares that name
+and arity. Several candidates stay unresolved.
 Literals, `new`, casts, and typed variables give argument types, which
 narrow same-arity overloads with boxing, then by assignability to a source
-ancestor. An override whose parameter type comes from an external wildcard
-import (`import org.springframework.http.*`) adopts the signature of the one
-ancestor contract that matches its resolved types and written simple names.
+ancestor or to an external interface it implements, then by excluding an
+overload whose parameter a known argument provably cannot take: a primitive,
+a `String` and a source type never convert into one another. Unknown
+arguments never narrow. An override whose parameter type comes from an
+external wildcard import (`import org.springframework.http.*`) adopts the
+signature of the one ancestor contract that matches its resolved types and
+written simple names.
 A concrete method with an unresolved parameter still implements itself, so
 self-calls to it resolve. A call is `exact` when one concrete body sits on
 the receiver's declared type or one of its ancestors. With the `source`
@@ -199,6 +211,29 @@ reaches the one abstract declaration no source type implements, such as a
 Spring Data query method, as a `possible` target. The pass drops ambiguous
 overloads while retaining an ambiguous receiver type long enough to apply
 module-scoped interface dispatch.
+
+The closed world adds two shapes of the CodeQL query (ADR-70). When the
+receiver's declared type is a source interface and the call has one exact
+concrete target, the pass also emits a `possible` witness edge to the
+abstract interface method the call names. The join stores it as a declared,
+non-inferred edge and adds the inferred `possible` edge to the site's exact
+implementation, as it does for a CodeQL row; it adds no other
+implementation, so the witness is a dead end that opens no route and leaves
+flow confidence unchanged. A static or un-overridden default interface
+method that is itself the target, and an overridden default body, get no
+witness; neither does a call whose dispatch is already `possible`.
+
+A receiver typed by an external interface, one that a source type lists in
+`implements` or `extends` (and `Thread` as a `Runnable`), dispatches to the
+most specific concrete, non-static, non-private body of that name and arity
+on each source subtype: `exact` when one body exists, otherwise `possible`
+to each. The call stays `possible` when an anonymous class in the sources
+implements the interface, or when a lambda can (`Runnable`, `Callable`):
+such a body has no indexed method. A subtype whose same-arity overloads the
+arguments cannot separate leaves the call unresolved. A call on an external
+class, such as `Object` or `OutputStream`, reaches no source override: the
+class hierarchy of a library is not in the sources.
+
 Each Spring `@Scheduled` method yields a transient scheduler trigger, used
 only while flows are built and never persisted as an endpoint. It makes the
 method an input of the call graph, so a scheduler that publishes through

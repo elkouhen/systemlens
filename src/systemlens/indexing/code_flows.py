@@ -897,11 +897,29 @@ def _build_call_graph(
         for call in symbols.fallback_calls(resolved_sites, closed_world=closed_world):
             caller = locate_caller(call)
             resolved_target = locate(call.callee, call.callee_path, call.callee_line)
-            if caller is not None and resolved_target is not None:
-                synthetic_calls.add(call)
-                # An exact source call names its target from the declared
-                # receiver type; only candidate dispatch is an inference.
-                add_edge(caller, resolved_target[0], call, call.dispatch_confidence != "exact")
+            if caller is None or resolved_target is None:
+                continue
+            target = resolved_target[0]
+            synthetic_calls.add(call)
+            exact_call = symbols.interface_witnesses.get(call)
+            implementation = (
+                locate(exact_call.callee, exact_call.callee_path, exact_call.callee_line)
+                if exact_call is not None else None
+            )
+            if exact_call is not None and implementation is not None:
+                # ADR-70 witness: the interface method the call names is a
+                # declared target, like CodeQL's row, and the join adds the
+                # possible dispatch to the site's exact implementation, the
+                # shape the engine-call join builds above. No other
+                # implementation is added: the witness opens no new route.
+                add_edge(caller, target, call)
+                synthetic = replace(exact_call, dispatch_confidence="possible")
+                synthetic_calls.add(synthetic)
+                add_edge(caller, implementation[0], synthetic, True)
+                continue
+            # An exact source call names its target from the declared
+            # receiver type; only candidate dispatch is an inference.
+            add_edge(caller, target, call, call.dispatch_confidence != "exact")
 
     return CallGraph(
         adjacency=adjacency,

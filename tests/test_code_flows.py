@@ -2643,6 +2643,57 @@ class OrderController {
     assert [flow.confidence for flow in closed] == ["medium"]
 
 
+def test_source_interface_witness_adds_the_contract_hop_without_a_new_route(tmp_path: Path) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    text = """package com.example;
+interface StockPort { void publish(); }
+class StockAdapter implements StockPort { public void publish() { kafka.send(); } }
+class OrderController {
+  StockPort port;
+  void receive() { port.publish(); }
+}
+"""
+    path = tmp_path / source
+    path.parent.mkdir(parents=True)
+    path.write_text(text, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        replace(_endpoint("entry", "serve", "rest", "POST /orders", source, 6),
+                qualified_name="com.example.OrderController"),
+        replace(_endpoint("stock", "produce", "kafka", "orders.stock", source, 3),
+                qualified_name="com.example.StockAdapter"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
+    names = {method.id: method.qualified_method for method in methods}
+    graphs = []
+
+    flows = materialize_call_graph_flows(
+        methods, endpoints, [], repo_root=tmp_path, closed_world=True,
+        call_graph_sink=graphs.append,
+    )
+
+    edges = sorted(
+        (names[edge.callee_id], edge.dispatch_confidence, edge.inferred)
+        for edge in graphs[-1].edges()
+    )
+    # ADR-70: the CodeQL shape. The declared interface method is a possible
+    # edge, and its dispatch to the site's exact implementation the
+    # synthetic edge the engine-call join adds.
+    assert edges == [
+        ("com.example.StockAdapter.publish", "exact", False),
+        ("com.example.StockAdapter.publish", "possible", True),
+        ("com.example.StockPort.publish", "possible", False),
+    ]
+    # The witness is a dead end: one flow, still exact, through the adapter.
+    assert [(flow.confidence, flow.alternative_count) for flow in flows] == [("medium", 1)]
+    assert [step.name for step in flows[0].steps] == [
+        "POST /orders", "com.example.StockAdapter.publish", "orders.stock",
+    ]
+
+
 def test_ast_fallback_prefers_same_module_for_duplicate_qualified_types(tmp_path: Path) -> None:
     source_a = "orders/src/main/java/com/example/Shared.java"
     source_b = "billing/src/main/java/com/example/Shared.java"

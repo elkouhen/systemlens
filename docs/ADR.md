@@ -1498,3 +1498,50 @@ controller no longer captures the pointer. Rendering in cards and symbols
 modes is pixel-identical on the supermarket lab export in Chrome. Arcs of the
 selected call graph keep the local orthogonal router of ADR-28. Swagger UI
 and the layout libraries keep their versions.
+
+## ADR-70: Give the source engine CodeQL's interface witness and dispatch gaps
+
+**Status:** Accepted on 2026-11-03. Amends ADR-61.
+
+**Context:** On the train-ticket model the `source` engine finds the same
+flows as `codeql` (406 against 408) but persists 2052 call edges against
+8264, and the exported call tree of an entry reaches one method fewer on
+219 of 260 entries. Measured by qualified name, the gap has three parts:
+calls whose caller or callee is outside the integration-method universe,
+which the export already filters for both engines; 360 calls to an
+interface method that the source pass resolves straight to its unique
+implementation, so the caller-to-contract hop CodeQL keeps as a witness
+disappears from the tree; and 63 calls between indexed methods that the
+pass leaves unresolved: `Runnable.run` and `Callable.call` on receivers
+typed by an external interface whose implementations are in the sources,
+`hashCode`, `toString` and `equals` redefined by a source type, and a few
+named inner classes, chained getters and static helpers.
+
+**Decision:** The source pass emits the same shapes as the CodeQL query of
+`engines/codeql/queries.py`. When the static receiver type is a source
+interface and the exact target is a concrete implementation, the pass also
+emits a `possible` witness edge to the interface declaration; an interface
+method that is itself the exact target stays a single exact edge. A
+receiver typed by an interface that is not in the sources dispatches to the
+source implementations of that method name and arity, `exact` when one
+concrete body exists in the closed world and `possible` otherwise. A call to
+`hashCode`, `toString` or `equals` on a source type reaches the body that
+type or its source ancestors declare. Named inner classes, chained record
+and bean accessors and static helpers resolve under the existing receiver
+rules. Ambiguous same-arity overloads stay unresolved: no rule invents a
+target.
+
+**Consequences:** The exported call tree shows the contract hop with the
+source engine, so a `source` export and a `codeql` export of one project
+read the same way. The witness targets an abstract method, and its
+synthetic dispatch reaches only the site's exact implementation, so it adds
+no route and changes no flow confidence. Persisted names and
+the `codeql_*` keys are unchanged. Measured on train-ticket, the source
+engine persists 3008 edges and finds 407 flows; the export holds 1457 edges
+between integration methods against 877, the same 1170 call sites as
+CodeQL, and no entry where CodeQL reaches more methods, against 219 of 260.
+`analyze compare-engines` still reports one CodeQL-only flow, a `cycle`
+through `TSOStr.write`: it needs dispatch from `java.io.OutputStream` to a
+subclass of the servlet API's `ServletOutputStream`, a library hierarchy
+the sources do not contain. Dispatch on an external interface stays
+`possible` when an anonymous class or a lambda can implement it.

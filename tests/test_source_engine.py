@@ -369,3 +369,209 @@ def test_record_components_type_chained_receivers(tmp_path: Path) -> None:
         ("p.Order.process", "exact"),
         ("p.Pair.other", "exact"),
     ]
+
+
+def _symbols(tmp_path: Path, files: dict[str, str]) -> JavaSymbols:
+    for path, text in files.items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(text, encoding="utf-8")
+    module = DiscoveredModule(
+        name="app", path=tmp_path / "app", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    methods = materialize_integration_methods(tmp_path, [], list(files), [module])
+    return JavaSymbols(tmp_path, methods, list(files))
+
+
+def test_an_interface_call_keeps_a_possible_witness_next_to_its_exact_implementation(
+    tmp_path: Path,
+) -> None:
+    symbols = _symbols(tmp_path, {
+        "app/src/main/java/p/Svc.java": (
+            "package p;\n"
+            "interface Port { void send(); static void make() {} default void ping() {} }\n"
+            "class Adapter implements Port { public void send() {} }\n"
+            "class Svc {\n"
+            "  private Port port;\n"
+            "  private Adapter adapter;\n"
+            "  void run() { port.send(); Port.make(); port.ping(); adapter.send(); }\n"
+            "}\n"
+        ),
+    })
+
+    closed = sorted(
+        (call.callee, call.dispatch_confidence)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+        if call.caller == "p.Svc.run"
+    )
+    witnesses = {call.callee: exact.callee for call, exact in symbols.interface_witnesses.items()}
+    opened = sorted(
+        (call.callee, call.dispatch_confidence)
+        for call in symbols.fallback_calls(set())
+        if call.caller == "p.Svc.run"
+    )
+
+    # ADR-70: the contract hop CodeQL keeps beside the exact dispatch. A
+    # static or un-overridden default interface method is the exact target
+    # itself; a receiver typed by the class names no interface method.
+    assert closed == [
+        ("p.Adapter.send", "exact"),
+        ("p.Adapter.send", "exact"),
+        ("p.Port.make", "exact"),
+        ("p.Port.ping", "exact"),
+        ("p.Port.send", "possible"),
+    ]
+    assert witnesses == {"p.Port.send": "p.Adapter.send"}
+    # Outside a closed world (the CodeQL fallback pass) nothing is added.
+    assert ("p.Port.send", "possible") not in opened
+
+
+def test_an_external_interface_dispatches_to_its_source_implementations(tmp_path: Path) -> None:
+    symbols = _symbols(tmp_path, {
+        "app/src/main/java/p/Tasks.java": (
+            "package p;\n"
+            "import java.util.concurrent.*;\n"
+            "import org.example.Listener;\n"
+            "import org.example.Store;\n"
+            "import org.example.Account;\n"
+            "class Job implements Callable<String> { public String call() { return \"\"; } }\n"
+            "class Poller extends Thread { public void run() {} }\n"
+            "class Loop implements Runnable { public void run() {} }\n"
+            "class Audit implements Listener {\n"
+            "  public void on(String text) {}\n"
+            "  public void on(Integer code) {}\n"
+            "}\n"
+            "class Disk implements Store { public void save(String key) {} }\n"
+            "class User implements Account { public String name() { return \"\"; } }\n"
+            "class Svc {\n"
+            "  void submit(Callable<String> task) throws Exception { task.call(); }\n"
+            "  void start(Runnable task) { task.run(); }\n"
+            "  void publish(Listener listener, Object value) { listener.on(value); }\n"
+            "  void keep(Store store) { store.save(\"k\"); }\n"
+            "  void login(Account account) { account.name(); }\n"
+            "  Account guest() { return new Account() { public String name() { return \"\"; } }; }\n"
+            "}\n"
+        ),
+    })
+
+    closed = sorted(
+        (call.caller.rsplit(".", 1)[-1], call.callee, call.dispatch_confidence)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+        if call.caller.startswith("p.Svc.")
+    )
+    opened = [call for call in symbols.fallback_calls(set()) if call.caller.startswith("p.Svc.")]
+
+    # One body in the closed world is exact. A lambda can implement
+    # ``Callable`` and an anonymous class implements ``Account``: both stay
+    # possible. A ``Thread`` subclass is a ``Runnable``. Two same-arity
+    # overloads that the argument cannot separate leave the call unresolved.
+    assert closed == [
+        ("keep", "p.Disk.save", "exact"),
+        ("login", "p.User.name", "possible"),
+        ("start", "p.Loop.run", "possible"),
+        ("start", "p.Poller.run", "possible"),
+        ("submit", "p.Job.call", "possible"),
+    ]
+    assert opened == []
+
+
+def test_object_methods_reach_the_body_a_source_type_declares(tmp_path: Path) -> None:
+    symbols = _symbols(tmp_path, {
+        "app/src/main/java/p/Ids.java": (
+            "package p;\n"
+            "import lombok.Data;\n"
+            "class TripId { public String toString() { return \"\"; } }\n"
+            "class Base { public int hashCode() { return 1; } }\n"
+            "class Child extends Base {}\n"
+            "@Data class Trip { private TripId tripId; private static TripId shared; }\n"
+            "class Svc {\n"
+            "  void run(Trip trip, Child child, Object any) {\n"
+            "    trip.getTripId().toString(); child.hashCode(); any.hashCode(); trip.getShared();\n"
+            "  }\n"
+            "}\n"
+        ),
+    })
+
+    calls = sorted(
+        (call.callee, call.dispatch_confidence)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+        if call.caller == "p.Svc.run"
+    )
+
+    # A Lombok ``@Data`` getter types the chained receiver; a source
+    # ancestor's body is reached; an ``Object`` receiver dispatches nowhere.
+    assert calls == [("p.Base.hashCode", "exact"), ("p.TripId.toString", "exact")]
+
+
+def test_unqualified_calls_bind_to_the_innermost_type_that_declares_the_name(
+    tmp_path: Path,
+) -> None:
+    symbols = _symbols(tmp_path, {
+        "app/src/main/java/p/Outer.java": (
+            "package p;\n"
+            "import java.util.concurrent.*;\n"
+            "import org.example.Provider;\n"
+            "interface Pattern { String skip(); }\n"
+            "class Outer {\n"
+            "  private static String helper(String value) { return value; }\n"
+            "  private String fetch() { return \"\"; }\n"
+            "  class Task implements Callable<String> {\n"
+            "    public String call() { return fetch(); }\n"
+            "  }\n"
+            "  static class Config {\n"
+            "    String build() { return helper(\"x\"); }\n"
+            "    Pattern pattern() { return new Pattern() { public String skip() { return helper(\"y\"); } }; }\n"
+            "    Provider external() { return new Provider() { public String get() { return helper(\"z\"); } }; }\n"
+            "  }\n"
+            "}\n"
+        ),
+    })
+
+    calls = sorted(
+        (call.caller.rsplit(".", 2)[-2:][0] + "." + call.caller.rsplit(".", 1)[-1], call.callee, call.call_line)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+    )
+
+    # An inner class reaches its outer type's methods, also from an
+    # anonymous body whose source supertype lacks the name. An anonymous
+    # class of an external supertype may inherit ``helper``: unresolved.
+    assert calls == [
+        ("Config.build", "p.Outer.helper", 12),
+        ("Config.pattern", "p.Outer.helper", 13),
+        ("Task.call", "p.Outer.fetch", 9),
+    ]
+
+
+def test_a_provably_incompatible_argument_separates_same_arity_overloads(tmp_path: Path) -> None:
+    symbols = _symbols(tmp_path, {
+        "app/src/main/java/p/Tags.java": (
+            "package p;\n"
+            "import java.util.Map;\n"
+            "class Span {}\n"
+            "class Tags {\n"
+            "  void add(Span span, String url, String host) {}\n"
+            "  void add(String url, String host, Map<String, String> headers) {}\n"
+            "  void put(String key, Object value) {}\n"
+            "  void put(Object key, String value) {}\n"
+            "}\n"
+            "class Svc {\n"
+            "  private Tags tags;\n"
+            "  void run(Span span, Object uri, Object request, Object other) {\n"
+            "    tags.add(span, request.toString(), other.getHost());\n"
+            "    tags.add(uri.toString(), other.getHost(), request.getHeaders());\n"
+            "    tags.put(other.name(), other.value());\n"
+            "    Span[] spans = new Span[] { span }; spans[0].toString();\n"
+            "  }\n"
+            "}\n"
+        ),
+    })
+
+    calls = sorted(
+        (call.callee_line, call.call_line, call.dispatch_confidence)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+        if call.caller == "p.Svc.run"
+    )
+
+    # ``span`` cannot be a ``String`` and ``toString()`` returns one; the
+    # unknown arguments of ``put`` select nothing and it stays unresolved.
+    assert calls == [(5, 13, "exact"), (6, 14, "exact")]
