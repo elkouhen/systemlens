@@ -122,6 +122,19 @@ class StoreError(Exception):
     pass
 
 
+# How long a writer waits for another writer's lock before failing cleanly.
+BUSY_TIMEOUT_SECONDS = 5.0
+
+
+class StoreLockedError(StoreError):
+    """Another SQLite connection holds the index write lock."""
+
+
+def _is_lock_error(exc: sqlite3.OperationalError) -> bool:
+    message = str(exc).lower()
+    return "locked" in message or "busy" in message
+
+
 def _row_to_runtime_collection(row: sqlite3.Row) -> RuntimeCollection:
     return RuntimeCollection(
         id=row["id"], source=row["source"], origin=row["origin"],
@@ -162,9 +175,18 @@ class Store:
             return self
 
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self._db_path)
+        self._conn = sqlite3.connect(self._db_path, timeout=BUSY_TIMEOUT_SECONDS)
         self._conn.row_factory = sqlite3.Row
-        self._create_schema()
+        try:
+            # A current schema needs no write, so opening never waits for
+            # the lock of another writer; only a real migration does.
+            self._create_schema()
+        except sqlite3.OperationalError as exc:
+            self._conn.close()
+            self._conn = None
+            if _is_lock_error(exc):
+                raise self._locked_error() from exc
+            raise
         return self
 
     def __exit__(
@@ -192,8 +214,13 @@ class Store:
             raise StoreError("Une transaction n'est pas disponible en lecture seule.")
         if self._transaction_active:
             raise StoreError("Les transactions Store imbriquées ne sont pas prises en charge.")
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError as exc:
+            if _is_lock_error(exc):
+                raise self._locked_error() from exc
+            raise
         self._transaction_active = True
-        self.conn.execute("BEGIN IMMEDIATE")
         try:
             yield
         except BaseException:
@@ -211,7 +238,25 @@ class Store:
         if not self._transaction_active:
             raise StoreError("Un checkpoint nécessite une transaction active.")
         self.conn.commit()
-        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError as exc:
+            if not _is_lock_error(exc):
+                raise
+            # Another writer took the lock between the commit and the new
+            # transaction. The published checkpoint is marked partial, so
+            # the next index retries the flow stage (ADR-37).
+            raise StoreLockedError(
+                f"Index verrouillé ({self._db_path}) : une autre commande systemlens "
+                "a pris l'index pendant un checkpoint. Le snapshot publié reste partiel ; "
+                "relancez systemlens index une fois l'autre commande terminée."
+            ) from exc
+
+    def _locked_error(self) -> StoreLockedError:
+        return StoreLockedError(
+            f"Index verrouillé ({self._db_path}) : une autre commande systemlens écrit "
+            "dans cet index. Attendez qu'elle se termine, puis relancez la commande."
+        )
 
     def _check_schema_compatible(self) -> None:
         try:
@@ -586,7 +631,13 @@ class Store:
         cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(modules)")}
         if "identity" not in cols:
             self.conn.execute("ALTER TABLE modules ADD COLUMN identity TEXT")
-        self.conn.execute("UPDATE modules SET identity = name WHERE identity IS NULL OR identity = ''")
+        # Write only when a row needs the backfill: an UPDATE takes the write
+        # lock even when it matches nothing.
+        missing = self.conn.execute(
+            "SELECT 1 FROM modules WHERE identity IS NULL OR identity = '' LIMIT 1"
+        ).fetchone()
+        if missing is not None:
+            self.conn.execute("UPDATE modules SET identity = name WHERE identity IS NULL OR identity = ''")
 
     def _migrate_endpoint_message_type(self) -> None:
         """Schema v12 -> v13: payload Java type on Kafka integration sites."""

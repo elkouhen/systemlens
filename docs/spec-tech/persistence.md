@@ -92,3 +92,20 @@ IDs for endpoints, relations, integration methods, findings, and code chunks.
 Exact duplicates on composite keys are collapsed; conflicting OpenAPI,
 AsyncAPI, dependency, diagnostic, or CodeQL-edge rows are rejected with a
 domain-level `StoreError` before the previous snapshot is deleted.
+
+## Concurrent writers
+
+Opening a writable store on a current schema runs no write statement: each
+migration reads the schema first and writes only when something is missing.
+A second `systemlens index` therefore opens the database without waiting and
+meets the lock only at the index transaction's `BEGIN IMMEDIATE` (ADR-7).
+A writer waits `BUSY_TIMEOUT_SECONDS` (5 s) for another writer's lock, then
+fails with `StoreLockedError`. The CLI prints
+`Indexation impossible : Index verrouillé (...)` and exits with code 2.
+
+`commit_checkpoint` commits, then opens a new `BEGIN IMMEDIATE`. Python's
+`sqlite3` cannot keep the lock across a commit, so another writer can take
+it in that gap. The run then stops with a `StoreLockedError` that says the
+published snapshot stays partial. That snapshot is the checkpoint, marked
+`code_flow_snapshot_status=partial` without a code-flow signature, so the
+other writer and the next index both rerun the flow stage.

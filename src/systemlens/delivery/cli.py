@@ -1749,52 +1749,58 @@ def index_cmd(
         )
 
     _trace_index("store.open.begin")
-    with Store(repo_root) as store:
-        _trace_index("store.open.end")
-        try:
-            report = index_repo(
-                repo_root,
-                config,
-                store,
-                full=full,
-                progress=(
-                    None
-                    if internal_flows_only and not codeql_progress
-                    else (
-                        _echo_only_constructed_chains
-                        if show_call_chains and not codeql_progress
+    try:
+        with Store(repo_root) as store:
+            _trace_index("store.open.end")
+            try:
+                report = index_repo(
+                    repo_root,
+                    config,
+                    store,
+                    full=full,
+                    progress=(
+                        None
+                        if internal_flows_only and not codeql_progress
                         else (
-                            _echo_index_progress_with_green_chains
-                            if show_call_chains
-                            else _echo_index_progress
+                            _echo_only_constructed_chains
+                            if show_call_chains and not codeql_progress
+                            else (
+                                _echo_index_progress_with_green_chains
+                                if show_call_chains
+                                else _echo_index_progress
+                            )
                         )
-                    )
-                ),
-                disabled=disabled,
-                extra_files=explicit_manifests,
-                topic_strategy=topic_strategy,
-                kubernetes=kubernetes,
-                kubernetes_namespace=kubernetes_namespace,
-                call_graph_engine=(
-                    load_engine(
-                        "codeql", database=codeql_database,
-                        threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
-                    )
-                    if codeql_database is not None else None
-                ),
-                call_graph_progress=write_codeql_progress if codeql_progress_html is not None else None,
-                codeql_progress=codeql_progress,
-                generate_sources=generate_sources,
-                resume_codeql_join=resume_codeql_join,
-                show_call_chains=show_call_chains,
-                show_call_chains_module=selected_module.name if selected_module else None,
-                refresh_codeql_view=refresh_codeql_view,
-            )
-        except (RuntimeError, ValueError) as exc:
-            typer.echo(f"Indexation impossible : {exc}", err=True)
-            raise typer.Exit(code=2) from exc
-        store.set_meta("index_engine", "manual")
-        _trace_index("store.close.begin")
+                    ),
+                    disabled=disabled,
+                    extra_files=explicit_manifests,
+                    topic_strategy=topic_strategy,
+                    kubernetes=kubernetes,
+                    kubernetes_namespace=kubernetes_namespace,
+                    call_graph_engine=(
+                        load_engine(
+                            "codeql", database=codeql_database,
+                            threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
+                        )
+                        if codeql_database is not None else None
+                    ),
+                    call_graph_progress=write_codeql_progress if codeql_progress_html is not None else None,
+                    codeql_progress=codeql_progress,
+                    generate_sources=generate_sources,
+                    resume_codeql_join=resume_codeql_join,
+                    show_call_chains=show_call_chains,
+                    show_call_chains_module=selected_module.name if selected_module else None,
+                    refresh_codeql_view=refresh_codeql_view,
+                )
+            except (RuntimeError, ValueError) as exc:
+                typer.echo(f"Indexation impossible : {exc}", err=True)
+                raise typer.Exit(code=2) from exc
+            store.set_meta("index_engine", "manual")
+            _trace_index("store.close.begin")
+    except StoreError as exc:
+        # A locked index or an incompatible schema is a user-facing failure,
+        # not a traceback (review I14).
+        typer.echo(f"Indexation impossible : {exc}", err=True)
+        raise typer.Exit(code=2) from exc
     if not internal_flows_only:
         typer.echo(
             f"scanned={report.scanned} skipped={report.skipped} "

@@ -132,6 +132,11 @@ manifests:
 - Progress and recovery: `--codeql-progress`, `--codeql-progress-html FILE`,
   and `--resume-codeql-join`.
 
+Only one `systemlens index` writes to an index at a time. A second one waits
+up to five seconds for the lock, then prints
+`Indexation impossible : Index verrouillé (...)` with the reason and exits
+with code 2, without a traceback. Read-only commands keep working meanwhile.
+
 `systemlens index` reports the main stages in order: module discovery, file
 inventory, incremental delta, AST extraction, endpoint persistence, module and
 property persistence, architecture relations, CodeQL/interprocedural flows,
