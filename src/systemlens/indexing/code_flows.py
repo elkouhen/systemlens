@@ -32,7 +32,7 @@ from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import trace_scalar_key_identity
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v46-data-operations"
+CODE_FLOW_SIGNATURE = "code-flow-v47-checked-reachability"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
@@ -1601,33 +1601,47 @@ def materialize_call_graph_flows(
         ] = {}
         max_cached_trees = 8
         direct_flows: dict[tuple[str, str], CodeFlow] = {}
+        joined_pairs = {
+            (flow.steps[0].endpoint_id, flow.steps[-1].endpoint_id)
+            for flow in current_flows()
+            if flow.status != "cycle" and flow.steps
+        }
 
         def representative_route(
             source: IntegrationMethod, target: IntegrationMethod, confidence: str
         ) -> list[tuple[IntegrationMethod, MethodCall, bool]]:
+            """Shortest route that passes every rule of the main join, or ``[]``.
+
+            A reachability row only says that CodeQL reaches the output. The
+            flow it yields must still respect the application boundary on
+            every hop, the entry's dispatch and the hop limit (review F1).
+            """
             key = (source.id, confidence)
             if key not in tree_cache:
                 if len(tree_cache) >= max_cached_trees:
                     tree_cache.pop(next(iter(tree_cache)))
                 predecessors: dict[str, tuple[str, IntegrationMethod, MethodCall, bool]] = {}
-                queue = deque([source.id])
+                queue = deque([(source, 0)])
                 visited = {source.id}
                 while queue:
-                    current_id = queue.popleft()
-                    for candidate, call, inferred in adjacency.get(current_id, []):
+                    current, depth = queue.popleft()
+                    if depth >= max_hops:
+                        continue
+                    for candidate, call, inferred in adjacency.get(current.id, []):
                         # A direct CodeQL witness must not contain synthetic
                         # AST edges or a weaker dispatch than the proven pair.
                         if (
                             inferred
                             or not within_application_boundary(source.module, candidate.module)
                             or (confidence == "medium" and call.dispatch_confidence != "exact")
+                            or not dispatch_matches_entry(source, current, candidate, call)
                         ):
                             continue
                         if candidate.id in visited:
                             continue
                         visited.add(candidate.id)
-                        predecessors[candidate.id] = (current_id, candidate, call, inferred)
-                        queue.append(candidate.id)
+                        predecessors[candidate.id] = (current.id, candidate, call, inferred)
+                        queue.append((candidate, depth + 1))
                 tree_cache[key] = predecessors
             predecessors = tree_cache[key]
             route: list[tuple[IntegrationMethod, MethodCall, bool]] = []
@@ -1666,10 +1680,18 @@ def materialize_call_graph_flows(
                     output = endpoint_by_id.get(output_id)
                     if output is None:
                         continue
+                    # A pair the join already connects keeps the join's
+                    # flows: a reachability row never replaces them.
+                    if (input_id, output_id) in joined_pairs:
+                        continue
                     previous_flow = direct_flows.get((input_id, output_id))
                     if previous_flow is not None and previous_flow.confidence == "medium":
                         continue
                     route = representative_route(source_method, target_method, relation.confidence)
+                    if not route:
+                        # No route passes the join's rules: the row stays
+                        # unused rather than becoming an unchecked flow.
+                        continue
                     steps = [_endpoint_step(trigger, 1)]
                     for order, (hop, edge, _signature_join) in enumerate(route, start=2):
                         steps.append(CodeFlowStep(
@@ -1687,9 +1709,6 @@ def materialize_call_graph_flows(
                         end_line=source_method.end_line,
                         status="potential", confidence=relation.confidence,
                         reason=(
-                            "The engine directly proved reverse reachability from the indexed output "
-                            "method to the indexed input method."
-                            if not route else
                             "The engine proved reverse reachability and the indexed method-call graph "
                             "provided a representative intermediate route."
                         ),

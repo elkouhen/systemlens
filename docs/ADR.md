@@ -13,7 +13,7 @@ functional or technical contract.
 | Optional or repository-specific behaviour | [ADR-5](#adr-5-strategy1-conventions-are-opt-in), [ADR-12](#adr-12-kubernetes-discovery-is-explicit-and-snapshot-based) |
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
 | Indexed contracts and implementation boundaries | [ADR-25](#adr-25-separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26-organize-implementation-modules-by-architectural-ownership) |
-| Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch) |
+| Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch), [ADR-78](#adr-78-hold-a-codeql-reachability-flow-to-the-joins-rules) |
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-76](#adr-76-type-kafka-payloads-with-one-shared-scanner-rule), [ADR-79](#adr-79-treat-generic-payload-carriers-as-unknown-kafka-types), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor), [ADR-68](#adr-68-dock-the-node-inspector-beside-the-graph) |
@@ -471,7 +471,7 @@ orthogonal router preserves a usable export.
 
 ## ADR-29: Ask CodeQL directly for input-to-output reachability
 
-**Status:** Accepted.
+**Status:** Accepted. Amended by ADR-78.
 
 **Context:** Reconstructing every interprocedural flow by starting at each
  indexed input method and traversing Python-side call edges can miss a flow
@@ -495,7 +495,7 @@ orthogonal router preserves a usable export.
 
 ## ADR-30: Resolve fallback dispatch by qualified symbols and union partial evidence
 
-**Status:** Accepted. Supersedes the endpoint-only fallback in ADR-27a.
+**Status:** Accepted. Supersedes the endpoint-only fallback in ADR-27a. Amended by ADR-78.
 
 **Context:** Large repositories contain unrelated homonymous methods and
 abstract contracts implemented in other build modules. Name-only bridges can
@@ -1767,6 +1767,37 @@ visible as several edges; the service relation keeps its confidence, because
 the host, not the route, identifies the service. A templated call aligned
 with a template route no longer reaches a literal sibling that the runtime
 value might hit.
+
+## ADR-78: Hold a CodeQL reachability flow to the join's rules
+
+**Status:** Accepted on 2026-11-03 with lot 2 of the
+[indexing review](plans/indexing-review-2026-11-03.md) (finding F1).
+Amends ADR-29 and ADR-30.
+
+**Context:** ADR-29 turns each CodeQL reachability row into a flow, with a
+two-endpoint direct flow when no intermediate route is found, and ADR-30
+lets that direct proof replace the join's flows of the same pair. The row
+is checked only against the target's module. A route through another
+application, a dispatch the entry's receiver cannot take, or a route past
+`codeql_max_hops` therefore became a flow, and it erased the join's own
+routes for that pair.
+
+**Decision:** A reachability row becomes a flow only through a
+representative route of the indexed call graph that passes every rule of
+the main join: the application boundary on each hop, the entry's dispatch
+(`dispatch_matches_entry`), and `codeql_max_hops`. Synthetic edges and,
+for a `medium` row, `possible` edges stay excluded from the route. A row
+with no such route creates no flow; the two-endpoint direct flow is gone.
+A pair the join already connects keeps the join's flows, which the row
+never replaces.
+
+**Consequences:** No flow is stronger than the evidence the join can check.
+CodeQL reachability no longer recovers a pair whose calls are missing from
+the persisted call graph; that pair stays absent rather than unchecked. On
+train-ticket the CodeQL index keeps its 408 flows and 397 anchor pairs;
+the 170 call flows keep their routes and confidence and take back the
+join's IDs and reasons, which the direct flows had replaced. The
+code-flow signature changes, so the next index rebuilds the flows.
 
 ## ADR-79: Treat generic payload carriers as unknown Kafka types
 

@@ -365,6 +365,13 @@ persisted with medium confidence; CodeQL-reported possible dispatch is
 persisted with low confidence. With `codeql_edge_confidence = "exact"`, only `medium`
 relations are kept, because they are the routes made of exact edges.
 
+A reachability row becomes a flow only through a representative route of the
+indexed call graph that passes the join's rules: the application boundary on
+every hop, the entry's dispatch and `codeql_max_hops` (ADR-78). The route is
+a shortest path from a predecessor tree cached per source and confidence. A
+row without such a route creates no flow, and a pair the join already
+connects keeps the join's flows.
+
 Module ownership uses repository-path ancestry rather than comparing every
 source path with every module. Call partitioning uses the same prefix map, so
 both operations are linear in the number of paths or calls times the maximum

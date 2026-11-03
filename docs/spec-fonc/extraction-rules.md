@@ -219,9 +219,12 @@ publication depends on a join. Each input remains a potential path; the graph
 does not claim that one message alone triggers the output.
 
 CodeQL additionally answers transitive reachability by starting at indexed
-output methods and walking callers until indexed input methods are reached;
-these direct answers are used when the Python-side traversal cannot reconstruct
-the intermediate calls. The configured timeout remains the operational guard.
+output methods and walking callers until indexed input methods are reached.
+A pair the Python-side traversal misses becomes a flow only when the indexed
+call graph holds a route that passes the same rules: the application
+boundary, the entry's dispatch and the hop limit (ADR-78). A pair without
+such a route stays absent, and a pair the traversal found keeps its flows.
+The configured timeout remains the operational guard.
 
 Only source-located CodeQL call pairs are materialized. The internal-flow join
 keeps source-located intermediate methods even when they have no IN or OUT

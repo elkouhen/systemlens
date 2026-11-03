@@ -3086,7 +3086,9 @@ class OrderController {
     }
 
 
-def test_exact_edge_confidence_keeps_an_exact_only_reachability(tmp_path: Path) -> None:
+def test_reachability_without_a_checkable_route_creates_no_flow(tmp_path: Path) -> None:
+    # ADR-78: an exact-only (medium) row is kept under exact edge confidence,
+    # but without a route in the indexed call graph it creates no flow.
     source = "orders/src/main/java/com/example/OrderController.java"
     target = "orders/src/main/java/com/example/OrderPublisher.java"
     for path, content in {
@@ -3117,8 +3119,7 @@ def test_exact_edge_confidence_keeps_an_exact_only_reachability(tmp_path: Path) 
         methods, endpoints, [], reachability=reachability, codeql_edge_confidence="exact",
     )
 
-    assert [(flow.steps[0].endpoint_id, flow.steps[-1].endpoint_id, flow.confidence)
-            for flow in flows] == [("entry", "output", "medium")]
+    assert flows == []
 
 
 def test_port_in_local_named_class_belongs_to_its_own_method(tmp_path: Path) -> None:

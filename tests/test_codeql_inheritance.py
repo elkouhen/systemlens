@@ -682,7 +682,9 @@ def test_qualified_import_does_not_merge_same_simple_type_names(tmp_path: Path):
     assert flows[0].steps[-1].path == "impl/Concrete.java"
 
 
-def test_partial_reachability_keeps_fallback_and_direct_pair(tmp_path: Path):
+def test_reachability_without_a_route_does_not_add_a_pair(tmp_path: Path):
+    # ADR-78 (review F1): `Other` is not a `Base`; no indexed route reaches it,
+    # so the row adds no two-endpoint direct flow beside the fallback.
     methods, endpoints = _project(tmp_path, SOURCES)
     entry = next(method for method in methods if method.input_endpoint_ids)
     target = next(method for method in methods if method.qualified_method == "unrelated.Other.otherOutput")
@@ -690,13 +692,12 @@ def test_partial_reachability_keeps_fallback_and_direct_pair(tmp_path: Path):
                                   target.qualified_method, target.path, target.start_line, "medium")
     flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path,
                                         source_paths=list(SOURCES), reachability=[relation])
-    assert {flow.steps[-1].path for flow in flows} == {"impl/Concrete.java", "unrelated/Other.java"}
-    direct = next(flow for flow in flows if flow.steps[-1].path == target.path)
-    assert direct.confidence == "medium"
-    assert len(direct.steps) == 2
+    assert {flow.steps[-1].path for flow in flows} == {"impl/Concrete.java"}
 
 
-def test_direct_proof_replaces_fallback_without_synthetic_witness(tmp_path: Path):
+def test_reachability_never_replaces_the_join_flow_of_a_pair(tmp_path: Path):
+    # ADR-78 (review F1): the row cannot check a route made of synthetic
+    # edges, so the join's low-confidence fallback flow stays as it is.
     methods, endpoints = _project(tmp_path, SOURCES)
     entry = next(method for method in methods if method.input_endpoint_ids)
     target = next(method for method in methods if method.qualified_method == "impl.Concrete.output")
@@ -704,9 +705,13 @@ def test_direct_proof_replaces_fallback_without_synthetic_witness(tmp_path: Path
                                   target.qualified_method, target.path, target.start_line, "medium")
     flows = materialize_call_graph_flows(methods, endpoints, [], repo_root=tmp_path,
                                         source_paths=list(SOURCES), reachability=[relation])
-    assert len(flows) == 1
-    assert flows[0].confidence == "medium"
-    assert len(flows[0].steps) == 2
+    without_row = materialize_call_graph_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(SOURCES),
+    )
+    assert [(flow.id, flow.confidence, flow.steps) for flow in flows] == [
+        (flow.id, flow.confidence, flow.steps) for flow in without_row
+    ]
+    assert flows[0].confidence == "low"
 
 
 def test_symbols_parse_each_indexed_file_once_and_respect_perimeter(tmp_path: Path, monkeypatch):
@@ -1348,3 +1353,140 @@ def test_flow_stage_parses_each_java_file_once_beyond_the_default_cache(tmp_path
     parser.reserve_parse_cache(len(sources))
     assert run_flow_stage() == len(sources)
     parser.clear_caches()
+
+
+def test_reachability_row_obeys_the_entry_dispatch_rule(tmp_path: Path):
+    # Review F1, ADR-78: `First.entry` calls `this.process()`, whose `send()`
+    # dispatches to `First.send` only. A CodeQL row to `Second`'s output must
+    # not become a flow through `Second.send`.
+    sources = {
+        "app/Base.java": """package app; public abstract class Base {
+  public void process() { send(); }
+  public abstract void send();
+}""",
+        "app/First.java": """package app; public class First extends Base {
+  public void entry() { process(); }
+  public void send() { }
+}""",
+        "app/Second.java": """package app; public class Second extends Base {
+  public void send() { otherOutput(); }
+  void otherOutput() {}
+}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    located = {method.qualified_method: (method.path, method.start_line) for method in methods}
+
+    def call(caller: str, callee: str, confidence: str) -> MethodCall:
+        return MethodCall(caller, *located[caller], callee, *located[callee], 2, confidence)
+
+    calls = [
+        call("app.First.entry", "app.Base.process", "exact"),
+        call("app.Base.process", "app.First.send", "possible"),
+        call("app.Base.process", "app.Second.send", "possible"),
+        call("app.Second.send", "app.Second.otherOutput", "exact"),
+    ]
+    relation = MethodReachability(
+        "app.First.entry", *located["app.First.entry"],
+        "app.Second.otherOutput", *located["app.Second.otherOutput"], "low",
+    )
+
+    flows = materialize_call_graph_flows(
+        methods, endpoints, calls, repo_root=tmp_path, source_paths=list(sources),
+        reachability=[relation],
+    )
+
+    assert flows == []
+
+
+def _boundary_project(root: Path):
+    files = {
+        "orders/src/main/java/com/a/A.java": (
+            "package com.a;\nclass A {\n  void entry() { com.b.B.relay(); }\n"
+            "  static void out() { kafka.send(); }\n}\n"
+        ),
+        "billing/src/main/java/com/b/B.java": (
+            "package com.b;\nclass B {\n  static void relay() { com.a.A.out(); }\n}\n"
+        ),
+    }
+    for path, text in files.items():
+        (root / path).parent.mkdir(parents=True, exist_ok=True)
+        (root / path).write_text(text)
+    modules = [
+        DiscoveredModule(name, root / name, "maven", None, "application", True, "")
+        for name in ("orders", "billing")
+    ]
+    path_a = "orders/src/main/java/com/a/A.java"
+    endpoints = [
+        MessageEndpoint(
+            id=identifier, role=role, system=system, topic=topic, topic_dynamic=False,
+            source="code", framework="test", path=path_a, start_line=line, end_line=line,
+            snippet=topic, message_type="T" if system == "kafka" else None,
+            module="orders", qualified_name="com.a.A",
+        )
+        for identifier, role, system, topic, line in (
+            ("in", "serve", "rest", "POST /x", 3), ("out", "produce", "kafka", "t", 4),
+        )
+    ]
+    methods = materialize_integration_methods(root, endpoints, list(files), modules)
+    return methods, endpoints, modules, files
+
+
+def test_reachability_row_obeys_the_application_boundary_on_every_hop(tmp_path: Path):
+    # Review F1, ADR-78: the only route from `orders` back to `orders` runs
+    # through the `billing` application, which the join refuses; the CodeQL
+    # row must not become a two-endpoint direct flow.
+    methods, endpoints, modules, files = _boundary_project(tmp_path)
+    located = {method.qualified_method: (method.path, method.start_line) for method in methods}
+    calls = [
+        MethodCall("com.a.A.entry", *located["com.a.A.entry"],
+                   "com.b.B.relay", *located["com.b.B.relay"], 3, "exact"),
+        MethodCall("com.b.B.relay", *located["com.b.B.relay"],
+                   "com.a.A.out", *located["com.a.A.out"], 3, "exact"),
+    ]
+    relation = MethodReachability(
+        "com.a.A.entry", *located["com.a.A.entry"], "com.a.A.out", *located["com.a.A.out"],
+        "medium",
+    )
+
+    assert materialize_call_graph_flows(
+        methods, endpoints, calls, repo_root=tmp_path, modules=modules,
+        source_paths=list(files),
+    ) == []
+    assert materialize_call_graph_flows(
+        methods, endpoints, calls, repo_root=tmp_path, modules=modules,
+        source_paths=list(files), reachability=[relation],
+    ) == []
+
+
+def test_reachability_row_obeys_the_hop_limit(tmp_path: Path):
+    # Review F1, ADR-78: a route longer than `max_hops` is not a flow, whether
+    # the join or a CodeQL row proposes it.
+    sources = {
+        "app/Chain.java": """package app; public class Chain {
+  public void entry() { a(); }
+  void a() { b(); }
+  void b() { output(); }
+  void output() {}
+}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    located = {method.qualified_method: (method.path, method.start_line) for method in methods}
+    chain = ["app.Chain.entry", "app.Chain.a", "app.Chain.b", "app.Chain.output"]
+    calls = [
+        MethodCall(chain[index], *located[chain[index]],
+                   chain[index + 1], *located[chain[index + 1]], 2, "exact")
+        for index in range(len(chain) - 1)
+    ]
+    relation = MethodReachability(
+        chain[0], *located[chain[0]], chain[-1], *located[chain[-1]], "medium",
+    )
+
+    def flows(max_hops: int, rows: list) -> list:
+        return materialize_call_graph_flows(
+            methods, endpoints, calls, repo_root=tmp_path, source_paths=list(sources),
+            max_hops=max_hops, reachability=rows,
+        )
+
+    assert flows(2, []) == []
+    assert flows(2, [relation]) == []
+    assert len(flows(3, [relation])) == 1
