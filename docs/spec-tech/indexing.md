@@ -461,3 +461,19 @@ commits the partial
 snapshot; the code-flow signature stays invalid so a later index retries
 CodeQL. Non-timeout failures from an available executable remain fatal and
 leave the previous successful snapshot intact.
+
+## Call shapes
+
+`tests/test_call_graph_shapes.py` runs one Java fixture per dependency
+shape through the symbol pass in a closed world, as the `source` engine
+does, and checks each target and its confidence. The
+[call-graph coverage plan](../plans/call-graph-coverage.md#2-dependency-shapes)
+defines the rows, their frequency on the reference projects, and the task
+that owns each gap. A shape not delivered is a strict expected failure.
+
+| Status | Shapes |
+|---|---|
+| `covered` | S1 declared receivers, S3 outer-type calls, S5 overloads by argument type, H1 inherited methods, H2 overrides and virtual dispatch, H3 template methods, H4 `super.m()` on the direct parent, H7 interfaces, H8 records, H9 enum constant bodies, H10 external interfaces, G1 and G2 generic supertypes with a concrete type, T1 casts and array elements, F1 lambdas and method references as call sites, F4 JDK callbacks, M1 external dispatch scope, W1 injected fields, W4 `@Async` as a plain call, W5 `@Scheduled`, W6 runners as calls, W7 derived queries, W8 generated implementations |
+| `defect` | S2 static hiding, S4 private homonyms, S6 overloads on one line, H5 grandparent `super.m()`, H6 overloaded `super.m()`, H12 `X.super.m()`, F2 lambda implementations, F3 anonymous subclasses, M2 dispatch out of the visible modules, M3 one type in two modules |
+| `missing` | S7 constructors, S8 constructor and initializer bodies, H11 external superclasses, G3 generic implementations, G4 bounded type variables, T2 and T3 pattern variables, W2 bean narrowing, W3 application events |
+| out of scope | X1 reflection, X2 AOP advice, X3 HTTP and Kafka transitions |

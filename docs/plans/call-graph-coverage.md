@@ -9,7 +9,8 @@ product owner and engine maintainer.
 Baseline: commit `2e42b93` (ADR-71), `source` engine in closed world.
 Each status below comes from a minimal Java fixture run through
 `JavaSymbols.fallback_calls` on 2026-11-03; the fixtures are listed in
-section 6. Frequencies on real projects are not measured yet (task K0).
+section 6. Section 2.9 gives the frequency of each shape on the reference
+projects (task K0).
 
 Parent rules: [ADR-62](../ADR.md#adr-62-attribute-anonymous-class-bodies-to-the-creating-method),
 [ADR-70](../ADR.md#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps),
@@ -55,9 +56,10 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | H6 | `super.m()` with same-arity overloads | `defect` | two `possible` edges instead of one exact edge |
 | H7 | Interfaces: chains, abstract intermediate class, inherited body, `default` and `static` methods | `covered` | fixtures 8, 8b, 15, 16, 17, 41, 50 |
 | H8 | Records implementing an interface | `covered` | fixture 28 |
-| H9 | Enum constant bodies | `missing` | only the abstract declaration is reached |
+| H9 | Enum constant bodies | `covered` | corpus case H9: each body is a `possible` target |
 | H10 | External interface implemented in the sources | `covered` | ADR-71 |
 | H11 | External class extended in the sources (`Thread`, servlet filters) | `missing` | no dispatch to the source override |
+| H12 | `X.super.m()` on a direct superinterface | `defect` | both the default body and the override, `possible` |
 
 ### 2.3 Generics
 
@@ -74,7 +76,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 |---|---|---|---|
 | T1 | Cast, record accessor, Lombok getter, array element | `covered` | fixture 35, existing tests |
 | T2 | Pattern variable of `instanceof Circle c` | `missing` | `c.area()` is not resolved |
-| T3 | Pattern variable of a `switch` pattern | not tested | to add to the fixture corpus |
+| T3 | Pattern variable of a `switch` pattern | `missing` | corpus case T3: `c.area()` is not resolved |
 
 ### 2.5 Functional and implicit implementations
 
@@ -102,9 +104,9 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | W3 | `ApplicationEventPublisher.publishEvent` to `@EventListener` | `missing` | no edge |
 | W4 | `@Async` method | `covered` as a plain call | no asynchronous marker |
 | W5 | Entry points: `@Scheduled` | `covered` | transient trigger |
-| W6 | Entry points: `@PostConstruct`, `CommandLineRunner`, `ApplicationRunner` | not measured | to check in K0 |
+| W6 | Entry points: `@PostConstruct`, `CommandLineRunner`, `ApplicationRunner` | `covered` as calls | their calls are edges; they are no flow roots |
 | W7 | Spring Data derived query | `covered` | unimplemented-contract rule |
-| W8 | Generated implementation (MapStruct, OpenAPI client) | not measured | to check in K0 |
+| W8 | Generated implementation (MapStruct, OpenAPI client) | `covered` | unimplemented-contract rule; none on either project |
 
 ### 2.8 Out of scope
 
@@ -113,6 +115,71 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | X1 | Reflection, `ServiceLoader`, `Class.forName` | Invariant 4: a dynamic target is never guessed. |
 | X2 | AOP advice and proxies (`@Transactional`, aspects) | No business call; the advised method is already the target. |
 | X3 | HTTP and Kafka between services | Flow transitions built by the extractors, not call edges. |
+
+### 2.9 Frequency on the reference projects
+
+`scripts/count_call_shapes.py` counts each shape in the tree-sitter syntax
+tree on 2026-11-03. It skips `.git` and `src/test`. Train-ticket's
+`old-docs/` directory belongs to no build module, so it has its own column.
+A count that needs a type hierarchy matches types by simple name within the
+build module first; it is an estimate. Values separated by `·` follow the
+order of the "Counted" column.
+
+| # | Counted | Train-ticket | `old-docs/` | Lab |
+|---|---|---|---|---|
+| S1 | calls on an explicit receiver | 7333 | 2512 | 237 |
+| S2 | static methods · static imports · static methods hiding an ancestor's | 78 · 75 · 0 | 61 · 5 · 0 | 7 · 0 · 0 |
+| S3 | unqualified calls from a nested type to an outer-type name | 1 | 2 | 0 |
+| S4 | private methods · with a homonym in an ancestor or subtype | 114 · 0 | 127 · 0 | 2 · 0 |
+| S5 | same-arity overload groups | 1 | 19 | 0 |
+| S6 | lines declaring two methods of one name in one owner | 0 | 0 | 0 |
+| S7 | explicit constructors · `new` of a source type · `this(...)`/`super(...)` | 129 · 623 · 4 | 90 · 118 · 36 | 39 · 21 · 14 |
+| S8 | calls in constructors and initializers | 169 | 152 | 16 |
+| H1 | classes extending a source class | 1 | 10 | 4 |
+| H2 | overrides of a source ancestor class's method | 0 | 12 | 4 |
+| H3 | `this.m()` or `m()` calls to an abstract method of the caller's type | 0 | 1 | 1 |
+| H4 | `super.m()` declared by the direct parent | 0 (1 on an external parent) | 4 | 0 |
+| H5 | `super.m()` declared above the direct parent | 0 | 0 | 0 |
+| H6 | `super.m()` with same-arity overloads in the ancestors | 0 | 0 | 0 |
+| H7 | interfaces · `default` methods · `static` interface methods · abstract classes implementing one | 67 · 0 · 0 · 0 | 21 · 0 · 0 · 0 | 8 · 0 · 0 · 0 |
+| H8 | records implementing an interface | 0 | 0 | 0 |
+| H9 | enum constants with a body | 0 | 0 | 0 |
+| H10 | types implementing an external interface | 37 | 27 | 6 |
+| H11 | classes extending an external class | 43 | 19 | 3 |
+| H12 | `X.super.m()` calls | 0 | 0 | 0 |
+| G1 | types implementing a source interface with type arguments | 0 | 0 | 0 |
+| G2 | classes extending a source class with type arguments | 0 | 3 | 4 |
+| G3 | generic types passing a type variable to a source supertype | 0 | 9 | 0 |
+| G4 | bounded type parameters | 0 | 1 | 0 |
+| T1 | calls on a cast · on an array element | 3 · 9 | 8 · 4 | 0 · 0 |
+| T2 | `instanceof` patterns | 0 | 0 | 0 |
+| T3 | `switch` patterns | 0 | 0 | 0 |
+| F1 | lambdas · method references | 5 · 5 | 28 · 4 | 11 · 2 |
+| F2 | estimate: one-method source interfaces with a named implementation | 3 | 9 | 2 |
+| F3 | anonymous classes of a source class · source interface · external type | 0 · 0 · 110 | 0 · 3 · 6 | 0 · 0 · 0 |
+| F4 | anonymous or named `Runnable`/`Callable` implementations | 1 | 4 | 0 |
+| M1 | types implementing an external interface (as H10) | 37 | 27 | 6 |
+| M2 | source supertypes used from another build module | 0 | 0 | 4 |
+| M3 | qualified names declared in two build modules | 1 | 0 | 0 |
+| W1 | `@Autowired`, `@Resource` or `@Inject` fields | 172 | 16 | 0 |
+| W2 | `@Qualifier`, `@Primary`, `@Profile`, `@ConditionalOn*` | 2 | 72 | 0 |
+| W3 | `publishEvent` calls · event listener methods | 0 · 0 | 0 · 0 | 0 · 0 |
+| W4 | `@Async` methods | 1 | 0 | 0 |
+| W5 | `@Scheduled` methods | 0 | 0 | 1 |
+| W6 | `@PostConstruct` methods · runner implementations | 2 · 21 | 2 · 0 | 0 · 1 |
+| W7 | repository interfaces · derived query methods | 27 · 79 | 0 · 0 | 3 · 1 |
+| W8 | `@Mapper` interfaces · `@Generated` types | 0 · 0 | 0 · 0 | 0 · 0 |
+| X1 | reflection and `ServiceLoader` calls | 0 | 17 | 0 |
+| X2 | `@Aspect` types · `@Transactional` annotations | 0 · 17 | 3 · 0 | 0 · 2 |
+| X3 | not a call shape: extractor facts | n/a | n/a | n/a |
+
+F2 cannot be counted syntactically: whether a lambda implements a source
+interface needs its target type. The row counts the interfaces it could
+implement instead. On train-ticket the frequent shapes are plain receiver
+calls, constructor-side calls (S7, S8), external supertypes (H10, H11),
+anonymous classes of external types (F3, mostly `WebMvcConfigurerAdapter`
+and `ParameterizedTypeReference`), injected fields and repositories.
+The inheritance, `super`, generic and pattern shapes are rare or absent.
 
 ## 3. Invariants
 
@@ -153,11 +220,12 @@ shapes and their status.
 
 Exclude static and private methods from the dispatch index (S2, S4).
 Resolve `super.m()` through all ancestors of the direct parent and select
-the overload by argument type (H5, H6). Key methods by declaration node,
+the overload by argument type (H5, H6). Bind `X.super.m()` to the body
+of `X` (H12, found by K1). Key methods by declaration node,
 not by line, so two methods on one line stay distinct (S6).
 
 - Files: `src/systemlens/indexing/java_symbols.py`, K1 corpus.
-- Acceptance: the five cases pass; train-ticket flows hold.
+- Acceptance: the cases of these six rows pass; train-ticket flows hold.
 
 ### K3. Lower the confidence of implicit implementations (lot 2)
 
@@ -249,14 +317,14 @@ a train-ticket copy with both engines, compared with
 ## 6. Review fixtures
 
 The fixtures of the 2026-11-03 review are in the session scratchpad and
-are not kept. K1 rebuilds them from this list, one class set per row of
-section 2, with every method on its own line so S6 does not mask a
-result. Rough text counts on train-ticket, to be replaced by K0: about 40
-anonymous classes, 41 subclasses of JDK or Spring classes, 23
-`@PostConstruct` or runner entry points, one `super.m()` call and no
-`publishEvent` call.
+are not kept. K1 rebuilt them in `tests/test_call_graph_shapes.py`, one
+case per row of section 2, with every method on its own line so S6 does
+not mask a result. Section 2.9 replaces the rough text counts of the
+review with syntax-tree counts.
 
 ## 7. Delivery record
 
 | ID | Outcome |
 |---|---|
+| K0 | `delivered` on 2026-11-03. `scripts/count_call_shapes.py` fills section 2.9 for train-ticket, its `old-docs/` and the lab. Verification: the script ran read-only on both trees. Deviation: F2 is an estimate; S2, S4 and the `super` rows count only types resolved by simple name. |
+| K1 | `delivered` on 2026-11-03. `tests/test_call_graph_shapes.py` has 50 cases over every row of sections 2.1 to 2.7; each `defect` and `missing` row is a strict expected failure naming its task. `docs/spec-tech/indexing.md` lists the shapes. Deviations: H9 is `covered` (the review read the two bodies, both named `Op.run`, as one edge); T3 is `missing`; W6 and W8 are `covered` as calls; new row H12, a `defect` assigned to K2. |
