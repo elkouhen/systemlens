@@ -71,6 +71,17 @@ index replaces those flows after reconciliation and sets the status to
 `complete`. A missing or partial code-flow signature causes the next index to
 retry the interprocedural stage.
 
+The flow stage unsets `code_flow_signature` and sets
+`code_flow_snapshot_status=partial` before its first checkpoint, whatever the
+engine. A run that stops after any checkpoint, including the call-graph
+checkpoint, therefore publishes new file hashes with a snapshot marked
+`partial`. The next incremental index runs the flow stage again while the
+status is `partial`, even when no file changed.
+
+Before that first checkpoint, the stage also drops the persisted flows that
+name a deleted Java file or a purged endpoint, so they cannot survive an
+interrupted run. The cost is one read of the flow table per index.
+
 Every persisted and provisional `code_flows` snapshot has unique flow IDs.
 Collision handling preserves the first stable ID and adds a deterministic
 content-derived suffix to later colliding candidates. This rule applies before

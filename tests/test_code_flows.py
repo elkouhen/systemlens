@@ -1626,6 +1626,81 @@ def test_codeql_timeout_commits_partial_snapshot_and_runs_post_processing(
     assert any("délai dépassé" in message for message in progress)
 
 
+_CHECKPOINT_CONSUMER = """package com.example.app;
+
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.web.client.RestTemplate;
+
+public class {name} {{
+    private final RestTemplate restTemplate;
+
+    public {name}(RestTemplate restTemplate) {{ this.restTemplate = restTemplate; }}
+
+    @KafkaListener(topics = "{topic}")
+    public void on(String payload) {{
+        restTemplate.postForObject("http://payment-service/{route}", payload, String.class);
+    }}
+}}
+"""
+
+
+def test_crash_after_call_graph_checkpoint_makes_next_index_retry_flows(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # Review I1 (2026-11-03), ADR-7 and ADR-37: a run that stops after a
+    # call-graph checkpoint must leave the flow signature unset, so the next
+    # incremental index retries the flow stage; a flow of a deleted file must
+    # not survive the checkpoint.
+    repo = tmp_path / "repo"
+    app_dir = repo / "app"
+    app_dir.mkdir(parents=True)
+    (repo / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion>"
+        "<groupId>com.example</groupId><artifactId>orders</artifactId>"
+        "<version>1.0.0</version></project>",
+        encoding="utf-8",
+    )
+    for name, topic, route in (("Orders", "orders", "charge"), ("Refunds", "refunds", "refund")):
+        (app_dir / f"{name}.java").write_text(
+            _CHECKPOINT_CONSUMER.format(name=name, topic=topic, route=route), encoding="utf-8"
+        )
+
+    with Store(repo) as store:
+        index_repo(repo, Config(), store, full=True)
+        assert {flow.path for flow in store.all_code_flows()} == {
+            "app/Orders.java", "app/Refunds.java",
+        }
+        assert store.get_meta("code_flow_signature")
+
+    (app_dir / "Refunds.java").unlink()
+    original_checkpoint = Store.commit_checkpoint
+
+    def crash_after_checkpoint(self: Store) -> None:
+        original_checkpoint(self)
+        raise KeyboardInterrupt("simulated crash after the first checkpoint")
+
+    monkeypatch.setattr(Store, "commit_checkpoint", crash_after_checkpoint)
+    with Store(repo) as store:
+        try:
+            index_repo(repo, Config(), store)
+        except KeyboardInterrupt:
+            pass
+        else:  # pragma: no cover - the patch always raises
+            raise AssertionError("the simulated crash did not happen")
+    monkeypatch.setattr(Store, "commit_checkpoint", original_checkpoint)
+
+    with Store(repo, readonly=True) as store:
+        assert store.get_meta("code_flow_signature") is None
+        assert store.get_meta("code_flow_snapshot_status") == "partial"
+        assert {flow.path for flow in store.all_code_flows()} <= {"app/Orders.java"}
+
+    with Store(repo) as store:
+        index_repo(repo, Config(), store)
+        assert {flow.path for flow in store.all_code_flows()} == {"app/Orders.java"}
+        assert store.get_meta("code_flow_signature")
+        assert store.get_meta("code_flow_snapshot_status") == "complete"
+
+
 def test_real_codeql_database_creation_timeout_is_soft_boundary(
     tmp_path: Path, monkeypatch
 ) -> None:

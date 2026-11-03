@@ -511,6 +511,8 @@ def _index_repo(
         or explicit_engine
         or refresh_codeql_view
         or store.get_meta("code_flow_signature") != flow_signature
+        # A run stopped after a checkpoint leaves a partial snapshot; retry.
+        or store.get_meta("code_flow_snapshot_status") == "partial"
     )
     if should_index_flows:
         stage_result = run_call_graph_stage(

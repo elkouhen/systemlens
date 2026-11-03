@@ -12,7 +12,7 @@ import hashlib
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Callable, Protocol, Sequence
+from typing import Callable, Mapping, Protocol, Sequence
 
 from systemlens.callgraph.engine import CallGraphEngine, CallGraphSession, EngineRequest
 from systemlens.callgraph.model import (
@@ -176,6 +176,37 @@ class CallGraphStageResult:
     timed_out: bool
 
 
+def _mark_flow_snapshot_in_progress(
+    store: Store,
+    current_hashes: Mapping[str, str],
+    endpoints: Sequence[MessageEndpoint],
+) -> None:
+    """Make every checkpoint of this stage an explicitly partial snapshot.
+
+    The stage commits intermediate checkpoints (ADR-37). Until its final
+    reconciliation, the flow snapshot is not current: the signature stays
+    unset and the status says ``partial``, so a run that stops after any
+    checkpoint makes the next index retry the stage (ADR-7, ADR-37). Flows
+    that name a deleted file or a purged endpoint are dropped before the
+    first checkpoint, so they cannot survive a crash.
+    """
+    store.delete_meta("code_flow_signature")
+    store.set_meta("code_flow_snapshot_status", "partial")
+    endpoint_ids = {endpoint.id for endpoint in endpoints}
+    persisted = store.all_code_flows()
+    surviving = [
+        flow for flow in persisted
+        if flow.path in current_hashes
+        and all(
+            (not step.path.endswith(".java") or step.path in current_hashes)
+            and (step.endpoint_id is None or step.endpoint_id in endpoint_ids)
+            for step in flow.steps
+        )
+    ]
+    if len(surviving) != len(persisted):
+        store.replace_code_flows(surviving)
+
+
 def run_call_graph_stage(
     *,
     store: Store,
@@ -215,6 +246,7 @@ def run_call_graph_stage(
     codeql_timed_out = False
     timer.begin("flows", "→ Indexation : matérialisation des flux de code...")
     all_endpoints = store.all_endpoints()
+    _mark_flow_snapshot_in_progress(store, current_hashes, all_endpoints)
     scheduler_triggers = scheduled_trigger_endpoints(
         repo_root, list(current_hashes), all_endpoints, relation_modules
     )
