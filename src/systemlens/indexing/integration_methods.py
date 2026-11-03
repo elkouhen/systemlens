@@ -192,6 +192,35 @@ def scheduled_trigger_endpoints(
     return triggers
 
 
+def declared_parameter_types(declaration, source: bytes) -> tuple[str, ...] | None:
+    """Parameter types of a method declaration as written, or ``None``.
+
+    This is the ``parameter_types`` signature persisted for each method; the
+    symbol pass uses it to tell apart declarations that share a line.
+    """
+    parameter_node = declaration.child_by_field_name("parameters")
+    parameters = [
+        child for child in parameter_node.named_children
+        if child.type in {"formal_parameter", "spread_parameter"}
+    ] if parameter_node is not None else []
+    parameter_type_nodes = [item.child_by_field_name("type") for item in parameters]
+    if not all(parameter_type_nodes):
+        return None
+    declared_types = []
+    for item, type_node in zip(parameters, parameter_type_nodes, strict=True):
+        assert type_node is not None
+        dimensions = item.child_by_field_name("dimensions")
+        declared_types.append(
+            java_parser.node_text(source, type_node).strip()
+            + ("..." if item.type == "spread_parameter" else "")
+            + (
+                "[]" * java_parser.node_text(source, dimensions).count("[")
+                if dimensions is not None else ""
+            )
+        )
+    return tuple(declared_types)
+
+
 def materialize_integration_methods(
     repo_root: Path, endpoints: list[MessageEndpoint], java_paths: list[str], modules: list[DiscoveredModule]
 ) -> list[IntegrationMethod]:
@@ -266,26 +295,7 @@ def materialize_integration_methods(
                 if parameter_node is not None
                 else "()"
             )
-            parameters = [
-                child for child in parameter_node.named_children
-                if child.type in {"formal_parameter", "spread_parameter"}
-            ] if parameter_node is not None else []
-            parameter_type_nodes = [item.child_by_field_name("type") for item in parameters]
-            parameter_types: tuple[str, ...] | None = None
-            if all(parameter_type_nodes):
-                declared_types = []
-                for item, type_node in zip(parameters, parameter_type_nodes, strict=True):
-                    assert type_node is not None
-                    dimensions = item.child_by_field_name("dimensions")
-                    declared_types.append(
-                        java_parser.node_text(source, type_node).strip()
-                        + ("..." if item.type == "spread_parameter" else "")
-                        + (
-                            "[]" * java_parser.node_text(source, dimensions).count("[")
-                            if dimensions is not None else ""
-                        )
-                    )
-                parameter_types = tuple(declared_types)
+            parameter_types = declared_parameter_types(declaration, source)
             method_id = _method_id(module, path, qualified_method, parameter_signature)
             if method_id in method_ids:
                 # Invalid or generated Java can contain two declarations with

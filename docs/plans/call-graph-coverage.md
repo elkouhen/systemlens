@@ -1,7 +1,7 @@
 # Plan: cover every Java dependency shape in the call graph
 
 Status: validated on 2026-11-03 by the product owner, who kept the lot
-order. Lots 0 and 1 are `open`. Lots 2, 3 and 4 wait for their decision
+order. Lots 0 and 1 are `delivered`. Lots 2, 3 and 4 wait for their decision
 records, validated before any code. Section 7 records each task's state.
 Owner: SystemLens implementer. Reviewers:
 product owner and engine maintainer.
@@ -36,11 +36,11 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | # | Shape | Status | Evidence |
 |---|---|---|---|
 | S1 | Call on a declared receiver: field, local, parameter, `var`, chained return | `covered` | existing tests |
-| S2 | Static call and static import | `defect` | `Base.util()` also reaches `Sub.util()`, which only hides it |
+| S2 | Static call and static import | `covered` | K2: `Base.util()` no longer reaches `Sub.util()`, which only hides it |
 | S3 | Unqualified call, outer class from an inner class | `covered` | fixture 27 |
-| S4 | Private method | `defect` | `Base.go()` also reaches the private `Sub.go()` |
+| S4 | Private method | `covered` | K2: `Base.go()` no longer reaches a homonym `Sub.go()` |
 | S5 | Overload chosen by argument type, including a subtype | `covered` | fixtures 14b, 14c |
-| S6 | Two methods of one type declared on the same line | `defect` | both methods are dropped from the symbol table |
+| S6 | Two methods of one type declared on the same line | `covered` in the symbol pass | K2; the join still locates a target by line (section 7) |
 | S7 | Constructor call `new X(...)`, `this(...)`, `super(...)` | `missing` | constructors are not methods of the graph |
 | S8 | Calls inside a constructor, an initializer or a field initializer | `missing` | these bodies are never callers |
 
@@ -52,14 +52,14 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | H2 | Override on the declared receiver; virtual dispatch over subclasses | `covered` | fixtures 5, 6, 7, 37 |
 | H3 | Template method: `step()` or `this.step()` from the base class | `covered` | fixtures 1, 1b, 19, 42 |
 | H4 | `super.m()` declared by the direct parent | `covered` | fixture 3 |
-| H5 | `super.m()` declared by a grandparent | `defect` | no edge |
-| H6 | `super.m()` with same-arity overloads | `defect` | two `possible` edges instead of one exact edge |
+| H5 | `super.m()` declared by a grandparent | `covered` | K2 |
+| H6 | `super.m()` with same-arity overloads | `covered` | K2: one exact edge |
 | H7 | Interfaces: chains, abstract intermediate class, inherited body, `default` and `static` methods | `covered` | fixtures 8, 8b, 15, 16, 17, 41, 50 |
 | H8 | Records implementing an interface | `covered` | fixture 28 |
 | H9 | Enum constant bodies | `covered` | corpus case H9: each body is a `possible` target |
 | H10 | External interface implemented in the sources | `covered` | ADR-71 |
 | H11 | External class extended in the sources (`Thread`, servlet filters) | `missing` | no dispatch to the source override |
-| H12 | `X.super.m()` on a direct superinterface | `defect` | both the default body and the override, `possible` |
+| H12 | `X.super.m()` on a direct superinterface or an outer class | `covered` | K2: was both the default body and the override, `possible` |
 
 ### 2.3 Generics
 
@@ -328,3 +328,4 @@ review with syntax-tree counts.
 |---|---|
 | K0 | `delivered` on 2026-11-03. `scripts/count_call_shapes.py` fills section 2.9 for train-ticket, its `old-docs/` and the lab. Verification: the script ran read-only on both trees. Deviation: F2 is an estimate; S2, S4 and the `super` rows count only types resolved by simple name. |
 | K1 | `delivered` on 2026-11-03. `tests/test_call_graph_shapes.py` has 50 cases over every row of sections 2.1 to 2.7; each `defect` and `missing` row is a strict expected failure naming its task. `docs/spec-tech/indexing.md` lists the shapes. Deviations: H9 is `covered` (the review read the two bodies, both named `Op.run`, as one edge); T3 is `missing`; W6 and W8 are `covered` as calls; new row H12, a `defect` assigned to K2. |
+| K2 | `delivered` on 2026-11-03. A static or private method answers only for its own type: it enters no ancestor's dispatch index and no homonym implements it (S2, S4). `super.m()` binds to the most specific declaration among the superclass and its ancestors after overload selection; `X.super.m()` binds through interface `X`, or through the superclass of an enclosing class `X` (H5, H6, H12). A method is matched to its declaration node by line, end line and written signature, and anonymous class methods are left out of that match (S6). Verification: the corpus cases of these rows pass, with three more regression cases; ruff, mypy, the default suite and the companion check pass. A fresh `source` index of a train-ticket copy gives the parent's result exactly: 2999 edges (1844 `exact`, 1155 `possible`) and 406 flows, all `potential`/`medium`, with identical edge and flow rows. The lab gives 23 flows and the same 87 edges before and after. Deviations: H12 added to the lot. Remaining limit: two overloads on one line share the locator `(name, path, line)` of `MethodCall`, so the join drops an edge to either; persisted method identities keep their shape, and section 2.9 finds no such line on either project. |

@@ -117,8 +117,20 @@ SHAPES: list[Shape] = [
             Base.util();
           }
         }
-        """, "Use.run", {"Base.util": "exact"},
-        pending="K2: a static method dispatches from the type it hides"),
+        """, "Use.run", {"Base.util": "exact"}),
+    Shape("S2-subclass", """
+        class Base {
+          static void util() {} //@Base.util
+        }
+        class Sub extends Base {
+          static void util() {} //@Sub.util
+        }
+        class Use {
+          void run() { //@Use.run
+            Sub.util();
+          }
+        }
+        """, "Use.run", {"Sub.util": "exact"}),
     Shape("S2-import", {
         f"{_APP}l/Util.java": """
             package p.l;
@@ -156,8 +168,18 @@ SHAPES: list[Shape] = [
         class Sub extends Base {
           private void go() {} //@Sub.go
         }
-        """, "Base.run", {"Base.go": "exact"},
-        pending="K2: a private method dispatches from its homonym in a base class"),
+        """, "Base.run", {"Base.go": "exact"}),
+    Shape("S4-public-homonym", """
+        class Base {
+          private void go() {} //@Base.go
+          void run() { //@Base.run
+            go();
+          }
+        }
+        class Sub extends Base {
+          public void go() {} //@Sub.go
+        }
+        """, "Base.run", {"Base.go": "exact"}),
     Shape("S5", """
         class Base {}
         class Sub extends Base {}
@@ -186,8 +208,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Svc.f": "exact"},
-        note="both overloads share a line; the call graph locates a target by line",
-        pending="K2: methods are keyed by line, so both overloads are dropped"),
+        note="both overloads share a line; the call graph locates a target by line"),
     Shape("S6-anonymous", """
         class Task {
           void run() { Runnable r = new Runnable() { public void run() {} }; } //@Task.run
@@ -198,8 +219,7 @@ SHAPES: list[Shape] = [
             task.run();
           }
         }
-        """, "Use.go", {"Task.run": "exact"},
-        pending="K2: an anonymous method on the same line hides the named one"),
+        """, "Use.go", {"Task.run": "exact"}),
     Shape("S7", """
         class Service {
           Service() {} //@Service.new
@@ -300,8 +320,7 @@ SHAPES: list[Shape] = [
             super.foo();
           }
         }
-        """, "Sub.foo", {"GrandBase.foo": "exact"},
-        pending="K2: super.m() reads only the direct bases"),
+        """, "Sub.foo", {"GrandBase.foo": "exact"}),
     Shape("H6", """
         class Base {
           void foo(String s) {} //@Base.foo.String
@@ -312,8 +331,7 @@ SHAPES: list[Shape] = [
             super.foo(s);
           }
         }
-        """, "Sub.foo", {"Base.foo.String": "exact"},
-        pending="K2: super.m() selects no overload"),
+        """, "Sub.foo", {"Base.foo.String": "exact"}),
     Shape("H7-abstract-intermediate", """
         interface Port {
           void send(); //@Port.send
@@ -375,8 +393,20 @@ SHAPES: list[Shape] = [
             Port.super.ping();
           }
         }
-        """, "Impl.ping", {"Port.ping": "exact"},
-        pending="K2: X.super.m() dispatches like a call on X"),
+        """, "Impl.ping", {"Port.ping": "exact"}),
+    Shape("H12-outer", """
+        class Base {
+          void foo() {} //@Base.foo
+        }
+        class Sub extends Base {
+          void foo() {} //@Sub.foo
+          class Inner {
+            void run() { //@Inner.run
+              Sub.super.foo();
+            }
+          }
+        }
+        """, "Inner.run", {"Base.foo": "exact"}),
     Shape("H8", """
         interface Named {
           String name(); //@Named.name

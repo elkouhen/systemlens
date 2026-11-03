@@ -15,6 +15,7 @@ from tree_sitter import Node
 from systemlens.discovery.java import parser
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.module_inventory import ModuleDependency
+from systemlens.indexing.integration_methods import declared_parameter_types
 from systemlens.callgraph.model import MethodCall
 
 
@@ -122,6 +123,9 @@ class _Method:
     # Erased simple type names as written, to match an override whose
     # parameter type comes from an external wildcard import.
     written: tuple[str, ...] = ()
+    # A static or private method binds to its own declaration: no subtype
+    # overrides it and it implements no ancestor's contract.
+    binds_statically: bool = False
 
 
 class JavaSymbols:
@@ -135,6 +139,8 @@ class JavaSymbols:
         self.types: dict[str, list[tuple[str, Node]]] = defaultdict(list)
         self.path_modules: dict[str, str] = {}
         self.bases: dict[tuple[str, str], set[tuple[str, str]]] = defaultdict(set)
+        # The source superclass of a class, the type ``super`` names.
+        self.superclasses: dict[tuple[str, str], set[tuple[str, str]]] = defaultdict(set)
         self.methods: dict[str, _Method] = {}
         self.by_owner: dict[tuple[str, str, int, str], list[_Method]] = defaultdict(list)
         self.dispatch: dict[tuple[str, str, str, tuple[str | None, ...]], list[_Method]] = defaultdict(list)
@@ -217,7 +223,9 @@ class JavaSymbols:
                     self.types[f"{outer}.{name}" if outer else name].append((path, node))
             declarations[path] = defaultdict(list)
             for node in nodes:
-                if node.type == "method_declaration":
+                # An anonymous class method is no indexed method: its body
+                # belongs to the method creating the instance.
+                if node.type == "method_declaration" and not parser.is_anonymous_member(node):
                     key = (self.owner(path, node), parser.declaration_name(node, source) or "", node.start_point.row + 1)
                     declarations[path][key].append(node)
         for owner, locations in self.types.items():
@@ -241,6 +249,10 @@ class JavaSymbols:
                                     self.bases[(owner, self.path_modules.get(path, ""))].add(
                                         (base, base_module)
                                     )
+                                    if child.type == "superclass":
+                                        self.superclasses[(owner, self.path_modules.get(path, ""))].add(
+                                            (base, base_module)
+                                        )
                             elif base != owner:
                                 type_key = (owner, self.path_modules.get(path, ""))
                                 self.external_bases[type_key].add(base)
@@ -256,6 +268,15 @@ class JavaSymbols:
                 name = method.qualified_method.rsplit(".", 1)[-1]
                 owner = method.qualified_method.rsplit(".", 1)[0]
                 matching = declarations[path].get((owner, name, method.start_line), [])
+                if len(matching) > 1:
+                    # Several declarations on one line: the persisted end
+                    # line and written signature identify the node (S6).
+                    matching = [
+                        node for node in matching
+                        if node.end_point.row + 1 == method.end_line
+                        and method.parameter_types is not None
+                        and declared_parameter_types(node, source) == method.parameter_types
+                    ]
                 if len(matching) != 1:
                     continue
                 node = matching[0]
@@ -283,14 +304,18 @@ class JavaSymbols:
                         resolved_type += "[]" * parser.node_text(source, dimensions).count("[")
                     parameter_types.append(resolved_type)
                     written.append(_written_type(source, parameter))
+                modifiers = parser.modifiers_node(node)
                 info = _Method(
                     method, method.module, owner, node, tuple(parameter_types),
                     node.child_by_field_name("body") is not None, tuple(written),
+                    bool(modifiers is not None and {"static", "private"} & set(
+                        parser.node_text(source, modifiers).split()
+                    )),
                 )
                 self.methods[method.id] = info
                 self.by_owner[(owner, name, len(parameter_types), method.module)].append(info)
                 if info.concrete and all(value is not None for value in info.parameters):
-                    for base_owner, base_module in self.ancestors(owner, info.module):
+                    for base_owner, base_module in self._dispatch_owners(info):
                         self.dispatch[(base_owner, base_module, name, info.parameters)].append(info)
 
         self._complete_override_signatures()
@@ -316,7 +341,10 @@ class JavaSymbols:
         resolved type and on the written simple name of every unresolved one.
         """
         for info in list(self.methods.values()):
-            if not info.concrete or all(value is not None for value in info.parameters):
+            if (
+                not info.concrete or info.binds_statically
+                or all(value is not None for value in info.parameters)
+            ):
                 continue
             name = info.method.qualified_method.rsplit(".", 1)[-1]
             signatures = {
@@ -338,6 +366,16 @@ class JavaSymbols:
             info.parameters = next(iter(signatures))
             for base_owner, base_module in self.ancestors(info.owner, info.module):
                 self.dispatch[(base_owner, base_module, name, info.parameters)].append(info)
+
+    def _dispatch_owners(self, info: _Method) -> set[tuple[str, str]]:
+        """The types whose contract ``info`` can implement.
+
+        A static method only hides an ancestor's homonym and a private one
+        is not inherited: both answer only for their own type (S2, S4).
+        """
+        if info.binds_statically:
+            return {(info.owner, info.module)}
+        return self.ancestors(info.owner, info.module)
 
     def _index_inherited_implementations(self) -> None:
         """Associate inherited public bodies with contracts on source subtypes."""
@@ -459,6 +497,10 @@ class JavaSymbols:
         return self._ancestors[key]
 
     def implementations(self, contract: _Method) -> list[_Method]:
+        if contract.binds_statically:
+            # No subtype body, even a homonym, overrides a static or
+            # private method.
+            return [contract] if contract.concrete else []
         name = contract.method.qualified_method.rsplit(".", 1)[-1]
         if not any(parameter is None for parameter in contract.parameters):
             return self.dispatch.get((contract.owner, contract.module, name, contract.parameters), [])
@@ -805,8 +847,11 @@ class JavaSymbols:
         if depth > 16:
             return None
         source = self.units[info.method.path].source
-        if receiver is None or receiver.type in {"this", "super"}:
+        if receiver is None or receiver.type == "this":
             return info.owner
+        if receiver.type == "super":
+            superclass = self._superclass(info.owner, info.module)
+            return superclass[0] if superclass is not None else None
         if receiver.type == "identifier":
             name = parser.node_text(source, receiver)
             declared = self.variable_type(info, name, invocation)
@@ -1213,6 +1258,52 @@ class JavaSymbols:
         self._external_targets[key] = targets
         return targets
 
+    def _superclass(self, owner: str, module: str) -> tuple[str, str] | None:
+        """The one source superclass of a class, if it has one."""
+        superclasses = self.superclasses.get((owner, module), set())
+        return next(iter(superclasses)) if len(superclasses) == 1 else None
+
+    def _super_base(
+        self, info: _Method, receiver: Node, receiver_type: str,
+    ) -> tuple[str, str] | None:
+        """The type whose members ``super.m()`` or ``X.super.m()`` names.
+
+        ``super`` names the caller's superclass. ``X.super`` names ``X`` when
+        ``X`` is an interface the caller implements, and the superclass of
+        ``X`` when it is an enclosing class. ``None`` when that type is not a
+        unique source type.
+        """
+        if receiver.type == "super":
+            return self._superclass(info.owner, info.module)
+        locations = self._type_candidates(receiver_type, info.method.path)
+        if len(locations) != 1:
+            return None
+        module = self.path_modules.get(locations[0][0], info.module)
+        if locations[0][1].type == "interface_declaration":
+            return receiver_type, module
+        return self._superclass(receiver_type, module)
+
+    def _super_target(
+        self, base: tuple[str, str], name: str, arity: int,
+        argument_types: tuple[str | None, ...] | None,
+    ) -> list[IntegrationMethod]:
+        """The body a ``super`` call invokes: no dispatch, one declaration.
+
+        Java binds ``super.m()`` to the most specific declaration among
+        ``base`` and its ancestors, grandparents included, after overload
+        selection by argument type (H5, H6). A private ancestor method is
+        not inherited. An abstract or ambiguous result reaches nothing.
+        """
+        contracts = self._select_overload([
+            candidate for owner, module in self.ancestors(*base)
+            for candidate in self.by_owner.get((owner, name, arity, module), [])
+            if not (candidate.binds_statically and "private" in self._modifiers(candidate))
+        ], argument_types)
+        if len({candidate.parameters for candidate in contracts}) != 1:
+            return []
+        declaration = self._most_specific(contracts)
+        return [declaration.method] if declaration is not None and declaration.concrete else []
+
     def _modifiers(self, info: _Method) -> set[str]:
         modifiers = parser.modifiers_node(info.node)
         return set(parser.node_text(self.units[info.method.path].source, modifiers).split()) if modifiers else set()
@@ -1309,13 +1400,14 @@ class JavaSymbols:
                 pruned = False
                 external = False
                 declaration: _Method | None = None
-                if receiver is not None and receiver.type == "super":
-                    direct_bases = self.bases.get((info.owner, info.module), set())
-                    targets = [
-                        candidate.method
-                        for base_owner, base_module in direct_bases
-                        for candidate in self.by_owner.get((base_owner, name, arguments_count, base_module), [])
-                    ]
+                if receiver is not None and (
+                    receiver.type == "super" or any(child.type == "super" for child in invocation.children)
+                ):
+                    super_base = self._super_base(info, receiver, receiver_type)
+                    if super_base is None:
+                        continue
+                    receiver_type = super_base[0]
+                    targets = self._super_target(super_base, name, arguments_count, argument_types)
                 else:
                     targets, pruned, declaration = self._candidate_targets(
                         receiver_type, name, arguments_count, info.module, info.method.path,
