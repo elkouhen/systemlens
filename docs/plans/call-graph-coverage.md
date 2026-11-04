@@ -60,6 +60,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | H10 | External interface implemented in the sources | `covered` | ADR-71 |
 | H11 | External class extended in the sources (`Thread`, servlet filters) | `missing` | no dispatch to the source override |
 | H12 | `X.super.m()` on a direct superinterface or an outer class | `covered` | K2: was both the default body and the override, `possible` |
+| H13 | A superclass method wins over an interface `default` (class wins) | `covered` | review S12 |
 
 ### 2.3 Generics
 

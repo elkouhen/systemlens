@@ -458,6 +458,40 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Inner.run", {"Base.foo": "exact"}),
+    Shape("H13", """
+        interface I {
+          default void go() {} //@I.go
+        }
+        abstract class Abs {
+          public void go() {} //@Abs.go
+        }
+        class C extends Abs implements I {
+        }
+        class Use {
+          void run(I i) { //@Use.run
+            i.go();
+          }
+        }
+        """, "Use.run", {"Abs.go": "exact"},
+        note="review S12: the superclass method wins over the interface default"),
+    Shape("H13-default-still-inherited", """
+        interface I {
+          default void go() {} //@I.go
+        }
+        abstract class Abs {
+          public void go() {} //@Abs.go
+        }
+        class C extends Abs implements I {
+        }
+        class D implements I {
+        }
+        class Use {
+          void run(I i) { //@Use.run
+            i.go();
+          }
+        }
+        """, "Use.run", {"Abs.go": "possible", "I.go": "possible"},
+        note="the default stays a target while one class inherits it"),
     Shape("H8", """
         interface Named {
           String name(); //@Named.name

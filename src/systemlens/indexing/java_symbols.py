@@ -373,6 +373,7 @@ class JavaSymbols:
 
         self._complete_override_signatures()
         self._index_inherited_implementations()
+        self._drop_unreachable_defaults()
         # ``dispatch`` is complete: index its signatures by name and arity so
         # a generic contract reads only the candidates it can match.
         self._dispatch_signatures: dict[
@@ -464,6 +465,92 @@ class JavaSymbols:
                             if info not in self.dispatch[key]:
                                 self.dispatch[key].append(info)
                             self.inherited_dispatch[(base_owner, base_module)].add(info.method.id)
+
+    def _drop_unreachable_defaults(self) -> None:
+        """Remove interface default bodies that no source type inherits.
+
+        Java's "class wins" rule: a method a class declares or inherits from
+        its superclass chain, abstract or concrete, takes precedence over an
+        interface default, and a more specific interface's declaration
+        overrides a default of its superinterface (S12). A default body
+        stays a target when some source class, record or enum inherits it,
+        when an anonymous class may, when no source type implements the
+        interface at all, or when its signature is not fully resolved.
+        """
+        defaults = [
+            info for info in self.methods.values()
+            if info.concrete and not info.binds_statically
+            and None not in info.parameters
+            and self._owner_kind(info) == "interface_declaration"
+        ]
+        if not defaults:
+            return
+        classes = [
+            (owner, self.path_modules.get(path, ""))
+            for owner, locations in self.types.items()
+            for path, node in locations
+            if node.type in {"class_declaration", "record_declaration", "enum_declaration"}
+        ]
+        anonymous = {
+            (supertype, module)
+            for supertype in self.anonymous_supertypes
+            for path, _node in self.types.get(supertype, [])
+            for module in [self.path_modules.get(path, "")]
+        }
+        for info in defaults:
+            key = (info.owner, info.module)
+            if any(key in self.ancestors(*supertype) for supertype in anonymous):
+                continue
+            users = [user for user in classes if key in self.ancestors(*user)]
+            if not users or any(self._inherits_default(user, info) for user in users):
+                continue
+            name = info.method.qualified_method.rsplit(".", 1)[-1]
+            for (_owner, _module, method_name, parameters), targets in self.dispatch.items():
+                if method_name == name and parameters == info.parameters and info in targets:
+                    targets.remove(info)
+            for implemented in self.inherited_dispatch.values():
+                implemented.discard(info.method.id)
+
+    @staticmethod
+    def _owner_kind(info: _Method) -> str | None:
+        owner_node = parser.enclosing(info.node, *_TYPES)
+        return owner_node.type if owner_node is not None else None
+
+    def _inherits_default(self, user: tuple[str, str], default: _Method) -> bool:
+        """Whether the class ``user`` gets ``default``'s body (JLS 8.4.8)."""
+        name = default.method.qualified_method.rsplit(".", 1)[-1]
+        arity = len(default.parameters)
+
+        def declares(owner: tuple[str, str]) -> bool | None:
+            """Whether ``owner`` declares the signature; ``None`` if unknown."""
+            declarations = self.by_owner.get((owner[0], name, arity, owner[1]), [])
+            if any(candidate.parameters == default.parameters for candidate in declarations):
+                return True
+            if any(None in candidate.parameters for candidate in declarations):
+                return None
+            return False
+
+        current: tuple[str, str] | None = user
+        seen: set[tuple[str, str]] = set()
+        while current is not None and current not in seen:
+            seen.add(current)
+            verdict = declares(current)
+            if verdict is None:
+                return True
+            if verdict:
+                return False
+            current = self._superclass(*current)
+        defaulting = (default.owner, default.module)
+        for interface in self.ancestors(*user):
+            if interface == defaulting or defaulting not in self.ancestors(*interface):
+                continue
+            verdict = declares(interface)
+            if verdict is None:
+                return True
+            if verdict:
+                # A subinterface redeclares it: its declaration wins.
+                return False
+        return True
 
     def owner(self, path: str, node: Node) -> str:
         names: list[str] = []
