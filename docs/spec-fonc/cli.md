@@ -6,7 +6,7 @@ Parent: [Functional specification](../SPEC-FONC.md).
 
 | Command | Behaviour |
 |---|---|
-| `systemlens init` | Creates `.systemlens/config.yml`; it never overwrites an existing file. |
+| `systemlens init [--profile default\|codeql]` | Creates `.systemlens/config.yml`; it never overwrites an existing file. `--profile default` (the default) selects the `source` call-graph engine and needs no external tool; `--profile codeql` selects the `codeql` engine and warns when the `codeql` CLI is not on `PATH`. An unknown profile exits with code 2 and writes nothing. |
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
 | `systemlens index` | Incrementally indexes architecture facts. See [indexing options and output](#indexing-options-and-output). |

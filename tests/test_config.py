@@ -60,3 +60,59 @@ def test_load_config_rejects_ambiguous_strategy_keys(tmp_path: Path) -> None:
 
     with pytest.raises(ConfigError, match="ne peuvent pas être utilisés ensemble"):
         load_config(tmp_path)
+
+
+def test_init_default_profile_selects_the_source_engine(tmp_path: Path) -> None:
+    config = load_config(init_config(tmp_path).parent.parent)
+
+    assert config.call_graph_engine == "source"
+    assert config.codeql_enabled is False
+
+
+def test_init_codeql_profile_selects_the_codeql_engine(tmp_path: Path) -> None:
+    path = init_config(tmp_path, "codeql")
+    config = load_config(tmp_path)
+
+    assert "codeql: true" in path.read_text()
+    assert config.call_graph_engine == "codeql"
+    assert config.codeql_enabled is True
+    assert config.strategy == "default", "a profile only chooses the engine"
+
+
+def test_init_rejects_an_unknown_profile_without_writing(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="Profil d'initialisation invalide"):
+        init_config(tmp_path, "fast")
+
+    assert not (tmp_path / ".systemlens" / "config.yml").exists()
+
+
+def test_init_command_takes_a_profile_and_warns_without_codeql(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from typer.testing import CliRunner
+
+    from systemlens.delivery import cli
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli.shutil, "which", lambda _name: None)
+    result = CliRunner().invoke(cli.app, ["init", "--profile", "codeql"])
+
+    assert result.exit_code == 0, result.output
+    assert "(profil codeql)" in result.output
+    assert "CLI codeql introuvable" in result.output
+    assert load_config(tmp_path).call_graph_engine == "codeql"
+
+
+def test_init_command_rejects_an_unknown_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from typer.testing import CliRunner
+
+    from systemlens.delivery import cli
+
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(cli.app, ["init", "--profile", "fast"])
+
+    assert result.exit_code == 2
+    assert "Profil d'initialisation invalide" in result.output
+    assert not (tmp_path / ".systemlens" / "config.yml").exists()

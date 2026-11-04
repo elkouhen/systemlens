@@ -23,6 +23,12 @@ analysis:
   disabled_extractors: []
 ```
 
+`systemlens init --profile codeql` writes the same file with `codeql: true`
+and `call_graph_engine: codeql`, so every index without a
+`--call-graph-engine` option uses CodeQL. A profile only chooses the
+call-graph engine: the strategy and every other key keep their defaults,
+and the file stays editable afterwards.
+
 `analysis.strategy` (`default` or `strategy1`) is the strategy of every
 indexing pass that has no `--strategy` option, including incremental passes
 and `systemlens web` reindexing. The persisted index profile never overrides

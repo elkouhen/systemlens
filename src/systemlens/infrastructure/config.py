@@ -150,7 +150,16 @@ def load_config(repo_root: Path) -> Config:
     )
 
 
-def init_config(repo_root: Path) -> Path:
+# ``init`` profiles: ``default`` needs no external tool (ADR-66); ``codeql``
+# selects the CodeQL call-graph engine for every index without an option.
+INIT_PROFILES = ("default", "codeql")
+
+
+def init_config(repo_root: Path, profile: str = "default") -> Path:
+    if profile not in INIT_PROFILES:
+        raise ConfigError(
+            f"Profil d'initialisation invalide : {profile!r}. Valeurs : {', '.join(INIT_PROFILES)}."
+        )
     path = config_path(repo_root)
     if path.exists():
         raise ConfigError(f"Une configuration existe déjà : {path}.")
@@ -162,7 +171,9 @@ def init_config(repo_root: Path) -> Path:
         "min_severity": DEFAULT_MIN_SEVERITY,
         "root_path": ".",
         "analysis": {
-            "strategy": "default", "codeql": False, "call_graph_engine": "source",
+            "strategy": "default",
+            "codeql": profile == "codeql",
+            "call_graph_engine": "codeql" if profile == "codeql" else "source",
             "codeql_timeout_seconds": 600,
             "codeql_threads": 0, "codeql_ram_mb": None,
             "codeql_verbosity": None,

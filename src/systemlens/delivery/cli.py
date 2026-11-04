@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal, Optional, cast
@@ -71,7 +72,7 @@ from systemlens.application.flow_diagnostic import diagnose_flows, render_flow_d
 from systemlens.application.indexing_audit import audit_indexing
 from systemlens.application.architecture_projection import project_architecture_graph
 from systemlens.application.audit import assess_architecture, render_audit_json, render_audit_text
-from systemlens.infrastructure.config import ConfigError, init_config, load_config
+from systemlens.infrastructure.config import INIT_PROFILES, ConfigError, init_config, load_config
 from systemlens.application.flow import resolve_topic
 from systemlens.domain.graph import (
     GraphEdge,
@@ -1436,11 +1437,27 @@ def doctor_cmd(json_output: bool = typer.Option(False, "--json")) -> None:
 
 
 @app.command()
-def init() -> None:
+def init(
+    profile: str = typer.Option(
+        "default",
+        "--profile",
+        help=(
+            "Profil de configuration : default (moteur source, aucun outil externe) "
+            "ou codeql (moteur CodeQL, requiert la CLI codeql)."
+        ),
+    ),
+) -> None:
     """Initialiser la configuration .systemlens/config.yml du projet.
 
     L'analyse des sources Java/Spring est entièrement locale et fondée sur AST.
+    Exemples : `systemlens init`, `systemlens init --profile codeql`.
     """
+    if profile not in INIT_PROFILES:
+        typer.echo(
+            f"Profil d'initialisation invalide : {profile!r}. Valeurs : {', '.join(INIT_PROFILES)}.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
     repo_root = Path.cwd()
     if config_path(repo_root).exists():
         typer.echo(
@@ -1449,12 +1466,18 @@ def init() -> None:
         raise typer.Exit(code=1)
 
     try:
-        path = init_config(repo_root)
+        path = init_config(repo_root, profile)
     except ConfigError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
 
-    typer.echo(f"Configuration créée : {path}")
+    typer.echo(f"Configuration créée : {path} (profil {profile}).")
+    if profile == "codeql" and shutil.which("codeql") is None:
+        typer.echo(
+            "CLI codeql introuvable dans le PATH : installez-la avant `systemlens index`, "
+            "ou recréez la configuration avec `--profile default`.",
+            err=True,
+        )
 
 
 @app.command(name="index")

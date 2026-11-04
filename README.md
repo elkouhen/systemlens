@@ -39,8 +39,8 @@ systemlens export microservices --html architecture.html
 Open `architecture.html` to inspect the architecture and call graphs. The
 export also groups indexed contracts and diagnostics. `systemlens index` uses
 the built-in tree-sitter source engine for method-call evidence. Opt in to
-CodeQL with `--call-graph-engine codeql` or `analysis.call_graph_engine` when
-its CLI is installed, and measure the difference on your code with
+CodeQL when its CLI is installed: start with `systemlens init --profile
+codeql`, or pass `--call-graph-engine codeql` to one index, and measure the difference on your code with
 `systemlens analyze compare-engines`.
 
 Choose an interface for the question you need to answer:
