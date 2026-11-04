@@ -24,7 +24,7 @@ Parent: [Functional specification](../SPEC-FONC.md).
 | `systemlens analyze audit [--workspace DIR]` | Reports static architecture risks; `--workspace` analyzes a parent workspace of independently indexed services instead of the current repository. |
 | `systemlens analyze coverage [--root DIR] [--json]` | Reports inventory coverage and unresolved integrations. `persistence` lists MongoDB, JPA, and JDBC with their supported, partial, and unsupported operation counts, every unresolved operation with its reason, and the note that operations are source-level attempts. |
 | `systemlens analyze indexing-issues [--root DIR] [--json]` | Lists unresolved indexing facts. JSON includes source evidence suitable for reviewing proposed heuristics. |
-| `systemlens analyze indexing-audit [--root DIR] [--json]` | Audits twenty distinct indexing-quality controls using only the persisted snapshot. It reports detected gaps such as unresolved endpoints, incomplete flows, ambiguous dispatch and orphaned graph edges, with source evidence when available. |
+| `systemlens analyze indexing-audit [--root DIR] [--json]` | Audits twenty distinct indexing-quality controls using only the persisted snapshot. It reports detected gaps such as unresolved endpoints, incomplete flows, ambiguous dispatch and orphaned graph edges, with source evidence when available. An edge is orphaned only when its caller or callee is neither an integration method nor a persisted call-graph method. |
 | `systemlens analyze call-edge CALLER CALLEE [--module NAME] [--root DIR] [--json]` | Diagnoses why one expected Java call is absent from a flow or graph. See [call-edge diagnosis](#call-edge-diagnosis). |
 | `systemlens analyze call-edges [--module NAME] [--root DIR] [--json]` | Lists every persisted source-backed method-call edge, including edges that do not belong to a reconstructed flow. Without `--module`, it lists all callers. With `--module`, it keeps edges whose caller belongs to that module and preserves cross-module callees. JSON includes caller and callee method facts, source call location, dispatch confidence and whether the edge was inferred. |
 | `systemlens analyze methods [--module NAME] [--root DIR] [--json]` | Lists every persisted Java method fact, including methods that have no persisted call edge or reconstructed flow. `--module` filters by the method's owning module. JSON includes method IDs, qualified names, source paths, line ranges, endpoint anchors, and source-backed method inheritance edges to concrete implementations. |
@@ -281,7 +281,8 @@ read the snapshot's profile, and a change of strategy forces a full refresh.
   through an external wildcard import still match their contract. A call is
   `exact` when one concrete source body can receive it, including the unique
   implementation of an interface; several implementations stay `possible`.
-  A Spring Data query method declared in the sources is a `possible` target.
+  A Spring Data query method declared in the sources is a `possible`,
+  non-inferred target: the receiver type declares it.
   Library methods and unknown argument types stay unresolved.
 - `none` builds no interprocedural path: only same-method flows remain.
 `analysis.codeql_edge_confidence` accepts `exact` or `possible`. The default
@@ -298,6 +299,18 @@ available; other build outputs and build descriptors are excluded.
 [--json]` rebuilds interprocedural flows from the persisted index with two
 engines and reports the flows and call edges both find, those only one finds,
 and confidence changes. It persists nothing. Both engines must be available.
+
+Each engine joins the inputs indexing uses: persisted endpoints, integration
+methods, modules, data operations and module dependencies. A flow is keyed by
+its module, entry method, status and every step, so two routes between the
+same ends stay two flows.
+
+Call edges are compared only between indexed integration methods, which both
+engines share. An edge is keyed by caller, callee, source path and call line;
+its dispatch confidence and `inferred` label are compared as its value.
+`confidence_changes_count` counts the edges whose labels differ. Edges that
+touch a method only one engine models, such as a CodeQL helper, appear under
+`edges_outside_shared_methods` with a count and examples per engine.
 
 `--codeql-progress-html FILE` is an opt-in progress aid: after each completed
 CodeQL project it atomically replaces `FILE` with a graph labelled as

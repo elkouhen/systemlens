@@ -224,6 +224,18 @@ reaches the one abstract declaration no source type implements, such as a
 Spring Data query method, as a `possible` target. The pass drops ambiguous
 overloads while retaining an ambiguous receiver type long enough to apply
 module-scoped interface dispatch.
+
+The join labels an edge `inferred` only when it is a candidate dispatch to a
+concrete body. A call to a declaration without a body, such as the Spring
+Data query method, is named by the receiver type: it stays a non-inferred
+`possible` edge with both engines. When the engine already returned that
+declaration, the symbol pass does not add it a second time.
+
+A flow's reason names the weakest hop of its route, whichever engine built
+it. An inferred dispatch candidate gives "A source-declared Java dispatch
+fallback ...", an inferred signature join gives the signature-join reason,
+a `possible` declared edge gives the virtual-dispatch reason, and a route of
+`exact` edges gives "The call graph resolved a static call path ...".
 A static or private method binds to its own declaration: it implements no
 ancestor's contract, and no subtype homonym is a candidate for it.
 `super.m()` binds without dispatch to the most specific declaration among

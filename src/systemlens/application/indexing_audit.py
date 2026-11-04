@@ -280,7 +280,11 @@ def audit_indexing(inventory: ArchitectureInventory) -> dict[str, object]:
         )
     ])
 
-    method_ids = {method.id for method in methods}
+    # A persisted edge may join engine methods that are not integration
+    # methods (CodeQL helpers); both node sets are persisted graph nodes.
+    method_ids = {method.id for method in methods} | {
+        method.id for method in inventory.call_graph_methods
+    }
     add_many("orphan_call_graph_edge", lambda: [
         _issue(
             "orphan_call_graph_edge", "warning",

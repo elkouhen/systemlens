@@ -1855,7 +1855,8 @@ class Generator {
     ]
     # The receiver's declared class owns the concrete method: an exact call.
     assert flows[0].confidence == "medium"
-    assert "source-declared" in flows[0].reason
+    # It is a static call, not a dispatch fallback (review F14).
+    assert "resolved a static call path" in flows[0].reason
 
     with Store(repo) as store:
         index_repo(repo, Config(codeql_enabled=False, call_graph_engine="none"), store, full=True)

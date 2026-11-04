@@ -1,25 +1,33 @@
 """Compare call-graph engines on one persisted index, without persisting.
 
-Each engine rebuilds interprocedural flows from the same stored endpoints,
-integration methods and modules. The comparison reports the flows and call
-edges that both engines find, and those only one of them finds, so the cost
-of choosing one engine over another is measured on the user's own code.
+Each engine rebuilds interprocedural flows from the same stored inputs as
+indexing and ``flows calculate``: endpoints, integration methods, modules,
+data operations and module dependencies. The comparison reports the flows
+and call edges that both engines find, and those only one of them finds, so
+the cost of choosing one engine over another is measured on the user's own
+code.
+
+Call edges are compared inside the universe both engines share, the indexed
+integration methods. An edge that touches a method only one engine knows,
+such as a CodeQL helper method, is counted apart instead of being reported
+as a difference.
 """
 
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TypeVar
 
+from systemlens.application.flow_calculation import load_persisted_flow_inputs
 from systemlens.callgraph.engine import CallGraphEngine, EngineRequest
-from systemlens.domain.code_flows import CodeFlow
+from systemlens.domain.code_flows import CallGraphEdge, CodeFlow
 from systemlens.indexing.code_flows import CallGraph, materialize_call_graph_flows
-from systemlens.indexing.integration_methods import scheduled_trigger_endpoints
 from systemlens.storage.sqlite import Store
 
 _EXAMPLES = 20
-_EdgeKey = tuple[str, str, int, str]
+# (caller, callee, caller path, call line), with method labels for display.
+_EdgeKey = tuple[str, str, str, int]
 _K = TypeVar("_K")
 
 
@@ -27,13 +35,33 @@ _K = TypeVar("_K")
 class _Run:
     seconds: float
     calls: int
+    flow_count: int
+    flow_confidence: dict[str, int]
     flows: dict[str, str]
+    edge_count: int
     edges: dict[_EdgeKey, str]
+    outside_edge_count: int
+    outside_edges: dict[_EdgeKey, str]
 
 
 def _flow_key(flow: CodeFlow) -> str:
-    first, last = flow.steps[0], flow.steps[-1]
-    return f"{flow.module} · {first.kind} {first.name} → {last.kind} {last.name}"
+    """A flow's full identity: its entry method and every step."""
+    steps = " → ".join(
+        f"{step.kind} {step.name}"
+        + (f" [{step.operation}]" if step.operation else "")
+        + f" ({step.path}:{step.start_line})"
+        for step in flow.steps
+    )
+    return f"{flow.module} · {flow.method} · {flow.status} · {steps}"
+
+
+def _edge_label(edge: CallGraphEdge) -> str:
+    return edge.dispatch_confidence + (" inferred" if edge.inferred else "")
+
+
+def _merge(labels: Mapping[_K, list[str]]) -> dict[_K, str]:
+    """One value per key; several facts on one key stay visible together."""
+    return {key: " + ".join(sorted(values)) for key, values in labels.items()}
 
 
 def _engine_run(
@@ -45,11 +73,9 @@ def _engine_run(
     edge_confidence: str,
 ) -> _Run:
     repo_root = store.repo_root
-    endpoints = store.all_endpoints()
-    methods = store.all_integration_methods()
-    modules = store.all_modules()
+    inputs = load_persisted_flow_inputs(store)
+    methods = inputs.methods
     paths = sorted(store.get_file_hashes())
-    endpoints = [*endpoints, *scheduled_trigger_endpoints(repo_root, paths, endpoints, modules)]
     graphs: list[CallGraph] = []
     started = time.perf_counter()
     with engine.open(EngineRequest(
@@ -59,26 +85,43 @@ def _engine_run(
         calls = session.calls()
         reachability = session.reachability(methods)
     flows = materialize_call_graph_flows(
-        methods, endpoints, calls, repo_root=repo_root, modules=modules,
+        methods, inputs.flow_endpoints, calls, repo_root=repo_root, modules=inputs.modules,
+        operations=inputs.operations,
         source_paths=paths, max_hops=max_hops, codeql_edge_confidence=edge_confidence,
         reachability=reachability, call_graph_sink=graphs.append,
         closed_world=not engine.resolves_types,
         module_dependencies=store.all_module_dependencies(),
     )
     flows = [flow for flow in flows if any(step.kind == "method_call" for step in flow.steps)]
-    names = {method.id: method.qualified_method for method in methods}
-    edges: dict[_EdgeKey, str] = {}
+    # A method is named by its declaration line too, so overloads differ.
+    shared = {method.id: f"{method.qualified_method}:{method.start_line}" for method in methods}
+    names = dict(shared)
+    edges: dict[_EdgeKey, list[str]] = defaultdict(list)
+    outside: dict[_EdgeKey, list[str]] = defaultdict(list)
+    graph_edges = graphs[-1].edges() if graphs else ()
     if graphs:
-        names.update({method.id: method.qualified_method for method in graphs[-1].methods})
-        for edge in graphs[-1].edges():
-            key = (names.get(edge.caller_id, edge.caller_id), edge.path, edge.line,
-                   names.get(edge.callee_id, edge.callee_id))
-            edges[key] = edge.dispatch_confidence
+        names.update({
+            method.id: f"{method.qualified_method}:{method.start_line}"
+            for method in graphs[-1].methods if method.id not in shared
+        })
+    for edge in graph_edges:
+        key = (names.get(edge.caller_id, edge.caller_id), names.get(edge.callee_id, edge.callee_id),
+               edge.path, edge.line)
+        in_shared = edge.caller_id in shared and edge.callee_id in shared
+        (edges if in_shared else outside)[key].append(_edge_label(edge))
+    flow_labels: dict[str, list[str]] = defaultdict(list)
+    for flow in flows:
+        flow_labels[_flow_key(flow)].append(flow.confidence)
     return _Run(
         seconds=round(time.perf_counter() - started, 2),
         calls=len(calls),
-        flows={_flow_key(flow): flow.confidence for flow in flows},
-        edges=edges,
+        flow_count=len(flows),
+        flow_confidence=dict(Counter(flow.confidence for flow in flows)),
+        flows=_merge(flow_labels),
+        edge_count=sum(len(values) for values in edges.values()),
+        edges=_merge(edges),
+        outside_edge_count=sum(len(values) for values in outside.values()),
+        outside_edges=_merge(outside),
     )
 
 
@@ -110,14 +153,24 @@ def compare_engines(
             name: {
                 "seconds": run.seconds,
                 "calls": run.calls,
-                "flows": len(run.flows),
-                "edges": len(run.edges),
-                "flow_confidence": dict(Counter(run.flows.values())),
+                "flows": run.flow_count,
+                "edges": run.edge_count,
+                "edges_outside_shared_methods": run.outside_edge_count,
+                "flow_confidence": run.flow_confidence,
             }
             for name, run in runs.items()
         },
         "flows": _diff(runs[left].flows, runs[right].flows, left, right),
         "edges": _diff(runs[left].edges, runs[right].edges, left, right),
+        # Edges touching a method only one engine models (CodeQL helpers):
+        # outside the shared universe, so never a difference by themselves.
+        "edges_outside_shared_methods": {
+            name: {
+                "count": run.outside_edge_count,
+                "examples": [_label(item) for item in sorted(run.outside_edges, key=str)][:_EXAMPLES],
+            }
+            for name, run in runs.items()
+        },
     }
 
 
@@ -133,12 +186,13 @@ def _diff(a: Mapping[_K, str], b: Mapping[_K, str], left: str, right: str) -> di
             f"{_label(item)} : {a[item]} → {b[item]}"
             for item in common if a[item] != b[item]
         ][:_EXAMPLES],
+        "confidence_changes_count": sum(a[item] != b[item] for item in common),
     }
 
 
 def _label(item: object) -> str:
     if isinstance(item, tuple):
-        caller, path, line, callee = item
+        caller, callee, path, line = item
         return f"{caller} → {callee} ({path}:{line})"
     return str(item)
 
@@ -152,8 +206,10 @@ def render_engine_comparison_text(result: dict[str, object]) -> str:
     lines = ["[comparaison des moteurs de graphe d'appel]"]
     for name, run in runs.items():
         lines.append(
-            f"  {name}: {run['flows']} flux interprocéduraux, {run['edges']} arêtes, "
-            f"{run['calls']} appels moteur, {run['seconds']} s, confiance {run['flow_confidence']}"
+            f"  {name}: {run['flows']} flux interprocéduraux, {run['edges']} arêtes "
+            f"entre méthodes indexées, {run['edges_outside_shared_methods']} arêtes hors de "
+            f"ces méthodes, {run['calls']} appels moteur, {run['seconds']} s, "
+            f"confiance {run['flow_confidence']}"
         )
     for kind, title in (("flows", "Flux"), ("edges", "Arêtes d'appel")):
         section = result[kind]
@@ -162,7 +218,8 @@ def render_engine_comparison_text(result: dict[str, object]) -> str:
         lines.append(
             f"{title} : {section['both']} communs, "
             f"{section[f'only_{left}_count']} seulement {left}, "
-            f"{section[f'only_{right}_count']} seulement {right}."
+            f"{section[f'only_{right}_count']} seulement {right}, "
+            f"{section['confidence_changes_count']} changement(s) de confiance."
         )
         for side in (left, right):
             for item in section[f"only_{side}"]:

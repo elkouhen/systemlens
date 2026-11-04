@@ -1,5 +1,7 @@
 """Reconstruct persisted code flows from independent stored evidence."""
 
+from dataclasses import dataclass
+
 from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
 from systemlens.domain.graph import (
     DEFAULT_REST_TARGET_POLICY,
@@ -13,14 +15,61 @@ from systemlens.indexing.code_flows import (
     materialize_call_graph_flows,
     reconcile_code_flows,
 )
+from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.data_operation_projection import data_operations_from_modules
-from systemlens.domain.module_inventory import module_identity
+from systemlens.domain.data_operations import DataOperation
+from systemlens.domain.models import MessageEndpoint
+from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 from systemlens.indexing.integration_methods import (
     SCHEDULER_TRIGGER_PREFIX,
     scheduled_trigger_endpoints,
 )
 from systemlens.scanner import local_spring_application_names
 from systemlens.storage.sqlite import Store
+
+
+@dataclass(frozen=True)
+class PersistedFlowInputs:
+    """The stored facts every flow reconstruction starts from.
+
+    Indexing, ``flows calculate`` and ``analyze compare-engines`` must join
+    the same methods, endpoints, modules and data operations, or their flow
+    counts diverge (review D1): one loader keeps the two commands aligned.
+    """
+
+    endpoints: list[MessageEndpoint]
+    flow_endpoints: list[MessageEndpoint]
+    methods: list[IntegrationMethod]
+    modules: list[DiscoveredModule]
+    operations: list[DataOperation]
+
+
+def load_persisted_flow_inputs(store: Store) -> PersistedFlowInputs:
+    """Read the flow-construction inputs of a persisted index.
+
+    ``flow_endpoints`` adds the transient scheduler triggers, recovered by
+    re-reading only the Java files of persisted methods that reference one.
+    """
+    endpoints = store.all_endpoints()
+    modules = store.all_modules()
+    # Persisted operation facts drive data steps; an index created before the
+    # table existed is projected from its module inventory until reindexed.
+    operations = store.all_data_operations() or data_operations_from_modules(
+        store.repo_root, modules,
+    )
+    methods = store.all_integration_methods()
+    scheduler_paths = sorted({
+        method.path for method in methods
+        if any(item.startswith(SCHEDULER_TRIGGER_PREFIX) for item in method.input_endpoint_ids)
+    })
+    flow_endpoints = [
+        *endpoints,
+        *scheduled_trigger_endpoints(store.repo_root, scheduler_paths, endpoints, modules),
+    ] if scheduler_paths else endpoints
+    return PersistedFlowInputs(
+        endpoints=endpoints, flow_endpoints=flow_endpoints, methods=methods,
+        modules=modules, operations=operations,
+    )
 
 
 def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
@@ -34,26 +83,10 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
     provided, only input methods owned by that module are reconstructed; the
     global persisted method graph remains available for helper calls.
     """
-    endpoints = store.all_endpoints()
-    modules = store.all_modules()
-    # Persisted operation facts drive data steps; an index created before the
-    # table existed is projected from its module inventory until reindexed.
-    operations = store.all_data_operations() or data_operations_from_modules(
-        store.repo_root, modules,
-    )
+    inputs = load_persisted_flow_inputs(store)
+    endpoints, modules, methods = inputs.endpoints, inputs.modules, inputs.methods
     persisted_flows = store.all_code_flows()
     current_endpoint_ids = {endpoint.id for endpoint in endpoints}
-    methods = store.all_integration_methods()
-    # Scheduler triggers are transient: re-read only the Java files of the
-    # persisted methods that reference one, to recover their schedules.
-    scheduler_paths = sorted({
-        method.path for method in methods
-        if any(item.startswith(SCHEDULER_TRIGGER_PREFIX) for item in method.input_endpoint_ids)
-    })
-    flow_endpoints = [
-        *endpoints,
-        *scheduled_trigger_endpoints(store.repo_root, scheduler_paths, endpoints, modules),
-    ] if scheduler_paths else endpoints
     persisted_call_edges = store.all_call_edges()
     persisted_codeql_methods = store.all_call_graph_methods()
     facts = store.all_graph_facts()
@@ -76,13 +109,13 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
     reconstructed_flows = (
         materialize_call_graph_flows(
             methods,
-            flow_endpoints,
+            inputs.flow_endpoints,
             [],
             module=module,
             modules=modules,
             persisted_edges=persisted_call_edges,
             persisted_methods=persisted_codeql_methods,
-            operations=operations,
+            operations=inputs.operations,
         )
         if methods
         else []

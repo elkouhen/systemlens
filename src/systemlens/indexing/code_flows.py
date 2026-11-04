@@ -894,6 +894,11 @@ def _build_call_graph(
                 resolved_sites.add((caller.id, call.call_line, callee.id))
                 if call.dispatch_confidence == "exact" and not signature_join:
                     exact_resolved_sites.add((caller.id, call.call_line, callee.id))
+            elif info is not None and not signature_join:
+                # The engine already names this declared contract (a Spring
+                # Data query method): the symbol pass must not add it again
+                # as a second, inferred edge (review D4).
+                resolved_sites.add((caller.id, call.call_line, callee.id))
             target_key = (callee.id, caller.module)
             if target_key not in implementation_targets:
                 implementation_targets[target_key] = tuple(
@@ -947,8 +952,16 @@ def _build_call_graph(
                 add_edge(caller, implementation[0], synthetic, True)
                 continue
             # An exact source call names its target from the declared
-            # receiver type; only candidate dispatch is an inference.
-            add_edge(caller, target, call, call.dispatch_confidence != "exact")
+            # receiver type, and so does a call to a declaration without a
+            # body, such as a Spring Data query method: the receiver type
+            # declares it (review D4). Only candidate dispatch to a concrete
+            # body is an inference.
+            target_info = symbols.methods.get(target.id)
+            declared_contract = target_info is not None and not target_info.concrete
+            add_edge(
+                caller, target, call,
+                call.dispatch_confidence != "exact" and not declared_contract,
+            )
 
     return CallGraph(
         adjacency=adjacency,
@@ -1569,6 +1582,14 @@ def materialize_call_graph_flows(
                             has_signature_join = any(
                                 signature_join for _hop, _edge, signature_join in next_route
                             )
+                            # The reason names the weakest hop the route
+                            # actually takes, whichever engine built it: an
+                            # exact symbol-pass call is a static call, not a
+                            # dispatch fallback (review F14).
+                            has_dispatch_candidate = any(
+                                inferred and edge in synthetic_calls
+                                for _hop, edge, inferred in next_route
+                            )
                             record_flow(CodeFlow(
                                 id=flow_id, module=entry.module, method=entry.qualified_method,
                                 path=entry.path, start_line=entry.start_line, end_line=entry.end_line,
@@ -1576,7 +1597,7 @@ def materialize_call_graph_flows(
                                 confidence="low" if has_possible_dispatch or has_signature_join else "medium",
                             reason=(
                                     "A source-declared Java dispatch fallback connects an indexed entry to an output through qualified types and compatible method signatures."
-                                    if any(edge in synthetic_calls for _hop, edge, _signature in next_route)
+                                    if has_dispatch_candidate
                                     else
                                     "A unique indexed method signature joined a module-local engine call."
                                     if has_signature_join

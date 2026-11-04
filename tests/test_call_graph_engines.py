@@ -204,6 +204,191 @@ def test_engine_comparison_reports_shared_and_missing_flows(tmp_path: Path) -> N
     assert isinstance(runs, dict)
     assert runs["source"]["flows"] == 1 and runs["recorded"]["calls"] == 1
     text = render_engine_comparison_text(result)
-    assert "Flux : 1 communs, 0 seulement source, 0 seulement recorded." in text
+    assert "Flux : 1 communs, 0 seulement source, 0 seulement recorded," in text
     with Store(repo, readonly=True) as store:
         assert len(store.all_code_flows()) == 1, "comparison never persists flows"
+
+
+def test_engine_comparison_joins_the_persisted_data_operations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review D1: the comparison rebuilds flows from the indexing inputs.
+
+    Without the persisted data operations the module projection turns
+    unknown derived queries into writes, and the totals diverge from the
+    index (352 flows instead of 406 on train-ticket).
+    """
+    from systemlens.application import engine_comparison
+
+    repo = _repository(tmp_path / "repo")
+    with Store(repo) as store:
+        index_repo(repo, Config(call_graph_engine="source"), store, full=True)
+    received: list[object] = []
+    original = engine_comparison.materialize_call_graph_flows
+
+    def recording(*args: object, **kwargs: object) -> object:
+        received.append(kwargs.get("operations"))
+        return original(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(engine_comparison, "materialize_call_graph_flows", recording)
+    with Store(repo, readonly=True) as store:
+        compare_engines(store, [SourceEngine(), _RecordedEngine([])])
+        persisted = store.all_data_operations()
+
+    assert received == [persisted, persisted], "each engine joins the persisted operations"
+
+
+def test_engine_comparison_compares_edges_inside_the_shared_method_universe(
+    tmp_path: Path,
+) -> None:
+    """Review D3: edges are keyed by site and compared on their labels.
+
+    An edge to a method only one engine models is reported apart, and an
+    edge both engines find with another confidence is a confidence change.
+    """
+    repo = _repository(tmp_path / "repo")
+    generator = repo / "src/main/java/example/Generator.java"
+    with Store(repo) as store:
+        index_repo(repo, Config(call_graph_engine="source"), store, full=True)
+        indexed = {method.qualified_method for method in store.all_integration_methods()}
+    assert "example.Generator.generate" in indexed
+
+    recorded = _RecordedEngine([
+        MethodCall(
+            "example.OrderController.create", "src/main/java/example/OrderController.java", 7,
+            "example.Generator.generate", "src/main/java/example/Generator.java", 5, 7,
+            "possible",
+        ),
+        # A library-like helper only the recorded engine models.
+        MethodCall(
+            "example.Generator.generate", "src/main/java/example/Generator.java", 5,
+            "example.Generator.helper", "src/main/java/example/Generator.java", 4, 5,
+        ),
+    ])
+    assert generator.is_file()
+    with Store(repo, readonly=True) as store:
+        result = compare_engines(store, [SourceEngine(), recorded])
+
+    edges = result["edges"]
+    assert isinstance(edges, dict)
+    assert edges["only_recorded_count"] == 0, "a helper edge is not a difference"
+    assert edges["confidence_changes_count"] == 1
+    assert edges["confidence_changes"] == [
+        "example.OrderController.create:7 → example.Generator.generate:5 "
+        "(src/main/java/example/OrderController.java:7) : exact → possible"
+    ]
+    outside = result["edges_outside_shared_methods"]
+    assert isinstance(outside, dict)
+    assert outside["source"]["count"] == 0
+    assert outside["recorded"]["count"] == 1
+    runs = result["runs"]
+    assert isinstance(runs, dict)
+    assert runs["recorded"]["edges_outside_shared_methods"] == 1
+    assert "1 changement(s) de confiance" in render_engine_comparison_text(result)
+
+
+def test_engine_comparison_keys_flows_by_their_full_route() -> None:
+    """Review D3: two flows with the same ends and another route stay two."""
+    from systemlens.application.engine_comparison import _flow_key
+    from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
+
+    def flow(middle: str, line: int) -> CodeFlow:
+        return CodeFlow(
+            "id-" + middle, "orders", "example.OrderController.create",
+            "src/main/java/example/OrderController.java", 7, 7, "potential", "medium", "",
+            (
+                CodeFlowStep(1, "http_entry", "POST /orders", "OrderController.java", 7, 7, "in"),
+                CodeFlowStep(2, "method_call", middle, "OrderController.java", line, line),
+                CodeFlowStep(3, "data_read", "orders", "Repository.java", line, line),
+            ),
+        )
+
+    assert _flow_key(flow("a.B.first", 8)) != _flow_key(flow("a.B.second", 9))
+
+
+def _derived_query_repository(root: Path) -> list[str]:
+    files = {
+        "app/src/main/java/p/OrderRepository.java": (
+            "package p;\n"
+            "import org.springframework.data.mongodb.repository.MongoRepository;\n"
+            "interface OrderRepository extends MongoRepository<Order, String> {\n"
+            "  Order findByOrderId(String orderId);\n"
+            "}\n"
+        ),
+        "app/src/main/java/p/Order.java": "package p;\nclass Order {}\n",
+        "app/src/main/java/p/OrderService.java": (
+            "package p;\n"
+            "class OrderService {\n"
+            "  private OrderRepository repository;\n"
+            "  Order find(String id) {\n"
+            "    return repository.findByOrderId(id);\n"
+            "  }\n"
+            "}\n"
+        ),
+    }
+    for path, text in files.items():
+        (root / path).parent.mkdir(parents=True, exist_ok=True)
+        (root / path).write_text(text, encoding="utf-8")
+    return list(files)
+
+
+def _derived_query_edges(
+    root: Path, paths: list[str], calls: list[MethodCall], *, closed_world: bool,
+) -> list[tuple[str, str, int, str, bool]]:
+    from systemlens.domain.module_inventory import DiscoveredModule
+    from systemlens.indexing.code_flows import _build_call_graph
+    from systemlens.indexing.integration_methods import materialize_integration_methods
+
+    module = DiscoveredModule(
+        name="app", path=root / "app", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    methods = materialize_integration_methods(root, [], paths, [module])
+    graph = _build_call_graph(
+        methods, calls, repo_root=root, source_paths=paths, progress=None,
+        closed_world=closed_world, modules=[module],
+    )
+    names = {method.id: method.qualified_method for method in methods}
+    return [
+        (names[edge.caller_id], names[edge.callee_id], edge.line,
+         edge.dispatch_confidence, edge.inferred)
+        for edge in graph.edges()
+    ]
+
+
+def test_a_derived_query_call_is_a_declared_possible_edge_in_both_engines(
+    tmp_path: Path,
+) -> None:
+    """Review D4: a call the receiver type declares is not an inference.
+
+    A Spring Data query method has no source body. The source engine used
+    to label its call ``inferred``, and the CodeQL join added that inferred
+    edge next to CodeQL's own row: 192 duplicated sites on train-ticket.
+    """
+    paths = _derived_query_repository(tmp_path)
+    expected = [
+        ("p.OrderService.find", "p.OrderRepository.findByOrderId", 5, "possible", False),
+    ]
+
+    assert _derived_query_edges(tmp_path, paths, [], closed_world=True) == expected
+    codeql_row = MethodCall(
+        "p.OrderService.find", "app/src/main/java/p/OrderService.java", 4,
+        "p.OrderRepository.findByOrderId", "app/src/main/java/p/OrderRepository.java", 4, 5,
+        "possible",
+    )
+    assert _derived_query_edges(tmp_path, paths, [codeql_row], closed_world=False) == expected
+
+
+def test_a_source_engine_flow_through_static_calls_says_so(tmp_path: Path) -> None:
+    """Review F14: the reason names the route, not the engine that built it.
+
+    Every source-engine call is a symbol-pass call; an exact one is still a
+    static call, as the same route built from engine rows says.
+    """
+    repo = _repository(tmp_path / "repo")
+    with Store(repo) as store:
+        index_repo(repo, Config(call_graph_engine="source"), store, full=True)
+        [flow] = store.all_code_flows()
+
+    assert flow.confidence == "medium"
+    assert "The call graph resolved a static call path" in flow.reason
