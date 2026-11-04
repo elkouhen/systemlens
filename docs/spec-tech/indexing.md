@@ -206,12 +206,18 @@ unless it is a JDK type with fixed members (`Runnable`, `Callable`,
 A name no enclosing type has resolves through a single static import, then
 through the one static wildcard import whose source type declares that name
 and arity. Several candidates stay unresolved.
-Literals, `new`, casts, and typed variables give argument types, which
-narrow same-arity overloads with boxing, then by assignability to a source
-ancestor or to an external interface it implements, then by excluding an
-overload whose parameter a known argument provably cannot take: a primitive,
-a `String` and a source type never convert into one another. Unknown
-arguments never narrow. An override whose parameter type comes from an
+Literals, `new`, casts, and typed variables give argument types. A numeric
+literal takes its suffix: `L` gives `long`, `f` gives `float`, and a
+decimal, hexadecimal, octal or binary integer is otherwise `int`.
+Same-arity overloads follow Java's phases. The first allows identity,
+widening primitive conversion and subtyping; the second adds boxing and
+unboxing. The first phase with an applicable overload keeps its most
+specific one. Subtyping is known for source types, the external interfaces
+they list, `String` and the boxes.
+A phase decides only when every argument and parameter type is known and
+no overload's applicability depends on an unknown hierarchy. Otherwise the
+pass drops only the overloads a known argument provably cannot reach.
+Unknown arguments never narrow. An override whose parameter type comes from an
 external wildcard import (`import org.springframework.http.*`) adopts the
 signature of the one ancestor contract that matches its resolved types and
 written simple names.

@@ -30,9 +30,6 @@ _JAVA_LANG = {
 _LITERAL_TYPES = {
     "string_literal": "java.lang.String",
     "text_block": "java.lang.String",
-    "decimal_integer_literal": "int",
-    "hex_integer_literal": "int",
-    "decimal_floating_point_literal": "double",
     "character_literal": "char",
     "true": "boolean",
     "false": "boolean",
@@ -42,6 +39,48 @@ _BOXED = {
     "float": "java.lang.Float", "boolean": "java.lang.Boolean", "char": "java.lang.Character",
     "byte": "java.lang.Byte", "short": "java.lang.Short",
 }
+_INTEGER_LITERALS = {
+    "decimal_integer_literal", "hex_integer_literal", "octal_integer_literal", "binary_integer_literal",
+}
+_FLOATING_LITERALS = {"decimal_floating_point_literal", "hex_floating_point_literal"}
+# Widening primitive conversions (JLS 5.1.2).
+_WIDENING = {
+    "byte": {"short", "int", "long", "float", "double"},
+    "short": {"int", "long", "float", "double"},
+    "char": {"int", "long", "float", "double"},
+    "int": {"long", "float", "double"},
+    "long": {"float", "double"},
+    "float": {"double"},
+}
+_UNBOXED = {boxed: primitive for primitive, boxed in _BOXED.items()}
+_NUMERIC_BOXES = {"java.lang." + name for name in ("Byte", "Short", "Integer", "Long", "Float", "Double")}
+# Supertypes of ``String`` and the boxes, fixed by the Java SE API.
+_FIXED_SUPERTYPES: dict[str, frozenset[str]] = {
+    name: frozenset({
+        "java.lang.Object", "java.io.Serializable", "java.lang.Comparable",
+        "java.lang.constant.Constable",
+        *(("java.lang.Number",) if name in _NUMERIC_BOXES else ()),
+        *(("java.lang.CharSequence", "java.lang.constant.ConstantDesc") if name == "java.lang.String" else ()),
+        *(("java.lang.constant.ConstantDesc",) if name in _NUMERIC_BOXES - {
+            "java.lang.Byte", "java.lang.Short"} else ()),
+    })
+    for name in ("java.lang.String", *_BOXED.values())
+}
+
+
+def _literal_type(kind: str, text: str) -> str | None:
+    """The type of a numeric literal, from its suffix (JLS 3.10)."""
+    text = text.replace("_", "")
+    if kind in _INTEGER_LITERALS:
+        return "long" if text[-1:] in {"l", "L"} else "int"
+    if kind == "hex_floating_point_literal":
+        # ``f`` is a hexadecimal digit: the suffix follows the exponent.
+        return "float" if text[-1:] in {"f", "F"} and "p" in text.lower() else "double"
+    if kind in _FLOATING_LITERALS:
+        return "float" if text[-1:] in {"f", "F"} else "double"
+    return None
+
+
 # Members every type has: an unqualified call to one of them never reaches an
 # outer type, and its return type is fixed by ``java.lang.Object``.
 _OBJECT_METHODS = {
@@ -72,13 +111,6 @@ _LOMBOK_GETTERS = {"Data", "Getter", "Value"}
 # Functional JDK interfaces: a lambda or method reference can implement them
 # anywhere, so dispatch on them is never exact.
 _FUNCTIONAL_JDK = {"java.lang.Runnable", "java.util.concurrent.Callable"}
-
-
-def _argument_matches(parameter: str | None, argument: str | None) -> bool:
-    """Whether a known argument type selects a declared parameter type."""
-    if parameter is None or argument is None:
-        return False
-    return parameter == argument or _BOXED.get(argument) == parameter or _BOXED.get(parameter) == argument
 
 
 def _written_type(source: bytes, parameter: Node) -> str:
@@ -554,32 +586,111 @@ class JavaSymbols:
     def _select_overload(
         self, contracts: list[_Method], argument_types: tuple[str | None, ...] | None,
     ) -> list[_Method]:
-        """Keep the same-arity overload the known argument types select.
+        """Keep the same-arity overload Java selects for the argument types.
 
-        An exact (or boxed) match wins, like the most specific overload in
-        Java; otherwise a source argument may select a parameter declared by
-        one of its ancestors; otherwise an overload survives when no known
-        argument is provably incompatible with its parameter. Unknown
-        arguments never narrow: ambiguity is returned unchanged.
+        Java tries three phases (JLS 15.12.2): identity, widening primitive
+        and subtyping first; then boxing and unboxing too; varargs last, a
+        shape this arity-keyed lookup leaves out. The first phase with an
+        applicable overload chooses the most specific one. A phase decides
+        only when every argument and parameter type is known, so unknown
+        arguments never narrow. Otherwise an overload survives when no known
+        argument is provably incompatible with its parameter.
         """
         if len({candidate.parameters for candidate in contracts}) <= 1 or argument_types is None:
             return contracts
-        for compatible in (
-            _argument_matches,
-            self._argument_assignable,
-            lambda parameter, argument: not self._argument_excluded(parameter, argument),
-        ):
-            selected = [
-                candidate for candidate in contracts
-                if len(candidate.parameters) == len(argument_types)
-                and all(
-                    compatible(parameter, argument)
-                    for parameter, argument in zip(candidate.parameters, argument_types, strict=True)
+        signatures = {
+            candidate.parameters for candidate in contracts
+            if len(candidate.parameters) == len(argument_types)
+        }
+        known = None not in argument_types and all(None not in signature for signature in signatures)
+        for boxing in (False, True) if known else ():
+            verdicts = {
+                signature: [
+                    self._applicable(parameter, argument, boxing=boxing)
+                    for parameter, argument in zip(signature, argument_types, strict=True)
+                ]
+                for signature in signatures
+            }
+            if any(False not in verdict and None in verdict for verdict in verdicts.values()):
+                # An overload may apply in this phase: the choice is open.
+                break
+            applicable = [signature for signature, verdict in verdicts.items() if all(verdict)]
+            if not applicable:
+                continue
+            specific = [
+                signature for signature in applicable
+                if all(
+                    other == signature or all(
+                        self._applicable(wider, narrower, boxing=False) is True
+                        for narrower, wider in zip(signature, other, strict=True)
+                    )
+                    for other in applicable
                 )
             ]
-            if len({candidate.parameters for candidate in selected}) == 1:
-                return selected
+            if len(specific) != 1:
+                return contracts
+            return [candidate for candidate in contracts if candidate.parameters == specific[0]]
+        selected = [
+            candidate for candidate in contracts
+            if len(candidate.parameters) == len(argument_types)
+            and not any(
+                self._applicable(parameter, argument, boxing=True) is False
+                for parameter, argument in zip(candidate.parameters, argument_types, strict=True)
+            )
+        ]
+        if len({candidate.parameters for candidate in selected}) == 1:
+            return selected
         return contracts
+
+    def _applicable(self, parameter: str | None, argument: str | None, *, boxing: bool) -> bool | None:
+        """Whether an argument type converts to a parameter type on invocation.
+
+        ``None`` when the sources cannot tell: an external type's hierarchy
+        is unknown. Primitives, their boxes, ``String``, arrays and source
+        types are decided (JLS 5.3), boxing and unboxing only when allowed.
+        """
+        if parameter is None or argument is None:
+            return None
+        if parameter == argument or parameter == "java.lang.Object" and argument not in _PRIMITIVES:
+            return True
+        if argument in _PRIMITIVES:
+            if parameter in _PRIMITIVES:
+                return parameter in _WIDENING.get(argument, ())
+            if not boxing or argument not in _BOXED:
+                return False
+            return parameter in _FIXED_SUPERTYPES[_BOXED[argument]] or parameter == _BOXED[argument]
+        if parameter in _PRIMITIVES:
+            unboxed = _UNBOXED.get(argument)
+            if not boxing or unboxed is None:
+                return False
+            return parameter == unboxed or parameter in _WIDENING.get(unboxed, ())
+        if argument in _FIXED_SUPERTYPES:
+            return parameter in _FIXED_SUPERTYPES[argument]
+        if argument.endswith("[]") or parameter.endswith("[]"):
+            if argument.endswith("[]") and parameter.endswith("[]"):
+                element = self._applicable(parameter[:-2], argument[:-2], boxing=False)
+                return element if parameter[:-2] not in _PRIMITIVES and argument[:-2] not in _PRIMITIVES else False
+            return None if parameter not in self.types and parameter not in _FIXED_SUPERTYPES else False
+        if argument in self.types:
+            modules = {self.path_modules.get(path, "") for path, _node in self.types[argument]}
+            ancestors = {
+                ancestor for module in modules for ancestor in self.ancestors(argument, module)
+            }
+            if any(owner == parameter for owner, _module in ancestors):
+                return True
+            externals = {base for ancestor in ancestors for base in self.external_bases.get(ancestor, ())}
+            if parameter in externals:
+                return True
+            if parameter in self.types or parameter in _FIXED_SUPERTYPES:
+                # No external type extends a source type, and a source type
+                # is never a ``String`` or a box.
+                return False
+            return None if externals else False
+        # An external argument: only a source type, ``String`` or a box is
+        # provably out of its reach.
+        if parameter in self.types or parameter in _FIXED_SUPERTYPES:
+            return False
+        return None
 
     def _most_specific(self, contracts: list[_Method]) -> _Method | None:
         """The one declaration no other candidate overrides, if unique."""
@@ -706,6 +817,17 @@ class JavaSymbols:
         source = self.units[info.method.path].source
         if node.type in _LITERAL_TYPES:
             return _LITERAL_TYPES[node.type]
+        if node.type in _INTEGER_LITERALS or node.type in _FLOATING_LITERALS:
+            return _literal_type(node.type, parser.node_text(source, node))
+        if (
+            node.type == "unary_expression" and node.named_children
+            and parser.node_text(source, node).lstrip()[:1] in {"-", "+"}
+        ):
+            operand = self.expression_type(info, node.named_children[-1], invocation, depth + 1)
+            # Unary numeric promotion (JLS 5.6).
+            if operand in {"byte", "short", "char"}:
+                return "int"
+            return operand if operand in {"int", "long", "float", "double"} else None
         if node.type in {"object_creation_expression", "cast_expression"}:
             type_node = node.child_by_field_name("type")
             return self.resolve(
@@ -1009,41 +1131,6 @@ class JavaSymbols:
             ):
                 return True
         return False
-
-    def _argument_assignable(self, parameter: str | None, argument: str | None) -> bool:
-        if _argument_matches(parameter, argument):
-            return True
-        if parameter is None or argument is None or argument not in self.types:
-            return False
-        modules = {self.path_modules.get(path, "") for path, _node in self.types[argument]}
-        return any(
-            owner == parameter or parameter in self.external_bases.get((owner, owner_module), ())
-            for module in modules
-            for owner, owner_module in self.ancestors(argument, module)
-        )
-
-    def _argument_excluded(self, parameter: str | None, argument: str | None) -> bool:
-        """Whether a known argument provably cannot be passed to a parameter.
-
-        Only primitives and their boxes, ``String`` and source types are
-        compared: no external type can be a subtype of a source type, and a
-        source type is never a primitive or a ``String``. Primitive widening
-        and boxing are left compatible.
-        """
-        if parameter is None or argument is None or self._argument_assignable(parameter, argument):
-            return False
-
-        def kind(type_name: str) -> str | None:
-            if type_name in _PRIMITIVES or type_name in _BOXED.values():
-                return "primitive"
-            if type_name == "java.lang.String":
-                return "string"
-            return "source" if type_name in self.types else None
-
-        parameter_kind, argument_kind = kind(parameter), kind(argument)
-        if parameter_kind is None or argument_kind is None:
-            return False
-        return not parameter_kind == argument_kind == "primitive"
 
     def _field_type(self, owner: str, name: str, module: str) -> str | None:
         """Declared type of a field on a source type or its ancestors."""

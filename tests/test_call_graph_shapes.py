@@ -195,6 +195,57 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Svc.f.Base": "exact"}),
+    Shape("S5-widening-before-boxing", """
+        class Svc {
+          void m(long x) {} //@Svc.m.long
+          void m(Integer x) {} //@Svc.m.Integer
+          void n(Object x) {} //@Svc.n.Object
+          void n(int x) {} //@Svc.n.int
+        }
+        class Use {
+          Svc svc;
+          void run() { //@Use.run
+            svc.m(1);
+            Integer boxed = 1;
+            svc.n(boxed);
+          }
+        }
+        """, "Use.run", {"Svc.m.long": "exact", "Svc.n.Object": "exact"},
+        note="review S3: widening and subtyping win over boxing and unboxing"),
+    Shape("S5-literal-suffix", """
+        class Svc {
+          void k(int x) {} //@Svc.k.int
+          void k(long x) {} //@Svc.k.long
+          void f(float x) {} //@Svc.f.float
+          void f(double x) {} //@Svc.f.double
+        }
+        class Use {
+          Svc svc;
+          void run() { //@Use.run
+            svc.k(10L);
+            svc.k(0x1FL);
+            svc.f(1.5f);
+            svc.f(-2.5F);
+          }
+        }
+        """, "Use.run", {"Svc.k.long": "exact", "Svc.f.float": "exact"},
+        note="review S4: a literal's suffix gives its type"),
+    Shape("S5-unknown-stays-open", """
+        import java.util.ArrayList;
+        import java.util.Collection;
+        class Svc {
+          void m(Object x) {} //@Svc.m.Object
+          void m(Collection x) {} //@Svc.m.Collection
+        }
+        class Use {
+          Svc svc;
+          void run(ArrayList items, Unknown u) { //@Use.run
+            svc.m(items);
+            svc.m(u);
+          }
+        }
+        """, "Use.run", {}, absent=("Svc.m.Object", "Svc.m.Collection"),
+        note="an argument of unknown hierarchy never selects one overload"),
     Shape("S6", """
         class Base {}
         class Sub extends Base {}
