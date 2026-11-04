@@ -132,6 +132,10 @@ def _refers_to_anonymous_instance(source: bytes, receiver: Node | None) -> bool:
     return receiver.type == "field_access" and parser.node_text(source, receiver).startswith("this.")
 
 
+def _is_anonymous_body(node: Node) -> bool:
+    return node.type == "class_body" and node.parent is not None and node.parent.type == "object_creation_expression"
+
+
 @dataclass
 class _Unit:
     source: bytes
@@ -185,6 +189,7 @@ class JavaSymbols:
         self.interface_witnesses: dict[MethodCall, MethodCall] = {}
         # ``var`` initializers being typed, to break reference cycles.
         self._typing: set[tuple[str, int]] = set()
+        self._levels: dict[tuple[str, str], list[list[tuple[str, str]]]] = {}
         # Types an anonymous class body extends or implements somewhere.
         self.anonymous_supertypes: set[str] = set()
         # Build dependencies between module identities (ADR-71), and the
@@ -841,62 +846,156 @@ class JavaSymbols:
         return None
 
     def variable_type(self, info: _Method, name: str, invocation: Node, *, field_only: bool = False) -> str | None:
+        """The declared type of the variable ``name`` visible at ``invocation``.
+
+        Java resolves a simple name lexically, innermost scope first: the
+        statements and parameters of every enclosing block, lambda and
+        method, anonymous and local class methods included; then the fields
+        of each enclosing class, declared or inherited, before those of its
+        outer classes. ``field_only`` (``this.name``) reads only the fields
+        of the innermost class. A declaration whose type is not written
+        still shadows the outer ones (S5, S6, S14).
+        """
         path = info.method.path
         source = self.units[path].source
-        parameters = info.node.child_by_field_name("parameters")
-        for parameter in parameters.named_children if parameters is not None and not field_only else []:
-            ident = parameter.child_by_field_name("name")
-            type_node = parameter.child_by_field_name("type")
-            if ident is not None and parser.node_text(source, ident) == name and type_node is not None:
-                return self.resolve(
-                    path, parser.node_text(source, type_node), info.owner,
-                    allow_ambiguous=True,
-                )
-        # Only enclosing lexical blocks can contribute local declarations.
-        scope = invocation.parent if not field_only else None
-        while scope is not None and scope != info.node:
-            declared, scoped_type = self._scoped_declaration(info, scope, name, invocation)
-            if declared:
-                return scoped_type
-            for declaration in reversed(scope.named_children):
-                if declaration.type != "local_variable_declaration" or declaration.end_byte > invocation.start_byte:
-                    continue
-                type_node = declaration.child_by_field_name("type")
-                for child in declaration.named_children:
-                    ident = child.child_by_field_name("name")
-                    if ident is not None and parser.node_text(source, ident) == name and type_node is not None:
-                        if parser.node_text(source, type_node).strip() == "var":
-                            # ``var`` takes the type of its initializer.
-                            return self._initializer_type(info, child.child_by_field_name("value"))
-                        return self.resolve(
-                            path, parser.node_text(source, type_node), info.owner,
-                            allow_ambiguous=True,
-                        )
-            scope = scope.parent
-        owners = [info.owner] + sorted(
-            (owner for owner, _module in self.ancestors(info.owner, info.module) if owner != info.owner),
-            key=len,
-            reverse=True,
-        )
-        for owner in owners:
-            found: set[str | None] = set()
-            for field_path, declaration in self.types.get(owner, []):
-                body = declaration.child_by_field_name("body")
-                field_source = self.units[field_path].source
-                for field in body.named_children if body is not None else []:
-                    if field.type != "field_declaration":
+        scope = invocation.parent
+        while scope is not None:
+            if not field_only:
+                declared, scoped_type = self._scoped_declaration(info, scope, name, invocation)
+                if declared:
+                    return scoped_type
+                for declaration in reversed(scope.named_children):
+                    if (
+                        declaration.type != "local_variable_declaration"
+                        or declaration.end_byte > invocation.start_byte
+                    ):
                         continue
-                    type_node = field.child_by_field_name("type")
-                    for child in field.named_children:
+                    type_node = declaration.child_by_field_name("type")
+                    for child in declaration.named_children:
                         ident = child.child_by_field_name("name")
-                        if ident is not None and parser.node_text(field_source, ident) == name and type_node is not None:
-                            found.add(self.resolve(
-                                field_path, parser.node_text(field_source, type_node), owner,
+                        if ident is not None and parser.node_text(source, ident) == name and type_node is not None:
+                            if parser.node_text(source, type_node).strip() == "var":
+                                # ``var`` takes the type of its initializer.
+                                return self._initializer_type(info, child.child_by_field_name("value"))
+                            return self.resolve(
+                                path, parser.node_text(source, type_node), info.owner,
                                 allow_ambiguous=True,
-                            ))
-            if found:
-                return next(iter(found)) if len(found) == 1 else None
+                            )
+            if scope.type in _TYPES or _is_anonymous_body(scope):
+                declared, field_type = self._class_scope_field(info, scope, name)
+                if declared or field_only:
+                    return field_type
+            scope = scope.parent
         return None
+
+    def _class_scope_field(self, info: _Method, scope: Node, name: str) -> tuple[bool, str | None]:
+        """A field ``name`` that the class ``scope`` declares or inherits.
+
+        ``scope`` is a named type declaration or an anonymous class body.
+        An anonymous class's own fields come first, then those of its source
+        supertype; an external supertype is assumed to declare none.
+        """
+        path = info.method.path
+        source = self.units[path].source
+        if scope.type in _TYPES:
+            return self._member_field(self.owner(path, scope), self.path_modules.get(path, info.module), name)
+        found: set[str | None] = set()
+        for member in scope.named_children:
+            type_node = member.child_by_field_name("type")
+            if member.type != "field_declaration" or type_node is None:
+                continue
+            for child in member.named_children:
+                ident = child.child_by_field_name("name")
+                if ident is not None and parser.node_text(source, ident) == name:
+                    found.add(self.resolve(
+                        path, parser.node_text(source, type_node), info.owner, allow_ambiguous=True,
+                    ))
+        if found:
+            return True, next(iter(found)) if len(found) == 1 else None
+        type_node = scope.parent.child_by_field_name("type") if scope.parent is not None else None
+        supertype = self.resolve(
+            path, parser.node_text(source, type_node), info.owner, allow_ambiguous=True,
+        ) if type_node is not None else None
+        if supertype is None or supertype not in self.types:
+            return False, None
+        return self._member_field(supertype, self._receiver_module(supertype, info), name)
+
+    def _ancestor_levels(self, owner: str, module: str) -> list[list[tuple[str, str]]]:
+        """``owner`` and its source ancestors, grouped by hierarchy distance."""
+        key = (owner, module)
+        levels = self._levels.get(key)
+        if levels is None:
+            levels = [[key]]
+            seen = {key}
+            while True:
+                following = []
+                for current in levels[-1]:
+                    for base in sorted(self.bases.get(current, ())):
+                        if base not in seen:
+                            seen.add(base)
+                            following.append(base)
+                if not following:
+                    break
+                levels.append(following)
+            self._levels[key] = levels
+        return levels
+
+    def _module_locations(self, owner: str, module: str) -> list[tuple[str, Node]]:
+        locations = self.types.get(owner, [])
+        same = [location for location in locations if self.path_modules.get(location[0], "") == module]
+        return same or locations
+
+    def _member_field(self, owner: str, module: str, name: str) -> tuple[bool, str | None]:
+        """A field ``name`` of a source type, the nearest declaration first.
+
+        A field hides any field of the same name farther up the hierarchy:
+        the type itself is searched, then its direct supertypes, and so on
+        (S11). Fields, interface constants, enum constants and record
+        components count. Several declarations at one distance leave the
+        type unknown, as Java reports them ambiguous.
+        """
+        for level in self._ancestor_levels(owner, module):
+            found: set[str | None] = set()
+            for candidate, candidate_module in level:
+                for path, declaration in self._module_locations(candidate, candidate_module):
+                    found.update(self._declared_fields(path, declaration, candidate, name))
+            if found:
+                return True, next(iter(found)) if len(found) == 1 else None
+        return False, None
+
+    def _declared_fields(self, path: str, declaration: Node, owner: str, name: str) -> set[str | None]:
+        """Types of the fields ``name`` one type declaration writes."""
+        source = self.units[path].source
+        found: set[str | None] = set()
+        if declaration.type == "record_declaration":
+            parameters = declaration.child_by_field_name("parameters")
+            for parameter in parameters.named_children if parameters is not None else []:
+                ident = parameter.child_by_field_name("name")
+                type_node = parameter.child_by_field_name("type")
+                if ident is not None and type_node is not None and parser.node_text(source, ident) == name:
+                    found.add(self.resolve(
+                        path, parser.node_text(source, type_node), owner, allow_ambiguous=True,
+                    ))
+        body = declaration.child_by_field_name("body")
+        members = list(body.named_children) if body is not None else []
+        for member in list(members):
+            if member.type == "enum_body_declarations":
+                members.extend(member.named_children)
+        for member in members:
+            if member.type in {"field_declaration", "constant_declaration"}:
+                type_node = member.child_by_field_name("type")
+                for child in member.named_children:
+                    ident = child.child_by_field_name("name")
+                    if ident is not None and type_node is not None and parser.node_text(source, ident) == name:
+                        found.add(self.resolve(
+                            path, parser.node_text(source, type_node), owner, allow_ambiguous=True,
+                        ))
+            elif member.type == "enum_constant" and declaration.type == "enum_declaration":
+                # Enum constants are fields of the enum type itself.
+                ident = member.child_by_field_name("name")
+                if ident is not None and parser.node_text(source, ident) == name:
+                    found.add(owner)
+        return found
 
     def _initializer_type(self, info: _Method, value: Node | None) -> str | None:
         """The type of a ``var`` initializer, read where it is written.
@@ -975,12 +1074,19 @@ class JavaSymbols:
                         return True, None
                     if parameter.type == "formal_parameter" and named(parameter.child_by_field_name("name")):
                         return typed(parameter.child_by_field_name("type"))
-        elif scope.type == "method_declaration":
-            # The method of an anonymous class inside ``info``'s body.
+        elif scope.type in {"method_declaration", "constructor_declaration"}:
+            # ``info`` itself, an anonymous class method in its body, or the
+            # method enclosing a local class.
             parameters = scope.child_by_field_name("parameters")
             for parameter in parameters.named_children if parameters is not None else []:
                 if parameter.type == "formal_parameter" and named(parameter.child_by_field_name("name")):
                     return typed(parameter.child_by_field_name("type"))
+                if parameter.type == "spread_parameter" and any(
+                    named(child.child_by_field_name("name"))
+                    for child in parameter.named_children if child.type == "variable_declarator"
+                ):
+                    # A varargs parameter is an array; it shadows outer names.
+                    return True, None
         return False, None
 
     def receiver_type(self, info: _Method, receiver: Node | None, invocation: Node, depth: int = 0) -> str | None:
@@ -1088,9 +1194,14 @@ class JavaSymbols:
             suffix, boolean_only = name[2:], True
         else:
             return None
-        for candidate in [owner, *sorted(base for base, _module in self.ancestors(owner, module) if base != owner)]:
+        # The nearest getter hides any farther up the hierarchy (S11).
+        for level in self._ancestor_levels(owner, module):
             found: set[str | None] = set()
-            for path, declaration in self.types.get(candidate, []):
+            locations = [
+                (candidate, path, declaration) for candidate, candidate_module in level
+                for path, declaration in self._module_locations(candidate, candidate_module)
+            ]
+            for candidate, path, declaration in locations:
                 if declaration.type != "class_declaration":
                     continue
                 source = self.units[path].source
@@ -1134,29 +1245,10 @@ class JavaSymbols:
 
     def _field_type(self, owner: str, name: str, module: str) -> str | None:
         """Declared type of a field on a source type or its ancestors."""
-        for candidate in [owner, *sorted(base for base, _module in self.ancestors(owner, module))]:
-            found: set[str | None] = set()
-            for path, declaration in self.types.get(candidate, []):
-                body = declaration.child_by_field_name("body")
-                source = self.units[path].source
-                for member in body.named_children if body is not None else []:
-                    if member.type not in {"field_declaration", "constant_declaration"}:
-                        continue
-                    type_node = member.child_by_field_name("type")
-                    for child in member.named_children:
-                        ident = child.child_by_field_name("name")
-                        if ident is not None and type_node is not None and parser.node_text(source, ident) == name:
-                            found.add(self.resolve(path, parser.node_text(source, type_node), candidate, allow_ambiguous=True))
-                if declaration.type == "enum_declaration" and body is not None:
-                    # Enum constants are fields of the enum type itself.
-                    for member in body.named_children:
-                        if member.type == "enum_constant":
-                            ident = member.child_by_field_name("name")
-                            if ident is not None and parser.node_text(source, ident) == name:
-                                found.add(candidate)
-            if found:
-                return next(iter(found)) if len(found) == 1 else None
-        return None
+        locations = self.types.get(owner, [])
+        if len(locations) == 1:
+            module = self.path_modules.get(locations[0][0], module)
+        return self._member_field(owner, module, name)[1]
 
     def _receiver_module(self, receiver_type: str, caller: _Method) -> str:
         locations = self._type_candidates(receiver_type, caller.method.path)

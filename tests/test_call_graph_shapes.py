@@ -693,6 +693,150 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {"Service.go": "exact"},
         note="review S2: the initializer names the field, not a later local"),
+    Shape("T5", """
+        interface Callback {
+          void on(Other s);
+        }
+        class Service {
+          void go() {} //@Service.go
+        }
+        class Other {
+          void go() {} //@Other.go
+        }
+        class Use {
+          void run(Service s) { //@Use.run
+            Callback c = new Callback() {
+              public void on(Other s) {
+                s.go();
+              }
+            };
+          }
+        }
+        """, "Use.run", {"Other.go": "exact"},
+        note="review S5: the anonymous method's parameter hides the outer one"),
+    Shape("T5-anonymous-local", """
+        interface Task {
+          void exec();
+        }
+        class Service {
+          void go() {} //@Service.go
+        }
+        class Other {
+          void go() {} //@Other.go
+        }
+        class Use {
+          void run(Service s) { //@Use.run
+            Task u = new Task() {
+              public void exec() {
+                Other s = new Other();
+                s.go();
+              }
+            };
+          }
+        }
+        """, "Use.run", {"Other.go": "exact"},
+        note="review S5: a local of the anonymous method hides the outer parameter"),
+    Shape("T5-anonymous-field", """
+        interface Task {
+          void exec();
+        }
+        class Service {
+          void go() {} //@Service.go
+        }
+        class Other {
+          void go() {} //@Other.go
+        }
+        class Use {
+          Service helper;
+          void run() { //@Use.run
+            Task t = new Task() {
+              Other helper = new Other();
+              public void exec() {
+                helper.go();
+              }
+            };
+          }
+        }
+        """, "Use.run", {"Other.go": "exact"},
+        note="review S6: the anonymous class's field hides the outer field"),
+    Shape("T5-inner-outer-field", """
+        class Service {
+          void go() {} //@Service.go
+        }
+        class Use {
+          Service service;
+          class Inner {
+            void run() { //@Inner.run
+              service.go();
+            }
+          }
+        }
+        """, "Inner.run", {"Service.go": "exact"},
+        note="review S14: a member inner class reads its outer class's fields"),
+    Shape("T5-local-class-captures", """
+        class Service {
+          void go() {} //@Service.go
+        }
+        class Other {
+          void go() {} //@Other.go
+        }
+        class Use {
+          Other helper;
+          void run() {
+            Service helper = new Service();
+            class Local {
+              void call() { //@Local.call
+                helper.go();
+              }
+            }
+          }
+        }
+        """, "Local.call", {"Service.go": "exact"},
+        note="a local class sees the enclosing method's locals before the outer fields"),
+    Shape("T6", """
+        class Service {
+          void go() {} //@Service.go
+        }
+        class Other {
+          void go() {} //@Other.go
+        }
+        class Top {
+          protected Other helper;
+        }
+        class Mid extends Top {
+          protected Service helper;
+        }
+        class Child extends Mid {
+          void run() { //@Child.run
+            helper.go();
+          }
+        }
+        """, "Child.run", {"Service.go": "exact"},
+        note="review S11: the nearest field in the hierarchy hides the farther one"),
+    Shape("T6-qualified-and-getter", """
+        import lombok.Getter;
+        class Service {
+          void go() {} //@Service.go
+        }
+        class Other {
+          void go() {} //@Other.go
+        }
+        class Atop {
+          @Getter protected Other helper;
+        }
+        class Zmid extends Atop {
+          @Getter protected Service helper;
+        }
+        class Holder extends Zmid {
+        }
+        class Use {
+          void run(Holder h) { //@Use.run
+            h.helper.go();
+            h.getHelper().go();
+          }
+        }
+        """, "Use.run", {"Service.go": "exact"},
+        note="review S11: field access and Lombok getters read the nearest field"),
     # 2.5 Functional and implicit implementations
     Shape("F1", """
         interface Port {
