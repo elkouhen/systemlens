@@ -154,6 +154,15 @@ target is reported once, as exact. This preserves the contract edge for
 module-aware dispatch enrichment; duplicate graph rows are deduplicated by
 their target and confidence.
 
+The declared method of a call is its source declaration, so a call on a
+parameterized receiver such as `Gateway<String>.send` keeps its declared
+row and its interface witness; the reachability query follows the same
+rule. In build mode `none`, CodeQL picks the first declared overload when
+an argument has an `ErrorType`, and reports it as exact. When the declaring
+type has other same-name overloads with the call's arity that agree with
+it on every typed argument, the call reaches each of them as `possible`
+and none as `exact`.
+
 The join reads the witness as it reads the source pass's witness. At a site
 (caller, call line) where an exact row reaches a concrete implementation of
 the interface method, the witness expands only to that implementation. The

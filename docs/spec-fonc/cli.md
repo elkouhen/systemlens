@@ -284,6 +284,8 @@ read the snapshot's profile, and a change of strategy forces a full refresh.
 
 - `codeql` resolves calls from CodeQL's typed program model. It needs the
   CodeQL CLI. When the CLI is missing, indexing says so and uses `source`.
+  A call whose argument type CodeQL cannot resolve reaches every matching
+  same-name overload as `possible` instead of one as `exact`.
 - `source` resolves calls from tree-sitter syntax and declared types. It needs
   no external tool. It types fields, parameters, locals, `var` initializers,
   chained calls by declared return type, field accesses and constants, static

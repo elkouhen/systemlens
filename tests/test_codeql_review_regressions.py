@@ -121,3 +121,86 @@ def test_q1_a_database_of_the_indexed_sources_is_used(tmp_path: Path) -> None:
     assert [[step.kind for step in flow.steps] for flow in flows] == [
         ["http_entry", "method_call", "message_publish"],
     ]
+
+
+def _calls(tmp_path: Path, files: dict[str, str]) -> set[tuple[str, int, str, int, str]]:
+    _write(tmp_path / "repo", files)
+    database = _create_database(tmp_path / "repo", tmp_path / "db")
+    return {
+        (call.caller, call.call_line, call.callee, call.callee_line, call.dispatch_confidence)
+        for call in codeql.extract_codeql_calls(database, executable="codeql")
+    }
+
+
+def test_q2_an_untyped_argument_reaches_every_overload_as_possible(tmp_path: Path) -> None:
+    calls = _calls(tmp_path, {
+        "src/main/java/com/acme/Invoice.java": "package com.acme;\npublic class Invoice {}\n",
+        "src/main/java/com/acme/Order.java": "package com.acme;\npublic class Order {}\n",
+        "src/main/java/com/acme/Pub.java": (
+            "package com.acme;\n"
+            "public class Pub {\n"
+            "    public void emit(Invoice i) { }\n"
+            "    public void emit(Order o) { }\n"
+            "    public void emit(Order o, int n) { }\n"
+            "}\n"
+        ),
+        "src/main/java/com/acme/Api.java": (
+            "package com.acme;\n"
+            "import org.modelmapper.ModelMapper;\n"
+            "public class Api {\n"
+            "    private Pub pub;\n"
+            "    private ModelMapper mapper;\n"
+            "    public void unknown(Object dto) {\n"
+            "        pub.emit(mapper.convert(dto));\n"
+            "    }\n"
+            "    public void known(Order order) {\n"
+            "        pub.emit(order);\n"
+            "    }\n"
+            "}\n"
+        ),
+    })
+
+    assert {call for call in calls if call[0] == "com.acme.Api.unknown"} == {
+        ("com.acme.Api.unknown", 7, "com.acme.Pub.emit", 3, "possible"),
+        ("com.acme.Api.unknown", 7, "com.acme.Pub.emit", 4, "possible"),
+    }
+    assert {call for call in calls if call[0] == "com.acme.Api.known"} == {
+        ("com.acme.Api.known", 10, "com.acme.Pub.emit", 4, "exact"),
+    }
+
+
+def test_q7_a_generic_receiver_keeps_its_declared_method_row(tmp_path: Path) -> None:
+    calls = _calls(tmp_path, {
+        "src/main/java/com/acme/Gateway.java": (
+            "package com.acme;\npublic interface Gateway<T> {\n    void send(T t);\n}\n"
+        ),
+        "src/main/java/com/acme/Two.java": (
+            "package com.acme;\npublic interface Two<T> {\n    void on(T t);\n}\n"
+        ),
+        "src/main/java/com/acme/TwoA.java": (
+            "package com.acme;\npublic class TwoA implements Two<String> {\n"
+            "    public void on(String t) { }\n}\n"
+        ),
+        "src/main/java/com/acme/TwoB.java": (
+            "package com.acme;\npublic class TwoB implements Two<String> {\n"
+            "    public void on(String t) { }\n}\n"
+        ),
+        "src/main/java/com/acme/Api.java": (
+            "package com.acme;\n"
+            "public class Api {\n"
+            "    private Gateway<String> gateway;\n"
+            "    private Two<String> two;\n"
+            "    public void generic() {\n"
+            "        gateway.send(\"x\");\n"
+            "    }\n"
+            "    public void two() {\n"
+            "        two.on(\"x\");\n"
+            "    }\n"
+            "}\n"
+        ),
+    })
+
+    # The declared-method row of a call without a visible implementation.
+    assert ("com.acme.Api.generic", 6, "com.acme.Gateway.send", 3, "possible") in calls
+    # The interface witness beside the concrete candidates.
+    assert ("com.acme.Api.two", 9, "com.acme.Two.on", 3, "possible") in calls

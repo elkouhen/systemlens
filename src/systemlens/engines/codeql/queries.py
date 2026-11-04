@@ -41,6 +41,46 @@ predicate exactTarget(MethodCall call, Method target) {
 }
 
 /**
+ * The method a call names, as declared in the sources. A call on a
+ * parameterized receiver (`Gateway<String>.send`) names a parameterized
+ * member that is not itself `fromSource()`; its source declaration is.
+ */
+Method declaredMethod(MethodCall call) {
+  result = call.getMethod().getSourceDeclaration()
+}
+
+/**
+ * A same-name overload the call could also reach when CodeQL could not
+ * type one of its arguments. In build mode `none`, an argument of an
+ * `ErrorType` makes CodeQL pick the first declared overload of the
+ * matching arity, reported as exact. A candidate must take as many
+ * parameters as the call has arguments and agree with the declared
+ * overload on every argument whose type is known.
+ */
+predicate unresolvedOverload(MethodCall call, Method candidate) {
+  exists(Method declared |
+    declared = declaredMethod(call) and
+    exists(int i | call.getArgument(i).getType() instanceof ErrorType) and
+    candidate.getDeclaringType() = declared.getDeclaringType() and
+    candidate.getName() = declared.getName() and
+    candidate != declared and
+    candidate.fromSource() and
+    candidate.getNumberOfParameters() = call.getNumArgument() and
+    declared.getNumberOfParameters() = call.getNumArgument() and
+    forall(int j |
+      j in [0 .. call.getNumArgument() - 1] and
+      not call.getArgument(j).getType() instanceof ErrorType
+    |
+      candidate.getParameterType(j).getErasure() = declared.getParameterType(j).getErasure()
+    )
+  )
+}
+
+predicate ambiguousOverloadCall(MethodCall call) {
+  exists(Method candidate | unresolvedOverload(call, candidate))
+}
+
+/**
  * Pick one resolution strategy for each call.
  *
  * Exact dispatch has priority.  The possible-dispatch branches are evaluated
@@ -53,8 +93,19 @@ predicate exactTarget(MethodCall call, Method target) {
  * A source-backed interface declaration is also kept as a witness when
  * CodeQL exposes a concrete virtual target, so downstream dispatch enrichment
  * retains the caller-to-contract edge.
+ *
+ * A call whose overload CodeQL could not choose reaches each candidate
+ * overload as a possible target, and nothing as exact.
  */
 predicate resolvedTarget(MethodCall call, Method target, string confidence) {
+  not ambiguousOverloadCall(call) and resolvedSingleOverload(call, target, confidence)
+  or
+  ambiguousOverloadCall(call) and confidence = "possible" and
+  (target = declaredMethod(call) or unresolvedOverload(call, target)) and
+  target.fromSource()
+}
+
+predicate resolvedSingleOverload(MethodCall call, Method target, string confidence) {
   exactTarget(call, target) and confidence = "exact"
   or
   not exists(Method exact | exactTarget(call, exact)) and
@@ -65,11 +116,11 @@ predicate resolvedTarget(MethodCall call, Method target, string confidence) {
   // declared source method so the Python join can conservatively bridge it
   // to a unique source implementation carrying an integration endpoint.
   not exists(Method exact | exactTarget(call, exact)) and
-  target = call.getMethod() and target.fromSource() and confidence = "possible"
+  target = declaredMethod(call) and target.fromSource() and confidence = "possible"
   or
   // An interface method that is itself the exact target (a static or an
   // unoverridden default method) is already reported as exact.
-  target = call.getMethod() and
+  target = declaredMethod(call) and
   target.getDeclaringType() instanceof Interface and
   target.fromSource() and not exactTarget(call, target) and confidence = "possible"
 }
@@ -242,7 +293,7 @@ predicate possibleTarget(MethodCall call, Method target) {{
   target = viableCallable(call) and target.fromSource()
   or
   not exists(Method exact | exactTarget(call, exact)) and
-  target = call.getMethod() and target.fromSource()
+  target = call.getMethod().getSourceDeclaration() and target.fromSource()
 }}
 
 predicate exactEdge(Callable caller, Callable callee) {{
