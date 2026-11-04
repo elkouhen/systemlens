@@ -609,6 +609,39 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {"Circle.area": "exact"},
         pending="K5: the variable of a switch pattern has no type"),
+    Shape("T4", """
+        class Service {
+          void go() {} //@Service.go
+        }
+        class Use {
+          Service b;
+          void run() { //@Use.run
+            var a = b;
+            var b = a;
+            b.go();
+          }
+        }
+        """, "Use.run", {"Service.go": "exact"},
+        note="review S1: two var locals naming each other through a field recursed forever"),
+    Shape("T4-later-local", """
+        class Service {
+          void go() {} //@Service.go
+        }
+        class Other {
+          void go() {} //@Other.go
+        }
+        class Use {
+          Service y;
+          void run() { //@Use.run
+            var x = y;
+            {
+              Other y = new Other();
+              x.go();
+            }
+          }
+        }
+        """, "Use.run", {"Service.go": "exact"},
+        note="review S2: the initializer names the field, not a later local"),
     # 2.5 Functional and implicit implementations
     Shape("F1", """
         interface Port {

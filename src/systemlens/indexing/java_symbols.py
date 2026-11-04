@@ -151,6 +151,8 @@ class JavaSymbols:
         # External interfaces and the source types that implement them directly.
         self.external_implementors: dict[str, set[tuple[str, str]]] = defaultdict(set)
         self.interface_witnesses: dict[MethodCall, MethodCall] = {}
+        # ``var`` initializers being typed, to break reference cycles.
+        self._typing: set[tuple[str, int]] = set()
         # Types an anonymous class body extends or implements somewhere.
         self.anonymous_supertypes: set[str] = set()
         # Build dependencies between module identities (ADR-71), and the
@@ -743,9 +745,7 @@ class JavaSymbols:
                     if ident is not None and parser.node_text(source, ident) == name and type_node is not None:
                         if parser.node_text(source, type_node).strip() == "var":
                             # ``var`` takes the type of its initializer.
-                            return self.expression_type(
-                                info, child.child_by_field_name("value"), invocation,
-                            )
+                            return self._initializer_type(info, child.child_by_field_name("value"))
                         return self.resolve(
                             path, parser.node_text(source, type_node), info.owner,
                             allow_ambiguous=True,
@@ -776,6 +776,25 @@ class JavaSymbols:
                 return next(iter(found)) if len(found) == 1 else None
         return None
 
+    def _initializer_type(self, info: _Method, value: Node | None) -> str | None:
+        """The type of a ``var`` initializer, read where it is written.
+
+        Names in the initializer resolve at the initializer's position, not
+        at the call site: a later local never shadows the field it names, and
+        two locals cannot type each other in a cycle. A declaration already
+        being typed has no type, which ends any remaining cycle (S1, S2).
+        """
+        if value is None:
+            return None
+        key = (info.method.path, value.start_byte)
+        if key in self._typing:
+            return None
+        self._typing.add(key)
+        try:
+            return self.expression_type(info, value, value)
+        finally:
+            self._typing.discard(key)
+
     def _scoped_declaration(
         self, info: _Method, scope: Node, name: str, invocation: Node,
     ) -> tuple[bool, str | None]:
@@ -793,7 +812,7 @@ class JavaSymbols:
                 return True, None
             text = parser.node_text(source, type_node).strip()
             if text == "var":
-                return True, self.expression_type(info, value, invocation) if value is not None else None
+                return True, self._initializer_type(info, value)
             return True, self.resolve(path, text, info.owner, allow_ambiguous=True)
 
         def named(node: Node | None) -> bool:

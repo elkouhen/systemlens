@@ -77,6 +77,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T1 | Cast, record accessor, Lombok getter, array element | `covered` | fixture 35, existing tests |
 | T2 | Pattern variable of `instanceof Circle c` | `missing` | `c.area()` is not resolved |
 | T3 | Pattern variable of a `switch` pattern | `missing` | corpus case T3: `c.area()` is not resolved |
+| T4 | `var` initializer typed where it is written, not at the call site | `covered` | review S1 (crash), S2 |
 
 ### 2.5 Functional and implicit implementations
 
