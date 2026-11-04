@@ -390,6 +390,18 @@ class JavaSymbols:
                     for base_owner, base_module in self._dispatch_owners(info):
                         self.dispatch[(base_owner, base_module, name, info.parameters)].append(info)
 
+        # Secondary indexes of ``by_owner``, so a call site reads only the
+        # declarations of its receiver's types instead of scanning them all
+        # (S13): by owner, name and arity across modules, in ``by_owner``
+        # order, and the declared arities of a name per owner.
+        self._by_owner_name: dict[tuple[str, str, int], list[_Method]] = defaultdict(list)
+        self._by_owner_order: dict[tuple[str, str, int, str], int] = {}
+        self._arities: dict[tuple[str, str], set[int]] = defaultdict(set)
+        for order, ((owner_name, method_name, arity, module_name), values) in enumerate(self.by_owner.items()):
+            self._by_owner_name[(owner_name, method_name, arity)].extend(values)
+            self._by_owner_order[(owner_name, method_name, arity, module_name)] = order
+            self._arities[(owner_name, method_name)].add(arity)
+
         self._complete_override_signatures()
         self._index_inherited_implementations()
         self._drop_unreachable_defaults()
@@ -909,22 +921,15 @@ class JavaSymbols:
         contracts = [candidate for owner in receiver_bases
                      for candidate in self.by_owner.get((owner[0], name, arity, owner[1]), [])]
         if len(receiver_locations) > 1:
-            contracts = [
-                candidate
-                for (owner, candidate_name, candidate_arity, _candidate_module), values in self.by_owner.items()
-                if owner == receiver_type
-                and candidate_name == name
-                and candidate_arity == arity
-                for candidate in values
-            ]
+            contracts = list(self._by_owner_name.get((receiver_type, name, arity), []))
         if not contracts:
-            contracts = [
-                candidate
-                for (owner, candidate_name, candidate_arity, _candidate_module), values in self.by_owner.items()
-                if (owner, _candidate_module) in receiver_bases
-                and candidate_name == name and candidate_arity == arity
-                for candidate in values
-            ]
+            keys = sorted(
+                (key for key in (
+                    (owner, name, arity, owner_module) for owner, owner_module in receiver_bases
+                ) if key in self._by_owner_order),
+                key=self._by_owner_order.__getitem__,
+            )
+            contracts = [candidate for key in keys for candidate in self.by_owner[key]]
         if not contracts:
             # Java's third phase: a varargs method takes any arity from its
             # fixed parameter count up, when no fixed arity applies (S14).
@@ -1485,10 +1490,7 @@ class JavaSymbols:
         locations = self._type_candidates(receiver_type, path)
         receiver_module = self.path_modules.get(locations[0][0], module) if len(locations) == 1 else module
         owners = {receiver_type, *(owner for owner, _module in self.ancestors(receiver_type, receiver_module))}
-        return {
-            arity for owner, method_name, arity, _module in self.by_owner
-            if owner in owners and method_name == name
-        }
+        return {arity for owner in owners for arity in self._arities.get((owner, name), ())}
 
     def _static_import_owner(self, info: _Method, name: str, arity: int) -> str | None:
         """The source type a static import makes ``name`` refer to, if unique.

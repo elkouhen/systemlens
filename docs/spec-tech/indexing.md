@@ -375,6 +375,13 @@ For `D` inherited declarations in one signature group, hiding checks cost
 A contract with an unresolved parameter type reads only the dispatch signatures
 indexed under its owner, module, name and arity, so its lookup is linear in
 those candidates instead of in the whole dispatch index.
+A call site reads the declarations of its receiver's types through two
+secondary indexes: by owner, name and arity across modules, and the
+declared arities by owner and name. A receiver without a source
+declaration, such as a Spring Data repository inherited from an external
+interface, therefore costs a lookup per ancestor, not a scan of every
+source method. On a generated project of 800 such classes the symbol pass
+fell from 10.5 s to 0.8 s.
 
 For a method invocation used as a receiver, the fallback reads source-declared
 return types through the receiver hierarchy. It requires one parameter signature

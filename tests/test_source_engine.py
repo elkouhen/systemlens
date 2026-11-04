@@ -715,3 +715,46 @@ def test_a_test_source_set_never_reaches_the_call_graph(tmp_path: Path) -> None:
 
     assert not any("src/test/" in method.path for method in methods.values())
     assert ("p.Use.run", "src/main/java/p/Clock.java", "exact") in edges
+
+
+class _NoScan(dict):  # type: ignore[type-arg]
+    """A mapping that fails when a call site iterates it instead of looking up."""
+
+    def __iter__(self):  # type: ignore[no-untyped-def]
+        raise AssertionError("a call site scanned every declaration")
+
+    def items(self):  # type: ignore[no-untyped-def]
+        raise AssertionError("a call site scanned every declaration")
+
+    def keys(self):  # type: ignore[no-untyped-def]
+        raise AssertionError("a call site scanned every declaration")
+
+
+def test_call_sites_look_declarations_up_instead_of_scanning_them(tmp_path: Path) -> None:
+    """Review S13: a receiver without a source contract scanned every method.
+
+    A Spring Data call (``repo.save``) and an unqualified helper call read
+    the declarations of their receiver's types through indexes, so the
+    symbol pass stays linear in the call sites.
+    """
+    symbols = _symbols(tmp_path, {"app/src/main/java/p/Svc.java": """package p;
+import org.springframework.data.jpa.repository.JpaRepository;
+interface Repo extends JpaRepository<Object, Long> {
+  Object findByName(String name);
+}
+class Svc {
+  Repo repo;
+  void run() {
+    repo.save(null);
+    repo.findByName("x");
+    helper();
+  }
+  void helper() {}
+}
+"""})
+    symbols.by_owner = _NoScan(symbols.by_owner)
+    calls = {
+        (call.callee.rsplit(".", 1)[-1], call.dispatch_confidence)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+    }
+    assert calls == {("findByName", "possible"), ("helper", "exact")}
