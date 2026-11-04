@@ -1913,3 +1913,30 @@ an `Object` receiver fan out to every override in the sources.
 **Consequences:** Some `exact` edges become `possible`, and flows built
 on them lose confidence. No edge is invented. On train-ticket the measured
 change is recorded before delivery; a flow lost entirely must be explained.
+
+## ADR-83: Check a supplied CodeQL database against the indexed sources
+
+**Status:** Accepted on 2026-11-04 with lot 1 of the
+[call-graph review](plans/call-graph-review-2026-11-04.md) (findings Q1
+and Q5), whose fixes the product owner validated.
+
+**Context:** `--codeql-database` trusted its database. One built from an
+older revision placed old call lines in other methods as `exact` edges,
+and one built from another source root joined no row while the status
+still said `complete`. Both looked like a valid CodeQL index.
+
+**Decision:** Before any query, compare each indexed Java file with its
+copy in the database's source archive. One differing file, or no indexed
+file in the archive, fails the index with an error that names the cause.
+A file CodeQL did not archive is accepted. A call result whose rows name
+no indexed file fails the same way. The hash of `codeql-database.yml`
+enters the code-flow signature. Refusing is preferred to falling back to
+the `source` engine: the user asked for CodeQL, and a silent fallback
+would change the engine behind the same command.
+
+**Consequences:** A stale or misplaced database can no longer create
+flows. The index keeps its previous snapshot, and the user recreates the
+database. A file added after the database was created is not detected;
+its calls are missing, which loses edges but invents none. The check
+reads the archive once; on train-ticket it compares 409 of 411 indexed
+Java files.

@@ -42,6 +42,9 @@ class SourceEngine:
     def available(self) -> bool:
         return True
 
+    def input_fingerprint(self) -> str:
+        return ""
+
     @contextmanager
     def open(self, request: EngineRequest) -> Iterator[_SourceSession]:
         yield _SourceSession()

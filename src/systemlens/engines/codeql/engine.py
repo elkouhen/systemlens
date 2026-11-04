@@ -55,9 +55,18 @@ class _CodeQLSession:
         }
 
     def calls(self) -> list[MethodCall]:
-        return cast(list[MethodCall], _deadline_bound(
+        calls = cast(list[MethodCall], _deadline_bound(
             extraction.extract_codeql_calls, self._database, **self._common(), **self._logging(),
         ))
+        indexed = {path for path in self._request.allowed_paths if path.endswith(".java")}
+        if calls and indexed and not any(call.caller_path in indexed for call in calls):
+            # No row names an indexed file: the join would keep only the
+            # symbol pass's edges under CodeQL's name.
+            raise CodeQLError(
+                f"None of the {len(calls)} CodeQL call(s) comes from an indexed Java file: "
+                "the database was built from another source root."
+            )
+        return calls
 
     def methods(self, source_prefix: str = "") -> list[SourceMethod]:
         return cast(list[SourceMethod], _deadline_bound(
@@ -93,9 +102,21 @@ class CodeQLEngine:
     def available(self) -> bool:
         return self.database is not None or database.codeql_executable() is not None
 
+    def input_fingerprint(self) -> str:
+        """Identify a supplied database; the automatic one derives from the sources."""
+        if self.database is None:
+            return ""
+        return database.database_fingerprint(self.database)
+
     @contextmanager
     def open(self, request: EngineRequest) -> Iterator[_CodeQLSession]:
         if self.database is not None:
+            # A supplied database must represent the indexed sources: one
+            # built from another revision or source root gives false edges
+            # or none at all (call-graph review Q1, Q5).
+            database.verify_database_sources(
+                self.database, request.repo_root, request.allowed_paths,
+            )
             yield _CodeQLSession(self, self.database, request)
             return
         options: dict[str, Any] = {

@@ -61,4 +61,12 @@ class CallGraphEngine(Protocol):
 
     def available(self) -> bool: ...
 
+    def input_fingerprint(self) -> str:
+        """Identify the analysis input the engine reads besides the sources.
+
+        Empty when the indexed sources are the engine's whole input. A
+        different value makes the next index recompute the flows.
+        """
+        ...
+
     def open(self, request: EngineRequest) -> AbstractContextManager[CallGraphSession]: ...

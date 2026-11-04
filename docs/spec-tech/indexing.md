@@ -161,8 +161,22 @@ symbol fallback then skips the invocation whose candidates include that
 target, so it cannot reopen the other implementations. A witness without an
 exact row at its site still expands to every compatible implementation.
 
-`--codeql-database` reuses one global database supplied by the caller. Once the
-source-backed call graph is constructed, its
+`--codeql-database` reuses one global database supplied by the caller
+(ADR-83). Before any query, the engine reads `sourceLocationPrefix` from
+`codeql-database.yml` and compares each indexed Java file with its copy in
+the database's source archive, `src.zip` or `src/`. One differing file
+refuses the database as stale. No indexed file in the archive refuses it as
+built from another source root. A file CodeQL did not archive, such as
+`package-info.java`, is not a mismatch. The cost is one read of the archive
+and of the indexed Java files.
+
+The call rows are checked again: when CodeQL returns calls and none comes
+from an indexed Java file, the engine refuses the database instead of
+leaving only the symbol pass's edges under CodeQL's name. A hash of
+`codeql-database.yml`, never its path, enters the code-flow signature, so a
+recreated database recomputes the flows of unchanged sources.
+
+Once the source-backed call graph is constructed, its
 edges are committed as an explicit partial checkpoint before input-to-output
 reconstruction begins. The checkpoint records
 `codeql_call_graph_status` and the persisted edge count; this status does not

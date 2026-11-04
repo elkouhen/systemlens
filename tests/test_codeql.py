@@ -447,3 +447,97 @@ def test_a_call_query_deadline_reports_no_recovered_calls(
 
     assert raised.value.calls == []
     assert [command[1:3] for command in commands] == [["query", "run"]]
+
+
+def _supplied_database(root: Path, prefix: str, archived: dict[str, str]) -> Path:
+    """A CodeQL database shell: its metadata and its source archive."""
+    import zipfile
+
+    database = root / "db"
+    database.mkdir(parents=True)
+    (database / "codeql-database.yml").write_text(
+        f"---\nsourceLocationPrefix: {prefix}\nbuildMode: none\nfinalised: true\n",
+        encoding="utf-8",
+    )
+    with zipfile.ZipFile(database / "src.zip", "w") as archive:
+        for name, text in archived.items():
+            archive.writestr(name, text)
+    return database
+
+
+def test_a_database_built_from_older_sources_is_refused(tmp_path: Path) -> None:
+    """Q1 of the call-graph review: old call lines would land in other
+    methods as exact edges, so a stale database is refused."""
+    repo = tmp_path / "repo"
+    (repo / "src/main/java/a").mkdir(parents=True)
+    (repo / "src/main/java/a/A.java").write_text("class A { void added() {} void m() {} }\n")
+    (repo / "src/main/java/a/package-info.java").write_text("package a;\n")
+    database = _supplied_database(tmp_path, "/work/repo", {
+        "work/repo/src/main/java/a/A.java": "class A { void m() {} }\n",
+    })
+
+    with pytest.raises(codeql.CodeQLError, match="stale: 1 indexed Java file"):
+        codeql.database.verify_database_sources(
+            database, repo, ["src/main/java/a/A.java", "src/main/java/a/package-info.java"],
+        )
+
+
+def test_a_database_matching_the_sources_is_accepted(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / "src/main/java/a").mkdir(parents=True)
+    (repo / "src/main/java/a/A.java").write_text("class A { void m() {} }\n")
+    (repo / "src/main/java/a/package-info.java").write_text("package a;\n")
+    database = _supplied_database(tmp_path, "C:\\work\\repo", {
+        "C_/work/repo/src/main/java/a/A.java": "class A { void m() {} }\n",
+    })
+
+    # CodeQL does not archive package-info.java: an absent file is no mismatch.
+    assert codeql.database.verify_database_sources(
+        database, repo,
+        ["src/main/java/a/A.java", "src/main/java/a/package-info.java", "pom.xml"],
+    ) == 1
+
+
+def test_a_database_built_from_another_source_root_is_refused(tmp_path: Path) -> None:
+    """Q5 of the call-graph review: no row would join, yet the status said
+    complete and the symbol-pass edges looked like CodeQL's."""
+    repo = tmp_path / "repo"
+    (repo / "src/main/java/a").mkdir(parents=True)
+    (repo / "src/main/java/a/A.java").write_text("class A { void m() {} }\n")
+    database = _supplied_database(tmp_path, "/work/repo/src/main/java", {
+        "work/repo/src/main/java/a/A.java": "class A { void m() {} }\n",
+    })
+
+    with pytest.raises(codeql.CodeQLError, match="another source root"):
+        codeql.database.verify_database_sources(database, repo, ["src/main/java/a/A.java"])
+
+
+def test_calls_that_join_no_indexed_file_are_refused(tmp_path: Path, monkeypatch) -> None:
+    """Q5: the call rows themselves must name indexed files."""
+    from systemlens.callgraph.engine import EngineRequest
+
+    monkeypatch.setattr(codeql.database, "verify_database_sources", lambda *_args: 1)
+    monkeypatch.setattr(codeql.extraction, "extract_codeql_calls", lambda *_a, **_k: [
+        codeql.MethodCall("a.A.m", "a/A.java", 1, "a.B.n", "a/B.java", 1, 1),
+    ])
+    engine = codeql.CodeQLEngine(database=tmp_path / "db")
+    request = EngineRequest(
+        repo_root=tmp_path, allowed_paths=["src/main/java/a/A.java"], timeout_seconds=60,
+    )
+
+    with engine.open(request) as session:
+        with pytest.raises(codeql.CodeQLError, match="another source root"):
+            session.calls()
+
+
+def test_the_supplied_database_identity_enters_the_flow_signature(tmp_path: Path) -> None:
+    """Q1: a recreated database recomputes the flows of unchanged sources."""
+    first = _supplied_database(tmp_path / "one", "/work/repo", {})
+    second = _supplied_database(tmp_path / "two", "/work/other", {})
+
+    one = codeql.CodeQLEngine(database=first).input_fingerprint()
+    two = codeql.CodeQLEngine(database=second).input_fingerprint()
+
+    assert one and two and one != two
+    assert str(tmp_path) not in one
+    assert codeql.CodeQLEngine().input_fingerprint() == ""

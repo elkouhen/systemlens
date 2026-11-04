@@ -1579,6 +1579,8 @@ def test_module_codeql_view_refresh_reuses_the_persisted_call_graph(
         return []
 
     monkeypatch.setattr(codeql.extraction, "extract_codeql_methods", query_module_methods)
+    # The placeholder database has no source archive to check.
+    monkeypatch.setattr(codeql.database, "verify_database_sources", lambda *_args: 0)
     with Store(repo) as store:
         index_repo(
             repo,

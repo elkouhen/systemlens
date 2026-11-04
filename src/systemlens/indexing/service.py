@@ -295,6 +295,12 @@ def _index_repo(
         f"hops={config.codeql_max_hops}"
         f"|edge-confidence={config.codeql_edge_confidence}"
     )
+    # A supplied analyzer database is an input of the flows: a new one
+    # recomputes them even when no source file changed.
+    fingerprint = getattr(engine, "input_fingerprint", None)
+    engine_input = fingerprint() if callable(fingerprint) else ""
+    if engine_input:
+        flow_signature += f"|engine-input={engine_input}"
     join_signature = f"{flow_signature}|inputs={analysis_inputs_signature}"
     resume_join_entries = 0
     resume_join_flows: list[CodeFlow] = []

@@ -199,6 +199,17 @@ same source-root layout, and represent the source revision being indexed.
 The caller owns its lifecycle and must recreate it when relevant source files
 change.
 
+SystemLens checks the database against the indexed sources before using it
+(ADR-83). The index fails, and keeps the previous snapshot, when:
+
+- an indexed Java file differs from its copy in the database's source
+  archive: `The CodeQL database is stale: N indexed Java file(s) changed
+  since it was created (...)`;
+- the archive holds none of the indexed Java files, or no call row comes
+  from one: `... the database was built from another source root`.
+
+A file CodeQL did not archive, such as `package-info.java`, is accepted.
+
 `--codeql-database` requires the `codeql` call-graph engine and cannot be
 combined with `--generate-sources`. Source generation, when needed, must finish
 before the external database is created. SystemLens does not replace the

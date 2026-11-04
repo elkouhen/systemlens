@@ -5,9 +5,12 @@ observe or replace a CodeQL process patch the names defined here.
 """
 
 import csv
+import hashlib
+import re
 import shutil
 import subprocess
 import tempfile
+import zipfile
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -26,6 +29,105 @@ from systemlens.indexing.source_generation import (
 def codeql_executable() -> str | None:
     """Return the local CodeQL executable, when it is available."""
     return shutil.which("codeql")
+
+
+_SOURCE_PREFIX = re.compile(r"^sourceLocationPrefix:\s*(.+?)\s*$", re.MULTILINE)
+
+
+def database_fingerprint(database: Path) -> str:
+    """Identify one CodeQL database without naming its local path.
+
+    The metadata file records the creation time and the source root, so a
+    recreated database gets a new identity even when its path is reused.
+    """
+    try:
+        content = (database / "codeql-database.yml").read_bytes()
+    except OSError:
+        # No identity to record: opening the database refuses it anyway.
+        return ""
+    return hashlib.sha256(content).hexdigest()[:24]
+
+
+def _archive_name(prefix: str, relative: str) -> str:
+    """Spell a source path the way CodeQL stores it in ``src.zip``."""
+    # CodeQL archives the absolute path without its root, and a Windows
+    # drive ``C:`` as ``C_``.
+    normalized = prefix.replace("\\", "/").rstrip("/")
+    normalized = re.sub(r"^([A-Za-z]):", r"\1_", normalized).lstrip("/")
+    return f"{normalized}/{relative}" if normalized else relative
+
+
+def verify_database_sources(
+    database: Path, repo_root: Path, paths: Sequence[str],
+) -> int:
+    """Refuse a supplied database that does not represent the indexed sources.
+
+    Every indexed Java file that CodeQL archived must have the same content
+    in the database's source archive as on disk: a database built from
+    another revision would place old call lines in other methods. When the
+    archive holds none of the indexed Java files, the database was built
+    from another source root and its rows cannot join. CodeQL skips some
+    files, such as ``package-info.java``, so a file absent from the archive
+    is not a mismatch by itself. Returns the number of files compared.
+    """
+    java_paths = sorted(path for path in paths if path.endswith(".java"))
+    if not java_paths:
+        return 0
+    metadata = database / "codeql-database.yml"
+    try:
+        match = _SOURCE_PREFIX.search(metadata.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise CodeQLError(f"CodeQL database metadata not found: {metadata}") from exc
+    if match is None:
+        raise CodeQLError(f"CodeQL database metadata has no source root: {metadata}")
+    prefix = match.group(1).strip("'\"")
+    archive = database / "src.zip"
+    directory = database / "src"
+    compared = 0
+    stale: list[str] = []
+
+    def check(relative: str, archived: bytes) -> None:
+        nonlocal compared
+        compared += 1
+        try:
+            current = (repo_root / relative).read_bytes()
+        except OSError:
+            return
+        if current != archived:
+            stale.append(relative)
+
+    if archive.is_file():
+        try:
+            with zipfile.ZipFile(archive) as handle:
+                names = set(handle.namelist())
+                for relative in java_paths:
+                    name = _archive_name(prefix, relative)
+                    if name in names:
+                        check(relative, handle.read(name))
+        except (OSError, zipfile.BadZipFile) as exc:
+            raise CodeQLError(f"CodeQL source archive is unreadable: {archive}") from exc
+    elif directory.is_dir():
+        for relative in java_paths:
+            candidate = directory / _archive_name(prefix, relative)
+            if candidate.is_file():
+                check(relative, candidate.read_bytes())
+    else:
+        raise CodeQLError(
+            f"CodeQL database has no source archive to check against the indexed sources: {database}"
+        )
+    if compared == 0:
+        raise CodeQLError(
+            "The CodeQL database does not contain the indexed Java sources: it was "
+            "built from another source root. Recreate it with --source-root at the "
+            "indexed repository root."
+        )
+    if stale:
+        shown = ", ".join(stale[:5]) + (f" and {len(stale) - 5} more" if len(stale) > 5 else "")
+        raise CodeQLError(
+            f"The CodeQL database is stale: {len(stale)} indexed Java file(s) changed "
+            f"since it was created ({shown}). Recreate the database from the current sources."
+        )
+    return compared
 
 
 def _prepare_source_only_root(
