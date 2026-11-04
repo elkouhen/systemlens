@@ -7,7 +7,7 @@ from systemlens.infrastructure.paths import config_path, state_dir
 from systemlens.callgraph.registry import ENGINE_NAMES
 
 DEFAULT_INCLUDE = ["**/*"]
-DEFAULT_EXCLUDE = [".git/**", ".venv/**", "node_modules/**", ".systemlens/**"]
+DEFAULT_EXCLUDE = [".git/**", ".venv/**", "node_modules/**", ".systemlens/**", ".codeql/**"]
 DEFAULT_MIN_SEVERITY = "INFO"
 VALID_SEVERITIES = ("INFO", "WARNING", "ERROR")
 VALID_TOPIC_STRATEGIES = ("default", "strategy1")

@@ -106,3 +106,21 @@ def test_a_source_package_named_target_is_not_build_output() -> None:
     assert is_build_output("app/target/classes/application.yml")
     assert is_build_output("app/target/generated-sources/openapi/src/main/java/Api.java")
     assert is_build_output("target/Foo.java")
+
+
+def test_inventory_skips_codeql_databases_wherever_they_live(tmp_path: Path) -> None:
+    """D7 of the call-graph review: a CodeQL database inside the repository
+    was hashed and inventoried (1521 extra files on train-ticket)."""
+    (tmp_path / "src/main/java").mkdir(parents=True)
+    (tmp_path / "src/main/java/App.java").write_text("class App {}")
+    for database in (".codeql/systemlens-java", "analysis/db-java"):
+        (tmp_path / database / "log").mkdir(parents=True)
+        (tmp_path / database / "codeql-database.yml").write_text("sourceLocationPrefix: /x\n")
+        (tmp_path / database / "log/build.log").write_text("x")
+    (tmp_path / ".codeql/notes.yml").write_text("x: 1")
+
+    # An explicit exclude list without `.codeql/**` still skips databases.
+    files = list_repo_files(tmp_path, Config(exclude=[".git/**"]))
+
+    assert set(files) == {"src/main/java/App.java", ".codeql/notes.yml"}
+    assert set(list_repo_files(tmp_path, Config())) == {"src/main/java/App.java"}

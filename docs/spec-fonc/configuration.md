@@ -7,7 +7,7 @@ Parent: [Functional specification](../SPEC-FONC.md).
 
 ```yaml
 include: ["**/*"]
-exclude: [".git/**", ".venv/**", "node_modules/**", ".systemlens/**"]
+exclude: [".git/**", ".venv/**", "node_modules/**", ".systemlens/**", ".codeql/**"]
 min_severity: INFO
 root_path: .
 analysis:
@@ -39,7 +39,9 @@ sets (`src/test`, `src/componentTest`, and names ending in `Test`) are always
 excluded. Maven modules whose artifact identifier or directory name has a
 `test` or `tests` name token (`orders-test-support`) or contains `archetype`
 are also excluded from the production index; `attestation-service` stays
-indexed. The
+indexed. A CodeQL database, any directory holding `codeql-database.yml`,
+is never inventoried, whatever `exclude` says: it copies the sources and
+holds thousands of analyzer files. The
 `min_severity` setting remains accepted for database compatibility
 but does not alter AST endpoint extraction.
 

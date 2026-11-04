@@ -2,6 +2,7 @@
 
 import fnmatch
 import hashlib
+import os
 from pathlib import Path
 
 from systemlens.discovery.build.projects import outermost_build_directories
@@ -119,6 +120,33 @@ def is_in_excluded_module(path: Path, excluded_module_paths: tuple[Path, ...]) -
     return any(module_path == path.parent or module_path in path.parents for module_path in excluded_module_paths)
 
 
+CODEQL_DATABASE_MARKER = "codeql-database.yml"
+
+
+def is_codeql_database(directory: Path) -> bool:
+    """Whether a directory is a CodeQL database, never a source tree."""
+    return (directory / CODEQL_DATABASE_MARKER).is_file()
+
+
+def _repository_files(repo_root: Path) -> list[Path]:
+    """Return the repository files in path order, without CodeQL databases.
+
+    A CodeQL database holds a copy of the sources and its own data, wherever
+    it lives; walking into it would hash and inventory thousands of files.
+    """
+    files: list[Path] = []
+    for directory, subdirectories, names in os.walk(repo_root):
+        current = Path(directory)
+        subdirectories[:] = [
+            name for name in subdirectories
+            if not is_codeql_database(current / name)
+        ]
+        files.extend(
+            current / name for name in names if (current / name).is_file()
+        )
+    return sorted(files)
+
+
 def list_repo_files(
     repo_root: Path,
     config: Config,
@@ -131,9 +159,7 @@ def list_repo_files(
     repo_root = repo_root.resolve()
     hashes: dict[str, str] = {}
     nested_roots = _nested_build_roots(repo_root)
-    for path in sorted(repo_root.rglob("*")):
-        if not path.is_file():
-            continue
+    for path in _repository_files(repo_root):
         if is_in_excluded_module(path, excluded_module_paths):
             continue
         if nested_roots and not any(root == path.parent or root in path.parents for root in nested_roots):
