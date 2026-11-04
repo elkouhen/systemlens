@@ -775,6 +775,9 @@ def _build_call_graph(
     )
     implementation_targets: dict[tuple[str, str], tuple[IntegrationMethod, ...]] = {}
     resolved_sites: set[tuple[str, int, str]] = set()
+    # Sites whose concrete target the engine resolved exactly: neither its
+    # interface witness nor the symbol fallback adds another target there.
+    exact_resolved_sites: set[tuple[str, int, str]] = set()
     seen_edges: set[tuple[str, str, int, str, bool]] = set()
     synthetic_calls: set[MethodCall] = set()
 
@@ -857,16 +860,11 @@ def _build_call_graph(
 
     started_at = time.monotonic()
     last_report_at = started_at
-    for call_number, call in enumerate(calls, start=1):
-        now = time.monotonic()
-        if now - last_report_at >= 5.0:
-            report(
-                f"→ Graphe d'appel : rattachement des appels en cours · "
-                f"{call_number - 1}/{len(calls)} appel(s) analysé(s) · "
-                f"{sum(len(targets) for targets in adjacency.values())} "
-                f"rattachement(s) · {now - started_at:.0f} s."
-            )
-            last_report_at = now
+    located_calls: list[tuple[MethodCall, IntegrationMethod, IntegrationMethod, bool]] = []
+    # Exact targets per call site. When the engine resolved the site's exact
+    # implementation, its interface witness dispatches only there (ADR-70).
+    exact_site_targets: dict[tuple[str, str, int], set[str]] = {}
+    for call in calls:
         caller = locate_caller(call)
         resolved_callee = locate(
             call.callee, call.callee_path, call.callee_line,
@@ -874,12 +872,28 @@ def _build_call_graph(
         )
         if caller is None or resolved_callee is None:
             continue
-        callee, signature_join = resolved_callee
+        located_calls.append((call, caller, *resolved_callee))
+        if call.dispatch_confidence == "exact" and not resolved_callee[1]:
+            exact_site_targets.setdefault(
+                (caller.id, call.caller_path, call.call_line), set()
+            ).add(resolved_callee[0].id)
+    for call_number, (call, caller, callee, signature_join) in enumerate(located_calls, start=1):
+        now = time.monotonic()
+        if now - last_report_at >= 5.0:
+            report(
+                f"→ Graphe d'appel : rattachement des appels en cours · "
+                f"{call_number - 1}/{len(located_calls)} appel(s) analysé(s) · "
+                f"{sum(len(targets) for targets in adjacency.values())} "
+                f"rattachement(s) · {now - started_at:.0f} s."
+            )
+            last_report_at = now
         add_edge(caller, callee, call, signature_join)
         if symbols is not None:
             info = symbols.methods.get(callee.id)
             if info is not None and info.concrete:
                 resolved_sites.add((caller.id, call.call_line, callee.id))
+                if call.dispatch_confidence == "exact" and not signature_join:
+                    exact_resolved_sites.add((caller.id, call.call_line, callee.id))
             target_key = (callee.id, caller.module)
             if target_key not in implementation_targets:
                 implementation_targets[target_key] = tuple(
@@ -889,7 +903,16 @@ def _build_call_graph(
                 implementation_targets[target_key] = prefer_caller_module(
                     implementation_targets[target_key], caller,
                 )
-            for candidate in implementation_targets[target_key]:
+            candidates = implementation_targets[target_key]
+            exact_targets = exact_site_targets.get(
+                (caller.id, call.caller_path, call.call_line), set()
+            )
+            if any(candidate.id in exact_targets for candidate in candidates):
+                # The witness opens no new route: keep the resolved target.
+                candidates = tuple(
+                    candidate for candidate in candidates if candidate.id in exact_targets
+                )
+            for candidate in candidates:
                 synthetic = replace(
                     call, callee=candidate.qualified_method, callee_path=candidate.path,
                     callee_line=candidate.start_line, dispatch_confidence="possible",
@@ -898,7 +921,9 @@ def _build_call_graph(
                 add_edge(caller, candidate, synthetic, True)
 
     if symbols is not None:
-        for call in symbols.fallback_calls(resolved_sites, closed_world=closed_world):
+        for call in symbols.fallback_calls(
+            resolved_sites, closed_world=closed_world, exact_sites=exact_resolved_sites,
+        ):
             caller = locate_caller(call)
             resolved_target = locate(call.callee, call.callee_path, call.callee_line)
             if caller is None or resolved_target is None:

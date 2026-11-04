@@ -237,7 +237,10 @@ instead of choosing one runtime target.
 
 When CodeQL also resolves a concrete virtual target, a source-backed interface
 declaration is retained as an additional possible witness so the caller-to-
-contract edge remains visible in the persisted call-edge listing.
+contract edge remains visible in the persisted call-edge listing. At a call
+site where CodeQL resolved the exact implementation, the witness expands to
+that implementation only, and the source symbol fallback adds no other
+candidate there: the witness opens no route (ADR-70).
 Calls are aggregated before the global flow join. `--codeql-database DIR`
 reuses an existing global CodeQL database instead.
 

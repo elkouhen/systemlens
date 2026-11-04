@@ -1331,6 +1331,7 @@ class JavaSymbols:
 
     def fallback_calls(
         self, resolved_sites: set[tuple[str, int, str]], *, closed_world: bool = False,
+        exact_sites: set[tuple[str, int, str]] | None = None,
     ) -> list[MethodCall]:
         """Receiver-typed calls between indexed methods.
 
@@ -1342,7 +1343,13 @@ class JavaSymbols:
         implementation, and dispatch on an external interface to its source
         implementations in the caller's visible modules, always possible
         (ADR-71).
+
+        ``exact_sites`` holds the call sites whose concrete target the engine
+        resolved exactly. When one of an invocation's candidates is such a
+        target, the invocation adds nothing: the engine already chose its
+        implementation, and the fallback must not reopen the others.
         """
+        exact_sites = exact_sites or set()
         calls: list[MethodCall] = []
         # Witness call -> the exact call it accompanies at the same site.
         self.interface_witnesses = {}
@@ -1437,6 +1444,10 @@ class JavaSymbols:
                     if not targets:
                         targets = self._unimplemented_contract(receiver_type, name, arguments_count, info)
                 if not targets:
+                    continue
+                if exact_sites and any(
+                    (info.method.id, line, target.id) in exact_sites for target in targets
+                ):
                     continue
                 # A concrete method declared by the receiver's own type is an
                 # exact call. Interface dispatch to a unique source

@@ -1490,3 +1490,66 @@ def test_reachability_row_obeys_the_hop_limit(tmp_path: Path):
     assert flows(2, []) == []
     assert flows(2, [relation]) == []
     assert len(flows(3, [relation])) == 1
+
+
+_WITNESS_SOURCES = {
+    "app/Port.java": "package app; public interface Port { void publish(); }",
+    "app/A.java": "package app; public class A implements Port {\n  public void publish() { }\n}",
+    "app/B.java": (
+        "package app; public class B implements Port {\n"
+        "  public void publish() { output(); }\n  void output() {}\n}"
+    ),
+    "app/Controller.java": (
+        "package app; public class Controller {\n"
+        "  public void entry() { Port p = new A(); p.publish(); }\n}"
+    ),
+}
+
+
+def _witness_calls(methods, *, exact_row: bool) -> list[MethodCall]:
+    located = {method.qualified_method: (method.path, method.start_line) for method in methods}
+
+    def call(caller: str, callee: str, confidence: str) -> MethodCall:
+        return MethodCall(caller, *located[caller], callee, *located[callee], 2, confidence)
+
+    rows = [
+        # CodeQL's interface witness (4th `resolvedTarget` branch).
+        call("app.Controller.entry", "app.Port.publish", "possible"),
+        call("app.B.publish", "app.B.output", "exact"),
+    ]
+    if exact_row:
+        rows.insert(0, call("app.Controller.entry", "app.A.publish", "exact"))
+    return rows
+
+
+def test_interface_witness_dispatches_only_to_the_exactly_resolved_target(tmp_path: Path):
+    # Review F8, ADR-70: CodeQL resolved `p.publish()` to `A.publish`; its
+    # interface witness opens no route, so no flow may run through
+    # `B.publish`, neither from the witness nor from the symbol fallback.
+    methods, endpoints = _project(tmp_path, _WITNESS_SOURCES)
+    graphs = []
+
+    flows = materialize_call_graph_flows(
+        methods, endpoints, _witness_calls(methods, exact_row=True), repo_root=tmp_path,
+        source_paths=list(_WITNESS_SOURCES), call_graph_sink=graphs.append,
+    )
+
+    assert flows == []
+    entry = next(method for method in methods if method.input_endpoint_ids)
+    targets = {target.qualified_method for target, _call, _inferred in graphs[0].adjacency[entry.id]}
+    assert targets == {"app.A.publish", "app.Port.publish"}
+
+
+def test_interface_witness_without_an_exact_row_keeps_every_implementation(tmp_path: Path):
+    # Without an exact row at the site, the witness is the only answer: the
+    # join keeps every source implementation as a possible target.
+    methods, endpoints = _project(tmp_path, _WITNESS_SOURCES)
+
+    flows = materialize_call_graph_flows(
+        methods, endpoints, _witness_calls(methods, exact_row=False), repo_root=tmp_path,
+        source_paths=list(_WITNESS_SOURCES),
+    )
+
+    assert [(flow.confidence, [step.name for step in flow.steps][1:-1]) for flow in flows] == [
+        ("low", ["app.B.publish", "app.B.output"]),
+    ]

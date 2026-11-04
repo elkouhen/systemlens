@@ -148,6 +148,13 @@ target is reported once, as exact. This preserves the contract edge for
 module-aware dispatch enrichment; duplicate graph rows are deduplicated by
 their target and confidence.
 
+The join reads the witness as it reads the source pass's witness. At a site
+(caller, call line) where an exact row reaches a concrete implementation of
+the interface method, the witness expands only to that implementation. The
+symbol fallback then skips the invocation whose candidates include that
+target, so it cannot reopen the other implementations. A witness without an
+exact row at its site still expands to every compatible implementation.
+
 `--codeql-database` reuses one global database supplied by the caller. Once the
 source-backed call graph is constructed, its
 edges are committed as an explicit partial checkpoint before input-to-output
