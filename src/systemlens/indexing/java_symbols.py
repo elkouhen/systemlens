@@ -97,8 +97,18 @@ _OBJECT_METHODS = {
 _OBJECT_RETURNS = {("toString", 0): "java.lang.String", ("hashCode", 0): "int", ("equals", 1): "boolean"}
 _ENUM_METHODS = {"name", "ordinal", "values", "valueOf", "compareTo", "getDeclaringClass", "describeConstable"}
 # Method names of the few external supertypes whose members are fixed by the
-# Java SE API. Any other external supertype may declare any name.
+# Java SE API or by a Spring interface that declares only them (beyond the
+# ``Object`` methods). Any other external supertype may declare any name.
 _KNOWN_EXTERNAL_MEMBERS: dict[str, frozenset[str]] = {
+    "org.springframework.security.core.userdetails.UserDetails": frozenset({
+        "getAuthorities", "getPassword", "getUsername", "isAccountNonExpired",
+        "isAccountNonLocked", "isCredentialsNonExpired", "isEnabled",
+    }),
+    "org.springframework.security.core.GrantedAuthority": frozenset({"getAuthority"}),
+    "org.springframework.boot.CommandLineRunner": frozenset({"run"}),
+    "org.springframework.boot.ApplicationRunner": frozenset({"run"}),
+    "org.springframework.beans.factory.InitializingBean": frozenset({"afterPropertiesSet"}),
+    "org.springframework.beans.factory.DisposableBean": frozenset({"destroy"}),
     "java.lang.Runnable": frozenset({"run"}),
     "java.util.concurrent.Callable": frozenset({"call"}),
     "java.io.Serializable": frozenset(),

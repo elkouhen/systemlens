@@ -158,6 +158,23 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Inner.run", {"Outer.helper": "exact"}),
+    Shape("S3-anonymous-user-details", """
+        import org.springframework.security.core.userdetails.UserDetails;
+        class Jwt {
+          static String name(String token) { //@Jwt.name
+            return token;
+          }
+          static Object authenticate(String token) { //@Jwt.authenticate
+            UserDetails details = new UserDetails() {
+              public String getUsername() {
+                return name(token);
+              }
+            };
+            return details;
+          }
+        }
+        """, "Jwt.authenticate", {"Jwt.name": "exact"},
+        note="review D6: UserDetails declares fixed members, so name() is the outer method"),
     Shape("S4", """
         class Base {
           private void go() {} //@Base.go

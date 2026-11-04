@@ -37,7 +37,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 |---|---|---|---|
 | S1 | Call on a declared receiver: field, local, parameter, `var`, chained return | `covered` | existing tests |
 | S2 | Static call and static import | `covered` | K2: `Base.util()` no longer reaches `Sub.util()`, which only hides it |
-| S3 | Unqualified call, outer class from an inner class | `covered` | fixture 27 |
+| S3 | Unqualified call, outer class from an inner class or from an anonymous class of a type with known members | `covered` | fixture 27; review D6 (`UserDetails`) |
 | S4 | Private method | `covered` | K2: `Base.go()` no longer reaches a homonym `Sub.go()` |
 | S5 | Overload chosen by argument type, including a subtype, widening before boxing, and literal suffixes | `covered` | fixtures 14b, 14c; review S3, S4 |
 | S6 | Two methods of one type declared on the same line | `covered` in the symbol pass | K2; the join still locates a target by line (section 7) |

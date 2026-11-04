@@ -217,7 +217,10 @@ included, that declares or inherits the name at any arity; a named inner
 class thus reaches its outer type's methods. A scope with an external
 supertype stops the search, since that supertype may declare the name,
 unless it is a JDK type with fixed members (`Runnable`, `Callable`,
-`Serializable`, `Comparable`, `AutoCloseable`, `Closeable`, `Cloneable`).
+`Serializable`, `Comparable`, `AutoCloseable`, `Closeable`, `Cloneable`)
+or a Spring interface that declares only its own members: `UserDetails`,
+`GrantedAuthority`, `CommandLineRunner`, `ApplicationRunner`,
+`InitializingBean` and `DisposableBean`.
 A name no enclosing type has resolves through a single static import, then
 through the one static wildcard import whose source type declares that name
 and arity. Several candidates stay unresolved.
